@@ -1140,8 +1140,9 @@
           "builds"
         ],
         "summary": "Submit Build",
-        "description": "Submit a door build for Discord moderation.",
+        "description": "Submit a door build for Discord moderation.\n\nDeprecated: create a revisioned submission draft, apply changes, then start\n`POST /v1/submissions/drafts/{draft_id}/submission`. That replacement returns\n`202` and exposes durable finalization status at the same submission URL.\nLegacy remote attachment URLs cannot be mapped losslessly to uploaded artifacts,\nso this route retains its existing `201` behavior until the next API version.",
         "operationId": "builds_create",
+        "deprecated": true,
         "security": [
           {
             "WebSession": [],
@@ -7763,6 +7764,8 @@
                   "type": "null"
                 }
               ],
+              "minLength": 32,
+              "maxLength": 45,
               "title": "Squid-Installation-Id"
             }
           },
@@ -7779,6 +7782,8 @@
                   "type": "null"
                 }
               ],
+              "minLength": 32,
+              "maxLength": 512,
               "title": "Squid-Installation-Secret"
             }
           }
@@ -7984,6 +7989,8 @@
                   "type": "null"
                 }
               ],
+              "minLength": 32,
+              "maxLength": 45,
               "title": "Squid-Installation-Id"
             }
           },
@@ -8000,6 +8007,8 @@
                   "type": "null"
                 }
               ],
+              "minLength": 32,
+              "maxLength": 512,
               "title": "Squid-Installation-Secret"
             }
           }
@@ -10158,6 +10167,202 @@
         }
       }
     },
+    "/v1/users/me/notifications/inbox/{notification_id}/unread": {
+      "post": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Mark Unread",
+        "description": "Mark one visible inbox item as unread.",
+        "operationId": "notification_inbox_mark_unread",
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "notification_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Notification Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
     "/v1/records/{record_id}": {
       "get": {
         "tags": [
@@ -10689,7 +10894,7 @@
         "tags": [
           "schematics"
         ],
-        "summary": "Get Schematic Content",
+        "summary": "Build Schematic Content",
         "description": "Download explicitly published sanitized bytes from a confirmed build.",
         "operationId": "build_schematic_content_get",
         "security": [
@@ -11732,7 +11937,7 @@
           "submissions"
         ],
         "summary": "Create Draft",
-        "description": "Create an empty synchronized draft owned by the signed-in account.",
+        "description": "Create an empty draft owned by the signed-in account.",
         "operationId": "submission_draft_create",
         "security": [
           {
@@ -12421,7 +12626,7 @@
           "submissions"
         ],
         "summary": "Get Draft",
-        "description": "Return one synchronized draft after enforcing caller ownership.",
+        "description": "Return one draft after enforcing caller ownership.",
         "operationId": "submission_draft_get",
         "security": [
           {
@@ -12618,7 +12823,7 @@
           "submissions"
         ],
         "summary": "Delete Draft",
-        "description": "Immediately delete one caller-owned synchronized draft.",
+        "description": "Immediately delete one caller-owned draft.",
         "operationId": "submission_draft_delete",
         "security": [
           {
@@ -13071,6 +13276,256 @@
         "x-squid-cli": {
           "classification": "command",
           "command": "draft.change",
+          "required_api_features": [
+            "submission-drafts"
+          ],
+          "interaction": "direct"
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/manifest-upgrade": {
+      "post": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Upgrade Draft Manifest",
+        "description": "Upgrade an owned draft to the next checked-in form revision.",
+        "operationId": "submission_draft_manifest_upgrade",
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DraftManifestUpgradeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftManifestUpgradeResponse"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Bad Request",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "draft.upgrade",
           "required_api_features": [
             "submission-drafts"
           ],
@@ -17801,7 +18256,7 @@
             "type": "string",
             "maxLength": 255,
             "minLength": 8,
-            "pattern": "^[\\x21-\\x7e]+$",
+            "pattern": "^[\\x21-\\x7e]{8,255}$",
             "title": "Idempotency Key"
           },
           "operations": {
@@ -17893,6 +18348,47 @@
         "title": "DraftListResponse",
         "description": "Bounded active drafts owned by one authenticated account."
       },
+      "DraftManifestUpgradeRequest": {
+        "properties": {
+          "base_revision": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Base Revision"
+          },
+          "target_revision": {
+            "type": "integer",
+            "minimum": 2.0,
+            "title": "Target Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "base_revision",
+          "target_revision"
+        ],
+        "title": "DraftManifestUpgradeRequest",
+        "description": "Move a draft to the next checked-in form revision."
+      },
+      "DraftManifestUpgradeResponse": {
+        "properties": {
+          "draft": {
+            "$ref": "#/components/schemas/StoredDraftResponse"
+          },
+          "replayed": {
+            "type": "boolean",
+            "title": "Replayed"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft",
+          "replayed"
+        ],
+        "title": "DraftManifestUpgradeResponse",
+        "description": "The upgraded draft and whether the requested target was already current."
+      },
       "DraftMediaArtifactResponse": {
         "properties": {
           "role": {
@@ -17926,7 +18422,7 @@
         "type": "string",
         "enum": [
           "output",
-          "poster"
+          "video_thumbnail"
         ],
         "title": "DraftMediaArtifactRole",
         "description": "Normalized visual outputs visible to a draft owner."
@@ -21176,7 +21672,7 @@
           "expires_at"
         ],
         "title": "StoredDraftResponse",
-        "description": "The compacted current state of one caller-owned synchronized draft."
+        "description": "The compacted current state of one caller-owned draft."
       },
       "SubmissionAttentionIssueResponse": {
         "properties": {
@@ -22222,7 +22718,7 @@
     },
     {
       "name": "submissions",
-      "description": "Revisioned submission forms and synchronized drafts."
+      "description": "Revisioned submission forms and drafts."
     },
     {
       "name": "records",
