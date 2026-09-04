@@ -170,7 +170,9 @@ class ApiRateLimitPolicies:
         window = config.window_seconds
         return cls(
             ip=RateLimitPolicy("ip", config.ip_requests, window),
-            caller=RateLimitPolicy("principal", config.principal_requests, window),
+            # The emitted token is a public header contract and remains stable for the
+            # deprecation window even though configuration now says "caller".
+            caller=RateLimitPolicy("principal", config.caller_requests, window),
             write=RateLimitPolicy("write", config.write_requests, window),
             vote=RateLimitPolicy("vote", config.vote_requests, window),
             suggest=RateLimitPolicy("suggest", config.suggest_requests, window),

@@ -17,7 +17,7 @@ from squid.api.idempotency import (
 from squid.core.errors import ErrorCode
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
 from squid.idempotency.application import IdempotencyRepository
-from squid.idempotency.domain import ExistingRequest, IdempotencyInProgressError, Reservation
+from squid.idempotency.domain import ExistingRequest, IdempotencyInProgressError, Reservation, UnsafeHttpMethod
 from tests.unit.api.fakes import TEST_SYNERGY_SECRET, TEST_UUID, MockDatabaseManager, build_app
 
 
@@ -35,7 +35,7 @@ class MemoryIdempotencyRepository(IdempotencyRepository):
         caller: str,
         key: str,
         fingerprint: bytes,
-        method: str,
+        method: UnsafeHttpMethod,
         route: str,
         expires_at: Instant,
         now: Instant,
@@ -189,7 +189,7 @@ async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_caller(
             caller=caller,
             key="concurrent-request",
             fingerprint=b"same-request",
-            method="POST",
+            method=UnsafeHttpMethod.POST,
             route="/v1/builds",
         )
 

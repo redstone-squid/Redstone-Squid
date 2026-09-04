@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import sys
+import warnings
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from difflib import get_close_matches
@@ -19,6 +20,7 @@ from urllib.parse import urlsplit
 from google.oauth2.service_account import Credentials
 from pydantic import (
     AnyHttpUrl,
+    AliasChoices,
     BaseModel,
     ConfigDict,
     Field,
@@ -456,7 +458,11 @@ class RateLimitConfig(_FrozenModel):
     redis_url: SecretStr | None = None
     window_seconds: int = Field(default=300, ge=1, le=86_400)
     ip_requests: int = Field(default=600, ge=1)
-    principal_requests: int = Field(default=300, ge=1)
+    caller_requests: int = Field(
+        default=300,
+        ge=1,
+        validation_alias=AliasChoices("caller_requests", "principal_requests"),
+    )
     write_requests: int = Field(default=60, ge=1)
     vote_requests: int = Field(default=30, ge=1)
     suggest_requests: int = Field(default=1_200, ge=1)
@@ -472,6 +478,26 @@ class RateLimitConfig(_FrozenModel):
     local_max_keys: int = Field(default=2_048, ge=16, le=100_000)
 
     _empty_redis_url = field_validator("redis_url", mode="before")(_empty_to_none)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_legacy_principal_setting(cls, value: object) -> object:
+        if isinstance(value, Mapping) and "principal_requests" in value:
+            if "caller_requests" in value:
+                normalized = dict(value)
+                normalized.pop("principal_requests")
+                return normalized
+            warnings.warn(
+                "rate_limit.principal_requests is deprecated; use rate_limit.caller_requests",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        return value
+
+    @property
+    def principal_requests(self) -> int:
+        """Return the caller quota under its one-release compatibility name."""
+        return self.caller_requests
 
     @field_validator("redis_url")
     @classmethod
@@ -946,6 +972,14 @@ class _FilteredEnvironmentSource(PydanticBaseSettingsSource):
                 continue
             annotation = field.annotation
             if isinstance(value, dict) and isinstance(annotation, type) and issubclass(annotation, BaseModel):
+                if name.casefold() == "rate_limit":
+                    legacy_key = next((key for key in value if key.casefold() == "principal_requests"), None)
+                    current_key = next((key for key in value if key.casefold() == "caller_requests"), None)
+                    if legacy_key is not None:
+                        value = dict(value)
+                        if current_key is None:
+                            value["caller_requests"] = value[legacy_key]
+                        value.pop(legacy_key)
                 allowed = {nested.casefold() for nested in annotation.model_fields}
                 value = {nested: item for nested, item in value.items() if nested.casefold() in allowed}
             filtered[name] = value
@@ -1251,6 +1285,11 @@ is a boot failure, so a leftover in an env file or a compose service would take 
 during a deploy that was otherwise a no-op for it.
 """
 
+_DEPRECATED_ENVIRONMENT_KEYS = {
+    "SQUID_RATE_LIMIT_PRINCIPAL_REQUESTS": "SQUID_RATE_LIMIT_CALLER_REQUESTS",
+}
+"""One-release aliases accepted with an actionable startup warning."""
+
 
 _INFRASTRUCTURE_ENVIRONMENT_KEYS = frozenset(
     {
@@ -1355,8 +1394,21 @@ def _configured_environment_keys(dotenv_path: Path) -> set[str]:
 
 def _audit_unknown_environment_keys(*, strict: bool, dotenv_path: Path) -> None:
     """Report likely deployment typos while accepting sibling-process keys."""
-    known = _known_environment_keys() | _RETIRED_ENVIRONMENT_KEYS | _INFRASTRUCTURE_ENVIRONMENT_KEYS
-    unknown = sorted(name for name in _configured_environment_keys(dotenv_path) if name.upper() not in known)
+    configured = _configured_environment_keys(dotenv_path)
+    for name, replacement in _DEPRECATED_ENVIRONMENT_KEYS.items():
+        if name in {configured_name.upper() for configured_name in configured}:
+            warnings.warn(
+                f"{name} is deprecated; use {replacement}",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+    known = (
+        _known_environment_keys()
+        | _RETIRED_ENVIRONMENT_KEYS
+        | _INFRASTRUCTURE_ENVIRONMENT_KEYS
+        | _DEPRECATED_ENVIRONMENT_KEYS.keys()
+    )
+    unknown = sorted(name for name in configured if name.upper() not in known)
     if not unknown:
         return
     suggestions = {

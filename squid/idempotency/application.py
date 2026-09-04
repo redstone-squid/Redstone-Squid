@@ -14,6 +14,7 @@ from squid.idempotency.domain import (
     PendingRequest,
     Reservation,
     StoredResponse,
+    UnsafeHttpMethod,
 )
 
 
@@ -26,7 +27,7 @@ class IdempotencyRepository(Protocol):
         caller: str,
         key: str,
         fingerprint: bytes,
-        method: str,
+        method: UnsafeHttpMethod,
         route: str,
         expires_at: Instant,
         now: Instant,
@@ -60,7 +61,7 @@ class IdempotencyService:
         caller: str,
         key: str,
         fingerprint: bytes,
-        method: str,
+        method: UnsafeHttpMethod,
         route: str,
     ) -> PendingRequest | StoredResponse:
         """Reserve a new key or return its completed response for replay."""
