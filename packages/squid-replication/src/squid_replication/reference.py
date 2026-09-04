@@ -14,6 +14,8 @@ _KINDS = frozenset({"increment", "add", "remove", "restore"})
 
 @dataclass(frozen=True, slots=True, order=True)
 class OperationId:
+    """`replica:sequence`; the ordering (replica, then sequence) is the deterministic replay order."""
+
     replica: str
     sequence: int
 
@@ -22,28 +24,35 @@ class OperationId:
 
     @classmethod
     def decode(cls, value: str) -> OperationId:
+        """Raises `ValueError` when `value` has no `:` or a non-integer sequence."""
         replica, sequence = value.rsplit(":", 1)
         return cls(replica, int(sequence))
 
 
 @dataclass(frozen=True, slots=True)
 class ReferenceOperation:
+    """One log entry; `tags` are the `add` identities a `remove` or `restore` targets."""
+
     identity: OperationId
     kind: str
     path: str
     value: str | int
     tags: tuple[OperationId, ...] = ()
     undoes: OperationId | None = None
-    """The removal a ``restore`` reverses. Set on that kind alone."""
+    """The removal a `restore` reverses; set on that kind alone."""
 
 
 @dataclass(frozen=True, slots=True)
 class ReferenceVersion:
+    """Every operation id the log holds; `export_since` sends what a peer's version lacks."""
+
     operations: frozenset[OperationId]
 
 
 @dataclass(frozen=True, slots=True)
 class ReferenceSnapshot:
+    """Counters and sets only; an untouched path reads as `0` or the empty set."""
+
     counters: tuple[tuple[str, int], ...]
     sets: tuple[tuple[str, frozenset[str]], ...]
 
@@ -56,16 +65,26 @@ class ReferenceSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class PreparedReferenceUpdate:
+    """`base` is `None` for a remote update, whose `operations` hold only what the log lacks."""
+
     base: ReferenceVersion | None
     operations: tuple[ReferenceOperation, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class ReferenceChange:
+    """What `ReferenceEngine.apply` returns; the document does not read it."""
+
     operations: tuple[ReferenceOperation, ...]
 
 
 class ReferenceBranch:
+    """Stages operations in a list and replays them over the log for `snapshot()`.
+
+    `prepare` does not check `base` against the engine; `ReplicatedDocument` does that before
+    calling it.
+    """
+
     def __init__(self, engine: ReferenceEngine) -> None:
         self._engine = engine
         self._base = engine.version()
@@ -90,6 +109,7 @@ class ReferenceBranch:
         return PreparedReferenceUpdate(base, tuple(self._operations))
 
     def stage_inverse(self, inverse: object) -> None:
+        """Raises `TypeError` unless `inverse` is a tuple of `ReferenceOperation`."""
         if not isinstance(inverse, tuple) or not all(isinstance(item, ReferenceOperation) for item in inverse):
             message = "reference inverse has the wrong backend type"
             raise TypeError(message)
@@ -97,7 +117,13 @@ class ReferenceBranch:
 
 
 class ReferenceEngine:
-    """A deterministic convergent operation set used to prove Squid integration semantics."""
+    """A JSON operation log for counters and sets, replayed in `OperationId` order on every read.
+
+    History never expires: `compact()` is a no-op and `retain_token` always succeeds. Updates
+    and tokens are capped at 1 MiB and 10 000 operations. Unlike `LoroEngine`, a malformed
+    update or token raises plain `ValueError`, `TypeError` or `KeyError` rather than
+    `ReplicationCorruptUpdateError`, and `export_since` treats a foreign `version` as `None`.
+    """
 
     backend_id = "squid-reference-v1"
     container_kinds = frozenset({"counter", "set"})
@@ -116,10 +142,12 @@ class ReferenceEngine:
         tags: tuple[OperationId, ...] = (),
         undoes: OperationId | None = None,
     ) -> ReferenceOperation:
+        """Mint the next `OperationId` of this replica; the sequence advances even if the operation is dropped."""
         self._next_sequence += 1
         return ReferenceOperation(OperationId(self.replica_id, self._next_sequence), kind, path, value, tags, undoes)
 
     def make_operation(self, kind: str, path: str, **data: Any) -> ReferenceOperation:
+        """Raises `KeyError` without `value`; `tags` and `undoes` are optional."""
         return self.operation(
             kind,
             path,
@@ -138,6 +166,7 @@ class ReferenceEngine:
         return self.snapshot_with(())
 
     def snapshot_with(self, additions: tuple[ReferenceOperation, ...] | list[ReferenceOperation]) -> ReferenceSnapshot:
+        """The log with `additions` overlaid (same identity wins), replayed into a snapshot."""
         operations = {**self._operations, **{operation.identity: operation for operation in additions}}
         ordered = sorted(operations.values(), key=lambda item: item.identity)
         counters: dict[str, int] = {}
@@ -213,17 +242,17 @@ class ReferenceEngine:
         return PreparedReferenceUpdate(None, novel)
 
     def encode_token(self, operations: tuple[ReferenceOperation, ...]) -> bytes:
-        """Encode one action's opaque change token for durable history tests."""
         return self._encode_envelope("history-token", operations)
 
     def change_token(self, prepared: PreparedReferenceUpdate) -> object | None:
         return prepared.operations or None
 
     def decode_token(self, token: bytes) -> tuple[ReferenceOperation, ...]:
-        """Decode a schema-checked action token without applying it."""
+        """Refuses an `update` envelope: a token and an update carry different `kind` markers."""
         return self._decode_envelope(token, kind="history-token")
 
     def plan_inverse(self, token: object) -> object | ConflictDetail:
+        """Never expires; the only conflicts are a foreign token (`replicated:reference:token`) or an unknown kind."""
         if not isinstance(token, tuple) or not all(isinstance(item, ReferenceOperation) for item in token):
             return ConflictDetail("replicated:reference:token", 0, 0)
         inverse: list[ReferenceOperation] = []
@@ -255,7 +284,7 @@ class ReferenceEngine:
         self._retentions.discard(retention)
 
     def compact(self) -> None:
-        """Keep the deterministic reference log unchanged; it is a bounded test backend."""
+        """No-op: the reference log never expires."""
 
     def export_since(self, version: object | None = None) -> bytes:
         known = version.operations if isinstance(version, ReferenceVersion) else frozenset()
@@ -265,7 +294,7 @@ class ReferenceEngine:
         return self._encode_envelope("update", operations)
 
     def encode_update(self, operations: tuple[ReferenceOperation, ...]) -> bytes:
-        """Encode exactly one committed participant change for outbound transport."""
+        """The `update` envelope `prepare_remote` accepts; `encode_prepared` and `export_since` both produce it."""
         return self._encode_envelope("update", operations)
 
     def _decode_envelope(self, data: bytes, *, kind: str) -> tuple[ReferenceOperation, ...]:
@@ -354,7 +383,7 @@ class ReferenceEngine:
 
 @dataclass(frozen=True, slots=True)
 class ReferenceBackend:
-    """Create bounded deterministic engines for conformance tests and examples."""
+    """Opens one independent `ReferenceEngine` per call; `document_id` is ignored."""
 
     backend_id = ReferenceEngine.backend_id
 

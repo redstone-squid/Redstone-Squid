@@ -50,7 +50,7 @@ class ReplicationError(Exception):
 
 
 class ReplicaClosedError(ReplicationError, RuntimeError):
-    """A replicated scope or document has been closed and no longer grants mutation authority."""
+    """Raised by every `Replica` or `ReplicatedDocument` method, and by their tokens, after `close()`."""
 
 
 class ReplicationResyncRequiredError(ReplicationError, RuntimeError):
@@ -67,31 +67,43 @@ class ReplicationCorruptUpdateError(ReplicationError, ValueError):
 
 
 class ReplicationBackendIntegrityError(ReplicationError, RuntimeError):
-    """A validated backend operation failed at the canonical apply boundary."""
+    """The backend rejected work it had already validated: an apply, export, compaction or planned inverse."""
 
 
 class UnsupportedReplicationContainerError(ReplicationError, TypeError):
-    """The explicitly selected backend does not implement a requested container class."""
+    """A container accessor asked for a kind missing from the engine's `container_kinds`."""
 
 
 @dataclass(frozen=True, slots=True)
 class PreparedReplicationInverse:
-    """An opaque semantic inverse tied to the backend-history generation that planned it."""
+    """A backend inverse from `ReplicationChangeToken.plan_inverse`, valid for one `token_epoch`."""
 
     payload: object
+    """What `ReplicationEngine.plan_inverse` returned; only `ReplicaBranch.stage_inverse` reads it."""
     token_epoch: int
+    """`ReplicatedDocument.token_epoch` at planning time; `stage_inverse` refuses any other."""
 
 
 @dataclass(frozen=True, slots=True)
 class ReplicationChangeToken:
-    """An action-addressable semantic token retained by opted-in history."""
+    """The `ChangeToken` a replicated document contributes to each committed action.
+
+    Holds its document weakly. Once that document is closed or collected, `plan_inverse()`
+    reports a `replicated:closed` conflict and `encode()`/`retain()` raise `ReplicaClosedError`.
+    """
 
     document: weakref.ReferenceType[ReplicatedDocument]
     backend_token: object
+    """The engine's `change_token` result; meaningful only to the same `backend_id`."""
     token_epoch: int
+    """`ReplicatedDocument.token_epoch` when the action committed."""
 
     def encode(self) -> bytes:
-        """Encode this token for durable history while its document remains available."""
+        """Serialise for durable history; `decode` reloads it on any replica of the same document.
+
+        Raises `ReplicaClosedError` once the document is closed or gone, and `ValueError` when
+        the backend token exceeds its size limit.
+        """
         document = self.document()
         if document is None or document.closed:
             message = "replicated history token no longer has a live document"
@@ -107,7 +119,12 @@ class ReplicationChangeToken:
 
     @classmethod
     def decode(cls, document: ReplicatedDocument, token: bytes) -> ReplicationChangeToken:
-        """Reload an encoded token against the current instance of its document."""
+        """Reload `encode` bytes against the live instance of the document they came from.
+
+        Raises `ValueError` for corrupt bytes, an unknown schema, or a token minted for another
+        backend or document, and `ReplicaClosedError` when `document` is closed. The epoch is
+        taken from the bytes, so a token from before `expire_history_tokens()` still conflicts.
+        """
         document._ensure_open()
         try:
             payload: Any = json.loads(token)
@@ -133,6 +150,13 @@ class ReplicationChangeToken:
         return cls(weakref.ref(document), backend_token, token_epoch)
 
     def plan_inverse(self) -> PreparedReplicationInverse | ConflictDetail:
+        """Ask the engine for this token's inverse without staging it.
+
+        Answers a `replicated:closed` conflict once the document is closed or collected, a
+        `replicated:<document_id>:expired` conflict when `expire_history_tokens()` has run
+        since the token was minted, and otherwise whatever `ReplicationEngine.plan_inverse`
+        reports.
+        """
         document = self.document()
         if document is None or document.closed:
             return ConflictDetail("replicated:closed", 0, 0)
@@ -144,6 +168,12 @@ class ReplicationChangeToken:
         return PreparedReplicationInverse(inverse, self.token_epoch)
 
     def stage_inverse(self, inverse: PreparedReplicationInverse) -> None:
+        """Stage a `plan_inverse` result on the current transaction's branch of the document.
+
+        Raises `ReactiveConflictError` (`replicated:closed` or `replicated:<document_id>:expired`)
+        when the document is gone or `inverse.token_epoch` is stale, `RuntimeError` outside a
+        Squid transaction, and `TypeError` when the payload belongs to another backend.
+        """
         document = self.document()
         if document is None or document.closed:
             detail = ConflictDetail("replicated:closed", 0, 0)
@@ -159,7 +189,11 @@ class ReplicationChangeToken:
         participant.branch.stage_inverse(inverse.payload)
 
     def retain(self) -> ReplicationHistoryLease:
-        """Retain the backend history needed by this token until the returned lease releases it."""
+        """Pin the history `plan_inverse` needs past `compact_history()` until the lease releases it.
+
+        Raises `ReplicaClosedError` once the document is closed or gone, and `ValueError` when
+        the backend has already discarded that history.
+        """
         document = self.document()
         if document is None or document.closed:
             message = "replicated history token no longer has a live document"
@@ -170,13 +204,18 @@ class ReplicationChangeToken:
 
 @dataclass(slots=True)
 class ReplicationHistoryLease:
-    """Retain inverse metadata until :meth:`release` is called or this lease is collected."""
+    """A `ReplicationEngine.retain_token` handle that `release()` or garbage collection gives back.
+
+    While it is held, `ReplicatedDocument.compact_history()` keeps everything at or after the
+    retained token.
+    """
 
     document: weakref.ReferenceType[ReplicatedDocument]
     retention: object | None
+    """The engine's handle; `None` once released."""
 
     def release(self) -> None:
-        """Release this token's compaction boundary; repeated calls do nothing."""
+        """Give the handle back; repeated calls and a collected document are no-ops."""
         retention = self.retention
         if retention is None:
             return
@@ -190,6 +229,11 @@ class ReplicationHistoryLease:
 
 
 class _ReplicationParticipant:
+    """One transaction's enlistment of one document: a branch for local edits, or a remote payload.
+
+    A remote participant skips the base check in `prepare` and never publishes what it applies.
+    """
+
     def __init__(
         self,
         document: ReplicatedDocument,
@@ -236,7 +280,13 @@ class _ReplicationParticipant:
 
 
 class ReplicatedDocument:
-    """One immutable-snapshot replicated document. Calling :meth:`close` ends all access."""
+    """One engine's state as a reactive cell of snapshots; `close()` ends every read, mutation and subscription.
+
+    `Replica.open` creates it; after `close()` every method raises `ReplicaClosedError`.
+    Container mutations stage onto the enclosing Squid transaction (`RuntimeError` outside one)
+    and reach the engine at commit; a committed local action is published to
+    `subscribe_updates` callbacks and the `drain_updates` buffer.
+    """
 
     def __init__(self, document_id: str, engine: ReplicationEngine[Any, Any, Any, Any]) -> None:
         self.document_id = document_id
@@ -254,39 +304,44 @@ class ReplicatedDocument:
 
     @property
     def identity(self) -> str:
+        """`replicated:<document_id>`: the participant identity conflicts and contributions report."""
         return f"replicated:{self.document_id}"
 
     @property
     def token_epoch(self) -> int:
-        """Return the local backend-history generation used by retained inverse tokens."""
+        """Bumped by `expire_history_tokens()`; a `ReplicationChangeToken` from an older epoch conflicts."""
         return self._token_epoch
 
     @property
     def pending_update_count(self) -> int:
-        """Return the bounded number of committed envelopes awaiting host transport."""
+        """Envelopes waiting for `drain_updates()`; at most 1 000 are kept."""
         return len(self._pending_updates)
 
     @property
     def resync_required(self) -> bool:
-        """Whether outbound overflow has left the pending buffer unable to carry a peer forward."""
+        """True once the outbound buffer has dropped an update; `drain_updates()` raises until `acknowledge_resync()`."""
         return self._resync_required
 
     @property
     def dropped_update_count(self) -> int:
-        """Return how many outbound updates overflow discarded since the last acknowledged resync."""
+        """Outbound updates the full buffer discarded since the last `acknowledge_resync()`."""
         return self._dropped_updates
 
     @property
     def subscription_count(self) -> int:
-        """Return the snapshot and outbound listener authorities owned by this document."""
+        """Live `subscribe()` plus `subscribe_updates()` callbacks."""
         return len(self._listeners) + len(self._update_listeners)
 
     @property
     def deduplication_count(self) -> int:
-        """Return the bounded number of remote update identities retained for deduplication."""
+        """Remote `update_id`s remembered so a redelivery is skipped; the newest 10 000 are kept."""
         return len(self._seen_update_ids)
 
     def snapshot(self) -> Any:
+        """The committed engine snapshot, or the current transaction's branch view once it has enlisted.
+
+        Reading inside a computation subscribes it to the document's cell.
+        """
         self._ensure_open()
         self._version_cell.read()
         participant = action_participant(self)
@@ -297,34 +352,47 @@ class ReplicatedDocument:
         )
 
     def counter(self, path: str) -> ReplicatedCounter:
+        """A handle on the counter at `path`; `UnsupportedReplicationContainerError` if the backend has none."""
         self._require_container("counter")
         return ReplicatedCounter(self, path)
 
     def set(self, path: str) -> ReplicatedSet:
+        """A handle on the set at `path`; `UnsupportedReplicationContainerError` if the backend has none."""
         self._require_container("set")
         return ReplicatedSet(self, path)
 
     def text(self, path: str) -> ReplicatedText:
+        """A handle on the text at `path`; `UnsupportedReplicationContainerError` if the backend has none."""
         self._require_container("text")
         return ReplicatedText(self, path)
 
     def list(self, path: str) -> ReplicatedList:
+        """A handle on the list at `path`; `UnsupportedReplicationContainerError` if the backend has none."""
         self._require_container("list")
         return ReplicatedList(self, path)
 
     def movable_list(self, path: str) -> ReplicatedMovableList:
+        """A handle on the movable list at `path`; `UnsupportedReplicationContainerError` if the backend has none."""
         self._require_container("movable")
         return ReplicatedMovableList(self, path)
 
     def map(self, path: str) -> ReplicatedMap:
+        """A handle on the map at `path`; `UnsupportedReplicationContainerError` if the backend has none."""
         self._require_container("map")
         return ReplicatedMap(self, path)
 
     def tree(self, path: str) -> ReplicatedTree:
+        """A handle on the tree at `path`; `UnsupportedReplicationContainerError` if the backend has none."""
         self._require_container("tree")
         return ReplicatedTree(self, path)
 
     def export_since(self, version: object | None = None) -> bytes:
+        """Everything a peer at `version` lacks, as an encoded `ReplicationUpdate` with no origin action.
+
+        `None` exports a self-contained snapshot. Raises what `ReplicationEngine.export_since`
+        raises (`TypeError`, `ValueError`, `ReplicationCorruptUpdateError`), and `ValueError`
+        when the envelope exceeds 1 500 000 bytes.
+        """
         self._ensure_open()
         update = ReplicationUpdate.create(
             document_id=self.document_id,
@@ -336,11 +404,18 @@ class ReplicatedDocument:
         return update.encode()
 
     def version(self) -> object:
-        """Return the backend-opaque version a peer can pass back to :meth:`export_since`."""
+        """The backend-opaque version a peer passes back to `export_since`; hashable and equality-comparable."""
         self._ensure_open()
         return self.engine.version()
 
     def import_update(self, update: bytes) -> None:
+        """Commit a peer's `export_since` or `drain_updates` envelope in its own `REMOTE` transaction.
+
+        An `update_id` among the last 10 000 seen is skipped without a transaction. Raises
+        `ValueError` for an envelope that does not decode or that names another document or
+        backend, and `ReplicationCorruptUpdateError` or `ValueError` from
+        `ReplicationEngine.prepare_remote` for a bad payload.
+        """
         self._ensure_open()
         envelope = ReplicationUpdate.decode(update)
         if envelope.document_id != self.document_id:
@@ -372,7 +447,7 @@ class ReplicatedDocument:
         self._remember_update(update_id)
 
     def subscribe(self, callback: Callable[[Any], None]) -> Callable[[], None]:
-        """Receive each committed snapshot until the returned function or document closes it."""
+        """Receive each committed snapshot, synchronously at finalize, until the returned function or `close()` stops it."""
         self._ensure_open()
         self._listeners.add(callback)
 
@@ -382,7 +457,10 @@ class ReplicatedDocument:
         return unsubscribe
 
     def subscribe_updates(self, callback: Callable[[ReplicationUpdate], None]) -> Callable[[], None]:
-        """Receive committed local updates until the returned function or document closes it."""
+        """Receive each locally committed envelope until the returned function or `close()` stops it.
+
+        Imported updates are not re-published. Unlike `drain_updates`, this path never drops.
+        """
         self._ensure_open()
         self._update_listeners.add(callback)
 
@@ -392,12 +470,11 @@ class ReplicatedDocument:
         return unsubscribe
 
     def drain_updates(self) -> tuple[ReplicationUpdate, ...]:
-        """Take committed outbound updates retained for an application-owned transport.
+        """Take the buffered outbound envelopes, oldest first, for an application-owned transport.
 
-        Raises :class:`ReplicationResyncRequiredError` once this bounded buffer has overflowed,
-        rather than returning a stream known to have a hole in it. Recover with
-        :meth:`export_since` from the peer's version, then :meth:`acknowledge_resync`.
-        :meth:`subscribe_updates` is the delivery path that never drops.
+        Raises `ReplicationResyncRequiredError` once the 1 000-envelope buffer has overflowed,
+        rather than returning a stream with a hole in it. Recover with `export_since` from the
+        peer's version, then `acknowledge_resync`.
         """
         self._ensure_open()
         if self._resync_required:
@@ -413,8 +490,8 @@ class ReplicatedDocument:
     def acknowledge_resync(self) -> None:
         """Clear an overflow, discarding the partial updates it left behind.
 
-        Call once :meth:`export_since` has carried the peer across the gap; the retained
-        updates go with it because that export already supersedes them.
+        Call once `export_since` has carried the peer across the gap; the buffered updates go
+        with it because that export already supersedes them.
         """
         self._ensure_open()
         self._pending_updates.clear()
@@ -422,7 +499,12 @@ class ReplicatedDocument:
         self._resync_required = False
 
     def compact_history(self) -> None:
-        """Compact backend history without crossing any retained token lease."""
+        """Discard engine history older than every live `ReplicationHistoryLease`.
+
+        Afterwards an unretained token from before that boundary plans an expired conflict.
+        Raises `TypeError` inside a transaction that has already enlisted this document, and
+        `ReplicationBackendIntegrityError` when the engine cannot reach a retained boundary.
+        """
         self._ensure_open()
         if isinstance(action_participant(self), _ReplicationParticipant):
             message = "replicated history cannot be compacted inside a transaction that edits the document"
@@ -430,15 +512,23 @@ class ReplicatedDocument:
         self.engine.compact()
 
     def checkpoint(self) -> bytes:
-        """Export a self-contained, authenticated-by-the-host checkpoint envelope."""
+        """`export_since(None)`: a self-contained snapshot envelope any replica of this document can import.
+
+        The envelope carries a payload hash, not a signature; authenticating the sender is the
+        transport's job.
+        """
         return self.export_since()
 
     def expire_history_tokens(self) -> None:
-        """Expire retained inverse authority before backend compaction discards its metadata."""
+        """Bump `token_epoch` so every existing `ReplicationChangeToken` plans an expired conflict.
+
+        Call before `compact_history()` when the history those tokens need is not retained.
+        """
         self._ensure_open()
         self._token_epoch += 1
 
     def close(self) -> None:
+        """Idempotent. Drops listeners, buffered updates and the deduplication window; the engine is left as is."""
         self.closed = True
         self._listeners.clear()
         self._update_listeners.clear()
@@ -449,6 +539,7 @@ class ReplicatedDocument:
         self._resync_required = False
 
     def _participant(self) -> _ReplicationParticipant:
+        """Enlist in the current transaction, once per document; `RuntimeError` outside one."""
         self._ensure_open()
         participant = enlist(self, lambda: _ReplicationParticipant(self))
         if participant is None:
@@ -502,6 +593,12 @@ class ReplicatedDocument:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedCounter:
+    """The integer counter at `path`: per-replica totals summed on read.
+
+    `increment()` stages one `increment` operation on the current transaction (`RuntimeError`
+    outside one); `value` reads through `ReplicatedDocument.snapshot()`.
+    """
+
     document: ReplicatedDocument
     path: str
 
@@ -510,6 +607,7 @@ class ReplicatedCounter:
         return self.document.snapshot().counter(self.path)
 
     def increment(self, amount: int = 1) -> None:
+        """Raises `TypeError` for anything but an `int`; `bool` is refused."""
         if isinstance(amount, bool) or not isinstance(amount, int):
             message = "counter increments must be integers"
             raise TypeError(message)
@@ -519,6 +617,13 @@ class ReplicatedCounter:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedSet:
+    """The observed-remove set of strings at `path`; `discard()` removes only the adds it observed.
+
+    `add()` stages an `add` and `discard()` a `remove` tagged with the adds visible to it, so a
+    concurrent add on another replica survives. Both stage on the current transaction
+    (`RuntimeError` outside one); a `remove` sees its own transaction's adds.
+    """
+
     document: ReplicatedDocument
     path: str
 
@@ -531,6 +636,7 @@ class ReplicatedSet:
         participant.branch.apply(self.document.engine.make_operation("add", self.path, value=value))
 
     def discard(self, value: str) -> None:
+        """Discarding a non-member stages a `remove` with no tags, which changes nothing."""
         participant = self.document._participant()
         tags = self.document.engine.visible_tags(self.path, value, participant.branch.operations)
         participant.branch.apply(self.document.engine.make_operation("remove", self.path, value=value, tags=tags))
@@ -538,6 +644,13 @@ class ReplicatedSet:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedText:
+    """The collaborative string at `path`, indexed by code point.
+
+    `insert()` and `delete()` stage `text_insert`/`text_delete` on the current transaction
+    (`RuntimeError` outside one); an index past the end raises `ValueError` at staging. A
+    history inverse restores the whole container by diff rather than op by op.
+    """
+
     document: ReplicatedDocument
     path: str
 
@@ -560,6 +673,14 @@ class ReplicatedText:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedList:
+    """The index-addressed sequence of JSON values at `path`.
+
+    `insert()`, `delete()` and `replace()` stage `list_insert`/`list_delete`/`list_replace` on
+    the current transaction (`RuntimeError` outside one). Values pass through `freeze_value`
+    (`TypeError`/`ValueError` outside JSON, 16 levels, int64). Loro raises `IndexError` for an
+    index past the visible end.
+    """
+
     document: ReplicatedDocument
     path: str
 
@@ -588,6 +709,14 @@ class ReplicatedList:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedMovableList:
+    """The sequence at `path` whose items keep a stable `item_id` across `move()`.
+
+    `insert()`, `delete()`, `move()` and `replace()` stage `movable_*` operations on the
+    current transaction (`RuntimeError` outside one); an unknown `item_id` or an index past
+    the end raises `ValueError` at staging. Values pass through `freeze_value`
+    (`TypeError`/`ValueError` outside JSON, 16 levels, int64).
+    """
+
     document: ReplicatedDocument
     path: str
 
@@ -596,6 +725,7 @@ class ReplicatedMovableList:
         return self.document.snapshot().movable(self.path)
 
     def insert(self, index: int, value: object, *, item_id: uuid.UUID | None = None) -> uuid.UUID:
+        """Returns the item's id: `item_id`, or a fresh UUIDv7."""
         logical_id = item_id or uuid.uuid7()
         participant = self.document._participant()
         participant.branch.apply(
@@ -626,6 +756,14 @@ class ReplicatedMovableList:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedMap:
+    """The string-keyed map of JSON values at `path`; each key is a last-writer-wins register.
+
+    `set()` and `delete()` stage `map_set`/`map_delete` on the current transaction
+    (`RuntimeError` outside one), recording the previous value so the action can be reversed;
+    deleting an absent key is allowed. Values pass through `freeze_value`
+    (`TypeError`/`ValueError` outside JSON, 16 levels, int64).
+    """
+
     document: ReplicatedDocument
     path: str
 
@@ -646,6 +784,15 @@ class ReplicatedMap:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedTree:
+    """The forest at `path`: nodes with a stable `node_id`, an ordered child list and per-key metadata.
+
+    `create()`, `move()`, `set_metadata()` and `delete()` stage `tree_*` operations on the
+    current transaction (`RuntimeError` outside one); all but `create` raise `ValueError` at
+    staging for an unknown `node_id`. `delete` removes the node's whole subtree. Metadata
+    values pass through `freeze_value` (`TypeError`/`ValueError` outside JSON, 16 levels,
+    int64).
+    """
+
     document: ReplicatedDocument
     path: str
 
@@ -661,6 +808,7 @@ class ReplicatedTree:
         metadata: Mapping[str, object] | None = None,
         node_id: uuid.UUID | None = None,
     ) -> uuid.UUID:
+        """Returns the node's id: `node_id`, or a fresh UUIDv7. `parent_id=None` makes a root; `index=None` appends."""
         logical_id = node_id or uuid.uuid7()
         participant = self.document._participant()
         participant.branch.apply(
@@ -676,6 +824,7 @@ class ReplicatedTree:
         return logical_id
 
     def move(self, node_id: uuid.UUID, *, parent_id: uuid.UUID | None = None, index: int | None = None) -> None:
+        """`parent_id=None` makes the node a root; `index=None` appends among its new siblings."""
         participant = self.document._participant()
         participant.branch.apply(
             self.document.engine.make_operation(
@@ -701,7 +850,7 @@ class ReplicatedTree:
 
 
 class Replica:
-    """Own replicated documents and listeners. Calling :meth:`close` closes every document.
+    """Owns one engine per opened document; `close()` closes every document and refuses `open()`.
 
     `replica_id` names an incarnation, not a machine. A restarted process that reuses one must
     import peer state before its first local mutation so the log can restore the operation
@@ -715,6 +864,7 @@ class Replica:
         self.closed = False
 
     def open(self, document_id: str) -> ReplicatedDocument:
+        """The same `ReplicatedDocument` for a repeated `document_id`; raises `ReplicaClosedError` after `close()`."""
         if self.closed:
             message = "replicated scope is closed"
             raise ReplicaClosedError(message)
@@ -726,7 +876,7 @@ class Replica:
 
     @property
     def active_documents(self) -> tuple[str, ...]:
-        """Return the document identities whose authority this scope still owns."""
+        """Every `document_id` opened so far, in open order; empty after `close()`."""
         return tuple(self._documents)
 
     def close(self) -> None:

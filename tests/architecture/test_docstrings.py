@@ -21,7 +21,6 @@ LIFETIME_EXEMPTIONS: frozenset[str] = frozenset(
         "packages/squid-reactivity/src/squid_reactivity/resources.py::LoadScope",
         "packages/squid-reactivity/src/squid_reactivity/resources.py::_NoAbandonment",
         "packages/squid-reactivity/src/squid_reactivity/topics.py::SubscriptionReconciler",
-        "packages/squid-replication/src/squid_replication/document.py::ReplicatedSet",
         "packages/squid-ui-discord/src/squid_ui_discord/actions.py::ActionResponder",
         "packages/squid-ui-discord/src/squid_ui_discord/challenges.py::ChallengeRunner",
         "packages/squid-ui-discord/src/squid_ui_discord/durability/runtime.py::DurableSessionRuntime",

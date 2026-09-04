@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class PycrdtTextOperation:
+    """`kind` is `insert` (`value` is the text) or `delete` (`value` is the count)."""
+
     kind: str
     index: int
     value: str | int
@@ -12,6 +14,8 @@ class PycrdtTextOperation:
 
 @dataclass(frozen=True, slots=True)
 class PycrdtChangeToken:
+    """The encoded `IdSet`s of one undo-stack item; `encode` prefixes `deletions` with its 4-byte length."""
+
     deletions: bytes
     insertions: bytes
 
@@ -27,12 +31,19 @@ class PycrdtChangeToken:
 
 @dataclass(frozen=True, slots=True)
 class PycrdtPrepared:
+    """`base` is the engine state vector the update was built from, `None` when remote; `token` is `None` without edits."""
+
     base: bytes | None
     update: bytes
     token: PycrdtChangeToken | None
 
 
 class PycrdtTextBranch:
+    """A second `Doc` under the engine's client id whose `UndoManager` captures the change token.
+
+    `prepare` raises `RuntimeError` once the engine moves past `base`.
+    """
+
     def __init__(self, engine: PycrdtTextEngine) -> None:
         module = engine.module
         self._engine = engine
@@ -75,7 +86,13 @@ class PycrdtTextBranch:
 
 
 class PycrdtTextEngine:
-    """A pycrdt text adapter used by the backend gate; public Squid values remain strings."""
+    """A single `text` container snapshotted as `str`, for the backend gate tests.
+
+    Not a full `ReplicationEngine`: it has no operations, and `plan_inverse` answers a
+    `PycrdtPrepared` or raises `RuntimeError` when the retained undo item no longer applies.
+    A non-`bytes` version to `export_since` means `None`. Raises `RuntimeError` at
+    construction without `pycrdt` installed.
+    """
 
     backend_id = "pycrdt-text-v1"
 

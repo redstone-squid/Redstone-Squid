@@ -13,15 +13,23 @@ _MAX_ENVELOPE_BYTES = 1_500_000
 
 @dataclass(frozen=True, slots=True)
 class ReplicationUpdate:
-    """A routed, integrity-checked backend update safe to hand to an application transport."""
+    """One committed backend update with its routing fields, as a JSON envelope of at most 1 500 000 bytes.
+
+    The envelope carries a SHA-256 of `payload` to catch corruption; it is not signed, so
+    authenticating the sender is the transport's job. The payload is never interpreted here.
+    """
 
     document_id: str
     backend_id: str
     source_replica_id: str
+    """The `replica_id` that committed the update."""
     update_id: uuid.UUID
+    """Minted by `create`; `ReplicatedDocument.import_update` skips an id it has already seen."""
     payload: bytes
     origin_action_id: uuid.UUID | None = None
+    """The local action that committed the payload; `None` for an `export_since` export."""
     schema: int = 1
+    """Wire schema; `decode` accepts 1 only."""
 
     @classmethod
     def create(
@@ -33,10 +41,11 @@ class ReplicationUpdate:
         payload: bytes,
         origin_action_id: uuid.UUID | None,
     ) -> ReplicationUpdate:
+        """Mint a fresh UUIDv7 `update_id`."""
         return cls(document_id, backend_id, source_replica_id, uuid.uuid7(), payload, origin_action_id)
 
     def encode(self) -> bytes:
-        """Encode the envelope without interpreting the backend payload."""
+        """Compact sorted-key JSON with a base64 payload; raises `ValueError` past 1 500 000 bytes."""
         body = {
             "backend": self.backend_id,
             "document": self.document_id,
@@ -55,7 +64,11 @@ class ReplicationUpdate:
 
     @classmethod
     def decode(cls, encoded: bytes) -> ReplicationUpdate:
-        """Decode and verify an untrusted envelope before it reaches the commit gate."""
+        """Parse untrusted bytes; raises `ValueError` for anything that is not a well-formed envelope.
+
+        That covers an oversize input, invalid JSON, a schema other than 1, a missing or
+        non-string routing field, bad base64 or UUIDs, and a payload hash mismatch.
+        """
         if len(encoded) > _MAX_ENVELOPE_BYTES:
             message = "replicated envelope exceeds the maximum encoded size"
             raise ValueError(message)

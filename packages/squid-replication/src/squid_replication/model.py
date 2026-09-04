@@ -15,7 +15,11 @@ _MAX_INT64 = 2**63 - 1
 
 
 def freeze_value(value: object, *, depth: int = 0) -> ReplicatedValue:
-    """Validate and deeply freeze one JSON-like replicated value."""
+    """Deep-copy a JSON-like value into tuples and `MappingProxyType`s.
+
+    Raises `ValueError` for nesting deeper than 16 levels, an `int` outside signed 64 bits or
+    a non-finite `float`, and `TypeError` for a non-string key or any other type.
+    """
     if depth > _MAX_JSON_DEPTH:
         message = f"replicated values cannot exceed {_MAX_JSON_DEPTH} nested levels"
         raise ValueError(message)
@@ -46,7 +50,7 @@ def freeze_value(value: object, *, depth: int = 0) -> ReplicatedValue:
 
 
 def thaw_value(value: ReplicatedValue) -> object:
-    """Convert one frozen public value to the mutable shape accepted by Loro."""
+    """The inverse of `freeze_value`: lists and dicts, the shape Loro's containers accept."""
     if isinstance(value, tuple):
         return [thaw_value(item) for item in value]
     if isinstance(value, Mapping):
@@ -56,7 +60,7 @@ def thaw_value(value: ReplicatedValue) -> object:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedItem:
-    """One stable logical item in a movable replicated list."""
+    """One entry of a movable list; `item_id` survives moves and replaces, `value` does not."""
 
     item_id: uuid.UUID
     value: ReplicatedValue
@@ -64,7 +68,7 @@ class ReplicatedItem:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedTreeNode:
-    """One immutable logical node in a replicated tree snapshot."""
+    """One live tree node; `children` is ordered, `parent_id` is `None` for a root."""
 
     node_id: uuid.UUID
     parent_id: uuid.UUID | None
@@ -74,18 +78,23 @@ class ReplicatedTreeNode:
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedTreeSnapshot:
-    """An immutable forest indexed by stable logical node identity."""
+    """The live nodes of one tree container; deleted subtrees are absent."""
 
     roots: tuple[uuid.UUID, ...]
     nodes: tuple[ReplicatedTreeNode, ...]
 
     def node(self, node_id: uuid.UUID) -> ReplicatedTreeNode | None:
+        """Linear lookup; `None` for a deleted or unknown id."""
         return next((node for node in self.nodes if node.node_id == node_id), None)
 
 
 @dataclass(frozen=True, slots=True)
 class ReplicatedSnapshot:
-    """A deeply immutable snapshot of every named container in one document."""
+    """Every container of one document, as sorted `(path, value)` tuples.
+
+    Each accessor answers the empty value (`0`, `frozenset()`, `""`, `()`, `{}`, an empty
+    forest) for a path the document has never touched.
+    """
 
     counters: tuple[tuple[str, int], ...] = ()
     sets: tuple[tuple[str, frozenset[str]], ...] = ()

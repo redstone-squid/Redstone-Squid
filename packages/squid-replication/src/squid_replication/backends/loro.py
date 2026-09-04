@@ -1,4 +1,10 @@
-"""Loro engines behind the replicated SPI."""
+"""Loro engines behind the replicated SPI.
+
+`LoroEngine` is the production backend (`loro-document-v1`); `LoroTextEngine` is a single-text
+adapter for the backend gate tests. Both import `loro` when constructed and raise
+`RuntimeError` without it. Loro reports a rejected edit as a bare `BaseException`, which is why
+the `type(error) is BaseException` checks translate it and let everything else through.
+"""
 
 import base64
 import json
@@ -70,6 +76,8 @@ _OPERATION_FIELDS = {
 
 @dataclass(frozen=True, slots=True)
 class LoroTextOperation:
+    """`kind` is `insert` (`value` is the text) or `delete` (`value` is the count)."""
+
     kind: str
     index: int
     value: str | int
@@ -77,6 +85,8 @@ class LoroTextOperation:
 
 @dataclass(frozen=True, slots=True)
 class LoroPrepared:
+    """One `LoroTextEngine` update between the encoded frontiers `before` and `after`; `base` is `None` when remote."""
+
     base: bytes | None
     update: bytes
     before: bytes
@@ -85,6 +95,8 @@ class LoroPrepared:
 
 @dataclass(frozen=True, slots=True)
 class LoroChangeToken:
+    """The frontiers around one `LoroTextEngine` commit; `encode` prefixes `before` with its 4-byte length."""
+
     before: bytes
     after: bytes
 
@@ -99,6 +111,8 @@ class LoroChangeToken:
 
 
 class LoroTextBranch:
+    """A fork under the engine's peer id; `prepare` raises `RuntimeError` once the engine moves past `base`."""
+
     def __init__(self, engine: LoroTextEngine) -> None:
         self._engine = engine
         self.doc = engine.doc.fork()
@@ -132,7 +146,12 @@ class LoroTextBranch:
 
 
 class LoroTextEngine:
-    """A Loro text adapter used by the backend gate; public Squid values remain strings."""
+    """A single `text` container snapshotted as `str`, for the backend gate tests.
+
+    Not a full `ReplicationEngine`: it has no operations, tokens are frontier pairs, and
+    `plan_inverse` always answers a `LoroPrepared` built from the reverse diff. `export_since`
+    raises `TypeError` for a non-`bytes` version and `ValueError` for one the document lacks.
+    """
 
     backend_id = "loro-text-v1"
 
@@ -192,27 +211,38 @@ class LoroTextEngine:
 
 @dataclass(frozen=True, slots=True)
 class LoroOperation:
-    """One semantic mutation staged through the production Loro adapter."""
+    """One staged mutation; `_OPERATION_FIELDS` lists the `data` keys each `kind` carries.
+
+    `identity` is a UUID string. The authority map beside each list, movable list, map and tree
+    records it against every item, key or node the operation touched, and `plan_inverse`
+    conflicts when a later operation has overwritten it.
+    """
 
     identity: str
     kind: str
     path: str
     data: Mapping[str, Any]
+    """Frozen; after `LoroDocumentBranch.apply` it also holds the previous values an inverse needs."""
 
 
 @dataclass(frozen=True, slots=True)
 class LoroDocumentToken:
-    """One durable, action-addressable Loro inverse token."""
+    """What `LoroEngine.change_token` returns and `encode_token` serialises as schema-1 JSON."""
 
     before: bytes
+    """Encoded oplog frontiers when the commit started; `plan_inverse` diffs back to them."""
     after: bytes
     operations: tuple[LoroOperation, ...]
     shallow_root: bytes
+    """The document's `shallow_since_frontiers` at minting."""
     backend_version: str
+    """The installed `loro` distribution version; `plan_inverse` conflicts on any other."""
 
 
 @dataclass(frozen=True, slots=True)
 class LoroDocumentPrepared:
+    """`base` is `None` and `operations` empty for a remote update; `update` is the exported bytes."""
+
     base: bytes | None
     update: bytes
     before: bytes
@@ -222,9 +252,13 @@ class LoroDocumentPrepared:
 
 @dataclass(frozen=True, slots=True)
 class LoroDocumentInverse:
+    """`operations` replay through `LoroDocumentBranch.apply`; `safe_diff` restores the text roots wholesale."""
+
     operations: tuple[LoroOperation, ...]
     safe_diff: DiffBatch
+    """The reverse Loro diff restricted to `safe_containers`."""
     safe_containers: tuple[tuple[str, str], ...]
+    """`(kind, path)` pairs, `text` only: the containers with no authority map to check."""
 
 
 def _operation(kind: str, path: str, **data: Any) -> LoroOperation:
@@ -347,6 +381,7 @@ def _valid_subtree(value: object) -> bool:
 
 
 def _root_name(kind: str, path: str) -> str:
+    """`$squid$<kind>$<urlsafe base64 of path, unpadded>`; `_parse_root` reverses it."""
     encoded = base64.urlsafe_b64encode(path.encode()).decode().rstrip("=")
     return f"{_ROOT_PREFIX}{kind}${encoded}"
 
@@ -545,7 +580,11 @@ def _restore_tree_subtree(tree: Any, subtree: Mapping[str, Any], operation: Loro
 
 
 class LoroDocumentBranch:
-    """An isolated Loro branch discarded unless its exact base commits."""
+    """A fork under the engine's peer id that stages `LoroOperation`s and re-records each with its previous values.
+
+    `prepare` checks `base` against the engine's version and runs the full snapshot validation
+    on the fork, so the limits in `_snapshot` are enforced before anything is committed.
+    """
 
     def __init__(self, engine: LoroEngine) -> None:
         self._engine = engine
@@ -564,6 +603,7 @@ class LoroDocumentBranch:
         return tuple(self._operations)
 
     def apply(self, operation: LoroOperation) -> None:
+        """Loro's bare `BaseException` becomes `ValueError`; `IndexError` from the `list_*` kinds passes through."""
         try:
             applied = self._apply(operation)
         except BaseException as error:
@@ -880,6 +920,11 @@ class LoroDocumentBranch:
 
 
 def _snapshot(document: Any) -> ReplicatedSnapshot:
+    """Read every `$squid$` root into a `ReplicatedSnapshot`, enforcing the size limits.
+
+    Raises `ValueError` past 256 roots, 100 000 items in one container or an 8 MiB JSON
+    encoding, and `TypeError` for a root whose contents are not what its kind stores.
+    """
     deep = document.get_deep_value()
     if not isinstance(deep, dict):
         message = "Loro document root is not an object"
@@ -1022,6 +1067,7 @@ def _snapshot(document: Any) -> ReplicatedSnapshot:
 
 
 def _set_snapshot(entries: Mapping[str, LoroValue]) -> frozenset[str]:
+    """Members with at least one `a:` tag no standing `r:` removal names; a `u:` entry cancels the removal it names."""
     adds = {key[2:]: value for key, value in entries.items() if key.startswith("a:") and isinstance(value, str)}
     removals: dict[str, set[str]] = {}
     cancelled: set[str] = set()
@@ -1037,9 +1083,10 @@ def _set_snapshot(entries: Mapping[str, LoroValue]) -> frozenset[str]:
 
 @dataclass(frozen=True, slots=True)
 class LoroBackend:
-    """Create production Loro engines for one replica incarnation."""
+    """Opens `LoroEngine`s that all share one Loro peer id."""
 
     peer_id: int = 0
+    """The 64-bit Loro peer id; `0` draws a random non-zero one at construction."""
     backend_id = "loro-document-v1"
 
     def __post_init__(self) -> None:
@@ -1051,7 +1098,16 @@ class LoroBackend:
 
 
 class LoroEngine:
-    """A full-document Loro engine whose containers never escape as public values."""
+    """The production `ReplicationEngine`: every container kind, over one `LoroDoc` per document.
+
+    Each replicated container is a root named by `_root_name`; lists, movable lists, maps and
+    trees keep a sibling authority map recording which operation last touched each item. A
+    `version()` is the encoded oplog frontiers. Limits: 512-byte paths, 1 MiB updates and
+    tokens, 10 000 operations per action, 256 roots, 100 000 items per container, an 8 MiB
+    snapshot. `compact()` keeps history back to the oldest retained token by replacing `doc`
+    with a shallow snapshot; a token from before that, or minted under another `loro`
+    version, plans a conflict instead of an inverse.
+    """
 
     backend_id = LoroBackend.backend_id
     container_kinds = frozenset({"counter", "set", "text", "list", "movable", "map", "tree"})
@@ -1078,6 +1134,7 @@ class LoroEngine:
         tags: tuple[object, ...] = (),
         undoes: object | None = None,
     ) -> LoroOperation:
+        """Build a counter or set operation from positional fields; `make_operation` is the keyword form."""
         data: dict[str, object] = {"value": value}
         if tags:
             data["tags"] = [str(tag) for tag in tags]
@@ -1574,6 +1631,7 @@ class LoroEngine:
             self._retentions.pop(retention, None)
 
     def compact(self) -> None:
+        """Replace `doc` with a shallow snapshot at the intersection of the oplog and every retained `before`."""
         target = self.doc.oplog_vv
         for encoded in self._retentions.values():
             frontiers = self.module.Frontiers.decode(encoded)
@@ -1596,6 +1654,7 @@ class LoroEngine:
         self.doc = compacted
 
     def _token_is_expired(self, token: LoroDocumentToken) -> bool:
+        """True when `before` does not decode, is unknown here, or predates the shallow-since boundary."""
         try:
             token_before = self.module.Frontiers.decode(token.before)
             before_vv = self.doc.frontiers_to_vv(token_before)
