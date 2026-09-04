@@ -98,7 +98,7 @@ class SharedState[ScopeT = None](StateOwner):
         """
         return CellAddress(self, name)
 
-    def _resource_binding(self, name: str) -> tuple[CellAddress, Callable[[Any], None]]:
+    def _resource_binding(self, name: str) -> tuple[CellAddress, Callable[[Address], None]]:
         """Address a resource declared here, and hand it the bus to announce itself on.
 
         This is what makes a namespace resource *shared* rather than merely reachable from
