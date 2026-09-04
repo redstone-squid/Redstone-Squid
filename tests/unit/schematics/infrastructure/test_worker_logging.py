@@ -303,17 +303,18 @@ async def test_worker_request_injects_trace_context_into_frame(mocker: MockerFix
     stdin.drain = mocker.AsyncMock()
     process = mocker.Mock(stdin=stdin, stdout=stdout)
     mocker.patch.object(worker, "_ensure_started", new=mocker.AsyncMock(return_value=process))
-    inject = mocker.patch.object(
+    headers = mocker.patch.object(
         worker_module,
-        "inject_trace_context",
-        side_effect=lambda header: header.update({"traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01"}),
+        "trace_context_headers",
+        return_value={"traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01"},
     )
 
     await worker.request("capabilities", {}, (), 1.0)
 
-    inject.assert_called_once()
+    headers.assert_called_once_with()
     encoded = stdin.write.call_args.args[0]
-    assert b'"traceparent":"00-' in encoded
+    assert b'"trace":{"traceparent":"00-' in encoded
+    assert b'"params":{},"traceparent"' not in encoded
 
 
 @pytest.mark.parametrize("job_id", [4242, None])
@@ -386,7 +387,7 @@ def test_worker_main_extracts_parent_context_around_operation(mocker: MockerFixt
         "id": 1,
         "op": "analyze",
         "params": {"source_format": "litematic"},
-        "traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01",
+        "trace": {"traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01"},
     }
     stdin = io.BytesIO(Frame(header).encode())
     stdout = io.BytesIO()
@@ -398,7 +399,7 @@ def test_worker_main_extracts_parent_context_around_operation(mocker: MockerFixt
 
     extract.assert_called_once_with(
         "schematic.worker analyze",
-        mocker.ANY,
+        header["trace"],
         {"squid.schematic.operation": "analyze", "squid.schematic.format": "litematic"},
     )
 

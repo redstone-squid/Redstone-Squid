@@ -8,7 +8,7 @@ from collections.abc import Callable, Generator, Mapping
 from contextlib import AbstractContextManager, contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol, override
+from typing import TYPE_CHECKING, Protocol, override
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -367,20 +367,20 @@ def trace_span(name: str, attributes: Mapping[str, SpanAttribute] | None = None)
             raise
 
 
-def inject_trace_context(carrier: dict[str, Any]) -> None:
-    """Inject the active W3C trace context into a JSON-compatible carrier."""
+def trace_context_headers() -> dict[str, str]:
+    """Return the active W3C trace context as worker-protocol headers."""
     telemetry = _telemetry()
     if telemetry is None:
-        return
+        return {}
     headers: dict[str, str] = {}
     telemetry.propagator.inject(headers)
-    carrier.update(headers)
+    return headers
 
 
 @contextmanager
 def extracted_trace_span(
     name: str,
-    carrier: Mapping[str, Any],
+    carrier: Mapping[str, str],
     attributes: Mapping[str, SpanAttribute] | None = None,
 ) -> Generator[TraceSpan]:
     """Extract a parent context and start a child span, tolerating absent propagation."""
@@ -388,8 +388,7 @@ def extracted_trace_span(
     if telemetry is None:
         yield TraceSpan()
         return
-    headers = {name: value for name, value in carrier.items() if isinstance(value, str)}
-    parent = telemetry.propagator.extract(headers)
+    parent = telemetry.propagator.extract(carrier)
     with telemetry.worker_tracer.start_as_current_span(
         name, context=parent, attributes=dict(attributes or {})
     ) as span:
@@ -599,12 +598,12 @@ __all__ = [
     "correlation_reference",
     "correlation_scope",
     "extracted_trace_span",
-    "inject_trace_context",
     "install_trace_context_log_filter",
     "instrument_api_app",
     "record_current_exception",
     "record_gauge",
     "record_histogram",
+    "trace_context_headers",
     "trace_span",
     "unbind_correlation_id",
 ]
