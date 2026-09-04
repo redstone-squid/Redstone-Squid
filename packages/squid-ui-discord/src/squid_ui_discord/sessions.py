@@ -570,7 +570,7 @@ class Session:
         return MembershipResult(user_id, status, self._members, self.remaining_capacity)
 
     async def finish(self, *, disable: bool = True) -> None:
-        """Finish every mount depth-first and unregister the session."""
+        """End this session, finishing every message root depth-first and unregistering it."""
         async with self._lifecycle_lock:
             if self._closed:
                 return
@@ -835,7 +835,7 @@ class SessionManager:
         return next((session for session in self._sessions if session.id == session_id), None)
 
     async def close(self, key: Hashable, *, disable: bool = True) -> None:
-        """Finish every session under `key`."""
+        """End every session under `key`; the manager remains usable."""
         for session in self.get(key):
             await session.finish(disable=disable)
 

@@ -146,6 +146,7 @@ class ActionResponder:
         await self.notice(url)
 
     async def finish(self) -> None:
+        """End this action's message root through the current interaction."""
         await self.message_root.finish_via(self.interaction)
 
     def invalidate(self) -> None:
