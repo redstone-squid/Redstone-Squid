@@ -13,6 +13,7 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.infrastructure.models import Account, AccountIdentity
+from squid.bot.notifications import render_delivery
 from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventRecord
 from squid.notifications.domain import (
@@ -155,6 +156,30 @@ async def test_delivery_claims_use_uuid_fencing_and_database_attempt_counts(
     assert claimed[0].claim_token is not None
     assert await repository.complete_delivery(claimed[0]) is True
     assert await repository.complete_delivery(claimed[0]) is False
+
+
+async def test_delivery_claim_selects_most_recent_discord_identity_and_completes(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    delivery_id = await _seed_delivery(async_session_factory)
+    async with async_session_factory.begin() as session:
+        account_id = (await session.scalars(select(Account.id))).one()
+        session.add(
+            AccountIdentity(
+                account_id=account_id,
+                provider=IdentityProvider.DISCORD,
+                subject="456",
+                verified_at=Instant.now().add(minutes=1),
+            )
+        )
+
+    (claimed,) = await repository.claim_deliveries(limit=10)
+
+    assert claimed.id == delivery_id
+    assert claimed.discord_id == 456
+    assert render_delivery(claimed, None) == "Your build was confirmed."
+    assert await repository.complete_delivery(claimed) is True
 
 
 async def test_persisted_notification_and_subscription_kinds_round_trip_as_enums(
