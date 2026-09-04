@@ -5,6 +5,7 @@ import inspect
 import logging
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from typing import cast, override
 
 import anyio
@@ -300,3 +301,83 @@ async def test_an_event_without_lookup_consumers_performs_no_discord_io() -> Non
         await router.close()
 
     harness.get_or_fetch_message.assert_not_awaited()
+
+
+async def test_clear_and_clear_emoji_dispatch_only_their_typed_callbacks() -> None:
+    calls: list[tuple[str, str | None]] = []
+
+    async def cleared(event: reactions_module.ReactionClearEvent) -> None:
+        calls.append(("clear", event.emoji))
+
+    async def cleared_emoji(event: reactions_module.ReactionClearEvent) -> None:
+        calls.append(("clear_emoji", event.emoji))
+
+    async with running_router() as router:
+        router.subscribe("clear-consumer", clear=cleared, clear_emoji=cleared_emoji)
+        await router.dispatch_clear(cast(discord.RawReactionClearEvent, SimpleNamespace(message_id=10)))
+        await router.dispatch_clear_emoji(
+            cast(discord.RawReactionClearEmojiEvent, SimpleNamespace(message_id=10, emoji="⭐"))
+        )
+        await router.close()
+
+    assert calls == [("clear", None), ("clear_emoji", "⭐")]
+
+
+async def test_cancelling_a_blocked_enqueue_does_not_admit_it_later() -> None:
+    entered = anyio.Event()
+    release = anyio.Event()
+    calls: list[int] = []
+
+    async def slow(event: ReactionEvent) -> None:
+        calls.append(event.payload.user_id)
+        if event.payload.user_id == 1:
+            entered.set()
+            await release.wait()
+
+    async with running_router(concurrency=1, max_pending=1) as router:
+        router.subscribe("slow", add=slow)
+        await router.dispatch_add(make_reaction_payload(user_id=1))
+        await entered.wait()
+        await router.dispatch_add(make_reaction_payload(user_id=2))
+
+        with anyio.move_on_after(0.01) as cancelled:
+            await router.dispatch_add(make_reaction_payload(user_id=3))
+        assert cancelled.cancelled_caught
+
+        release.set()
+        await router.close()
+
+    assert calls == [1, 2]
+
+
+async def test_shutdown_routes_an_unadmitted_vote_event_to_consumer_recovery() -> None:
+    entered = anyio.Event()
+    recovered: list[int] = []
+
+    async def hang(event: ReactionEvent) -> None:
+        if event.payload.user_id == 1:
+            entered.set()
+            await anyio.sleep_forever()
+
+    async def recover(event: ReactionEvent) -> None:
+        recovered.append(event.payload.user_id)
+
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        router = ReactionRouter(
+            make_reaction_bot().bot,
+            supervisor,
+            concurrency=1,
+            max_pending=1,
+            shutdown_timeout=0.01,
+        )
+        router.subscribe("vote", add=hang, recover_add=recover)
+        await router.dispatch_add(make_reaction_payload(user_id=1))
+        await entered.wait()
+        await router.dispatch_add(make_reaction_payload(user_id=2))
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(router.dispatch_add, make_reaction_payload(user_id=3))
+            await anyio.sleep(0)
+            await router.close()
+
+    assert recovered == [3]

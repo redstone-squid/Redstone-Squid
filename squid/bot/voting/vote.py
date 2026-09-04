@@ -52,6 +52,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             remove=self.on_reaction_remove,
             clear=self.on_reaction_clear,
             clear_emoji=self.on_reaction_clear_emoji,
+            recover_add=self.on_reaction_add,
+            recover_remove=self.on_reaction_remove,
+            recover_clear=self.on_reaction_clear,
+            recover_clear_emoji=self.on_reaction_clear_emoji,
         )
 
     @override
