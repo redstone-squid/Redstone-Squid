@@ -186,7 +186,7 @@ def _assess_media(
             if artifact.role in {MediaArtifactRole.OUTPUT, MediaArtifactRole.POSTER}
         ),
     )
-    rejected |= limits.batch_violation(totals) is not None
+    rejected |= bool(limits.batch_violations(totals))
 
     identifiers: list[UUID] = []
     seen: set[UUID] = set()
