@@ -33,6 +33,7 @@ drawn as the `discord.ui.Item` that factory returns.
 
 class _DiscordItemExtension:
     def prepare(self, payload: ItemFactory) -> PreparedExtension[discord.ui.Item[Any]]:
+        """Build and measure one native item during target planning."""
         # Still checked, though `ExtensionKind` now states it: a scene can be authored from
         # untyped code, and "not a factory" is a better report than "the factory failed".
         if not callable(payload):
@@ -62,11 +63,13 @@ DISCORD_PY_27_ADAPTER = AdapterProfile(
 
 @cache
 def _installed_discord_py() -> Version:
+    """Return the installed discord.py version once per process."""
     return Version(version("discord.py"))
 
 
 @cache
 def _version_range(expression: str) -> SpecifierSet:
+    """Parse and cache one adapter version constraint."""
     return SpecifierSet(expression)
 
 

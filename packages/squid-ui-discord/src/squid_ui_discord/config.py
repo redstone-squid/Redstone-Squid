@@ -19,6 +19,7 @@ type ErrorObserver = Callable[[Request[Any], Exception, DeliveryResult | None], 
 
 
 def _response_spec() -> ResponseSpec:
+    """Construct response defaults without importing the facade cycle eagerly."""
     from squid_ui_discord.response import ResponseSpec
 
     return ResponseSpec()
