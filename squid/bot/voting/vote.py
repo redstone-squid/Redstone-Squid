@@ -20,7 +20,15 @@ from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.sessions import start_delete_log_vote
 from squid.core.i18n import tr
 from squid.runtime import JobHandle
-from squid.voting.domain import PollScope, VoteActor, VoteKind, VoteOption, VoteRejection
+from squid.voting.domain import (
+    PollScope,
+    VoteActor,
+    VoteKind,
+    VoteMessage,
+    VoteOption,
+    VoteRejection,
+    VoteSessionSnapshot,
+)
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_ui.text import localization_scope
 from squid_ui_discord import send_to
@@ -52,10 +60,20 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             remove=self.on_reaction_remove,
             clear=self.on_reaction_clear,
             clear_emoji=self.on_reaction_clear_emoji,
-            recover_add=self.on_reaction_add,
-            recover_remove=self.on_reaction_remove,
-            recover_clear=self.on_reaction_clear,
-            recover_clear_emoji=self.on_reaction_clear_emoji,
+            recover_add=self.recover_reaction_action,
+            recover_remove=self.recover_reaction_action,
+            recover_clear=self.recover_reaction_clear,
+            recover_clear_emoji=self.recover_reaction_clear,
+        )
+
+    @override
+    async def ui_load(self) -> None:
+        self._track(
+            self.bot.background_tasks.start_periodic(
+                self.reconcile_open_reactions,
+                name="vote-reaction-reconciliation",
+                interval=60,
+            )
         )
 
     @override
@@ -92,14 +110,6 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         if snapshot.option_by_emoji(emoji_name, payload.guild_id or 0) is None:
             return
 
-        if snapshot.should_remove_reaction_on_cast():
-            self._track(
-                self.bot.background_tasks.start(
-                    self._remove_reaction(message, payload.emoji, user),
-                    name=f"remove-vote-reaction-{payload.message_id}-{payload.user_id}",
-                )
-            )
-
         if payload.guild_id is None:
             return  # Voting in DMs is not implemented.
 
@@ -116,6 +126,16 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             return
         if result.session is None:
             return
+
+        # The reaction is the durable recovery source until the ballot commits. If shutdown
+        # interrupts this handler first, the periodic reconciliation sees it on the next run.
+        if result.session.should_remove_reaction_on_cast():
+            self._track(
+                self.bot.background_tasks.start(
+                    self._remove_reaction(message, payload.emoji, user),
+                    name=f"remove-vote-reaction-{payload.message_id}-{payload.user_id}",
+                )
+            )
 
         # A public poll keeps reactions as the visible ballot, so a changed vote has
         # to have its previous reaction taken back or the message would show both.
@@ -154,6 +174,135 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
         """Restore the offered options after one emoji is cleared from a vote card."""
         await self._restore_reactions(event.payload.message_id)
+
+    async def recover_reaction_action(self, event: ReactionEvent) -> None:
+        """Reconcile one interrupted add/remove from Discord's durable message state."""
+        await self.reconcile_message_reactions(event.payload.message_id)
+
+    async def recover_reaction_clear(self, event: ReactionClearEvent) -> None:
+        """Reconcile one interrupted clear from Discord's durable message state."""
+        await self.reconcile_message_reactions(event.payload.message_id)
+
+    async def reconcile_open_reactions(self) -> None:
+        """Periodically converge every open vote from its Discord reactions.
+
+        The job ends when the cog unloads. Public reactions are the desired ballot state;
+        anonymous reactions remain only until their corresponding database mutation commits,
+        so a reaction left behind is a retryable ballot without exposing stored selections.
+        """
+        await self.bot.wait_until_ready()
+        errors: list[Exception] = []
+        visited: set[int] = set()
+        for kind in VoteKind:
+            try:
+                sessions = await self.vote_service.list_open(kind)
+            except Exception as error:
+                errors.append(error)
+                continue
+            for session in sessions:
+                if session.id in visited:
+                    continue
+                visited.add(session.id)
+                try:
+                    await self._reconcile_session_reactions(session)
+                except Exception as error:
+                    errors.append(error)
+        if errors:
+            message = "Vote reaction reconciliation failed"
+            raise ExceptionGroup(message, errors)
+
+    async def reconcile_message_reactions(self, message_id: int) -> None:
+        """Make one open session agree with the reactions currently on its card."""
+        snapshot = await self.vote_service.get_session(message_id)
+        if snapshot is None or not snapshot.is_open:
+            return
+        if message_id not in snapshot.message_ids:
+            return
+        await self._reconcile_session_reactions(snapshot)
+
+    async def _reconcile_session_reactions(self, snapshot: VoteSessionSnapshot) -> None:
+        """Converge all of one session's cards without multi-card vote oscillation."""
+        cards: list[tuple[VoteMessage, discord.Message, dict[str, discord.Reaction]]] = []
+        observed: dict[int, list[tuple[int, discord.Message, discord.Member, str]]] = {}
+        complete_observation = True
+        for location in snapshot.messages:
+            message = await self.bot.get_or_fetch_message(location.channel_id, location.id)
+            if message is None:
+                complete_observation = False
+                continue
+            reactions = {str(reaction.emoji): reaction for reaction in message.reactions}
+            cards.append((location, message, reactions))
+            for option in snapshot.options_for_guild(location.guild_id):
+                reaction = reactions.get(option.emoji)
+                if reaction is None:
+                    continue
+                async for user in reaction.users(limit=None):
+                    if user.bot or (self.bot.user is not None and user.id == self.bot.user.id):
+                        continue
+                    member = await self._reaction_member(location.guild_id, user)
+                    if member is None:
+                        complete_observation = False
+                        continue
+                    account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, member.id)
+                    if account_id is not None:
+                        observed.setdefault(account_id, []).append((location.id, message, member, option.emoji))
+
+        changed = False
+        for account_id, reactions_for_account in observed.items():
+            reacted_message_id, _message, member, desired_emoji = reactions_for_account[0]
+            selection = snapshot.selection_for(account_id)
+            accepted = selection is not None and selection.emoji == desired_emoji
+            if not accepted:
+                actor = await resolve_actor(self.bot, member, account_id=account_id)
+                result = await self.vote_service.cast_vote(reacted_message_id, actor, desired_emoji)
+                accepted = result.accepted
+                changed = changed or accepted
+            if accepted:
+                retained = None if snapshot.is_anonymous else desired_emoji
+                for _message_id, reacted_message, reacted_member, emoji in reactions_for_account:
+                    if emoji != retained:
+                        await self._remove_reaction(reacted_message, emoji, reacted_member)
+
+        if not snapshot.is_anonymous and complete_observation:
+            observed_accounts = observed.keys()
+            for selection in snapshot.selections:
+                if selection.account_id in observed_accounts:
+                    continue
+                location = next(
+                    (message for message in snapshot.messages if message.guild_id == selection.guild_id),
+                    snapshot.messages[0] if snapshot.messages else None,
+                )
+                if location is None:
+                    continue
+                actor = await self.resolve(selection.account_id, location.guild_id, snapshot.kind)
+                if actor is None:
+                    continue
+                result = await self.vote_service.cast_vote(location.id, actor, selection.emoji)
+                changed = changed or result.accepted
+
+        for location, message, reactions in cards:
+            for option in snapshot.options_for_guild(location.guild_id):
+                reaction = reactions.get(option.emoji)
+                if reaction is None or not reaction.me:
+                    await message.add_reaction(option.emoji)
+        if changed:
+            await self.bot.refresh_posts("vote_session", str(snapshot.id))
+
+    async def _reaction_member(
+        self, guild_id: int, user: discord.Member | discord.User
+    ) -> discord.Member | None:
+        if isinstance(user, discord.Member):
+            return user
+        guild = self.bot.get_guild(guild_id)
+        if guild is None:
+            return None
+        member = guild.get_member(user.id)
+        if member is not None:
+            return member
+        try:
+            return await guild.fetch_member(user.id)
+        except (discord.NotFound, discord.Forbidden):
+            return None
 
     async def _restore_reactions(self, message_id: int) -> None:
         """Put the configured baseline reactions back, without inferring lost ballots.

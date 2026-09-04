@@ -380,4 +380,50 @@ async def test_shutdown_routes_an_unadmitted_vote_event_to_consumer_recovery() -
             await anyio.sleep(0)
             await router.close()
 
-    assert recovered == [3]
+    assert sorted(recovered) == [1, 2, 3]
+
+
+async def test_reaction_arriving_after_close_is_deferred_to_periodic_reconciliation() -> None:
+    recovered: list[int] = []
+
+    async def handle(_event: ReactionEvent) -> None:
+        pytest.fail("closed intake must not call the ordinary handler")
+
+    async def recover(event: ReactionEvent) -> None:
+        recovered.append(event.payload.user_id)
+
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        router = ReactionRouter(make_reaction_bot().bot, supervisor)
+        router.subscribe("vote", add=handle, recover_add=recover)
+        await router.close()
+        await router.dispatch_add(make_reaction_payload(user_id=4))
+
+    assert recovered == []
+
+
+async def test_close_bounds_a_hanging_recovery_handoff(caplog: pytest.LogCaptureFixture) -> None:
+    entered = anyio.Event()
+
+    async def hang(event: ReactionEvent) -> None:
+        if event.payload.user_id == 1:
+            entered.set()
+            await anyio.sleep_forever()
+
+    async def recover(_event: ReactionEvent) -> None:
+        await anyio.sleep_forever()
+
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        router = ReactionRouter(
+            make_reaction_bot().bot,
+            supervisor,
+            concurrency=1,
+            max_pending=1,
+            shutdown_timeout=0.01,
+        )
+        router.subscribe("vote", add=hang, recover_add=recover)
+        await router.dispatch_add(make_reaction_payload(user_id=1))
+        await entered.wait()
+        with caplog.at_level(logging.ERROR, logger="squid.bot.reactions"), anyio.fail_after(2):
+            await router.close()
+
+    assert any("recovery handoff did not finish" in record.getMessage() for record in caplog.records)
