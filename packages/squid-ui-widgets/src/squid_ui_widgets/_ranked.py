@@ -20,6 +20,8 @@ type Projector[EntryT] = str | Callable[[EntryT], object]
 
 
 class RankedRows[EntryT]:
+    """Project arbitrary entries into stable ranked display rows."""
+
     def __init__(
         self,
         label: Projector[EntryT] | None,
@@ -32,6 +34,7 @@ class RankedRows[EntryT]:
 
     @staticmethod
     def project(entry: EntryT, projector: Projector[EntryT]) -> object:
+        """Apply a callback, mapping key, or attribute projector."""
         if callable(projector):
             return projector(entry)
         if isinstance(entry, Mapping):
@@ -47,6 +50,7 @@ class RankedRows[EntryT]:
             raise ValueError(message) from error
 
     def values(self, entry: RankedEntry | EntryT) -> tuple[object, object]:
+        """Return the display label and value for one entry."""
         if isinstance(entry, RankedEntry):
             if self.label is not None or self.value is not None:
                 message = "projectors cannot be combined with RankedEntry values"
@@ -60,6 +64,7 @@ class RankedRows[EntryT]:
         return self.project(entry, self.label), self.project(entry, self.value)
 
     def identity_of(self, entry: RankedEntry | EntryT) -> str:
+        """Return the entry identity used to anchor paging."""
         if isinstance(entry, RankedEntry) and entry.key:
             return entry.key
         if self.identity is not None and not isinstance(entry, RankedEntry):
@@ -67,6 +72,7 @@ class RankedRows[EntryT]:
         return repr(entry)
 
     def lines(self, entries: tuple[RankedEntry | EntryT, ...], offset: int) -> tuple[str, ...]:
+        """Format entries with ranks continuing after `offset`."""
         return tuple(
             f"{rank}. **{display_text(label)}** — {display_text(value)}"
             for rank, entry in enumerate(entries, offset + 1)
