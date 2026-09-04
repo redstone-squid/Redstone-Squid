@@ -11,6 +11,9 @@ from typing import Literal
 
 type Vector3 = tuple[int, int, int]
 
+SCHEMATIC_FILE_SCHEMA_MAX_BYTES = 16 * 1024 * 1024
+"""Fixed compressed-byte ceiling encoded in the database schema."""
+
 
 class SchematicFormat(StrEnum):
     """A schematic container format this application can read."""
@@ -73,7 +76,7 @@ class SchematicLimits:
     worker immediately after the engine loads the file.
     """
 
-    max_upload_bytes: int = 16 * 1024 * 1024
+    max_upload_bytes: int = SCHEMATIC_FILE_SCHEMA_MAX_BYTES
     max_inflated_bytes: int = 64 * 1024 * 1024
     max_allocated_volume: int = 20_000_000
     max_axis_length: int = 512
