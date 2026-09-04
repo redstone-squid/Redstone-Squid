@@ -1,6 +1,6 @@
 """Submission finalization tests: the same path serves the bot and the API."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from uuid import UUID
 
@@ -12,6 +12,7 @@ from squid.sponsors import PublicSponsor
 from squid.submissions.application import (
     ActionableSubmissionError,
     AppliedDraftChange,
+    AppliedDraftUpgrade,
     ClaimedFinalizationJob,
     FinalizationFailureOutcome,
     FinalizationJobSnapshot,
@@ -26,6 +27,7 @@ from squid.submissions.application import (
 from squid.submissions.domain import (
     DoorSubmissionDetails,
     DraftChange,
+    DraftChangeKey,
     DraftSnapshot,
     DraftStatus,
     ExtenderSubmissionDetails,
@@ -73,9 +75,8 @@ class FakeManifestRegistry:
         *,
         locale: str | None,
     ) -> FormManifest | None:
-        del locale
-        if (schema_id, revision) == (self.manifest.schema_id, self.manifest.revision):
-            return self.manifest
+        if schema_id == self.manifest.schema_id and revision in {1, 2}:
+            return build_submission_manifest(locale, revision=revision)
         return None
 
 
@@ -108,7 +109,7 @@ class FakeDraftRepository:
         self,
         draft_id: UUID,
         account_id: int,
-        idempotency_key: str,
+        idempotency_key: DraftChangeKey,
     ) -> AppliedDraftChange | None:
         del draft_id, account_id, idempotency_key
         return None
@@ -143,6 +144,20 @@ class FakeDraftRepository:
             expires_at=expires_at,
         )
         return self.draft
+
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_schema_revision: int,
+        answers: Mapping[str, JSONValue],
+        updated_at: Instant,
+        expires_at: Instant,
+    ) -> AppliedDraftUpgrade:
+        del draft_id, account_id, expected_revision, target_schema_revision, answers, updated_at, expires_at
+        raise NotImplementedError
 
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
         del draft_id, account_id
