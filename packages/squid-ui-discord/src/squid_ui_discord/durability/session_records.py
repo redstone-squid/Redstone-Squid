@@ -103,9 +103,12 @@ class DurableSessionCodec:
             message_root = require_object(raw_root, "durable mount")
             address = require_object(message_root.get("address"), "mount address")
             values = require_object(address.get("values"), "mount address values")
-            if not all(isinstance(key, str) and isinstance(value, str | int) for key, value in values.items()):
-                message = "mount address values must contain string keys and string or integer values"
-                raise MessageRootStateError(message)
+            address_values: dict[str, str | int] = {}
+            for key, value in values.items():
+                if not isinstance(value, str | int):
+                    message = "mount address values must contain string keys and string or integer values"
+                    raise MessageRootStateError(message)
+                address_values[key] = value
             actor_id = message_root.get("actor_id")
             if actor_id is not None and (not isinstance(actor_id, int) or isinstance(actor_id, bool)):
                 message = "mount actor_id must be an integer or null"
@@ -121,7 +124,7 @@ class DurableSessionCodec:
                         json.dumps(message_root.get("state"), ensure_ascii=False, separators=(",", ":"))
                     ),
                     address=FrontendAddress(
-                        require_string(address, "frontend", description="mount address field"), values
+                        require_string(address, "frontend", description="mount address field"), address_values
                     ),
                     parent_id=parent_id,
                     actor_id=actor_id,
