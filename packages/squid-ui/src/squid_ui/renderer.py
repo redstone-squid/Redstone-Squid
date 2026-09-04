@@ -20,6 +20,3 @@ class Renderer[BodyT: scene.Body, OutputT](Protocol):
     """
 
     def draw(self, document: scene.Scene[BodyT], *, plan: PlanResult[BodyT] | None = None) -> OutputT: ...
-
-
-__all__ = ["AssetResolver", "Renderer"]
