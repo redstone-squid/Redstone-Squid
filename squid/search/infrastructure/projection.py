@@ -28,9 +28,9 @@ from squid.diagnostics.log_capture import work_lost
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.infrastructure.models import (
     RecordComputationRun,
-    RecordDefinition,
-    RecordResult,
     RecordResultHolder,
+    RecordRule,
+    RecordStanding,
 )
 from squid.search.infrastructure.models import (
     SearchDocument,
@@ -461,10 +461,10 @@ class SearchProjectionLoader:
     async def _computed_record(self, result_id: int) -> SearchProjection | None:
         row = (
             await self._session.execute(
-                select(RecordResult, RecordDefinition)
-                .join(RecordComputationRun, RecordComputationRun.id == RecordResult.run_id)
-                .join(RecordDefinition, RecordDefinition.id == RecordResult.definition_id)
-                .where(RecordResult.id == result_id, RecordComputationRun.is_active.is_(True))
+                select(RecordStanding, RecordRule)
+                .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
+                .join(RecordRule, RecordRule.id == RecordStanding.definition_id)
+                .where(RecordStanding.id == result_id, RecordComputationRun.is_active.is_(True))
             )
         ).one_or_none()
         if row is None:
