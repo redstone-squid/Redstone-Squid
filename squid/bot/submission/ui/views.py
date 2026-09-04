@@ -449,6 +449,7 @@ class BuildEditScreen(sd.Screen):
     timeout = 900
     audience = "personal"
     follow_topics = True
+    root_options = {"retain_routed_on_timeout": True}
 
     page: int = sl.state(1)
     confirming: bool = sl.state(default=False)
@@ -533,6 +534,8 @@ class BuildEditScreen(sd.Screen):
         return await self._authorize()
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+        from squid.bot.submission.ui.controls import build_edit
+
         if self.saved:
             return (
                 sl.section(
@@ -585,6 +588,7 @@ class BuildEditScreen(sd.Screen):
                 sl.heading(tr(t"Edit build")),
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(sl.field(tr(t"Fields in this section"), self.summary_text())),
+                sl.note(tr(t"Reloading a fresh editor discards every staged change in this one.")),
                 accent=DISCORD_YELLOW if self.validation_error else sl.palette.INHERIT,
             )
         ]
@@ -593,6 +597,17 @@ class BuildEditScreen(sd.Screen):
         nodes.append(
             sl.action_controls(*controls, key="build-edit-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL)
         )
+        if self._build_id is not None:
+            nodes.append(
+                sl.action_controls(
+                    sl.routed_action_control(
+                        tr(t"Reload fresh editor"),
+                        build_edit.id(build_id=self._build_id),
+                        key="restart",
+                    ),
+                    key="build-edit-recovery",
+                )
+            )
         return tuple(nodes)
 
     def summary_text(self) -> str:
