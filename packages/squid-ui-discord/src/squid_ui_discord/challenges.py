@@ -16,6 +16,8 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 
+import anyio
+
 from squid_ui.guards import ChallengeResolver
 from squid_ui_discord.delivery import respond_to
 from squid_ui_discord.message_root_contracts import ChallengeRequest, ChallengeSupervisor, ResumedPress
@@ -82,7 +84,7 @@ class ChallengeRunner:
             raise RuntimeError(message)
         self._running = True
         try:
-            async with asyncio.TaskGroup() as tasks:
+            async with anyio.create_task_group() as tasks:
                 while True:
                     press = await self._queue.get()
                     # Taken before the task is started, so the loop stops dequeuing while
@@ -91,11 +93,12 @@ class ChallengeRunner:
                     await self._limit.acquire()
                     # Started from this task, not from the approving one: the resumed press
                     # inherits the context this loop was created in, which has no transaction.
-                    tasks.create_task(self._carry(press))
+                    tasks.start_soon(self._carry, press)
         finally:
             self._running = False
 
     async def _carry(self, press: ResumedPress) -> None:
+        """Run one queued press while accounting for its concurrency slot."""
         self._active += 1
         try:
             await press()
