@@ -5,6 +5,7 @@ import hmac
 import secrets
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 
 from sqlalchemy import case, column, delete, func, literal, or_, select, table, text, update
 from sqlalchemy.dialects.postgresql import insert
@@ -75,6 +76,150 @@ _now = now
 
 It was the first place the nanosecond/microsecond mismatch was found; the definition now lives
 in `squid.persistence.types` so every persisted default gets the same treatment.
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountMergeContext:
+    survivor: int
+    absorbed: int
+
+    @property
+    def parameters(self) -> dict[str, int]:
+        return {"survivor": self.survivor, "absorbed": self.absorbed}
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountReference:
+    table_name: str
+    column_name: str
+
+
+_IDENTITY_PROFILE_REFERENCES = (
+    _AccountReference("minecraft_paper_installations", "owner_account_id"),
+    _AccountReference("minecraft_player_challenges", "approved_by_account_id"),
+    _AccountReference("minecraft_player_grants", "account_id"),
+    _AccountReference("api_keys", "owner_account_id"),
+    _AccountReference("api_keys", "created_by_account_id"),
+    _AccountReference("web_sessions", "account_id"),
+    _AccountReference("cli_device_enrollments", "approved_by_account_id"),
+    _AccountReference("cli_devices", "account_id"),
+    _AccountReference("account_identities", "account_id"),
+)
+_SUBMISSION_REFERENCES = (
+    _AccountReference("builds", "submitter_account_id"),
+    _AccountReference("submission_drafts", "owner_account_id"),
+    _AccountReference("submission_draft_access", "account_id"),
+    _AccountReference("submission_draft_changes", "actor_account_id"),
+    _AccountReference("build_schematics", "rights_attested_by_account_id"),
+)
+_CREATOR_CREDIT_REFERENCES = (
+    _AccountReference("creator_aliases", "account_id"),
+    _AccountReference("creator_alias_claims", "resolved_by_account_id"),
+)
+_VOTING_REFERENCES = (_AccountReference("vote_sessions", "author_account_id"),)
+_NOTIFICATION_REFERENCES = (
+    _AccountReference("notification_subscriptions", "account_id"),
+    _AccountReference("notifications", "account_id"),
+    _AccountReference("notification_deliveries", "account_id"),
+)
+_PERMISSION_PROVENANCE_REFERENCES = (
+    _AccountReference("permission_roles", "created_by_account_id"),
+    _AccountReference("permission_role_patterns", "added_by_account_id"),
+    _AccountReference("permission_role_includes", "added_by_account_id"),
+    _AccountReference("permission_grants", "granted_by_account_id"),
+    _AccountReference("permission_role_assignments", "granted_by_account_id"),
+    _AccountReference("permission_audit_log", "actor_account_id"),
+)
+
+_COLLAPSE_DRAFT_ACCESS_SQL = """
+DELETE FROM submission_draft_access AS access_row
+WHERE access_row.id IN (
+    SELECT CASE
+        WHEN draft.owner_account_id = :absorbed THEN survivor_access.id
+        ELSE absorbed_access.id
+    END
+    FROM submission_draft_access AS survivor_access
+    JOIN submission_draft_access AS absorbed_access
+      ON absorbed_access.draft_id = survivor_access.draft_id
+    JOIN submission_drafts AS draft ON draft.id = survivor_access.draft_id
+    WHERE survivor_access.account_id = :survivor
+      AND absorbed_access.account_id = :absorbed
+)
+"""
+_COLLAPSE_ALIAS_CLAIMS_SQL = """
+DELETE FROM creator_alias_claims AS absorbed_claim
+USING creator_alias_claims AS survivor_claim
+WHERE absorbed_claim.account_id = :absorbed
+  AND survivor_claim.account_id = :survivor
+  AND absorbed_claim.alias_id = survivor_claim.alias_id
+  AND absorbed_claim.status = 'pending'
+  AND survivor_claim.status = 'pending'
+"""
+_COLLAPSE_VOTES_SQL = """
+DELETE FROM votes AS absorbed_vote
+USING votes AS survivor_vote
+WHERE absorbed_vote.account_id = :absorbed
+  AND survivor_vote.account_id = :survivor
+  AND absorbed_vote.vote_session_id = survivor_vote.vote_session_id
+"""
+_MERGE_NOTIFICATION_PROFILE_SQL = """
+INSERT INTO notification_profiles (
+    account_id,
+    web_enabled,
+    dm_enabled,
+    dm_suspended_at,
+    created_at,
+    updated_at
+)
+SELECT
+    :survivor,
+    web_enabled,
+    dm_enabled,
+    dm_suspended_at,
+    created_at,
+    updated_at
+FROM notification_profiles
+WHERE account_id = :absorbed
+ON CONFLICT (account_id) DO UPDATE SET
+    web_enabled = notification_profiles.web_enabled OR EXCLUDED.web_enabled,
+    dm_enabled = notification_profiles.dm_enabled OR EXCLUDED.dm_enabled,
+    dm_suspended_at = COALESCE(notification_profiles.dm_suspended_at, EXCLUDED.dm_suspended_at)
+"""
+_COLLAPSE_NOTIFICATION_SUBSCRIPTIONS_SQL = """
+DELETE FROM notification_subscriptions AS absorbed_subscription
+USING notification_subscriptions AS survivor_subscription
+WHERE absorbed_subscription.account_id = :absorbed
+  AND survivor_subscription.account_id = :survivor
+  AND absorbed_subscription.kind = survivor_subscription.kind
+  AND absorbed_subscription.subject_id IS NOT DISTINCT FROM survivor_subscription.subject_id
+  AND absorbed_subscription.filter IS NOT DISTINCT FROM survivor_subscription.filter
+  AND absorbed_subscription.enabled = survivor_subscription.enabled
+"""
+_MERGE_PERMISSION_EFFECTS_SQL = """
+UPDATE permission_grants AS survivor_grant
+SET effect = LEAST(survivor_grant.effect, absorbed_grant.effect)
+FROM permission_grants AS absorbed_grant
+WHERE survivor_grant.subject_account_id = :survivor
+  AND absorbed_grant.subject_account_id = :absorbed
+  AND absorbed_grant.pattern = survivor_grant.pattern
+  AND absorbed_grant.scope_guild_id IS NOT DISTINCT FROM survivor_grant.scope_guild_id
+"""
+_COLLAPSE_PERMISSION_GRANTS_SQL = """
+DELETE FROM permission_grants AS absorbed_grant
+USING permission_grants AS survivor_grant
+WHERE absorbed_grant.subject_account_id = :absorbed
+  AND survivor_grant.subject_account_id = :survivor
+  AND absorbed_grant.pattern = survivor_grant.pattern
+  AND absorbed_grant.scope_guild_id IS NOT DISTINCT FROM survivor_grant.scope_guild_id
+"""
+_COLLAPSE_PERMISSION_ROLE_ASSIGNMENTS_SQL = """
+DELETE FROM permission_role_assignments AS absorbed_assignment
+USING permission_role_assignments AS survivor_assignment
+WHERE absorbed_assignment.subject_account_id = :absorbed
+  AND survivor_assignment.subject_account_id = :survivor
+  AND absorbed_assignment.role_id = survivor_assignment.role_id
+  AND absorbed_assignment.scope_guild_id IS NOT DISTINCT FROM survivor_assignment.scope_guild_id
 """
 
 
@@ -469,24 +614,14 @@ class AccountRepository:
                 raise AccountNotFoundError(absorbed_account_id)
 
             await self._merge_references(session, surviving_account_id, absorbed_account_id)
-            await session.execute(
-                update(PublicCreatorRedirect)
-                .where(PublicCreatorRedirect.target_account_id == absorbed_account_id)
-                .values(target_account_id=surviving_account_id)
-            )
-            session.add(
-                PublicCreatorRedirect(
-                    retired_public_creator_id=absorbed.public_creator_id,
-                    target_account_id=surviving_account_id,
-                )
-            )
-            await session.delete(absorbed)
-            return AccountMerge(
+            result = AccountMerge(
                 surviving_account_id=surviving_account_id,
                 absorbed_account_id=absorbed_account_id,
                 surviving_public_creator_id=survivor.public_creator_id,
                 redirected_public_creator_id=absorbed.public_creator_id,
             )
+            await _retire_absorbed_account(session, survivor, absorbed)
+            return result
 
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None:
         """Return a case-insensitive creator alias."""
@@ -1198,115 +1333,128 @@ class AccountRepository:
 
     @staticmethod
     async def _merge_references(session: AsyncSession, survivor: int, absorbed: int) -> None:
-        """Move every account-keyed resource while resolving unique-key collisions deterministically."""
-        parameters = {"survivor": survivor, "absorbed": absorbed}
-        draft_ids = tuple(
-            (
-                await session.scalars(
-                    select(SubmissionDraft.id)
-                    .where(SubmissionDraft.owner_account_id == absorbed)
-                    .order_by(SubmissionDraft.id)
-                    .with_for_update()
-                )
-            ).all()
+        """Move every account-keyed resource through named phases in this transaction."""
+        context = _AccountMergeContext(survivor, absorbed)
+        await _merge_submissions(session, context)
+        await _merge_identities_and_profiles(session, context)
+        await _merge_creator_credit(session, context)
+        await _merge_voting(session, context)
+        await _merge_notifications(session, context)
+        await _merge_permissions(session, context)
+
+
+async def _merge_submissions(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Move builds, drafts, artifact attestations, and retained finalization owners."""
+    draft_ids = tuple(
+        (
+            await session.scalars(
+                select(SubmissionDraft.id)
+                .where(SubmissionDraft.owner_account_id == context.absorbed)
+                .order_by(SubmissionDraft.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    await _canonicalize_finalization_job_owners(session, draft_ids, context.survivor, context.absorbed)
+    await _execute_merge_sql(session, _COLLAPSE_DRAFT_ACCESS_SQL, context)
+    await _move_account_references(session, _SUBMISSION_REFERENCES, context)
+
+
+async def _merge_identities_and_profiles(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Move external identities and credential ownership while retaining the survivor profile."""
+    await _move_account_references(session, _IDENTITY_PROFILE_REFERENCES, context)
+
+
+async def _merge_creator_credit(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Move creator aliases and collapse duplicate pending claims."""
+    await _move_account_references(session, _CREATOR_CREDIT_REFERENCES, context)
+    await _execute_merge_sql(session, _COLLAPSE_ALIAS_CLAIMS_SQL, context)
+    await _move_account_reference(session, _AccountReference("creator_alias_claims", "account_id"), context)
+
+
+async def _merge_voting(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Move authored sessions and retain one ballot per merged voter."""
+    await _move_account_references(session, _VOTING_REFERENCES, context)
+    await _execute_merge_sql(session, _COLLAPSE_VOTES_SQL, context)
+    await _move_account_reference(session, _AccountReference("votes", "account_id"), context)
+
+
+async def _merge_notifications(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Coalesce delivery preferences and duplicate subscriptions before moving inbox facts."""
+    await _execute_merge_sql(session, _MERGE_NOTIFICATION_PROFILE_SQL, context)
+    profiles = table("notification_profiles", column("account_id"))
+    await session.execute(delete(profiles).where(profiles.c.account_id == context.absorbed))
+    await _execute_merge_sql(session, _COLLAPSE_NOTIFICATION_SUBSCRIPTIONS_SQL, context)
+    await _move_account_references(session, _NOTIFICATION_REFERENCES, context)
+
+
+async def _merge_permissions(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Move permission provenance and collapse subject collisions to the restrictive effect."""
+    await _move_account_references(session, _PERMISSION_PROVENANCE_REFERENCES, context)
+    await _execute_merge_sql(session, _MERGE_PERMISSION_EFFECTS_SQL, context)
+    await _execute_merge_sql(session, _COLLAPSE_PERMISSION_GRANTS_SQL, context)
+    await _move_account_reference(session, _AccountReference("permission_grants", "subject_account_id"), context)
+    await _execute_merge_sql(session, _COLLAPSE_PERMISSION_ROLE_ASSIGNMENTS_SQL, context)
+    await _move_account_reference(
+        session,
+        _AccountReference("permission_role_assignments", "subject_account_id"),
+        context,
+    )
+    audit = table("permission_audit_log", column("subject_kind"), column("subject_id"))
+    await session.execute(
+        update(audit)
+        .where(audit.c.subject_kind == "account", audit.c.subject_id == context.absorbed)
+        .values(subject_id=context.survivor)
+    )
+
+
+async def _move_account_references(
+    session: AsyncSession,
+    references: Sequence[_AccountReference],
+    context: _AccountMergeContext,
+) -> None:
+    for reference in references:
+        await _move_account_reference(session, reference, context)
+
+
+async def _move_account_reference(
+    session: AsyncSession,
+    reference: _AccountReference,
+    context: _AccountMergeContext,
+) -> None:
+    target = table(reference.table_name, column(reference.column_name))
+    account_column = target.c[reference.column_name]
+    await session.execute(
+        update(target).where(account_column == context.absorbed).values({reference.column_name: context.survivor})
+    )
+
+
+async def _execute_merge_sql(
+    session: AsyncSession,
+    statement: str,
+    context: _AccountMergeContext,
+) -> None:
+    await session.execute(text(statement), context.parameters)
+
+
+async def _retire_absorbed_account(
+    session: AsyncSession,
+    survivor: AccountModel,
+    absorbed: AccountModel,
+) -> None:
+    """Finish the merge by preserving public redirects and deleting the source row."""
+    await session.execute(
+        update(PublicCreatorRedirect)
+        .where(PublicCreatorRedirect.target_account_id == absorbed.id)
+        .values(target_account_id=survivor.id)
+    )
+    session.add(
+        PublicCreatorRedirect(
+            retired_public_creator_id=absorbed.public_creator_id,
+            target_account_id=survivor.id,
         )
-        await _canonicalize_finalization_job_owners(session, draft_ids, survivor, absorbed)
-        statements = (
-            "UPDATE builds SET submitter_account_id = :survivor WHERE submitter_account_id = :absorbed",
-            "DELETE FROM submission_draft_access access_row WHERE access_row.id IN ("
-            "SELECT CASE WHEN draft.owner_account_id = :absorbed THEN survivor_access.id ELSE absorbed_access.id END "
-            "FROM submission_draft_access survivor_access "
-            "JOIN submission_draft_access absorbed_access ON absorbed_access.draft_id = survivor_access.draft_id "
-            "JOIN submission_drafts draft ON draft.id = survivor_access.draft_id "
-            "WHERE survivor_access.account_id = :survivor AND absorbed_access.account_id = :absorbed)",
-            "UPDATE submission_drafts SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
-            "UPDATE submission_draft_access SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE submission_draft_changes SET actor_account_id = :survivor WHERE actor_account_id = :absorbed",
-            "UPDATE build_schematics SET rights_attested_by_account_id = :survivor "
-            "WHERE rights_attested_by_account_id = :absorbed",
-            # Keep installation IDs and credential hashes stable; only the owning account changes.
-            "UPDATE minecraft_paper_installations SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
-            "UPDATE minecraft_player_challenges SET approved_by_account_id = :survivor "
-            "WHERE approved_by_account_id = :absorbed",
-            "UPDATE minecraft_player_grants SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE api_keys SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
-            "UPDATE api_keys SET created_by_account_id = :survivor WHERE created_by_account_id = :absorbed",
-            "UPDATE web_sessions SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE cli_device_enrollments SET approved_by_account_id = :survivor "
-            "WHERE approved_by_account_id = :absorbed",
-            "UPDATE cli_devices SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE creator_aliases SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE creator_alias_claims SET resolved_by_account_id = :survivor "
-            "WHERE resolved_by_account_id = :absorbed",
-            "DELETE FROM creator_alias_claims absorbed_claim USING creator_alias_claims survivor_claim "
-            "WHERE absorbed_claim.account_id = :absorbed AND survivor_claim.account_id = :survivor "
-            "AND absorbed_claim.alias_id = survivor_claim.alias_id AND absorbed_claim.status = 'pending' "
-            "AND survivor_claim.status = 'pending'",
-            "UPDATE creator_alias_claims SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE vote_sessions SET author_account_id = :survivor WHERE author_account_id = :absorbed",
-            "DELETE FROM votes absorbed_vote USING votes survivor_vote "
-            "WHERE absorbed_vote.account_id = :absorbed AND survivor_vote.account_id = :survivor "
-            "AND absorbed_vote.vote_session_id = survivor_vote.vote_session_id",
-            "UPDATE votes SET account_id = :survivor WHERE account_id = :absorbed",
-            # Only switches move now: the notice receipt this used to fold lives on `accounts`,
-            # where the survivor's own row already carries the answer.
-            "INSERT INTO notification_profiles "
-            "(account_id, web_enabled, dm_enabled, dm_suspended_at, created_at, updated_at) "
-            "SELECT :survivor, web_enabled, dm_enabled, dm_suspended_at, created_at, updated_at "
-            "FROM notification_profiles WHERE account_id = :absorbed "
-            "ON CONFLICT (account_id) DO UPDATE SET "
-            "web_enabled = notification_profiles.web_enabled OR EXCLUDED.web_enabled, "
-            "dm_enabled = notification_profiles.dm_enabled OR EXCLUDED.dm_enabled, "
-            "dm_suspended_at = COALESCE(notification_profiles.dm_suspended_at, EXCLUDED.dm_suspended_at)",
-            "DELETE FROM notification_profiles WHERE account_id = :absorbed",
-            "DELETE FROM notification_subscriptions absorbed_subscription USING notification_subscriptions survivor_subscription "
-            "WHERE absorbed_subscription.account_id = :absorbed AND survivor_subscription.account_id = :survivor "
-            "AND absorbed_subscription.kind = survivor_subscription.kind "
-            "AND absorbed_subscription.subject_id IS NOT DISTINCT FROM survivor_subscription.subject_id "
-            "AND absorbed_subscription.filter IS NOT DISTINCT FROM survivor_subscription.filter "
-            "AND absorbed_subscription.enabled = survivor_subscription.enabled",
-            "UPDATE notification_subscriptions SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE notifications SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE notification_deliveries SET account_id = :survivor WHERE account_id = :absorbed",
-            # Permission provenance is keyed by account with ON DELETE RESTRICT, so the grantor
-            # columns have to move before the absorbed row can go away at all.
-            "UPDATE permission_roles SET created_by_account_id = :survivor WHERE created_by_account_id = :absorbed",
-            "UPDATE permission_role_patterns SET added_by_account_id = :survivor WHERE added_by_account_id = :absorbed",
-            "UPDATE permission_role_includes SET added_by_account_id = :survivor WHERE added_by_account_id = :absorbed",
-            "UPDATE permission_grants SET granted_by_account_id = :survivor WHERE granted_by_account_id = :absorbed",
-            "UPDATE permission_role_assignments SET granted_by_account_id = :survivor "
-            "WHERE granted_by_account_id = :absorbed",
-            # `permission_grants_account_unique` keeps one row per (subject, pattern, scope), so a
-            # collision has to collapse two effects into one. Take the more restrictive of the two
-            # (-2 forbid < -1 deny < 1 allow) rather than the survivor's: a merge that silently drops
-            # the absorbed account's emergency forbid would hand back the very access it revoked.
-            "UPDATE permission_grants survivor_grant SET effect = LEAST(survivor_grant.effect, absorbed_grant.effect) "
-            "FROM permission_grants absorbed_grant "
-            "WHERE survivor_grant.subject_account_id = :survivor AND absorbed_grant.subject_account_id = :absorbed "
-            "AND absorbed_grant.pattern = survivor_grant.pattern "
-            "AND absorbed_grant.scope_guild_id IS NOT DISTINCT FROM survivor_grant.scope_guild_id",
-            "DELETE FROM permission_grants absorbed_grant USING permission_grants survivor_grant "
-            "WHERE absorbed_grant.subject_account_id = :absorbed AND survivor_grant.subject_account_id = :survivor "
-            "AND absorbed_grant.pattern = survivor_grant.pattern "
-            "AND absorbed_grant.scope_guild_id IS NOT DISTINCT FROM survivor_grant.scope_guild_id",
-            "UPDATE permission_grants SET subject_account_id = :survivor WHERE subject_account_id = :absorbed",
-            "DELETE FROM permission_role_assignments absorbed_assignment "
-            "USING permission_role_assignments survivor_assignment "
-            "WHERE absorbed_assignment.subject_account_id = :absorbed "
-            "AND survivor_assignment.subject_account_id = :survivor "
-            "AND absorbed_assignment.role_id = survivor_assignment.role_id "
-            "AND absorbed_assignment.scope_guild_id IS NOT DISTINCT FROM survivor_assignment.scope_guild_id",
-            "UPDATE permission_role_assignments SET subject_account_id = :survivor "
-            "WHERE subject_account_id = :absorbed",
-            # The audit log outlives the account it describes. Repointing it at the survivor keeps
-            # the history readable; leaving it would strand entries on an id nothing resolves.
-            "UPDATE permission_audit_log SET actor_account_id = :survivor WHERE actor_account_id = :absorbed",
-            "UPDATE permission_audit_log SET subject_id = :survivor "
-            "WHERE subject_kind = 'account' AND subject_id = :absorbed",
-            "UPDATE account_identities SET account_id = :survivor WHERE account_id = :absorbed",
-        )
-        for statement in statements:
-            await session.execute(text(statement), parameters)
+    )
+    await session.delete(absorbed)
 
 
 async def _canonicalize_finalization_job_owners(
