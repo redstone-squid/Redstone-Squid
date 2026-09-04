@@ -34,6 +34,16 @@ class NotificationKind(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class InboxVisibility:
+    """The notification kinds one authenticated inbox request may observe."""
+
+    include_staff: bool = False
+
+
+DEFAULT_INBOX_VISIBILITY = InboxVisibility()
+
+
+@dataclass(frozen=True, slots=True)
 class NotificationPreferences:
     """An account's notification channel switches, and whether it may use them yet.
 

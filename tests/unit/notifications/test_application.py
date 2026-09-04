@@ -9,7 +9,12 @@ import pytest
 from squid.accounts.errors import ConsentRequiredError
 from squid.notifications import NotificationPreferences, NotificationService
 from squid.notifications.application import NotificationRepository
-from squid.notifications.domain import NotificationSubscription, RecordSubscriptionFilter, SubscriptionKind
+from squid.notifications.domain import (
+    InboxVisibility,
+    NotificationSubscription,
+    RecordSubscriptionFilter,
+    SubscriptionKind,
+)
 from squid.notifications.errors import NotificationSubscriptionNotFoundError
 
 SUBJECT_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -45,6 +50,12 @@ class NotificationRepositoryFake:
         self.attempted_add = True
         raise AssertionError("a rejected subscription must not be persisted")
 
+    async def mark_read(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
+        return account_id == 7 and notification_id == 3 and visibility.include_staff
+
+    async def mark_unread(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool:
+        return account_id == 7 and notification_id == 3 and visibility.include_staff
+
 
 def _repository(*, consent_pending: bool, target_exists: bool = True) -> NotificationRepositoryFake:
     return NotificationRepositoryFake(
@@ -79,3 +90,11 @@ async def test_public_subscription_targets_are_validated_before_persistence() ->
 
     assert repository.target_checks == 1
     assert not repository.attempted_add
+
+
+async def test_read_and_unread_use_the_same_visibility_contract() -> None:
+    service = _service(_repository(consent_pending=False))
+    visibility = InboxVisibility(include_staff=True)
+
+    await service.mark_read(7, 3, visibility=visibility)
+    await service.mark_unread(7, 3, visibility=visibility)
