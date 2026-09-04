@@ -1,6 +1,7 @@
 """PostgreSQL coverage for account-keyed synchronized build targets."""
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import replace
 
 import anyio
@@ -15,7 +16,7 @@ from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.infrastructure.models import Account, AccountIdentity
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.builds.application import BuildService
-from squid.builds.domain import Build, BuildCategory, Status
+from squid.builds.domain import Build, BuildCategory, BuildLink, Status
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.models import Build as SQLBuild
@@ -72,6 +73,14 @@ class NoopEmbeddings:
 class NoApprovedTags:
     async def public_definitions(self) -> tuple[TagDefinition, ...]:
         return ()
+
+
+class PublicSummaryOnlyBuildRepository(BuildRepository):
+    """Fail if the public read model falls back to aggregate hydration."""
+
+    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
+        del build_ids
+        raise AssertionError("public summaries must not hydrate private build aggregates")
 
 
 async def test_repository_round_trips_and_updates_every_manifest_category(
@@ -156,6 +165,37 @@ async def test_repository_round_trips_immutable_public_sponsor_snapshot(
             )
         ).one()
     assert row == (installation_id, "Example server", "play.example.test", "https://example.test/server")
+
+
+async def test_public_summaries_select_only_allowlisted_fields_and_preserve_requested_order(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await seed_account_and_version(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+    confirmed = submission_build(BuildCategory.OTHER, account_id)
+    confirmed.submission_status = Status.CONFIRMED
+    confirmed.display_name = "Public prototype"
+    confirmed.description = "moderation-only description"
+    confirmed.extra_info = {"submission_provenance": {"private": True}}
+    confirmed.links = [
+        BuildLink(url="https://cdn.example.test/render.png", media_type="render"),
+        BuildLink(url="https://cdn.example.test/evidence.mp4", media_type="video"),
+    ]
+    pending = submission_build(BuildCategory.OTHER, account_id)
+    await repository.save(confirmed)
+    await repository.save(pending)
+    assert confirmed.id is not None
+    assert pending.id is not None
+
+    summaries = await PublicSummaryOnlyBuildRepository(migrated_session_factory).get_public_summaries(
+        [confirmed.id, pending.id, confirmed.id, 999_999]
+    )
+
+    assert [summary.id for summary in summaries] == [confirmed.id, confirmed.id]
+    assert summaries[0] == summaries[1]
+    assert summaries[0].display_name == "Public prototype"
+    assert summaries[0].preview is not None
+    assert summaries[0].preview.url == "https://cdn.example.test/render.png"
 
 
 async def test_submission_target_persists_only_the_exact_canonical_source_version(
