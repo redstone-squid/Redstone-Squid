@@ -88,9 +88,7 @@ class MediaLimits:
             (MediaLimitMeasure.SOURCE_BYTES, totals.source_bytes, self.max_source_bytes),
             (MediaLimitMeasure.OUTPUT_BYTES, totals.output_bytes, self.max_output_bytes),
         )
-        return tuple(
-            MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit
-        )
+        return tuple(MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit)
 
     def probe_violations(self, kind: MediaKind, probe: MediaProbe) -> tuple[MediaViolation, ...]:
         """Return every decoded-work violation without floating-point arithmetic."""
@@ -113,9 +111,7 @@ class MediaLimits:
                     self.max_decoded_pixels_per_second,
                 )
             )
-        return tuple(
-            MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit
-        )
+        return tuple(MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit)
 
 
 @dataclass(frozen=True, slots=True)

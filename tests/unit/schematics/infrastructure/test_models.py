@@ -29,7 +29,5 @@ def test_render_objects_have_durable_lifecycle_rows() -> None:
     )
 
     assert object_table.primary_key.columns.keys() == ["object_key"]
-    assert [element.target_fullname for element in foreign_key.elements] == [
-        "schematic_preview_objects.object_key"
-    ]
+    assert [element.target_fullname for element in foreign_key.elements] == ["schematic_preview_objects.object_key"]
     assert foreign_key.ondelete == "RESTRICT"
