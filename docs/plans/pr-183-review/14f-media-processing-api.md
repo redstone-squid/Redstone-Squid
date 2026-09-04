@@ -16,10 +16,12 @@ routes. Streaming bytes from `Request` into a private bounded file is legitimate
 whether a draft accepts an upload, registering it, cleaning an abandoned stage, and mapping job state are application
 work.
 
-Create `DraftAttachmentService` in the media application package. The route authenticates, validates HTTP framing,
-streams to a `StagedUpload`, and calls the service. The service rechecks draft ownership/state, registers or replays
-the upload, owns cleanup on every exit, and returns typed snapshots. Dependency aliases move to
-`squid/api/dependencies.py`; route-local runtime protocols and error classes move to their owning packages.
+Create `DraftAttachmentService` under `submissions.application.attachments`; submission ownership is the aggregate
+boundary and media job registration is a narrow injected port. Before reading attacker-controlled bytes, the route
+calls `authorize_upload` and receives a short-lived typed authority for that draft/account/revision. It then validates
+framing and streams to a `StagedUpload`. `register` consumes the authority, rechecks ownership/state/revision under
+the lifecycle lock, registers or replays the upload, owns cleanup on every exit, and returns typed snapshots.
+Dependency aliases move to `squid/api/dependencies.py`; route-local runtime protocols and errors move to their owners.
 
 ### Limits should return all actionable violations
 
@@ -34,8 +36,10 @@ metadata beyond the allowed measures/limits.
 ### “Poster” is ambiguous outside video tooling
 
 Rename the durable role/value to `VIDEO_THUMBNAIL` (`video_thumbnail` on new writes) and user copy to “video preview
-image.” Dual-read the historical `poster` value, migrate persisted rows/reports, and keep object keys stable rather
-than moving blobs. The codec must accept old reports during rolling deploys.
+image.” Expand database checks/readers first, deploy dual readers, switch writers, drain old writers, backfill rows,
+then contract. Historical schema-1 report JSON is content-addressed immutable data: retain its `poster` bytes/object
+key and introduce new terminology only in a new report schema if an inventoried reader requires it. Include
+submission readiness and API DTO role mapping in the consumer inventory.
 
 ### Persistence enums and object publication need one boundary
 
@@ -66,12 +70,12 @@ extracted through the normal catalogue workflow.
 
 1. **Pin the live HTTP and job contracts.** Cover body framing, private modes, ownership-before-read, cleanup, replay,
    cache headers, safe DTO fields, and worker-disabled behavior.
-2. **Extract `DraftAttachmentService`.** Leave only HTTP parsing/streaming/response assembly in the route and move
-   dependencies/errors to their owners.
+2. **Extract `DraftAttachmentService`.** Add ownership-before-read authorization plus register-time revalidation;
+   leave only HTTP parsing/streaming/response assembly in the route and move dependencies/errors to their owners.
 3. **Aggregate limit violations.** Update domain, application errors, API schemas, Discord/web presentation, and
    tests with deterministic order.
-4. **Rename poster to video thumbnail.** Dual-read, migrate rows/report payloads, switch writers, then remove the
-   compatibility reader after all retained jobs age out.
+4. **Rename poster to video thumbnail.** Expand readers/checks, switch and drain writers, backfill mutable rows, then
+   contract. Preserve immutable schema-1 report bytes and object keys; add a new report schema only for a real reader.
 5. **Type persistence and extract artifact publication.** Remove scattered `.value` conversions and centralize the
    lease/fencing transaction.
 6. **Register worker job specs once.** Derive scheduling/readiness/health from the same immutable registry.
@@ -92,12 +96,14 @@ class StagedUpload:
 
 
 class DraftAttachmentService:
+    async def authorize_upload(
+        self, *, draft_id: UUID, account_id: int, kind: MediaKind
+    ) -> DraftUploadAuthority: ...
+
     async def register(
         self,
         *,
-        draft_id: UUID,
-        account_id: int,
-        kind: MediaKind,
+        authority: DraftUploadAuthority,
         staged: StagedUpload,
         strip_audio: bool,
         upload_id: UUID | None,
@@ -119,8 +125,9 @@ The concrete type's first docstring paragraph must state that lifetime when impl
 
 - Transport: duplicate/missing content length, transfer encoding, content type, nil UUID, query allowlist, short/long
   body, disconnect, filesystem failure, permissions, cleanup, no-store, and safe response fields.
-- Application: ownership/state race, replay with same/different metadata, aggregate limits, staged-file authority,
-  registration failure, and cleanup failure containment.
+- Application: denial before the first body read, authority expiry/revision race, register-time ownership recheck,
+  replay with same/different metadata, aggregate limits, staged-file authority, registration failure, and cleanup
+  failure containment.
 - Repository: enum round trips, concurrent registration, artifact publication lease, cleanup fencing, shared object
   references, claim loss, terminal source deletion, and poster-to-thumbnail migration.
 - Worker: optional service absent/present, job registry/readiness parity, interval choice, heartbeats, bounded
@@ -147,6 +154,7 @@ The concrete type's first docstring paragraph must state that lifetime when impl
 
 ## Delivery and rollout
 
-Extract the service before renaming persisted values. The thumbnail migration is expand/migrate/contract: dual-read
-first, migrate, write the new value, then remove the old reader only after retained payloads/jobs are gone. Worker job
-registration and image-test changes are independent commits. No milestone deletes user artifacts or object keys.
+Extract the service before renaming persisted values. The thumbnail migration is expand/deploy readers/switch
+writers/drain/backfill/contract; the old reader remains until retained rows/jobs are gone. Immutable report objects
+are never rewritten under stable content-addressed keys. Worker job registration and image-test changes are
+independent commits. No milestone deletes user artifacts or object keys.
