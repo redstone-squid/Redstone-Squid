@@ -3,10 +3,12 @@
 import asyncio
 import os
 import shutil
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import anyio
 import pytest
 from httpx import ASGITransport, AsyncClient
 from starlette.requests import ClientDisconnect, Request
@@ -444,6 +446,68 @@ async def test_zero_length_filesystem_write_is_rejected(monkeypatch: pytest.Monk
 
     with pytest.raises(OSError, match="Unable to stage"):
         submission_media._write_all(1, b"data")
+
+
+async def test_cancellation_waits_for_blocking_write_before_closing_and_removing_stage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    directory = tmp_path / "upload"
+    directory.mkdir()
+    monkeypatch.setattr(submission_media.tempfile, "mkdtemp", lambda **_kwargs: str(directory))
+    started = threading.Event()
+    release = threading.Event()
+    real_write_all = submission_media._write_all
+
+    def blocking_write(descriptor: int, data: bytes) -> None:
+        started.set()
+        if not release.wait(timeout=5):
+            msg = "test did not release the blocking write"
+            raise TimeoutError(msg)
+        real_write_all(descriptor, data)
+
+    monkeypatch.setattr(submission_media, "_write_all", blocking_write)
+    messages: Iterator[Message] = iter(({"type": "http.request", "body": b"data", "more_body": False},))
+
+    async def receive() -> Message:
+        return next(messages)
+
+    request = raw_request([(b"content-type", b"image/png"), (b"content-length", b"4")], receive=receive)
+    cancel_scope = anyio.CancelScope()
+    settled = anyio.Event()
+
+    async def upload() -> None:
+        try:
+            with cancel_scope:
+                await upload_draft_media(
+                    draft_id=DRAFT_ID,
+                    kind=MediaKind.IMAGE,
+                    request=request,
+                    response=Response(),
+                    attachments=DraftAttachmentService(FakeDrafts([]), FakeMedia([])),
+                    account_id=ACCOUNT_ID,
+                    strip_audio=False,
+                    upload_id=UPLOAD_ID,
+                )
+        finally:
+            settled.set()
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(upload)
+        with anyio.fail_after(2):
+            while not started.is_set():
+                await anyio.sleep(0)
+
+        cancel_scope.cancel()
+        await anyio.sleep(0)
+        assert directory.exists()
+        assert (directory / "source").exists()
+        assert not settled.is_set()
+
+        release.set()
+        await settled.wait()
+
+    assert not directory.exists()
 
 
 async def test_cross_draft_lookup_and_missing_discard_are_not_visible() -> None:
