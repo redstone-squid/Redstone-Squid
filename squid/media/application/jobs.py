@@ -36,6 +36,7 @@ from squid.media.errors import (
     InvalidMediaError,
     MediaArtifactCleanupInProgressError,
     MediaDraftNotFoundError,
+    MediaDraftRevisionConflictError,
     MediaDraftStateConflictError,
     MediaJobArtifactError,
     MediaJobClaimLostError,
@@ -80,6 +81,19 @@ class MediaArtifactRole(StrEnum):
     OUTPUT = "output"
     POSTER = "poster"
     REPORT = "report"
+
+
+@dataclass(frozen=True, slots=True)
+class MediaDraftUploadAuthorization:
+    """Owner and revision proof that persistence must revalidate atomically."""
+
+    owner_account_id: int
+    draft_revision: int
+
+    def __post_init__(self) -> None:
+        if self.owner_account_id < 1 or self.draft_revision < 0:
+            msg = tr(t"Media draft upload authorization is invalid.")
+            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,7 +273,13 @@ class TerminalMediaSource:
 class MediaJobRepository(Protocol):
     """Durable metadata and claim-fenced queue operations."""
 
-    async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome: ...
+    async def enqueue(
+        self,
+        upload: MediaUploadMetadata,
+        limits: MediaLimits,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> MediaEnqueueOutcome: ...
 
     async def get(self, upload_id: UUID) -> MediaJobSnapshot | None: ...
 
@@ -337,7 +357,12 @@ class MediaNormalizationJobService:
         """Return the same source and output limits enforced by the worker."""
         return self._limits
 
-    async def submit(self, submission: MediaUploadSubmission) -> UUID:
+    async def submit(
+        self,
+        submission: MediaUploadSubmission,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> UUID:
         """Stage a raw object and idempotently enqueue its immutable metadata."""
         if len(submission.source) > self._limits.max_source_bytes:
             limit = self._limits.max_source_bytes
@@ -364,10 +389,16 @@ class MediaNormalizationJobService:
                 source_sha256=digest,
                 source_object_key=object_key,
                 strip_audio=submission.strip_audio,
-            )
+            ),
+            authorization=authorization,
         )
 
-    async def submit_staged(self, submission: StagedMediaUploadSubmission) -> UUID:
+    async def submit_staged(
+        self,
+        submission: StagedMediaUploadSubmission,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> UUID:
         """Stage a bounded regular file without buffering it in application memory."""
         byte_size, digest = await asyncio.to_thread(
             _staged_source_metadata,
@@ -396,16 +427,27 @@ class MediaNormalizationJobService:
                 source_sha256=digest,
                 source_object_key=object_key,
                 strip_audio=submission.strip_audio,
-            )
+            ),
+            authorization=authorization,
         )
 
-    async def _register(self, upload: MediaUploadMetadata) -> UUID:
+    async def _register(
+        self,
+        upload: MediaUploadMetadata,
+        *,
+        authorization: MediaDraftUploadAuthorization | None,
+    ) -> UUID:
         """Register immutable staged metadata and reconcile terminal replays."""
         object_key = upload.source_object_key
         upload_id = upload.id
         try:
-            outcome = await self._repository.enqueue(upload, self._limits)
-        except MediaLimitExceededError, MediaDraftNotFoundError, MediaDraftStateConflictError:
+            outcome = await self._repository.enqueue(upload, self._limits, authorization=authorization)
+        except (
+            MediaLimitExceededError,
+            MediaDraftNotFoundError,
+            MediaDraftRevisionConflictError,
+            MediaDraftStateConflictError,
+        ):
             await self._artifacts.delete(object_key)
             raise
         except MediaUploadConflictError as error:
