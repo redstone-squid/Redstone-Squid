@@ -6,7 +6,7 @@ from typing import Any, Literal, cast
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.submission.input import format_invalid_values, invalid_web_urls, split_values
+from squid.bot.submission.input import optional_text, parse_web_urls, split_values
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.fields import (
     BoundBuildField,
@@ -69,21 +69,8 @@ def _parse_optional_dimensions(value: str) -> tuple[int | None, int | None, int 
     return parse_dimensions(value) if value.strip() else (None, None, None)
 
 
-def _parse_optional_text(value: str) -> str | None:
-    return value.strip() or None
-
-
 def _format_optional_text(value: str | None) -> str:
     return value or ""
-
-
-def _parse_urls(value: str) -> list[str]:
-    urls = split_values(value)
-    if invalid := invalid_web_urls(urls):
-        displayed = format_invalid_values(invalid)
-        msg = f"Use complete https:// or http:// links. Invalid: {displayed}"
-        raise ValueError(msg)
-    return urls
 
 
 def _all_restrictions(build: BuildDraft) -> list[str]:
@@ -127,7 +114,7 @@ VERSIONS_FIELD = CreationFieldSpec(
     "versions",
     "Supported versions",
     "For example: 1.20.4+",
-    _parse_optional_text,
+    optional_text,
     _format_optional_text,
     lambda build: build.version_spec,
     maximum=200,
@@ -154,7 +141,7 @@ IMAGE_URLS_FIELD = CreationFieldSpec(
     "image_urls",
     "Images",
     "Image links, comma separated",
-    _parse_urls,
+    parse_web_urls,
     lambda values: ", ".join(values),
     lambda build: list(build.image_urls),
     maximum=4000,
@@ -163,7 +150,7 @@ VIDEO_URLS_FIELD = CreationFieldSpec(
     "video_urls",
     "Videos",
     "Video links, comma separated",
-    _parse_urls,
+    parse_web_urls,
     lambda values: ", ".join(values),
     lambda build: list(build.video_urls),
     maximum=4000,
@@ -172,7 +159,7 @@ WORLD_URLS_FIELD = CreationFieldSpec(
     "world_urls",
     "World downloads",
     "World download links, comma separated",
-    _parse_urls,
+    parse_web_urls,
     lambda values: ", ".join(values),
     lambda build: list(build.world_download_urls),
     maximum=4000,
@@ -181,7 +168,7 @@ NOTES_FIELD = CreationFieldSpec(
     "notes",
     "Notes",
     "Anything staff should know",
-    _parse_optional_text,
+    optional_text,
     _format_optional_text,
     lambda build: cast(str | None, build.extra_info.get("user")),
     maximum=4000,
