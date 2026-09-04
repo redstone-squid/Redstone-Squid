@@ -173,7 +173,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             await handler.post_for_voting()
         except Exception as error:
             fallback = text_node(
-                tr("Submission saved. Attachment processing or review-card delivery still needs recovery.")
+                tr(t"Submission saved. Attachment processing or review-card delivery still needs recovery.")
             )
             raise SubmissionDeliveryError(SubmissionOutcome(build, fallback, delivery_complete=False)) from error
         return SubmissionOutcome(build, node)

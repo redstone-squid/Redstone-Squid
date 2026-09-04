@@ -50,5 +50,5 @@ def test_resource_pack_rejects_an_unexpected_media_type() -> None:
 
 
 def test_resource_pack_rejects_mutable_data() -> None:
-    with pytest.raises(TypeError, match="immutable bytes"):
+    with pytest.raises(ValidationError, match="immutable bytes"):
         VerifiedResourcePack(bytearray(b"pack"), VerifiedResourcePack.from_bytes(b"pack").sha256)  # type: ignore[arg-type]

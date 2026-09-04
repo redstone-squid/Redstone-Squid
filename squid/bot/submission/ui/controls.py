@@ -26,7 +26,7 @@ async def edit_build(interaction: Interaction[RedstoneSquid], build_id: int) -> 
     request = await sd.request(interaction)
     build = await interaction.client.services.builds.get(build_id)
     if build is None:
-        await request.respond(text_node(tr("That build no longer exists.")), audience="personal")
+        await request.respond(text_node(tr(t"That build no longer exists.")), audience="personal")
         return
     await open_build_editor(request, build)
 
@@ -39,7 +39,7 @@ async def recover_build_editor(interaction: Interaction[RedstoneSquid], build_id
     request = await sd.request(interaction)
     build = await interaction.client.services.builds.get(build_id)
     if build is None:
-        await request.respond(text_node(tr("That build no longer exists.")), audience="personal")
+        await request.respond(text_node(tr(t"That build no longer exists.")), audience="personal")
         return
     await open_build_editor(request, build, recovered=True)
 

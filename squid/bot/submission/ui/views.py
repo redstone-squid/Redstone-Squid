@@ -266,11 +266,11 @@ def _creation_form(
 
 
 def _submission_basics_form(build: BuildDraft) -> sl.forms.FormSpec:
-    return _creation_form(tr("Build basics"), BASICS_FIELDS, build)
+    return _creation_form(tr(t"Build basics"), BASICS_FIELDS, build)
 
 
 def _submission_details_form(build: BuildDraft) -> sl.forms.FormSpec:
-    return _creation_form(tr("Links and optional details"), DETAIL_FIELDS, build)
+    return _creation_form(tr(t"Links and optional details"), DETAIL_FIELDS, build)
 
 
 async def _apply_creation_fields(
