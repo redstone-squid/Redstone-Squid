@@ -160,7 +160,53 @@ async def test_enqueue_claim_fence_and_completion_are_atomic(
     assert completed.result == result
     async with async_session_factory() as session:
         draft_status = await session.scalar(select(SubmissionDraft.status).where(SubmissionDraft.id == DRAFT_ID))
+        legacy_result = (
+            await session.execute(
+                select(
+                    SubmissionFinalizationResult._legacy_target_key,
+                    SubmissionFinalizationResult._legacy_provenance,
+                ).where(SubmissionFinalizationResult.job_id == first.job_id)
+            )
+        ).one()
     assert draft_status == DraftStatus.SUBMITTED.value
+    assert legacy_result[0] == "postgres_builds"
+    assert legacy_result[1] == {
+        "source_draft_id": str(DRAFT_ID),
+        "owner_account_id": stored_draft.snapshot.owner_account_id,
+        "origin": "web",
+        "schema_id": "build_submission.v1",
+        "schema_revision": 1,
+        "source_installation_id": None,
+        "sponsor_installation_id": None,
+        "normalized_media_upload_ids": [],
+        "sanitized_schematic_id": None,
+    }
+
+
+async def test_build_only_reader_accepts_a_legacy_writer_result(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresFinalizationJobRepository(async_session_factory)
+    expires_at = NOW.add(days=7, days_assumed_24h_ok=True)
+    pending = await repository.enqueue(stored_draft, _payload(stored_draft), now=NOW, expires_at=expires_at)
+    (claim,) = await repository.claim(now=NOW, limit=1)
+    assert await repository.complete(claim, FinalizedBuild(41), now=NOW) is True
+
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(SubmissionFinalizationResult)
+            .where(SubmissionFinalizationResult.job_id == pending.job_id)
+            .values(
+                target_key="legacy_postgres_builds",
+                provenance={"source_draft_id": str(DRAFT_ID), "legacy_only": True},
+            )
+        )
+
+    snapshot = await repository.get(DRAFT_ID)
+
+    assert snapshot is not None
+    assert snapshot.result == FinalizedBuild(41)
 
 
 async def test_claim_refuses_a_payload_with_a_conflicting_digest(
