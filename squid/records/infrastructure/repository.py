@@ -48,8 +48,11 @@ from squid.records.infrastructure.models import (
     DoorTimingVariant,
     ExtenderTimingVariant,
     RecordComputationRun,
+    RecordComputationStatus,
     RecordDefinitionFacet,
+    RecordFacetKind,
     RecordHolderHistory,
+    RecordMaterializationSource,
     RecordRecomputeQueueItem,
     RecordResultHolder,
     RecordRule,
@@ -141,7 +144,7 @@ class PostgresRecordRepository:
                     insert(RecordRecomputeQueueItem)
                     .values(
                         scope_key=kind.value,
-                        build_kind=kind.value,
+                        build_kind=kind,
                         reasons=["ruleset_activation"],
                     )
                     .on_conflict_do_update(
@@ -187,16 +190,16 @@ class PostgresRecordRepository:
             )
             previous_run_id = await session.scalar(
                 select(RecordComputationRun.id).where(
-                    RecordComputationRun.build_kind == batch.kind.value,
+                    RecordComputationRun.build_kind == batch.kind,
                     version_predicate,
                     RecordComputationRun.is_active.is_(True),
                 )
             )
             run = RecordComputationRun(
                 ruleset_id=batch.ruleset_id,
-                build_kind=batch.kind.value,
+                build_kind=batch.kind,
                 version_id=batch.version_id,
-                status="running",
+                status=RecordComputationStatus.RUNNING,
             )
             session.add(run)
             await session.flush()
@@ -207,7 +210,7 @@ class PostgresRecordRepository:
                 result = RecordStanding(
                     run_id=run.id,
                     definition_id=definition.id,
-                    status=computed.resolution.status.value,
+                    status=computed.resolution.status,
                     gap_reasons=_serialize_gaps(computed),
                     provisional_build_id=_provisional_build_id(computed),
                     history_complete=computed.history_complete,
@@ -260,14 +263,14 @@ class PostgresRecordRepository:
             await session.execute(
                 update(RecordComputationRun)
                 .where(
-                    RecordComputationRun.build_kind == batch.kind.value,
+                    RecordComputationRun.build_kind == batch.kind,
                     version_predicate,
                     RecordComputationRun.is_active.is_(True),
                     RecordComputationRun.id != run.id,
                 )
                 .values(is_active=False)
             )
-            run.status = "completed"
+            run.status = RecordComputationStatus.COMPLETED
             run.completed_at = Instant.now()
             run.is_active = True
             await session.flush()
@@ -302,11 +305,11 @@ class PostgresRecordRepository:
                 .join(RecordComputationRun, RecordComputationRun.id == RecordStanding.run_id)
                 .where(
                     RecordComputationRun.is_active.is_(True),
-                    RecordStanding.status == ResolutionStatus.UNRESOLVED.value,
+                    RecordStanding.status == ResolutionStatus.UNRESOLVED,
                 )
             )
             if kind is not None:
-                statement = statement.where(RecordRule.build_kind == kind.value)
+                statement = statement.where(RecordRule.build_kind == kind)
             rows = (await session.execute(statement)).all()
             return tuple(_gap_from_row(definition, result) for definition, result in rows)
 
@@ -325,7 +328,7 @@ class PostgresRecordRepository:
                 .order_by(RecordRule.id)
             )
             if kind is not None:
-                statement = statement.where(RecordRule.build_kind == kind.value)
+                statement = statement.where(RecordRule.build_kind == kind)
             definitions = (await session.execute(statement)).scalars()
             return tuple(
                 TitleDiagnosticGap(
@@ -448,8 +451,8 @@ class PostgresRecordRepository:
                 await session.execute(
                     select(RecordRule.category_key)
                     .where(
-                        RecordRule.build_kind == kind.value,
-                        RecordRule.materialization_source == "public_lookup",
+                        RecordRule.build_kind == kind,
+                        RecordRule.materialization_source == RecordMaterializationSource.PUBLIC_LOOKUP,
                     )
                     .distinct()
                 )
@@ -485,9 +488,9 @@ class PostgresRecordRepository:
             for record_class in _record_classes(category.kind):
                 statement = select(RecordRule).where(
                     RecordRule.ruleset_id == ruleset_id,
-                    RecordRule.record_class == record_class.value,
-                    RecordRule.build_kind == category.kind.value,
-                    RecordRule.version_scope == VersionScope.ALL_TIME.value,
+                    RecordRule.record_class == record_class,
+                    RecordRule.build_kind == category.kind,
+                    RecordRule.version_scope == VersionScope.ALL_TIME,
                     RecordRule.version_id.is_(None),
                     RecordRule.category_key == category.key,
                 )
@@ -495,24 +498,24 @@ class PostgresRecordRepository:
                 if definition is None:
                     competition_id = await self._ensure_competition(
                         session,
-                        record_class=record_class.value,
-                        build_kind=category.kind.value,
-                        version_scope=VersionScope.ALL_TIME.value,
+                        record_class=record_class,
+                        build_kind=category.kind,
+                        version_scope=VersionScope.ALL_TIME,
                         version_id=None,
                         category_key=category.key,
                     )
                     definition = RecordRule(
                         competition_id=competition_id,
                         ruleset_id=ruleset_id,
-                        record_class=record_class.value,
-                        build_kind=category.kind.value,
-                        version_scope=VersionScope.ALL_TIME.value,
+                        record_class=record_class,
+                        build_kind=category.kind,
+                        version_scope=VersionScope.ALL_TIME,
                         version_id=None,
                         category_key=category.key,
                         title=titles[record_class].title,
                         subtitle=titles[record_class].subtitle,
                         title_diagnostics=[diagnostic.as_dict() for diagnostic in titles[record_class].diagnostics],
-                        materialization_source="public_lookup",
+                        materialization_source=RecordMaterializationSource.PUBLIC_LOOKUP,
                     )
                     session.add(definition)
                     await session.flush()
@@ -520,7 +523,7 @@ class PostgresRecordRepository:
                         session.add(
                             RecordDefinitionFacet(
                                 definition_id=definition.id,
-                                facet_kind="restriction",
+                                facet_kind=RecordFacetKind.RESTRICTION,
                                 facet_id=facet_id,
                                 display_order=order,
                             )
@@ -534,7 +537,7 @@ class PostgresRecordRepository:
                 insert(RecordRecomputeQueueItem)
                 .values(
                     scope_key=scope_key,
-                    build_kind=kind.value,
+                    build_kind=kind,
                     build_id=build_id,
                     reasons=[reason],
                 )
@@ -562,7 +565,7 @@ class PostgresRecordRepository:
         """
         rows = await self._recompute_queue.claim(limit=limit)
         return RecomputeLease(
-            kinds=tuple(dict.fromkeys(BuildKind(row.build_kind) for row in rows)),
+            kinds=tuple(dict.fromkeys(row.build_kind for row in rows)),
             claim_tokens=tuple(self._recompute_queue.token_of(row) for row in rows),
         )
 
@@ -627,10 +630,10 @@ class PostgresRecordRepository:
             await session.execute(
                 select(RecordRule).where(
                     RecordRule.ruleset_id == batch.ruleset_id,
-                    RecordRule.build_kind == batch.kind.value,
-                    RecordRule.version_scope == first.scope.value,
+                    RecordRule.build_kind == batch.kind,
+                    RecordRule.version_scope == first.scope,
                     version_predicate,
-                    RecordRule.record_class.in_({computed.record_class.value for computed in batch.records}),
+                    RecordRule.record_class.in_({computed.record_class for computed in batch.records}),
                     RecordRule.category_key.in_({computed.competition.identity.key for computed in batch.records}),
                 )
             )
@@ -639,29 +642,29 @@ class PostgresRecordRepository:
 
         definitions: list[RecordRule] = []
         for computed in batch.records:
-            identity = (computed.record_class.value, computed.competition.identity.key)
+            identity = (computed.record_class, computed.competition.identity.key)
             definition = by_identity.get(identity)
             if definition is None:
                 competition_id = await self._ensure_competition(
                     session,
-                    record_class=computed.record_class.value,
-                    build_kind=computed.competition.identity.kind.value,
-                    version_scope=computed.scope.value,
+                    record_class=computed.record_class,
+                    build_kind=computed.competition.identity.kind,
+                    version_scope=computed.scope,
                     version_id=computed.version_id,
                     category_key=computed.competition.identity.key,
                 )
                 definition = RecordRule(
                     competition_id=competition_id,
                     ruleset_id=batch.ruleset_id,
-                    record_class=computed.record_class.value,
-                    build_kind=computed.competition.identity.kind.value,
-                    version_scope=computed.scope.value,
+                    record_class=computed.record_class,
+                    build_kind=computed.competition.identity.kind,
+                    version_scope=computed.scope,
                     version_id=computed.version_id,
                     category_key=computed.competition.identity.key,
                     title=computed.title.title,
                     subtitle=computed.title.subtitle,
                     title_diagnostics=[diagnostic.as_dict() for diagnostic in computed.title.diagnostics],
-                    materialization_source=computed.competition.source,
+                    materialization_source=RecordMaterializationSource(computed.competition.source),
                 )
                 session.add(definition)
                 by_identity[identity] = definition
@@ -686,13 +689,14 @@ class PostgresRecordRepository:
         )
         for definition, computed in zip(definitions, batch.records, strict=True):
             for order, facet in enumerate(computed.competition.facets):
-                identity = (definition.id, facet.kind, facet.id)
+                facet_kind = RecordFacetKind(facet.kind)
+                identity = (definition.id, facet_kind, facet.id)
                 if identity in existing_facets:
                     continue
                 session.add(
                     RecordDefinitionFacet(
                         definition_id=definition.id,
-                        facet_kind=facet.kind,
+                        facet_kind=facet_kind,
                         facet_id=facet.id,
                         display_order=order,
                     )
@@ -704,9 +708,9 @@ class PostgresRecordRepository:
         self,
         session: AsyncSession,
         *,
-        record_class: str,
-        build_kind: str,
-        version_scope: str,
+        record_class: RecordClass,
+        build_kind: BuildKind,
+        version_scope: VersionScope,
         version_id: int | None,
         category_key: str,
     ) -> UUID:
@@ -979,7 +983,7 @@ def _gap_from_row(definition: RecordRule, result: RecordStanding) -> RecordGap:
         definition_id=definition.id,
         title=definition.title,
         subtitle=definition.subtitle,
-        record_class=RecordClass(definition.record_class),
+        record_class=definition.record_class,
         build_ids=tuple(build_ids),
         fields=tuple(fields),
     )

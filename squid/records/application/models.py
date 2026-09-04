@@ -16,6 +16,7 @@ from squid.records.domain import (
     RecordCandidate,
     RecordClass,
     RecordResolution,
+    ResolutionStatus,
     VersionScope,
 )
 
@@ -165,10 +166,10 @@ class PublishedRecord:
     competition_id: UUID
     title: str
     subtitle: str | None
-    record_class: str
-    build_kind: str
-    version_scope: str
-    status: str
+    record_class: RecordClass
+    build_kind: BuildKind
+    version_scope: VersionScope
+    status: ResolutionStatus
     holder_build_ids: tuple[int, ...]
     computed_at: datetime
 
