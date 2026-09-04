@@ -243,6 +243,34 @@ async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
     assert page.total == 1
 
 
+async def test_two_public_attachments_download_while_only_the_featured_one_supplies_preview() -> None:
+    schematics, _analyzer, store = service(render_enabled=True, resource_pack=FakeResourcePack())
+    publication = sanitized_publication(public=True)
+    first_digest = await store.put_file(b"featured", source_format=SchematicFormat.LITEMATIC)
+    second_digest = await store.put_file(b"secondary", source_format=SchematicFormat.LITEMATIC)
+    featured_id = await store.record_analysis(
+        7,
+        first_digest,
+        make_analysis(),
+        primary=True,
+        publication=publication,
+    )
+    secondary_id = await store.record_analysis(
+        7,
+        second_digest,
+        make_analysis(),
+        primary=False,
+        publication=publication,
+    )
+
+    assert [item.id for item in await schematics.list_public_for_build(7)] == [featured_id, secondary_id]
+    assert (await schematics.public_download(7, featured_id)).content == b"featured"
+    assert (await schematics.public_download(7, secondary_id)).content == b"secondary"
+    preview = await schematics.prepare_render(7)
+    assert isinstance(preview, FreshRender)
+    assert preview.schematic_id == featured_id
+
+
 async def test_ingest_refuses_an_oversized_upload_before_reaching_the_analyzer() -> None:
     schematics, analyzer, _ = service(limits=SchematicLimits(max_upload_bytes=8))
 

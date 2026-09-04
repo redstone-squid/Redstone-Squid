@@ -3,6 +3,7 @@
 from dataclasses import replace
 
 import pytest
+from fastapi import FastAPI, Request
 from whenever import Instant
 
 from squid.api.v1.schematics import (
@@ -27,6 +28,19 @@ from squid.schematics.application.attachments import PublicSchematicDownload
 from squid.schematics.domain import SchematicFormat, SchematicLicense, SchematicVisibility
 from squid.schematics.errors import SchematicRenderRefusedError
 from tests.unit.schematics.fakes import make_analysis
+
+
+def api_request(*, root_path: str = "", forwarded_host: str = "attacker.example") -> Request:
+    app = FastAPI()
+    app.include_router(router, prefix="/v1")
+    return Request(
+        {
+            "type": "http",
+            "app": app,
+            "root_path": root_path,
+            "headers": [(b"x-forwarded-host", forwarded_host.encode())],
+        }
+    )
 
 
 def _public_publication() -> SchematicPublication:
@@ -189,6 +203,7 @@ async def test_a_render_refusal_names_the_reason_in_public_context() -> None:
 async def test_public_metadata_omits_digest_and_original_filename() -> None:
     page = await list_build_schematics(
         7,
+        api_request(),
         ConfirmedBuilds(),
         PublicSchematics(),
         page_size=50,
@@ -203,11 +218,26 @@ async def test_public_metadata_omits_digest_and_original_filename() -> None:
     assert item["download_url"] == "/v1/builds/7/schematics/3/content"
 
 
+async def test_public_download_links_follow_the_mounted_root_without_using_forwarded_host() -> None:
+    page = await list_build_schematics(
+        7,
+        api_request(root_path="/catalogue", forwarded_host="untrusted.example"),
+        ConfirmedBuilds(),
+        PublicSchematics(),
+        page_size=50,
+        offset=None,
+    )
+
+    assert page.items[0].download_url == "/catalogue/v1/builds/7/schematics/3/content"
+    assert "untrusted.example" not in page.items[0].download_url
+
+
 async def test_public_listing_pages_multiple_attachments_with_offset_anchors() -> None:
     schematics = PublicSchematics(count=3)
 
     first = await list_build_schematics(
         7,
+        api_request(),
         ConfirmedBuilds(),
         schematics,
         page_size=2,
@@ -224,6 +254,7 @@ async def test_public_listing_pages_multiple_attachments_with_offset_anchors() -
 
     last = await list_build_schematics(
         7,
+        api_request(),
         ConfirmedBuilds(),
         schematics,
         page_size=2,

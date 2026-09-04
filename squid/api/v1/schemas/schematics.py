@@ -46,7 +46,7 @@ class SchematicSummary(FromDomain[StoredSchematic]):
     download_url: str
 
     @classmethod
-    def from_domain(cls, schematic: StoredSchematic, /) -> Self:
+    def from_domain(cls, schematic: StoredSchematic, /, *, download_url: str) -> Self:
         analysis = schematic.analysis
         metrics = analysis.metrics
         license = schematic.publication.license
@@ -69,5 +69,5 @@ class SchematicSummary(FromDomain[StoredSchematic]):
             analysis_schema_version=analysis.analysis_schema_version,
             license=license.value,
             license_url=license.uri,
-            download_url=f"/v1/builds/{schematic.build_id}/schematics/{schematic.id}/content",
+            download_url=download_url,
         )
