@@ -297,9 +297,7 @@ async def test_vote_adapter_restores_every_baseline_after_clear_and_tolerates_fo
     cog, bot, _votes = _cog(mocker, session)
     response = cast(Any, SimpleNamespace(status=403, reason="Forbidden"))
     message = mocker.Mock()
-    message.add_reaction = mocker.AsyncMock(
-        side_effect=[discord.Forbidden(response, "Cannot add reaction"), None]
-    )
+    message.add_reaction = mocker.AsyncMock(side_effect=[discord.Forbidden(response, "Cannot add reaction"), None])
     bot.get_or_fetch_message.return_value = message
     event = SimpleNamespace(payload=SimpleNamespace(message_id=100), emoji=None)
 

@@ -769,10 +769,7 @@ async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:
     [
         (build_snapshot(), BuildVoteTarget, None, OWNER_GUILD_ID),
         (snapshot(kind=VoteKind.DELETE_LOG), DeleteLogVoteTarget, None, OWNER_GUILD_ID),
-        *[
-            (poll_snapshot(visibility=visibility, guild_id=77), None, visibility, 77)
-            for visibility in VoteVisibility
-        ],
+        *[(poll_snapshot(visibility=visibility, guild_id=77), None, visibility, 77) for visibility in VoteVisibility],
     ],
     ids=["build", "delete-log", *[f"generic-{visibility.value}" for visibility in VoteVisibility]],
 )

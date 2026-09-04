@@ -433,8 +433,7 @@ class ReactionRouter:
             attributes={"squid.reaction.kind": item.kind},
         )
         await run_all(
-            functools.partial(self._run_recovery, callback, item.kind, item.event)
-            for callback in item.recoveries
+            functools.partial(self._run_recovery, callback, item.kind, item.event) for callback in item.recoveries
         )
 
     @staticmethod

@@ -361,9 +361,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                     if account_id is None:
                         await self._remove_reaction(message, option.emoji, member)
                         continue
-                    observed.setdefault(account_id, []).append(
-                        (location.id, message, member, option.emoji, option.id)
-                    )
+                    observed.setdefault(account_id, []).append((location.id, message, member, option.emoji, option.id))
 
         changed = False
         for account_id, reactions_for_account in observed.items():
@@ -403,9 +401,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         if changed:
             await self.bot.refresh_posts("vote_session", str(snapshot.id))
 
-    async def _reaction_member(
-        self, guild_id: int, user: discord.Member | discord.User
-    ) -> discord.Member | None:
+    async def _reaction_member(self, guild_id: int, user: discord.Member | discord.User) -> discord.Member | None:
         if isinstance(user, discord.Member):
             return user
         guild = self.bot.get_guild(guild_id)
@@ -416,7 +412,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             return member
         try:
             return await guild.fetch_member(user.id)
-        except (discord.NotFound, discord.Forbidden):
+        except discord.NotFound, discord.Forbidden:
             return None
 
     async def _restore_reactions(self, message_id: int) -> None:
