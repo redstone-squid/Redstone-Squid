@@ -29,6 +29,12 @@ from squid.api.v1.schemas.minecraft_auth import (
     ServerProfileSchema,
 )
 from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
+from squid.minecraft_auth.application.crypto import (
+    MAX_INSTALLATION_ID_CHARS,
+    MAX_INSTALLATION_SECRET_CHARS,
+    MIN_INSTALLATION_ID_CHARS,
+    MIN_INSTALLATION_SECRET_CHARS,
+)
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
 )
@@ -54,8 +60,23 @@ async def current_account_id(caller: Annotated[Caller, Depends(current_caller)])
 
 
 AccountId = Annotated[int, Depends(current_account_id)]
-InstallationIdHeader = Annotated[str | None, Header(alias="Squid-Installation-ID")]
-InstallationSecretHeader = Annotated[str | None, Header(alias="Squid-Installation-Secret")]
+InstallationIdHeader = Annotated[
+    str | None,
+    Header(
+        alias="Squid-Installation-ID",
+        json_schema_extra={"minLength": MIN_INSTALLATION_ID_CHARS, "maxLength": MAX_INSTALLATION_ID_CHARS},
+    ),
+]
+InstallationSecretHeader = Annotated[
+    str | None,
+    Header(
+        alias="Squid-Installation-Secret",
+        json_schema_extra={
+            "minLength": MIN_INSTALLATION_SECRET_CHARS,
+            "maxLength": MAX_INSTALLATION_SECRET_CHARS,
+        },
+    ),
+]
 VerificationUri = Annotated[AnyHttpUrl, Depends(get_minecraft_verification_uri)]
 
 
