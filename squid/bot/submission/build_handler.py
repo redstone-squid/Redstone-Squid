@@ -33,7 +33,7 @@ _SPONSOR_CREDIT_MAX_CHARACTERS = 255
 _SPONSOR_WEBSITE_MAX_CHARACTERS = 512
 
 
-def _status_colour(status: Status | None, *, build_id: int) -> int:
+def _status_colour(status: Status | None, *, build_id: int | None) -> int:
     """Return an exhaustive build-status accent, reporting invalid persisted state."""
     match status:
         case Status.PENDING:
