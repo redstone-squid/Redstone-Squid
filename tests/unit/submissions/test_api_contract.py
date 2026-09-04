@@ -266,6 +266,10 @@ def test_draft_change_rejects_non_json_and_client_schematic_assertions() -> None
     with pytest.raises(PydanticValidationError):
         DraftChangeRequest.model_validate({**base, "has_sanitized_schematic": True})
 
+    for invalid_key in (123, {}, [], None, "short"):
+        with pytest.raises(PydanticValidationError):
+            DraftChangeRequest.model_validate({**base, "idempotency_key": invalid_key})
+
     with pytest.raises(PydanticValidationError):
         DraftChangeRequest.model_validate(
             {
@@ -282,6 +286,18 @@ def test_draft_change_rejects_non_json_and_client_schematic_assertions() -> None
                 ],
             }
         )
+
+
+def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
+    key_schema = DraftChangeRequest.model_json_schema()["properties"]["idempotency_key"]
+
+    assert key_schema == {
+        "maxLength": 255,
+        "minLength": 8,
+        "pattern": r"^[\x21-\x7e]{8,255}$",
+        "title": "Idempotency Key",
+        "type": "string",
+    }
 
 
 async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:

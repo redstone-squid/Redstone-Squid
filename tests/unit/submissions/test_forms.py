@@ -109,11 +109,13 @@ def test_partial_validation_allows_incomplete_draft_but_rejects_wrong_values() -
 async def test_checked_in_registry_retains_v1_and_serves_v2_vocabulary() -> None:
     registry = CheckedInFormManifestRegistry()
 
+    current = await registry.current(locale="en")
     revision_one = await registry.get("build_submission.v1", 1, locale="en")
     revision_two = await registry.get("build_submission.v1", 2, locale="en")
 
     assert revision_one is not None
     assert revision_two is not None
+    assert current.revision == 1
     old_context = next(section for section in revision_one.common_sections if section.id == "provenance")
     new_context = next(section for section in revision_two.common_sections if section.id == "submission_context")
     assert (

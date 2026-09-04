@@ -20,8 +20,12 @@ from pydantic import (
 )
 
 from squid.core.errors import JSONValue
+from squid.core.errors import ValidationError as DomainValidationError
 from squid.submissions.application import AppliedDraftUpgrade, FinalizationJobSnapshot, FormOptionSet, StoredDraft
 from squid.submissions.domain import (
+    DRAFT_CHANGE_KEY_MAX_LENGTH,
+    DRAFT_CHANGE_KEY_MIN_LENGTH,
+    DRAFT_CHANGE_KEY_PATTERN,
     CategoryForm,
     ChoiceOption,
     ControlKind,
@@ -44,7 +48,30 @@ from squid.submissions.domain import (
 
 StableIdentifier = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 ClientInstanceIdentifier = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")]
-DraftChangeKeyInput = Annotated[DraftChangeKey, BeforeValidator(DraftChangeKey), WithJsonSchema({"type": "string"})]
+
+
+def _draft_change_key(value: object) -> DraftChangeKey:
+    if not isinstance(value, str):
+        msg = "draft change key must be a string"
+        raise ValueError(msg)  # noqa: TRY004 - Pydantic validators must raise ValueError, not TypeError.
+    try:
+        return DraftChangeKey(value)
+    except DomainValidationError as error:
+        raise ValueError(str(error)) from error
+
+
+DraftChangeKeyInput = Annotated[
+    DraftChangeKey,
+    BeforeValidator(_draft_change_key),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "minLength": DRAFT_CHANGE_KEY_MIN_LENGTH,
+            "maxLength": DRAFT_CHANGE_KEY_MAX_LENGTH,
+            "pattern": DRAFT_CHANGE_KEY_PATTERN,
+        }
+    ),
+]
 _JSON_VALUE = TypeAdapter(JsonValue)
 
 
