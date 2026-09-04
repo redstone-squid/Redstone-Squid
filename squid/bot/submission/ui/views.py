@@ -729,8 +729,9 @@ class SubmissionScreen(sd.Screen):
 
 
 def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.FormSpec:
+    page_items = items[5 * (page - 1) : 5 * page]
     fields: list[sl.forms.FormField[Any]] = []
-    for item in items[5 * (page - 1) : 5 * page]:
+    for item in page_items:
         spec = item.spec
         field_type = sl.forms.TextAreaField if spec.display is FieldDisplay.PARAGRAPH else sl.forms.TextField
         fields.append(
@@ -744,7 +745,16 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
                 maximum=spec.maximum,
             )
         )
-    return sl.forms.FormSpec(tr("Edit build, section {page}", page=page), tuple(fields))
+    def validate(values: Mapping[str, object]) -> tuple[sl.forms.FormIssue, ...]:
+        errors: list[sl.forms.FormIssue] = []
+        for item in page_items:
+            try:
+                item.spec.parser(cast(str, values[item.key]))
+            except ValueError as error:
+                errors.append(sl.forms.FieldError(item.key, str(error) or tr("Invalid value")))
+        return tuple(errors)
+
+    return sl.forms.FormSpec(tr("Edit build, section {page}", page=page), tuple(fields), validator=validate)
 
 
 class BuildEditScreen(sd.Screen):
