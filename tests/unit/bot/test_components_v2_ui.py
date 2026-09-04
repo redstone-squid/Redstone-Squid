@@ -197,6 +197,8 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
 
     assert component.max_pages == 1
     assert "Edit this section" in str(component.render())
+    assert "Reload fresh editor" in str(component.render())
+    assert "discards every staged change" in str(component.render())
     assert component._current()[0] is display_build
 
 
@@ -205,6 +207,7 @@ def test_build_editor_declares_keyed_topic_following_policy() -> None:
     assert BuildEditScreen.session.name == "build-edit"
     assert BuildEditScreen.timeout == 900
     assert BuildEditScreen.follow_topics is True
+    assert BuildEditScreen.root_options["retain_routed_on_timeout"] is True
 
 
 async def test_build_editor_commits_against_the_revision_it_presented(display_build: Build) -> None:
