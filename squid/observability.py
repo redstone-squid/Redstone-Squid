@@ -9,7 +9,7 @@ from contextlib import AbstractContextManager, contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING, Protocol, override
+from typing import TYPE_CHECKING, Protocol, cast, override
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -531,11 +531,11 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
     metrics.set_meter_provider(metric_provider)
     active = _Telemetry(
         pid=os.getpid(),
-        tracer=trace.get_tracer("squid"),
-        worker_tracer=trace.get_tracer("squid.worker"),
-        meter=metric_provider.get_meter("squid"),
+        tracer=cast(_Tracer, trace.get_tracer("squid")),
+        worker_tracer=cast(_Tracer, trace.get_tracer("squid.worker")),
+        meter=cast(_Meter, metric_provider.get_meter("squid")),
         propagator=propagate,
-        current_span=trace.get_current_span,
+        current_span=cast(Callable[[], _Span], trace.get_current_span),
         error_status=lambda: Status(StatusCode.ERROR),
         instrument_api_app=FastAPIInstrumentor.instrument_app,
     )
