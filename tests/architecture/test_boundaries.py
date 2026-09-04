@@ -78,6 +78,34 @@ def _dependency_name(requirement: str) -> str:
     return re.split(r"[<>=!~;\[]", requirement, maxsplit=1)[0].strip().lower()
 
 
+def test_process_entry_points_use_concrete_runtime_constructors() -> None:
+    """Production startup may not inject an arbitrary service factory into bootstrap."""
+    expected_calls = {
+        Path("squid/bot/app.py"): ("_run_bot", "create_bot_runtime"),
+        Path("squid/worker/app.py"): ("_run_worker", "create_worker_runtime"),
+    }
+    for path, (function_name, constructor_name) in expected_calls.items():
+        function = next(
+            node
+            for node in source_tree(path).body
+            if isinstance(node, ast.AsyncFunctionDef) and node.name == function_name
+        )
+        calls = {
+            node.func.id
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        assert constructor_name in calls
+
+    api_factory = next(
+        node
+        for node in source_tree(Path("squid/api/app.py")).body
+        if isinstance(node, ast.FunctionDef) and node.name == "create_api_app"
+    )
+    assert isinstance(api_factory.args.defaults[0], ast.Name)
+    assert api_factory.args.defaults[0].id == "create_api_runtime"
+
+
 def test_background_tasks_use_owned_anyio_task_groups() -> None:
     """Task lifetime stays with an anyio owner instead of escaping through asyncio."""
     banned = {"TaskGroup", "create_task", "ensure_future"}

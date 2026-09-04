@@ -754,6 +754,7 @@ def _create_runtime[ServicesT](
     service_factory: Callable[[DatabaseEngine, RuntimeConfig, AsyncExitStack], ServicesT],
     db: DatabaseEngine | None,
 ) -> ApplicationRuntime[ServicesT]:
+    """Share resource ownership behind the concrete process runtime constructors."""
     database = db or DatabaseEngine(config.database)
     resources_stack = AsyncExitStack()
     # Registered first so LIFO shutdown keeps the database alive until every adapter
