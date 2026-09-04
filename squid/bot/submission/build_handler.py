@@ -12,6 +12,7 @@ import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.ui import (
     DISCORD_GREEN,
+    DISCORD_GREY,
     DISCORD_RED,
     DISCORD_YELLOW,
     render_item,
@@ -21,6 +22,7 @@ from squid.bot.ui import (
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
 from squid.builds.domain import Build, DoorBuild, Status
 from squid.builds.domain.titles import format_build_display_title
+from squid.observability import add_counter
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -29,6 +31,29 @@ logger = logging.getLogger(__name__)
 
 _SPONSOR_CREDIT_MAX_CHARACTERS = 255
 _SPONSOR_WEBSITE_MAX_CHARACTERS = 512
+
+
+def _status_colour(status: Status | None, *, build_id: int) -> int:
+    """Return an exhaustive build-status accent, reporting invalid persisted state."""
+    match status:
+        case Status.PENDING:
+            return DISCORD_YELLOW
+        case Status.CONFIRMED:
+            return DISCORD_GREEN
+        case Status.DENIED:
+            return DISCORD_RED
+        case _:
+            raw_status = status.name if isinstance(status, Status) else str(status)
+            logger.error(
+                "Build %s has no valid submission status",
+                build_id,
+                extra={"squid.build.id": build_id, "squid.build.status": raw_status},
+            )
+            add_counter(
+                "squid.build.invalid_submission_status",
+                attributes={"squid.build.status": raw_status},
+            )
+            return DISCORD_GREY
 
 
 class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
@@ -155,11 +180,6 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             )
             return sl.section(sl.heading(title), sl.fields(*entries)) if entries else None
 
-        status_colours: dict[Status | None, int] = {
-            Status.PENDING: DISCORD_YELLOW,
-            Status.CONFIRMED: DISCORD_GREEN,
-            Status.DENIED: DISCORD_RED,
-        }
         footer = f"Submission ID: {build.id}"
         if build.edited_time is not None:
             footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
@@ -187,7 +207,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             bool(extra_media) and sl.media(*extra_media, key="media"),
             sl.note(footer),
             *rows,
-            accent=status_colours.get(build.submission_status, DISCORD_GREEN),
+            accent=_status_colour(build.submission_status, build_id=build.id),
             thumbnail=media[0] if media else None,
         )
 
