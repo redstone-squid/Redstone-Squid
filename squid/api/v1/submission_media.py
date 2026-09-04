@@ -87,7 +87,7 @@ async def upload_draft_media(
 
     content_type = _source_content_type(request, kind)
     content_length = _declared_content_length(request, attachments.limits.max_source_bytes)
-    with tempfile.TemporaryDirectory(prefix="squid-media-upload-") as directory_name:
+    with tempfile.TemporaryDirectory(prefix="squid-media-upload-", ignore_cleanup_errors=True) as directory_name:
         directory = Path(directory_name)
         directory.chmod(0o700)
         source_path = directory / "source"

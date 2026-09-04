@@ -176,6 +176,29 @@ async def test_register_rejects_reused_staging_authority(tmp_path: Path) -> None
     assert not second_source.exists()
 
 
+async def test_cleanup_failure_does_not_mask_successful_registration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = DraftAttachmentService(FakeDrafts(_draft(), []), FakeJobs())
+    source = tmp_path / "source"
+    source.write_bytes(b"png")
+
+    def fail_cleanup(*_args: object, **_kwargs: object) -> None:
+        raise PermissionError("cleanup refused")
+
+    monkeypatch.setattr(Path, "unlink", fail_cleanup)
+
+    snapshot = await service.register(
+        DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE),
+        StagedUpload(source, "image/png"),
+        strip_audio=False,
+        upload_id=UPLOAD_ID,
+    )
+
+    assert snapshot.upload.id == UPLOAD_ID
+
+
 async def test_get_and_discard_enforce_ownership_then_draft_association() -> None:
     drafts = FakeDrafts(_draft(), [])
     jobs = FakeJobs()
