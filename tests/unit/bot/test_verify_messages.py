@@ -26,7 +26,8 @@ from squid.bot.account_presentation import (
     refresh_message,
 )
 from squid.bot.profile_render import present_claimant
-from squid.suggestions.infrastructure.providers.records import _claimant_description
+from squid.suggestions.domain import SuggestionRequest
+from squid.suggestions.infrastructure.providers.records import AliasClaimProvider, _claimant_description
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_UUID = UUID("22222222-2222-2222-2222-222222222222")
@@ -205,7 +206,7 @@ def test_the_internal_id_is_last_and_labelled_as_a_diagnostic() -> None:
 
 
 def test_the_autocomplete_prefers_a_readable_name_over_a_snowflake() -> None:
-    """A mention renders as raw `<@id>` in an autocomplete row, so that surface needs its own rule."""
+    """The canonical presenter disables mentions where Discord would render their raw syntax."""
     java_only = _claim(Account((AccountIdentity.java(JAVA_UUID, username="Notch"),), None, 42, NOW))
     with_discord = _claim(
         Account((AccountIdentity.discord(555), AccountIdentity.java(JAVA_UUID, username="Notch")), None, 42, NOW)
@@ -213,7 +214,7 @@ def test_the_autocomplete_prefers_a_readable_name_over_a_snowflake() -> None:
 
     assert _claimant_description(java_only) == "Notch"
     assert _claimant_description(with_discord) == "Notch"
-    assert _claimant_description(_claim(None)) == "account 42"
+    assert _claimant_description(_claim(None)) == present_claimant(_claim(None), mention=False)
 
 
 def test_the_autocomplete_description_respects_discords_limit() -> None:
@@ -221,6 +222,19 @@ def test_the_autocomplete_description_respects_discords_limit() -> None:
     claim = _claim(Account((AccountIdentity.java(JAVA_UUID, username=long_name),), None, 42, NOW))
 
     assert len(_claimant_description(claim)) <= 100
+
+
+async def test_registered_claim_provider_uses_the_canonical_presentation() -> None:
+    claim = _claim(Account((AccountIdentity.discord(555),), None, 42, NOW))
+
+    class Claims:
+        async def pending_alias_claims(self, *, with_claimants: bool = False) -> tuple[AliasClaim, ...]:
+            assert with_claimants
+            return (claim,)
+
+    (candidate,) = await AliasClaimProvider(Claims()).candidates(SuggestionRequest(source="alias_claims_pending"))
+
+    assert candidate.suggestion.description == present_claimant(claim, mention=False)
 
 
 # The unlink decision tree that used to live here is gone with the command: unlinking is a
