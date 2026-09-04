@@ -204,13 +204,13 @@ class AccountWorkspace(sd.Screen):
             ttl_seconds=int(CONSENT_PROMPT_TIMEOUT_SECONDS),
         )
         conflict = (
-            None
-            if account is None
-            else link_conflict(reservation.preview, account.identity(IdentityProvider.JAVA))
+            None if account is None else link_conflict(reservation.preview, account.identity(IdentityProvider.JAVA))
         )
         if conflict is not None:
             await self._accounts.release_minecraft_link(code, reservation)
-            raise AccountAlreadyLinkedError(account_id=account.id if account is not None else None, minecraft_uuid=conflict)
+            raise AccountAlreadyLinkedError(
+                account_id=account.id if account is not None else None, minecraft_uuid=conflict
+            )
 
         settled = False
 
