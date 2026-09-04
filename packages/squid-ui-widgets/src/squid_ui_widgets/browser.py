@@ -98,6 +98,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
 
     @resource
     async def window(self) -> LoadedWindow[ItemT]:
+        """Load the requested source window around the visible anchor."""
         return await load_window(
             self.loader,
             self._request,
@@ -111,18 +112,23 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         await self.window._load()
 
     async def _previous(self, _event: ActionEvent) -> None:
+        """Request the previous source window."""
         self._request = WindowRequest("previous")
 
     async def _next(self, _event: ActionEvent) -> None:
+        """Request the next source window."""
         self._request = WindowRequest("next")
 
     async def _seek(self, page: int) -> None:
+        """Request a zero-based page from a jumpable source."""
         self._request = WindowRequest("seek", Position(offset=page * self.page_size))
 
     async def _retry(self, _event: ActionEvent) -> None:
+        """Retry the current window request."""
         self._request = WindowRequest(self._request.operation, self._request.position)
 
     def _ready(self) -> LoadedWindow[ItemT] | None:
+        """Return the current or stale window available for interaction."""
         current = self.window.status
         if isinstance(current, Ready):
             return current.value
@@ -131,6 +137,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         return None
 
     async def _selected(self, event: ChoiceEvent) -> None:
+        """Open the single selected item if it remains visible."""
         if len(event.selected) != 1:
             return
         loaded = self._ready()
@@ -142,16 +149,19 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         await self._open(event, item)
 
     async def _open(self, event: ActionEvent, item: ItemT) -> None:
+        """Open one item and materialize its detail once."""
         self.opened = item
         self._detail_value = self.detail(item)
         if self.on_open is not None:
             await self.on_open(event, item)
 
     async def _back(self, _event: ActionEvent) -> None:
+        """Return from detail to the source overview."""
         self.opened = None
         self._detail_value = None
 
     async def _adjacent(self, event: ActionEvent, delta: int) -> None:
+        """Open an adjacent item within the current source window."""
         loaded = self._ready()
         if loaded is None or self.opened is None:
             return
@@ -164,12 +174,15 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
             await self._open(event, items[target])
 
     async def _previous_item(self, event: ActionEvent) -> None:
+        """Open the previous item in the visible window."""
         await self._adjacent(event, -1)
 
     async def _next_item(self, event: ActionEvent) -> None:
+        """Open the next item in the visible window."""
         await self._adjacent(event, 1)
 
     def render(self) -> DocumentLike[RenderTargetT]:
+        """Render ready, pending, or failed source state."""
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
         # checker saw a path with no return on a shape that cannot occur.
@@ -186,6 +199,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
                 return self._render_loaded(previous.value, status_text=self.copy.failed, retry=True)
 
     def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT]:
+        """Render a source status without a stale window."""
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
@@ -203,6 +217,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         status_text: TextLike | None = None,
         retry: bool = False,
     ) -> DocumentLike[RenderTargetT]:
+        """Render a loaded window as either overview or detail."""
         opened = None
         if self.opened is not None:
             opened = next(
@@ -220,6 +235,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         status_text: TextLike | None,
         retry: bool,
     ) -> DocumentLike[RenderTargetT]:
+        """Render overview content, item selection, and navigation."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         extra = (
@@ -260,6 +276,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         )
 
     def _navigation(self, loaded: LoadedWindow[ItemT]) -> tuple[MountNavNode, ...]:
+        """Bind shared source navigation facts to mounted handlers."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
         state = source_navigation_state(
@@ -290,6 +307,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         status_text: TextLike | None,
         retry: bool,
     ) -> DocumentLike[RenderTargetT]:
+        """Render one opened item and its local actions."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         index = next(index for index, candidate in enumerate(items) if self.identity(candidate) == self.identity(item))

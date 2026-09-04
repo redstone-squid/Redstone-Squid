@@ -81,6 +81,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
 
     @resource
     async def loaded(self) -> LoadedWindow[RankedEntry | EntryT]:
+        """Load the requested ranked source window."""
         return await load_window(
             self.loader,
             self._request,
@@ -94,9 +95,11 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         await self.loaded._load()
 
     async def _previous(self, _event: ActionEvent) -> None:
+        """Request the previous source window."""
         self._request = WindowRequest("previous")
 
     async def _next(self, _event: ActionEvent) -> None:
+        """Request the next source window."""
         self._request = WindowRequest("next")
 
     async def _seek(self, page: int) -> None:
@@ -104,15 +107,18 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         self._request = WindowRequest("seek", Position(offset=page * self.page_size))
 
     async def _retry(self, _event: ActionEvent) -> None:
+        """Retry the current window request."""
         self._request = WindowRequest(self._request.operation, self._request.position)
 
     def _hook(
         self, hook: SourceContentHook[RenderTargetT], total: int | None, *, name: str
     ) -> tuple[LayoutNode[RenderTargetT], ...]:
+        """Resolve and normalize source-aware header or footer content."""
         value = hook(total) if callable(hook) else hook
         return render_content(self, normalize_content(value, name=name), prefix=name)
 
     def render(self) -> DocumentLike[RenderTargetT]:
+        """Render ready, pending, or failed ranking state."""
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
         # checker saw a path with no return on a shape that cannot occur.
@@ -129,6 +135,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
                 return self._render_loaded(previous.value, status=self.copy.failed, retry=True)
 
     def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT]:
+        """Render a source status without a stale ranking window."""
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
@@ -147,6 +154,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         status: TextLike | None = None,
         retry: bool = False,
     ) -> DocumentLike[RenderTargetT]:
+        """Render one ranked source window with navigation facts."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
         window = loaded.window

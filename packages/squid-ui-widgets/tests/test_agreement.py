@@ -1,6 +1,6 @@
 """Actor-keyed agreement: who has approved, and when that resolves."""
 
-from typing import Any
+from typing import Literal
 
 import pytest
 
@@ -10,11 +10,16 @@ from squid_ui import testing as engine
 from squid_ui.semantic import ActionControl
 
 
-def _agreement(**overrides: Any) -> sp.Agreement:
+def _agreement(
+    *,
+    require: int | Literal["all"] = "all",
+    on_resolve: sp.AgreementResolveHandler | None = None,
+) -> sp.Agreement:
     return sp.Agreement(
         "Ship this change?",
         (sp.AgreementParticipant("1", "Alice"), sp.AgreementParticipant("2", "Bob")),
-        **overrides,
+        require=require,
+        on_resolve=on_resolve,
     )
 
 

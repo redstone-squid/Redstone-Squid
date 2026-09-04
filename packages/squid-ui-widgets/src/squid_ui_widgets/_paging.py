@@ -16,6 +16,7 @@ class PagePosition:
     index: int = 0
 
     def __post_init__(self) -> None:
+        """Reject positions before the first page."""
         if self.index < 0:
             message = "PagePosition.index must not be negative"
             raise ValueError(message)

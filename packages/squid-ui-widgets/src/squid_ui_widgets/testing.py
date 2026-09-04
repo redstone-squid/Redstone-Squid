@@ -49,19 +49,24 @@ class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget]:
 
     @property
     def state(self) -> StateT:
+        """Return the mounted machine's current state."""
         return self.driver.machine_state
 
     @property
     def nodes(self) -> tuple[AnyLayoutNode, ...]:
+        """Render the mounted machine's current semantic tree."""
         return engine.render_tree(self.driver)
 
     def texts(self) -> list[str]:
+        """Return authored text from the current tree."""
         return engine.texts(self.nodes)
 
     def labels(self) -> list[str]:
+        """Return control labels from the current tree."""
         return engine.labels(self.nodes)
 
     def keys(self) -> list[str]:
+        """Return semantic keys from the current tree."""
         return engine.keys(self.nodes)
 
     def control(self, key: str) -> ActionControl:
@@ -82,10 +87,12 @@ class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget]:
 
     @property
     def notices(self) -> tuple[str, ...]:
+        """Return notices recorded by the action responder."""
         return tuple(text for text, _visibility in self.responder.notices)
 
     @property
     def finished(self) -> bool:
+        """Return whether an action finished the presentation."""
         return self.responder.finished
 
 
@@ -162,9 +169,11 @@ class RoutedRender[StateT, RenderTargetT: RenderTarget = RenderTarget]:
     routes: tuple[TransitionRoute[StateT], ...]
 
     def texts(self) -> list[str]:
+        """Return authored text from this routed tree."""
         return engine.texts(self.nodes)
 
     def labels(self) -> list[str]:
+        """Return control labels from this routed tree."""
         return engine.labels(self.nodes)
 
     def route_ids(self) -> list[str]:

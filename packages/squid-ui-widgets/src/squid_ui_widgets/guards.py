@@ -36,12 +36,15 @@ __all__ = ["confirm"]
 
 @dataclass(frozen=True, slots=True)
 class _Confirm:
+    """Challenge an unconfirmed action and remember one approval."""
+
     prompt: TextLike
     danger: bool
     deadline: float | None
     on_decline: TextLike | None
 
     async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardResult:
+        """Consume prior approval or request a confirmation challenge."""
         bucket = approvals(ledger, event.actor.id)
         outstanding: int = ledger.read(bucket, 0)
         if outstanding > 0:
@@ -50,6 +53,8 @@ class _Confirm:
         return Challenge(self._ask, deadline=self.deadline, on_decline=self.on_decline)
 
     def _ask(self, resolver: ChallengeResolver) -> Component:
+        """Build the private confirmation shell for this challenge."""
+
         async def approved(event: TransitionEvent[DecisionState]) -> None:
             # Closing first answers the click inside its own deadline, and leaves nothing in
             # this handler that could fail after the press has been handed on.
