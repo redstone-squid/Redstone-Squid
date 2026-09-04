@@ -44,7 +44,7 @@ from anyio.abc import TaskGroup
 
 from squid.config import SchematicConfig
 from squid.core.errors import DomainError, InfrastructureError
-from squid.observability import add_counter, inject_trace_context, record_gauge, record_histogram
+from squid.observability import add_counter, record_gauge, record_histogram, trace_context_headers
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -150,7 +150,8 @@ class _Worker:
             job_id = current_schematic_job_id.get()
             if job_id is not None:
                 header["job_id"] = job_id
-            inject_trace_context(header)
+            if trace := trace_context_headers():
+                header["trace"] = trace
             frame = Frame(header, tuple(payloads))
             assert process.stdin is not None and process.stdout is not None
             try:

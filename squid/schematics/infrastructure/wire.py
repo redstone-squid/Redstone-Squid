@@ -11,7 +11,9 @@ A frame is::
 Binary payloads travel in the body, appended raw. Schematic files, converted output, and
 rendered PNGs are megabyte-scale; base64-ing them into the JSON header would inflate every
 transfer by a third for no benefit. The header's `parts` field carries the length of each
-payload so a multi-payload request such as `compare` can be split back apart.
+payload so a multi-payload request such as `compare` can be split back apart. Request headers
+may also carry a `trace` mapping containing W3C propagation keys such as `traceparent`;
+propagation keys never share the frame-header namespace.
 """
 
 import asyncio
