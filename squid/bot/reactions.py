@@ -14,7 +14,7 @@ import discord
 from discord.ext import commands
 
 from squid.core.concurrency import run_all
-from squid.observability import record_histogram
+from squid.observability import add_counter, record_gauge, record_histogram
 from squid.runtime import BackgroundTaskSupervisor, JobHandle
 
 if TYPE_CHECKING:
@@ -24,44 +24,59 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class ReactionEvent:
-    """A normalized reaction action with memoized Discord lookups."""
+class ReactionResolver:
+    """Discord lookups memoized for one routed event and its callback snapshot."""
 
-    payload: discord.RawReactionActionEvent
-    emoji: str
-    member: discord.Member | None
     _bot: squid.bot.app.RedstoneSquid = field(repr=False, compare=False)
+    _member: discord.Member | None = field(repr=False, compare=False)
     _message_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     _message: discord.Message | None = field(default=None, init=False, repr=False, compare=False)
     _message_loaded: bool = field(default=False, init=False, repr=False, compare=False)
     _member_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
     _member_loaded: bool = field(default=False, init=False, repr=False, compare=False)
 
-    async def message(self) -> discord.Message | None:
+    async def message(self, channel_id: int, message_id: int) -> discord.Message | None:
         """Fetch the reacted-to message at most once across all subscribers."""
         async with self._message_lock:
             if self._message_loaded:
                 return self._message
-            message = await self._bot.get_or_fetch_message(self.payload.channel_id, self.payload.message_id)
+            message = await self._bot.get_or_fetch_message(channel_id, message_id)
             object.__setattr__(self, "_message", message)
             object.__setattr__(self, "_message_loaded", True)
             return message
 
-    async def resolve_member(self) -> discord.Member | None:
+    async def member(self, guild_id: int | None, user_id: int) -> discord.Member | None:
         """Resolve the reacting guild member at most once, only when a subscriber needs it."""
         async with self._member_lock:
             if self._member_loaded:
-                return self.member
-            member = self.member
-            guild = self._bot.get_guild(self.payload.guild_id) if self.payload.guild_id is not None else None
+                return self._member
+            member = self._member
+            guild = self._bot.get_guild(guild_id) if guild_id is not None else None
             if member is None and guild is not None:
-                member = guild.get_member(self.payload.user_id)
+                member = guild.get_member(user_id)
             if member is None and guild is not None:
                 with contextlib.suppress(discord.NotFound, discord.Forbidden):
-                    member = await guild.fetch_member(self.payload.user_id)
-            object.__setattr__(self, "member", member)
+                    member = await guild.fetch_member(user_id)
+            object.__setattr__(self, "_member", member)
             object.__setattr__(self, "_member_loaded", True)
             return member
+
+
+@dataclass(frozen=True, slots=True)
+class ReactionEvent:
+    """A Discord reaction action with lookups scoped to this dispatch."""
+
+    payload: discord.RawReactionActionEvent
+    emoji: str
+    _resolver: ReactionResolver = field(repr=False, compare=False)
+
+    async def message(self) -> discord.Message | None:
+        """Fetch the reacted-to message at most once across all callbacks."""
+        return await self._resolver.message(self.payload.channel_id, self.payload.message_id)
+
+    async def resolve_member(self) -> discord.Member | None:
+        """Resolve the reacting member at most once across all callbacks."""
+        return await self._resolver.member(self.payload.guild_id, self.payload.user_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,12 +119,13 @@ class _ReactionCallback[EventT]:
     callback: Callable[[EventT], Awaitable[None]]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class _QueuedReaction[EventT]:
     kind: ReactionKind
     event: EventT
     callbacks: tuple[_ReactionCallback[EventT], ...]
-    enqueued_at: float
+    created_at: float
+    accepted_at: float | None = None
 
 
 type _QueuedEvent = _QueuedReaction[ReactionEvent] | _QueuedReaction[ReactionClearEvent]
@@ -209,6 +225,7 @@ class ReactionRouter:
 
         if drain_scope.cancelled_caught:
             self._abort_enqueues.set()
+            add_counter("squid.reaction.shutdown.timeouts")
             logger.error(
                 "Reaction work did not drain before the shutdown deadline",
                 extra={
@@ -220,6 +237,17 @@ class ReactionRouter:
             with anyio.move_on_after(1.0):
                 async with self._intake_changed:
                     await self._intake_changed.wait_for(lambda: self._active_enqueues == 0)
+        shutdown_attributes = {"squid.outcome": "timeout" if drain_scope.cancelled_caught else "drained"}
+        record_histogram(
+            "squid.reaction.shutdown.drain_duration",
+            time.monotonic() - started,
+            attributes=shutdown_attributes,
+        )
+        record_gauge(
+            "squid.reaction.shutdown.accepted_pending",
+            self._outstanding,
+            attributes=shutdown_attributes,
+        )
         if self._workers:
             await self._supervisor.cancel(*self._workers)
 
@@ -228,7 +256,7 @@ class ReactionRouter:
         if member is None and payload.guild_id is not None:
             guild = self._bot.get_guild(payload.guild_id)
             member = guild.get_member(payload.user_id) if guild is not None else None
-        event = ReactionEvent(payload, str(payload.emoji), member, self._bot)
+        event = ReactionEvent(payload, str(payload.emoji), ReactionResolver(self._bot, member))
         await self._dispatch(_QueuedReaction(kind, event, self._action_callbacks(kind), time.monotonic()))
 
     def _action_callbacks(self, kind: Literal["add", "remove"]) -> tuple[_ReactionCallback[ReactionEvent], ...]:
@@ -251,18 +279,31 @@ class ReactionRouter:
         async with self._intake_changed:
             if self._closing:
                 logger.warning("Ignored a reaction received during router shutdown")
+                add_counter("squid.reaction.intake.ignored", attributes={"squid.reaction.kind": item.kind})
                 return
             self._active_enqueues += 1
         self._ensure_workers()
         try:
-            queue = self._queues[item.event.payload.message_id % len(self._queues)]
+            shard = item.event.payload.message_id % len(self._queues)
+            queue = self._queues[shard]
             try:
                 queue.put_nowait(item)
                 accepted = True
             except asyncio.QueueFull:
                 accepted = await self._enqueue_or_abort(queue, item)
             if accepted:
+                accepted_at = time.monotonic()
+                item.accepted_at = accepted_at
                 self._outstanding += 1
+                attributes = {"squid.reaction.kind": item.kind, "squid.reaction.shard": shard}
+                record_histogram(
+                    "squid.reaction.enqueue.wait",
+                    accepted_at - item.created_at,
+                    attributes=attributes,
+                )
+                record_gauge("squid.reaction.queue.depth", queue.qsize(), attributes=attributes)
+            else:
+                add_counter("squid.reaction.enqueue.aborted", attributes={"squid.reaction.kind": item.kind})
         finally:
             async with self._intake_changed:
                 self._active_enqueues -= 1
@@ -294,15 +335,17 @@ class ReactionRouter:
         if self._workers:
             return
         self._workers = tuple(
-            self._supervisor.start(self._run_shard(queue), name=f"reaction-shard-{index}")
+            self._supervisor.start(self._run_shard(index, queue), name=f"reaction-shard-{index}")
             for index, queue in enumerate(self._queues)
         )
 
-    async def _run_shard(self, queue: asyncio.Queue[_QueuedEvent]) -> None:
+    async def _run_shard(self, shard: int, queue: asyncio.Queue[_QueuedEvent]) -> None:
         while True:
             item = await queue.get()
+            attributes = {"squid.reaction.kind": item.kind, "squid.reaction.shard": shard}
             try:
-                record_histogram("squid.reaction.queue_latency", time.monotonic() - item.enqueued_at)
+                accepted_at = item.accepted_at or item.created_at
+                record_histogram("squid.reaction.queue_latency", time.monotonic() - accepted_at, attributes=attributes)
                 await run_all(
                     functools.partial(self._run_callback, callback, item.kind, item.event)
                     for callback in item.callbacks
@@ -314,9 +357,11 @@ class ReactionRouter:
                 # rest of the process, and close() then blocks on join() until the
                 # shutdown deadline rather than reporting the real failure.
                 logger.exception("Reaction shard failed to dispatch %s", item.kind)
+                add_counter("squid.reaction.shard.failures", attributes=attributes)
             finally:
                 self._outstanding -= 1
                 queue.task_done()
+                record_gauge("squid.reaction.queue.depth", queue.qsize(), attributes=attributes)
 
     @staticmethod
     async def _run_callback[EventT](
@@ -324,10 +369,20 @@ class ReactionRouter:
         kind: ReactionKind,
         event: EventT,
     ) -> None:
+        started = time.monotonic()
+        attributes = {"squid.reaction.kind": kind, "squid.reaction.consumer": callback.consumer}
         try:
             await callback.callback(event)
         except Exception:
-            logger.exception("Reaction consumer %s failed in %s", callback.consumer, kind)
+            add_counter("squid.reaction.handler.failures", attributes=attributes)
+            logger.exception(
+                "Reaction consumer %s failed in %s",
+                callback.consumer,
+                kind,
+                extra=dict(attributes),
+            )
+        finally:
+            record_histogram("squid.reaction.handler.duration", time.monotonic() - started, attributes=attributes)
 
 
 class ReactionRouterCog(commands.Cog):
