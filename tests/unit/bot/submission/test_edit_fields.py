@@ -161,8 +161,7 @@ async def test_invalid_edit_urls_reopen_the_modal_with_every_attempted_value() -
     defaults = {
         component.custom_id: component.default
         for child in retried.children
-        if isinstance(child, discord.ui.Label)
-        and isinstance((component := child.component), discord.ui.TextInput)
+        if isinstance(child, discord.ui.Label) and isinstance((component := child.component), discord.ui.TextInput)
     }
     assert defaults == attempted
 
