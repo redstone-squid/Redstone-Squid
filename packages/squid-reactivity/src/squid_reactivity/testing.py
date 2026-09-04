@@ -27,7 +27,7 @@ class InterleavingHarness:
 
     @contextmanager
     def installed(self) -> Iterator[InterleavingHarness]:
-        """Install this harness for the lexical test scope."""
+        """Route `core`'s checkpoints to this harness until the block exits; nests with other harnesses."""
         token = core._INTERLEAVER.set(self.checkpoint)
         core._INTERLEAVER_USERS += 1
         try:

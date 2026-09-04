@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class Topic:
-    """A process-portable, payload-free address."""
+    """A process-portable, payload-free address, spelled ``kind:key``."""
 
     kind: str
     key: str
@@ -25,7 +25,7 @@ class Topic:
 
 @dataclass(frozen=True, slots=True, eq=False)
 class CellAddress:
-    """The process-local identity of one field on a shared reactive owner."""
+    """The process-local identity of one field on a shared reactive owner; equal by owner identity and name."""
 
     owner: object
     name: str
@@ -39,12 +39,9 @@ class CellAddress:
         return hash((id(self.owner), self.name))
 
     def __str__(self) -> str:
-        """``Preferences(Member(1, 2)).theme``: what a person needs to find the field.
+        """``Preferences(Member(1, 2)).theme``, so a `core` conflict message can name the field.
 
-        Here rather than only in :func:`squid_reactivity.shared_state.describe` so that
-        :mod:`squid_reactivity.core` can name an address too. It cannot import the namespace
-        module -- that module imports it -- and a conflict that says which field moved is
-        worth more than a diagnostic layered on top of one that does not.
+        Lives here because `core` cannot import `shared_state.describe`; that module imports this one.
         """
         return f"{self.owner!r}.{self.name}"
 
@@ -85,13 +82,21 @@ def _invalidate(topic: Topic) -> None:
 class TopicCodec(Protocol):
     """Encode the portable subset of topic addresses for an external bridge."""
 
-    def encode(self, topic: Topic) -> str | None: ...
+    def encode(self, topic: Topic) -> str | None:
+        """Return the wire form, or None when this codec cannot carry `topic`; the bridge then skips it."""
+        ...
 
-    def decode(self, text: str) -> Topic | None: ...
+    def decode(self, text: str) -> Topic | None:
+        """Return the topic `text` spells, or None when it is not one this codec produced."""
+        ...
 
 
 class KindKeyCodec:
-    """Encode topics as ``kind<separator>key`` without escaping."""
+    """Encode topics as ``kind<separator>key`` without escaping.
+
+    `encode` returns None for an empty kind or key, or a kind containing the separator. Raises
+    `ValueError` for an empty separator.
+    """
 
     def __init__(self, separator: str = ":") -> None:
         if not separator:
@@ -113,21 +118,25 @@ class KindKeyCodec:
 class TopicBus(Protocol):
     """Small synchronous bus contract used by reactive publication and hosts.
 
-    Implementations must advance a :class:`Topic`'s tracked version before notifying
-    subscribers, even when there are no subscribers. Delivery scheduling, coalescing,
-    durability, and bridges are deliberately outside this protocol.
+    Implementations must advance a `Topic`'s tracked version before notifying subscribers, even
+    when there are none. Delivery scheduling, coalescing, durability and bridges are outside
+    this protocol.
     """
 
     def subscribe[AddressT: Address](
         self, address: AddressT, callback: Callable[[AddressT], None]
-    ) -> Callable[[], None]: ...
+    ) -> Callable[[], None]:
+        """Call `callback` with `address` on every publish of exactly it; returns the idempotent unsubscribe."""
+        ...
 
-    def publish(self, *addresses: Address) -> None: ...
+    def publish(self, *addresses: Address) -> None:
+        """Notify each address's subscribers in order; a `Topic` also has its `watch` version advanced."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class TopicSnapshot:
-    """Compatibility diagnostics for one address on a local bus."""
+    """Diagnostics for one address on a local bus; delivery is synchronous, so `queued` and `in_flight` are false."""
 
     topic: Address
     subscribers: int
@@ -139,7 +148,7 @@ class TopicSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class BusSnapshot:
-    """Compatibility diagnostics for synchronous local publication."""
+    """Diagnostics for a local bus; `queued` and `in_flight` are always zero, delivery is synchronous."""
 
     topics: tuple[TopicSnapshot, ...]
     queued: int = 0
@@ -171,7 +180,11 @@ def _log_subscriber_error(address: Address, callback: Subscriber, error: Excepti
 
 
 class LocalTopicBus:
-    """Deliver exact-address notifications synchronously in registration order."""
+    """Deliver exact-address notifications synchronously in registration order.
+
+    A subscriber that raises is reported to `on_subscriber_error` (default: logged) and does not
+    stop delivery to the others.
+    """
 
     def __init__(self, *, on_subscriber_error: SubscriberErrorHandler = _log_subscriber_error) -> None:
         self._on_subscriber_error = on_subscriber_error
@@ -237,7 +250,16 @@ class LocalTopicBus:
 
 
 class SubscriptionReconciler:
-    """Keep subscriptions for one committed projection and at most one candidate."""
+    """Subscriptions for one committed projection and one staged candidate; `discard()` drops it, `close()` ends all.
+
+    `close()` unsubscribes everything and refuses further staging. `stage()` subscribes the candidate's
+    new addresses up front, so a read that lands between stage and commit is not missed; `commit()` and
+    `discard()` then unsubscribe whatever neither set needs. A `bus` of None keeps the bookkeeping
+    without subscribing.
+
+    Raises `RuntimeError` from `stage()` when closed or a candidate is already staged, and from
+    `commit()` or `discard()` when nothing is staged.
+    """
 
     def __init__(self, bus: TopicBus | None, callback: Subscriber) -> None:
         self.bus = bus

@@ -17,10 +17,6 @@ LIFETIME_EXEMPTIONS: frozenset[str] = frozenset(
     {
         # Seeded with the offenders at the start of the docstring pass; each unit of that
         # pass removes its own. Nothing should be added here without a reason beside it.
-        "packages/squid-reactivity/src/squid_reactivity/completion.py::Completion",
-        "packages/squid-reactivity/src/squid_reactivity/resources.py::LoadScope",
-        "packages/squid-reactivity/src/squid_reactivity/resources.py::_NoAbandonment",
-        "packages/squid-reactivity/src/squid_reactivity/topics.py::SubscriptionReconciler",
         "packages/squid-ui-discord/src/squid_ui_discord/actions.py::ActionResponder",
         "packages/squid-ui-discord/src/squid_ui_discord/challenges.py::ChallengeRunner",
         "packages/squid-ui-discord/src/squid_ui_discord/durability/runtime.py::DurableSessionRuntime",

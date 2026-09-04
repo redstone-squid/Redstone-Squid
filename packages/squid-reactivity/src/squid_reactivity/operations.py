@@ -28,8 +28,11 @@ class OperationOwner(Protocol):
     """The behaviour a bound operation definition needs from its declaring owner."""
 
     __dict__: dict[str, Any]
+    """Where the descriptor caches the bound `OperationDefinition`, one per instance."""
 
-    def invalidate(self) -> None: ...
+    def invalidate(self) -> None:
+        """Called on every progress report and terminal outcome; a re-render should follow."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,12 +89,16 @@ class ProgressReporter[ProgressT]:
         self._execution = execution
 
     def report(self, value: ProgressT) -> None:
-        """Replace current progress and request a render."""
+        """Replace current progress and request a render; raises `RuntimeError` once the execution has settled."""
         self._execution._set_progress(value)
 
 
 class OperationExecution[ValueT, ProgressT](AsyncBinding):
-    """One one-shot execution. Awaiting it runs or joins it until terminal status."""
+    """One one-shot execution. Awaiting it runs or joins it until terminal status.
+
+    The first awaiter runs the loader; later ones join. Awaiting re-raises the loader's exception,
+    or `asyncio.CancelledError` when the running task was cancelled.
+    """
 
     pending_mode = PendingMode.EXPLICIT
     reconcile_while_pending = True
@@ -183,7 +190,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
 
     @contextmanager
     def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.SYSTEM):
-        """Start a fresh state-publishing action caused by this execution."""
+        """Open a fresh action transaction caused by this execution; yields its `ActionContext`, commits on exit."""
         from squid_reactivity.core import fresh_action_transaction
 
         context = ActionContext.create(
@@ -290,7 +297,7 @@ def operation[OwnerT: OperationOwner, ValueT, ProgressT](
     [Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]]],
     _OperationDescriptor[OwnerT, ValueT, ProgressT],
 ]:
-    """Declare a repeatable operation definition."""
+    """Declare a repeatable operation; `initial` is the progress every execution starts with."""
 
     def decorate(
         loader: Callable[[OwnerT, ProgressReporter[ProgressT]], Awaitable[ValueT]],

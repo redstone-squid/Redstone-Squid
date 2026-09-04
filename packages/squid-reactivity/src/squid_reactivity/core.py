@@ -54,34 +54,43 @@ _MISSING = object()
 
 
 class ReactiveOwner(Protocol):
+    """What holds state cells: an instance `__dict__` for storage, and two commit callbacks."""
+
     __dict__: dict[str, Any]
+    """Where each declared field's `_Cell` lives, under the descriptor's private name."""
 
-    def _state_changed(self, names: frozenset[str]) -> None: ...
+    def _state_changed(self, names: frozenset[str]) -> None:
+        """Called after the values land with the storage names (`_State._name`) of the fields that changed."""
+        ...
 
-    def _state_rolled_back(self) -> None: ...
+    def _state_rolled_back(self) -> None:
+        """Called once per staged cell of this owner when the action rolls back, after any restore."""
+        ...
 
 
 class TransactionView(Protocol):
     """Read-only access to the frozen overlay during participant preparation."""
 
-    def read_staged(self, target: CellTarget) -> SlotValue: ...
+    def read_staged(self, target: CellTarget) -> SlotValue:
+        """The value the action will commit for `target`: its staged write, or the committed value if none."""
+        ...
 
-    def read_committed(self, target: CellTarget) -> SlotValue: ...
+    def read_committed(self, target: CellTarget) -> SlotValue:
+        """The value `target` holds outside this action."""
+        ...
 
     @property
-    def context(self) -> ActionContext: ...
+    def context(self) -> ActionContext:
+        """The identity of the action being prepared."""
+        ...
 
 
 class TransactionParticipant[PreparedT](Protocol):
-    """A subsystem that publishes its own writes when the action in flight commits.
+    """A subsystem that publishes its own writes when the action in flight commits; register with `enlist`.
 
-    The split is the whole point. Everything that can fail happens in `prepare`, before
-    any participant has made anything visible, so the transaction can still roll the
-    action back as though it never ran. Register with :func:`enlist`.
-
-    `prepare` hands what it built to `apply` as a value, rather than leaving it in a field
-    `apply` has to trust. That is what makes "everything fallible happened in prepare" a
-    fact of the signatures instead of an assertion inside a body.
+    Everything that can fail happens in `prepare`, before any participant has made anything
+    visible, so the action can still roll back as though it never ran. `prepare` hands what it
+    built to `apply` as a value, so the signatures carry that split.
     """
 
     def prepare(self, view: TransactionView) -> PreparedT:
@@ -118,7 +127,7 @@ class ReactivityError(Exception):
 
 
 class ReactiveWriteError(ReactivityError, RuntimeError):
-    """A state mutation was attempted inside a read-only action."""
+    """A state write where none is allowed: a read-only action, a `block_writes` region, a render, or a hook."""
 
 
 class ActionValidationError(ReactivityError, ValueError):
@@ -140,10 +149,9 @@ class UndeclaredStateError(ReactivityError, RuntimeError):
 class ReactiveCycleError(ReactivityError, RuntimeError):
     """A derived value depends, through some chain, on itself.
 
-    Raised for a computed that reads itself and for a resource whose loader awaits one
-    waiting on it -- the same mistake, and a chain can cross both kinds, so it is one error.
-    Carries the whole ring rather than the node that closed it, because `a` needing `b` is
-    usually fine and `b` needing `a` is usually fine, and only the pair is wrong.
+    One error for a computed that reads itself and a resource whose loader awaits one waiting on
+    it, since a chain can cross both kinds. `path` carries the whole ring, not the node that
+    closed it.
     """
 
     def __init__(self, path: Sequence[str]) -> None:
@@ -352,10 +360,10 @@ def cycle_path(node: Any) -> tuple[str, ...] | None:
 
 @contextmanager
 def settling(node: Any) -> Iterator[None]:
-    """Mark `node` as producing a value, and refuse to enter a ring twice.
+    """Mark `node` as producing a value for the block's duration.
 
-    The check precedes the push, so the error is raised before whatever would otherwise
-    deadlock or recurse.
+    Raises `ReactiveCycleError` if `node` is already producing one on this task, before the push
+    and so before whatever would otherwise deadlock or recurse.
     """
     path = cycle_path(node)
     if path is not None:
@@ -485,9 +493,11 @@ class SlotValue:
 
     @classmethod
     def from_raw(cls, value: Any) -> SlotValue:
+        """The cell-level `_MISSING` sentinel becomes an absent slot; anything else, `None` included, is present."""
         return cls(value is not _MISSING, None if value is _MISSING else value)
 
     def raw(self) -> Any:
+        """Inverse of `from_raw`: the value a cell stores, with absence spelled as `_MISSING`."""
         return self.value if self.present else _MISSING
 
 
@@ -525,7 +535,7 @@ class CellTarget:
         object.__setattr__(self, "identity", f"slot:{cell.identity}")
 
     def resolve(self, expected_version: int) -> tuple[ReactiveOwner, _Cell]:
-        """Return the live slot or report an expired conditional inverse."""
+        """The owner and cell, or `ReactiveConflictError` (found version -1) once either has been collected."""
         owner = self._owner()
         cell = self._cell()
         if owner is None or cell is None:
@@ -549,6 +559,7 @@ class CellPatch:
     after_version: int
 
     def inverse(self) -> ConditionalCellPatch:
+        """A patch that puts `before` back, valid only while the cell still holds `after_version`."""
         return ConditionalCellPatch(self.target, self.before, self.after_version)
 
 
@@ -574,6 +585,7 @@ class CellPatchSet:
         return len(self.patches)
 
     def addresses(self) -> tuple[Any, ...]:
+        """Bus addresses of the shared cells patched, in patch order; collected and local cells are skipped."""
         found: list[Any] = []
         seen: set[int] = set()
         for patch in self.patches:
@@ -586,11 +598,17 @@ class CellPatchSet:
         return tuple(found)
 
     def inverse(self) -> tuple[ConditionalCellPatch, ...]:
+        """Each patch's inverse in reverse order, so applying them undoes the action last-write-first."""
         return tuple(patch.inverse() for patch in reversed(self.patches))
 
 
 def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
-    """Stage an all-or-nothing conditional patch set in the active transaction."""
+    """Stage every patch into the action in flight, each conditional on its target's version at commit.
+
+    Raises `RuntimeError` without a writable transaction on this task, and `ReactiveConflictError` when a
+    target has been collected or two patches expect different versions of one cell; the version check
+    itself runs at commit.
+    """
     current = _CURRENT.get()
     if current is None or not current.writable():
         message = "conditional patches require an active writable transaction"
@@ -603,7 +621,11 @@ def apply_conditional_patches(patches: Sequence[ConditionalCellPatch]) -> None:
 
 
 def apply_local_overwrite_patches(patches: Sequence[ConditionalCellPatch]) -> None:
-    """Stage an explicitly unsafe overwrite, refusing shared or participant-backed targets."""
+    """Stage every patch into the action in flight with no version check: last write wins.
+
+    Only local (unaddressed) cells qualify. Raises `RuntimeError` without a writable transaction on this
+    task, and `ReactiveConflictError` when a target has been collected or is shared state.
+    """
     current = _CURRENT.get()
     if current is None or not current.writable():
         message = "local overwrite patches require an active writable transaction"
@@ -792,6 +814,7 @@ class _Transaction:
         return _slot_name(cell)
 
     def require_version(self, cell: _Cell, version: int) -> None:
+        """Add a commit precondition; raises `ReactiveConflictError` if one for `cell` already names another version."""
         existing = self.preconditions.get(cell)
         if existing is not None and existing != version:
             detail = ConflictDetail(self.target_id(cell), existing, version)
@@ -999,6 +1022,10 @@ class _Transaction:
         cause: BaseException,
         prepared: Sequence[tuple[TransactionParticipant[Any], Any]] | None = None,
     ) -> tuple[ExceptionReport, ...]:
+        """Abort every participant in reverse order, then restore the cells; returns the participants' own failures.
+
+        Runs once: a second call returns the failures recorded by the first.
+        """
         if self.aborted:
             return tuple(self.cleanup_errors)
         self.aborted = True
@@ -1041,14 +1068,12 @@ class _FrozenTransactionView:
 
 
 def report_undeclared_write(owner: object, name: str) -> None:
-    """Reject a transaction-time write to an attribute that is not declared state.
+    """Raise `UndeclaredStateError` for a transaction-time write to an attribute that is not declared state.
 
-    Raised before the write lands, so the transaction rolls back whole. The alternative --
-    letting it land and logging that it is uncovered -- produced exactly the corruption it
-    described: the attribute stays written while everything around it is restored.
-
-    A component built during the action is exempt; assigning to something the action created
-    is construction, not mutation.
+    Raised before the write lands, so the transaction rolls back whole; a write that landed would
+    survive the restore of everything around it. Raises `ReactiveWriteError` instead inside a
+    read-only action or a `block_writes` region. An owner built during the action is exempt:
+    assigning to something the action created is construction, not mutation.
     """
     current = _active()
     if current is None or not current.protects(owner):
@@ -1138,7 +1163,16 @@ def _emit_rollback(current: _Transaction, error: BaseException, *, during_commit
 
 @contextmanager
 def transaction(*, action_context: ActionContext | None = None) -> Iterator[None]:
-    """Commit one identified action atomically or emit one immutable rollback result."""
+    """Stage every write in the body, then commit them all on exit or roll them all back and re-raise.
+
+    Inside an open transaction the body simply joins it. Every exit emits one `ActionCommit` or one
+    `ActionRollback` through `emit_result`.
+
+    Raises:
+        StaleReactiveContextError: Entered from a task other than the one that owns the enclosing transaction.
+        ReactiveConflictError: A written or strongly read shared cell moved before commit; nothing is published.
+        FrameworkIntegrityError: A participant's `apply` failed after publication; the commit stands.
+    """
     outer = _CURRENT.get()
     if outer is not None:
         # Checked at the `with`, not at the first write inside it, so a task that inherited
@@ -1198,10 +1232,10 @@ def transaction(*, action_context: ActionContext | None = None) -> Iterator[None
 def fresh_action_transaction(*, action_context: ActionContext) -> Iterator[None]:
     """Start a distinct causal transaction while an empty admitting transaction is open.
 
-    Mounted undo/redo handlers are admitted inside the dispatch transaction. Suspending that
-    empty envelope lets the history operation remain a real action with its own identity. An
-    outer transaction that already staged work is rejected because committing the inner action
-    could not then be rolled back with the outer one.
+    Mounted undo/redo handlers are admitted inside the dispatch transaction; suspending that
+    empty envelope lets the history operation be a real action with its own identity. Raises
+    `FreshActionError` when the outer transaction has already staged writes, participants or
+    preconditions, since the inner commit could not then roll back with the outer one.
     """
     outer = _CURRENT.get()
     if outer is not None and (outer.writes or outer.participants or outer.preconditions):
@@ -1217,14 +1251,17 @@ def fresh_action_transaction(*, action_context: ActionContext) -> Iterator[None]
 
 @contextmanager
 def batch() -> Iterator[None]:
-    """Coalesce related state writes into one invalidation per component."""
+    """`transaction()` under a name for its side effect: one invalidation per owner instead of one per write."""
     with transaction():
         yield
 
 
 @contextmanager
 def readonly_transaction() -> Iterator[None]:
-    """Run an identified read-only action and reject any state mutation."""
+    """An identified action whose every write raises `ReactiveWriteError`; still emits a commit or rollback.
+
+    Raises `RuntimeError` when entered inside any open transaction.
+    """
     if _CURRENT.get() is not None:
         message = "a read-only transaction cannot nest inside a writable transaction"
         raise RuntimeError(message)
@@ -1263,21 +1300,33 @@ def readonly_transaction() -> Iterator[None]:
 def on_action_commit(
     callback: Callable[[ActionCommit, ActionContinuation], None], *, key: object | None = None
 ) -> None:
-    """Run a failure-isolated synchronous callback after definitive commit."""
+    """Register a synchronous callback for after this action's commit has fully landed.
+
+    A callback that raises is logged and reported as a continuation failure; it cannot undo the
+    commit. Raises `RuntimeError` outside a transaction or when `key` already registered a hook,
+    `ReactiveWriteError` in a read-only action, and `StaleReactiveContextError` from a task other
+    than the transaction's owner.
+    """
     _add_action_hook("commit", callback, key=key)
 
 
 def on_action_rollback(
     callback: Callable[[ActionRollback, ActionContinuation], None], *, key: object | None = None
 ) -> None:
-    """Run a failure-isolated callback after staged state is dead."""
+    """Register a synchronous callback for after this action's rollback has restored every cell.
+
+    Raises `RuntimeError`, `ReactiveWriteError` and `StaleReactiveContextError` as `on_action_commit` does.
+    """
     _add_action_hook("rollback", callback, key=key)
 
 
 def on_action_result(
     callback: Callable[[ActionResult, ActionContinuation], None], *, key: object | None = None
 ) -> None:
-    """Run a failure-isolated callback after either terminal result."""
+    """Register a synchronous callback for after this action commits or rolls back, run after the specific hooks.
+
+    Raises `RuntimeError`, `ReactiveWriteError` and `StaleReactiveContextError` as `on_action_commit` does.
+    """
     _add_action_hook("result", callback, key=key)
 
 
@@ -1311,6 +1360,10 @@ def enlist[ParticipantT: TransactionParticipant[Any]](
     `None` when no transaction is open -- the caller's signal that its write has nothing
     to wait for and should land now. `key` identifies the subsystem, is usually the
     subsystem itself, and must be hashable.
+
+    Raises `ReactiveWriteError` in a read-only action or a `block_writes` region, even for a
+    participant enlisted earlier, and `StaleReactiveContextError` from a task other than the
+    transaction's owner.
     """
     current = _CURRENT.get()
     if current is None:
@@ -1444,6 +1497,7 @@ class _State:
         _write(instance, self._name, cell, held)
 
     def __get__(self, instance: ReactiveOwner | None, owner: type | None = None) -> Any:
+        """Tracked read; raises `AttributeError` for a field with no default that nothing has assigned."""
         if instance is None:
             return self
         cell = instance.__dict__.get(self._name)
@@ -1469,6 +1523,7 @@ class _State:
         return self._initial(instance)
 
     def __set__(self, instance: ReactiveOwner, value: Any) -> None:
+        """Stage or land the write; an equal value is dropped, and a render-time write raises `ReactiveWriteError`."""
         if rendering():
             if self.address(instance) is not None:
                 # shared state: visible to other mounts mid-render, a correctness problem
@@ -1504,16 +1559,9 @@ class _State:
         _write(instance, self._name, self.cell(instance), value)
 
     def __delete__(self, instance: ReactiveOwner) -> None:
-        """Refuse removal: a state field is reset by assignment, never taken away.
+        """Raise `AttributeError`: a declared field keeps its cell, identity and version lineage for life.
 
-        Reading it back would have to answer something, and every answer is a lie about a
-        field that is still declared. Defined rather than left off so the refusal says which
-        field and what to do instead, in place of the bare `AttributeError: __delete__`
-        Python raises for a data descriptor with no deleter.
-
-        Nothing inside the package needs it: history restores a slot that was never assigned
-        by staging that absence through the ordinary write path, which keeps the slot, its
-        identity, and its version lineage.
+        History resets an unassigned slot by staging the absence through `__set__`, never by deleting.
         """
         message = (
             f"{type(instance).__name__}.{self.public_name} cannot be deleted; a state field is "
@@ -1703,7 +1751,11 @@ def export_state(owner: ReactiveOwner) -> dict[str, Any]:
 
 
 def restore_state(owner: ReactiveOwner, values: Mapping[str, Any]) -> None:
-    """Restore declared persistent state, rejecting stale or misspelled field names."""
+    """Assign persistent fields from a snapshot in one transaction; lists come back as tuples.
+
+    Raises `ValueError`, before writing anything, when `values` names a field that is not declared persistent
+    state on `owner`.
+    """
     fields = _state_fields(owner)
     unknown = set(values) - set(fields)
     if unknown:
@@ -1920,7 +1972,7 @@ def observe_render() -> Iterator[Observation]:
 
 @contextmanager
 def observe_reads() -> Iterator[Observation]:
-    """Collect addressed reactive sources read by one pure projection."""
+    """`observe_render()` under the name a pure projection uses; the guard and the observation are the same."""
     with observe_render() as observation:
         yield observation
 
@@ -1930,8 +1982,8 @@ def addresses(read: Callable[[], object]) -> tuple[Any, ...]:
 
     ``addresses(lambda: preferences.theme)`` names a cell the way the rest of the package
     does -- by reading it -- so the thunk is ordinary typed code with no class name repeated
-    and no string to drift. Reading a computed yields the shared cells behind it. Raises if
-    the thunk reaches no shared cell at all, so a typo cannot quietly follow nothing.
+    and no string to drift. Reading a computed yields the shared cells behind it. Raises
+    `ValueError` if the thunk reaches no shared cell at all, so a typo cannot quietly follow nothing.
     """
     with observe_render() as observation:
         read()
@@ -2009,6 +2061,11 @@ class StateOwner:
         return instance
 
     def __setattr__(self, name: str, value: Any) -> None:
+        """Inside a transaction, an attribute not in `_reactive_internal_attributes` or declared state raises.
+
+        The errors are `report_undeclared_write`'s: `UndeclaredStateError`, or `ReactiveWriteError` where writes
+        are blocked.
+        """
         if (
             _active() is not None
             and name not in type(self)._reactive_internal_attributes
@@ -2030,14 +2087,15 @@ class StateOwner:
         """React after an attempted transaction restores this owner."""
 
     def invalidate(self) -> None:
-        """Invalidate projections owned by this object, if it has any."""
+        """No-op here; an owner that caches a projection overrides it to drop the cache."""
 
     def mutated(self, collaborator: object) -> None:
         """Signal an in-place change to the object held by one opaque state field.
 
         Inside an action the signal stages with it, so a handler that fails publishes no
         notification and a namespace does not tell other mounts to re-read halfway through
-        a transaction that is about to roll back.
+        a transaction that is about to roll back. Raises `TypeError` unless exactly one opaque
+        field holds `collaborator`.
         """
         with untracked():
             holders = [

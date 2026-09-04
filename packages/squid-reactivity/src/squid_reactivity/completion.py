@@ -4,7 +4,11 @@ import asyncio
 
 
 class Completion[ValueT]:
-    """A lazily loop-bound future which never owns the work that resolves it."""
+    """A one-shot future its owner settles: `resolve()` publishes the value, `cancel()` wakes waiters with an error.
+
+    `cancel()` raises `asyncio.CancelledError` in every waiter. Binds to the running loop on first use and never
+    owns the work that settles it. Both verbs are no-ops once settled.
+    """
 
     def __init__(self) -> None:
         self._future: asyncio.Future[ValueT] | None = None
@@ -16,28 +20,25 @@ class Completion[ValueT]:
 
     @property
     def done(self) -> bool:
-        """Whether this generation has reached any terminal outcome."""
+        """True once resolved or cancelled."""
         return self._future is not None and self._future.done()
 
     @property
     def cancelled(self) -> bool:
-        """Whether its owner cancelled before resolving the generation."""
         return self._future is not None and self._future.cancelled()
 
     def resolve(self, value: ValueT) -> None:
-        """Publish a successful outcome once."""
         future = self._bound()
         if not future.done():
             future.set_result(value)
 
     def cancel(self) -> None:
-        """Wake joiners by cancelling this generation's completion signal."""
         future = self._bound()
         if not future.done():
             future.cancel()
 
     async def wait(self) -> ValueT:
-        """Wait without letting a cancelled joiner cancel every other observer."""
+        """Shielded, so one cancelled waiter does not cancel the completion for the others."""
         return await asyncio.shield(self._bound())
 
 

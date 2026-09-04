@@ -58,7 +58,11 @@ class CausalRef:
 
 @dataclass(frozen=True, slots=True)
 class ActorRef:
-    """A safe application-defined actor identity."""
+    """An application-defined actor identity, such as `("discord_user", "<id>")`.
+
+    Retained in result snapshots and durable sinks unless `RedactionPolicy.include_actor` is false,
+    so it must hold only what the application is willing to store.
+    """
 
     kind: str
     identity: str
@@ -66,7 +70,10 @@ class ActorRef:
 
 @dataclass(frozen=True, slots=True)
 class ActionContext:
-    """Immutable identity and causality assigned before an action begins."""
+    """Immutable identity and causality assigned before an action begins.
+
+    `root_action_id` is the action's own id unless it continues another action's causal chain.
+    """
 
     action_id: ActionId
     cause: CausalRef | None
@@ -110,7 +117,7 @@ class ActionContext:
         )
 
     def causal_ref(self) -> CausalRef:
-        """Return the immutable token detached work may retain."""
+        """`CausalRef("action", <action_id>)`, which detached work may retain as its cause."""
         return CausalRef("action", str(self.action_id))
 
 
@@ -144,7 +151,7 @@ class ObservedRead:
 
 @dataclass(frozen=True, slots=True)
 class ChangeReport:
-    """A safe count-only projection of staged or committed changes."""
+    """Counts of staged or committed changes; carries no values, so it may be retained anywhere."""
 
     cells: int = 0
     participants: int = 0
@@ -160,21 +167,24 @@ class ConflictDetail:
 
 
 class ChangeToken[InverseT = Any](Protocol):
-    """A participant's handle to work it can plan and then stage an inverse for.
+    """A participant's handle to one committed change, through which an undo stack plans and stages its inverse.
 
-    Opaque in what the inverse *is* -- that belongs to whichever backend produced it -- but
-    not in what can be asked of the handle: an undo stack such as `squid_ui`'s history calls
-    exactly these two methods, so both sides are checked against them.
+    What the inverse is belongs to the backend that produced it; a history calls exactly these two
+    methods, planning every token before staging any.
     """
 
-    def plan_inverse(self) -> InverseT | ConflictDetail: ...
+    def plan_inverse(self) -> InverseT | ConflictDetail:
+        """Compute the inverse without staging it; a `ConflictDetail` means the change can no longer be inverted."""
+        ...
 
-    def stage_inverse(self, inverse: InverseT) -> None: ...
+    def stage_inverse(self, inverse: InverseT) -> None:
+        """Stage a `plan_inverse` result on the current transaction; raises `ReactiveConflictError` if it went stale."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class TransactionContribution:
-    """An opaque reversible participant contribution and its safe report."""
+    """One participant's committed change: its token, and a count-only report safe to retain."""
 
     participant_id: str
     token: ChangeToken[Any]
@@ -215,7 +225,11 @@ type ActionResult = ActionCommit | ActionRollback
 
 @dataclass(frozen=True, slots=True)
 class ActionResultSnapshot:
-    """The bounded, portable default projection of an result."""
+    """The bounded, portable projection of an `ActionResult`: ids, counts and redacted reports, no values.
+
+    `terminal` is `"committed"` or `"rolled_back"`; `sequence` is set only for a commit, `reason`,
+    `conflict` and `exception` only for a rollback.
+    """
 
     action_id: str
     root_action_id: str
@@ -287,7 +301,7 @@ class ActionResultSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class RedactionPolicy:
-    """Explicit portable-result policy for metadata and exception messages."""
+    """What a snapshot carries beyond ids and counts; by default the actor, no metadata, and exception types only."""
 
     include_actor: bool = True
     include_metadata: bool = False
@@ -347,7 +361,11 @@ type CausalEventSnapshot = (
 
 
 class ActionResultCodec:
-    """Schema-versioned count-only JSON codec for portable result snapshots."""
+    """Schema-versioned JSON codec for `ActionResultSnapshot`.
+
+    `decode` raises `ValueError` for a payload over `max_encoded_bytes`, an unsupported schema
+    version, or a corrupt document.
+    """
 
     schema_version = 1
     max_encoded_bytes = 1_048_576
@@ -444,12 +462,14 @@ class ActionResultCodec:
 class ActionResultSink(Protocol):
     """A synchronous consumer of retention-safe causal events."""
 
-    def accept(self, result: CausalEventSnapshot) -> None: ...
+    def accept(self, result: CausalEventSnapshot) -> None:
+        """Receive one event; an exception is logged and never vetoes the work that emitted it."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class DurableResultPolicy:
-    """The privacy, storage, and retention declaration for an encoded result sink."""
+    """The privacy, storage and retention declaration for an encoded result sink; only `redaction` is enforced here."""
 
     redaction: RedactionPolicy = DEFAULT_REDACTION
     value_serialization: str = "summaries-only"
@@ -459,7 +479,10 @@ class DurableResultPolicy:
 
 
 class DurableResultSink:
-    """Encode committed/rolled-back results for a host store. Calling :meth:`close` unregisters it."""
+    """Encode each `ActionResultSnapshot` to `append` for a host store until `close()` unregisters it.
+
+    Registers itself on construction. Other causal events are dropped.
+    """
 
     def __init__(
         self,
@@ -484,7 +507,11 @@ class DurableResultSink:
 
 
 class ActionLedger:
-    """A bounded diagnostic ledger. Calling :meth:`close` ends its sink registration."""
+    """Retain the last `limit` causal events; `close()` unregisters it as a sink.
+
+    Does not register itself: pass it to `add_action_result_sink` or `action_result_sink`. Raises
+    `ValueError` for a `limit` below 1.
+    """
 
     def __init__(self, limit: int = 100) -> None:
         if limit < 1:
@@ -532,18 +559,18 @@ def next_commit_sequence() -> CommitSequence:
 
 
 def current_action() -> ActionContext | None:
-    """Return the live lexical action context, if any."""
+    """The action context installed by `action_scope`, or None outside one."""
     return _CURRENT_ACTION.get()
 
 
 def current_causality() -> tuple[CausalRef, ActionId | None] | None:
-    """Return the immutable cause/root pair installed for action, operation, or resource work."""
+    """The `(cause, root_action_id)` pair installed by `action_scope` or `causal_scope`, or None outside both."""
     return _CURRENT_CAUSALITY.get()
 
 
 @contextmanager
 def action_scope(context: ActionContext):
-    """Install an action context until the lexical scope exits."""
+    """Install `context` as the current action and causality until the block exits."""
     token = _CURRENT_ACTION.set(context)
     causal = _CURRENT_CAUSALITY.set((context.causal_ref(), context.root_action_id))
     try:
@@ -555,7 +582,7 @@ def action_scope(context: ActionContext):
 
 @contextmanager
 def causal_scope(cause: CausalRef, root_action_id: ActionId | None):
-    """Install detached immutable causality without granting live transaction authority."""
+    """Install causality alone until the block exits; no action context or transaction is opened."""
     token = _CURRENT_CAUSALITY.set((cause, root_action_id))
     try:
         yield
@@ -564,12 +591,11 @@ def causal_scope(cause: CausalRef, root_action_id: ActionId | None):
 
 
 def add_action_result_sink(sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION) -> None:
-    """Register a process-wide observer of committed and rolled-back actions.
+    """Register a process-wide observer of causal events.
 
-    The sink is held weakly and observes redacted snapshots under `policy`. Registering an
+    The sink is held weakly and sees action results redacted under `policy`. Registering an
     already-registered sink is a no-op and keeps its original policy. For an observer with a
-    narrower life than the process, prefer :func:`action_result_sink`, which cannot leak a
-    registration.
+    narrower life than the process, prefer `action_result_sink`.
     """
     if not any(registration.reference() is sink for registration in _sinks):
         _sinks.append(_SinkRegistration(weakref.ref(sink), policy))
@@ -586,11 +612,7 @@ def remove_action_result_sink(sink: ActionResultSink) -> None:
 
 @contextmanager
 def action_result_sink(sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION):
-    """Register a sink until the lexical scope exits.
-
-    The scoped form of :func:`add_action_result_sink`, for observers -- a test collector, a
-    bounded diagnostic capture -- whose life is a block rather than the process.
-    """
+    """Register a sink until the block exits; the scoped form of `add_action_result_sink`."""
     add_action_result_sink(sink, policy=policy)
     try:
         yield sink
@@ -599,6 +621,11 @@ def action_result_sink(sink: ActionResultSink, *, policy: RedactionPolicy = DEFA
 
 
 def emit_result(result: ActionResult) -> None:
+    """Snapshot `result` once per distinct policy and deliver it to every live sink.
+
+    A sink that raises is logged and reported as a `result_sink` continuation failure; dead weak
+    references are dropped.
+    """
     if not _sinks:
         return
     live: list[_SinkRegistration] = []
@@ -624,7 +651,7 @@ def emit_result(result: ActionResult) -> None:
 
 
 def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
-    """Fan out one bounded diagnostic node without allowing a sink to veto runtime work."""
+    """Deliver `snapshot` to every live sink; a sink that raises is logged and skipped."""
     live: list[_SinkRegistration] = []
     for registration in _sinks:
         sink = registration.reference()
@@ -639,7 +666,7 @@ def emit_causal_event(snapshot: CausalEventSnapshot) -> None:
 
 
 def emit_continuation_failure(result: ActionResult, stage: str, callback: str, error: BaseException) -> None:
-    """Record a redacted post-result failure causally beneath its immutable result."""
+    """Emit a `ContinuationFailureSnapshot` caused by `result`; the result itself is already immutable."""
     exception = DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
     assert exception is not None
     emit_causal_event(
@@ -656,14 +683,17 @@ def emit_continuation_failure(result: ActionResult, stage: str, callback: str, e
 
 
 class ActionContinuation:
-    """Authority to start fresh causal work after a result; the callback ends it."""
+    """Authority to start fresh causal work after a result.
+
+    Handed to `on_action_result` callbacks for the callback's duration.
+    """
 
     def __init__(self, result: ActionResult) -> None:
         self.result = result
 
     @contextmanager
     def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.RECOVERY):
-        """Start a fresh causal action and transaction."""
+        """Open a fresh action transaction caused by the result; yields its `ActionContext`, commits on exit."""
         from squid_reactivity.core import fresh_action_transaction
 
         context = ActionContext.create(
@@ -676,12 +706,13 @@ class ActionContinuation:
             yield context
 
     def start_operation(self, start: Callable[[CausalRef, ActionId], Any]) -> Any:
-        """Start application-owned work with immutable cause and root identifiers."""
+        """Call `start(cause, root_action_id)` with the result's causal identity and return what it returns."""
         return start(self.result.context.causal_ref(), self.result.context.root_action_id)
 
 
 @contextmanager
 def continuation_callback():
+    """Mark the block as running inside a result callback, for `in_continuation`."""
     token = _continuation_depth.set(_continuation_depth.get() + 1)
     try:
         yield

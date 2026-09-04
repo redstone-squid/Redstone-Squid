@@ -1,13 +1,8 @@
 """An optional keyed lifetime owner for shared view state.
 
-:mod:`squid_reactivity.shared_state` argues that there is no store, no registry and no keyed lookup, and
-that stays true: a handle is still the state, and it still lives exactly as long as whoever holds
-it. This module is the one thing a host may reach for when what it holds is *one handle per scope* —
-the `setdefault` cache otherwise written by hand around every namespace.
-
-A pool is strong and single-typed. It owns one namespace class and retains one canonical handle per
-hashable scope until that scope is dropped, the pool is cleared, or the pool itself is released.
-There is no global pool, no lookup by type, and no way to reach a namespace nobody handed you.
+A pool is strong and single-typed: it owns one namespace class and retains one canonical handle per
+hashable scope until that scope is deleted, the pool is cleared, or the pool itself is released. There
+is no global pool and no lookup by type; a handle lives exactly as long as whoever holds it.
 """
 
 from collections.abc import Callable, Hashable, Mapping
@@ -24,27 +19,23 @@ type SharedStateFactory[ScopeT, SharedT] = Callable[[TopicBus, ScopeT], SharedT]
 class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
     """Retain one canonical namespace per scope, for as long as this pool is held.
 
-    The pool is where a host writes down a lifetime it would otherwise write down in a dict: put it
-    on the bot for process lifetime, on a cog for extension lifetime, on a session or a request for
-    theirs. Nothing about :class:`~squid_reactivity.shared_state.SharedState` changes -- constructing and passing
-    handles directly remains supported, and a scope used outside a pool may still be mutable or
-    unhashable.
+    Put it on the object whose lifetime the handles should share: the bot, a cog, a session. Handles
+    constructed outside a pool are unaffected, and their scopes may still be mutable or unhashable.
 
-    ``namespace`` is declared twice in the overloads, as a class and as the constructor that class
-    already is. The callable spelling is what lets a type checker read ``ScopeT`` off
-    ``SharedState[ScopeT]`` rather than having to solve it from a type-parameter bound, which Pyrefly 1.2
-    will not do (see ``docs/plans/squid-ui-redesign/spikes/59/``). Only a namespace *class* is
-    accepted at runtime; a bare function is refused at construction, because the identity check a
-    pool performs on what its factory returns needs a class to check against.
+    Raises `TypeError` at construction when `namespace` is not a `SharedState` subclass: the identity
+    check on what the factory returns needs a class to check against.
 
     Args:
-        namespace: The one :class:`~squid_reactivity.shared_state.SharedState` subclass this pool owns.
-        bus: The host's topic bus. Every handle this pool retains must hold exactly this bus.
-        factory: How to build a namespace that needs more than ``(bus, scope)``. Annotate it as a
-            function rather than passing a lambda: a lambda takes its parameter types from the
-            expected type, which still contains the unsolved scope, so it infers as unknown.
+        namespace: The one `SharedState` subclass this pool owns.
+        bus: Every handle this pool retains must hold exactly this bus.
+        factory: Builds a namespace that needs more than `(bus, scope)`. Annotate it as a function
+            rather than passing a lambda: a lambda takes its parameter types from the expected type,
+            which still contains the unsolved scope, so it infers as unknown.
     """
 
+    # `namespace` is overloaded as both a class and the callable that class already is. The callable
+    # spelling lets a checker read `ScopeT` off `SharedState[ScopeT]` instead of solving it from a
+    # type-parameter bound, which Pyrefly 1.2 will not do (docs/plans/squid-ui-redesign/spikes/59/).
     @overload
     def __init__(
         self,
@@ -85,8 +76,13 @@ class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
     def get(self, scope: ScopeT) -> SharedT:
         """Return the canonical namespace for `scope`, constructing it on the first ask.
 
-        One synchronous lookup: there is no await between the miss and the insertion, so two
-        asyncio tasks cannot both construct. A factory that raises leaves no entry behind.
+        Synchronous end to end, so two tasks cannot both construct. A factory that raises leaves no
+        entry behind.
+
+        Raises:
+            RuntimeError: The factory asked this pool for the scope it is already building.
+            TypeError: The factory returned something other than a `namespace` instance on this bus
+                for this scope.
         """
         existing = self._handles.get(scope)
         if existing is not None:
@@ -100,39 +96,25 @@ class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
     def delete(self, scope: ScopeT) -> SharedT | None:
         """Retire `scope`, returning the handle that was canonical, or None if it was absent.
 
-        The retired handle is not invalidated or mutated: components still holding it keep reading
-        and writing the same state, and its writes still reach the bus. What changes is only that a
-        later `get(scope)` builds a **new generation** rather than returning this one. Callers that
-        cannot tolerate two generations being live at once must coordinate their consumers before
-        deleting -- the pool does not know who is holding what.
+        The retired handle is not invalidated: holders keep reading and writing it and its writes
+        still reach the bus. Only a later `get(scope)` changes, building a second handle. Callers that
+        cannot tolerate two live handles for one scope must coordinate their consumers first.
         """
         return self._handles.pop(scope, None)
 
     def clear(self) -> None:
-        """Retire every scope, on the same terms as `delete`.
-
-        No cleanup hook runs, because a namespace has none; adding one here would make a pooled
-        handle behave differently from one constructed directly, which is the whole thing this
-        module is trying not to do.
-        """
+        """Retire every scope on the same terms as `delete`; no cleanup hook runs, a namespace has none."""
         self._handles.clear()
 
     def active(self) -> Mapping[ScopeT, SharedT]:
-        """Snapshot the retained handles, copied at the moment of the call.
-
-        The result is not a view: mutating the pool afterwards -- get, delete, clear -- leaves a
-        snapshot already returned unchanged, so a caller may iterate it while retiring the very
-        scopes it names. It is read-only at runtime as well as statically, holds strong references
-        to the handles it names, and never invokes the factory.
-        """
+        """A read-only copy of the retained handles, safe to iterate while retiring the scopes it names."""
         return MappingProxyType(dict(self._handles))
 
     def _create(self, scope: ScopeT) -> SharedT:
-        """Build and validate a handle for `scope` without retaining it.
+        """Build and validate a handle for `scope` without retaining it; the pool is unchanged either way.
 
-        Runs the factory under the same-scope reentrancy guard and applies the three validations.
-        The pool is unchanged whether this returns or raises. Exposed for an owner that must
-        prepare a handle -- hydrate it from a store, say -- before it becomes canonical.
+        Used with `_adopt` by an owner that must prepare a handle, say hydrate it from a store, before
+        it becomes canonical.
         """
         if scope in self._constructing:
             message = (
@@ -150,9 +132,8 @@ class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
     def _adopt(self, scope: ScopeT, handle: SharedT) -> SharedT:
         """Retain `handle` as canonical for `scope`, or return the incumbent if one already exists.
 
-        Never calls the factory. Returns whichever handle is canonical afterwards; a caller that
-        released control between `_create` and here compares identity to learn whether it won, which
-        is how an owner with an await in the middle avoids publishing a second canonical handle.
+        An owner that awaited between `_create` and here compares the result's identity to `handle`
+        to learn whether it won.
         """
         incumbent = self._handles.get(scope)
         if incumbent is not None:
