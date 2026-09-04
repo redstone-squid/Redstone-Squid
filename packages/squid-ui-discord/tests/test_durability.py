@@ -1,5 +1,6 @@
 """Versioned snapshots and fenced durable-session store contracts."""
 
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
@@ -12,7 +13,7 @@ import squid_ui as sl
 from squid_ui import Component, state
 from squid_ui.primitives import Lines, Paginate, Text
 from squid_ui.sources import Position
-from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord import Everyone, MessageRoot, SessionKey
 from squid_ui_discord.durability import (
     ComponentRegistry,
     ComponentState,
@@ -22,8 +23,10 @@ from squid_ui_discord.durability import (
     MessageRootStateCodec,
     MessageRootStateError,
     SQLiteSessionStore,
+    encode_session_scope,
     migrate_component_state,
 )
+from squid_ui_discord.durability.session_records import decode_session_key
 from squid_ui_discord.testing import commit_render
 
 
@@ -49,6 +52,18 @@ def _registry(*, version: int = 1, migrations=None) -> ComponentRegistry:
     registry = ComponentRegistry()
     registry.register("counter", version=version, factory=DurableRoot, migrations=migrations)
     return registry
+
+
+def test_custom_session_scope_encoding_is_canonical_and_finite() -> None:
+    key = SessionKey.custom("panel", (1, ("nested", True)))
+    encoded = encode_session_scope(key)
+
+    assert encoded == ('{"name":"panel","scope":{"type":"custom","value":[1,["nested",true]]}}')
+    assert decode_session_key(json.loads(encoded)) == key
+    with pytest.raises(MessageRootStateError, match="numbers must be finite"):
+        encode_session_scope(SessionKey.custom("panel", float("nan")))
+    with pytest.raises(MessageRootStateError, match="value is malformed"):
+        decode_session_key({"name": "panel", "scope": {"type": "custom", "value": float("inf")}})
 
 
 def _session_store(kind: str, path: Path, clock: Callable[[], float]) -> DurableSessionStore:
