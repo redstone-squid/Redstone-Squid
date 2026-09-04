@@ -9,9 +9,11 @@ import discord
 import pytest
 
 import squid_ui_discord as sd
+from squid.bot.submission import build_handler as build_handler_module
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
+from squid.bot.ui import DISCORD_GREEN, DISCORD_GREY, DISCORD_RED, DISCORD_YELLOW, DiscordColour
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Status
 from squid.search.application import SearchService
@@ -99,6 +101,43 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
     assert "https://example.com/build.png" in str(payload)
     assert "https://discord.com/channels/1/2/3" in str(payload)
     assert "Submission ID: 7" in str(payload)
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (Status.PENDING, DISCORD_YELLOW),
+        (Status.CONFIRMED, DISCORD_GREEN),
+        (Status.DENIED, DISCORD_RED),
+    ],
+)
+def test_build_statuses_have_exhaustive_named_colours(status: Status, expected: DiscordColour) -> None:
+    assert build_handler_module._status_colour(status, build_id=7) is expected
+
+
+@pytest.mark.parametrize("status", [None, cast(Status, "legacy")])
+def test_missing_or_unknown_build_status_is_neutral_and_reported(
+    status: Status | None,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    metrics: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        build_handler_module,
+        "add_counter",
+        lambda name, *, attributes: metrics.append((name, attributes)),
+    )
+
+    colour = build_handler_module._status_colour(status, build_id=7)
+
+    assert colour is DISCORD_GREY
+    assert metrics == [
+        (
+            "squid.build.invalid_submission_status",
+            {"squid.build.status": "None" if status is None else "legacy"},
+        )
+    ]
+    assert "Build 7 has no valid submission status" in caplog.text
 
 
 async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
