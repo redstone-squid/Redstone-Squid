@@ -7,6 +7,7 @@ import signal
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass
+from functools import partial
 
 import anyio
 from whenever import Instant
@@ -15,6 +16,7 @@ from squid.bootstrap import create_worker_runtime
 from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_worker_process_config
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
+from squid.media.application.jobs import MediaNormalizationJobRunner
 from squid.observability import TraceSurface, configure_observability, record_histogram, trace_span
 from squid.runtime import BackgroundTaskSupervisor, WorkerServices, start_log_capture
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
@@ -151,7 +153,7 @@ class DatabaseWorker:
                 job(
                     "media-normalization",
                     self._config.media_job_interval_seconds,
-                    self._process_media_jobs,
+                    partial(self._process_media_jobs, self._services.media_runner),
                 )
             )
         jobs.extend(
@@ -228,10 +230,7 @@ class DatabaseWorker:
         with trace_span("squid.worker.schematic_renders", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_renders.process_batch()
 
-    async def _process_media_jobs(self) -> None:
-        runner = self._services.media_runner
-        if runner is None:
-            return
+    async def _process_media_jobs(self, runner: MediaNormalizationJobRunner) -> None:
         with trace_span("squid.worker.media_normalization", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await runner.process_batch(limit=self._config.media_job_concurrency)
 

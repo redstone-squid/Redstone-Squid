@@ -1,5 +1,6 @@
 """Application-owned draft attachment orchestration."""
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +18,8 @@ from squid.media.application.jobs import (
 from squid.media.domain import MediaKind, MediaLimits
 from squid.media.errors import DraftMediaConflictError, DraftMediaNotFoundError, MediaUploadConflictError
 from squid.submissions.application.drafts import StoredDraft, SubmissionDraftService
+
+logger = logging.getLogger(__name__)
 
 
 class DraftAttachmentJobs(Protocol):
@@ -91,7 +94,12 @@ class StagedUpload:
     def discard(self) -> None:
         """End this staging authority and remove any retained private bytes."""
         self._available = False
-        self.source_path.unlink(missing_ok=True)
+        try:
+            self.source_path.unlink(missing_ok=True)
+        except OSError:
+            # Registration may already be durable. Cleanup failure must not turn
+            # that success into an ambiguous client-visible retry.
+            logger.warning("Unable to remove a staged attachment", exc_info=True)
 
 
 class DraftAttachmentService:
