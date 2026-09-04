@@ -14,7 +14,7 @@ from squid.media.errors import DraftMediaUnavailableError
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.notifications import NotificationService
 from squid.permissions.application import PermissionService
-from squid.records.application import RecordService
+from squid.records.application import PublicRecordQueryService, RecordService
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
@@ -45,6 +45,10 @@ def get_build_queries(services: Services) -> BuildQueryService:
 
 def get_records(services: Services) -> RecordService:
     return services.records
+
+
+def get_public_records(services: Services) -> PublicRecordQueryService:
+    return services.public_records
 
 
 def get_notifications(services: Services) -> NotificationService:
@@ -124,6 +128,7 @@ type BuildCommands = Annotated[BuildService, Depends(get_builds)]
 type BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]
 type CurrentCaller = Annotated[Caller, Depends(current_caller)]
 type Records = Annotated[RecordService, Depends(get_records)]
+type PublicRecords = Annotated[PublicRecordQueryService, Depends(get_public_records)]
 type Notifications = Annotated[NotificationService, Depends(get_notifications)]
 type Schematics = Annotated[SchematicService, Depends(get_schematics)]
 type Search = Annotated[SearchService, Depends(get_search)]

@@ -70,7 +70,7 @@ from squid.persistence.engine import DatabaseEngine
 from squid.persistence.wake_listener import PostgresWakeListener
 from squid.posts.application import PostService
 from squid.posts.infrastructure.repository import PostRepository
-from squid.records.application import RecordComputationService, RecordService
+from squid.records.application import PublicRecordQueryService, RecordComputationService, RecordService
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
 from squid.schematics.application import (
@@ -324,6 +324,10 @@ class _ServiceGraph:
     @cached_property
     def records(self) -> RecordService:
         return RecordService(self.record_repository, self.record_repository, self.record_computation)
+
+    @cached_property
+    def public_records(self) -> PublicRecordQueryService:
+        return PublicRecordQueryService(self.record_repository, self.build_queries)
 
     @cached_property
     def artifacts(self) -> ArtifactStore:
@@ -658,6 +662,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         permissions=graph.permissions,
         permission_epoch=graph.permission_epoch,
         records=graph.records,
+        public_records=graph.public_records,
         schematics=graph.schematics,
         search=graph.search,
         tags=graph.tags,
