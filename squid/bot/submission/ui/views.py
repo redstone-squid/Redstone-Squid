@@ -629,6 +629,7 @@ class BuildEditScreen(sd.Screen):
         authorize: Callable[[], Awaitable[bool]],
         render_build: Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target]]],
         refresh_posts: Callable[[int], Awaitable[None]],
+        recovered: bool = False,
     ) -> None:
         self._seed: tuple[Build, sl.LayoutNode[sl.ComponentsV2Target] | None] | None = (build, node)
         self._build_id = build.id
@@ -636,6 +637,7 @@ class BuildEditScreen(sd.Screen):
         self._authorize = authorize
         self._render_build = render_build
         self._refresh_posts = refresh_posts
+        self._recovered = recovered
         if items is DEFAULT:
             items = [field.bind(build) for field in EDIT_FIELDS if field.applies_to(build)]
         self.items = tuple(items)
@@ -697,7 +699,7 @@ class BuildEditScreen(sd.Screen):
         return await self._authorize()
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-        from squid.bot.submission.ui.controls import build_edit
+        from squid.bot.submission.ui.controls import build_edit_recovery
 
         if self.saved:
             return (
@@ -746,7 +748,15 @@ class BuildEditScreen(sd.Screen):
         if self.validation_error:
             controls.append(sl.action_control(tr(t"Reload latest"), self._reload, key="reload"))
         controls.append(sl.action_control(tr(t"Close"), self._close, key="close"))
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
+        if self._recovered:
+            nodes.append(
+                sl.status(
+                    tr(t"Fresh editor loaded. Unsaved changes from the previous editor were discarded."),
+                    tone=sl.Tone.WARNING,
+                )
+            )
+        nodes.append(
             sl.section(
                 sl.heading(tr(t"Edit build")),
                 sl.truncate(sl.paragraph(description)),
@@ -754,7 +764,7 @@ class BuildEditScreen(sd.Screen):
                 sl.note(tr(t"Reloading a fresh editor discards every staged change in this one.")),
                 accent=DISCORD_YELLOW if self.validation_error else sl.palette.INHERIT,
             )
-        ]
+        )
         if (node := self._current()[1]) is not None:
             nodes.append(node)
         nodes.append(
@@ -765,7 +775,7 @@ class BuildEditScreen(sd.Screen):
                 sl.action_controls(
                     sl.routed_action_control(
                         tr(t"Reload fresh editor"),
-                        build_edit.id(build_id=self._build_id),
+                        build_edit_recovery.id(build_id=self._build_id),
                         key="restart",
                     ),
                     key="build-edit-recovery",
@@ -853,10 +863,10 @@ class BuildEditScreen(sd.Screen):
         await event.finish()
 
     async def _reload(self, event: sl.PressEvent) -> None:
+        await self.projection.reload()
         if not await self._may_event(event):
             return
         await event.acknowledge()
-        await self.projection.reload()
         build, node = self._current()
         self.items = tuple(field.bind(build) for field in EDIT_FIELDS if field.applies_to(build))
         self.validation_error = None
