@@ -23,7 +23,7 @@ from squid_ui.planning.target import Target
 from squid_ui.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
 from squid_ui.slack.target import SlackHomeLimits, SlackMessageLimits, SlackModalLimits
 from squid_ui.target_types import SlackTarget
-from squid_ui.text import Markup, TextLike, resolve_text
+from squid_ui.text import Markup, Message, ResolvedText, resolve_text
 
 type SlackLimits = SlackMessageLimits | SlackModalLimits | SlackHomeLimits
 type SlackBody = scene.SlackMessage | scene.SlackModalView | scene.SlackHomeView
@@ -401,13 +401,18 @@ class _Lowerer:
 
     def _gallery(self, node: scene.HtmlElement, path: str) -> tuple[scene.SlackBlock, ...]:
         images = tuple(item for item in self._elements(node) if item.tag is scene.HtmlTag.IMG and item.url is not None)
-        cards = tuple(
-            scene.SlackCard(
-                description=self.text(str(_attribute(item, scene.HtmlAttributeName.ALT) or "Image"), path),
-                image_url=cast(scene.HtmlUrlRef, item.url).url,
+        cards: list[scene.SlackCard] = []
+        for item in images[: self.limits.components.carousel_cards]:
+            url = item.url
+            if not isinstance(url, scene.HtmlUrlRef):
+                message = f"{path}: gallery image URL was not resolved"
+                raise LayoutInvariantError(message)
+            cards.append(
+                scene.SlackCard(
+                    description=self.text(str(_attribute(item, scene.HtmlAttributeName.ALT) or "Image"), path),
+                    image_url=url.url,
+                )
             )
-            for item in images[: self.limits.components.carousel_cards]
-        )
         if not cards:
             return ()
         if self.surface == "modal" or len(cards) == 1:
@@ -418,7 +423,7 @@ class _Lowerer:
                 )
                 for card in cards
             )
-        return (scene.SlackCarousel(cards),)
+        return (scene.SlackCarousel(tuple(cards)),)
 
     def _alert_style(self, node: scene.HtmlElement) -> scene.SlackAlertStyle:
         tone = str(_attribute(node, scene.HtmlAttributeName.TONE) or "neutral")
@@ -643,7 +648,10 @@ class _Lowerer:
         path: str,
     ) -> scene.SlackInput:
         self._stable_id(field.key, path)
-        label_value = resolve_text(cast(TextLike, field.label), self.request.localization).content
+        if field.label is None:
+            message = f"{path}: adapted form field has no label"
+            raise LayoutInvariantError(message)
+        label_value = resolve_text(field.label, self.request.localization).content
         label = self.plain(label_value, path, capacity=2000)
         hint = (
             None
@@ -659,12 +667,15 @@ class _Lowerer:
         return scene.SlackInput(block_id, label, element, optional=not field.required, hint=hint)
 
     def _form_element(self, field: forms.FormField[Any], prefill: object, path: str) -> scene.SlackInputElement:
-        placeholder_value = getattr(field, "placeholder", None)
+        placeholder_value: object = getattr(field, "placeholder", None)
+        if placeholder_value is not None and not isinstance(placeholder_value, str | ResolvedText | Message):
+            message = f"{path}: form field placeholder is not text"
+            raise LayoutInvariantError(message)
         placeholder = (
             None
             if placeholder_value is None
             else self.plain(
-                resolve_text(cast(TextLike, placeholder_value), self.request.localization).content,
+                resolve_text(placeholder_value, self.request.localization).content,
                 path,
                 capacity=self.limits.components.placeholder,
             )
@@ -762,12 +773,25 @@ class _Lowerer:
             raise LayoutInvariantError(message)
         if len(options) <= 10:
             if multiple:
-                selected = cast(tuple[str, ...], initial or ())
+                if initial is not None and not isinstance(initial, tuple):
+                    message = f"{path}: multi-choice initial value is not a tuple"
+                    raise LayoutInvariantError(message)
+                selected = initial or ()
                 return scene.SlackCheckboxes(key, options, selected)
-            return scene.SlackRadioButtons(key, options, cast(str | None, initial))
-        selected_values = (
-            cast(tuple[str, ...], initial) if multiple else (() if initial is None else (cast(str, initial),))
-        )
+            if isinstance(initial, tuple):
+                message = f"{path}: single-choice initial value is a tuple"
+                raise LayoutInvariantError(message)
+            return scene.SlackRadioButtons(key, options, initial)
+        if multiple:
+            if initial is not None and not isinstance(initial, tuple):
+                message = f"{path}: multi-choice initial value is not a tuple"
+                raise LayoutInvariantError(message)
+            selected_values = initial or ()
+        else:
+            if isinstance(initial, tuple):
+                message = f"{path}: single-choice initial value is a tuple"
+                raise LayoutInvariantError(message)
+            selected_values = () if initial is None else (initial,)
         return scene.SlackSelect(
             action_id=key,
             kind=scene.SlackSelectKind.STATIC,
