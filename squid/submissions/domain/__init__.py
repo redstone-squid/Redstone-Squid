@@ -2,6 +2,7 @@
 
 from squid.submissions.domain.drafts import (
     DraftChange,
+    DraftChangeKey,
     DraftRevisionConflictError,
     DraftSnapshot,
     DraftStatus,
@@ -53,6 +54,7 @@ __all__ = [
     "DoorSubmissionDetails",
     "DoorTiming",
     "DraftChange",
+    "DraftChangeKey",
     "DraftRevisionConflictError",
     "DraftSnapshot",
     "DraftStatus",

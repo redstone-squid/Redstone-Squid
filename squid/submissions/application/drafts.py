@@ -9,8 +9,10 @@ from whenever import Instant
 
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
+from squid.submissions.application.forms import FormManifestRegistry
 from squid.submissions.domain import (
     DraftChange,
+    DraftChangeKey,
     DraftSnapshot,
     DraftStatus,
     FormManifest,
@@ -19,10 +21,10 @@ from squid.submissions.domain import (
 from squid.submissions.errors import (
     DraftAccessDeniedError,
     DraftCapacityExceededError,
-    DraftIncompleteError,
     DraftNotFoundError,
     DraftSchemaUnsupportedError,
     DraftStateConflictError,
+    DraftValidationError,
 )
 
 DEFAULT_DRAFT_RETENTION_DAYS = 7
@@ -83,7 +85,7 @@ class DraftRepository(Protocol):
         self,
         draft_id: UUID,
         account_id: int,
-        idempotency_key: str,
+        idempotency_key: DraftChangeKey,
     ) -> AppliedDraftChange | None: ...
 
     async def apply_change(
@@ -110,14 +112,6 @@ class DraftRepository(Protocol):
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool: ...
 
     async def expire_due(self, *, now: Instant, limit: int = 100) -> int: ...
-
-
-class FormManifestRegistry(Protocol):
-    """Resolve current and still-pinned form revisions."""
-
-    async def current(self, *, locale: str | None) -> FormManifest: ...
-
-    async def get(self, schema_id: str, revision: int, *, locale: str | None) -> FormManifest | None: ...
 
 
 class AccountDraftCapacity(Protocol):
@@ -261,7 +255,7 @@ class SubmissionDraftService:
             require_complete=False,
         )
         if errors:
-            raise DraftIncompleteError(errors)
+            raise DraftValidationError(errors)
         touched_at = now or self._now()
         return await self._repository.apply_change(
             draft_id,
@@ -291,7 +285,7 @@ class SubmissionDraftService:
             origin=current.origin,
         )
         if errors:
-            raise DraftIncompleteError(errors)
+            raise DraftValidationError(errors)
         normalized = manifest.apply_defaults(
             current.snapshot.category,
             current.snapshot.answers,

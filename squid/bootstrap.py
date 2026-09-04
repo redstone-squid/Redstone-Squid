@@ -415,14 +415,18 @@ class _ServiceGraph:
         return TagService(PostgresTagDefinitionRepository(self.db.async_session))
 
     @cached_property
+    def submission_manifests(self) -> CheckedInFormManifestRegistry:
+        return CheckedInFormManifestRegistry()
+
+    @cached_property
     def submission_forms(self) -> SubmissionFormService:
-        return SubmissionFormService(SuggestionFormOptionCatalog(self.suggestions))
+        return SubmissionFormService(SuggestionFormOptionCatalog(self.suggestions), self.submission_manifests)
 
     @cached_property
     def submission_drafts(self) -> SubmissionDraftService:
         return SubmissionDraftService(
             PostgresDraftRepository(self.db.async_session),
-            CheckedInFormManifestRegistry(),
+            self.submission_manifests,
         )
 
     @cached_property

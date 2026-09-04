@@ -39,6 +39,16 @@ class FieldOperationKind(StrEnum):
     UNSET = "unset"
 
 
+class DraftChangeKey(str):
+    """A retry identity for one atomic draft edit."""
+
+    def __new__(cls, value: str) -> DraftChangeKey:
+        if _IDEMPOTENCY_KEY.fullmatch(value) is None:
+            msg = tr(t"draft change keys must be 8-255 visible ASCII characters")
+            raise ValidationError(msg)
+        return super().__new__(cls, value)
+
+
 class DraftRevisionConflictError(ConflictError):
     """A client attempted to mutate a stale draft revision."""
 
@@ -83,18 +93,16 @@ class DraftChange:
 
     base_revision: int
     client_instance_id: str
-    idempotency_key: str
+    idempotency_key: DraftChangeKey
     operations: tuple[FieldOperation, ...]
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "idempotency_key", DraftChangeKey(self.idempotency_key))
         if self.base_revision < 0:
             msg = tr(t"base_revision cannot be negative")
             raise ValidationError(msg)
         if _CLIENT_ID.fullmatch(self.client_instance_id) is None:
             msg = tr(t"client_instance_id has an invalid format")
-            raise ValidationError(msg)
-        if _IDEMPOTENCY_KEY.fullmatch(self.idempotency_key) is None:
-            msg = tr(t"idempotency_key must be 8-255 visible ASCII characters")
             raise ValidationError(msg)
         if not self.operations:
             msg = tr(t"draft changes require at least one operation")

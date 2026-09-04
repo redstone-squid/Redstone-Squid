@@ -8,7 +8,16 @@ from datetime import datetime
 from typing import Annotated, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    JsonValue,
+    TypeAdapter,
+    WithJsonSchema,
+    model_validator,
+)
 
 from squid.core.errors import JSONValue
 from squid.submissions.application import FinalizationJobSnapshot, FormOptionSet, StoredDraft
@@ -17,6 +26,7 @@ from squid.submissions.domain import (
     ChoiceOption,
     ControlKind,
     DraftChange,
+    DraftChangeKey,
     DraftStatus,
     FieldConstraints,
     FieldOperation,
@@ -34,14 +44,14 @@ from squid.submissions.domain import (
 
 StableIdentifier = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 ClientInstanceIdentifier = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")]
-IdempotencyKey = Annotated[str, Field(min_length=8, max_length=255, pattern=r"^[\x21-\x7e]+$")]
+DraftChangeKeyInput = Annotated[DraftChangeKey, BeforeValidator(DraftChangeKey), WithJsonSchema({"type": "string"})]
 _JSON_VALUE = TypeAdapter(JsonValue)
 
 
 class StrictSchema(BaseModel):
     """Base model which rejects contract fields unknown to this server."""
 
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, arbitrary_types_allowed=True)
 
 
 class ChoiceOptionResponse(StrictSchema):
@@ -244,7 +254,7 @@ class DraftChangeRequest(StrictSchema):
 
     base_revision: int = Field(ge=0)
     client_instance_id: ClientInstanceIdentifier
-    idempotency_key: IdempotencyKey
+    idempotency_key: DraftChangeKeyInput
     operations: list[FieldOperationRequest] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")
