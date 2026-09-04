@@ -162,9 +162,18 @@ async def test_register_rejects_reused_staging_authority(tmp_path: Path) -> None
     staged = StagedUpload(source, "image/png")
     authority = DraftUploadAuthority(DRAFT_ID, 7, 4, MediaKind.IMAGE)
     await service.register(authority, staged, strip_audio=False, upload_id=UPLOAD_ID)
+    second_source = tmp_path / "second-source"
+    second_source.write_bytes(b"png")
 
-    with pytest.raises(Exception, match="no longer available"):
-        await service.register(authority, staged, strip_audio=False, upload_id=uuid4())
+    with pytest.raises(Exception, match="upload authority is no longer available"):
+        await service.register(
+            authority,
+            StagedUpload(second_source, "image/png"),
+            strip_audio=False,
+            upload_id=uuid4(),
+        )
+
+    assert not second_source.exists()
 
 
 async def test_get_and_discard_enforce_ownership_then_draft_association() -> None:
