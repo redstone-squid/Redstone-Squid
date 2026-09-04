@@ -5,6 +5,7 @@ dispatch and every service on the bot. It needs exactly three things: the guild'
 emoji palette, option parsing, and "create this poll and put it in this channel".
 """
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Protocol
@@ -21,6 +22,8 @@ from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,7 +126,25 @@ class DiscordPollPublisher:
             guild_id=channel.guild.id,
             scope=scope,
         )
-        return await self.attach(session_id, channel)
+        try:
+            return await self.attach(session_id, channel)
+        except PollPublicationError as first_failure:
+            try:
+                return await self.resume(first_failure.pending, channel)
+            except PollPublicationError as final_failure:
+                pending = final_failure.pending
+                attributes: dict[str, int | str] = {"squid.vote.session_id": pending.vote_session_id}
+                if pending.message is not None:
+                    attributes.update(
+                        {
+                            "squid.message.id": pending.message.id,
+                            "squid.channel.id": pending.message.channel.id,
+                        }
+                    )
+                    if pending.message.guild is not None:
+                        attributes["squid.guild.id"] = pending.message.guild.id
+                logger.exception("Poll publication remains incomplete after retry", extra=attributes)
+                raise
 
     async def may_create_network(self, member: discord.Member) -> bool:
         """Whether `member` may publish a poll into every server's vote channel."""
