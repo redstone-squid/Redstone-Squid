@@ -11,8 +11,8 @@ from alembic_utils.replaceable_entity import ReplaceableEntity
 ENTITY_SQL_PATH = Path(__file__).with_name("postgres_entities.sql")
 """Sole definition of the entities Alembic owns in the public schema."""
 
-EXPECTED_FUNCTIONS = 12
-EXPECTED_TRIGGERS = 38
+EXPECTED_FUNCTIONS = 13
+EXPECTED_TRIGGERS = 42
 
 
 def parse_entities(sql: str) -> list[ReplaceableEntity]:
@@ -26,7 +26,7 @@ def parse_entities(sql: str) -> list[ReplaceableEntity]:
     that is in fact still running its previous definition.
     """
     functions = re.findall(r"^CREATE FUNCTION .*?\$\$;", sql, flags=re.MULTILINE | re.DOTALL)
-    triggers = re.findall(r"^CREATE TRIGGER .*?;$", sql, flags=re.MULTILINE)
+    triggers = re.findall(r"^CREATE (?:CONSTRAINT )?TRIGGER .*?;$", sql, flags=re.MULTILINE)
     if len(functions) != EXPECTED_FUNCTIONS or len(triggers) != EXPECTED_TRIGGERS:
         msg = (
             f"postgres_entities.sql must define exactly {EXPECTED_FUNCTIONS} functions and "
