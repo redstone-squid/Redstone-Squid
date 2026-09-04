@@ -45,7 +45,14 @@
 **Done.** The retained router exposes typed optional add/remove/clear callbacks, memoizes Discord
 lookups per dispatch, preserves same-message FIFO, and runs shard lifetimes under
 `BackgroundTaskSupervisor` and anyio. Enqueue wait/depth, handler latency/failure, drain duration,
-and outstanding work are observable. Capacity waits are lossless during normal operation; if the
-shutdown deadline aborts an unadmitted vote event, the router invokes the voting consumer's typed
-recovery path instead of dropping it. Saturation, cancellation, clear dispatch, recovery handoff,
-failure isolation, and source-level ownership rules are covered without starboard fixtures.
+and outstanding work are observable. Capacity waits are lossless during normal operation. On a
+shutdown timeout the router hands accepted work to an idempotent consumer recovery path in FIFO
+order. Vote recovery is serialized and event-specific: adds and removes are applied idempotently,
+clears only restore option baselines, cross-guild emoji aliases compare by stable option ID, and
+anonymous reactions are removed only after commit or a terminal rejection. A supervisor-owned
+periodic pass repairs retained reactions without interpreting a moderator clear as ballot removal.
+Handoffs are bounded so they cannot outlive application teardown. Saturation, cancellation, clear
+dispatch, recovery handoff, failure isolation, and source-level ownership rules are covered without
+starboard fixtures. If the bounded handoff itself cannot reach persistence, the authoritative log
+records the immutable event kind, message, channel, guild, user, and emoji identifiers needed for
+operator reconciliation rather than silently discarding the intent.
