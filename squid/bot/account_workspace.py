@@ -221,7 +221,7 @@ class AccountWorkspace(sd.Screen):
             settled = True
             await self._accounts.release_minecraft_link(code, reservation)
 
-        async def consented_account(consent: AccountConsent) -> Account:
+        async def consented_account_id(consent: AccountConsent) -> int:
             linked_account = account
             if linked_account is None or linked_account.id is None:
                 linked_account = await self._accounts.get_or_create_identity(
@@ -231,9 +231,10 @@ class AccountWorkspace(sd.Screen):
                 )
             elif linked_account.consent is None or linked_account.needs_consent_refresh:
                 linked_account = await self._accounts.grant_current_consent(linked_account.id)
-            if linked_account.id is None:
+            account_id = linked_account.id
+            if account_id is None:
                 raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(self._actor_id))
-            return linked_account
+            return account_id
 
         async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
             nonlocal settled
@@ -241,9 +242,9 @@ class AccountWorkspace(sd.Screen):
                 await release()
                 return
             try:
-                linked_account = await consented_account(consent)
+                linked_account_id = await consented_account_id(consent)
                 refresh = await self._accounts.link_minecraft_account(
-                    linked_account.id,
+                    linked_account_id,
                     code,
                     consent=consent,
                     attempted_by=attempted_by,
