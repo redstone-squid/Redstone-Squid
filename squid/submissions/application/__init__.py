@@ -23,7 +23,6 @@ from squid.submissions.application.drafts import (
 from squid.submissions.application.finalization import (
     DEFAULT_FINALIZATION_ATTEMPTS,
     MAX_FINALIZATION_JOB_CLAIM,
-    BuildSubmissionRejectedError,
     BuildSubmissionWriter,
     ClaimedFinalizationJob,
     DraftArtifactReadiness,
@@ -61,7 +60,6 @@ __all__ = [
     "AccountDraftCapacity",
     "AppliedDraftChange",
     "AppliedDraftUpgrade",
-    "BuildSubmissionRejectedError",
     "BuildSubmissionWriter",
     "CheckedInFormManifestRegistry",
     "CheckedInFormRevisionMigration",

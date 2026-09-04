@@ -13,6 +13,8 @@ from squid.submissions.domain.drafts import (
     FieldOperationKind,
 )
 from squid.submissions.domain.finalization import (
+    BuildSubmissionRejected,
+    BuildSubmissionResult,
     DoorOrientation,
     DoorSubmissionDetails,
     DoorTiming,
@@ -53,6 +55,8 @@ __all__ = [
     "DRAFT_CHANGE_KEY_MAX_LENGTH",
     "DRAFT_CHANGE_KEY_MIN_LENGTH",
     "DRAFT_CHANGE_KEY_PATTERN",
+    "BuildSubmissionRejected",
+    "BuildSubmissionResult",
     "CategoryForm",
     "ChoiceOption",
     "ControlKind",
