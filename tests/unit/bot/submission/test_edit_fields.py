@@ -1,15 +1,18 @@
 """The generic build edit UI must stay aligned with the edit patch."""
 
 from dataclasses import replace
+from unittest.mock import AsyncMock
 
 import discord
 import pytest
 
 import squid_ui as sl
-from squid.bot.submission.ui.views import EDIT_FIELDS, _edit_form
+import squid_ui_discord as sd
+from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen, _edit_form
+from squid.builds.application import BuildService
 from squid.builds.domain import BuildCategory, DoorBuild, ExtenderBuild, UtilityBuild
 from squid_ui_discord.modal import build_form_modal
-from squid_ui_discord.testing import assert_within_limits
+from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
 
 
 def test_every_edit_field_emits_a_typed_patch_fragment() -> None:
@@ -107,6 +110,61 @@ def test_every_edit_form_page_fits_the_strict_discord_modal_boundary() -> None:
     for page in range(1, (len(items) + 4) // 5 + 1):
         modal = build_form_modal(_edit_form(items, page), on_submit=submit, strict=True)
         assert_within_limits(modal)
+
+
+async def test_invalid_edit_urls_reopen_the_modal_with_every_attempted_value() -> None:
+    class Builds(BuildService):
+        def __init__(self) -> None:
+            pass
+
+    build = DoorBuild()
+    items = tuple(
+        field.bind(build) for field in EDIT_FIELDS if field.key in {"image_urls", "video_urls", "world_download_urls"}
+    )
+    screen = BuildEditScreen(
+        build,
+        Builds(),
+        items,
+        authorize=AsyncMock(return_value=True),
+        render_build=AsyncMock(),
+        refresh_posts=AsyncMock(),
+    )
+    await screen.projection.reload()
+    root = sd.MessageRoot(screen, access=sd.Owner(7), timeout=None)
+    commit_render(root)
+
+    opened = interaction_harness(7)
+    await root.dispatch("open", opened)
+    modal = opened.response.send_modal.await_args.args[0]
+    assert isinstance(modal, discord.ui.Modal)
+    attempted = {
+        "image_urls": "https://valid.example/image.png, invalid-image",
+        "video_urls": "ftp://invalid-video, relative-video",
+        "world_download_urls": "https://valid.example/world.zip",
+    }
+    for child in modal.children:
+        assert isinstance(child, discord.ui.Label)
+        component = child.component
+        assert isinstance(component, discord.ui.TextInput)
+        component._value = attempted[component.custom_id]  # pyrefly: ignore[missing-attribute]
+
+    submitted = interaction_harness(7)
+    await modal.on_submit(submitted)
+
+    assert all(not item.modified and item.current_text == "" for item in items)
+    retry_view = submitted.response.send_message.await_args.kwargs["view"]
+    retry = next(item for item in retry_view.walk_children() if isinstance(item, discord.ui.Button))
+    reopened = interaction_harness(7)
+    await retry.callback(reopened)
+    retried = reopened.response.send_modal.await_args.args[0]
+    assert isinstance(retried, discord.ui.Modal)
+    defaults = {
+        component.custom_id: component.default
+        for child in retried.children
+        if isinstance(child, discord.ui.Label)
+        and isinstance((component := child.component), discord.ui.TextInput)
+    }
+    assert defaults == attempted
 
 
 @pytest.mark.parametrize("field_key", ["image_urls", "video_urls", "world_download_urls"])
