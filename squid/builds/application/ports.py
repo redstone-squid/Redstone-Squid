@@ -30,6 +30,14 @@ class BuildSchematicSummary:
     sign_texts: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class SourceSubmissionBuildWrite:
+    """Canonical build selected for a source draft and whether this call created it."""
+
+    build: Build
+    created: bool
+
+
 class BuildRepository(Protocol):
     """Persistence operations required by the build application service."""
 
@@ -40,6 +48,8 @@ class BuildRepository(Protocol):
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]: ...
 
     async def save(self, build: Build) -> None: ...
+
+    async def save_for_source_submission(self, build: Build) -> SourceSubmissionBuildWrite: ...
 
     async def confirm(self, build: Build) -> None: ...
 

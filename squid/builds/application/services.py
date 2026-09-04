@@ -169,26 +169,24 @@ class BuildService:
         """
         existing = await self._repository.get_by_source_submission_draft_id(source_submission_draft_id)
         if existing is not None:
-            if existing.submitter_account_id != submitter_account_id:
-                msg = "The source submission draft is already owned by another account."
-                raise InvalidStateError(
-                    msg,
-                    context={"source_submission_draft_id": str(source_submission_draft_id)},
-                )
-            if existing.sponsor != build.sponsor:
-                msg = "The source submission draft already produced a build with different immutable provenance."
-                raise InvalidStateError(
-                    msg,
-                    context={"source_submission_draft_id": str(source_submission_draft_id)},
-                )
+            _require_matching_source_submission(existing, build, submitter_account_id, source_submission_draft_id)
             return existing
         build.submitter_account_id = submitter_account_id
         build.source_submission_draft_id = source_submission_draft_id
         build.display_name = display_name.strip() if display_name is not None and display_name.strip() else None
         build.ai_generated = ai_generated
         build.submission_status = Status.PENDING
-        await self._persist(build)
-        return build
+        await self._prepare_for_persistence(build)
+        outcome = await self._repository.save_for_source_submission(build)
+        _require_matching_source_submission(
+            outcome.build,
+            build,
+            submitter_account_id,
+            source_submission_draft_id,
+        )
+        if outcome.created:
+            await self._embeddings.index(outcome.build)
+        return outcome.build
 
     def edit(
         self,
@@ -269,6 +267,12 @@ class BuildService:
 
     async def _persist_without_lock(self, build: Build) -> None:
         """Persist a build when the caller already owns any required edit lease."""
+        await self._prepare_for_persistence(build)
+        await self._repository.save(build)
+        await self._embeddings.index(build)
+
+    async def _prepare_for_persistence(self, build: Build) -> None:
+        """Resolve application-owned defaults and derived values before a relational write."""
         if not build.versions:
             build.versions = [await self._versions.newest("Java")]
         # Resolve the editable taxonomy strings into tag assignments here, at the
@@ -276,12 +280,30 @@ class BuildService:
         # verbatim and unresolvable names are recorded before anything is saved.
         await apply_build_taxonomy(build, self._taxonomy)
         await self._embeddings.prepare(build)
-        await self._repository.save(build)
-        await self._embeddings.index(build)
 
     async def _set_restrictions(self, build: Build, restrictions: Sequence[str]) -> None:
         known_restrictions = await self._restrictions.fetch_all_restrictions()
         build.classify_restrictions(
             restrictions,
             {restriction.name: restriction.type for restriction in known_restrictions},
+        )
+
+
+def _require_matching_source_submission(
+    persisted: Build,
+    candidate: Build,
+    submitter_account_id: int,
+    source_submission_draft_id: UUID,
+) -> None:
+    if persisted.submitter_account_id != submitter_account_id:
+        msg = "The source submission draft is already owned by another account."
+        raise InvalidStateError(
+            msg,
+            context={"source_submission_draft_id": str(source_submission_draft_id)},
+        )
+    if persisted.sponsor != candidate.sponsor:
+        msg = "The source submission draft already produced a build with different immutable provenance."
+        raise InvalidStateError(
+            msg,
+            context={"source_submission_draft_id": str(source_submission_draft_id)},
         )
