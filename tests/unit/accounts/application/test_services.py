@@ -706,6 +706,46 @@ async def test_refresh_can_name_which_java_identity_to_refresh() -> None:
         await service(repository).refresh_java_identity(account.id, java_uuid=OTHER_JAVA_UUID)
 
 
+async def test_refresh_without_uuid_deliberately_selects_most_recent_java_identity() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+    first = account.identity_for(IdentityProvider.JAVA, str(JAVA_UUID))
+    assert first is not None
+    newest = replace(
+        AccountIdentity.java(
+            OTHER_JAVA_UUID,
+            username="NewerPlayer",
+            verified_at=NOW.add(minutes=1),
+        ),
+        id=3,
+    )
+    repository.accounts[account.id] = replace(account, identities=(*account.identities, newest))
+
+    await service(repository, "RefreshedPlayer").refresh_java_identity(account.id)
+
+    assert repository.refreshed == (account.id, OTHER_JAVA_UUID, "RefreshedPlayer")
+
+
+async def test_refresh_exact_uuid_ignores_a_more_recent_java_identity() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+    newest = replace(
+        AccountIdentity.java(
+            OTHER_JAVA_UUID,
+            username="NewerPlayer",
+            verified_at=NOW.add(minutes=1),
+        ),
+        id=3,
+    )
+    repository.accounts[account.id] = replace(account, identities=(*account.identities, newest))
+
+    await service(repository, "RefreshedPlayer").refresh_java_identity(account.id, java_uuid=JAVA_UUID)
+
+    assert repository.refreshed == (account.id, JAVA_UUID, "RefreshedPlayer")
+
+
 async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> None:
     """The point of the rekeying: a Bedrock-only caller is a first-class linker.
 

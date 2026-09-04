@@ -401,6 +401,8 @@ class AccountService:
 
         Keyed on the account rather than a Discord ID: this is reachable from Discord, from an
         API session, and from a CLI device, and only the first of those has a Discord ID.
+        Callers with an identity selector pass its exact UUID; account-level refresh actions use
+        the most recently verified Java identity, with persistence order breaking timestamp ties.
 
         Raises `MinecraftAccountNotFoundError` when no Java identity is linked or the UUID no
         longer resolves, and `MinecraftServiceUnavailableError` when Mojang cannot be reached.
@@ -408,14 +410,10 @@ class AccountService:
         account = await self._repository.get_by_id(account_id)
         if account is None:
             raise AccountNotFoundError(account_id)
-        identity = next(
-            (
-                candidate
-                for candidate in account.identities
-                if candidate.provider is IdentityProvider.JAVA
-                and (java_uuid is None or candidate.java_uuid == java_uuid)
-            ),
-            None,
+        identity = (
+            account.most_recent_identity_for(IdentityProvider.JAVA)
+            if java_uuid is None
+            else account.identity_for(IdentityProvider.JAVA, str(java_uuid))
         )
         if identity is None or identity.java_uuid is None:
             raise NoLinkedMinecraftAccountError(account_id=account_id)
