@@ -639,7 +639,7 @@ async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -
     assert next(snapshot for snapshot in snapshots if snapshot.upload.id == first_id).status is MediaJobStatus.DISCARDED
 
 
-async def test_runner_persists_video_output_poster_and_report_then_cleans_raw_and_temp(tmp_path: Path) -> None:
+async def test_runner_persists_video_output_thumbnail_and_report_then_cleans_raw_and_temp(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
     jobs = MediaNormalizationJobService(repository, artifacts)
@@ -671,13 +671,23 @@ async def test_runner_persists_video_output_poster_and_report_then_cleans_raw_an
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.COMPLETED
     assert snapshot.upload.raw_deleted_at == NOW
-    assert {artifact.role for artifact in snapshot.artifacts} == set(MediaArtifactRole)
+    assert {artifact.role for artifact in snapshot.artifacts} == {
+        MediaArtifactRole.OUTPUT,
+        MediaArtifactRole.VIDEO_THUMBNAIL,
+        MediaArtifactRole.REPORT,
+    }
     assert snapshot.upload.source_object_key not in artifacts.objects
     assert all(artifact.object_key.endswith(artifact.sha256) for artifact in snapshot.artifacts)
     report = next(artifact for artifact in snapshot.artifacts if artifact.role is MediaArtifactRole.REPORT)
     report_payload = json.loads(artifacts.objects[report.object_key])
     assert report_payload["kind"] == "video"
     assert report_payload["actions"] == ["video_transcoded"]
+    assert "poster" in report_payload
+    assert "video_thumbnail" not in report_payload
+    thumbnail = next(
+        artifact for artifact in snapshot.artifacts if artifact.role is MediaArtifactRole.VIDEO_THUMBNAIL
+    )
+    assert thumbnail.object_key.startswith("media/posters/")
     assert not any(tmp_path.iterdir())
     assert all(not directory.exists() for directory in normalizer.seen_directories)
 
