@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any, Generic, TypeVar, cast
 
-from squid_ui.document import Document, DocumentLike
+from squid_ui.document import DocumentLike, as_document
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import Form, FormField, FormIssue, FormLike, FormSpec
 from squid_ui.semantic import (
@@ -28,12 +28,13 @@ from squid_ui_widgets.commit import CommitMode
 from squid_ui_widgets.drivers import (
     ComponentDriver,
     FormPresentingMachine,
+    FormValues,
     MachineControls,
     StateMachine,
     TransitionEvent,
 )
 
-type EditorValues = Mapping[str, object]
+type EditorValues = FormValues
 type EditorCommitHandler = Callable[[TransitionEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]]
 
 StateT = TypeVar("StateT")
@@ -97,8 +98,8 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
         label: TextLike,
         form: FormLike,
         *,
-        summary: Callable[[Mapping[str, object]], TextLike] | None = None,
-    ) -> EditorSection[tuple[tuple[str, object], ...], Mapping[str, object], RenderTarget]:
+        summary: Callable[[FormValues], TextLike] | None = None,
+    ) -> EditorSection[tuple[tuple[str, object], ...], FormValues, RenderTarget]:
         """Adapt one form schema into an editor section."""
         spec = form.spec() if isinstance(form, Form) else form
         initial_values = {
@@ -107,7 +108,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
             if isinstance(field, FormField)
         }
 
-        def load(value: Mapping[str, object]) -> tuple[tuple[str, object], ...]:
+        def load(value: FormValues) -> tuple[tuple[str, object], ...]:
             if not isinstance(value, Mapping):
                 message = f"Editor section {key!r} needs a mapping value"
                 raise TypeError(message)
@@ -118,10 +119,10 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
                 raise ValueError(message)
             return tuple((field_key, value.get(field_key)) for field_key in spec.field_keys)
 
-        def dump(state: tuple[tuple[str, object], ...]) -> Mapping[str, object]:
+        def dump(state: tuple[tuple[str, object], ...]) -> FormValues:
             return MappingProxyType(dict(state))
 
-        def default_summary(value: Mapping[str, object]) -> TextLike:
+        def default_summary(value: FormValues) -> TextLike:
             parts = []
             for field in spec.items:
                 if not isinstance(field, FormField):
@@ -130,7 +131,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
                 parts.append(f"{display_text(field.label)}: {_formatted(formatted)}")
             return " · ".join(parts)
 
-        return EditorSection[tuple[tuple[str, object], ...], Mapping[str, object], RenderTarget](
+        return EditorSection[tuple[tuple[str, object], ...], FormValues, RenderTarget](
             key,
             label,
             initial=tuple(initial_values.items()),
@@ -173,7 +174,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
             raise KeyError(message)
         return self.dump(cast(StateT, slot.state))
 
-    def form_prefill(self, state: StateT) -> Mapping[str, object]:
+    def form_prefill(self, state: StateT) -> FormValues:
         """Project a form section to string-keyed values, rejecting a mismatched adapter."""
         value = self.dump(state)
         if not isinstance(value, Mapping):
@@ -319,7 +320,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> EditorState:
         if action == "back":
             return replace(state, editing=None)
@@ -384,12 +385,6 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         before = {slot.key: slot.committed for slot in previous.sections}
         return frozenset(slot.key for slot in state.sections if before.get(slot.key) != slot.committed)
 
-    @staticmethod
-    def _nodes(rendered: DocumentLike[RenderTargetT]) -> tuple[LayoutNode[RenderTargetT], ...]:
-        if isinstance(rendered, Document):
-            return rendered.children
-        return tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
-
     def render(
         self, state: EditorState, controls: MachineControls[EditorState, RenderTargetT]
     ) -> DocumentLike[RenderTargetT]:
@@ -409,7 +404,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
                 return stack(
                     heading(self.title),
                     heading(section.label, level=3),
-                    *self._nodes(nested),
+                    *as_document(nested).children,
                     action_controls(
                         controls.action_control(controls.chrome.back, "back", key=f"{self.key}.back"),
                         key=f"{self.key}.workspace",

@@ -21,7 +21,6 @@ from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     MountNavNode,
     NavigationContext,
-    NavigationState,
     default_nav,
 )
 from squid_ui.runtime.component import Component
@@ -30,7 +29,6 @@ from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
 from squid_ui.sources import (
     ORIGIN,
-    CountPrecision,
     LoadedWindow,
     Position,
     WindowLoader,
@@ -46,6 +44,7 @@ from squid_ui_widgets._window import (
     WindowRequest,
     last_ready,
     load_window,
+    source_navigation_state,
 )
 
 type BrowserDetail[ItemT, RenderTargetT: DiscordTarget = DiscordTarget] = Callable[[ItemT], ContentLike[RenderTargetT]]
@@ -263,47 +262,22 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
     def _navigation(self, loaded: LoadedWindow[ItemT]) -> tuple[MountNavNode, ...]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
-        window = loaded.window
-        capabilities = self.source.capabilities
-        extent = (
-            max(1, (window.total + self.page_size - 1) // self.page_size)
-            if capabilities.count is CountPrecision.EXACT and capabilities.jumpable and window.total is not None
-            else None
+        state = source_navigation_state(
+            loaded,
+            self.source.capabilities,
+            key=self.key,
+            page_size=self.page_size,
+            chrome=chrome,
         )
-        navigable = window.has_next or (capabilities.backward and window.has_previous) or (extent or 0) > 1
-        if not navigable:
+        if state is None:
             return ()
-        total = window.total if capabilities.count is not CountPrecision.NONE else None
-        visible_range = (
-            (window.position.offset + 1, window.position.offset + len(window.items))
-            if capabilities.offsets and window.items
-            else None
-        )
         return tuple(
             nav(
                 NavigationContext(
-                    NavigationState(
-                        key=self.key,
-                        position=window.position,
-                        has_previous=window.has_previous,
-                        has_next=window.has_next,
-                        backward=capabilities.backward,
-                        previous_label=chrome.older,
-                        next_label=chrome.newer,
-                        previous_key=f"{self.key}.previous",
-                        next_key=f"{self.key}.next",
-                        extent=extent,
-                        page=window.position.offset // self.page_size if capabilities.offsets else None,
-                        visible_range=visible_range,
-                        total=total,
-                        count=capabilities.count,
-                        seek_key=f"{self.key}.seek",
-                        seek_label=chrome.jump_to_page,
-                        page_option=chrome.page_option,
-                    ),
+                    state,
                     self._previous,
                     self._next,
-                    self._seek if extent is not None else None,
+                    self._seek if state.extent is not None else None,
                 )
             )
         )

@@ -1,4 +1,4 @@
-"""Reusable, frontend-neutral state-machine machines."""
+"""Reusable, frontend-neutral state machines."""
 
 from squid_ui_widgets import guards
 from squid_ui_widgets._actions import MachineKeySegment, PageDirection
@@ -16,6 +16,7 @@ from squid_ui_widgets.commit import CommitMode
 from squid_ui_widgets.decision import Decision, DecisionHandler, DecisionOption, DecisionState, confirm
 from squid_ui_widgets.drivers import (
     ComponentDriver,
+    FormValues,
     MachineControls,
     RouteDriver,
     RouteEncoder,
@@ -91,6 +92,7 @@ __all__ = [
     "EditorSectionState",
     "EditorState",
     "EditorValues",
+    "FormValues",
     "GridCell",
     "LoadingCopy",
     "MachineControls",
