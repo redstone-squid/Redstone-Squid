@@ -10,7 +10,7 @@ from discord.ext.commands import Greedy
 
 import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
-from squid.bot.reactions import ReactionClearEvent, ReactionEvent
+from squid.bot.reactions import ReactionEvent
 from squid.bot.tags_view import TagsScreen
 from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
@@ -38,11 +38,11 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         self.tags = bot.services.tags
         self.restrictions = bot.services.restrictions
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
-        self.bot.reactions.subscribe(self)
+        self._reaction_subscription = self.bot.reactions.subscribe(type(self).__qualname__, add=self.on_reaction_add)
 
     @override
     async def ui_unload(self) -> None:
-        self.bot.reactions.unsubscribe(self)
+        self._reaction_subscription.detach()
 
     @autocompletes(build_id="builds")
     @sd.command(name="tags", description="Browse, apply, propose, and moderate build tags")
@@ -140,15 +140,6 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         if author_id != payload.user_id:
             return
         await message.delete()
-
-    async def on_reaction_remove(self, event: ReactionEvent) -> None:
-        """Ignore removals from archived messages."""
-
-    async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
-        """Ignore clears from archived messages."""
-
-    async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
-        """Ignore emoji clears from archived messages."""
 
     @sd.prefix_command(name="s", hidden=True)
     @commands.is_owner()
