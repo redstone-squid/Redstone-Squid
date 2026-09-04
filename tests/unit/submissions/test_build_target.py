@@ -30,7 +30,7 @@ from squid.submissions.domain import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
-from squid.submissions.infrastructure.build_target import TARGET_KEY, CanonicalBuildSubmissionWriter
+from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
 from squid.tags.domain import (
     TagAuthority,
     TagDefinition,
@@ -165,7 +165,6 @@ async def test_adapter_creates_every_category_with_direct_account_ownership(
 
     build, arguments = builds.calls[0]
     assert result.build_id == 41
-    assert result.target_key == TARGET_KEY
     assert arguments["submitter_account_id"] == 17
     assert arguments["source_submission_draft_id"] == DRAFT_ID
     assert build.submitter_discord_id is None
@@ -226,8 +225,6 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_pro
         "license": None,
         "rights_attested": False,
     }
-    assert result.provenance["normalized_media_upload_ids"] == [str(MEDIA_ID)]
-    assert result.provenance["schematic_id"] == str(SCHEMATIC_ID)
 
 
 async def test_adapter_persists_the_verified_public_sponsor_snapshot() -> None:
@@ -260,7 +257,6 @@ async def test_adapter_persists_the_verified_public_sponsor_snapshot() -> None:
         "description": None,
         "website_url": "https://example.test/server",
     }
-    assert result.provenance["sponsor_installation_id"] == str(INSTALLATION_ID)
 
 
 async def test_retry_rejects_a_sponsor_snapshot_that_differs_from_the_existing_build() -> None:

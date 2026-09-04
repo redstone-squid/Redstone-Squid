@@ -26,6 +26,7 @@ from squid.submissions.domain.finalization import (
     ExtenderSubmissionDetails,
     ExtenderTiming,
     FinalizationJobStatus,
+    FinalizedBuild,
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicArtifactState,
@@ -37,7 +38,6 @@ from squid.submissions.domain.finalization import (
     SubmissionDimensions,
     SubmissionSchematicLicense,
     SubmissionSchematicVisibility,
-    SubmissionTargetResult,
     SubmissionTaxonomy,
 )
 from squid.submissions.errors import DraftSchemaUnsupportedError, DraftValidationError
@@ -82,7 +82,7 @@ class FinalizationJobSnapshot:
     dead_at: Instant | None = None
     last_error: str | None = None
     issues: tuple[SubmissionAttentionIssue, ...] = ()
-    result: SubmissionTargetResult | None = None
+    result: FinalizedBuild | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,7 +194,7 @@ class BuildSubmissionWriter(Protocol):
     same ``source_draft_id``, including after the first call committed and the worker crashed.
     """
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> SubmissionTargetResult: ...
+    async def create_or_get(self, submission: NormalizedSubmission) -> FinalizedBuild: ...
 
 
 class FinalizationJobRepository(Protocol):
@@ -225,7 +225,7 @@ class FinalizationJobRepository(Protocol):
     async def complete(
         self,
         job: ClaimedFinalizationJob,
-        result: SubmissionTargetResult,
+        result: FinalizedBuild,
         *,
         now: Instant,
     ) -> bool: ...
