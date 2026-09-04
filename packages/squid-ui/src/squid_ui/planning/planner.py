@@ -66,7 +66,7 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     request already and would otherwise have to spread it back out only for it to be
     reassembled -- every layer between a mount and a backend is one of those.
     """
-    backend: Any = request.target.dialect.planner
+    backend = request.target.dialect.planner
     return backend.plan(rendered, request, cache=cache, memo=memo)
 
 

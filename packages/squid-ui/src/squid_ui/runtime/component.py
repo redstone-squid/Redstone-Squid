@@ -366,7 +366,7 @@ class IncrementalRender[RenderTargetT: RenderTarget = RenderTarget]:
 
 
 class _TreeRender[RenderTargetT: RenderTarget]:
-    """One expansion of one component tree, and everything it accumulates on the way.
+    """One component-tree expansion, ended when ``run`` returns its accumulated tree.
 
     A render walks the tree once while filling a dozen parallel collections -- the components
     it found and where, the assets and observations they declared, the subtrees it could

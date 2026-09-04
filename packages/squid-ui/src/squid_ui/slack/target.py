@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from squid_ui import scene
 from squid_ui.capabilities import Capability
@@ -10,6 +10,9 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import Target
 from squid_ui.target_types import SlackAdapter, SlackHomeTarget, SlackMessageTarget, SlackModalTarget
+
+if TYPE_CHECKING:
+    from squid_ui.planning.slack_planner import SlackPlanner
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,7 +140,7 @@ class SlackMessageDialect:
     realizes_extensions = False
 
     @property
-    def planner(self) -> Any:
+    def planner(self) -> SlackPlanner:
         from squid_ui.planning.slack_planner import SLACK_PLANNER
 
         return SLACK_PLANNER
@@ -155,7 +158,7 @@ class SlackModalDialect:
     realizes_extensions = False
 
     @property
-    def planner(self) -> Any:
+    def planner(self) -> SlackPlanner:
         from squid_ui.planning.slack_planner import SLACK_PLANNER
 
         return SLACK_PLANNER
@@ -175,7 +178,7 @@ class SlackHomeDialect:
     realizes_extensions = False
 
     @property
-    def planner(self) -> Any:
+    def planner(self) -> SlackPlanner:
         from squid_ui.planning.slack_planner import SLACK_PLANNER
 
         return SLACK_PLANNER
