@@ -46,12 +46,15 @@ class SchematicSummary(FromDomain[StoredSchematic]):
     download_url: str
 
     @classmethod
-    def from_domain(cls, schematic: StoredSchematic, /, *, download_url: str) -> Self:
+    def from_domain(cls, schematic: StoredSchematic, /, *, download_url: str | None = None) -> Self:
         analysis = schematic.analysis
         metrics = analysis.metrics
         license = schematic.publication.license
         if not schematic.publication.is_public_downloadable or license is None:
             msg = "Only public downloadable schematics can be rendered in the public API."
+            raise ValueError(msg)
+        if download_url is None:
+            msg = "Public schematic representations require a route-derived download URL."
             raise ValueError(msg)
         return cls(
             id=schematic.id,

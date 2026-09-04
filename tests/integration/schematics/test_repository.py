@@ -181,7 +181,7 @@ async def test_promoting_a_new_primary_demotes_the_previous_one(repository: Post
     assert sum(stored.is_primary for stored in await repository.list_for_build(1)) == 1
 
 
-async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_url(
+async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_the_generated_url(
     repository: PostgresSchematicStore,
     preview_publisher: PostgresSchematicPreviewPublisher,
     async_session_factory: async_sessionmaker[AsyncSession],

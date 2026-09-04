@@ -51,7 +51,7 @@ class FakeSchematics:
         self.current = current
         self.publication_failures = publication_failures or []
         self.recorded: list[tuple[FreshRender, str, str]] = []
-        self.projected: list[CachedRender] = []
+        self.published_cached: list[CachedRender] = []
         self.published_urls: list[str] = []
 
     async def prepare_render(self, _build_id: int) -> RenderPreparation:
@@ -69,7 +69,7 @@ class FakeSchematics:
         return object()
 
     async def publish_cached_preview(self, render: CachedRender) -> bool:
-        self.projected.append(render)
+        self.published_cached.append(render)
         if self.current:
             self.published_urls[:] = [render.url]
         return self.current
@@ -84,7 +84,7 @@ class FakeArtifacts:
         return ArtifactMetadata(byte_size=len(data))
 
 
-async def test_fresh_render_is_published_and_projected_onto_build() -> None:
+async def test_fresh_render_is_published_onto_build() -> None:
     job = ClaimedRenderJob(7, 0, uuid.uuid4())
     jobs = FakeJobs(job)
     schematics = FakeSchematics(FreshRender(3, RECIPE_HASH, 768, 768, PNG))
@@ -169,7 +169,7 @@ async def test_replaced_primary_cannot_publish_its_completed_render() -> None:
     assert jobs.completed == [job]
 
 
-async def test_cached_render_is_rechecked_before_projection() -> None:
+async def test_cached_render_is_rechecked_before_publication() -> None:
     job = ClaimedRenderJob(7, 0, uuid.uuid4())
     jobs = FakeJobs(job)
     cached_url = f"https://api.example/v1/schematic-renders/{RECIPE_HASH}/content"
@@ -186,7 +186,7 @@ async def test_cached_render_is_rechecked_before_projection() -> None:
 
     await worker.process_batch()
 
-    assert schematics.projected == [prepared]
+    assert schematics.published_cached == [prepared]
     assert schematics.published_urls == []
     assert artifacts.puts == []
     assert jobs.completed == [job]
@@ -211,7 +211,7 @@ async def test_a_permanent_skip_acknowledges_the_intent_instead_of_retrying(reas
 
     assert artifacts.puts == []
     assert schematics.recorded == []
-    assert schematics.projected == []
+    assert schematics.published_cached == []
     assert jobs.completed == [job]
     assert jobs.failed == []
 

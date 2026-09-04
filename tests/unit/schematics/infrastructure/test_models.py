@@ -1,15 +1,18 @@
 """Tests for schematic persistence schema contracts."""
 
-from sqlalchemy import CheckConstraint
+from typing import cast
+
+from sqlalchemy import CheckConstraint, Table
 
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.schematics.infrastructure.models import SchematicFile
 
 
 def test_file_size_constraint_uses_the_fixed_schema_ceiling() -> None:
+    table = cast(Table, SchematicFile.__table__)
     constraint = next(
         constraint
-        for constraint in SchematicFile.__table__.constraints
+        for constraint in table.constraints
         if isinstance(constraint, CheckConstraint) and constraint.name == "schematic_files_size_bounded"
     )
 
