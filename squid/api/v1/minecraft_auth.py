@@ -2,13 +2,14 @@
 
 import hashlib
 from collections.abc import Awaitable
-from typing import Annotated, Protocol, cast
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, Response, status
 from pydantic import AnyHttpUrl
 
 from squid.api.contract import ANONYMOUS, PAPER, WEB, WEB_WRITE, browser_only, contract, transport_only
+from squid.api.dependencies import MinecraftInstallations, MinecraftPlayerAuthorization
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
 from squid.api.security import Caller, current_caller, require_consented_account
@@ -30,117 +31,12 @@ from squid.api.v1.schemas.minecraft_auth import (
 from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
-    IssuedInstallationCredential,
-    IssuedPlayerChallenge,
-    IssuedPlayerGrant,
-    PaperInstallation,
-    PlayerAuthorizationChallenge,
-    PublicServerProfile,
 )
 
 _NO_STORE = "no-store"
 
 
-class PaperInstallationHttpService(Protocol):
-    """Account and credential operations consumed by the HTTP transport."""
-
-    async def register(
-        self,
-        *,
-        owner_account_id: int,
-        label: str,
-        profile: PublicServerProfile | None = None,
-    ) -> IssuedInstallationCredential: ...
-
-    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]: ...
-
-    async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential: ...
-
-    async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation: ...
-
-    async def update_profile(
-        self,
-        *,
-        installation_id: UUID,
-        owner_account_id: int,
-        profile: PublicServerProfile,
-    ) -> PaperInstallation: ...
-
-    async def authenticate(self, token: str) -> AuthenticatedPaperInstallation: ...
-
-    async def authenticate_headers(
-        self,
-        installation_id: str | None,
-        installation_secret: str | None,
-    ) -> AuthenticatedPaperInstallation: ...
-
-
-class PlayerAuthorizationHttpService(Protocol):
-    """Challenge and grant operations consumed by the HTTP transport."""
-
-    async def start_paper_challenge(
-        self,
-        *,
-        installation: AuthenticatedPaperInstallation,
-        java_uuid: UUID,
-    ) -> IssuedPlayerChallenge: ...
-
-    async def start_fabric_challenge(
-        self,
-        *,
-        java_uuid: UUID,
-        pkce_s256_challenge: str,
-    ) -> IssuedPlayerChallenge: ...
-
-    async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge: ...
-
-    async def exchange_paper(
-        self,
-        *,
-        device_code: str,
-        installation: AuthenticatedPaperInstallation,
-    ) -> IssuedPlayerGrant: ...
-
-    async def exchange_fabric(self, *, device_code: str, pkce_verifier: str) -> IssuedPlayerGrant: ...
-
-    async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool: ...
-
-
-class MinecraftAuthApiServices(Protocol):
-    """Narrow runtime bundle required when this router is integrated."""
-
-    minecraft_installations: PaperInstallationHttpService | None
-    minecraft_player_authorization: PlayerAuthorizationHttpService | None
-
-
-class _MinecraftAuthRuntime(Protocol):
-    services: MinecraftAuthApiServices
-
-
-class _MinecraftAuthAppState(Protocol):
-    runtime: _MinecraftAuthRuntime
-    config: object
-
-
-def get_installation_service(request: Request) -> PaperInstallationHttpService:
-    """Resolve Paper installation operations without importing the global runtime."""
-    state = cast(_MinecraftAuthAppState, request.app.state)
-    service = state.runtime.services.minecraft_installations
-    if service is None:
-        raise ServiceUnavailableError(resource="minecraft_auth")
-    return service
-
-
-def get_player_authorization_service(request: Request) -> PlayerAuthorizationHttpService:
-    """Resolve player authorization operations without importing the global runtime."""
-    state = cast(_MinecraftAuthAppState, request.app.state)
-    service = state.runtime.services.minecraft_player_authorization
-    if service is None:
-        raise ServiceUnavailableError(resource="minecraft_auth")
-    return service
-
-
-def get_minecraft_verification_uri(request: Request) -> AnyHttpUrl:
+async def get_minecraft_verification_uri(request: Request) -> AnyHttpUrl:
     """Return the explicitly configured public page that accepts a user code."""
     config = getattr(request.app.state, "config", None)
     minecraft_auth = getattr(config, "minecraft_auth", None)
@@ -157,8 +53,6 @@ async def current_account_id(caller: Annotated[Caller, Depends(current_caller)])
     return require_consented_account(caller)
 
 
-Installations = Annotated[PaperInstallationHttpService, Depends(get_installation_service)]
-PlayerAuthorization = Annotated[PlayerAuthorizationHttpService, Depends(get_player_authorization_service)]
 AccountId = Annotated[int, Depends(current_account_id)]
 InstallationIdHeader = Annotated[str | None, Header(alias="Squid-Installation-ID")]
 InstallationSecretHeader = Annotated[str | None, Header(alias="Squid-Installation-Secret")]
@@ -166,7 +60,7 @@ VerificationUri = Annotated[AnyHttpUrl, Depends(get_minecraft_verification_uri)]
 
 
 async def authenticated_paper_installation(
-    installations: Installations,
+    installations: MinecraftInstallations,
     installation_id: InstallationIdHeader = None,
     installation_secret: InstallationSecretHeader = None,
 ) -> AuthenticatedPaperInstallation:
@@ -215,7 +109,7 @@ router = APIRouter(
 async def create_installation(
     payload: InstallationCreateRequest,
     response: Response,
-    installations: Installations,
+    installations: MinecraftInstallations,
     account_id: AccountId,
 ) -> IssuedInstallationResponse:
     """Register a Paper server and return its plaintext secret exactly once."""
@@ -239,7 +133,7 @@ async def create_installation(
 )
 async def list_installations(
     response: Response,
-    installations: Installations,
+    installations: MinecraftInstallations,
     account_id: AccountId,
 ) -> InstallationListResponse:
     """List only the signed-in account's Paper installations, without secrets or digests."""
@@ -261,7 +155,7 @@ async def list_installations(
 async def rotate_installation(
     installation_id: UUID,
     response: Response,
-    installations: Installations,
+    installations: MinecraftInstallations,
     account_id: AccountId,
 ) -> IssuedInstallationResponse:
     """Fence an owned installation's old credentials and return one replacement secret."""
@@ -282,7 +176,7 @@ async def update_installation_profile(
     installation_id: UUID,
     payload: ServerProfileSchema,
     response: Response,
-    installations: Installations,
+    installations: MinecraftInstallations,
     account_id: AccountId,
 ) -> InstallationResponse:
     """Replace an owned server's explicit public-listing and sponsorship preferences."""
@@ -307,7 +201,7 @@ async def update_installation_profile(
 )
 async def revoke_installation(
     installation_id: UUID,
-    installations: Installations,
+    installations: MinecraftInstallations,
     account_id: AccountId,
 ) -> Response:
     """Revoke an owned server and all pending or active authorization derived from it."""
@@ -327,7 +221,7 @@ async def revoke_installation(
 async def start_paper_challenge(
     payload: PaperChallengeCreateRequest,
     response: Response,
-    players: PlayerAuthorization,
+    players: MinecraftPlayerAuthorization,
     installation: AuthenticatedPaper,
     verification_uri: VerificationUri,
 ) -> ChallengeCreateResponse:
@@ -348,7 +242,7 @@ async def start_paper_challenge(
 async def exchange_paper_challenge(
     payload: PaperChallengeExchangeRequest,
     response: Response,
-    players: PlayerAuthorization,
+    players: MinecraftPlayerAuthorization,
     installation: AuthenticatedPaper,
 ) -> IssuedPlayerGrantResponse:
     """Exchange one approved Paper challenge on the same authenticated installation."""
@@ -369,7 +263,7 @@ async def exchange_paper_challenge(
 async def start_fabric_challenge(
     payload: FabricChallengeCreateRequest,
     response: Response,
-    players: PlayerAuthorization,
+    players: MinecraftPlayerAuthorization,
     verification_uri: VerificationUri,
 ) -> ChallengeCreateResponse:
     """Start an anonymous Fabric challenge committed to a client-held S256 verifier."""
@@ -394,7 +288,7 @@ async def start_fabric_challenge(
 async def exchange_fabric_challenge(
     payload: FabricChallengeExchangeRequest,
     response: Response,
-    players: PlayerAuthorization,
+    players: MinecraftPlayerAuthorization,
 ) -> IssuedPlayerGrantResponse:
     """Exchange one approved Fabric challenge by proving its client-held PKCE verifier."""
     issued = await _execute(
@@ -415,7 +309,7 @@ async def exchange_fabric_challenge(
 async def approve_challenge(
     payload: ChallengeApprovalRequest,
     response: Response,
-    players: PlayerAuthorization,
+    players: MinecraftPlayerAuthorization,
     account_id: AccountId,
 ) -> ChallengeApprovalResponse:
     """Approve only the Java UUID authoritatively attached to the signed-in account."""
@@ -434,7 +328,7 @@ async def approve_challenge(
 )
 async def revoke_grant(
     grant_id: UUID,
-    players: PlayerAuthorization,
+    players: MinecraftPlayerAuthorization,
     account_id: AccountId,
 ) -> Response:
     """Revoke one grant only when it belongs to the signed-in account."""
