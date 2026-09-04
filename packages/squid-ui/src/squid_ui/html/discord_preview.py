@@ -5,11 +5,13 @@ import json
 from collections.abc import Callable
 from datetime import datetime
 from html import escape
-from urllib.parse import urlsplit
 
 from squid_ui import scene
 from squid_ui.assets import Asset, InlineAsset, StoredAsset
 from squid_ui.errors import DrawInvariantError
+from squid_ui.html._safety import attribute as _attribute
+from squid_ui.html._safety import safe_url as _safe_url
+from squid_ui.renderer import AssetResolver
 from squid_ui.scene.model import PlanResult
 from squid_ui.temporal import ZonedDateTime
 
@@ -29,17 +31,7 @@ border-radius:4px}.squid-gallery{display:grid;grid-template-columns:repeat(auto-
 .squid-spoiler{filter:blur(12px);transition:filter .15s}.squid-spoiler:hover,.squid-spoiler:focus{filter:none}
 """.strip()
 
-type AssetResolver = Callable[[scene.Asset], str | None]
 type FileResolver = Callable[[scene.File], str | None]
-
-
-def _attribute(value: object) -> str:
-    return escape(str(value), quote=True)
-
-
-def _url(value: str) -> str | None:
-    parsed = urlsplit(value)
-    return value if parsed.scheme in {"http", "https"} and parsed.netloc else None
 
 
 class DiscordPreviewRenderer:
@@ -93,7 +85,7 @@ class DiscordPreviewRenderer:
                 encoded = base64.b64encode(resource.source.data).decode("ascii")
                 return f"data:{resource.media_type};base64,{encoded}"
             if isinstance(resource.source, StoredAsset):
-                return _url(resource.source.reference)
+                return _safe_url(resource.source.reference)
             return None
 
         body = "".join(self._node(child, resolve_file) for child in document.body.children)
@@ -187,7 +179,7 @@ class DiscordPreviewRenderer:
                 )
             case scene.Link(label=label, url=url, emoji=emoji, disabled=disabled):
                 icon = f'<span class="squid-button__emoji">{escape(emoji.name)}</span> ' if emoji else ""
-                safe = _url(url)
+                safe = _safe_url(url)
                 if safe is None or disabled:
                     return (
                         f'<span class="squid-button squid-link" aria-disabled="true">{icon}{escape(label or "")}</span>'
@@ -253,7 +245,7 @@ class DiscordPreviewRenderer:
                     f"{multiple}{disabled_attribute}>{prompt}{rendered}</select>"
                 )
             case scene.Thumbnail(url=url, description=description, spoiler=spoiler):
-                safe = _url(url)
+                safe = _safe_url(url)
                 if safe is None:
                     return ""
                 spoiler_class = " squid-spoiler" if spoiler else ""
@@ -264,7 +256,7 @@ class DiscordPreviewRenderer:
                     f'<img class="{"squid-spoiler" if item.spoiler else ""}" src="{_attribute(safe)}" '
                     f'alt="{_attribute(item.description or "")}"{' tabindex="0"' if item.spoiler else ""}>'
                     for item in items
-                    if (safe := _url(item.url)) is not None
+                    if (safe := _safe_url(item.url)) is not None
                 )
                 return f'<div class="squid-gallery">{images}</div>'
             case scene.Extension(kind=kind, version=version):
