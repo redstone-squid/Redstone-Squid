@@ -6,7 +6,7 @@ from typing import cast
 import pytest
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql import Executable
+from sqlalchemy.sql import ClauseElement, Executable
 
 from squid.accounts.infrastructure import repository
 
@@ -47,7 +47,7 @@ async def test_routine_reference_moves_compile_as_core_updates() -> None:
     )
 
     assert len(session.statements) == 1
-    compiled = str(session.statements[0].compile(dialect=postgresql.dialect()))
+    compiled = str(cast(ClauseElement, session.statements[0]).compile(dialect=postgresql.dialect()))
     assert compiled.startswith("UPDATE builds SET submitter_account_id=")
     assert "WHERE builds.submitter_account_id =" in compiled
 
