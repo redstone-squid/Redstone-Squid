@@ -5,7 +5,7 @@ from typing import Self
 from pydantic import ConfigDict
 
 from squid.api.v1.schemas import FromDomain
-from squid.schematics.application.queries import StoredSchematic
+from squid.schematics.application.attachments import StoredSchematic
 from squid.schematics.domain import SchematicDimensions
 
 

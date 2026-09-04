@@ -1,0 +1,73 @@
+"""Attachment and publication read models."""
+
+from dataclasses import dataclass
+
+from whenever import Instant
+
+from squid.core.errors import DataIntegrityError
+from squid.core.i18n import tr
+from squid.schematics.domain.models import (
+    SchematicAnalysis,
+    SchematicFormat,
+    SchematicLicense,
+    SchematicVisibility,
+    SimulationResult,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class SchematicPublication:
+    """Rights and withdrawal facts governing an attachment."""
+
+    visibility: SchematicVisibility = SchematicVisibility.LEGACY_UNVERIFIED
+    license: SchematicLicense | None = None
+    rights_attested_at: Instant | None = None
+    rights_attested_by_account_id: int | None = None
+    published_at: Instant | None = None
+    withdrawn_at: Instant | None = None
+
+    def __post_init__(self) -> None:
+        rights_complete = (
+            self.license is not None
+            and self.rights_attested_at is not None
+            and self.rights_attested_by_account_id is not None
+        )
+        if self.visibility is SchematicVisibility.PUBLIC_DOWNLOAD and not rights_complete:
+            msg = tr(t"public schematic downloads require a license and rights attestation")
+            raise DataIntegrityError(msg)
+
+    @property
+    def is_public_downloadable(self) -> bool:
+        """Whether public callers may receive the stored original bytes."""
+        return (
+            self.visibility is SchematicVisibility.PUBLIC_DOWNLOAD
+            and self.license is not None
+            and self.rights_attested_at is not None
+            and self.rights_attested_by_account_id is not None
+            and self.published_at is not None
+            and self.withdrawn_at is None
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class StoredSchematic:
+    """A schematic file that has been analyzed and attached to a build."""
+
+    id: int
+    build_id: int
+    file_sha256: str
+    is_primary: bool
+    original_filename: str | None
+    analysis: SchematicAnalysis
+    publication: SchematicPublication = SchematicPublication()
+    simulation_evidence: SimulationResult | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PublicSchematicDownload:
+    """Original bytes plus the typed facts required by a download response."""
+
+    content: bytes
+    schematic: StoredSchematic
+    license: SchematicLicense
+    source_format: SchematicFormat

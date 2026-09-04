@@ -2,8 +2,9 @@
 
 from typing import Protocol
 
+from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.queries import SchematicPublication, StoredRender, StoredSchematic
+from squid.schematics.application.previews import StoredRender
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
