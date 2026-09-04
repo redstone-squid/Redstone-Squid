@@ -354,7 +354,7 @@ async def _run_worker(config: WorkerProcessConfig, *, stop_event: asyncio.Event 
         topic_bridge = await open_topic_bridge(config.runtime.database, LocalTopicBus())
         schematic_renders = SchematicPreviewWorker(
             runtime.services.schematic_renders,
-            runtime.services.schematics,
+            runtime.services.schematics.previews,
             runtime.services.artifacts,
             str(schematic_config.render_public_base_url)
             if schematic_config.render_public_base_url is not None

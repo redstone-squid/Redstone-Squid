@@ -19,7 +19,9 @@ from whenever import Instant
 
 import squid.persistence.model_registry  # noqa: F401
 from squid.accounts.infrastructure.models import Account
+from squid.artifacts import ArtifactMetadata
 from squid.artifacts.infrastructure import LocalArtifactStore
+from squid.core.errors import DataIntegrityError
 from squid.persistence.base import Base
 from squid.schematics.application import SchematicPublication
 from squid.schematics.domain.models import (
@@ -450,6 +452,58 @@ async def test_missing_cached_preview_is_marked_for_safe_regeneration(
     )
 
     assert cached is None
+    assert reservation.upload_required is True
+
+
+async def test_cached_preview_that_disappears_during_publication_is_retried(
+    repository: PostgresSchematicStore,
+    preview_artifacts: LocalArtifactStore,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    class DisappearingArtifactStore(LocalArtifactStore):
+        def __init__(self, delegate: LocalArtifactStore) -> None:
+            self._delegate = delegate
+            self._stat_calls = 0
+
+        async def put(self, key: str, data: bytes, *, content_type: str) -> ArtifactMetadata:
+            return await self._delegate.put(key, data, content_type=content_type)
+
+        async def stat(self, key: str) -> ArtifactMetadata | None:
+            self._stat_calls += 1
+            if self._stat_calls == 2:
+                await self._delegate.delete(key)
+            return await self._delegate.stat(key)
+
+        async def delete(self, key: str) -> None:
+            await self._delegate.delete(key)
+
+    artifacts = DisappearingArtifactStore(preview_artifacts)
+    publisher = PostgresSchematicPreviewPublisher(async_session_factory, artifacts)
+    digest = await repository.put_file(b"vanishing-preview", source_format=SchematicFormat.LITEMATIC)
+    schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    object_key = "renders/vanishing.png"
+    await _ready_preview_object(publisher, artifacts, object_key)
+    url = "https://api.example/v1/schematic-renders/vanishing/content"
+    rendered = await publisher.publish_fresh_preview(
+        schematic_id,
+        "vanishing-recipe",
+        url,
+        object_key,
+        width=768,
+        height=768,
+        byte_size=42,
+    )
+    assert rendered is not None
+    assert await publisher.get_render(schematic_id, "vanishing-recipe") is not None
+
+    with pytest.raises(DataIntegrityError, match="disappeared"):
+        await publisher.publish_cached_preview(schematic_id, "vanishing-recipe", url)
+
+    reservation = await publisher.reserve_preview_object(
+        object_key,
+        byte_size=42,
+        sha256=hashlib.sha256(b"p" * 42).hexdigest(),
+    )
     assert reservation.upload_required is True
 
 
