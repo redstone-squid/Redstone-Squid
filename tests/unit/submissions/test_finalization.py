@@ -21,6 +21,7 @@ from squid.submissions.application import (
     SubmissionFinalizationService,
     SubmissionFinalizationWorker,
     SubmissionNotificationEvent,
+    SubmissionPreparation,
     SubmissionReviewEvent,
     build_submission_manifest,
 )
@@ -376,7 +377,11 @@ async def _submit(
     repository = FakeDraftRepository(_stored(origin, category=category, answers=answers))
     drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
-    service = SubmissionFinalizationService(drafts, FakeArtifacts(readiness), jobs, FakeSponsors(sponsor))
+    service = SubmissionFinalizationService(
+        drafts,
+        SubmissionPreparation(FakeArtifacts(readiness), FakeSponsors(sponsor)),
+        jobs,
+    )
     return await service.submit(DRAFT_ID, 7, locale="en", now=NOW), jobs
 
 
@@ -604,7 +609,11 @@ async def test_status_rechecks_draft_ownership_before_returning_job() -> None:
     drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
     jobs.snapshot = _snapshot(FinalizationJobStatus.PENDING)
-    service = SubmissionFinalizationService(drafts, FakeArtifacts(SubmissionArtifactReadiness()), jobs)
+    service = SubmissionFinalizationService(
+        drafts,
+        SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
+        jobs,
+    )
 
     assert await service.status(DRAFT_ID, 7) == jobs.snapshot
 
@@ -616,7 +625,11 @@ async def _payload() -> NormalizedSubmission:
     repository = FakeDraftRepository(_stored(SubmissionOrigin.WEB))
     drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
-    service = SubmissionFinalizationService(drafts, FakeArtifacts(SubmissionArtifactReadiness()), jobs)
+    service = SubmissionFinalizationService(
+        drafts,
+        SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
+        jobs,
+    )
 
     await service.submit(DRAFT_ID, 7, locale="en", now=NOW)
     assert jobs.enqueued is not None

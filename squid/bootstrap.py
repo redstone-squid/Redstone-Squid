@@ -108,6 +108,7 @@ from squid.submissions.application import (
     SubmissionFinalizationService,
     SubmissionFinalizationWorker,
     SubmissionFormService,
+    SubmissionPreparation,
 )
 from squid.submissions.infrastructure.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
@@ -447,9 +448,8 @@ class _ServiceGraph:
         )
         return SubmissionFinalizationService(
             self.submission_drafts,
-            readiness,
+            SubmissionPreparation(readiness, sponsors),
             self.submission_finalization_jobs,
-            sponsors,
         )
 
     @cached_property
