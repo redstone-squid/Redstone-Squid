@@ -18,6 +18,7 @@ to know any of it.
 """
 
 import base64
+import binascii
 import hashlib
 import json
 import logging
@@ -143,11 +144,7 @@ def convert(
 
     if target is SchematicFormat.LITEMATIC:
         payload = _json_object(schematic.to_litematic_for_version_json(data_version), "conversion result")
-        encoded = payload.get("data_b64")
-        if not isinstance(encoded, str):
-            msg = "The engine returned no converted schematic data."
-            raise InvalidSchematicError(msg, developer_action="Check to_litematic_for_version_json's result shape.")
-        return base64.b64decode(encoded), _loss_entries(payload.get("loss"))
+        return _base64_bytes(payload.get("data_b64"), "converted schematic data"), _loss_entries(payload.get("loss"))
 
     source_version = schematic.source_data_version()
     if source_version == _UNKNOWN_DATA_VERSION:
@@ -182,7 +179,8 @@ def render(data: bytes, *, request: RenderRequest, resource_pack: VerifiedResour
     if pack is None:
         pack = nucleation.ResourcePack.from_bytes(resource_pack.data)
         _RESOURCE_PACK_CACHE[resource_pack.sha256] = pack
-    return base64.b64decode(nucleation.Renderer.render_png_b64_with_pack(schematic, pack, config))
+    rendered = nucleation.Renderer.render_png_b64_with_pack(schematic, pack, config)
+    return _base64_bytes(rendered, "rendered PNG")
 
 
 def _render_config(request: RenderRequest) -> Any:
@@ -220,7 +218,7 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
             "",
         )
     except Exception as exc:
-        detail = _optional(lambda: str(nucleation.TickSimulation.last_error_detail()), "")
+        detail = _optional_engine_evidence(lambda: str(nucleation.TickSimulation.last_error_detail()), "tick error")
         msg = detail or str(exc) or "The tick engine could not load this schematic."
         raise InvalidSchematicError(msg, context={"engine_error": msg}) from exc
 
@@ -234,10 +232,14 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
     settled = bool(simulation.run_until_quiescent(request.max_ticks))
 
     summary = _json_array(simulation.events_summary_json(), "simulation event summary")
-    event_rows = [cast(Mapping[str, Any], row) for row in summary if isinstance(row, dict)]
-    piston_ticks = [int(row["tick"]) for row in event_rows if int(row.get("piston", 0)) > 0]
+    event_rows = tuple(_event_row(row) for row in summary)
+    piston_ticks = [
+        _integer(row, "tick", "simulation event")
+        for row in event_rows
+        if _integer(row, "piston", "simulation event", default=0) > 0
+    ]
     audit = _json_object(nucleation.TickSimulation.block_entity_audit_json(schematic), "block entity audit")
-    missing_block_entities = int(audit.get("missing_total", 0))
+    missing_block_entities = _integer(audit, "missing_total", "block entity audit", default=0)
     unsupported_contacts = int(simulation.piston_retract_contacts())
     notes: list[str] = []
     if not settled:
@@ -254,8 +256,8 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
         input_source=input_source,
         last_piston_tick=max(piston_ticks) if piston_ticks else None,
         block_changes=int(simulation.changes_count()),
-        piston_events=sum(int(row.get("piston", 0)) for row in event_rows),
-        redstone_events=sum(int(row.get("redstone", 0)) for row in event_rows),
+        piston_events=sum(_integer(row, "piston", "simulation event", default=0) for row in event_rows),
+        redstone_events=sum(_integer(row, "redstone", "simulation event", default=0) for row in event_rows),
         trustworthy=settled and missing_block_entities == 0 and unsupported_contacts == 0 and bool(piston_ticks),
         notes=tuple(notes),
     )
@@ -287,12 +289,10 @@ def _resolve_simulation_input(
     """Choose one actuator without ever guessing between ambiguous controls."""
     controls: dict[Vector3, str] = {}
     for item in snapshot:
-        if not isinstance(item, dict):
-            continue
-        entry = cast(Mapping[str, Any], item)
-        state = str(entry.get("state", ""))
-        position = _vector(entry.get("pos"))
-        if position is not None and any(name in state.partition("[")[0] for name in _INPUT_BLOCK_NAMES):
+        entry = _object(item, "simulation snapshot entry")
+        state = _string(entry, "state", "simulation snapshot entry")
+        position = _required_vector(entry.get("pos"), "simulation snapshot position")
+        if any(name in state.partition("[")[0] for name in _INPUT_BLOCK_NAMES):
             controls[position] = state
 
     # A caller who named a coordinate is answering this very question, so their answer is
@@ -375,8 +375,15 @@ def _guard_allocated_volume(schematic: nucleation.Schematic, limits: SchematicLi
 def _metrics(
     schematic: nucleation.Schematic, data: bytes, *, source_format: SchematicFormat | None
 ) -> SchematicMetrics:
+    resolved_format = source_format or sniff_schematic_format(data)
+    if resolved_format is None:
+        msg = "The schematic source format could not be resolved."
+        raise InvalidSchematicError(
+            msg,
+            context={"reason": "unresolved source format"},
+            developer_action="Pass the format established by bounded content sniffing into analyze().",
+        )
     tight = _dimensions(schematic.tight_dimensions())
-    resolved_format = source_format or sniff_schematic_format(data) or SchematicFormat.LITEMATIC
     return SchematicMetrics(
         source_format=resolved_format,
         byte_size=len(data),
@@ -388,36 +395,28 @@ def _metrics(
         # the tight bounding box including air, which is *not* the Door Rules cumulative
         # volume: that has hallway, frame, and hitbox exceptions no static read can apply.
         bounding_volume=tight.volume,
-        entity_count=_optional(lambda: int(schematic.entity_count()), 0),
-        palette_size=_optional(lambda: len(_json_array(schematic.palette_json(), "palette")), 0),
-        region_names=_optional(
-            lambda: tuple(str(name) for name in _json_array(schematic.region_names_json(), "region names")), ()
+        entity_count=int(schematic.entity_count()),
+        palette_size=len(_json_array(schematic.palette_json(), "palette")),
+        region_names=tuple(
+            _string_value(name, "region name") for name in _json_array(schematic.region_names_json(), "region names")
         ),
-        source_data_version=_optional(lambda: _optional_data_version(schematic), None),
-        declared_name=_optional(lambda: _non_empty(schematic.name()), None),
-        declared_author=_optional(lambda: _non_empty(schematic.author()), None),
-        signs=_optional(lambda: _signs(schematic), ()),
+        source_data_version=_optional_data_version(schematic),
+        declared_name=_non_empty(schematic.name()),
+        declared_author=_non_empty(schematic.author()),
+        signs=_signs(schematic),
     )
 
 
-def _optional[T](read: Callable[[], T], missing: T) -> T:
-    """Read one piece of optional metadata, treating "this format has no such field" as absent.
-
-    `author()` and `description()` *raise* `NotFound` when the metadata is absent, while
-    `name()` and every numeric getter return a fallback, so a display-metadata read is a crash
-    risk on some formats and not others. Reported upstream as
-    https://github.com/Schem-at/Nucleation/issues/8; the related Sponge reader bug that makes
-    `.schem` hit this path is https://github.com/Schem-at/Nucleation/issues/7. Remove this guard
-    once both land.
-
-    Every caller here is reading display metadata, so an absent field must not fail the whole
-    analysis; the load-bearing measurements above are deliberately left unguarded.
-    """
+def _optional_engine_evidence(read: Callable[[], str], what: str) -> str | None:
+    """Read optional evidence, recovering only from the engine call itself."""
     try:
         return read()
+    # Nucleation 0.10.14 raises plain `Exception` while its exported `NucleationError` is not
+    # an exception class, so there is no narrower catch target: upstream issue #40.
+    # https://github.com/Schem-at/Nucleation/issues/40
     except Exception:
-        logger.debug("Optional schematic metadata is unavailable in this file.", exc_info=True)
-        return missing
+        logger.warning("The engine could not provide optional %s evidence; continuing without it.", what, exc_info=True)
+        return None
 
 
 def _fingerprints(schematic: nucleation.Schematic) -> SchematicFingerprints:
@@ -443,10 +442,13 @@ def _detect_lattice(schematic: nucleation.Schematic) -> AutostackLattice | None:
     Failure here is never fatal: a lattice is opportunistic evidence, and a build with no
     periodicity is the common case rather than an error.
     """
+    raw = _optional_engine_evidence(lambda: nucleation.Autostack.detect_structures(schematic), "lattice")
+    if raw is None:
+        return None
     try:
-        candidates = _json_array(nucleation.Autostack.detect_structures(schematic), "autostack result")
-    except Exception:
-        logger.warning("Repeating-structure detection failed; continuing without a lattice.", exc_info=True)
+        candidates = _json_array(raw, "autostack result")
+    except InvalidSchematicError:
+        logger.warning("The engine returned malformed optional lattice evidence; continuing without it.", exc_info=True)
         return None
 
     best: AutostackLattice | None = None
@@ -485,8 +487,16 @@ def _signs(schematic: nucleation.Schematic) -> tuple[SchematicSign, ...]:
     Sign text is display-only evidence, so an unexpected entry is dropped rather than failing
     the whole analysis.
     """
+    raw = _optional_engine_evidence(schematic.extract_signs_json, "sign")
+    if raw is None:
+        return ()
+    try:
+        payload = _json_array(raw, "signs")
+    except InvalidSchematicError:
+        logger.warning("The engine returned malformed optional sign evidence; continuing without it.", exc_info=True)
+        return ()
     signs: list[SchematicSign] = []
-    for entry in _json_array(schematic.extract_signs_json(), "signs"):
+    for entry in payload:
         if not isinstance(entry, dict):
             continue
         record = cast(Mapping[str, Any], entry)
@@ -513,31 +523,34 @@ def _export(schematic: nucleation.Schematic, target: SchematicFormat) -> bytes:
             end_user_action=f"Choose one of: {', '.join(sorted(fmt.value for fmt in _EXPORTERS))}.",
         )
     try:
-        return base64.b64decode(schematic.save_as_b64(writer, "", "{}"))
+        encoded = schematic.save_as_b64(writer, "", "{}")
     except Exception as exc:
         raise InvalidSchematicError(
             context={"target": target.value, "engine_error": str(exc)},
             public_context={"target": target.value},
         ) from exc
+    return _base64_bytes(encoded, f"{target.value} export")
 
 
 def _loss_entries(payload: object) -> tuple[VersionLossEntry, ...]:
-    """Translate the engine's fidelity-loss report, skipping entries we cannot read."""
+    """Translate the engine's required fidelity-loss report."""
     if not isinstance(payload, list):
-        return ()
+        msg = "The engine returned an unexpected conversion loss payload."
+        raise InvalidSchematicError(msg, context={"payload_type": type(payload).__name__})
     entries: list[VersionLossEntry] = []
     for item in cast(list[object], payload):
-        if not isinstance(item, dict):
-            continue
-        record = cast(Mapping[str, Any], item)
-        severity = str(record.get("severity", "Loss"))
+        record = _object(item, "conversion loss entry")
+        severity = _string(record, "severity", "conversion loss entry")
+        if severity not in ("Loss", "Approximated"):
+            msg = f"The engine returned an invalid conversion-loss severity {severity!r}."
+            raise InvalidSchematicError(msg)
         entries.append(
             VersionLossEntry(
-                version=str(record.get("version", "")),
-                kind=str(record.get("kind", "unknown")),
-                severity="Approximated" if severity == "Approximated" else "Loss",
-                path=str(record.get("path", "")),
-                detail=str(record.get("detail", record.get("message", ""))),
+                version=_string(record, "version", "conversion loss entry"),
+                kind=_string(record, "kind", "conversion loss entry"),
+                severity=cast(Literal["Loss", "Approximated"], severity),
+                path=_string(record, "path", "conversion loss entry"),
+                detail=_string(record, "detail", "conversion loss entry"),
             )
         )
     return tuple(entries)
@@ -578,7 +591,10 @@ def _non_empty(value: object) -> str | None:
     return text or None
 
 
-def _json_value(payload: str) -> object:
+def _json_value(payload: object) -> object:
+    if not isinstance(payload, str):
+        msg = "The engine returned a non-text JSON payload."
+        raise InvalidSchematicError(msg, context={"payload_type": type(payload).__name__})
     try:
         return json.loads(payload)
     except json.JSONDecodeError as exc:
@@ -602,3 +618,60 @@ def _json_object(payload: str, what: str) -> Mapping[str, Any]:
         msg = f"The engine returned an unexpected {what} payload."
         raise InvalidSchematicError(msg, context={"payload_type": type(value).__name__})
     return cast(Mapping[str, Any], value)
+
+
+def _object(value: object, what: str) -> Mapping[str, Any]:
+    if not isinstance(value, dict):
+        msg = f"The engine returned an unexpected {what}."
+        raise InvalidSchematicError(msg, context={"payload_type": type(value).__name__})
+    return cast(Mapping[str, Any], value)
+
+
+def _string(payload: Mapping[str, Any], key: str, what: str) -> str:
+    if key not in payload:
+        msg = f"The engine omitted {key!r} from its {what}."
+        raise InvalidSchematicError(msg)
+    return _string_value(payload[key], f"{what} {key}")
+
+
+def _string_value(value: object, what: str) -> str:
+    if not isinstance(value, str):
+        msg = f"The engine returned a non-text {what}."
+        raise InvalidSchematicError(msg, context={"payload_type": type(value).__name__})
+    return value
+
+
+def _integer(payload: Mapping[str, Any], key: str, what: str, *, default: int | None = None) -> int:
+    if key not in payload:
+        if default is not None:
+            return default
+        msg = f"The engine omitted {key!r} from its {what}."
+        raise InvalidSchematicError(msg)
+    value = payload[key]
+    if not isinstance(value, int) or isinstance(value, bool):
+        msg = f"The engine returned a non-integer {what} {key}."
+        raise InvalidSchematicError(msg, context={"payload_type": type(value).__name__})
+    return value
+
+
+def _event_row(value: object) -> Mapping[str, Any]:
+    return _object(value, "simulation event")
+
+
+def _required_vector(value: object, what: str) -> Vector3:
+    vector = _vector(value)
+    if vector is None:
+        msg = f"The engine returned an invalid {what}."
+        raise InvalidSchematicError(msg)
+    return vector
+
+
+def _base64_bytes(value: object, what: str) -> bytes:
+    if not isinstance(value, str) or not value:
+        msg = f"The engine returned no {what}."
+        raise InvalidSchematicError(msg, context={"payload_type": type(value).__name__})
+    try:
+        return base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        msg = f"The engine returned malformed base64 for {what}."
+        raise InvalidSchematicError(msg) from exc
