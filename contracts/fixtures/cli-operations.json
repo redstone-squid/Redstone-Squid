@@ -277,6 +277,26 @@
         }
       }
     },
+    "submission_draft_manifest_upgrade": {
+      "success": {
+        "status": 200,
+        "body": {
+          "replayed": false,
+          "draft": {
+            "revision": 1,
+            "schema_revision": 2
+          }
+        }
+      },
+      "problem": {
+        "status": 409,
+        "body": {
+          "title": "Draft revision conflict",
+          "status": 409,
+          "code": "INVALID_STATE"
+        }
+      }
+    },
     "submission_drafts_list": {
       "success": {
         "status": 200,
