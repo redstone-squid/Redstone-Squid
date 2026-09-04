@@ -11,7 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.artifacts import ArtifactStore
 from squid.builds.infrastructure.models import Build as SQLBuild
 from squid.builds.infrastructure.models import BuildLink
-from squid.schematics.application.queries import SchematicPublication, StoredRender, StoredSchematic
+from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
+from squid.schematics.application.previews import StoredRender
 from squid.schematics.domain.models import (
     FingerprintPreset,
     SchematicAnalysis,

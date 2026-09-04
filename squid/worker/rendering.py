@@ -5,7 +5,7 @@ import logging
 from squid.artifacts import ArtifactStore
 from squid.diagnostics.log_capture import work_lost
 from squid.schematics.application import SchematicRenderJobService, SchematicService
-from squid.schematics.application.queries import CachedRender, FreshRender, SkippedRender
+from squid.schematics.application.previews import CachedRender, FreshRender, SkippedRender
 from squid.topics import TopicPublisher, resource_topic
 
 logger = logging.getLogger(__name__)

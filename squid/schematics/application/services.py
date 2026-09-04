@@ -11,26 +11,23 @@ from dataclasses import dataclass
 
 from squid.core.errors import DataIntegrityError, SquidError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
+from squid.schematics.application.attachments import PublicSchematicDownload, SchematicPublication, StoredSchematic
 from squid.schematics.application.commands import ConvertRequest, IngestRequest, RenderRequest, SimulationRequest
+from squid.schematics.application.duplicates import DuplicateCandidate, DuplicateTier
 from squid.schematics.application.ports import (
     SchematicAnalyzer,
     SchematicResourcePackProvider,
     SchematicStore,
     SchematicVersionResolver,
 )
-from squid.schematics.application.queries import (
+from squid.schematics.application.previews import (
     CachedRender,
-    DuplicateCandidate,
-    DuplicateTier,
     FreshRender,
-    PublicSchematicDownload,
     RenderedSchematic,
     RenderPreparation,
     RenderSkipReason,
-    SchematicPublication,
     SkippedRender,
     StoredRender,
-    StoredSchematic,
 )
 from squid.schematics.domain.formats import inflated_size_at_most, sniff_schematic_format
 from squid.schematics.domain.models import (
