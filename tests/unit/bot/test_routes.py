@@ -14,6 +14,13 @@ from squid.bot.routes import router, routes
         ("squid.bot.voting.controls", "poll_refresh", {}, "r:polls:refresh", "poll:refresh"),
         ("squid.bot.submission.ui.controls", "build_edit", {"build_id": 5}, "r:builds:5:edit", "edit:build:5"),
         (
+            "squid.bot.submission.ui.controls",
+            "build_edit_recovery",
+            {"build_id": 5},
+            "r:builds:5:edit:recover",
+            "r:builds:5:edit:recover",
+        ),
+        (
             "squid.bot.submission.consent_banner",
             "build_log_consent",
             {},
@@ -67,10 +74,11 @@ def test_production_route_table_has_one_feature_owned_registration_per_identity(
         "r:polls:close",
         "r:polls:refresh",
         "r:builds:{build_id:int}:edit",
+        "r:builds:{build_id:int}:edit:recover",
         "r:build-log-consents:new",
         "r:redstoner-roles:self:remove",
     }
-    assert len(descriptions) == 5
+    assert len(descriptions) == 6
     assert all(route.middleware[0].endswith(".TraceRoutes") for route in descriptions)
     redstoner = next(route for route in descriptions if route.group_prefix == "r:redstoner-roles")
     assert redstoner.middleware[1].endswith(".OwnerGuildOnly")

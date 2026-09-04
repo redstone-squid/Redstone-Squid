@@ -7,8 +7,11 @@ from typing import Any, cast
 import discord
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.bot.submission.edit import BuildEditCommands
+from squid.bot.submission.ui.controls import recover_build_editor
+from squid.bot.submission.ui.opening import prepare_build_editor
 from squid.bot.submission.ui.views import BuildEditScreen
 from squid.builds.application import BuildService
 from squid.builds.domain import DoorBuild, OtherBuild, RestrictionTypeLiteral, Status
@@ -16,6 +19,7 @@ from squid.permissions.application import PermissionService
 from squid.permissions.domain import PermissionNode, Subject
 from squid.settings.application import SettingsService
 from squid.topics import resource_topic
+from squid_ui.testing import RecordingResponder, press_event
 from squid_ui_discord.testing import InteractionHarness, invoke_context_menu
 from tests.support.discord import make_layout_bot
 
@@ -95,19 +99,21 @@ class BuildRenderer:
 
 
 class Services:
-    def __init__(self, allowed: bool) -> None:
+    def __init__(self, allowed: bool, builds: BuildService) -> None:
         self.settings = SettingsRecorder()
         self.accounts = AccountRecorder()
         self.permissions = PermissionRecorder(allowed)
+        self.builds = builds
 
 
 def _cog(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> BuildEditCommands[Any]:
     cog = BuildEditCommands.__new__(BuildEditCommands)
-    cog.builds = StubBuilds(build)
+    builds = StubBuilds(build)
+    cog.builds = builds
     cog.bot = cast(
         Any,
         make_layout_bot(
-            services=Services(allowed),
+            services=Services(allowed, builds),
             account_ids=AccountIdResolver(account_id),
             is_owner=OwnerCheck(),
             for_build=lambda _build: BuildRenderer(),
@@ -126,8 +132,12 @@ async def _run(cog: BuildEditCommands[Any], **kwargs: Any) -> discord.Interactio
 def _sent_view(interaction: discord.Interaction[Any]) -> Any:
     """The one message the command sent: it completes its own private defer in place."""
     source = cast(Any, interaction)
-    source.followup.send.assert_not_awaited()
-    return source.edit_original_response.await_args.kwargs["view"]
+    call = (
+        source.response.send_message.await_args
+        or source.followup.send.await_args
+        or source.edit_original_response.await_args
+    )
+    return call.kwargs["view"]
 
 
 def _component(view: Any) -> BuildEditScreen | None:
@@ -277,3 +287,51 @@ async def test_the_menu_refuses_a_message_that_is_not_a_card() -> None:
     interaction = await _open_from_menu(cog, _card(author_id=1))
 
     assert _component(_sent_view(interaction)) is None
+
+
+async def test_recovery_route_reloads_current_state_before_authorizing() -> None:
+    latest = DoorBuild(
+        id=1,
+        revision=4,
+        submission_status=Status.PENDING,
+        submitter_account_id=1,
+        version_spec="1.21.4",
+    )
+    cog = _cog(latest, allowed=False, account_id=1)
+    interaction = _interaction(cog.bot)
+
+    await recover_build_editor(interaction, 1)
+
+    component = _component(_sent_view(interaction))
+    assert component is not None
+    assert component.build is latest
+    assert cast(StubBuilds, cog.builds).gets == 1
+    assert "Unsaved changes from the previous editor were discarded" in str(component.render())
+
+
+async def test_recovery_route_denies_an_actor_after_reloading_current_state() -> None:
+    latest = DoorBuild(id=1, revision=4, submission_status=Status.CONFIRMED, submitter_account_id=1)
+    cog = _cog(latest, allowed=False, account_id=1)
+    interaction = _interaction(cog.bot)
+
+    await recover_build_editor(interaction, 1)
+
+    assert _component(_sent_view(interaction)) is None
+    assert cast(StubBuilds, cog.builds).gets == 1
+
+
+async def test_in_session_reload_reauthorizes_the_reloaded_non_pending_build() -> None:
+    original = _door()
+    latest = DoorBuild(id=1, revision=2, submission_status=Status.CONFIRMED, submitter_account_id=1)
+    cog = _cog(latest, allowed=False, account_id=1)
+    interaction = _interaction(cog.bot)
+    request = await sd.request(interaction)
+    screen = await prepare_build_editor(request, original, cast(BuildService, cog.builds))
+    await screen.projection.reload()
+    responder = RecordingResponder()
+
+    await screen._reload(press_event(responder=responder))
+
+    assert screen.build is latest
+    assert responder.acknowledged == 0
+    assert responder.notices[0][0] == "Only the pending build's submitter or a trusted staff member can edit it."

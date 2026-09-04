@@ -18,6 +18,8 @@ async def prepare_build_editor(
     request: sd.Request[Any],
     build: Build,
     builds: BuildService | None = None,
+    *,
+    recovered: bool = False,
 ) -> BuildEditScreen:
     """Inject actor-aware Discord operations into one build editor."""
     client = cast("RedstoneSquid", request.client)
@@ -48,6 +50,7 @@ async def prepare_build_editor(
         authorize=authorize,
         render_build=render_build,
         refresh_posts=refresh_posts,
+        recovered=recovered,
     )
     return prepared
 
@@ -68,9 +71,17 @@ async def show_build_editor(request: sd.Request[Any], screen: BuildEditScreen) -
     return screen if isinstance(outcome, sd.Presented) else None
 
 
-async def open_build_editor(request: sd.Request[Any], build: Build) -> BuildEditScreen | None:
+async def open_build_editor(
+    request: sd.Request[Any],
+    build: Build,
+    *,
+    recovered: bool = False,
+) -> BuildEditScreen | None:
     """Prepare and show a build editor in one call."""
-    return await show_build_editor(request, await prepare_build_editor(request, build))
+    return await show_build_editor(
+        request,
+        await prepare_build_editor(request, build, recovered=recovered),
+    )
 
 
 __all__ = ["open_build_editor", "prepare_build_editor", "show_build_editor"]
