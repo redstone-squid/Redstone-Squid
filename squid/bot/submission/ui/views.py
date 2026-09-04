@@ -13,6 +13,7 @@ from squid.bot.ui import DISCORD_YELLOW, tr
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
 from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, BuildDraft, Status
+from squid.builds.errors import BuildRevisionMismatchError
 from squid.topics import resource_topic
 from squid_ui_discord.sessions import AdmissionSpec, Reject
 
@@ -555,6 +556,8 @@ class BuildEditScreen(sd.Screen):
                     tone=sl.Tone.SUCCESS,
                 )
             )
+        if self.validation_error:
+            controls.append(sl.action_control(tr(t"Reload latest"), self._reload, key="reload"))
         controls.append(sl.action_control(tr(t"Close"), self._close, key="close"))
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
@@ -629,8 +632,16 @@ class BuildEditScreen(sd.Screen):
             await self.builds.save(build)
             self._build_id = build.id
         else:
-            async with self.builds.edit(build.id, patch) as edit:
-                build = await edit.commit()
+            try:
+                async with self.builds.edit(build.id, patch, expected_revision=build.revision) as edit:
+                    build = await edit.commit()
+            except BuildRevisionMismatchError:
+                self.confirming = False
+                self.validation_error = tr(
+                    t"This build changed while you were editing. Reload the latest version; your staged changes will be discarded."
+                )
+                self.invalidate()
+                return
             edited_build_id = build.id
         self.saved = True
         self.confirming = False
@@ -641,6 +652,17 @@ class BuildEditScreen(sd.Screen):
 
     async def _close(self, event: sl.PressEvent) -> None:
         await event.finish()
+
+    async def _reload(self, event: sl.PressEvent) -> None:
+        if not await self._may_event(event):
+            return
+        await event.acknowledge()
+        await self.projection.reload()
+        build, node = self._current()
+        self.items = tuple(field.bind(build) for field in EDIT_FIELDS if field.applies_to(build))
+        self.validation_error = None
+        self.confirming = False
+        self._replace(build, node)
 
     async def _may_event(self, event: sl.ActionEvent) -> bool:
         if not await self.may_edit():

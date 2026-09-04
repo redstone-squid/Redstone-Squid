@@ -8,6 +8,7 @@ from uuid import UUID
 import discord
 import pytest
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission import build_handler as build_handler_module
 from squid.bot.submission.build_handler import BuildHandler
@@ -16,11 +17,13 @@ from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
 from squid.bot.ui import DISCORD_GREEN, DISCORD_GREY, DISCORD_RED, DISCORD_YELLOW, DiscordColour
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Status
+from squid.builds.errors import BuildRevisionMismatchError
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
 from squid.versions.application import VersionService
 from squid.versions.domain import Edition
+from squid_ui.testing import RecordingResponder, press_event
 from squid_ui_discord.testing import commit_render, delivered_to, message_harness
 from tests.support.discord import make_layout_bot
 
@@ -49,6 +52,41 @@ class SearchRecorder(SearchService):
 class BuildRecorder(BuildService):
     def __init__(self) -> None:
         pass
+
+
+class EditRecorder(BuildService):
+    def __init__(self, build: Build, *, conflict: bool = False) -> None:
+        self.build = build
+        self.conflict = conflict
+        self.expected_revision: int | None = None
+
+    def edit(
+        self,
+        build_id: int,
+        patch: Any,
+        *,
+        blocking: bool = False,
+        timeout: float = 30,
+        expected_revision: int | None = None,
+    ) -> Any:
+        del patch, blocking, timeout
+        assert build_id == self.build.id
+        self.expected_revision = expected_revision
+        recorder = self
+
+        class Lease:
+            async def __aenter__(self) -> Any:
+                if recorder.conflict:
+                    raise BuildRevisionMismatchError(build_id, expected_revision=expected_revision, current_revision=2)
+                return self
+
+            async def __aexit__(self, *args: object) -> None:
+                pass
+
+            async def commit(self) -> Build:
+                return replace(recorder.build, revision=recorder.build.revision + 1)
+
+        return Lease()
 
 
 @dataclass(frozen=True)
@@ -167,6 +205,46 @@ def test_build_editor_declares_keyed_topic_following_policy() -> None:
     assert BuildEditScreen.session.name == "build-edit"
     assert BuildEditScreen.timeout == 900
     assert BuildEditScreen.follow_topics is True
+
+
+async def test_build_editor_commits_against_the_revision_it_presented(display_build: Build) -> None:
+    builds = EditRecorder(display_build)
+    field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
+    field.stage("1.21+")
+    component = BuildEditScreen(
+        display_build,
+        builds,
+        [field],
+        authorize=AsyncMock(return_value=True),
+        render_build=AsyncMock(return_value=sl.status("updated")),
+        refresh_posts=AsyncMock(),
+    )
+
+    await component._apply(press_event(responder=RecordingResponder()))
+
+    assert builds.expected_revision == display_build.revision
+    assert component.saved is True
+
+
+async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(display_build: Build) -> None:
+    builds = EditRecorder(display_build, conflict=True)
+    field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
+    field.stage("1.21+")
+    component = BuildEditScreen(
+        display_build,
+        builds,
+        [field],
+        authorize=AsyncMock(return_value=True),
+        render_build=AsyncMock(),
+        refresh_posts=AsyncMock(),
+    )
+
+    await component._apply(press_event(responder=RecordingResponder()))
+    await component.projection.reload()
+
+    assert component.saved is False
+    assert "changed while you were editing" in str(component.validation_error)
+    assert "Reload latest" in str(component.render())
 
 
 @pytest.mark.asyncio
