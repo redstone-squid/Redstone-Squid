@@ -53,13 +53,14 @@ async def test_routine_reference_moves_compile_as_core_updates() -> None:
 
 
 def test_only_owner_precedence_retains_raw_postgres_with_a_specific_reason() -> None:
-    assert repository._RETAINED_MERGE_SQL_REASONS == {
-        repository._COLLAPSE_DRAFT_ACCESS_SQL: (
+    assert repository._RETAINED_MERGE_STATEMENTS == (repository._COLLAPSE_DRAFT_ACCESS,)
+    assert {
+        repository._COLLAPSE_DRAFT_ACCESS.sql: (
             "The winner depends on the draft's pre-merge owner while deleting one of two conflicting access rows; "
             "the joined CASE delete is clearer and safer than duplicating that precedence across correlated subqueries."
         )
-    }
-    statement = repository._COLLAPSE_DRAFT_ACCESS_SQL
+    } == repository._RETAINED_MERGE_SQL_REASONS
+    statement = repository._COLLAPSE_DRAFT_ACCESS.sql
     assert statement.startswith("\n")
     assert "\n" in statement.strip()
     assert ":survivor" in statement

@@ -106,6 +106,12 @@ class _AccountReference:
     column_name: str
 
 
+@dataclass(frozen=True, slots=True)
+class _RawMergeStatement:
+    sql: str
+    reason: str
+
+
 _IDENTITY_PROFILE_REFERENCES = (
     _AccountReference("minecraft_paper_installations", "owner_account_id"),
     _AccountReference("minecraft_player_challenges", "approved_by_account_id"),
@@ -139,27 +145,29 @@ _PERMISSION_PROVENANCE_REFERENCES = (
     _AccountReference("permission_audit_log", "actor_account_id"),
 )
 
-_COLLAPSE_DRAFT_ACCESS_SQL = """
-DELETE FROM submission_draft_access AS access_row
-WHERE access_row.id IN (
-    SELECT CASE
-        WHEN draft.owner_account_id = :absorbed THEN survivor_access.id
-        ELSE absorbed_access.id
-    END
-    FROM submission_draft_access AS survivor_access
-    JOIN submission_draft_access AS absorbed_access
-      ON absorbed_access.draft_id = survivor_access.draft_id
-    JOIN submission_drafts AS draft ON draft.id = survivor_access.draft_id
-    WHERE survivor_access.account_id = :survivor
-      AND absorbed_access.account_id = :absorbed
-)
-"""
-_RETAINED_MERGE_SQL_REASONS = {
-    _COLLAPSE_DRAFT_ACCESS_SQL: (
+_COLLAPSE_DRAFT_ACCESS = _RawMergeStatement(
+    sql="""
+    DELETE FROM submission_draft_access AS access_row
+    WHERE access_row.id IN (
+        SELECT CASE
+            WHEN draft.owner_account_id = :absorbed THEN survivor_access.id
+            ELSE absorbed_access.id
+        END
+        FROM submission_draft_access AS survivor_access
+        JOIN submission_draft_access AS absorbed_access
+          ON absorbed_access.draft_id = survivor_access.draft_id
+        JOIN submission_drafts AS draft ON draft.id = survivor_access.draft_id
+        WHERE survivor_access.account_id = :survivor
+          AND absorbed_access.account_id = :absorbed
+    )
+    """,
+    reason=(
         "The winner depends on the draft's pre-merge owner while deleting one of two conflicting access rows; "
         "the joined CASE delete is clearer and safer than duplicating that precedence across correlated subqueries."
-    )
-}
+    ),
+)
+_RETAINED_MERGE_STATEMENTS = (_COLLAPSE_DRAFT_ACCESS,)
+_RETAINED_MERGE_SQL_REASONS = {statement.sql: statement.reason for statement in _RETAINED_MERGE_STATEMENTS}
 
 
 def _collapse_alias_claims_statement(context: _AccountMergeContext):
@@ -1473,7 +1481,7 @@ async def _merge_submissions(session: AsyncSession, context: _AccountMergeContex
         ).all()
     )
     await _canonicalize_finalization_job_owners(session, draft_ids, context.survivor, context.absorbed)
-    await _execute_merge_sql(session, _COLLAPSE_DRAFT_ACCESS_SQL, context)
+    await _execute_merge_sql(session, _COLLAPSE_DRAFT_ACCESS, context)
     await _move_account_references(session, _SUBMISSION_REFERENCES, context)
 
 
@@ -1715,10 +1723,10 @@ async def _move_account_reference(
 
 async def _execute_merge_sql(
     session: AsyncSession,
-    statement: str,
+    statement: _RawMergeStatement,
     context: _AccountMergeContext,
 ) -> None:
-    await session.execute(text(statement), context.parameters)
+    await session.execute(text(statement.sql), context.parameters)
 
 
 async def _retire_absorbed_account(
