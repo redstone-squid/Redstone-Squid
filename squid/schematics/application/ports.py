@@ -148,6 +148,14 @@ class SchematicStore(Protocol):
         """
         ...
 
+    async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
+        """Persist moderator-facing simulation evidence for one attachment."""
+        ...
+
+
+class SchematicPreviewPublisher(Protocol):
+    """Persistence operations for generated preview recipes and publication."""
+
     async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None: ...
 
     async def publish_fresh_preview(
@@ -169,10 +177,6 @@ class SchematicStore(Protocol):
         ...
 
     async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None: ...
-
-    async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
-        """Persist moderator-facing simulation evidence for one attachment."""
-        ...
 
 
 class SchematicResourcePackProvider(Protocol):
