@@ -8,14 +8,31 @@ from squid.api.security import Caller
 from squid.api.v1.votes import VoteInput, cast_vote
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
 from squid.voting.application import VoteService
-from squid.voting.domain import CastVoteResult, VoteActor, VoteKind, VoteRejection, VoteSessionSnapshot
+from squid.voting.domain import (
+    CastVoteResult,
+    VoteActor,
+    VoteChoice,
+    VoteKind,
+    VoteMessage,
+    VoteOption,
+    VoteRejection,
+    VoteSessionSnapshot,
+)
 from squid.voting.errors import VoteSessionNotFoundError
 from tests.support.voting import build_snapshot
 from tests.unit.api.fakes import credential_nodes
 
 
 def snapshot() -> VoteSessionSnapshot:
-    return build_snapshot()
+    return build_snapshot(
+        messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 999)),
+        options=(
+            VoteOption("<:yes:1>", VoteChoice.APPROVE, identifier="approve", guild_id=10, position=0),
+            VoteOption("<:no:2>", VoteChoice.DENY, identifier="deny", guild_id=10, position=1),
+            VoteOption("✅", VoteChoice.APPROVE, identifier="approve", guild_id=999, position=0),
+            VoteOption("❌", VoteChoice.DENY, identifier="deny", guild_id=999, position=1),
+        ),
+    )
 
 
 def account(subject: str = "account:1") -> Caller:
