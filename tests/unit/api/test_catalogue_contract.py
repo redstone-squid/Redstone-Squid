@@ -14,6 +14,7 @@ from squid.builds.domain import Build, DoorBuild, ExtenderBuild, MediaTypeLitera
 from squid.core.errors import DataIntegrityError
 from squid.records.application.models import PublishedRecord
 from squid.records.application.services import RecordService
+from squid.records.domain import BuildKind, RecordClass, ResolutionStatus, VersionScope
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import (
     TagAssignment,
@@ -62,10 +63,10 @@ def published_record(*holder_build_ids: int) -> PublishedRecord:
         competition_id=UUID("22222222-2222-2222-2222-222222222222"),
         title="Fastest 2x3 door",
         subtitle="All versions",
-        record_class="fastest",
-        build_kind="door",
-        version_scope="all-time",
-        status="resolved",
+        record_class=RecordClass.FASTEST,
+        build_kind=BuildKind.DOOR,
+        version_scope=VersionScope.ALL_TIME,
+        status=ResolutionStatus.RESOLVED,
         holder_build_ids=holder_build_ids,
         computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
     )
