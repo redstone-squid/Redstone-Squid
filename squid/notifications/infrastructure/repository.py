@@ -562,30 +562,9 @@ class PostgresNotificationRepository:
         if isinstance(previous_run_id, bool) or not isinstance(previous_run_id, int):
             return
         gains = await self._record_gains(session, event.aggregate_id, previous_run_id)
+        recipients_by_build = await self._record_gain_recipients(session, gains)
         candidates: list[NotificationCandidate] = []
         for build_id, build_gains in gains.items():
-            recipients = set(await self._creator_account_ids(session, build_id))
-            creator_ids = tuple(await self._creator_public_ids(session, build_id))
-            competition_ids = {gain.competition_id for gain in build_gains}
-            subscribed = (
-                await session.execute(
-                    select(NotificationSubscriptionRecord.account_id).where(
-                        NotificationSubscriptionRecord.enabled.is_(True),
-                        or_(
-                            (
-                                (NotificationSubscriptionRecord.kind == SubscriptionKind.CREATOR)
-                                & NotificationSubscriptionRecord.subject_id.in_(creator_ids)
-                            ),
-                            (
-                                (NotificationSubscriptionRecord.kind == SubscriptionKind.RECORD)
-                                & NotificationSubscriptionRecord.subject_id.in_(competition_ids)
-                            ),
-                        ),
-                    )
-                )
-            ).scalars()
-            recipients.update(subscribed)
-            recipients.update(await self._matching_filter_subscribers(session, build_id, build_gains))
             payload: dict[str, object] = {
                 "build_id": build_id,
                 "records": [
@@ -606,7 +585,7 @@ class PostgresNotificationRepository:
                     source_key=f"event:{event.id}:record-build:{build_id}:account:{account_id}",
                     payload=payload,
                 )
-                for account_id in sorted(recipients)
+                for account_id in sorted(recipients_by_build[build_id])
             )
         await self._insert_candidates(session, event=event, candidates=candidates)
 
@@ -716,18 +695,6 @@ class PostgresNotificationRepository:
         )
 
     @staticmethod
-    async def _creator_account_ids(session: AsyncSession, build_id: int) -> Sequence[int]:
-        account_ids = (
-            await session.execute(
-                select(CreatorAlias.account_id)
-                .join(BuildCreator, BuildCreator.alias_id == CreatorAlias.id)
-                .where(BuildCreator.build_id == build_id, CreatorAlias.account_id.is_not(None))
-                .distinct()
-            )
-        ).scalars()
-        return tuple(account_id for account_id in account_ids if account_id is not None)
-
-    @staticmethod
     async def _record_gains(
         session: AsyncSession, run_id: int, previous_run_id: int
     ) -> dict[int, tuple[_RecordGain, ...]]:
@@ -766,10 +733,53 @@ class PostgresNotificationRepository:
         return {build_id: tuple(values) for build_id, values in grouped.items()}
 
     @staticmethod
-    async def _matching_filter_subscribers(
-        session: AsyncSession, build_id: int, gains: Sequence[_RecordGain]
-    ) -> set[int]:
-        rows = (
+    async def _record_gain_recipients(
+        session: AsyncSession,
+        gains: dict[int, tuple[_RecordGain, ...]],
+    ) -> dict[int, set[int]]:
+        build_ids = set(gains)
+        recipients = {build_id: set() for build_id in build_ids}
+        if not build_ids:
+            return recipients
+        creator_rows = (
+            await session.execute(
+                select(BuildCreator.build_id, CreatorAlias.account_id, Account.public_creator_id)
+                .join(CreatorAlias, BuildCreator.alias_id == CreatorAlias.id)
+                .join(Account, Account.id == CreatorAlias.account_id)
+                .where(BuildCreator.build_id.in_(build_ids))
+            )
+        ).all()
+        creator_ids: dict[int, set[UUID]] = defaultdict(set)
+        for build_id, account_id, public_creator_id in creator_rows:
+            recipients[build_id].add(account_id)
+            creator_ids[build_id].add(public_creator_id)
+
+        relevant_subjects: set[UUID] = set().union(*creator_ids.values())
+        relevant_subjects.update(gain.competition_id for build_gains in gains.values() for gain in build_gains)
+        exact_subscriptions = (
+            await session.execute(
+                select(
+                    NotificationSubscriptionRecord.account_id,
+                    NotificationSubscriptionRecord.kind,
+                    NotificationSubscriptionRecord.subject_id,
+                ).where(
+                    NotificationSubscriptionRecord.kind.in_((SubscriptionKind.CREATOR, SubscriptionKind.RECORD)),
+                    NotificationSubscriptionRecord.subject_id.in_(relevant_subjects),
+                    NotificationSubscriptionRecord.enabled.is_(True),
+                )
+            )
+        ).all()
+        for account_id, kind, subject_id in exact_subscriptions:
+            for build_id, build_gains in gains.items():
+                subjects = (
+                    creator_ids[build_id]
+                    if kind is SubscriptionKind.CREATOR
+                    else {gain.competition_id for gain in build_gains}
+                )
+                if subject_id in subjects:
+                    recipients[build_id].add(account_id)
+
+        filter_rows = (
             await session.execute(
                 select(NotificationSubscriptionRecord.account_id, NotificationSubscriptionRecord.filter).where(
                     NotificationSubscriptionRecord.kind == SubscriptionKind.RECORD_FILTER,
@@ -777,30 +787,30 @@ class PostgresNotificationRepository:
                 )
             )
         ).all()
-        if not rows:
-            return set()
         assignments = (
             await session.execute(
                 select(
+                    BuildTagAssignment.build_id,
                     BuildTagAssignment.tag_id,
                     BuildTagAssignment.numeric_value,
                     BuildTagAssignment.text_value,
                     BuildTagAssignment.boolean_value,
-                ).where(BuildTagAssignment.build_id == build_id)
+                ).where(BuildTagAssignment.build_id.in_(build_ids))
             )
         ).all()
-        tags = {
-            tag_id: numeric if numeric is not None else text_value if text_value is not None else boolean
-            for tag_id, numeric, text_value, boolean in assignments
-        }
-        matched: set[int] = set()
-        for account_id, raw_filter in rows:
+        tags_by_build: dict[int, dict[int, Decimal | str | bool | None]] = defaultdict(dict)
+        for build_id, tag_id, numeric, text_value, boolean in assignments:
+            tags_by_build[build_id][tag_id] = (
+                numeric if numeric is not None else text_value if text_value is not None else boolean
+            )
+        for account_id, raw_filter in filter_rows:
             if raw_filter is None:
                 continue
             record_filter = RecordSubscriptionFilter.from_dict(dict(raw_filter))
-            if any(_filter_matches(record_filter, gain, tags) for gain in gains):
-                matched.add(account_id)
-        return matched
+            for build_id, build_gains in gains.items():
+                if any(_filter_matches(record_filter, gain, tags_by_build[build_id]) for gain in build_gains):
+                    recipients[build_id].add(account_id)
+        return recipients
 
 
 def _preferences(
