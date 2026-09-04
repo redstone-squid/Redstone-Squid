@@ -87,7 +87,8 @@ from squid.schematics.domain.models import SchematicLimits
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
 from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
 from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
-from squid.schematics.infrastructure.repository import SchematicRepository
+from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
+from squid.schematics.infrastructure.repository import PostgresSchematicStore
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
 from squid.search.application import SearchEmbeddingService, SearchQueryParser, SearchService
@@ -170,9 +171,11 @@ def create_schematic_service(
             expected_sha256=config.render_pack_sha256,
             cache_dir=config.render_cache_dir,
         )
+    previews = PostgresSchematicPreviewPublisher(db.async_session, artifacts)
     return SchematicService(
         analyzer,
-        SchematicRepository(db.async_session, artifacts),
+        PostgresSchematicStore(db.async_session, artifacts, previews),
+        previews,
         PostgresSchematicVersionResolver(db.async_session),
         limits=SchematicLimits(
             max_upload_bytes=config.max_upload_bytes,

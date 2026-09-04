@@ -16,6 +16,7 @@ from squid.schematics.application.commands import ConvertRequest, IngestRequest,
 from squid.schematics.application.duplicates import DuplicateCandidate, DuplicateTier
 from squid.schematics.application.ports import (
     SchematicAnalyzer,
+    SchematicPreviewPublisher,
     SchematicResourcePackProvider,
     SchematicStore,
     SchematicVersionResolver,
@@ -79,6 +80,7 @@ class SchematicService:
         self,
         analyzer: SchematicAnalyzer,
         store: SchematicStore,
+        previews: SchematicPreviewPublisher,
         versions: SchematicVersionResolver,
         *,
         limits: SchematicLimits | None = None,
@@ -96,6 +98,7 @@ class SchematicService:
     ) -> None:
         self._analyzer = analyzer
         self._store = store
+        self._previews = previews
         self._versions = versions
         self._limits = limits or SchematicLimits()
         self._available = engine_installed
@@ -391,7 +394,7 @@ class SchematicService:
 
         resource_pack = await self._render_resources()
         recipe_hash = _render_recipe_hash(stored, self._render_request, resource_pack.sha256)
-        cached = await self._store.get_render(stored.id, recipe_hash)
+        cached = await self._previews.get_render(stored.id, recipe_hash)
         if cached is not None:
             return CachedRender(
                 schematic_id=stored.id,
@@ -470,8 +473,8 @@ class SchematicService:
         render_request = request or self._render_request
         resource_pack = await self._render_resources()
         recipe_hash = _render_recipe_hash(stored, render_request, resource_pack.sha256)
-        if await self._store.get_render(stored.id, recipe_hash) is not None:
-            cached = await self._store.get_render_content(recipe_hash, max_bytes=_MAX_RENDER_CONTENT_BYTES)
+        if await self._previews.get_render(stored.id, recipe_hash) is not None:
+            cached = await self._previews.get_render_content(recipe_hash, max_bytes=_MAX_RENDER_CONTENT_BYTES)
             if cached is not None:
                 return RenderedSchematic(
                     build_id=stored.build_id,
@@ -583,7 +586,7 @@ class SchematicService:
 
     async def publish_fresh_preview(self, render: FreshRender, url: str, object_key: str) -> StoredRender | None:
         """Persist and publish a fresh preview if its source attachment is still featured."""
-        return await self._store.publish_fresh_preview(
+        return await self._previews.publish_fresh_preview(
             render.schematic_id,
             render.recipe_hash,
             url,
@@ -595,11 +598,11 @@ class SchematicService:
 
     async def publish_cached_preview(self, render: CachedRender) -> bool:
         """Publish a cached preview if its source attachment is still featured."""
-        return await self._store.publish_cached_preview(render.schematic_id, render.recipe_hash, render.url)
+        return await self._previews.publish_cached_preview(render.schematic_id, render.recipe_hash, render.url)
 
     async def render_content(self, recipe_hash: str, *, max_bytes: int = _MAX_RENDER_CONTENT_BYTES) -> bytes:
         """Return one registered PNG preview from private object storage."""
-        content = await self._store.get_render_content(recipe_hash, max_bytes=max_bytes)
+        content = await self._previews.get_render_content(recipe_hash, max_bytes=max_bytes)
         if content is None:
             raise SchematicNotFoundError(context={"recipe_hash": recipe_hash})
         return content

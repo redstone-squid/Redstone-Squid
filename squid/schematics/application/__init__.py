@@ -11,7 +11,12 @@ from squid.schematics.application.jobs import (
     SchematicJobService,
     SchematicJobSnapshot,
 )
-from squid.schematics.application.ports import SchematicAnalyzer, SchematicStore, SchematicVersionResolver
+from squid.schematics.application.ports import (
+    SchematicAnalyzer,
+    SchematicPreviewPublisher,
+    SchematicStore,
+    SchematicVersionResolver,
+)
 from squid.schematics.application.previews import (
     CachedRender,
     FreshRender,
@@ -48,6 +53,7 @@ __all__ = [
     "SchematicJobRepository",
     "SchematicJobService",
     "SchematicJobSnapshot",
+    "SchematicPreviewPublisher",
     "SchematicPublication",
     "SchematicRenderJobService",
     "SchematicService",

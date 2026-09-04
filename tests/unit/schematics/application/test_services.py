@@ -100,6 +100,7 @@ def service(
         SchematicService(
             analyzer,
             store,
+            store,
             FakeVersionResolver(),
             limits=limits,
             engine_installed=engine_installed,
@@ -442,7 +443,10 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
     assert isinstance(prepared, FreshRender)
     assert prepared.png == analyzer.render_output
     assert analyzer.render_calls[0][2] == VerifiedResourcePack.from_bytes(b"resource-pack")
-    assert await schematics.publish_fresh_preview(prepared, "https://cdn.example/render.png", "renders/recipe.png") is not None
+    assert (
+        await schematics.publish_fresh_preview(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+        is not None
+    )
 
     cached = await schematics.prepare_render(7)
     assert isinstance(cached, CachedRender)

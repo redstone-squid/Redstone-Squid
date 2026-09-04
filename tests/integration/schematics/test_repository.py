@@ -28,7 +28,8 @@ from squid.schematics.domain.models import (
     SchematicVisibility,
     SimulationResult,
 )
-from squid.schematics.infrastructure.repository import SchematicRepository
+from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
+from squid.schematics.infrastructure.repository import PostgresSchematicStore
 from tests.unit.schematics.fakes import make_analysis
 
 pytestmark = pytest.mark.asyncio
@@ -67,16 +68,30 @@ async def schematic_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEng
 
 
 @pytest.fixture
+def preview_publisher(
+    schematic_tables: AsyncEngine,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> PostgresSchematicPreviewPublisher:
+    return PostgresSchematicPreviewPublisher(async_session_factory, LocalArtifactStore(tmp_path / "objects"))
+
+
+@pytest.fixture
 def repository(
     schematic_tables: AsyncEngine,
     async_session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
-) -> SchematicRepository:
-    return SchematicRepository(async_session_factory, LocalArtifactStore(tmp_path / "objects"))
+    preview_publisher: PostgresSchematicPreviewPublisher,
+) -> PostgresSchematicStore:
+    return PostgresSchematicStore(
+        async_session_factory,
+        LocalArtifactStore(tmp_path / "objects"),
+        preview_publisher,
+    )
 
 
 async def test_storing_the_same_bytes_twice_yields_one_row_and_one_digest(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
 ) -> None:
     """Content addressing is what makes "this is byte-identical to an existing submission"
     free to detect, so a resubmission must be an upsert rather than a conflict."""
@@ -88,7 +103,7 @@ async def test_storing_the_same_bytes_twice_yields_one_row_and_one_digest(
 
 
 async def test_new_payload_stores_only_object_metadata(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     digest = await repository.put_file(b"verified", source_format=SchematicFormat.LITEMATIC)
@@ -105,7 +120,7 @@ async def test_new_payload_stores_only_object_metadata(
 
 
 async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """An engine upgrade re-analyses; accumulating a row per pass would corrupt every count."""
@@ -123,7 +138,7 @@ async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
 
 
 async def test_uploader_account_attribution_reaches_the_persisted_attachment(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Provider-neutral account identity must survive the repository boundary."""
@@ -150,7 +165,7 @@ async def test_uploader_account_attribution_reaches_the_persisted_attachment(
     assert stored_account_id == account_id
 
 
-async def test_promoting_a_new_primary_demotes_the_previous_one(repository: SchematicRepository) -> None:
+async def test_promoting_a_new_primary_demotes_the_previous_one(repository: PostgresSchematicStore) -> None:
     """A partial unique index allows only one primary per build, so the swap has to happen in
     a single transaction or the second insert fails."""
     first = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
@@ -166,7 +181,8 @@ async def test_promoting_a_new_primary_demotes_the_previous_one(repository: Sche
 
 
 async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_url(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
+    preview_publisher: PostgresSchematicPreviewPublisher,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
@@ -179,7 +195,7 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
             {"url": manual_url},
         )
     first_url = "https://api.example/v1/schematic-renders/first/content"
-    first_render = await repository.publish_fresh_preview(
+    first_render = await preview_publisher.publish_fresh_preview(
         first_id,
         "first-recipe",
         first_url,
@@ -201,7 +217,7 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
             await session.scalars(text("SELECT url FROM build_links WHERE build_id = 1 AND media_type = 'render'"))
         )
     assert links_after_replacement == {manual_url}
-    stale_render = await repository.publish_fresh_preview(
+    stale_render = await preview_publisher.publish_fresh_preview(
         first_id,
         "stale-recipe",
         "https://api.example/v1/schematic-renders/stale/content",
@@ -211,10 +227,10 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
         byte_size=42,
     )
     assert stale_render is None
-    assert await repository.publish_cached_preview(first_id, "first-recipe", first_url) is False
+    assert await preview_publisher.publish_cached_preview(first_id, "first-recipe", first_url) is False
 
     second_url = "https://api.example/v1/schematic-renders/second/content"
-    second_render = await repository.publish_fresh_preview(
+    second_render = await preview_publisher.publish_fresh_preview(
         second_id,
         "second-recipe",
         second_url,
@@ -225,7 +241,7 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
     )
     assert second_render is not None
     replacement_url = "https://api.example/v1/schematic-renders/replacement/content"
-    replacement = await repository.publish_fresh_preview(
+    replacement = await preview_publisher.publish_fresh_preview(
         second_id,
         "replacement-recipe",
         replacement_url,
@@ -249,7 +265,8 @@ async def test_replacing_a_primary_fences_its_render_and_replaces_the_projected_
 
 
 async def test_primary_replacement_wins_a_concurrent_render_publication(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
+    preview_publisher: PostgresSchematicPreviewPublisher,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
@@ -262,7 +279,7 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
 
     async def publish_late_render() -> None:
         results.append(
-            await repository.publish_fresh_preview(
+            await preview_publisher.publish_fresh_preview(
                 first_id,
                 "late-recipe",
                 "https://api.example/v1/schematic-renders/late/content",
@@ -300,7 +317,7 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
 
 
 async def test_a_fingerprint_lookup_finds_the_same_build_resubmitted_under_another_id(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
 ) -> None:
     shared = make_analysis(shape="translated-shape")
     for build_id, payload in ((1, b"original"), (2, b"moved")):
@@ -318,7 +335,7 @@ async def test_a_fingerprint_lookup_finds_the_same_build_resubmitted_under_anoth
 
 
 async def test_an_exact_file_lookup_finds_every_build_using_the_same_bytes(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
 ) -> None:
     digest = await repository.put_file(b"shared", source_format=SchematicFormat.LITEMATIC)
     await repository.record_analysis(1, digest, make_analysis(), primary=True)
@@ -330,7 +347,7 @@ async def test_an_exact_file_lookup_finds_every_build_using_the_same_bytes(
 
 
 async def test_a_fingerprint_from_another_engine_version_never_matches(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
 ) -> None:
     """Fingerprints are hashes whose definition can change between releases. Comparing across
     versions would return confident garbage, so the version is part of every lookup."""
@@ -344,7 +361,7 @@ async def test_a_fingerprint_from_another_engine_version_never_matches(
 
 
 async def test_metric_neighbours_shortlist_builds_of_comparable_size(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
 ) -> None:
     close = make_analysis(dimensions=(3, 4, 5), block_count=100)
     far = make_analysis(dimensions=(80, 90, 100), block_count=100_000)
@@ -358,7 +375,7 @@ async def test_metric_neighbours_shortlist_builds_of_comparable_size(
 
 
 async def test_the_stored_read_model_carries_the_file_facts_from_the_file_row(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
 ) -> None:
     """`source_format` and `byte_size` describe the bytes, not the analysis, so they live on
     the content-addressed row and are joined back in rather than duplicated per attachment."""
@@ -372,7 +389,7 @@ async def test_the_stored_read_model_carries_the_file_facts_from_the_file_row(
 
 
 async def test_publication_round_trips_and_reanalysis_does_not_reset_it(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     now = Instant.parse_iso("2026-08-11T12:00:00Z")
@@ -409,7 +426,7 @@ async def test_publication_round_trips_and_reanalysis_does_not_reset_it(
 
 
 async def test_oversized_bytes_are_refused_by_the_database_as_well_as_the_upload_check(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
 ) -> None:
     """Defence in depth: the size cap is a check constraint, not only an application rule."""
     with pytest.raises(IntegrityError):
@@ -417,7 +434,7 @@ async def test_oversized_bytes_are_refused_by_the_database_as_well_as_the_upload
 
 
 async def test_simulation_evidence_round_trips_without_changing_the_analysis(
-    repository: SchematicRepository,
+    repository: PostgresSchematicStore,
 ) -> None:
     digest = await repository.put_file(b"door", source_format=SchematicFormat.LITEMATIC)
     schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
