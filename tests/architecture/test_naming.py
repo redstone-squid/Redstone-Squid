@@ -43,6 +43,24 @@ PACKAGE_SOURCE_ROOTS = (
     Path("packages/squid-ui-widgets/src"),
 )
 
+PUBLIC_PACKAGES = (
+    squid_ui_discord,
+    squid_ui_slack,
+    squid_ui,
+    squid_ui_widgets,
+    squid_reactivity,
+    squid_replication,
+    squid_storage,
+)
+
+UI_PUBLIC_PACKAGES = (
+    squid_ui_discord,
+    squid_ui_slack,
+    squid_ui,
+    squid_ui_widgets,
+    squid_reactivity,
+)
+
 TERMINATING_VERBS = frozenset({"close", "detach", "finish", "cancel", "discard", "run"})
 """What ends something, and nothing else. See `docs/squid-ui-architecture.md`."""
 
@@ -286,15 +304,7 @@ frontend and transactional classifications are `InteractionKind` and `ActionPurp
 def _exported_classes() -> dict[str, set[str]]:
     """Every class reachable through a package `__all__`, by short name to defining module."""
     found: dict[str, set[str]] = defaultdict(set)
-    for package in (
-        squid_ui_discord,
-        squid_ui_slack,
-        squid_ui,
-        squid_ui_widgets,
-        squid_reactivity,
-        squid_replication,
-        squid_storage,
-    ):
+    for package in PUBLIC_PACKAGES:
         modules: list[ModuleType] = [package]
         modules.extend(
             importlib.import_module(info.name)
@@ -306,6 +316,23 @@ def _exported_classes() -> dict[str, set[str]]:
                 if inspect.isclass(value):
                     found[name].add(f"{value.__module__}.{value.__qualname__}")
     return found
+
+
+def test_ui_public_callables_have_docstrings() -> None:
+    """Every exported UI class and function explains its contract at the definition."""
+    missing: set[str] = set()
+    for package in UI_PUBLIC_PACKAGES:
+        modules: list[ModuleType] = [package]
+        modules.extend(
+            importlib.import_module(info.name)
+            for info in pkgutil.walk_packages(package.__path__, f"{package.__name__}.")
+        )
+        for module in modules:
+            for name in getattr(module, "__all__", ()):
+                value = getattr(module, name, None)
+                if (inspect.isclass(value) or inspect.isfunction(value)) and inspect.getdoc(value) is None:
+                    missing.add(f"{value.__module__}.{value.__qualname__}")
+    assert not missing, f"exported UI callables without docstrings: {sorted(missing)}"
 
 
 def _classes_in_source() -> list[tuple[Path, ast.ClassDef]]:
