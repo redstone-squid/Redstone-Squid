@@ -278,6 +278,48 @@ async def test_round_trip_is_identity_for_known_taxonomy(
     _assert_round_trip(build, loaded)
 
 
+async def test_attachment_enrichment_evidence_round_trips_as_nested_json(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+    build = _make_build(BuildCategory.DOOR, account_id)
+    build.extra_info["schematic_duplicates"] = [
+        {
+            "build_id": 17,
+            "title": "Compact candidate",
+            "tier": "identical",
+            "footprint_distance": 0.0,
+            "source_attachments": [
+                {"attachment_id": "101", "filename": "first.litematic"},
+                {"attachment_id": "102", "filename": "copy.litematic"},
+            ],
+        }
+    ]
+    build.extra_info["attachment_failures"] = [
+        {
+            "attachment_id": "103",
+            "filename": "unchecked.schem",
+            "stage": "duplicate-check",
+            "detail": "Duplicate lookup was unavailable.",
+        },
+        {
+            "attachment_id": "104",
+            "filename": "unstored.schem",
+            "stage": "record",
+            "detail": "Analysis persistence was unavailable.",
+        },
+    ]
+
+    await _resolve_and_save(migrated_session_factory, repository, build)
+    assert build.id is not None
+
+    loaded = await repository.get_by_id(build.id)
+
+    assert loaded is not None
+    assert loaded.extra_info == build.extra_info
+
+
 async def test_loaded_status_is_a_status_member(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

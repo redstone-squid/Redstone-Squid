@@ -117,6 +117,24 @@ async def test_many_usable_schematics_require_an_explicit_primary_and_prefill_fr
     assert component.is_ready
 
 
+async def test_submit_preserves_primary_required_guidance_when_other_required_fields_are_complete() -> None:
+    component = SubmissionScreen(
+        BuildDraft(door_orientation="Door", door_width=2, door_height=2),
+        BuildRecorder(),
+        attachments=(
+            _schematic("a", "first.litematic", (3, 4, 5)),
+            _schematic("b", "second.litematic", (7, 8, 9)),
+        ),
+        on_submit=_unused_submit,
+    )
+
+    await component._submit(press_event(responder=RecordingResponder()))
+
+    rendered = str(component.render())
+    assert "Choose which usable schematic is primary" in rendered
+    assert "Choose a door type" not in rendered
+
+
 async def test_switching_primary_updates_only_an_untouched_prefill() -> None:
     first = _schematic("a", "first.litematic", (3, 4, 5))
     second = _schematic("b", "second.litematic", (7, 8, 9))
@@ -339,5 +357,5 @@ async def test_post_persistence_failure_never_claims_nothing_was_saved() -> None
     assert component.outcome is not None
     assert component.outcome.build is build
     assert "was saved" in rendered
-    assert "could not be delivered" in rendered
+    assert "attachment processing or review-card delivery did not finish" in rendered
     assert "nothing was saved" not in rendered
