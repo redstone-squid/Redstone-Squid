@@ -68,16 +68,12 @@ shared reaction routing (8).
 
 ## Status
 
-As of the final 2026-08-30 audit, plans 1–13 have been implemented and independently
+As of the final 2026-08-31 audit, plans 1–14 have been implemented and independently
 re-audited against their production entry points, not only their focused test helpers. Each plan's
 findings and dispositions remain the historical reasoning; this table records the resulting
 implementation state. **Done** means every in-scope
 implementation and test case is present. External-only verification is recorded separately and does not make
 completed repository work blocked. **Blocked** is reserved for repository work that cannot proceed.
-
-Plan 14 was triaged afterward against the resulting current code. **Planned** means its detailed
-thread dispositions, milestones, compatibility requirements, and tests are written, but the
-repository changes have not been implemented.
 
 The review inventories below the numbered plans are scoping records, not implementation plans.
 GitHub replies and thread resolution also remain separately authorized work.
@@ -97,9 +93,28 @@ GitHub replies and thread resolution also remain separately authorized work.
 | 11 | [API, auth, records, and sync](11-api-auth-records-sync.md) | Done | Existing caller/error/sync decisions and persistence coverage remain intact. `0bdb3918` declares dependency/pagination aliases with PEP 695 and removes the last abstract provider wording; `4b33ba75` gives submission finalization its concrete application name. |
 | 12 | [Runtime and observability](12-runtime-observability.md) | Done | The authoritative log transport, correlation display, resolved telemetry record, explicit worker trace field, typed public command surfaces, FastAPI error registration, join/message correlation, and three-process lifecycle contract all landed from `ae9edae0` through `89d9dde0`. |
 | 13 | [Test and tooling cleanup](13-test-tooling-cleanup.md) / [dispositions](13-test-tooling-dispositions.md) | Done | All repository work and thread dispositions are complete, including the typed reaction-callback update in `df1302d1`. GitHub CI/PostgreSQL verification remains pending because local Docker access is unavailable. |
-| 14 | [Later review batch](14-review-comment-inventory.md) / [plans 14A–14I](#plans) | Planned | All 104 comments through `aa85f68` have one current-state disposition and a detailed implementation/validation owner. The 52 still-later comments remain outside this cutoff. |
+| 14 | [Later review batch](14-review-comment-inventory.md) / [plans 14A–14I](#plans) | Done | All 104 comments through `aa85f68` have one disposition, implementation evidence, and focused acceptance coverage. Mixed-binary writer switches remain explicit rollout gates below. The 52 still-later comments remain outside this cutoff. |
 
-## Historical implementation sequence for plans 1–13
+### Plan 14 implementation and rollout state
+
+| Plan | Status | Result |
+|---|---|---|
+| 14A | Done | Platform contracts, deterministic generation, deployment checks, log sanitization, and tooling boundaries are implemented. |
+| 14B | Done | API middleware, request identity, idempotency, rate-limit ownership, typed lock namespaces, and migration compatibility are implemented. |
+| 14C | Done | Notification preferences, subscriptions, durable materialization/delivery, inbox visibility, localization, and retention behavior are implemented. |
+| 14D | Done | Typed submission forms, immutable vocabulary revisions, draft snapshots, validation, and compatibility readers are implemented. Revision 2 writing remains disabled until old binaries have drained. |
+| 14E | Done | Typed finalization preparation/results, source-draft winner semantics, payload integrity, build targeting, and mixed-binary result compatibility are implemented. Legacy result columns remain dual-written until old binaries drain. PAPER/FABRIC schematic finalization remains fail-closed until the deterministic sanitizer/quarantine reader described in the [sanitizer plan](../nucleation-sanitization.md) is available. |
+| 14F | Done | Media transport, ownership, normalization, worker lifetime, cleanup, localization, and executable image contracts are implemented. Readers accept `poster` and `video_thumbnail`, while writers retain `poster` until the dual-reader fleet drains; backfill and constraint contraction follow that switch. |
+| 14G | Done | Schematic persistence, typed mapping, preview service/publication, reservation-before-upload, race fencing, and reference-aware object cleanup are implemented. |
+| 14H | Done | Multi-identity selection, account-merge phases and collision semantics, notification convergence, record vocabulary/enums, and public-record query ownership are implemented. UUIDv7 remains an explicitly unowned repository-wide backlog item. |
+| 14I | Done | Minecraft-auth error taxonomy, dependency ownership, raw-header authentication, account authorization port, clock ownership, and advisory-lock compatibility are implemented. |
+
+PostgreSQL-backed migration/integration execution and runtime-image inspection remain external CI checks because the
+local Docker socket is unavailable. The migrations collect, render offline, and retain a single Alembic head. This
+does not authorize GitHub replies or thread resolution, and it does not bring the 52 post-`aa85f68` comments into
+scope.
+
+## Historical implementation sequence
 
 1. Settle provider-neutral identity and shared value types in plans 2, 6, and 11.
 2. Implement the submission contracts and UX in plans 1 and 3–5.
@@ -108,10 +123,9 @@ GitHub replies and thread resolution also remain separately authorized work.
 5. Handle runtime/observability decisions in plan 12, then perform the test cleanup in plan 13
    alongside or immediately after the affected implementation plan.
 
-For plan 14, first land the cross-cutting typed boundaries in 14A–14B; then 14H identity semantics
-before 14I, and 14D draft contracts before 14E–14F. Plan 14G can proceed independently once its
-current locking invariants are pinned. Plan 14C is independent except for the shared enum and API
-dependency conventions from 14B.
+For plan 14, the cross-cutting typed boundaries in 14A–14B landed before dependent work; 14H identity semantics
+preceded 14I, and 14D draft contracts preceded 14E–14F. Plan 14G proceeded independently after its locking
+invariants were pinned. Plan 14C shared only the enum and API dependency conventions from 14B.
 
 Treat each plan or 14A–14I subplan as a separate planning and implementation unit. Before closing GitHub
 threads, produce a thread-level checklist that records one of four dispositions: fixed by the new
