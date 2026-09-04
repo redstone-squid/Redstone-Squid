@@ -58,6 +58,7 @@ from squid.schematics.domain.models import (
     Vector3,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
     AmbiguousSimulationInputError,
     InvalidSchematicError,
@@ -524,10 +525,13 @@ class SchematicWorkerPool:
         frame = await self._call("compare", {"preset": preset.value}, (left, right), timeout)
         return wire.decode_comparison(cast(Mapping[str, Any], _result(frame)["comparison"]))
 
-    async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes:
-        params: dict[str, Any] = {"request": dataclasses.asdict(request)}
+    async def render(
+        self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
+    ) -> bytes:
+        params: dict[str, Any] = {"request": wire.encode_render_request(request)}
         if resource_pack is not None:
-            params["resource_pack_b64"] = base64.b64encode(resource_pack).decode("ascii")
+            params["resource_pack_b64"] = base64.b64encode(resource_pack.data).decode("ascii")
+            params["resource_pack"] = wire.encode_resource_pack(resource_pack)
         async with self._render_slot:
             frame = await self._call("render", params, (data,), self._config.render_timeout_seconds)
         return _payload(frame)

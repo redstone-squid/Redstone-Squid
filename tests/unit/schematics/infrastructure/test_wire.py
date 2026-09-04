@@ -10,6 +10,7 @@ import json
 
 import pytest
 
+from squid.schematics.application.commands import RenderRequest
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -21,6 +22,7 @@ from squid.schematics.domain.models import (
     Vector3,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
 from squid.schematics.errors import AmbiguousSimulationInputError
 from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.wire import Frame, FrameStreamClosed
@@ -117,6 +119,42 @@ def test_capabilities_survive_encoding_and_decoding() -> None:
     )
 
     assert wire.decode_capabilities(wire.encode_capabilities(capabilities)) == capabilities
+
+
+def test_render_requests_keep_the_rgba_json_array_shape() -> None:
+    request = RenderRequest(
+        width=640,
+        height=480,
+        projection="perspective",
+        sphere_fit=False,
+        yaw=45.0,
+        pitch=20.0,
+        zoom=1.5,
+        background=RgbaColor(0.1, 0.2, 0.3, 1.0),
+    )
+
+    encoded = wire.encode_render_request(request)
+    round_tripped = json.loads(json.dumps(encoded))
+
+    assert round_tripped["background"] == [0.1, 0.2, 0.3, 1.0]
+    assert wire.decode_render_request(round_tripped) == request
+
+
+def test_render_request_decode_rejects_non_array_rgba_values() -> None:
+    encoded = dict(wire.encode_render_request(RenderRequest()))
+    encoded["background"] = {"red": 0.0, "green": 0.0, "blue": 0.0, "alpha": 0.0}
+
+    with pytest.raises(TypeError, match="JSON array"):
+        wire.decode_render_request(encoded)
+
+
+def test_resource_pack_metadata_and_raw_bytes_rebuild_a_verified_value() -> None:
+    pack = VerifiedResourcePack.from_bytes(b"resource-pack")
+    metadata = json.loads(json.dumps(wire.encode_resource_pack(pack)))
+
+    assert wire.decode_resource_pack(metadata, pack.data) == pack
+    with pytest.raises(ValueError, match="do not match"):
+        wire.decode_resource_pack(metadata, b"tampered")
 
 
 def test_a_simulation_result_survives_encoding_and_decoding() -> None:

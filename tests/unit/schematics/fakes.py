@@ -21,6 +21,7 @@ from squid.schematics.domain.models import (
     SimulationResult,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import VerifiedResourcePack
 
 
 def make_analysis(
@@ -67,7 +68,7 @@ class FakeSchematicAnalyzer:
         self.analyze_calls: list[tuple[bytes, SchematicFormat | None, bool]] = []
         self.convert_calls: list[tuple[SchematicFormat, int | None]] = []
         self.compare_calls: list[tuple[bytes, bytes, FingerprintPreset, float | None]] = []
-        self.render_calls: list[tuple[bytes, RenderRequest, bytes | None]] = []
+        self.render_calls: list[tuple[bytes, RenderRequest, VerifiedResourcePack | None]] = []
         self.simulate_calls: list[tuple[bytes, SimulationRequest]] = []
         self.render_output = b"\x89PNG\r\n\x1a\nrendered"
         self.simulation_output = SimulationResult(
@@ -127,7 +128,9 @@ class FakeSchematicAnalyzer:
             SchematicComparison(preset=preset, identical=left == right, footprint_distance=0.0),
         )
 
-    async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes:
+    async def render(
+        self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
+    ) -> bytes:
         self.render_calls.append((data, request, resource_pack))
         if self.failure is not None:
             raise self.failure

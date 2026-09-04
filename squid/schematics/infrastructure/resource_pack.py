@@ -6,6 +6,7 @@ from pathlib import Path
 
 import aiohttp
 
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import SchematicRenderUnavailableError
 
 MAX_RESOURCE_PACK_BYTES = 256 * 1024 * 1024
@@ -29,12 +30,12 @@ class ResourcePackLoader:
         self._url = url
         self._expected_sha256 = expected_sha256
         self._cache_dir = cache_dir
-        self._loaded: tuple[bytes, str] | None = None
+        self._loaded: VerifiedResourcePack | None = None
         self._lock = asyncio.Lock()
         self._session = session
         self._owns_session = session is None
 
-    async def load(self) -> tuple[bytes, str]:
+    async def load(self) -> VerifiedResourcePack:
         """Return the verified pack, fetching a configured URL only on first use."""
         if self._loaded is not None:
             return self._loaded
@@ -48,7 +49,7 @@ class ResourcePackLoader:
                     PACK_DIGEST_MESSAGE,
                     context={"expected_sha256": self._expected_sha256, "actual_sha256": digest},
                 )
-            self._loaded = (data, digest)
+            self._loaded = VerifiedResourcePack(data, digest)
             return self._loaded
 
     async def _read_source(self) -> bytes:
