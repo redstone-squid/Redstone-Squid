@@ -667,6 +667,8 @@ async def test_schema_two_requires_attribution_and_verified_sponsor() -> None:
     )
     assert jobs.enqueued is not None
     encoded = encode_submission(jobs.enqueued)
+    assert submission_payload_digest(encoded) == "88dcebc6349fe4adbf6bdb7b8e04969329a487e78768bf8c937e33dd26bf8d7b"
+    assert decode_submission(encoded) == jobs.enqueued
 
     with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
         decode_submission(encoded | {"sponsor_attribution": False})
