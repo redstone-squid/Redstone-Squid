@@ -1,11 +1,9 @@
 """Classification of Discord attachments before anything is downloaded.
 
-Discord derives an attachment's `content_type` from what the uploading client sent, and no
-client maps these extensions to anything, so a schematic arrives as `content_type=None` or
-`application/octet-stream`. Both were observed in production, where the submission flow raised
-a bare `AssertionError` on them and the message-scraping listener silently dropped them. The
-rules here replace both: the **extension is the primary signal** and the content type is
-advisory, because the one thing Discord will not tell us is exactly the thing we care about.
+The accepted input contract permits `content_type=None` and `application/octet-stream`. Neither
+value identifies a schematic format, so the **extension is the primary signal** and content type
+is advisory. This module deliberately makes no claim about which Discord clients produce either
+shape; repository tests prove only that both are handled consistently.
 
 Nothing here reads the file. Size is checked against the attachment metadata first, so an
 oversized upload costs us no bandwidth at all, and the real content check happens afterwards
@@ -41,9 +39,8 @@ def classify_attachment(filename: str, content_type: str | None, size: int, *, m
     Rules, in order:
 
     1. Size, before anything else, so we never download something we would reject.
-    2. A schematic extension wins outright. Discord sends `None` or
-       `application/octet-stream` for these, so waiting for a content type would reject every
-       one of them.
+    2. A schematic extension wins outright. A missing or generic content type cannot identify
+       these formats, so it cannot be required for acceptance.
     3. An `image/` or `video/` content type, falling back to guessing from the filename when
        Discord reported nothing.
     4. Anything else is refused by name, listing what we do take.

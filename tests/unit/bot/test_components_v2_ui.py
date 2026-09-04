@@ -24,7 +24,7 @@ from squid.sponsors import PublicSponsor
 from squid.versions.application import VersionService
 from squid.versions.domain import Edition
 from squid_ui.testing import RecordingResponder, press_event
-from squid_ui_discord.testing import commit_render, delivered_to, message_harness
+from squid_ui_discord.testing import assert_within_limits, commit_render, delivered_to, message_harness
 from tests.support.discord import make_layout_bot
 
 if TYPE_CHECKING:
@@ -231,9 +231,7 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
     await message_root.handle_timeout()
 
     expired = message.edit.await_args.kwargs["view"]
-    buttons = {
-        item.label: item.disabled for item in expired.walk_children() if isinstance(item, discord.ui.Button)
-    }
+    buttons = {item.label: item.disabled for item in expired.walk_children() if isinstance(item, discord.ui.Button)}
     assert buttons["Reload fresh editor"] is False
     assert all(disabled for label, disabled in buttons.items() if label != "Reload fresh editor")
 
@@ -303,35 +301,48 @@ def test_build_handler_credits_the_sponsoring_server_and_website(display_build: 
     assert metadata["Sponsor Website"] == "https://example.test/"
 
 
-def test_build_handler_renders_bounded_human_attachment_evidence(display_build: Build) -> None:
+async def test_build_handler_renders_bounded_human_attachment_evidence(display_build: Build) -> None:
     display_build.extra_info["schematic_duplicates"] = [
         {
             "build_id": 7,
             "title": "2x2 Seamless Door",
             "tier": "identical",
             "footprint_distance": 0.0,
-            "source_attachments": [{"attachment_id": "a", "filename": "alternate.litematic"}],
+            "source_attachments": [
+                {"attachment_id": "a", "filename": "alternate.litematic"},
+                {"attachment_id": "b", "filename": "second.litematic"},
+                {"attachment_id": "c", "filename": "third.litematic"},
+                {"attachment_id": "d", "filename": "fourth.litematic"},
+            ],
         }
+        for _ in range(8)
     ]
     display_build.extra_info["attachment_failures"] = [
         {
-            "attachment_id": "b",
-            "filename": "broken.litematic",
+            "attachment_id": str(index),
+            "filename": f"broken-{index}.litematic",
             "stage": "analysis",
             "detail": "bad\nnews " + "x" * 2_000,
         }
+        for index in range(8)
     ]
-    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", object()), display_build)
+    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", handler_bot()), display_build)
 
     metadata = handler.get_metadata_fields()
+    presentation = await handler.render_payload()
 
     duplicate = metadata["⚠ Possible duplicate"]
     failure = metadata["⚠ Attachment issues"]
     assert "2x2 Seamless Door (#7)" in duplicate
     assert "alternate.litematic" in duplicate
-    assert "broken.litematic — bad news" in failure
+    assert "and 2 more" in duplicate
+    assert "…and 3 more" in duplicate
+    assert "broken-0.litematic — bad news" in failure
+    assert "…and 4 more" in failure
     assert len(duplicate) <= 1_000
     assert len(failure) <= 1_000
+    assert "Attachment issues" in str(presentation.layout.to_components())
+    assert_within_limits(presentation.layout)
 
 
 def test_search_results_use_named_selection_and_direct_build_action() -> None:
