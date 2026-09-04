@@ -9,6 +9,7 @@ The bot owns only localized chrome and audience policy; rendering and delivery s
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import IntEnum
 from math import ceil
 from typing import Any
 
@@ -18,11 +19,22 @@ import squid_ui as ui
 import squid_ui_discord as sd
 from squid.core.i18n import tr
 
-DISCORD_RED = 0xF04747
-DISCORD_YELLOW = 0xFAA61A
-DISCORD_GREEN = 0x43B581
-DISCORD_BLUE = 0x5865F2
-DISCORD_GREY = 0x4F545C
+
+class DiscordColour(IntEnum):
+    """Exact Discord house colours used where a semantic palette tone is insufficient."""
+
+    RED = 0xF04747
+    YELLOW = 0xFAA61A
+    GREEN = 0x43B581
+    BLUE = 0x5865F2
+    GREY = 0x4F545C
+
+
+DISCORD_RED = DiscordColour.RED
+DISCORD_YELLOW = DiscordColour.YELLOW
+DISCORD_GREEN = DiscordColour.GREEN
+DISCORD_BLUE = DiscordColour.BLUE
+DISCORD_GREY = DiscordColour.GREY
 
 __all__ = [
     "CHROME",
@@ -35,6 +47,7 @@ __all__ = [
     "PALETTES",
     "CardField",
     "CardSection",
+    "DiscordColour",
     "card_node",
     "error_node",
     "info_node",
