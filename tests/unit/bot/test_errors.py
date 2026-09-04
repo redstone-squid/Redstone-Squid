@@ -34,16 +34,15 @@ def test_unwrap_error_finds_original_command_exception() -> None:
 
 
 def test_log_context_redaction_recurses_through_supported_containers() -> None:
-    context: dict[object, object] = {
+    context: dict[str, object] = {
         "discord_id": 1,
         "DISCORD_USER_ID": 2,
         "user_id": 3,
         "owner_discord_id": 4,
         "safe": [
-            {"discord_id": 5, "job_id": 6},
+            {"discord_id": 5, "job_id": 6, 8: "non-string mapping keys are not safe diagnostic fields"},
             ({"user_id": 7, "state": "ready"},),
         ],
-        8: "non-string mapping keys are not safe diagnostic fields",
     }
 
     assert _safe_log_context(context) == {
