@@ -213,6 +213,7 @@ class MessageRootBehaviorOptions(TypedDict, total=False):
     palette: Palette
     strict: bool
     timeout: float | None
+    retain_routed_on_timeout: bool
     on_error: ErrorHook | None
     middleware: Sequence[ActionMiddleware]
     profiler: Profiler | None
@@ -261,6 +262,7 @@ class MessageRootConfig[
     palette: Palette = DEFAULT_PALETTE
     strict: bool = False
     timeout: float | None = 900
+    retain_routed_on_timeout: bool = False
     on_error: ErrorHook | None = None
     middleware: Sequence[ActionMiddleware] = ()
     profiler: Profiler | None = None
