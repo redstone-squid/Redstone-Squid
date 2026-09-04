@@ -63,7 +63,7 @@ class ConfirmedBuilds(BuildQueryService):
 
 
 class PublicSchematics(SchematicService):
-    def __init__(self) -> None:
+    def __init__(self, *, count: int = 1) -> None:
         self.stored = StoredSchematic(
             id=3,
             build_id=7,
@@ -73,6 +73,7 @@ class PublicSchematics(SchematicService):
             analysis=make_analysis(),
             publication=_public_publication(),
         )
+        self.items = tuple(replace(self.stored, id=self.stored.id + offset) for offset in range(count))
 
     async def list_public_page(
         self,
@@ -81,7 +82,7 @@ class PublicSchematics(SchematicService):
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 50,
     ) -> Page[StoredSchematic]:
-        items = [self.stored] if build_id == 7 else []
+        items = self.items if build_id == 7 else ()
         return offset_page(items, offset=selector.offset, page_size=page_size)
 
     async def public_download(self, build_id: int, schematic_id: int) -> PublicSchematicDownload:
@@ -200,6 +201,42 @@ async def test_public_metadata_omits_digest_and_original_filename() -> None:
     assert "filename" not in item
     assert item["license"] == "cc_by_4_0"
     assert item["download_url"] == "/v1/builds/7/schematics/3/content"
+
+
+async def test_public_listing_pages_multiple_attachments_with_offset_anchors() -> None:
+    schematics = PublicSchematics(count=3)
+
+    first = await list_build_schematics(
+        7,
+        ConfirmedBuilds(),
+        schematics,
+        page_size=2,
+        offset=None,
+    )
+
+    assert [item.id for item in first.items] == [3, 4]
+    assert first.total == 3
+    assert first.next is not None
+    assert first.next.offset == 2
+    assert first.next.after_id is None
+    assert first.next.before_id is None
+    assert first.prev is None
+
+    last = await list_build_schematics(
+        7,
+        ConfirmedBuilds(),
+        schematics,
+        page_size=2,
+        offset=2,
+    )
+
+    assert [item.id for item in last.items] == [5]
+    assert last.total == 3
+    assert last.next is None
+    assert last.prev is not None
+    assert last.prev.offset == 0
+    assert last.prev.after_id is None
+    assert last.prev.before_id is None
 
 
 async def test_download_uses_scoped_locator_and_short_revalidation_cache() -> None:
