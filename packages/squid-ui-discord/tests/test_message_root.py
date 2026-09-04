@@ -1829,6 +1829,34 @@ class TestLifecycle:
         await message_root.dispatch("inc", interaction)  # finished mounts ignore late clicks
         interaction.response.edit_message.assert_not_awaited()
 
+    async def test_timeout_can_leave_only_stateless_recovery_routes_enabled(self) -> None:
+        class Recoverable(Component[sl.ComponentsV2Target]):
+            def render(self):
+                return sl.action_controls(
+                    sl.action_control("Mounted action", self.press, key="mounted"),
+                    sl.routed_action_control("Recover", "route:recover", key="recover"),
+                    key="actions",
+                )
+
+            async def press(self, event: PressEvent) -> None: ...
+
+        message_root = MessageRoot(
+            Recoverable(),
+            access=Everyone(),
+            timeout=None,
+            retain_routed_on_timeout=True,
+        )
+        message: Any = message_harness()
+        await message_root.send(delivered_to(message))
+
+        await message_root.handle_timeout()
+
+        disabled_view = message.edit.await_args.kwargs["view"]
+        buttons = {
+            item.label: item.disabled for item in disabled_view.walk_children() if isinstance(item, discord.ui.Button)
+        }
+        assert buttons == {"Mounted action": True, "Recover": False}
+
     async def test_refresh_edits_bound_message(self):
         component = Counter()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
