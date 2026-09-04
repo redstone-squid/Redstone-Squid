@@ -7,7 +7,7 @@ from discord.ext.commands import Cog
 
 from squid.bot.events.handlers import DomainEventHandler, build_handler_registry
 from squid.events import DomainEventDelivery, UnsupportedEventVersionError
-from squid.observability import trace_span
+from squid.observability import TraceSurface, trace_span
 from squid.runtime import JobHandle
 
 if TYPE_CHECKING:
@@ -44,7 +44,7 @@ class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def process_domain_events(self) -> None:
         """Dispatch bounded transition work to its handlers."""
         await self.bot.wait_until_ready()
-        with trace_span("squid.background.domain_events", {"squid.surface": "background_loop"}):
+        with trace_span("squid.background.domain_events", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             for delivery in await self.bot.services.domain_events.claim(CONSUMER):
                 await self._process(delivery)
 
