@@ -756,6 +756,4 @@ async def test_deleting_one_draft_keeps_objects_referenced_by_another_draft(
     assert deleted == []
     assert retained is not None
     assert retained.status is MediaJobStatus.COMPLETED
-    assert {artifact.object_key for artifact in retained.artifacts} == {
-        artifact.object_key for artifact in artifacts
-    }
+    assert {artifact.object_key for artifact in retained.artifacts} == {artifact.object_key for artifact in artifacts}

@@ -114,7 +114,7 @@ class CanonicalBuildSubmissionWriter:
                 display_name=submission.display_name,
                 ai_generated=submission.ai_generated,
             )
-        except (InvalidBuildError, InvalidStateError):
+        except InvalidBuildError, InvalidStateError:
             return _target_rejected()
         if persisted.submitter_account_id != submission.owner_account_id or persisted.sponsor != submission.sponsor:
             return _target_rejected()
@@ -249,9 +249,7 @@ def _target_result(build: Build) -> FinalizedBuild:
 
 
 def _target_rejected() -> BuildSubmissionRejected:
-    return BuildSubmissionRejected(
-        (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
-    )
+    return BuildSubmissionRejected((SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),))
 
 
 def _submission_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue]:

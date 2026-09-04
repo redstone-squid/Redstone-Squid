@@ -28,9 +28,7 @@ def test_media_enum_mappings_match_database_checks() -> None:
 
     assert _checked_values(uploads, "media_uploads_kind_check") == {kind.value for kind in MediaKind}
     assert _checked_values(artifacts, "media_artifacts_role_check") == {role.value for role in MediaArtifactRole}
-    assert _checked_values(jobs, "media_normalization_jobs_status_check") == {
-        status.value for status in MediaJobStatus
-    }
+    assert _checked_values(jobs, "media_normalization_jobs_status_check") == {status.value for status in MediaJobStatus}
 
 
 def test_media_checked_text_columns_round_trip_as_domain_enums() -> None:
