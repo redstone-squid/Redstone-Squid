@@ -210,6 +210,34 @@ def test_build_editor_declares_keyed_topic_following_policy() -> None:
     assert BuildEditScreen.root_options["retain_routed_on_timeout"] is True
 
 
+async def test_expired_build_editor_retains_only_the_fresh_recovery_route(display_build: Build) -> None:
+    component = BuildEditScreen(
+        display_build,
+        BuildRecorder(),
+        authorize=AsyncMock(return_value=True),
+        render_build=AsyncMock(return_value=sl.status("card")),
+        refresh_posts=AsyncMock(),
+    )
+    bot = make_layout_bot()
+    message_root = bot.ui.mount(
+        component,
+        access=sd.Owner(7),
+        timeout=BuildEditScreen.timeout,
+        **BuildEditScreen.root_options,
+    )
+    message = message_harness()
+    await message_root.send(delivered_to(message))
+
+    await message_root.handle_timeout()
+
+    expired = message.edit.await_args.kwargs["view"]
+    buttons = {
+        item.label: item.disabled for item in expired.walk_children() if isinstance(item, discord.ui.Button)
+    }
+    assert buttons["Reload fresh editor"] is False
+    assert all(disabled for label, disabled in buttons.items() if label != "Reload fresh editor")
+
+
 async def test_build_editor_commits_against_the_revision_it_presented(display_build: Build) -> None:
     builds = EditRecorder(display_build)
     field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
