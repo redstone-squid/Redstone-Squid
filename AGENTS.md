@@ -14,11 +14,18 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 - **Don't use Python 3.8 typings**: Never import `List`, `Tuple` or other deprecated classes from `typing`, use `list`, `tuple` etc. instead, or import from `collections.abc`
 - Do not `from __future__ import annotations` and do not quote forward references in type hints — Python 3.14 defers annotation evaluation by default (PEP 649/749), so plain unquoted names work everywhere.
 - Add code comments sparingly. Focus on why something is done, especially for complex logic. For unintuitive code, explain until it is clear.
+- **Docstrings**: a docstring states something the name and signature do not — a limit, what it
+  lowers to, when it is chosen, what it raises, who owns it. If there is nothing, write nothing.
+  Name every exception a caller might catch, in prose or `Raises:`. Protocols and SPIs document
+  every member: that is where the contract is read. Present tense only — what the code used to
+  do lives in git. No aphorisms: cut any sentence that gives the reader no fact. The `sl`/`sd`
+  aliases appear only in docstrings of packages that define them.
 - **Lifetime in docstrings**: a type that defines a terminating verb (`close`, `detach`,
   `finish`, `cancel`, `discard`, `run`) or hands out expiring authority states what ends it,
   in one clause, in its first paragraph. Everything else states nothing — a frozen value has
   no lifetime to describe. The trigger is a method the class defines, not how it is spelled.
-  See `docs/squid-ui-architecture.md` for the verb table and the naming rules
+  `tests/architecture/test_docstrings.py` enforces the verb half; see
+  `docs/squid-ui-architecture.md` for the verb table and the naming rules
   `tests/architecture/test_naming.py` enforces.
 
 ### Concurrency
