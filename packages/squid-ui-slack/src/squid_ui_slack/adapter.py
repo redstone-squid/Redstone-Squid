@@ -28,11 +28,13 @@ SLACK_SDK_343_ADAPTER = AdapterProfile(
 
 @cache
 def _installed_slack_sdk() -> Version:
+    """Return the installed Slack SDK version once per process."""
     return Version(version("slack-sdk"))
 
 
 @cache
 def _version_range(expression: str) -> SpecifierSet:
+    """Parse and cache one adapter version constraint."""
     return SpecifierSet(expression)
 
 

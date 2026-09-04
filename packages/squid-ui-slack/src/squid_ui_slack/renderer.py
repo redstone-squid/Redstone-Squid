@@ -64,12 +64,14 @@ _CONVERSATION_TYPES = {
 
 
 def _text(value: scene.SlackText) -> SdkText:
+    """Draw a resolved Slack text object in its declared dialect."""
     if value.kind is scene.SlackTextKind.PLAIN:
         return PlainTextObject(text=value.content, emoji=value.emoji)
     return MarkdownTextObject(text=value.content, verbatim=value.verbatim)
 
 
 def _plain(value: scene.SlackText, role: str) -> PlainTextObject:
+    """Draw text for a Slack field restricted to ``plain_text``."""
     if value.kind is not scene.SlackTextKind.PLAIN:
         message = f"{role} requires Slack plain_text, not {value.kind.value}"
         raise DrawInvariantError(message)
@@ -77,17 +79,21 @@ def _plain(value: scene.SlackText, role: str) -> PlainTextObject:
 
 
 def _safe_url(value: str, *, https_only: bool = False) -> str | None:
+    """Return an absolute web URL when it meets the requested policy."""
     parsed = urlsplit(value)
     schemes = {"https"} if https_only else {"http", "https"}
     return value if parsed.scheme in schemes and parsed.netloc else None
 
 
 def _generated_action_id(prefix: str, value: str) -> str:
+    """Derive a stable action id for controls with no callback identity."""
     digest = hashlib.blake2s(value.encode(), digest_size=12).hexdigest()
     return f"squid:{prefix}:{digest}"
 
 
 class _Drawer:
+    """Mechanically translate one validated Slack scene into SDK objects."""
+
     def __init__(
         self,
         *,
@@ -100,9 +106,11 @@ class _Drawer:
         self.asset_resolver = asset_resolver
 
     def blocks(self, values: Sequence[scene.SlackBlock]) -> tuple[Block, ...]:
+        """Draw a sequence of scene blocks in order."""
         return tuple(self.block(value) for value in values)
 
     def block(self, value: scene.SlackBlock) -> Block:
+        """Draw one closed-union Slack block."""
         match value:
             case scene.SlackSection(text=text, fields=fields, accessory=accessory):
                 return SectionBlock(
@@ -147,6 +155,7 @@ class _Drawer:
                 return AlertBlock(text=MarkdownTextObject(text=content), level=style.value)
 
     def card(self, value: scene.SlackCard) -> CardBlock:
+        """Draw a card shared by standalone and carousel positions."""
         image_url = value.image_url
         if image_url is not None and (image_url := _safe_url(image_url, https_only=True)) is None:
             message = "Slack card images require an absolute HTTPS URL"
@@ -159,16 +168,19 @@ class _Drawer:
         )
 
     def interactive(self, value: scene.SlackButton | scene.SlackSelect) -> ButtonElement | InputInteractiveElement:
+        """Draw an element legal inside an actions block."""
         if isinstance(value, scene.SlackButton):
             return self.button(value)
         return self.select(value)
 
     def element(self, value: scene.SlackElement) -> ButtonElement | InputInteractiveElement:
+        """Draw an element legal in a section accessory."""
         if isinstance(value, scene.SlackButton):
             return self.button(value)
         return self.input_element(value)
 
     def input_element(self, value: scene.SlackInputElement) -> InputInteractiveElement:
+        """Draw an element legal in an input block."""
         match value:
             case scene.SlackSelect():
                 return self.select(value)
@@ -222,19 +234,16 @@ class _Drawer:
                 )
 
     def button(self, value: scene.SlackButton) -> ButtonElement:
-        action_id: str
+        """Draw one button and resolve its external destination if present."""
+        action_id = _action_id(value)
         url: str | None = None
-        if value.action is not None:
-            action_id = value.action.action
-        elif value.route is not None:
-            action_id = value.route.route_id
-        elif value.url is not None:
+        if action_id is None and value.url is not None:
             action_id = _generated_action_id("url", value.url)
             url = _safe_url(value.url)
             if url is None:
                 message = "Slack URL buttons require an absolute HTTP or HTTPS URL"
                 raise DrawInvariantError(message)
-        else:
+        elif action_id is None:
             assert value.asset is not None
             action_id = _generated_action_id("asset", value.asset.key)
             url = self.resolve_asset(value.asset)
@@ -248,13 +257,8 @@ class _Drawer:
         )
 
     def select(self, value: scene.SlackSelect) -> InputInteractiveElement:
-        action_id = (
-            value.action.action
-            if value.action is not None
-            else value.route.route_id
-            if value.route is not None
-            else value.action_id
-        )
+        """Draw one static, user, or conversation selector."""
+        action_id = _action_id(value)
         assert action_id is not None
         placeholder = None if value.placeholder is None else _plain(value.placeholder, "select placeholder")
         multiple = value.maximum > 1
@@ -314,6 +318,7 @@ class _Drawer:
 
     @staticmethod
     def options(values: Sequence[scene.SlackOption]) -> list[Option]:
+        """Draw a scene option sequence for an SDK choice element."""
         return [
             Option(
                 value=value.value,
@@ -329,6 +334,7 @@ class _Drawer:
         scene_options: Sequence[scene.SlackOption],
         selected: Sequence[str],
     ) -> list[Option]:
+        """Resolve selected values to their exact SDK option instances."""
         by_value = {source.value: target for source, target in zip(scene_options, sdk_options, strict=True)}
         try:
             return [by_value[value] for value in selected]
@@ -337,6 +343,7 @@ class _Drawer:
             raise DrawInvariantError(message) from error
 
     def resolve_asset(self, reference: scene.SlackAssetRef) -> str:
+        """Resolve an asset reference to a public HTTPS URL."""
         metadata = self.assets.get(reference.key)
         if metadata is None or (metadata.name, metadata.media_type) != (reference.name, reference.media_type):
             message = f"Slack asset {reference.key!r} has no matching scene metadata"
@@ -361,6 +368,7 @@ def _validate_scene[BodyT: scene.SlackBody](
     capability: AdapterCapability,
     profile: AdapterProfile[SlackSdkAdapter],
 ) -> BodyT:
+    """Validate scene/profile identity and return the narrowed body."""
     require_slack_sdk_capability(profile, capability, f"draw {target}")
     if document.protocol != scene.Codec.protocol:
         message = f"Slack renderer cannot draw scene protocol {document.protocol}"
@@ -378,6 +386,7 @@ def _validate_scene[BodyT: scene.SlackBody](
 
 
 def _validate_sdk(value: Block | View) -> None:
+    """Ask the Slack SDK to validate one fully drawn object."""
     try:
         value.to_dict()
     except (SlackObjectFormationError, TypeError, ValueError) as error:
@@ -386,13 +395,15 @@ def _validate_sdk(value: Block | View) -> None:
 
 
 def _audit_length(value: str, limit: int, role: str, *, allow_empty: bool = True) -> None:
+    """Reject a string outside one Block Kit field's length range."""
     if (not allow_empty and not value) or len(value) > limit:
         range_description = f"1-{limit}" if not allow_empty else f"at most {limit}"
         message = f"Slack {role} must contain {range_description} characters"
         raise DrawInvariantError(message)
 
 
-def _element_action_id(value: scene.SlackButton | scene.SlackSelect) -> str | None:
+def _action_id(value: scene.SlackButton | scene.SlackSelect) -> str | None:
+    """Return the portable action identity carried by a control, if any."""
     if value.action is not None:
         return value.action.action
     if value.route is not None:
@@ -401,6 +412,7 @@ def _element_action_id(value: scene.SlackButton | scene.SlackSelect) -> str | No
 
 
 def _audit_option(value: scene.SlackOption, limits: SlackLimits) -> None:
+    """Audit one option against the selected Block Kit limits."""
     _audit_length(value.label.content, limits.components.option_label, "option label", allow_empty=False)
     _audit_length(value.value, limits.components.option_value, "option value", allow_empty=False)
     if value.description is not None:
@@ -408,6 +420,7 @@ def _audit_option(value: scene.SlackOption, limits: SlackLimits) -> None:
 
 
 def _audit_element(value: scene.SlackElement, limits: SlackLimits) -> None:
+    """Audit one interactive element and its nested options."""
     if isinstance(value, scene.SlackButton):
         _audit_length(value.label.content, limits.components.button_label, "button label", allow_empty=False)
         if value.value is not None:
@@ -446,14 +459,13 @@ def _audit_element(value: scene.SlackElement, limits: SlackLimits) -> None:
         if any(item not in available for item in selected):
             message = "Slack checkbox or radio initial value is not in its option set"
             raise DrawInvariantError(message)
-    action_id = (
-        _element_action_id(value) if isinstance(value, scene.SlackButton | scene.SlackSelect) else value.action_id
-    )
+    action_id = _action_id(value) if isinstance(value, scene.SlackButton | scene.SlackSelect) else value.action_id
     if action_id is not None:
         _audit_length(action_id, limits.components.action_id, "action id", allow_empty=False)
 
 
 def _audit_block(value: scene.SlackBlock, limits: SlackLimits) -> None:
+    """Audit one resolved block and its nested elements."""
     match value:
         case scene.SlackSection(text=text, fields=fields, accessory=accessory):
             if text is not None:
@@ -513,6 +525,7 @@ def _audit_block(value: scene.SlackBlock, limits: SlackLimits) -> None:
 
 
 def _audit_surface(blocks: Sequence[scene.SlackBlock], *, surface: str, limits: SlackLimits) -> None:
+    """Audit the limits and block vocabulary of one Slack surface."""
     if len(blocks) > limits.blocks:
         message = f"Slack {surface} has {len(blocks)} blocks; limit is {limits.blocks}"
         raise DrawInvariantError(message)
