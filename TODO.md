@@ -89,8 +89,9 @@
 - [ ] Remove legacy smallest-door tables, columns, functions, and triggers after the new projections have run in production.
 - [ ] Remove compatibility reads from legacy description and timing fields after backfill verification.
 - [ ] Snapshot managed function and trigger SQL inside historical migrations so later registry edits cannot alter migration replay.
-- [ ] Migrate primary keys from sequential integers to UUIDv7 and add human-readable slugs. **Do this before the next
-      alpha test** — once external users hold IDs and URLs, the migration stops being a schema change and becomes a
-      data-compatibility problem.
+- [ ] Migrate primary keys from sequential integers to UUIDv7 and add human-readable slugs. This is an unowned,
+      repository-wide backlog item, not part of an active implementation plan; assign an owner and migration plan
+      before scheduling it. Once external users hold IDs and URLs, the work stops being only a schema change and
+      becomes a data-compatibility project.
   - UUIDv7 keeps index locality while removing the enumerable, guessable IDs currently exposed through the REST API.
   - Slugs give stable, shareable URLs that survive re-keying; `permission_roles.slug` is the pattern to follow.
