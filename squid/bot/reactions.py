@@ -288,28 +288,31 @@ class ReactionRouter:
             queue = self._queues[shard]
             try:
                 queue.put_nowait(item)
+                self._mark_accepted(item, queue, shard)
                 accepted = True
             except asyncio.QueueFull:
-                accepted = await self._enqueue_or_abort(queue, item)
-            if accepted:
-                accepted_at = time.monotonic()
-                item.accepted_at = accepted_at
-                self._outstanding += 1
-                attributes = {"squid.reaction.kind": item.kind, "squid.reaction.shard": shard}
-                record_histogram(
-                    "squid.reaction.enqueue.wait",
-                    accepted_at - item.created_at,
-                    attributes=attributes,
-                )
-                record_gauge("squid.reaction.queue.depth", queue.qsize(), attributes=attributes)
-            else:
+                accepted = await self._enqueue_or_abort(queue, item, shard)
+            if not accepted:
                 add_counter("squid.reaction.enqueue.aborted", attributes={"squid.reaction.kind": item.kind})
         finally:
             async with self._intake_changed:
                 self._active_enqueues -= 1
                 self._intake_changed.notify_all()
 
-    async def _enqueue_or_abort(self, queue: asyncio.Queue[_QueuedEvent], item: _QueuedEvent) -> bool:
+    def _mark_accepted(self, item: _QueuedEvent, queue: asyncio.Queue[_QueuedEvent], shard: int) -> None:
+        """Account for an accepted item before its worker can observe it."""
+        accepted_at = time.monotonic()
+        item.accepted_at = accepted_at
+        self._outstanding += 1
+        attributes = {"squid.reaction.kind": item.kind, "squid.reaction.shard": shard}
+        record_histogram(
+            "squid.reaction.enqueue.wait",
+            accepted_at - item.created_at,
+            attributes=attributes,
+        )
+        record_gauge("squid.reaction.queue.depth", queue.qsize(), attributes=attributes)
+
+    async def _enqueue_or_abort(self, queue: asyncio.Queue[_QueuedEvent], item: _QueuedEvent, shard: int) -> bool:
         """Wait losslessly for queue capacity unless shutdown exhausts its drain budget."""
         finished = anyio.Event()
         accepted = False
@@ -317,6 +320,7 @@ class ReactionRouter:
         async def enqueue() -> None:
             nonlocal accepted
             await queue.put(item)
+            self._mark_accepted(item, queue, shard)
             accepted = True
             finished.set()
 
