@@ -104,12 +104,12 @@ class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         and writing the same state, and its writes still reach the bus. What changes is only that a
         later `get(scope)` builds a **new generation** rather than returning this one. Callers that
         cannot tolerate two generations being live at once must coordinate their consumers before
-        dropping -- the pool does not know who is holding what.
+        deleting -- the pool does not know who is holding what.
         """
         return self._handles.pop(scope, None)
 
     def clear(self) -> None:
-        """Retire every scope, on the same terms as `drop`.
+        """Retire every scope, on the same terms as `delete`.
 
         No cleanup hook runs, because a namespace has none; adding one here would make a pooled
         handle behave differently from one constructed directly, which is the whole thing this
@@ -120,7 +120,7 @@ class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
     def active(self) -> Mapping[ScopeT, SharedT]:
         """Snapshot the retained handles, copied at the moment of the call.
 
-        The result is not a view: mutating the pool afterwards -- get, drop, clear -- leaves a
+        The result is not a view: mutating the pool afterwards -- get, delete, clear -- leaves a
         snapshot already returned unchanged, so a caller may iterate it while retiring the very
         scopes it names. It is read-only at runtime as well as statically, holds strong references
         to the handles it names, and never invokes the factory.

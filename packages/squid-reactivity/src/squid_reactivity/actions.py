@@ -163,8 +163,8 @@ class ChangeToken[InverseT = Any](Protocol):
     """A participant's handle to work it can plan and then stage an inverse for.
 
     Opaque in what the inverse *is* -- that belongs to whichever backend produced it -- but
-    not in what can be asked of the handle. `sl.history()` calls exactly these two methods,
-    and typing the field `Any` meant neither the calls nor the implementations were checked.
+    not in what can be asked of the handle: an undo stack such as `squid_ui`'s history calls
+    exactly these two methods, so both sides are checked against them.
     """
 
     def plan_inverse(self) -> InverseT | ConflictDetail: ...

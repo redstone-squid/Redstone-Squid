@@ -47,14 +47,11 @@ LimitsT = TypeVar("LimitsT", bound=TargetLimits)
 BodyT = TypeVar("BodyT", bound=scene.Body)
 RenderTargetT_co = TypeVar("RenderTargetT_co", covariant=True)
 AdapterT_co = TypeVar("AdapterT_co", covariant=True)
-"""Declared the old way, and covariant on purpose, in a package that otherwise uses PEP 695.
+"""Covariant on purpose, spelled the old way because PEP 695 cannot declare variance.
 
-`Target` reads its render target and adapter back out — through the `render_target` property
-and `AdapterProfile[AdapterT_co]` — so a `Target[.., ComponentsV2Target, DiscordPyAdapter]`
-must satisfy a parameter typed for the wider markers those refine. PEP 695 infers variance
-rather than letting it be declared, and there is no syntax to override the inference, so the
-old spelling is the only one that can say this. `Component` carries the mirror-image note for
-its contravariant parameter.
+`Target` only reads these back out (`render_target`, `AdapterProfile[AdapterT_co]`), so a
+`Target[.., ComponentsV2Target, DiscordPyAdapter]` must satisfy a parameter typed for the wider
+markers those refine. `runtime.component.RenderTargetT` is the contravariant counterpart.
 """
 
 

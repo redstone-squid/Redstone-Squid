@@ -128,7 +128,7 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         The retired namespace stays usable, reactive and readable; it simply stops writing to a
         slot it no longer owns. Detaching is not optional: two generations sharing one slot would
         race for the row, and retired state would resurrect on the next load. Anything this handle
-        already staged still gets written -- a drop retires a lifetime, it does not undo a
+        already staged still gets written -- deleting retires a lifetime, it does not undo a
         committed action -- which is why this drains before returning.
         """
         async with self._load_lock:
@@ -140,7 +140,7 @@ class PersistentStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
         return retired
 
     async def clear(self) -> None:
-        """Retire every scope on the same terms as `drop`."""
+        """Retire every scope on the same terms as `delete`."""
         async with self._load_lock:
             for scope, handle in self._pool.active().items():
                 self._detach(handle, scope)
