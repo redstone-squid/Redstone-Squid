@@ -9,6 +9,11 @@ def split_values(value: str) -> list[str]:
     return [item for entry in value.split(",") if (item := entry.strip())]
 
 
+def optional_text(value: str) -> str | None:
+    """Trim optional text and normalize an empty value to ``None``."""
+    return value.strip() or None
+
+
 def invalid_web_urls(values: Iterable[str]) -> tuple[str, ...]:
     """Return values that are not absolute HTTP(S) URLs, preserving input order."""
     invalid: list[str] = []
@@ -26,3 +31,13 @@ def format_invalid_values(values: Iterable[str], *, maximum: int = 500) -> str:
         raise ValueError(msg)
     rendered = ", ".join(f"`{value.replace('`', "'")}`" for value in values)
     return rendered if len(rendered) <= maximum else f"{rendered[: maximum - 1].rstrip()}…"
+
+
+def parse_web_urls(value: str) -> list[str]:
+    """Parse comma-separated HTTP(S) URLs or name every invalid submitted value."""
+    urls = split_values(value)
+    if invalid := invalid_web_urls(urls):
+        displayed = format_invalid_values(invalid)
+        message = f"Use complete https:// or http:// links. Invalid: {displayed}"
+        raise ValueError(message)
+    return urls
