@@ -323,7 +323,7 @@ async def test_attached_message_root_is_checkpointed_in_the_same_record() -> Non
 
         raw["message_roots"].pop(1)
         raw["opened_at"] = float("nan")
-        with pytest.raises(MessageRootStateError, match="must be a number"):
+        with pytest.raises(MessageRootStateError, match="must be a finite number"):
             DurableSessionCodec.loads(json.dumps(raw))
         tasks.cancel_scope.cancel()
 
