@@ -19,8 +19,8 @@ from urllib.parse import urlsplit
 
 from google.oauth2.service_account import Credentials
 from pydantic import (
-    AnyHttpUrl,
     AliasChoices,
+    AnyHttpUrl,
     BaseModel,
     ConfigDict,
     Field,
@@ -361,6 +361,7 @@ class ApiConfig(_FrozenModel):
     session_pepper: SecretStr
     idempotency_active_key_id: str
     idempotency_keys: dict[str, SecretStr] = Field(min_length=1, max_length=8)
+    idempotency_max_response_bytes: int = Field(default=1024 * 1024, ge=1, le=16 * 1024 * 1024)
     bot_token: SecretStr | None = None
     port: int = Field(default=8000, ge=1, le=65535)
     log_file: str | None = None
