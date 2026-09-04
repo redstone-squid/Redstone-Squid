@@ -157,6 +157,25 @@ async def test_raw_content_length_headers_reject_ambiguous_framing(
     assert raised.value.public_context == {"reason": reason}
 
 
+async def test_unbounded_content_length_returns_structured_limit_error_without_integer_conversion() -> None:
+    events: list[str] = []
+    app = app_with_fakes(FakeMedia(events), FakeDrafts(events))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/submissions/drafts/{DRAFT_ID}/media/image",
+            headers={"Content-Type": "image/png", "Content-Length": "9" * 4301},
+            content=b"x",
+        )
+
+    assert response.status_code == 400
+    assert response.json()["context"] == {
+        "reason": "limit_exceeded",
+        "violations": [{"measure": "source_bytes", "limit": 8}],
+    }
+    assert events == ["owner"]
+
+
 @pytest.mark.parametrize(
     ("headers", "reason"),
     [
