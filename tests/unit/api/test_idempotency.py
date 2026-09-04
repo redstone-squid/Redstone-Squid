@@ -1,12 +1,19 @@
 """HTTP idempotency contract tests."""
 
-from typing import override
+import asyncio
+from typing import cast, override
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.types import ASGIApp, Message, Scope
 from whenever import Instant
 
+from squid.api.idempotency import (
+    MAX_IDEMPOTENT_RESPONSE_BYTES,
+    CompleteIdempotentResponseMiddleware,
+    IdempotencyReservationState,
+)
 from squid.core.errors import ErrorCode
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
 from squid.idempotency.application import IdempotencyRepository
@@ -62,6 +69,60 @@ class CountingAccounts:
     async def generate_verification_code(self, _minecraft_uuid: UUID) -> int:
         self.calls += 1
         return 100_000 + self.calls
+
+
+class CompletionRecorder:
+    def __init__(self, error: Exception | None = None) -> None:
+        self.error = error
+        self.responses: list[StoredResponse] = []
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+        self.release.set()
+
+    async def complete(self, _request: PendingRequest, response: StoredResponse) -> None:
+        self.started.set()
+        await self.release.wait()
+        if self.error is not None:
+            raise self.error
+        self.responses.append(response)
+
+
+async def run_completion_middleware(
+    app: ASGIApp,
+    recorder: CompletionRecorder,
+) -> list[Message]:
+    sent: list[Message] = []
+    scope = cast(
+        Scope,
+        {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "http",
+            "path": "/mutation",
+            "raw_path": b"/mutation",
+            "query_string": b"",
+            "headers": [],
+            "client": ("127.0.0.1", 1),
+            "server": ("test", 80),
+            "state": {
+                "squid_idempotency": IdempotencyReservationState(
+                    cast(IdempotencyService, recorder),
+                    PendingRequest(uuid4()),
+                )
+            },
+        },
+    )
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: Message) -> None:
+        sent.append(message)
+
+    await CompleteIdempotentResponseMiddleware(app)(scope, receive, send)
+    return sent
 
 
 def idempotent_client() -> tuple[TestClient, CountingAccounts, MockDatabaseManager]:
@@ -140,3 +201,61 @@ async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_caller(
     assert isinstance(first, PendingRequest)
     assert isinstance(other_caller, PendingRequest)
     assert first.request_id != other_caller.request_id
+
+
+@pytest.mark.asyncio
+async def test_completion_buffers_multiple_and_empty_body_frames_before_sending() -> None:
+    async def app(_scope: Scope, _receive, send) -> None:
+        await send({"type": "http.response.start", "status": 204, "headers": [(b"etag", b'"one"')]})
+        await send({"type": "http.response.body", "body": b"", "more_body": True})
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+    recorder = CompletionRecorder()
+    sent = await run_completion_middleware(app, recorder)
+
+    assert recorder.responses == [StoredResponse(204, (("etag", '"one"'),), b"")]
+    assert [message["type"] for message in sent] == [
+        "http.response.start",
+        "http.response.body",
+        "http.response.body",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_completion_failure_sends_no_partial_response() -> None:
+    async def app(_scope: Scope, _receive, send) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok", "more_body": False})
+
+    recorder = CompletionRecorder(RuntimeError("database unavailable"))
+    with pytest.raises(RuntimeError, match="database unavailable"):
+        await run_completion_middleware(app, recorder)
+
+
+@pytest.mark.asyncio
+async def test_handler_failure_does_not_complete_or_send_a_response() -> None:
+    async def app(_scope: Scope, _receive, _send) -> None:
+        raise RuntimeError("handler failed")
+
+    recorder = CompletionRecorder()
+    with pytest.raises(RuntimeError, match="handler failed"):
+        await run_completion_middleware(app, recorder)
+    assert recorder.responses == []
+
+
+@pytest.mark.asyncio
+async def test_response_body_limit_is_enforced_before_bytes_are_sent() -> None:
+    async def app(_scope: Scope, _receive, send) -> None:
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send(
+            {
+                "type": "http.response.body",
+                "body": b"x" * (MAX_IDEMPOTENT_RESPONSE_BYTES + 1),
+                "more_body": False,
+            }
+        )
+
+    recorder = CompletionRecorder()
+    with pytest.raises(RuntimeError, match="replay limit"):
+        await run_completion_middleware(app, recorder)
+    assert recorder.responses == []

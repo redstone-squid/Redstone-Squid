@@ -22,7 +22,11 @@ from squid.api.contract import (
 from squid.api.dependencies import Accounts
 from squid.api.errors import register_exception_handlers, responses
 from squid.api.i18n import LocaleContextMiddleware
-from squid.api.idempotency import IdempotencyResponseMiddleware, enforce_request_idempotency
+from squid.api.idempotency import (
+    CompleteIdempotentResponseMiddleware,
+    assert_idempotency_completion_installed,
+    enforce_request_idempotency,
+)
 from squid.api.openapi import install_openapi_contract
 from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateResponseHeadersMiddleware
 from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter, enforce_route_rate_limits
@@ -172,7 +176,8 @@ def create_api_app(
     api.include_router(v1_router)
     install_openapi_contract(api)
     api.add_middleware(RateLimitMiddleware)
-    api.add_middleware(IdempotencyResponseMiddleware)
+    api.add_middleware(CompleteIdempotentResponseMiddleware)
+    assert_idempotency_completion_installed(api)
     api.add_middleware(BoundedRequestBodyMiddleware, routes=api.routes)
     api.add_middleware(PrivateResponseHeadersMiddleware, path_prefixes=PRIVATE_API_PATH_PREFIXES)
     # Added last of the unconditional stack so it is outermost: it stamps Request-Id onto rate-limit
