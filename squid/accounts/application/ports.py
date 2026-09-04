@@ -50,6 +50,18 @@ class VerificationLinkResult:
     """
 
 
+class AccountMinecraftAuthorization(Protocol):
+    """Account-owned consent and verified Java-identity authorization."""
+
+    async def has_current_consent(self, account_id: int) -> bool:
+        """Return whether the account has accepted the current privacy notice."""
+        ...
+
+    async def can_approve_minecraft_identity(self, *, account_id: int, java_uuid: UUID) -> bool:
+        """Return whether current consent and exact verified Java ownership coexist."""
+        ...
+
+
 class AccountRepository(Protocol):
     """Persistence operations required by :class:`AccountService`."""
 

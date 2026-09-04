@@ -7,12 +7,14 @@ from typing import cast
 from uuid import UUID
 
 import pytest
+from anyio import create_task_group
 from sqlalchemy import Table, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.infrastructure.models import Account, AccountIdentity
+from squid.accounts.infrastructure.repository import AccountRepository
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.domain import PublicServerProfile
@@ -22,7 +24,6 @@ from squid.minecraft_auth.errors import (
     InvalidPlayerTokenError,
     TooManyActiveChallengesError,
 )
-from squid.minecraft_auth.infrastructure.accounts import PostgresAccountIdentityAuthorizer
 from squid.minecraft_auth.infrastructure.models import (
     PaperInstallationRecord,
     PlayerChallengeRecord,
@@ -85,7 +86,7 @@ def services(
     max_active_challenges: int = 5,
 ) -> tuple[InstallationCredentialService, PlayerAuthorizationService]:
     repository = PostgresMinecraftAuthorizationRepository(session_factory)
-    accounts = PostgresAccountIdentityAuthorizer(session_factory)
+    accounts = AccountRepository(session_factory, "unused-verification-code-pepper")
     codec = MinecraftSecretCodec("integration-test-pepper")
     return (
         InstallationCredentialService(repository, accounts, codec, clock=lambda: NOW),
@@ -200,22 +201,44 @@ async def test_postgres_advisory_fence_enforces_active_challenge_bound(
 ) -> None:
     await consenting_account(async_session_factory)
     _, players = services(async_session_factory, max_active_challenges=1)
+    outcomes: list[object] = []
 
-    await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
+    async def start_challenge() -> None:
+        try:
+            outcomes.append(
+                await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
+            )
+        except TooManyActiveChallengesError as error:
+            outcomes.append(error)
 
-    with pytest.raises(TooManyActiveChallengesError):
-        await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
+    async with create_task_group() as tasks:
+        tasks.start_soon(start_challenge)
+        tasks.start_soon(start_challenge)
+
+    assert len([outcome for outcome in outcomes if isinstance(outcome, TooManyActiveChallengesError)]) == 1
+    assert len([outcome for outcome in outcomes if not isinstance(outcome, TooManyActiveChallengesError)]) == 1
 
 
 async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await consenting_account(async_session_factory)
-    authorizer = PostgresAccountIdentityAuthorizer(async_session_factory)
+    authorizer = AccountRepository(async_session_factory, "unused-verification-code-pepper")
+    second_java_uuid = UUID("24d86f82-6193-4886-94af-8bc62994192d")
+    async with async_session_factory.begin() as session:
+        session.add(
+            AccountIdentity(
+                account_id=account_id,
+                provider=IdentityProvider.JAVA,
+                subject=str(second_java_uuid),
+                verified_at=NOW,
+            )
+        )
 
     assert await authorizer.has_current_consent(account_id)
-    assert await authorizer.can_approve(account_id=account_id, java_uuid=JAVA_UUID)
-    assert not await authorizer.can_approve(
+    assert await authorizer.can_approve_minecraft_identity(account_id=account_id, java_uuid=JAVA_UUID)
+    assert await authorizer.can_approve_minecraft_identity(account_id=account_id, java_uuid=second_java_uuid)
+    assert not await authorizer.can_approve_minecraft_identity(
         account_id=account_id,
         java_uuid=UUID("041873ab-65e9-4f44-a225-89d621df8e90"),
     )
@@ -226,4 +249,4 @@ async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
         account.consent_version = "outdated"
 
     assert not await authorizer.has_current_consent(account_id)
-    assert not await authorizer.can_approve(account_id=account_id, java_uuid=JAVA_UUID)
+    assert not await authorizer.can_approve_minecraft_identity(account_id=account_id, java_uuid=JAVA_UUID)
