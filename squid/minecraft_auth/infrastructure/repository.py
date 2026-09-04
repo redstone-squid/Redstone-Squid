@@ -9,6 +9,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.core.errors import InvalidStateError
 from squid.minecraft_auth.domain import (
     MinecraftClientOrigin,
     PaperInstallation,
@@ -476,7 +477,10 @@ class PostgresMinecraftAuthorizationRepository:
         )
         if not matches:
             msg = "Player grant does not match its approved challenge."
-            raise ValueError(msg)
+            raise InvalidStateError(
+                msg,
+                context={"challenge_id": str(record.id), "grant_id": str(grant.id)},
+            )
 
 
 def _challenge_lock_key(challenge: PlayerAuthorizationChallenge) -> bytes:
