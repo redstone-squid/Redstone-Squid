@@ -14,7 +14,10 @@ from squid.core.i18n import tr
 
 _FIELD_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _CLIENT_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
-_IDEMPOTENCY_KEY = re.compile(r"^[\x21-\x7e]{8,255}$")
+DRAFT_CHANGE_KEY_MIN_LENGTH = 8
+DRAFT_CHANGE_KEY_MAX_LENGTH = 255
+DRAFT_CHANGE_KEY_PATTERN = rf"^[\x21-\x7e]{{{DRAFT_CHANGE_KEY_MIN_LENGTH},{DRAFT_CHANGE_KEY_MAX_LENGTH}}}$"
+_IDEMPOTENCY_KEY = re.compile(DRAFT_CHANGE_KEY_PATTERN)
 MAX_DRAFT_OPERATIONS = 100
 MAX_DRAFT_OPERATION_VALUE_BYTES = 16 * 1024
 MAX_DRAFT_ANSWERS_BYTES = 64 * 1024
@@ -43,7 +46,7 @@ class DraftChangeKey(str):
     """A retry identity for one atomic draft edit."""
 
     def __new__(cls, value: str) -> DraftChangeKey:
-        if _IDEMPOTENCY_KEY.fullmatch(value) is None:
+        if not isinstance(value, str) or _IDEMPOTENCY_KEY.fullmatch(value) is None:
             msg = tr(t"draft change keys must be 8-255 visible ASCII characters")
             raise ValidationError(msg)
         return super().__new__(cls, value)
