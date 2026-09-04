@@ -4,8 +4,9 @@ import asyncio
 import contextlib
 import logging
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal, Protocol, override
+from typing import TYPE_CHECKING, Literal, override
 
 import discord
 from discord.ext import commands
@@ -67,32 +68,47 @@ class ReactionClearEvent:
     emoji: str | None = None
 
 
-class ReactionSubscriber(Protocol):
-    """Receive normalized raw-reaction events from the bot router."""
-
-    async def on_reaction_add(self, event: ReactionEvent) -> None: ...
-
-    async def on_reaction_remove(self, event: ReactionEvent) -> None: ...
-
-    async def on_reaction_clear(self, event: ReactionClearEvent) -> None: ...
-
-    async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None: ...
-
-
-type ReactionMethod = Literal[
-    "on_reaction_add",
-    "on_reaction_remove",
-    "on_reaction_clear",
-    "on_reaction_clear_emoji",
-]
+type ReactionActionCallback = Callable[[ReactionEvent], Awaitable[None]]
+type ReactionClearCallback = Callable[[ReactionClearEvent], Awaitable[None]]
+type ReactionKind = Literal["add", "remove", "clear", "clear_emoji"]
 
 
 @dataclass(frozen=True, slots=True)
-class _QueuedReaction:
-    method: ReactionMethod
-    event: ReactionEvent | ReactionClearEvent
-    subscribers: tuple[ReactionSubscriber, ...]
+class _ReactionRegistration:
+    consumer: str
+    add: ReactionActionCallback | None
+    remove: ReactionActionCallback | None
+    clear: ReactionClearCallback | None
+    clear_emoji: ReactionClearCallback | None
+
+
+@dataclass(frozen=True, slots=True)
+class ReactionSubscription:
+    """A router registration that ends when :meth:`detach` is called."""
+
+    _router: ReactionRouter = field(repr=False)
+    _registration_id: int
+
+    def detach(self) -> None:
+        """Stop routing future events to this registration."""
+        self._router._detach(self._registration_id)
+
+
+@dataclass(frozen=True, slots=True)
+class _ReactionCallback[EventT]:
+    consumer: str
+    callback: Callable[[EventT], Awaitable[None]]
+
+
+@dataclass(frozen=True, slots=True)
+class _QueuedReaction[EventT]:
+    kind: ReactionKind
+    event: EventT
+    callbacks: tuple[_ReactionCallback[EventT], ...]
     enqueued_at: float
+
+
+type _QueuedEvent = _QueuedReaction[ReactionEvent] | _QueuedReaction[ReactionClearEvent]
 
 
 class ReactionRouter:
@@ -113,31 +129,54 @@ class ReactionRouter:
             msg = "Reaction queue capacity must be at least the worker concurrency."
             raise ValueError(msg)
         self._bot = bot
-        self._subscribers: set[ReactionSubscriber] = set()
+        self._registrations: dict[int, _ReactionRegistration] = {}
+        self._next_registration_id = 0
         capacity = (max_pending + concurrency - 1) // concurrency
-        self._queues = tuple(asyncio.Queue[_QueuedReaction](maxsize=capacity) for _ in range(concurrency))
+        self._queues = tuple(asyncio.Queue[_QueuedEvent](maxsize=capacity) for _ in range(concurrency))
         self._workers: tuple[asyncio.Task[None], ...] = ()
         self._producers: set[asyncio.Task[object]] = set()
         self._shutdown_timeout = shutdown_timeout
         self._closing = False
 
-    def subscribe(self, subscriber: ReactionSubscriber) -> None:
-        self._subscribers.add(subscriber)
+    def subscribe(
+        self,
+        consumer: str,
+        *,
+        add: ReactionActionCallback | None = None,
+        remove: ReactionActionCallback | None = None,
+        clear: ReactionClearCallback | None = None,
+        clear_emoji: ReactionClearCallback | None = None,
+    ) -> ReactionSubscription:
+        """Register only the reaction callbacks one consumer implements.
 
-    def unsubscribe(self, subscriber: ReactionSubscriber) -> None:
-        self._subscribers.discard(subscriber)
+        Events use a snapshot of registrations taken before enqueue, so detaching does not
+        retract work the router has already accepted.
+        """
+        if all(callback is None for callback in (add, remove, clear, clear_emoji)):
+            msg = "A reaction subscription requires at least one callback."
+            raise ValueError(msg)
+        registration_id = self._next_registration_id
+        self._next_registration_id += 1
+        self._registrations[registration_id] = _ReactionRegistration(consumer, add, remove, clear, clear_emoji)
+        return ReactionSubscription(self, registration_id)
+
+    def _detach(self, registration_id: int) -> None:
+        self._registrations.pop(registration_id, None)
 
     async def dispatch_add(self, payload: discord.RawReactionActionEvent) -> None:
-        await self._dispatch_action("on_reaction_add", payload)
+        await self._dispatch_action("add", payload)
 
     async def dispatch_remove(self, payload: discord.RawReactionActionEvent) -> None:
-        await self._dispatch_action("on_reaction_remove", payload)
+        await self._dispatch_action("remove", payload)
 
     async def dispatch_clear(self, payload: discord.RawReactionClearEvent) -> None:
-        await self._dispatch("on_reaction_clear", ReactionClearEvent(payload))
+        callbacks = self._clear_callbacks("clear")
+        await self._dispatch(_QueuedReaction("clear", ReactionClearEvent(payload), callbacks, time.monotonic()))
 
     async def dispatch_clear_emoji(self, payload: discord.RawReactionClearEmojiEvent) -> None:
-        await self._dispatch("on_reaction_clear_emoji", ReactionClearEvent(payload, str(payload.emoji)))
+        callbacks = self._clear_callbacks("clear_emoji")
+        event = ReactionClearEvent(payload, str(payload.emoji))
+        await self._dispatch(_QueuedReaction("clear_emoji", event, callbacks, time.monotonic()))
 
     async def close(self) -> None:
         """Stop intake, drain accepted events, then await every shard worker."""
@@ -159,14 +198,31 @@ class ReactionRouter:
             if self._workers:
                 await asyncio.gather(*self._workers, return_exceptions=True)
 
-    async def _dispatch_action(self, method: ReactionMethod, payload: discord.RawReactionActionEvent) -> None:
+    async def _dispatch_action(self, kind: Literal["add", "remove"], payload: discord.RawReactionActionEvent) -> None:
         member = payload.member
         if member is None and payload.guild_id is not None:
             guild = self._bot.get_guild(payload.guild_id)
             member = guild.get_member(payload.user_id) if guild is not None else None
-        await self._dispatch(method, ReactionEvent(payload, str(payload.emoji), member, self._bot))
+        event = ReactionEvent(payload, str(payload.emoji), member, self._bot)
+        await self._dispatch(_QueuedReaction(kind, event, self._action_callbacks(kind), time.monotonic()))
 
-    async def _dispatch(self, method: ReactionMethod, event: ReactionEvent | ReactionClearEvent) -> None:
+    def _action_callbacks(self, kind: Literal["add", "remove"]) -> tuple[_ReactionCallback[ReactionEvent], ...]:
+        return tuple(
+            _ReactionCallback(registration.consumer, callback)
+            for registration in self._registrations.values()
+            if (callback := registration.add if kind == "add" else registration.remove) is not None
+        )
+
+    def _clear_callbacks(
+        self, kind: Literal["clear", "clear_emoji"]
+    ) -> tuple[_ReactionCallback[ReactionClearEvent], ...]:
+        return tuple(
+            _ReactionCallback(registration.consumer, callback)
+            for registration in self._registrations.values()
+            if (callback := registration.clear if kind == "clear" else registration.clear_emoji) is not None
+        )
+
+    async def _dispatch(self, item: _QueuedEvent) -> None:
         if self._closing:
             logger.warning("Ignored a reaction received during router shutdown")
             return
@@ -175,8 +231,7 @@ class ReactionRouter:
         if producer is not None:
             self._producers.add(producer)
         try:
-            item = _QueuedReaction(method, event, tuple(self._subscribers), time.monotonic())
-            await self._queues[event.payload.message_id % len(self._queues)].put(item)
+            await self._queues[item.event.payload.message_id % len(self._queues)].put(item)
         finally:
             if producer is not None:
                 self._producers.discard(producer)
@@ -189,13 +244,13 @@ class ReactionRouter:
             for index, queue in enumerate(self._queues)
         )
 
-    async def _run_shard(self, queue: asyncio.Queue[_QueuedReaction]) -> None:
+    async def _run_shard(self, queue: asyncio.Queue[_QueuedEvent]) -> None:
         while True:
             item = await queue.get()
             try:
                 record_histogram("squid.reaction.queue_latency", time.monotonic() - item.enqueued_at)
                 await asyncio.gather(
-                    *(self._run_subscriber(subscriber, item.method, item.event) for subscriber in item.subscribers)
+                    *(self._run_callback(callback, item.kind, item.event) for callback in item.callbacks)
                 )
             except asyncio.CancelledError:
                 raise
@@ -203,21 +258,20 @@ class ReactionRouter:
                 # A shard that escapes this loop stops draining its queue for the
                 # rest of the process, and close() then blocks on join() until the
                 # shutdown deadline rather than reporting the real failure.
-                logger.exception("Reaction shard failed to dispatch %s", item.method)
+                logger.exception("Reaction shard failed to dispatch %s", item.kind)
             finally:
                 queue.task_done()
 
     @staticmethod
-    async def _run_subscriber(
-        subscriber: ReactionSubscriber,
-        method: ReactionMethod,
-        event: ReactionEvent | ReactionClearEvent,
+    async def _run_callback[EventT](
+        callback: _ReactionCallback[EventT],
+        kind: ReactionKind,
+        event: EventT,
     ) -> None:
         try:
-            callback = getattr(subscriber, method)
-            await callback(event)
+            await callback.callback(event)
         except Exception:
-            logger.exception("Reaction subscriber %r failed in %s", subscriber, method)
+            logger.exception("Reaction consumer %s failed in %s", callback.consumer, kind)
 
 
 class ReactionRouterCog(commands.Cog):
