@@ -132,7 +132,7 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         )
         resolved: dict[int, int] = {}
         for account_id, account in accounts.items():
-            identity = account.identity(IdentityProvider.DISCORD)
+            identity = account.most_recent_identity_for(IdentityProvider.DISCORD)
             if identity is not None and identity.discord_id is not None:
                 resolved[account_id] = identity.discord_id
         return resolved

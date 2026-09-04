@@ -580,7 +580,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         """
         guild = self.bot.get_guild(guild_id)
         account = await self.bot.services.accounts.get_account_by_id(account_id)
-        identity = None if account is None else account.identity(IdentityProvider.DISCORD)
+        identity = None if account is None else account.most_recent_identity_for(IdentityProvider.DISCORD)
         if identity is None or identity.discord_id is None:
             # No Discord identity at all, so no roles anywhere.
             return VoteActor(account_id, discord_id=0, guild_id=guild_id)

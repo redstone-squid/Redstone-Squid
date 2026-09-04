@@ -1,16 +1,17 @@
 """Shared presentation for Minecraft identity reconciliation."""
 
+from collections.abc import Sequence
 from uuid import UUID
 
 from squid.accounts.domain import AccountIdentity, IdentityRefresh, LinkPreview
 from squid.core.i18n import tr
 
 
-def link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:
-    """Return the Minecraft UUID that makes this link impossible, or `None` if it can proceed."""
-    if existing_java is not None and existing_java.java_uuid != preview.java_uuid:
-        return existing_java.java_uuid
-    if preview.java_uuid_held_elsewhere and (existing_java is None or existing_java.java_uuid != preview.java_uuid):
+def link_conflict(preview: LinkPreview, existing_java: Sequence[AccountIdentity]) -> UUID | None:
+    """Return the first linked UUID that blocks this link, in persistence order."""
+    if mismatched := next((identity for identity in existing_java if identity.java_uuid != preview.java_uuid), None):
+        return mismatched.java_uuid
+    if preview.java_uuid_held_elsewhere and not existing_java:
         return preview.java_uuid
     return None
 

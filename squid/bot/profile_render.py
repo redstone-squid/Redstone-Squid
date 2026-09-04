@@ -135,10 +135,10 @@ def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
     """
     claimant = claim.claimant
     if claimant is not None:
-        discord = claimant.identity(IdentityProvider.DISCORD)
+        discord = claimant.most_recent_identity_for(IdentityProvider.DISCORD)
         if mention and discord is not None and discord.discord_id is not None:
             return f"<@{discord.discord_id}>"
-        java = claimant.identity(IdentityProvider.JAVA)
+        java = claimant.most_recent_identity_for(IdentityProvider.JAVA)
         if java is not None and java.display_name is not None:
             return java.display_name
         if claimant.public_creator_id is not None:
