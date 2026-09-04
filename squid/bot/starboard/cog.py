@@ -56,11 +56,17 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         super().__init__(bot)
         self.service = bot.services.starboards
         self._debouncer = EntryDebouncer(self._refresh_key, bot.background_tasks)
-        self.bot.reactions.subscribe(self)
+        self._reaction_subscription = self.bot.reactions.subscribe(
+            type(self).__qualname__,
+            add=self.on_reaction_add,
+            remove=self.on_reaction_remove,
+            clear=self.on_reaction_clear,
+            clear_emoji=self.on_reaction_clear_emoji,
+        )
 
     @override
     async def ui_unload(self) -> None:
-        self.bot.reactions.unsubscribe(self)
+        self._reaction_subscription.detach()
         await self._debouncer.close()
 
     async def on_reaction_add(self, event: ReactionEvent) -> None:
