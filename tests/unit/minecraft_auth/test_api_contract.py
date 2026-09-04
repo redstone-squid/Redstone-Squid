@@ -163,6 +163,8 @@ class FakeInstallations(InstallationCredentialService):
             parsed_id = UUID(installation_id)
         except ValueError:
             raise InvalidInstallationCredentialError from None
+        if parsed_id != self.current.id or installation_secret != INSTALLATION_SECRET:
+            raise InvalidInstallationCredentialError
         return await self.authenticate(f"sqpi_{parsed_id.hex}_{installation_secret}")
 
 
@@ -477,6 +479,14 @@ async def test_invalid_paper_installation_headers_are_indistinguishable() -> Non
                 {
                     "Squid-Installation-ID": str(INSTALLATION_ID),
                     "Squid-Installation-Secret": "short",
+                },
+                {
+                    "Squid-Installation-ID": "22222222-2222-4222-8222-222222222222",
+                    "Squid-Installation-Secret": INSTALLATION_SECRET,
+                },
+                {
+                    "Squid-Installation-ID": str(INSTALLATION_ID),
+                    "Squid-Installation-Secret": "x" * 43,
                 },
                 {
                     "Squid-Installation-ID": "x" * 46,
