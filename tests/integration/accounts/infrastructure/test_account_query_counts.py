@@ -16,7 +16,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod, ClaimStatus
 from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.infrastructure.models import CreatorAlias
 from squid.accounts.infrastructure.repository import AccountRepository
@@ -186,6 +186,38 @@ async def test_pending_claims_without_claimants_stays_one_query(
 
     assert [claim.claimant for claim in claims] == [None]
     assert len(_selects(statements)) == 1, _selects(statements)
+
+
+@pytest.mark.parametrize("status", [ClaimStatus.APPROVED, ClaimStatus.REJECTED])
+@pytest.mark.parametrize("identity_count", [1, 3])
+async def test_resolving_a_claim_names_its_claimant_at_constant_query_cost(
+    repository: AccountRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    status: ClaimStatus,
+    identity_count: int,
+) -> None:
+    identities = (
+        AccountIdentityValue.discord(1),
+        AccountIdentityValue.java(uuid.UUID(int=1), username="Player"),
+        AccountIdentityValue.bedrock(2**63, gamertag="Builder"),
+    )[:identity_count]
+    claimant = await repository.create(consent=CONSENT, identities=identities)
+    assert claimant.id is not None
+    async with async_session_factory.begin() as session:
+        session.add(CreatorAlias(name="OldName"))
+    claim = await repository.request_claim(name="OldName", account_id=claimant.id)
+
+    with _counting(async_session_factory) as statements:
+        resolved = await repository.resolve_claim(
+            claim_id=claim.id,
+            status=status,
+            resolved_by_account_id=claimant.id,
+        )
+
+    assert resolved.claimant is not None
+    assert len(resolved.claimant.identities) == identity_count
+    # Claim, alias, claimant account, then the one batched identity load.
+    assert len(_selects(statements)) == 4, _selects(statements)
 
 
 async def test_create_returns_exactly_what_it_persisted(

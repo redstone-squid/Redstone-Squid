@@ -2,16 +2,30 @@
 
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 import anyio
+import discord
 import pytest
 from whenever import Instant
 
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.application import AccountService
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
-from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent, request_consent
+from squid.accounts.domain import (
+    CURRENT_CONSENT_VERSION,
+    PRIVACY_NOTICE,
+    Account,
+    AccountConsent,
+    AccountIdentity,
+    CreditPreview,
+    IdentityProvider,
+    LinkPreview,
+)
+from squid.bot.consent import NOT_ASKED, _consent_prompt, ensure_consented_account, prompt_for_consent, request_consent
+from squid.core.i18n import tr
+from squid_ui.testing import RecordingResponder, press
+from squid_ui.text import NEUTRAL, resolve_text
 from squid_ui_discord import Everyone, SessionKey, SessionManager
 from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import (
@@ -27,6 +41,7 @@ from tests.support.discord import make_layout_bot
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
 USER_ID = 123
+JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 
 
 def discord_account(*, account_id: int = 7, consented: bool) -> Account:
@@ -81,6 +96,78 @@ def make_interaction(*, response_done: bool) -> Any:
 async def gate(source: Any) -> sd.Request[Any]:
     """The request a command hands the gate."""
     return await sd.request(source)
+
+
+@pytest.mark.parametrize(
+    ("credit", "expected_credit"),
+    [
+        pytest.param(None, "No build credits", id="none"),
+        pytest.param(CreditPreview("Notch", 3), "becomes attributed", id="unclaimed"),
+        pytest.param(CreditPreview("Notch", 3, UUID(int=9)), "opens a claim", id="contested"),
+    ],
+)
+def test_link_consent_card_names_every_stored_value_and_credit_outcome(
+    credit: CreditPreview | None,
+    expected_credit: str,
+) -> None:
+    prompt = _consent_prompt(
+        user_id=USER_ID,
+        preview=LinkPreview(JAVA_UUID, "Notch", credit),
+        timeout=120,
+        on_answer=None,
+    )
+    root = sd.MessageRoot(prompt, access=sd.Owner(USER_ID), timeout=120)
+
+    payload = commit_render(root).to_components()
+    rendered = str(payload)
+    card_text = "\n".join(component["content"] for component in payload[0]["components"])
+
+    assert payload[0]["type"] == discord.ComponentType.container.value
+    assert "Discord user ID" in card_text
+    assert "Minecraft UUID" in card_text
+    assert "Minecraft username" in card_text
+    assert "Notch" in card_text
+    assert str(JAVA_UUID).replace("-", r"\-") in card_text
+    assert expected_credit in card_text
+    assert CURRENT_CONSENT_VERSION.replace("-", r"\-") in card_text
+    assert all(label in rendered for label in ("Agree and link", "Cancel", "Privacy notice"))
+
+
+async def test_cancel_and_privacy_never_record_consent() -> None:
+    answers: list[AccountConsent | None] = []
+
+    async def answer(_event: sl.PressEvent, consent: AccountConsent | None) -> None:
+        answers.append(consent)
+
+    cancel_prompt = _consent_prompt(
+        user_id=USER_ID,
+        preview=LinkPreview(JAVA_UUID, "Notch"),
+        timeout=120,
+        on_answer=answer,
+    )
+    cancel_responder = RecordingResponder()
+
+    await press(cancel_prompt, "cancel", responder=cancel_responder)
+
+    assert cancel_prompt.consent is None
+    assert cancel_prompt.closed
+    assert cancel_responder.finished
+    assert answers == [None]
+
+    privacy_prompt = _consent_prompt(
+        user_id=USER_ID,
+        preview=LinkPreview(JAVA_UUID, "Notch"),
+        timeout=120,
+        on_answer=answer,
+    )
+    privacy_responder = RecordingResponder()
+
+    await press(privacy_prompt, "privacy", responder=privacy_responder)
+
+    assert privacy_prompt.consent is None
+    assert not privacy_prompt.closed
+    assert answers == [None]
+    assert privacy_responder.notices == [(resolve_text(tr(PRIVACY_NOTICE), NEUTRAL).content, sl.interactions.Visibility.PRIVATE)]
 
 
 def answer(view_holder: list[Any], *, agree: bool) -> None:

@@ -172,9 +172,27 @@ async def _show_prompt(
     parent: sd.MessageRoot | None,
 ) -> ConsentPrompt | None:
     """The notice this reader is owed, worded for what agreeing would actually store."""
+    prompt = _consent_prompt(
+        user_id=user_id,
+        preview=preview,
+        timeout=timeout,
+        on_answer=on_answer,
+    )
+    outcome = await request.respond(prompt, parent=parent)
+    return prompt if isinstance(outcome, sd.Presented) else None
+
+
+def _consent_prompt(
+    *,
+    user_id: int,
+    preview: LinkPreview | None,
+    timeout: float,
+    on_answer: ConsentContinuation | None,
+) -> ConsentPrompt:
+    """Build the exact notice shown before an account or identity is stored."""
     version = CURRENT_CONSENT_VERSION
     if preview is None:
-        prompt = ConsentPrompt(
+        return ConsentPrompt(
             user_id=user_id,
             title=tr(t"Before Redstone Squid stores anything about you"),
             summary=tr(
@@ -195,37 +213,34 @@ async def _show_prompt(
             wait_timeout=timeout,
             on_answer=on_answer,
         )
-    else:
-        username = preview.username
-        uuid = preview.java_uuid
-        prompt = ConsentPrompt(
-            user_id=user_id,
-            title=tr(t"Link {username} to your Discord account"),
-            summary=tr(
-                t"Agreeing stores your Discord user ID, your Minecraft UUID and your current "
-                t"Minecraft username, and records this consent. Cancelling stores nothing."
+    username = preview.username
+    uuid = preview.java_uuid
+    return ConsentPrompt(
+        user_id=user_id,
+        title=tr(t"Link {username} to your Discord account"),
+        summary=tr(
+            t"Agreeing stores your Discord user ID, your Minecraft UUID and your current "
+            t"Minecraft username, and records this consent. Cancelling stores nothing."
+        ),
+        fields=(
+            CardField(
+                tr(t"Minecraft account"),
+                tr(t"**{username}**\n`{uuid}`"),
             ),
-            fields=(
-                CardField(
-                    tr(t"Minecraft account"),
-                    tr(t"**{username}**\n`{uuid}`"),
-                ),
-                CardField(
-                    tr(t"Discord account"),
-                    tr(t"<@{user_id}> (`{user_id}`)"),
-                ),
-                CardField(tr(t"Build credit"), _link_credit_value(preview)),
-                CardField(
-                    tr(t"Consent recorded"),
-                    tr(t"Notice {version}, timed at the moment you agree."),
-                ),
+            CardField(
+                tr(t"Discord account"),
+                tr(t"<@{user_id}> (`{user_id}`)"),
             ),
-            accept_label=tr(t"Agree and link"),
-            wait_timeout=timeout,
-            on_answer=on_answer,
-        )
-    outcome = await request.respond(prompt, parent=parent)
-    return prompt if isinstance(outcome, sd.Presented) else None
+            CardField(tr(t"Build credit"), _link_credit_value(preview)),
+            CardField(
+                tr(t"Consent recorded"),
+                tr(t"Notice {version}, timed at the moment you agree."),
+            ),
+        ),
+        accept_label=tr(t"Agree and link"),
+        wait_timeout=timeout,
+        on_answer=on_answer,
+    )
 
 
 async def prompt_for_consent(

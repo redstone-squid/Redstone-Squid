@@ -9,6 +9,7 @@ from discord.ext import commands
 from pytest_mock import MockerFixture
 
 import squid_ui_discord as sd
+from squid.accounts.errors import MinecraftServiceUnavailableError
 from squid.bot.errors import (
     SquidCommandTree,
     build_error_notice,
@@ -38,6 +39,14 @@ def test_domain_error_presentation_exposes_only_public_detail() -> None:
 
     assert notice.title == "Resource not found"
     assert notice.detail == "Build not found. Check the build ID and try again."
+    assert notice.error_id is None
+
+
+def test_minecraft_service_outage_is_rendered_as_a_stable_retryable_bot_error() -> None:
+    notice = build_error_notice(MinecraftServiceUnavailableError(), locale="en-GB")
+
+    assert notice.title == "Service unavailable"
+    assert notice.detail == "The Minecraft account service is temporarily unavailable. Try again in a few minutes."
     assert notice.error_id is None
 
 
