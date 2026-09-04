@@ -108,12 +108,20 @@ class CompleteIdempotentResponseMiddleware:
             return
 
         buffered: list[Message] = []
+        buffered_body_bytes = 0
+        response_limit = _response_limit(scope)
 
         async def capture(message: Message) -> None:
+            nonlocal buffered_body_bytes
             state = scope.get("state", {})
             if _STATE_KEY not in state:
                 await send(message)
                 return
+            if message["type"] == "http.response.body":
+                buffered_body_bytes += len(cast(bytes, message.get("body", b"")))
+                if buffered_body_bytes > response_limit:
+                    msg = f"An idempotent response exceeds the {response_limit}-byte replay limit."
+                    raise RuntimeError(msg)
             buffered.append(message)
 
         await self.app(scope, receive, capture)
@@ -121,7 +129,7 @@ class CompleteIdempotentResponseMiddleware:
         pending = state.get(_STATE_KEY)
         if not isinstance(pending, IdempotencyReservationState):
             return
-        response = _stored_response(buffered, max_bytes=_response_limit(scope))
+        response = _stored_response(buffered, max_bytes=response_limit)
         # A disconnect or server shutdown must not interrupt completion after the
         # application mutation has succeeded. No bytes reach the caller until the
         # durable response commit settles.
