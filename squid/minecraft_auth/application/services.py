@@ -10,7 +10,9 @@ from squid.accounts.application.ports import AccountMinecraftAuthorization
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
 from squid.minecraft_auth.application.crypto import (
+    MAX_INSTALLATION_ID_CHARS,
     MAX_INSTALLATION_SECRET_CHARS,
+    MIN_INSTALLATION_ID_CHARS,
     MIN_INSTALLATION_SECRET_CHARS,
     MinecraftSecretCodec,
     SecretPurpose,
@@ -173,6 +175,8 @@ class InstallationCredentialService:
     ) -> AuthenticatedPaperInstallation:
         """Authenticate opaque Paper credential headers as one indistinguishable credential."""
         if installation_id is None or installation_secret is None:
+            raise InvalidInstallationCredentialError
+        if not MIN_INSTALLATION_ID_CHARS <= len(installation_id) <= MAX_INSTALLATION_ID_CHARS:
             raise InvalidInstallationCredentialError
         if not MIN_INSTALLATION_SECRET_CHARS <= len(installation_secret) <= MAX_INSTALLATION_SECRET_CHARS:
             raise InvalidInstallationCredentialError
