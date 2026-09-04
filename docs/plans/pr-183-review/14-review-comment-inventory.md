@@ -1,4 +1,4 @@
-# PR 183 review comment inventory
+# PR #183 Review Plan 14: Later Review Batch
 
 This inventory records the 104 pending review comments left by `Glinte` on
 [PR 183](https://github.com/redstone-squid/Redstone-Squid/pull/183) for the inclusive commit range
@@ -10,6 +10,40 @@ The CLI, web frontend, and Minecraft plugin are excluded by path: `cli/`, `web/`
 Core backend files under `squid/` remain included even when their introducing commit has a `minecraft:` or
 `minecraft-auth:` subject. Each comment appears once under its primary category. Comment wording, spelling, and
 capitalization are preserved.
+
+This file is the immutable source inventory. The implementation plan is split by ownership boundary rather than by
+the reviewer's wording category; that prevents one architectural change from being planned independently in three
+different files. Every inventory row is assigned to exactly one detailed subplan:
+
+| Subplan | Primary ownership | Threads |
+|---|---|---:|
+| [14A](14a-platform-delivery-tooling.md) | Runtime composition, build delivery, CI, and cross-cutting test shape | 6 |
+| [14B](14b-api-idempotency-rate-limits.md) | HTTP idempotency and rate limiting | 12 |
+| [14C](14c-notifications.md) | Event materialization, inbox policy, and Discord notification UX | 13 |
+| [14D](14d-submission-form-drafts.md) | Submission manifests and synchronized drafts | 17 |
+| [14E](14e-submission-finalization-builds.md) | Durable finalization and canonical build creation | 20 |
+| [14F](14f-media-processing-api.md) | Media upload, normalization, persistence, and worker registration | 11 |
+| [14G](14g-schematics-persistence-publication.md) | Schematic storage and preview publication | 10 |
+| [14H](14h-accounts-records-persistence.md) | Account identity and computed-record persistence | 9 |
+| [14I](14i-minecraft-auth.md) | Minecraft installation and player authorization | 6 |
+| **Total** |  | **104** |
+
+## Triage rules
+
+The audit base is the current branch after the completed plans 1–13, not the historical comment anchor. A thread is
+classified in a subplan as:
+
+- **Already addressed** when current production code, rather than only a test helper, implements the requested
+  outcome. The disposition names the surviving code contract.
+- **Retain** when the review proposed a change but the current design has a concrete invariant that would be lost.
+  The plan records that invariant and adds or strengthens the proof where needed.
+- **Fix** when repository work remains. The disposition points to a milestone and an acceptance test.
+- **Defer** only when the work belongs to a named existing plan whose scope is broader than PR #183. A bare future
+  TODO is not a disposition.
+
+The detailed plans cover repository work only. Posting replies or resolving GitHub threads still requires separate
+authorization. The 52 later comments called out in the directory README remain outside this plan's `aa85f68`
+cutoff.
 
 | Category | Count |
 |---|---:|
