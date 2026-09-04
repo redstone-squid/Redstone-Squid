@@ -60,23 +60,24 @@ class ErrorNotice:
         return error_node(self.title, self.detail)
 
 
+def _sanitize_log_value(value: object) -> object:
+    """Remove Discord account identifiers from one recursively nested log value."""
+    if isinstance(value, Mapping):
+        return {
+            key: _sanitize_log_value(item)
+            for key, item in value.items()
+            if isinstance(key, str) and not _is_discord_user_id_key(key)
+        }
+    if isinstance(value, list):
+        return [_sanitize_log_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_log_value(item) for item in value)
+    return value
+
+
 def _safe_log_context(context: Mapping[str, object] | None) -> dict[str, object]:
     """Return diagnostic context without stable Discord account identifiers."""
-
-    def sanitize(value: object) -> object:
-        if isinstance(value, Mapping):
-            return {
-                key: sanitize(item)
-                for key, item in value.items()
-                if isinstance(key, str) and not _is_discord_user_id_key(key)
-            }
-        if isinstance(value, list):
-            return [sanitize(item) for item in value]
-        if isinstance(value, tuple):
-            return tuple(sanitize(item) for item in value)
-        return value
-
-    sanitized = sanitize(context or {})
+    sanitized = _sanitize_log_value(context or {})
     assert isinstance(sanitized, dict)
     return sanitized
 
