@@ -487,3 +487,11 @@ land inside the same second. `tests/unit/` and `tests/architecture/` are green.
 
 Replying on GitHub and resolving these threads still requires separate explicit authorization, per
 [README.md](README.md).
+
+## Completion update (2026-08-30)
+
+**Done.** The retained caller naming, error wording, sync mapping, and pagination decisions remain
+intact. `b1032ee7` adds the missing persistence-boundary proof that API-key scopes are trimmed,
+deduplicated, and sorted before storage, plus a substantive three-item schematic pagination case
+covering both next and previous offset anchors. The pagination test passes locally; PostgreSQL
+execution of canonical scope persistence is externally gated.

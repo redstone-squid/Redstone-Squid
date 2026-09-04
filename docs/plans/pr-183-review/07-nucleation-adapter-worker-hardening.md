@@ -32,4 +32,11 @@
 
 ## Status
 
-**In progress.** No code fix has landed here yet: the `SchematicFormat.LITEMATIC` fallback, broad `_optional()` exception handling, and untyped `cast()`/`dataclasses.asdict()` boundary decoding are all unchanged since the audit. The only thing that moved is the ground under one citation — `nucleation` is now pinned to `0.10.14`, not `0.10.1` — so the upstream reproduction (Plan step 3) must run against the current pin.
+**Done.** Unresolved source formats reject instead of becoming litematic. Required native JSON,
+base64, frame headers, numeric ranges, vectors, RGBA, payload totals, and every operation's arity
+are decoded strictly before allocation or slicing. Optional sign/lattice evidence alone may be
+dropped, with malformed evidence covered; simulation failures keep stable user copy and developer
+context. Queue wait and every operation timeout are covered. A clean `0.10.14` reproducer confirmed
+the current exception-type documentation mismatch and it is reported as
+[Nucleation #40](https://github.com/Schem-at/Nucleation/issues/40), cited beside the sole narrow
+workaround.

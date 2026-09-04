@@ -20,3 +20,13 @@
 - Scenarios cover zero, one, and several schematics; primary selection; reordered attachments; one failed analysis; and all analyses failing.
 - Duplicate tests cover matches from non-first files, repeated candidates across files, strongest-tier merging, and build-summary rendering.
 - Classification tests cover missing, generic, misleading, and correctly specific content types for schematics and non-schematics.
+
+## Completion update (2026-08-30)
+
+**Done.** Attachments retain stable identity, classification, analysis, failure, and primary facts.
+Multiple usable schematics require an explicit choice; the sole usable schematic defaults safely.
+Duplicate evidence covers every successful analysis, merges by strongest match with titled source
+summaries, and records partial lookup failures. Same-digest uploads coalesce without upload-order
+effects, while post-save record failures become persisted recovery evidence and truthful UI.
+Zero/one/many, reorder, one/all-failure, record-failure, boundary, and nested JSON round-trip cases
+are present; PostgreSQL execution of the round trip remains externally gated.

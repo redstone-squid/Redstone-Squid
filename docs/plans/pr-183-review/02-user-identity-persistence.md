@@ -383,3 +383,9 @@ Replying on GitHub and resolving threads requires separate explicit authorizatio
 - **An integration test caught a real bug**: inside `case()` the `locked_until` bind loses its
   `InstantUTC` adapter and reaches asyncpg as a bare `Instant` it cannot encode.
 - `docs/credential-hashing.md` now records the applied answer rather than pointing here for it.
+
+## Completion update (2026-08-30)
+
+**Done.** Provider-neutral identity, keyed verification-code hashing, and persistence constraints
+remain intact. `61eb77e0` closes the final bot-boundary gap by presenting
+`MinecraftServiceUnavailableError` with stable translated service-unavailable guidance.
