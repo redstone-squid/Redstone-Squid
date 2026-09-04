@@ -10,20 +10,23 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.errors import AccountNotFoundError
-from squid.accounts.infrastructure.models import Account, AccountIdentity
+from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias, CreatorAliasClaim
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.core.errors import DataIntegrityError
 from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventRecord
-from squid.notifications.domain import NotificationCandidate, NotificationKind
+from squid.notifications.domain import NotificationCandidate, NotificationKind, SubscriptionKind
 from squid.notifications.infrastructure.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
     NotificationRecord,
+    NotificationSubscriptionRecord,
 )
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.submissions.domain import SubmissionOrigin
 from squid.submissions.infrastructure.models import SubmissionDraft
+from squid.voting.domain import VoteKind, VoteSessionResult, VoteStatus
+from squid.voting.infrastructure.models import Vote, VoteSession
 
 
 @pytest.mark.parametrize(
@@ -264,3 +267,68 @@ async def test_simultaneous_reversed_merges_lock_in_one_order_and_choose_one_win
         remaining_ids = tuple(await session.scalars(select(Account.id).where(Account.id.in_((first.id, second.id)))))
     assert len(remaining_ids) == 1
     assert outcomes.count(("merged", remaining_ids[0])) == 1
+
+
+async def test_core_conflict_statements_collapse_claim_vote_and_subscription_collisions(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    accounts = AccountRepository(migrated_session_factory, "test-pepper")
+    survivor = await accounts.create()
+    absorbed = await accounts.create()
+    assert survivor.id is not None
+    assert absorbed.id is not None
+    subject_id = uuid.UUID("f0000000-0000-4000-8000-000000000002")
+    async with migrated_session_factory.begin() as session:
+        alias = CreatorAlias(name="Merge Builder")
+        vote_session = VoteSession(
+            status=VoteStatus.OPEN,
+            result=VoteSessionResult.PENDING,
+            author_account_id=survivor.id,
+            kind=VoteKind.GENERIC,
+            pass_threshold=None,
+            fail_threshold=None,
+        )
+        session.add_all([alias, vote_session])
+        await session.flush()
+        session.add_all(
+            [
+                CreatorAliasClaim(alias_id=alias.id, account_id=survivor.id),
+                CreatorAliasClaim(alias_id=alias.id, account_id=absorbed.id),
+                Vote(
+                    vote_session_id=vote_session.id,
+                    account_id=survivor.id,
+                    guild_id=1,
+                    option_id="yes",
+                    emoji="yes",
+                    weight=1.0,
+                ),
+                Vote(
+                    vote_session_id=vote_session.id,
+                    account_id=absorbed.id,
+                    guild_id=1,
+                    option_id="no",
+                    emoji="no",
+                    weight=1.0,
+                ),
+                NotificationSubscriptionRecord(
+                    account_id=survivor.id,
+                    kind=SubscriptionKind.CREATOR,
+                    subject_id=subject_id,
+                ),
+                NotificationSubscriptionRecord(
+                    account_id=absorbed.id,
+                    kind=SubscriptionKind.CREATOR,
+                    subject_id=subject_id,
+                ),
+            ]
+        )
+
+    await accounts.merge(survivor.id, absorbed.id)
+
+    async with migrated_session_factory() as session:
+        claim_accounts = tuple(await session.scalars(select(CreatorAliasClaim.account_id)))
+        vote_accounts = tuple(await session.scalars(select(Vote.account_id)))
+        subscription_accounts = tuple(await session.scalars(select(NotificationSubscriptionRecord.account_id)))
+    assert claim_accounts == (survivor.id,)
+    assert vote_accounts == (survivor.id,)
+    assert subscription_accounts == (survivor.id,)
