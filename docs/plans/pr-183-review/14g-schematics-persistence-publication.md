@@ -14,9 +14,11 @@ Runtime APIs still expose `project_render`, `_replace_projected_render`, and “
 migration filename/table comments use the same term. The operation actually publishes one generated preview as a
 build link while preserving manually managed render links.
 
-Use `publish_cached_preview`, `replace_generated_preview_link`, and “generated preview link” throughout runtime code.
-Rename the migration file before merge only if its revision has never shipped; otherwise leave the historical
-filename/revision and add a forward migration for physical table names. Never rewrite an applied Alembic revision.
+Use `publish_cached_preview`, `replace_generated_preview_link`, and “generated preview link” for publication/runtime
+projector terminology. Retain the legitimate `RenderRequest.projection` camera field and its orthographic/perspective
+wire values. Rename the migration filename/prose before merge only if its revision has never shipped; if shipped,
+leave the historical revision unchanged. It contains no projection-named physical table/column, so no forward schema
+migration is needed unless a separate inventory finds such a name.
 
 ### The repository owns two aggregates
 
@@ -58,29 +60,32 @@ of every dataclass.
 ### Public links must come from routing/configuration
 
 `SchematicSummary.from_domain` hard-codes `/v1/builds/.../content`. Domain-to-DTO conversion lacks the mounted root,
-proxy prefix, and route name. Have the route pass a link built through FastAPI/Starlette reverse routing (or a shared
-API link builder) and keep the Pydantic model responsible only for validation. Test a non-default `root_path`.
+proxy prefix, and route name. Have the route pass a root-path-aware relative link built by a shared API link builder
+from the named route. Preserve the current relative wire shape rather than adopting `Request.url_for`'s absolute,
+host-dependent URL. Keep the Pydantic model responsible only for validation; test a non-default `root_path` and an
+untrusted forwarded host.
 
 ### Limits have two authorities in tests
 
-The integration test spells `16 * 1024 * 1024` while model/domain values already expose the upload bound. Create one
-application/config limit supplied to preflight, object storage, persistence, and tests. A database check necessarily
-embeds the migration-time numeric value; a schema-totality test compares it to the declared deployment constant so a
-future change requires an explicit migration.
+The integration test spells `16 * 1024 * 1024` while model/domain values already expose the upload bound. Define a
+fixed schema ceiling shared by model/migration assertions, and require configurable
+`SchematicConfig.max_upload_bytes` to be less than or equal to it. Runtime preflight uses the configured limit; the
+database check uses only the schema ceiling. Changing the ceiling requires an explicit migration.
 
 ## Planned work
 
 1. **Pin current invariants.** Cover two public attachments, featured-only preview, manual link preservation, primary
    replacement races, and revision increments.
-2. **Replace runtime projection vocabulary.** Rename methods/types/docs and decide migration-file treatment from
-   deployment history before editing Alembic artifacts.
+2. **Replace publication projection vocabulary.** Rename publication methods/types/docs while retaining camera
+   projection. Rename the historical migration file/prose only if unshipped; otherwise leave it untouched.
 3. **Split preview publication persistence.** Move render/job/link transactions behind
    `SchematicPreviewPublisher` while preserving the exact row-lock order.
 4. **Split read models and harden mapping.** Create focused modules, exhaustive decoders, and structured corruption
    failures.
-5. **Centralize the upload limit.** Share the runtime value and add migration/schema drift coverage; remove test
-   literals.
-6. **Build public URLs through the router.** Pass links into Pydantic response construction and cover mounted roots.
+5. **Centralize upload-limit contracts.** Share the fixed schema ceiling, validate runtime configuration beneath it,
+   add migration/model drift coverage, and remove test literals.
+6. **Build relative public URLs from named routes.** Pass links into Pydantic response construction and cover mounted
+   roots without trusting request hosts.
 7. **Re-run race and worker integration.** Verify the separated publisher against real PostgreSQL and the real worker
    pool, including crash/retry after object upload and before link commit.
 
@@ -106,7 +111,9 @@ class SchematicPreviewPublisher(Protocol):
 
 Both operations return a negative result when the attachment is no longer featured. They must never delete a manual
 `build_links.media_type == "render"` row; generated-link ownership is established by a registered render record, not
-by URL shape.
+by URL shape. A fresh object rejected as stale remains an unreferenced generated artifact owned by the
+reference-aware preview cleanup job; retries register the same digest, and exhausted retries remove only objects with
+no render/link reference.
 
 ## Test matrix
 
@@ -114,7 +121,7 @@ by URL shape.
   duplicate tiers, typed mapping corruption, uploader attribution, and shared file rows.
 - Publisher: current/non-current source, cached/fresh recipe, manual link coexistence, replacement, concurrent
   primary change, revision increments, missing build/schematic, and retry after ambiguous commit.
-- Migration: upgrade/downgrade of preview jobs/object keys and any forward physical rename; never revise applied IDs.
+- Migration: upgrade/downgrade of preview jobs/object keys; never revise applied IDs and add no no-op physical rename.
 - API: two downloadable attachments, one featured preview, explicit download ID, license facts, route-generated link,
   proxy `root_path`, and unavailable private attachment.
 - Limits: exact boundary/over-boundary through domain, repository, database check, and API preflight using one value.
@@ -124,19 +131,20 @@ by URL shape.
 
 | Thread | Disposition |
 |---|---|
-| [`alembic/versions/2026_08_10_1900-e1f2a3b4c5d6_durable_schematic_render_projection.py`: “ban projection”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796148680) | **Fix in milestone 2 subject to deployment history.** Rename an unshipped filename; never rewrite an applied revision. |
+| [`alembic/versions/2026_08_10_1900-e1f2a3b4c5d6_durable_schematic_render_projection.py`: “ban projection”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796148680) | **Fix in milestone 2.** Rename filename/prose only if unshipped; otherwise retain the applied historical revision because no physical schema name needs a forward rename. |
 | [`squid/schematics/application/ports.py`: “ban project”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796489853) | **Fix in milestones 2–3.** Name cached/fresh preview publication actions directly. |
 | [`squid/schematics/application/ports.py`: “confusing docstirng”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796491045) | **Fix in milestone 3.** State featured-source fencing, generated-link ownership, and return behavior. |
 | [`squid/schematics/infrastructure/repository.py`: “wtf is this crap”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796495596) | **Fix in milestone 3.** Separate schematic storage from preview/build-link publication without losing atomic fencing. |
-| [`squid/schematics/infrastructure/repository.py`: “is this really a good design? actually unsure.”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796530955) | **Resolve in milestone 3.** Keep the cross-table transaction in a purpose-named publisher and pin its invariant. |
+| [`squid/schematics/infrastructure/repository.py`: “is this really a good design? actually unsure.”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796530955) | **Fix in milestone 3.** Keep the cross-table transaction in a purpose-named publisher and pin its invariant. |
 | [`squid/schematics/application/queries.py`: “ok we need a single round of big cleanup of historical baggage”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791237158) | **Fix in milestone 4.** Split attachment, duplicate, and preview read models and narrow exports. |
 | [`tests/integration/schematics/test_repository.py`: “use the constant”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791246495) | **Fix in milestone 5.** Remove the literal and enforce runtime/migration agreement. |
-| [`squid/schematics/infrastructure/repository.py`: “only primary?”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3789550075) | **Already correct at current HEAD; retain.** All public attachments list/download; only the featured attachment supplies the generated preview. |
-| [`squid/schematics/infrastructure/repository.py`: “doing this manually seem really error prone”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796514203) | **Already addressed by `infrastructure/mapping.py`; strengthen in milestone 4.** Make decoding exhaustive and failures structured. |
+| [`squid/schematics/infrastructure/repository.py`: “only primary?”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3789550075) | **Already addressed.** All public attachments list/download; only the featured attachment supplies the generated preview. |
+| [`squid/schematics/infrastructure/repository.py`: “doing this manually seem really error prone”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796514203) | **Already addressed.** `infrastructure/mapping.py` owns conversion; milestone 4 makes decoding exhaustive and failures structured. |
 | [`squid/api/v1/schemas/schematics.py`: “hmm, idk how to feel about hard coding an url that could be changed elsewhere in code”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791235798) | **Fix in milestone 6.** Reverse the named route under the actual mounted root. |
 
 ## Delivery and rollout
 
 Land invariant tests before splitting the repository. Runtime vocabulary and Python module moves are independent of
-physical migration names. The publisher split must preserve lock ordering in one commit. URL generation is a small
-API commit. Any database rename uses expand/contract and a new Alembic revision if the original revision shipped.
+historical migration prose. The publisher split must preserve lock ordering in one commit. URL generation is a small
+API commit. No database rename is planned because the historical revision has no affected physical name. Fresh
+generated objects that lose the featured-source race are reclaimed only by reference-aware cleanup.

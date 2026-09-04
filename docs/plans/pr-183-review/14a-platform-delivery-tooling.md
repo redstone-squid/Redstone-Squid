@@ -19,9 +19,9 @@ mechanism to private `_create_runtime`; the three public constructors are typed,
 `create_api_runtime`, `create_bot_runtime`, and `create_worker_runtime`. Keeping the private generic removes repeated
 database/exit-stack ownership code without granting callers a runtime service-locator seam.
 
-**Decision:** retain the private helper. Add an architecture assertion that process entry points call only the
-concrete constructors, and document that test composition happens by constructing an `ApplicationRuntime` or service
-bundle directly. Do not grow `_create_runtime` into a public plugin hook.
+**Decision:** retain the private helper. Add an architecture assertion that production process entry points call only
+the concrete constructors. Tests may construct an `ApplicationRuntime`/service bundle directly or use the existing,
+narrow `create_api_app(runtime_factory=...)` seam; do not grow `_create_runtime` into a public plugin hook.
 
 ### Error-context recursion should be named at module scope
 
@@ -88,7 +88,8 @@ fields. This is test readability work; production voting contracts do not change
 ## Validation
 
 - `tests/unit/bot/test_errors.py`: recursive redaction and unchanged presentation behavior.
-- `tests/unit/test_bootstrap.py` and `tests/architecture/`: concrete process constructors and lifetime ownership.
+- Existing `tests/unit/test_runtime.py` plus a new architecture test: concrete process constructors and lifetime
+  ownership, while retaining the API-app-only test factory.
 - OpenAPI export test from a temporary working directory, followed by the repository's contract drift check.
 - Docker build/inspect smoke tests for every deployed target; assert the non-root UID, writable-directory modes,
   exact FFmpeg package where enabled, and absence where disabled.
@@ -101,12 +102,12 @@ fields. This is test readability work; production voting contracts do not change
 
 | Thread | Disposition |
 |---|---|
-| [`squid/bootstrap.py`: “no a fan of this function injection”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796445586) | **Already addressed; retain the private helper.** Public process constructors are concrete. Milestone 1 records and enforces that boundary. |
+| [`squid/bootstrap.py`: “no a fan of this function injection”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796445586) | **Already addressed.** Retain the private helper and narrow API-app test seam; public production process constructors are concrete. Milestone 1 enforces that boundary. |
 | [`squid/bot/errors.py`: “why does this need to be nested”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3789562468) | **Fix in milestone 1.** Extract the recursive security helper and pin its behavior. |
 | [`Dockerfile`: “don't like this. We can do better.”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3796045201) | **Fix in milestone 3.** Replace Boolean shell branching with named, inspectable targets while retaining pins. |
 | [`scripts/export_openapi.py`: “really need a ROOT constant”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3789569542) | **Fix in milestone 2.** Add `PROJECT_ROOT` and a CWD-independent contract test. |
 | [`.github/workflows/catalogue-screenshots-commit.yml`: “this is such a long script this should be extracted out maybe, if it can be done securely”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790822387) | **Fix in milestone 4, under the trust constraint above.** PR-controlled code must never execute with the write token. |
-| [`tests/unit/voting/application/test_vote_service.py`: “nah, we are not storing a 9-tuple without explaining what each row is. Can we just not have this.”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791201333) | **Partly superseded, then fix in milestone 5.** The tuple is smaller but still opaque; use a named record. |
+| [`tests/unit/voting/application/test_vote_service.py`: “nah, we are not storing a 9-tuple without explaining what each row is. Can we just not have this.”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791201333) | **Fix in milestone 5.** The reviewed tuple is smaller at current HEAD but remains opaque; use a named record. |
 
 ## Delivery
 

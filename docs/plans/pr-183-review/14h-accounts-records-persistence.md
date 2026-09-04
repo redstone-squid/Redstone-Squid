@@ -26,10 +26,10 @@ type does not enforce.
 
 ### UUIDv7 is repository-wide work
 
-`accounts.public_creator_id` remains separate from the integer primary key. Merging it into `id` requires the
-repository-wide UUIDv7 primary-key migration already deferred by the schema audit/TODO, including dozens of foreign
-keys and public URL compatibility. Do not perform an account-only primary-key rewrite here. Add a cross-link to that
-named migration and retain the stable public/internal identity split meanwhile.
+`accounts.public_creator_id` remains separate from the integer primary key. Merging it into `id` would require an
+unplanned repository-wide UUIDv7 primary-key migration, including dozens of foreign keys and public URL
+compatibility. Do not perform an account-only primary-key rewrite here. Retain the stable public/internal identity
+split and record that no named implementation plan currently owns a revamp.
 
 ### Account merge SQL needs typed ownership, not cosmetic quoting
 
@@ -50,8 +50,10 @@ docstrings. Adopt the following application/model names while initially retainin
 - `RecordRule`: one ruleset-specific title/calculation definition in that series;
 - `RecordStanding`: one computation run's resolved/unresolved/no-candidate outcome.
 
-Keep user-facing “record” for the public concept. If physical names are later changed, use a separate forward
-migration after code and observability have adopted the vocabulary; do not combine table renames with behavior.
+Keep user-facing “record” for the public concept. Inventory notifications, search projection, suggestions
+catalogue/providers, API, and tests before renaming Python symbols; use temporary aliases so consumers can migrate in
+reviewable stages. If physical names are later changed, use a separate forward migration after code and observability
+have adopted the vocabulary; do not combine table renames with behavior.
 
 ### Record persistence should use domain enums
 
@@ -64,8 +66,9 @@ migration.
 
 `get_record` fetches holder builds and filters `Status.CONFIRMED` in the route, then treats hidden/missing holders as
 integrity failure. Move this to a `PublicRecordQueryService` that returns a complete `PublicRecordDetail` or raises a
-typed data-integrity error. The route should authorize, invoke, and serialize only. Repository queries should avoid
-loading private build fields that the public DTO never uses.
+typed data-integrity error. The route should authorize, invoke, and serialize only. Add a build-owned
+`get_public_summaries(ids)` read port so records do not import build persistence and private aggregate fields are not
+loaded.
 
 ## Planned work
 
@@ -75,13 +78,13 @@ loading private build fields that the public DTO never uses.
    rewrite state/mechanics docstrings.
 3. **Decompose account merge persistence.** Introduce named phases, Core statements, retained raw-SQL constants, and
    phase-level plus end-to-end transaction tests.
-4. **Adopt record vocabulary in Python.** Rename models/read values/services and observability fields without changing
-   physical tables or public routes.
+4. **Adopt record vocabulary in Python.** Inventory all downstream imports, introduce temporary aliases, migrate
+   notifications/search/suggestions/API/tests in stages, then remove aliases without changing physical tables/routes.
 5. **Type record persistence.** Map enums, eliminate routine `.value`/string comparisons, and enforce schema totality.
 6. **Move public record assembly into application queries.** Fetch only public holder summaries, retain order, and
    centralize integrity failure.
-7. **Document the UUIDv7 deferral.** Link the existing repository-wide migration from account model docs; do no local
-   schema rewrite.
+7. **Document the UUIDv7 non-plan.** State that repository-wide conversion has no current implementation owner; do no
+   local schema rewrite or misleading delegation.
 
 ## Interface sketch
 
@@ -99,8 +102,9 @@ class PublicRecordDetail:
     holder_builds: tuple[PublicBuildSummary, ...]
 ```
 
-Persistence must return identities in stable `(provider, created_at, id)` order. A call site may not use `[0]`
-without a named policy and a test containing at least two matching identities.
+Persistence must return identities in stable `(provider, id)` order, matching facts exposed by the current domain
+value. A call site may not use `[0]` without a named policy and a test containing at least two matches; selecting by
+`created_at` requires an explicit domain-contract change.
 
 ## Test matrix
 
@@ -122,7 +126,7 @@ without a named policy and a test containing at least two matching identities.
 | [`squid/accounts/domain/models.py`: “why not identities(...)”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791071265) | **Fix in milestones 1–2.** Return all identities for a provider and make singular selection explicit. |
 | [`squid/accounts/domain/models.py`: “docstring seem inaccurate when ClaimStatus exists”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791104476) | **Fix in milestone 2.** Describe the request and resolution state, not only pending claims. |
 | [`squid/accounts/domain/models.py`: “returned by persistence is not necessary”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791106450) | **Fix in milestone 2.** Describe redeemable identity facts without naming a caller. |
-| [`squid/accounts/infrastructure/models.py`: “merge this into id when we do the UUIDv7 revamp”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790796051) | **Defer to the named repository-wide UUIDv7 migration.** Milestone 7 records the dependency; account-only conversion is out of scope. |
+| [`squid/accounts/infrastructure/models.py`: “merge this into id when we do the UUIDv7 revamp”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790796051) | **Retain.** No repository-wide UUIDv7 migration is currently planned; preserve the public/internal ID split and do not create an account-only conversion. |
 | [`squid/accounts/infrastructure/repository.py`: “can we at least make this triple quoted string, and ideally using sqlalchemy”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791446925) | **Fix in milestone 3.** Use named SQLAlchemy merge phases; triple-quote only irreducible PostgreSQL statements. |
 | [`squid/records/infrastructure/models.py`: “the concept of "Competition" vs "Definition" vs just a normal "Record" is confusing”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790793074) | **Fix in milestone 4.** Adopt series/rule/standing vocabulary and pin conversions. |
 | [`squid/records/infrastructure/models.py`: “enum”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3790791549) | **Fix in milestone 5.** Map record class/build kind/version scope/materialization values through enums. |

@@ -23,11 +23,15 @@ strings with compatibility tests.
 FastAPI can parse a `UUID` header directly, but malformed dependency input normally becomes a 422 validation response
 while a malformed installation credential should be indistinguishable from missing/invalid credentials (401). Keep
 the header value opaque until the authentication dependency, parse it with one credential-token parser, and return
-the same authentication error for missing, malformed, or mismatched ID/secret.
+the same authentication error for missing, malformed, or mismatched ID/secret. This intentionally changes today's
+public context, where missing/malformed headers are generic but well-shaped mismatches carry a Minecraft reason;
+snapshot the distinction first, then make indistinguishable 401 bodies a reviewed security/compatibility change.
 
 The route currently reconstructs a token from two headers and calls `authenticate`. Move that reconstruction/parsing
 into `InstallationCredentialService.authenticate_headers` (or a credential value factory) so HTTP code does not know
-the token serialization. FastAPI remains responsible for header aliases and maximum input length.
+the token serialization. FastAPI remains responsible only for header aliases. Syntax and length validation stay in
+the authentication parser so oversized/malformed credentials cannot become framework-generated 422 responses;
+OpenAPI documents the bounds without a pre-dependency validator.
 
 ### Clock vocabulary is inconsistent
 
@@ -45,9 +49,10 @@ Extend 14B's namespaced advisory-lock helper to hash a stable structured key (no
 ### Account authorization duplicates account persistence
 
 `PostgresAccountIdentityAuthorizer` queries account/identity tables directly for consent and Java ownership. The
-queries are correct but create a second account repository. Expose the two exact checks through an account
-application port implemented by `AccountRepository`/`AccountService`, and inject that port into Minecraft auth. Do
-not inject the entire account service or expose account models to the package.
+approval query correctly proves current consent plus exact verified Java ownership atomically; splitting it would
+create a race. Expose account-owned `can_approve_minecraft_identity(account_id, java_uuid)` with that one-query
+semantic. Retain a separate `has_current_consent` operation only for installation registration and CLI authorization.
+Move CLI composition/tests in the same milestone or retain a compatibility adapter; do not expose account models.
 
 ### API dependencies can be centralized without moving service work into routes
 
@@ -64,8 +69,8 @@ composition: headers, caller requirements, request/response DTOs, and operation 
 3. **Move credential assembly into the application boundary.** Keep raw headers at the transport but centralize
    parse/authenticate behavior and indistinguishable failures.
 4. **Rename the clock and centralize dependencies.** Mechanical, type-checked changes with no behavior delta.
-5. **Reuse the account authorization port.** Move consent/Java ownership queries behind account ownership and delete
-   the duplicate infrastructure adapter.
+5. **Reuse the account authorization port.** Move atomic approval plus consent-only queries behind account ownership,
+   migrate Minecraft and CLI consumers, then delete the duplicate adapter.
 6. **Use a typed namespaced lock.** Generalize the helper, document the count/insert race, and add real PostgreSQL
    concurrency tests.
 
@@ -81,16 +86,17 @@ class MinecraftAuthReason(StrEnum):
 
 class AccountMinecraftAuthorization(Protocol):
     async def has_current_consent(self, account_id: int) -> bool: ...
-    async def owns_verified_java_identity(self, account_id: int, java_uuid: UUID) -> bool: ...
+    async def can_approve_minecraft_identity(self, account_id: int, java_uuid: UUID) -> bool: ...
 ```
 
-The advisory-lock helper should accept a namespace plus already-canonical string/byte key. It must frame components
-unambiguously rather than concatenate user-controlled strings with a delimiter.
+The advisory-lock helper should accept a namespace plus an already-canonical string/byte key. Typing must preserve
+the challenge lock's existing key-byte/SHA-256 derivation and other callers' `hashtextextended` derivation so old and
+new processes contend during rollout. A new framing/hash algorithm requires a drained deployment.
 
 ## Test matrix
 
-- Errors/API: each reason maps to the intended HTTP status/resource/public context; malformed/missing/wrong headers
-  are indistinguishable; input lengths are bounded before service calls.
+- Errors/API: snapshot today's public-context distinction, then prove the intentional indistinguishable 401 result
+  for malformed/missing/wrong/oversized headers; input lengths are bounded inside the auth parser, never by 422.
 - Credentials: register, authenticate, rotate, revoke, constant-time digest comparison, old generation fencing, and
   no secret/digest in logs or responses.
 - Player flow: Paper/Fabric start, approve, exchange, PKCE, polling interval, expiry, replay, wrong installation,
@@ -107,14 +113,16 @@ unambiguously rather than concatenate user-controlled strings with a delimiter.
 | Thread | Disposition |
 |---|---|
 | [`squid/minecraft_auth/errors.py`: “??? This is completely different from how other errors are implemented”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791425659) | **Fix in milestone 2.** Use direct semantic core errors plus a typed reason, not a parallel hierarchy. |
-| [`squid/api/v1/minecraft_auth.py`: “cant fastapi validate UUID in headers directly”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791507956) | **Retain authentication-owned parsing.** Direct UUID validation would change malformed credentials to 422; milestone 3 centralizes parsing and pins 401 equivalence. |
+| [`squid/api/v1/minecraft_auth.py`: “cant fastapi validate UUID in headers directly”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791507956) | **Retain.** Authentication-owned parsing prevents malformed credentials from becoming 422; milestone 3 centralizes parsing and intentionally unifies 401 context. |
 | [`squid/api/v1/minecraft_auth.py`: “why are we doing this”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791510883) | **Fix in milestones 3–4.** Move credential serialization to the application and generic dependency lookup to the shared dependency module. |
 | [`squid/minecraft_auth/application/services.py`: “isnt this called clock elsewhere”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791372764) | **Fix in milestone 4.** Rename `now` to `clock` consistently. |
 | [`squid/minecraft_auth/infrastructure/repository.py`: “needs a comment on why an advisory lock is needed here.”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791404140) | **Fix in milestone 6.** State and test the count-then-insert race under a typed namespace. |
-| [`squid/minecraft_auth/infrastructure/accounts.py`: “are we sure this isnt duplicated with another repository”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791382593) | **Fix in milestone 5.** Put the two account checks behind an account-owned port and delete the duplicate adapter. |
+| [`squid/minecraft_auth/infrastructure/accounts.py`: “are we sure this isnt duplicated with another repository”](https://github.com/redstone-squid/Redstone-Squid/pull/183#discussion_r3791382593) | **Fix in milestone 5.** Put atomic approval and consent-only checks behind an account-owned port, migrate the CLI consumer, then delete the duplicate adapter. |
 
 ## Delivery and rollout
 
 Pin wire errors before changing inheritance. Error alignment, dependency movement, and clock renaming are separate
-behavior-preserving commits. Move account queries only after multi-identity semantics from 14H are available. The
-lock-helper change lands with its concurrency test and all callers migrated atomically to avoid namespace drift.
+commits; header-context unification is an intentional behavior change. The account-port move does not depend on
+14H's identity collection rename and includes CLI compatibility. The lock-helper change lands with its concurrency
+test while preserving existing lock IDs; changing derivation requires a drained deployment, not merely an atomic
+source commit.
