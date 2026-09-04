@@ -170,6 +170,7 @@ class ReactionRouter:
         self._intake_changed = asyncio.Condition()
         self._active_enqueues = 0
         self._outstanding = 0
+        self._accepted: dict[int, _QueuedEvent] = {}
         self._abort_enqueues = anyio.Event()
         self._shutdown_timeout = shutdown_timeout
         self._closing = False
@@ -249,8 +250,10 @@ class ReactionRouter:
             for queue in self._queues:
                 await queue.join()
 
+        pending_at_timeout: tuple[_QueuedEvent, ...] = ()
         if drain_scope.cancelled_caught:
             self._abort_enqueues.set()
+            pending_at_timeout = tuple(self._accepted.values())
             add_counter("squid.reaction.shutdown.timeouts")
             logger.error(
                 "Reaction work did not drain before the shutdown deadline",
@@ -276,6 +279,18 @@ class ReactionRouter:
         )
         if self._workers:
             await self._supervisor.cancel(*self._workers)
+        if pending_at_timeout:
+            with anyio.move_on_after(1.0) as recovery_scope:
+                # Reconciliation is idempotent but not safe to run concurrently for two
+                # snapshots of the same toggling consumer. Preserve acceptance order here.
+                for item in pending_at_timeout:
+                    await self._recover_unadmitted(item)
+            if recovery_scope.cancelled_caught:
+                add_counter("squid.reaction.recovery.timeouts")
+                logger.error(
+                    "Reaction recovery handoff did not finish before shutdown",
+                    extra={"squid.reaction.recovery.pending": len(pending_at_timeout)},
+                )
 
     async def _dispatch_action(self, kind: Literal["add", "remove"], payload: discord.RawReactionActionEvent) -> None:
         member = payload.member
@@ -334,12 +349,19 @@ class ReactionRouter:
         )
 
     async def _dispatch(self, item: _QueuedEvent) -> None:
+        closing = False
         async with self._intake_changed:
             if self._closing:
-                logger.warning("Ignored a reaction received during router shutdown")
-                add_counter("squid.reaction.intake.ignored", attributes={"squid.reaction.kind": item.kind})
-                return
-            self._active_enqueues += 1
+                closing = True
+            else:
+                self._active_enqueues += 1
+        if closing:
+            # Discord remains the durable source: public reactions are desired state and
+            # anonymous reactions are only removed after their ballot commits. The voting
+            # reconciler will therefore observe this event on its next periodic pass.
+            logger.warning("Deferred a reaction received during router shutdown to reconciliation")
+            add_counter("squid.reaction.intake.deferred", attributes={"squid.reaction.kind": item.kind})
+            return
         self._ensure_workers()
         try:
             shard = item.event.payload.message_id % len(self._queues)
@@ -352,7 +374,14 @@ class ReactionRouter:
                 accepted = await self._enqueue_or_abort(queue, item, shard)
             if not accepted:
                 add_counter("squid.reaction.enqueue.aborted", attributes={"squid.reaction.kind": item.kind})
-                await self._recover_unadmitted(item)
+                with anyio.move_on_after(0.5) as recovery_scope:
+                    await self._recover_unadmitted(item)
+                if recovery_scope.cancelled_caught:
+                    add_counter("squid.reaction.recovery.timeouts")
+                    logger.error(
+                        "Reaction recovery timed out; periodic reconciliation will retry it",
+                        extra={"squid.reaction.kind": item.kind},
+                    )
         finally:
             async with self._intake_changed:
                 self._active_enqueues -= 1
@@ -363,6 +392,7 @@ class ReactionRouter:
         accepted_at = time.monotonic()
         item.accepted_at = accepted_at
         self._outstanding += 1
+        self._accepted[id(item)] = item
         attributes = {"squid.reaction.kind": item.kind, "squid.reaction.shard": shard}
         record_histogram(
             "squid.reaction.enqueue.wait",
@@ -454,6 +484,7 @@ class ReactionRouter:
                 add_counter("squid.reaction.shard.failures", attributes=attributes)
             finally:
                 self._outstanding -= 1
+                self._accepted.pop(id(item), None)
                 queue.task_done()
                 record_gauge("squid.reaction.queue.depth", queue.qsize(), attributes=attributes)
 
