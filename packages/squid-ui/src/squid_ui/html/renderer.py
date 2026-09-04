@@ -3,9 +3,8 @@
 import base64
 import json
 import re
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from html import escape
-from urllib.parse import urlsplit
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
@@ -13,6 +12,9 @@ from markdown_it.token import Token
 from squid_ui import scene
 from squid_ui.assets import Asset, InlineAsset, StoredAsset
 from squid_ui.errors import DrawInvariantError
+from squid_ui.html._safety import attribute as _attribute
+from squid_ui.html._safety import safe_url as _safe_url
+from squid_ui.renderer import AssetResolver
 from squid_ui.scene.model import PlanResult
 from squid_ui.text import Markup
 
@@ -28,8 +30,6 @@ border:1px solid color-mix(in srgb,CanvasText 25%,transparent);text-align:start}
 textarea,select,input:not([type=checkbox]){width:100%;max-width:36rem;padding:.5rem}.squid-field{display:grid;gap:.25rem}
 .squid-spoiler{filter:blur(.5rem)}.squid-spoiler:focus,.squid-spoiler:hover{filter:none}
 """.strip()
-
-type AssetResolver = Callable[[scene.Asset], str | None]
 
 _MARKDOWN = MarkdownIt("js-default", {"html": False, "linkify": False})
 _MEDIA_TYPE = re.compile(r"[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\Z")
@@ -55,15 +55,6 @@ _DATA_ATTRIBUTES = {
     scene.HtmlAttributeName.TONE: "data-squid-tone",
 }
 _VOID_TAGS = frozenset({scene.HtmlTag.BR, scene.HtmlTag.HR, scene.HtmlTag.IMG, scene.HtmlTag.INPUT})
-
-
-def _attribute(value: object) -> str:
-    return escape(str(value), quote=True)
-
-
-def _safe_url(value: str) -> str | None:
-    parsed = urlsplit(value)
-    return value if parsed.scheme in {"http", "https"} and parsed.netloc else None
 
 
 def _token_attribute(token: Token, name: str) -> str | None:

@@ -1,9 +1,13 @@
-"""Mechanical renderer protocol for resolved scenes."""
+"""Mechanical renderer contracts for resolved scenes."""
 
+from collections.abc import Callable
 from typing import Protocol
 
 from squid_ui import scene
 from squid_ui.scene.model import PlanResult
+
+type AssetResolver = Callable[[scene.Asset], str | None]
+"""Resolve planned asset metadata to a frontend-consumable reference, if available."""
 
 
 class Renderer[BodyT: scene.Body, OutputT](Protocol):
@@ -16,3 +20,6 @@ class Renderer[BodyT: scene.Body, OutputT](Protocol):
     """
 
     def draw(self, document: scene.Scene[BodyT], *, plan: PlanResult[BodyT] | None = None) -> OutputT: ...
+
+
+__all__ = ["AssetResolver", "Renderer"]
