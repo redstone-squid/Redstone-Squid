@@ -13,6 +13,7 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION
 from squid.accounts.infrastructure.models import Account
+from squid.accounts.infrastructure.repository import AccountRepository
 from squid.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.cli_auth.application import enrollment_proof_message, session_proof_message
 from squid.cli_auth.errors import CliEnrollmentAlreadyExchangedError, InvalidCliSessionError
@@ -23,7 +24,6 @@ from squid.cli_auth.models import (
     CliSessionRecord,
 )
 from squid.cli_auth.repository import PostgresCliAuthorizationRepository
-from squid.minecraft_auth.infrastructure.accounts import PostgresAccountIdentityAuthorizer
 from squid.persistence.base import Base
 
 pytestmark = pytest.mark.asyncio
@@ -61,7 +61,7 @@ async def consenting_account(session_factory: async_sessionmaker[AsyncSession]) 
 def service(session_factory: async_sessionmaker[AsyncSession]) -> CliAuthorizationService:
     return CliAuthorizationService(
         PostgresCliAuthorizationRepository(session_factory),
-        PostgresAccountIdentityAuthorizer(session_factory),
+        AccountRepository(session_factory, "unused-verification-code-pepper"),
         CliSecretCodec(b"integration-cli-auth-pepper-32-bytes"),
         now=lambda: NOW,
     )
