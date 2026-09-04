@@ -21,6 +21,7 @@ DYNAMIC_VOTING_REVISION = "4c9e7a2b1d63"
 NULLABLE_VOTE_THRESHOLDS_REVISION = "b2c3d4e5f6a8"
 VOTE_SUBTYPE_INVARIANT_REVISION = "a9b5c8d3e6f0"
 IDEMPOTENCY_CALLER_REVISION = "b0c6d9e4f7a1"
+FINALIZATION_RESULT_METADATA_REVISION = "c1d7e0f5a8b2"
 
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
@@ -441,6 +442,60 @@ def test_idempotency_caller_migration_dual_writes_and_downgrades(
                 "account:new",
                 "account:old-rolling",
             }
+    finally:
+        engine.dispose()
+
+
+def test_finalization_result_metadata_migration_expands_and_downgrades(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Build-only writers coexist with legacy metadata writers during the drain window."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{FINALIZATION_RESULT_METADATA_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.connect() as connection:
+            before = {
+                str(row[0]): str(row[1])
+                for row in connection.execute(
+                    text(
+                        "SELECT column_name, is_nullable FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'submission_finalization_results' "
+                        "AND column_name IN ('target_key', 'provenance')"
+                    )
+                )
+            }
+            assert before == {"target_key": "NO", "provenance": "NO"}
+
+        command.upgrade(config, FINALIZATION_RESULT_METADATA_REVISION)
+        with engine.connect() as connection:
+            expanded = {
+                str(row[0]): str(row[1])
+                for row in connection.execute(
+                    text(
+                        "SELECT column_name, is_nullable FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'submission_finalization_results' "
+                        "AND column_name IN ('target_key', 'provenance')"
+                    )
+                )
+            }
+            assert expanded == {"target_key": "YES", "provenance": "YES"}
+
+        command.downgrade(config, f"{FINALIZATION_RESULT_METADATA_REVISION}-1")
+        with engine.connect() as connection:
+            downgraded = {
+                str(row[0]): str(row[1])
+                for row in connection.execute(
+                    text(
+                        "SELECT column_name, is_nullable FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'submission_finalization_results' "
+                        "AND column_name IN ('target_key', 'provenance')"
+                    )
+                )
+            }
+            assert downgraded == before
     finally:
         engine.dispose()
 
