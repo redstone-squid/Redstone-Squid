@@ -22,6 +22,7 @@ from typing import Any
 from squid_ui.forms import FormIssue, FormLike, SubmitHandler
 from squid_ui.interactions import (
     ActionMode,
+    ActionResponder,
     Actor,
     PressEvent,
     SelectionEvent,
@@ -39,7 +40,7 @@ type Tree = object
 # --- Tree queries -------------------------------------------------------------------------
 
 
-def walk(tree: Tree) -> Iterator[Any]:
+def walk(tree: Tree) -> Iterator[object]:
     """Yield every dataclass in `tree`, depth first, including `tree` itself.
 
     Deliberately generic rather than built on `runtime._tree`'s `_CHILD_FIELD_NAMES`. That set
@@ -52,7 +53,7 @@ def walk(tree: Tree) -> Iterator[Any]:
     yield from _walk(tree, set())
 
 
-def _walk(value: object, seen: set[int]) -> Iterator[Any]:
+def _walk(value: object, seen: set[int]) -> Iterator[object]:
     if id(value) in seen:
         return
     if isinstance(value, str | bytes):
@@ -103,7 +104,7 @@ def labels(tree: Tree) -> list[str]:
 
 def keys(tree: Tree) -> list[str]:
     """The `key` of every node in `tree` that carries one, in render order."""
-    return [node.key for node in walk(tree) if isinstance(getattr(node, "key", None), str)]
+    return [key for node in walk(tree) if isinstance(key := getattr(node, "key", None), str)]
 
 
 def find_all[NodeT](tree: Tree, kind: type[NodeT], *, key: str | None = None) -> tuple[NodeT, ...]:
@@ -137,7 +138,7 @@ def render_tree(component: AnyComponent) -> tuple[AnyLayoutNode, ...]:
 
 @dataclass
 class RecordingResponder:
-    """An `ActionResponder` that records what a handler asked the frontend to do.
+    """An `ActionResponder` whose ``finish`` records the end of one action's response authority.
 
     Every method a frontend must honestly implement, answered by appending to a list. A test
     asserts against `notices`, `redirects`, `forms`, `finished` and `invalidations` rather than
@@ -180,29 +181,56 @@ class RecordingResponder:
 
 
 class UntouchedResponder:
-    """A responder that fails the test if anything reaches it.
+    """A responder that rejects every call, including ``finish`` ending response authority.
 
     For the cases whose whole claim is that no frontend call happens -- a guard answering a
     verdict, a pure machine computing a transition. An unused `RecordingResponder` proves the
     same thing only if the test remembers to assert it; this one cannot be forgotten.
     """
 
-    def __getattr__(self, name: str) -> object:
+    def _unexpected(self, name: str) -> None:
         message = f"this code was not supposed to reach the responder, but called {name}"
         raise AssertionError(message)
 
+    async def acknowledge(self) -> None:
+        self._unexpected("acknowledge")
 
-def _responder(responder: object | None) -> Any:
+    async def notice(self, text: TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None:
+        self._unexpected("notice")
+
+    async def redirect(self, url: str) -> None:
+        self._unexpected("redirect")
+
+    async def finish(self) -> None:
+        self._unexpected("finish")
+
+    async def present_form(
+        self,
+        form: FormLike,
+        *,
+        key: str = "form",
+        on_submit: SubmitHandler | None = None,
+        mode: ActionMode | None = None,
+        label: TextLike = "",
+        record: object | None = None,
+    ) -> None:
+        self._unexpected("present_form")
+
+    def invalidate(self) -> None:
+        self._unexpected("invalidate")
+
+
+def _responder(responder: ActionResponder | None) -> ActionResponder:
     return RecordingResponder() if responder is None else responder
 
 
-def press_event(*, actor: str = "1", responder: object | None = None, locale: str | None = None) -> PressEvent:
+def press_event(*, actor: str = "1", responder: ActionResponder | None = None, locale: str | None = None) -> PressEvent:
     """A press, carrying a `RecordingResponder` unless one is supplied."""
     return PressEvent(Actor(actor), _responder(responder), locale)
 
 
 def selection_event(
-    *values: str, actor: str = "1", responder: object | None = None, locale: str | None = None
+    *values: str, actor: str = "1", responder: ActionResponder | None = None, locale: str | None = None
 ) -> SelectionEvent:
     """A selection of `values`, carrying a `RecordingResponder` unless one is supplied."""
     return SelectionEvent(Actor(actor), _responder(responder), locale, values=values)
@@ -211,7 +239,7 @@ def selection_event(
 def choice_event(
     *selected: str,
     actor: str = "1",
-    responder: object | None = None,
+    responder: ActionResponder | None = None,
     locale: str | None = None,
     added: Sequence[str] = (),
     removed: Sequence[str] = (),
@@ -236,7 +264,7 @@ def submit_event(
     values: Mapping[str, object] | None = None,
     *,
     actor: str = "1",
-    responder: object | None = None,
+    responder: ActionResponder | None = None,
     locale: str | None = None,
     attempted: Mapping[str, object] | None = None,
     errors: Sequence[FormIssue] = (),
@@ -261,7 +289,13 @@ def control(tree: Tree, key: str) -> ActionControl:
     return find(tree, ActionControl, key=key)
 
 
-async def press(component: AnyComponent, key: str, *, actor: str = "1", responder: object | None = None) -> None:
+async def press(
+    component: AnyComponent,
+    key: str,
+    *,
+    actor: str = "1",
+    responder: ActionResponder | None = None,
+) -> None:
     """Press the control keyed `key` in `component`'s current render.
 
     Renders first, so the control pressed is the one the reader would be looking at rather than
@@ -271,7 +305,11 @@ async def press(component: AnyComponent, key: str, *, actor: str = "1", responde
 
 
 async def choose(
-    component: AnyComponent, key: str, *values: str, actor: str = "1", responder: object | None = None
+    component: AnyComponent,
+    key: str,
+    *values: str,
+    actor: str = "1",
+    responder: ActionResponder | None = None,
 ) -> None:
     """Settle the picker keyed `key` in `component`'s current render on `values`."""
     picker = find(render_tree(component), Choices, key=key)
@@ -285,7 +323,7 @@ async def submit(
     values: Mapping[str, object],
     *,
     actor: str = "1",
-    responder: object | None = None,
+    responder: ActionResponder | None = None,
 ) -> None:
     """Submit `values` to the form the trigger keyed `key` opens."""
     trigger = find(render_tree(component), FormTrigger, key=key)

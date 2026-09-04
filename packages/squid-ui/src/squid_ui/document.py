@@ -27,6 +27,7 @@ type PortableDocumentLike = DocumentLike[RenderTarget]
 
 
 def as_document[RenderTargetT](rendered: DocumentLike[RenderTargetT]) -> Document[RenderTargetT]:
+    """Normalize one node or node sequence into a complete document."""
     if isinstance(rendered, Document):
         return rendered
     if isinstance(rendered, str | bytes):

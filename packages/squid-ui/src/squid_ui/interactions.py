@@ -64,7 +64,7 @@ class Actor:
 
 
 class ActionResponder(Protocol):
-    """Small UI response surface implemented by each frontend adapter.
+    """Response authority for one action, ended by ``finish`` after its terminal acknowledgement.
 
     Every method here is one that any frontend can honestly implement. Forms joined this
     surface once their schemas became portable; frontend-native payloads remain on concrete
@@ -95,7 +95,7 @@ class ActionResponder(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ActionEvent:
-    """Base event passed to portable component handlers.
+    """Portable action input whose response authority ends when ``finish`` delegates to its responder.
 
     `context` carries one reserved key, `"frontend"`, naming the adapter that dispatched
     the event; the rest is for host-injected `ContextKey`s. It is not a place to smuggle
