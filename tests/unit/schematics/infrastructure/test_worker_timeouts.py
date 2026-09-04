@@ -2,6 +2,7 @@
 """Worker deadline-selection tests that do not start native subprocesses."""
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -10,11 +11,52 @@ from squid.schematics.application.commands import RenderRequest, SimulationReque
 from squid.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
 from squid.schematics.errors import SchematicTimeoutError
 from squid.schematics.infrastructure.wire import Frame, Operation
-from squid.schematics.infrastructure.worker import SchematicWorkerPool
+from squid.schematics.infrastructure.worker import SchematicWorkerPool, _Worker
 
 
 class CallObserved(Exception):
     """Stop a public operation after its selected deadline has been observed."""
+
+
+def _worker() -> _Worker:
+    return _Worker(SchematicConfig(), lambda _pump: None)
+
+
+async def test_worker_deadline_includes_cold_process_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    worker = _worker()
+
+    async def slow_start() -> None:
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(worker, "_ensure_started", slow_start)
+    monkeypatch.setattr(worker, "_terminate", AsyncMock(return_value=None))
+
+    with pytest.raises(SchematicTimeoutError):
+        await worker.request("capabilities", {}, (), 0.001)
+
+
+async def test_worker_write_and_read_share_one_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    worker = _worker()
+
+    class SlowInput:
+        def write(self, _data: bytes) -> None:
+            return
+
+        async def drain(self) -> None:
+            await asyncio.sleep(0.02)
+
+    process = type("Process", (), {"stdin": SlowInput(), "stdout": object()})()
+
+    async def slow_response(_stream: object) -> Frame:
+        await asyncio.sleep(0.02)
+        return Frame({"id": 1, "ok": True, "result": {}})
+
+    monkeypatch.setattr(worker, "_ensure_started", AsyncMock(return_value=process))
+    monkeypatch.setattr(worker, "_terminate", AsyncMock(return_value=None))
+    monkeypatch.setattr("squid.schematics.infrastructure.worker.wire.read_frame", slow_response)
+
+    with pytest.raises(SchematicTimeoutError):
+        await worker.request("capabilities", {}, (), 0.03)
 
 
 async def test_queue_wait_can_consume_the_whole_operation_deadline() -> None:

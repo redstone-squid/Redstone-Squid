@@ -141,33 +141,34 @@ class _Worker:
         self, operation: Operation, params: Mapping[str, Any], payloads: Sequence[bytes], timeout: float
     ) -> Frame:
         """Send one request and await its response, respawning on timeout or death."""
-        async with self._lock:
-            process = await self._ensure_started()
-            self._next_id += 1
-            # `id` counts per worker, not per pool, so the correlation key in the logs is the
-            # pair (worker_pid, request_id).
-            header: dict[str, Any] = {"id": self._next_id, "op": operation, "params": params}
-            job_id = current_schematic_job_id.get()
-            if job_id is not None:
-                header["job_id"] = job_id
-            if trace := trace_context_headers():
-                header["trace"] = trace
-            frame = Frame(header, tuple(payloads))
-            assert process.stdin is not None and process.stdout is not None
-            try:
-                process.stdin.write(frame.encode())
-                await asyncio.wait_for(process.stdin.drain(), timeout)
-                response = await asyncio.wait_for(wire.read_frame(process.stdout), timeout)
-                wire.validate_worker_response(response, request_id=self._next_id, operation=operation)
-            except TimeoutError:
-                exit_code = await self._terminate()
-                _record_worker_failure(exit_code, reason="timeout")
-                raise SchematicTimeoutError(operation=operation, timeout_seconds=timeout) from None
-            except FrameStreamClosed, ConnectionResetError, BrokenPipeError:
-                exit_code = await self._terminate()
-                _record_worker_failure(exit_code, reason="crash")
-                raise SchematicWorkerCrashedError(operation=operation, exit_code=exit_code) from None
-            return response
+        try:
+            with anyio.fail_after(timeout):
+                async with self._lock:
+                    process = await self._ensure_started()
+                    self._next_id += 1
+                    # `id` counts per worker, not per pool, so the correlation key in the logs is the
+                    # pair (worker_pid, request_id).
+                    header: dict[str, Any] = {"id": self._next_id, "op": operation, "params": params}
+                    job_id = current_schematic_job_id.get()
+                    if job_id is not None:
+                        header["job_id"] = job_id
+                    if trace := trace_context_headers():
+                        header["trace"] = trace
+                    frame = Frame(header, tuple(payloads))
+                    assert process.stdin is not None and process.stdout is not None
+                    process.stdin.write(frame.encode())
+                    await process.stdin.drain()
+                    response = await wire.read_frame(process.stdout)
+                    wire.validate_worker_response(response, request_id=self._next_id, operation=operation)
+        except TimeoutError:
+            exit_code = await self._terminate()
+            _record_worker_failure(exit_code, reason="timeout")
+            raise SchematicTimeoutError(operation=operation, timeout_seconds=timeout) from None
+        except FrameStreamClosed, ConnectionResetError, BrokenPipeError:
+            exit_code = await self._terminate()
+            _record_worker_failure(exit_code, reason="crash")
+            raise SchematicWorkerCrashedError(operation=operation, exit_code=exit_code) from None
+        return response
 
     async def _ensure_started(self) -> asyncio.subprocess.Process:
         if self._process is not None and self._process.returncode is None:
