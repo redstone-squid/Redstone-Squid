@@ -54,11 +54,17 @@ logger = logging.getLogger(__name__)
 
 
 class HistoryError(SquidUiError, RuntimeError):
-    """A history operation could not be honoured or was already reserved by this action."""
+    """A second `record` in one action; a history admits one operation per action."""
 
 
 class HistoryEntryState(Enum):
-    """The inspectable lifecycle of a retained inverse plan."""
+    """Where a retained entry is between `record` and reversal.
+
+    `CONFLICTED` and `FAILED` entries stay on their stack and may be retried; `delete_conflicted`
+    is the only other way out of `CONFLICTED`. `NEEDS_RECONCILIATION` is sticky: the external
+    compensation ran but the local inverse or the outbox record did not follow, and `undo`
+    returns the stored result instead of retrying.
+    """
 
     READY = "ready"
     REVERSING = "reversing"
@@ -80,20 +86,27 @@ class HistoryResultStatus(Enum):
 
 
 class UndoMode(Enum):
-    """How retained register patches may be applied."""
+    """`CONDITIONAL` refuses when a cell moved since the commit; `LOCAL_OVERWRITE` writes regardless.
+
+    `LOCAL_OVERWRITE` cannot reverse an action that enlisted transaction participants; such
+    an undo reports `CONFLICT`.
+    """
 
     CONDITIONAL = "conditional"
     LOCAL_OVERWRITE = "local_overwrite"
 
 
 class HistoryOwner(Protocol):
+    """What a `history()` descriptor needs from the object it is declared on."""
+
     __dict__: dict[str, Any]
     """Declared because `_HistoryField` writes its stack straight into it.
 
     `squid_reactivity.resources.ResourceOwner` declares the same member for the same reason.
     """
 
-    def invalidate(self) -> None: ...
+    def invalidate(self) -> None:
+        """Called after every stack change so the owner's controls re-render."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,13 +114,18 @@ class CompensationSpec:
     """A repeatable external compensator with a stable idempotency key."""
 
     operation: Callable[[str], Awaitable[None]]
+    """Runs the external undo; receives the idempotency key so a repeat can be detected remotely."""
     idempotency_key: Callable[[ActionCommit], str]
+    """Derives the key from the original commit; the outbox deduplicates on it across restarts."""
     retry: CompensationRetryPolicy = field(default_factory=lambda: CompensationRetryPolicy())
 
 
 @dataclass(frozen=True, slots=True)
 class CompensationRetryPolicy:
-    """Explicit retry limit for separately requested compensation executions."""
+    """How many `undo` calls may dispatch the same compensation; `None` is unlimited.
+
+    Raises `ValueError` for a `max_attempts` below one.
+    """
 
     max_attempts: int | None = None
 
@@ -118,7 +136,7 @@ class CompensationRetryPolicy:
 
 
 class CompensationStatus(Enum):
-    """Truthful terminal and in-flight saga states."""
+    """Where one compensation saga is; `SETTLED_COMPENSATIONS` lists the ones that must not rerun."""
 
     REVERTING = "reverting"
     EXTERNAL_SUCCEEDED = "external_succeeded"
@@ -131,7 +149,7 @@ class CompensationStatus(Enum):
 
 @dataclass(slots=True)
 class CompensationExecution:
-    """One compensation attempt. Reaching a terminal status ends the execution."""
+    """One compensation attempt's latest status, kept on the `HistoryEntry` for inspection."""
 
     context: OperationContext
     idempotency_key: str
@@ -143,7 +161,7 @@ class CompensationExecution:
         return self.context.execution_id
 
     def transition(self, status: CompensationStatus, error: Exception | None = None) -> None:
-        """Record an inspectable transition without changing any transactional domain state."""
+        """Record the step and emit it as a causal `OperationEventSnapshot`; no domain state moves."""
         self.status = status
         self.error = error
         report = None if error is None else DEFAULT_REDACTION.redact_exception(ExceptionReport.capture(error))
@@ -187,26 +205,43 @@ class CompensationClaim:
 
     dispatch: bool
     attempts: int
+    """Attempts including this one when dispatching; the recorded count when not."""
     status: CompensationStatus
+    """`REVERTING` when dispatching; otherwise the settled status, or `FAILED` when retries ran out."""
 
 
 class CompensationOutbox(Protocol):
     """Application-owned persistence and deduplication for compensation intents."""
 
-    async def claim(self, intent: CompensationIntent, retry: CompensationRetryPolicy) -> CompensationClaim: ...
+    async def claim(self, intent: CompensationIntent, retry: CompensationRetryPolicy) -> CompensationClaim:
+        """Decide whether `intent`'s external effect runs, and record the attempt if so.
+
+        Returns `dispatch=False` for a key already in `SETTLED_COMPENSATIONS`, or with status
+        `FAILED` once `retry.max_attempts` is exhausted. Must record before returning
+        `dispatch=True`: a crash between the two is a duplicate external effect.
+        """
 
     async def update(
         self,
         intent: CompensationIntent,
         status: CompensationStatus,
         error: ExceptionReport | None = None,
-    ) -> None: ...
+    ) -> None:
+        """Record the outcome of a dispatched attempt.
+
+        A raise here surfaces in the `HistoryResult`; after a successful external effect it
+        makes the result `NEEDS_RECONCILIATION`, since the effect ran but is not recorded.
+        """
 
 
 class TransactionalCompensationOutbox(CompensationOutbox, Protocol):
     """An outbox that can atomically retain first intent through the Squid commit gate."""
 
-    def participant(self, intent: CompensationIntent) -> TransactionParticipant[CompensationRecord | None]: ...
+    def participant(self, intent: CompensationIntent) -> TransactionParticipant[CompensationRecord | None]:
+        """A participant that persists `intent` in the same local commit that begins the compensation.
+
+        Prepares `None` when the key is already recorded, so a retry does not reset it.
+        """
 
 
 SETTLED_COMPENSATIONS = frozenset(
@@ -224,14 +259,14 @@ claim into a second execution of an external effect that already ran.
 
 
 class MemoryCompensationOutbox:
-    """Bounded reference outbox; ``records=`` rebuilds one after a simulated restart.
+    """Bounded reference outbox; `records=` rebuilds one after a simulated restart.
 
-    ``limit`` is a safety valve, not a cache size. It has to exceed the compensations that can
+    `limit` is a safety valve, not a cache size. It has to exceed the compensations that can
     be in flight at once plus those whose settled answer is still worth having, because the
     bound is enforced by forgetting the oldest record -- and a forgotten settled record
-    dispatches its external effect a second time. :attr:`dropped_records` counts the times
-    that has happened; a host watching it move has a limit set too low, or wants the durable
-    outbox this one stands in for.
+    dispatches its external effect a second time. `dropped_records` counts the times that
+    has happened; a host watching it move has a limit set too low, or wants the durable
+    outbox this one stands in for. Raises `ValueError` for a `limit` below one.
     """
 
     def __init__(self, *, limit: int = 100, records: Iterable[CompensationRecord] = ()) -> None:
@@ -331,7 +366,11 @@ class _CompensationIntentParticipant:
 
 
 class CompensationRecordCodec:
-    """JSON schema 1 codec for application-owned durable compensation records."""
+    """JSON schema 1 codec for application-owned durable compensation records.
+
+    `decode` raises `ValueError` for input over `max_encoded_bytes`, a schema version other
+    than `schema_version`, or a payload that does not parse as a record.
+    """
 
     schema_version = 1
     max_encoded_bytes = 65_536
@@ -413,6 +452,7 @@ class UndoPlan:
 
     @classmethod
     def from_commit(cls, commit: ActionCommit) -> UndoPlan:
+        """The commit's cell patches inverted, plus its participant changes for `plan_inverse` later."""
         patches: CellPatchSet = commit.patches
         return cls(patches.inverse(), commit.participant_changes)
 
@@ -426,14 +466,17 @@ class HistoryEntry:
     undo_plan: UndoPlan
     state: HistoryEntryState = HistoryEntryState.READY
     recorded_at: float = field(default_factory=time.monotonic)
+    """`time.monotonic()` at retention; not wall-clock."""
     last_result: HistoryResult | None = None
     undo_action_id: ActionId | None = None
     redo_plan: UndoPlan | None = None
+    """Inverse of the committed undo, so `redo` reapplies what actually landed rather than the original."""
     compensation: CompensationSpec | None = None
     original_commit: ActionCommit | None = None
     compensation_execution: CompensationExecution | None = None
     mode: UndoMode = UndoMode.CONDITIONAL
     retentions: tuple[object, ...] = ()
+    """Leases from participants' `retain()`, released when the entry is evicted, cleared or reversed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -457,27 +500,33 @@ type RedoResult = HistoryResult
 
 @dataclass(frozen=True, slots=True)
 class HistoryEntrySnapshot:
-    """Safe diagnostic facts for one history entry."""
+    """One entry rendered to strings for logging; nothing here references live state."""
 
     label: str
     recorded_at: float
     action_id: str
     state: str
     conflict: str | None
+    """The last result's `ConflictDetail`, or `None` when the entry never conflicted."""
 
 
 @dataclass(frozen=True, slots=True)
 class HistorySnapshot:
-    """A read-only view of one component-owned history stack."""
+    """Both stacks of one declared history, newest entry last."""
 
     name: str
+    """The attribute the `history()` descriptor is declared under."""
     limit: int
     undo: tuple[HistoryEntrySnapshot, ...]
     redo: tuple[HistoryEntrySnapshot, ...]
 
 
 class History:
-    """One component's bounded commit-derived undo stack."""
+    """One component's bounded commit-derived undo stack.
+
+    Entries beyond `limit` are evicted oldest first, and any `record` empties the redo stack.
+    Raises `ValueError` for a `limit` below one.
+    """
 
     def __init__(
         self,
@@ -534,7 +583,17 @@ class History:
         compensate: CompensationSpec | None = None,
         mode: UndoMode = UndoMode.CONDITIONAL,
     ) -> None:
-        """Retain the whole successful action once, using its committed patch lineage."""
+        """Retain the current action once it commits, using its committed patch lineage.
+
+        Must be called inside the action's transaction; the entry is pushed by a commit hook,
+        so a rolled-back action retains nothing.
+
+        Raises:
+            HistoryError: This history already recorded in the same action.
+            RuntimeError: No transaction is in flight.
+            ReactiveWriteError: The action is read-only.
+            StaleReactiveContextError: Called from a task other than the transaction's owner.
+        """
 
         def committed(commit: ActionCommit, continuation: object) -> None:
             if commit.context.kind in {ActionPurpose.UNDO, ActionPurpose.REDO}:
@@ -553,7 +612,16 @@ class History:
         self._reserve(committed)
 
     async def undo(self, action_id: ActionId | None = None) -> UndoResult:
-        """Conditionally reverse one retained action as a fresh ``UNDO`` action."""
+        """Reverse the newest retained action (or the one with `action_id`) as a fresh `UNDO` action.
+
+        Never raises for a conflict or a failed inverse -- those come back as the result's
+        status, with the entry left in the matching state. An entry with a `CompensationSpec`
+        runs the external compensation first, through the outbox.
+
+        Raises:
+            FreshActionError: The admitting transaction already staged writes.
+            FrameworkIntegrityError: The inverse committed locally but publication failed.
+        """
         entry = self._select(self._undone, action_id)
         if entry is None:
             return HistoryResult(HistoryResultStatus.EMPTY)
@@ -675,7 +743,7 @@ class History:
             self._owner.invalidate()
             raise
         except FrameworkIntegrityError, FreshActionError:
-            # No compensation was admitted, so the entry is still whatever it was selected as.
+            # Same reasoning as in _undo_state: nothing was admitted, so restore the state.
             entry.state = previous
             self._owner.invalidate()
             raise
@@ -776,7 +844,14 @@ class History:
         return result
 
     async def redo(self) -> RedoResult:
-        """Reapply the inverse of the actual committed undo using its fresh lineage."""
+        """Reapply the newest undone entry by inverting its committed undo, as a fresh `REDO` action.
+
+        Conflicts and failed inverses come back as the result's status, never as a raise.
+
+        Raises:
+            FreshActionError: The admitting transaction already staged writes.
+            FrameworkIntegrityError: The inverse committed locally but publication failed.
+        """
         entry = self._select(self._redoable, None)
         if entry is None or entry.redo_plan is None:
             return HistoryResult(HistoryResultStatus.EMPTY)
@@ -831,7 +906,7 @@ class History:
             self._owner.invalidate()
             return result
         except FrameworkIntegrityError, FreshActionError:
-            # No inverse was admitted, so the entry is still whatever it was selected as.
+            # Same reasoning as in _undo_state: nothing was admitted, so restore the state.
             entry.state = previous
             raise
         except Exception as error:
@@ -844,7 +919,10 @@ class History:
         return entry.last_result
 
     def delete_conflicted(self, action_id: ActionId | None = None) -> HistoryEntry | None:
-        """Forget a conflicted entry without touching application state."""
+        """Forget a conflicted entry from either stack without touching application state.
+
+        Returns `None` when the selected entry is not in `CONFLICTED` state.
+        """
         for stack in (self._undone, self._redoable):
             entry = self._select(stack, action_id)
             if entry is not None and entry.state is HistoryEntryState.CONFLICTED:
@@ -855,6 +933,7 @@ class History:
         return None
 
     def clear(self) -> None:
+        """Empty both stacks, releasing every entry's participant leases."""
         if not (self._undone or self._redoable):
             return
         for entry in (*self._undone, *self._redoable):
@@ -953,12 +1032,16 @@ class _HistoryField:
 
 
 def history(*, limit: int = 20, compensation_outbox: CompensationOutbox | None = None) -> History:
-    """Declare an undo stack whose owner lifetime ends the retained inverse plans."""
+    """Declare a per-instance `History` on a `HistoryOwner` class, created on first access.
+
+    The stack lives in the owner's `__dict__`, so it lasts as long as the owner does. Without
+    `compensation_outbox` each stack gets its own `MemoryCompensationOutbox` of the same `limit`.
+    """
     return _HistoryField(limit, compensation_outbox)  # type: ignore[bad-return]
 
 
 def history_actions(stack: History, *, key: str = "history", chrome: Chrome = DEFAULT_CHROME) -> ControlGroup:
-    """Build ordinary controls for the history's current LIFO entries."""
+    """Undo and redo controls keyed `{key}.undo` and `{key}.redo`, each available only while its stack is non-empty."""
 
     async def undo(event: ActionEvent) -> None:
         await stack.undo()
@@ -974,7 +1057,7 @@ def history_actions(stack: History, *, key: str = "history", chrome: Chrome = DE
 
 
 def inspect_histories(owner: HistoryOwner) -> tuple[HistorySnapshot, ...]:
-    """Inspect declared histories without applying an inverse."""
+    """Snapshots of every `history()` declared on `owner`'s class hierarchy, base classes first."""
     snapshots: list[HistorySnapshot] = []
     for klass in reversed(type(owner).__mro__):
         for name, descriptor in vars(klass).items():

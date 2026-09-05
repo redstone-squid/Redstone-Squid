@@ -60,11 +60,15 @@ class _SequenceStep:
 def map_layout_children[RenderTargetT: RenderTarget](
     node: LayoutNode[RenderTargetT], path: str, transform: LayoutTransform[RenderTargetT]
 ) -> LayoutNode[RenderTargetT]:
-    """Rebuild ``node`` after transforming each of its direct layout children.
+    """Rebuild `node` after transforming each of its direct layout children.
 
     Sequence positions accept a transform that splices zero or more nodes. Singular positions
-    require exactly one result. ``path`` is diagnostic only and is extended consistently for
+    require exactly one result. `path` is diagnostic only and is extended consistently for
     every structural shape.
+
+    Raises `LayoutInvariantError` when a singular position gets other than one node, or when a
+    dataclass node carries a child-bearing field this walker does not know (a new container
+    must be registered here before it can hold a `Boundary`).
     """
     return _map_layout_children_routed(node, path, (), lambda child, child_path, _route: transform(child, child_path))
 
@@ -75,7 +79,11 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget](
     route: _LayoutRoute,
     transform: _RoutedLayoutTransform[RenderTargetT],
 ) -> LayoutNode[RenderTargetT]:
-    """Rebuild a node while identifying where each transformed child lands."""
+    """Rebuild a node, handing the transform the `_LayoutRoute` at which each child's result lands.
+
+    The route is what `component._splice_nodes` follows to patch a re-rendered subtree into a
+    cached parent without re-walking it.
+    """
 
     def many(
         children: Sequence[LayoutNode[RenderTargetT]], parent_path: str, field: str

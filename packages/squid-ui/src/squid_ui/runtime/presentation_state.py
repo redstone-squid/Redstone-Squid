@@ -12,7 +12,10 @@ class CursorState:
 
     position: Position = ORIGIN
     extent: int = 1
+    """How many positions the content has; `move_cursor` clamps to `extent - 1`."""
     fingerprint: str = ""
+    """`content_fingerprint` of the content the cursor was placed in; planning treats a stored
+    cursor whose fingerprint no longer matches as stale. Empty means never fingerprinted."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +35,8 @@ class ToggleState:
 
 @dataclass(frozen=True, slots=True)
 class StrategyState:
+    """A remembered layout strategy, honoured only by the adapter and version that chose it."""
+
     node_key: str
     adapter_id: str
     adapter_version: int
@@ -51,7 +56,7 @@ class PresentationState:
 
     @property
     def revision(self) -> int:
-        """Monotonic identity of changes to this live presentation session."""
+        """Incremented by every write that changed a value; `PlanCache` keys on it."""
         return self._revision
 
     def _touch(self) -> None:
@@ -74,6 +79,7 @@ class PresentationState:
             self._touch()
 
     def reset_cursor(self, key: str | None = None) -> None:
+        """Forget one cursor, or every cursor when `key` is `None`."""
         if key is None:
             if not self.cursors:
                 return
@@ -84,10 +90,10 @@ class PresentationState:
                 self._touch()
 
     def selection(self, key: str, *, initial: tuple[str, ...] = ()) -> SelectionState:
-        """The stored selection, or ``initial`` when this key was never written.
+        """The stored selection, or `initial` when this key was never written.
 
         The miss has to stay distinguishable from an explicit empty selection: a reader who
-        backed out of an item chose ``()``, and re-seeding them into it would trap them.
+        backed out of an item chose `()`, and re-seeding them into it would trap them.
         """
         return self.selections.get(key, SelectionState(initial))
 

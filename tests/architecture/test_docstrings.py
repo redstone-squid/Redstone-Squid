@@ -26,8 +26,6 @@ LIFETIME_EXEMPTIONS: frozenset[str] = frozenset(
         "packages/squid-ui/src/squid_ui/profiling/profiler.py::DetachedSpanRecorder",
         "packages/squid-ui/src/squid_ui/profiling/profiler.py::_DetachedSpan",
         "packages/squid-ui/src/squid_ui/profiling/profiler.py::_NoOpDetachedSpan",
-        "packages/squid-ui/src/squid_ui/runtime/component.py::_TreeRender",
-        "packages/squid-ui/src/squid_ui/runtime/owner.py::ComponentRuntime",
     }
 )
 """`path::Class` whose first paragraph does not yet name its verb. Listed so an exemption is a decision."""

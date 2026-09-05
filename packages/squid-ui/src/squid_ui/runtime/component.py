@@ -1,13 +1,13 @@
 """Stateful components: render() is a pure function of state; mutating state re-renders.
 
 A component describes *what the message should say now*. Interaction callbacks assign
-declared state, and every assignment schedules the mount to re-render. State values are
-immutable and replaced rather than mutated. Components never touch discord.py objects
+declared state, and every assignment schedules the owning runtime to re-render. State values
+are immutable and replaced rather than mutated. Components never touch a frontend's objects
 directly.
 
-Components compose through explicit keyed Boundary nodes, so two instances of the same
+Components compose through explicit keyed `Boundary` nodes, so two instances of the same
 child class can appear in one message without their controls or pagers cross-wiring. Only the
-root component is attached to a MessageRoot; children reach it through their parent.
+root component is attached to a `RuntimeOwner`; children reach it through their parent.
 """
 
 from abc import ABC, abstractmethod
@@ -110,7 +110,14 @@ same spirit as `AnyTarget`.
 
 
 class RuntimeOwner(Protocol):
-    def invalidate(self, component: AnyComponent | None = None, *, check_dependencies: bool = False) -> None: ...
+    """What a mounted component needs from whatever owns its tree; `ComponentRuntime` is the one."""
+
+    def invalidate(self, component: AnyComponent | None = None, *, check_dependencies: bool = False) -> None:
+        """Mark `component`'s subtree (the whole tree when `None`) as needing a re-render.
+
+        `check_dependencies` means the write came through the reactive graph, so the owner may
+        keep the cached render when nothing the component observed actually changed.
+        """
 
 
 _CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
@@ -128,11 +135,11 @@ _MISSING = _Missing()
 RenderTargetT = TypeVar("RenderTargetT", contravariant=True, default=RenderTarget)
 """The dialects a component's rendered nodes can be drawn in.
 
-Declared the old way, and contravariant on purpose, in a file that otherwise uses PEP 695.
-`RenderTargetT` reaches `Component` through `DocumentLike[RenderTargetT]`, which is contravariant
-because `Renderable` puts the render target in a parameter position -- and neither pyrefly nor
-basedpyright infers variance through that nesting. PEP 695 has no syntax for declaring variance,
-so this is the only way to preserve portable-component substitution.
+Contravariant, so a portable component substitutes for a target-specific one: `RenderTargetT`
+reaches `Component` through `DocumentLike[RenderTargetT]`, which is contravariant because
+`Renderable` takes the target as a parameter, and neither pyrefly nor basedpyright infers
+variance through that nesting. PEP 695 cannot declare variance, hence the `TypeVar` spelling.
+`planning.target.RenderTargetT_co` is the covariant counterpart.
 """
 
 
@@ -142,16 +149,18 @@ class ComponentTree(Generic[RenderTargetT]):
 
     nodes: tuple[LayoutNode[RenderTargetT], ...]
     components: dict[str, AnyComponent]
+    """Every expanded component by path: `$` for the root, then dot-joined `Boundary` keys."""
     assets: tuple[Asset, ...] = ()
     document_key: str | None = None
     deferred: tuple[AnyComponent, ...] = ()
-    async_bindings: tuple[AsyncBinding, ...] = ()
     """Embedded components expansion stopped at, in the order it met them.
 
-    Only ever non-empty for a discovery render (see ``render_component_tree``'s ``defer``).
-    Such a tree is missing whole subtrees, so it describes what to load next and nothing else:
-    never plan it, draw it, or commit it.
+    Only ever non-empty for a discovery render (see `render_component_tree`'s `defer`). Such a
+    tree is missing whole subtrees, so it describes what to load next and nothing else: never
+    plan it, draw it, or commit it.
     """
+    async_bindings: tuple[AsyncBinding, ...] = ()
+    """Every async binding a render read, deduplicated; a frontend settles these before redrawing."""
     observations: tuple[Address, ...] = ()
     """The bus addresses of every shared cell this render read, deduplicated.
 
@@ -215,15 +224,15 @@ class _SpliceResult[RenderTargetT: RenderTarget]:
 class Component(StateOwner, ABC, Generic[RenderTargetT]):
     """Base class for mounted, stateful views.
 
-    Abstract in :meth:`render`, so a subclass that does not describe a message cannot be
-    mounted. An intermediate base that leaves `render` to *its* subclasses is abstract in
-    turn and needs no annotation to say so.
+    Abstract in `render`, so a subclass that does not describe a message cannot be mounted.
+    An intermediate base that leaves `render` to *its* subclasses is abstract in turn and
+    needs no annotation to say so.
     """
 
     _runtime: RuntimeOwner | None = None
     _parent: AnyComponent | None = None
     _loaded: bool = False
-    """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
+    """Whether this instance's `on_load` has completed. Owned by the frontend."""
     _reactive_internal_attributes = frozenset(
         {"_runtime", "_parent", "_loaded", "_state_revision", "_dependency_invalidation"}
     )
@@ -243,11 +252,16 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
             self.__dict__.pop("_dependency_invalidation", None)
 
     def on_state_rollback(self) -> None:
+        """Bump the state revision so a render cached before the rolled-back write is not reused."""
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
     @abstractmethod
     def render(self) -> DocumentLike[RenderTargetT]:
-        """Describe the message for the current state. Pure and synchronous."""
+        """Describe the message for the current state. Pure and synchronous.
+
+        Only the root component may return a keyed `Document`; the tree render raises
+        `LayoutInvariantError` for any other.
+        """
 
     def boundary(self, child: Component[RenderTargetT], *, key: str) -> Boundary:
         """Place child in this render tree under a stable key and namespace.
@@ -264,17 +278,17 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
         """Fetch what this component cannot render without, before its first render.
 
         Runs once per instance, before the first delivery that would show it, and before
-        :meth:`render` is ever called on it: a frontend stops expanding at an unloaded
-        component rather than rendering it empty. Writes are ordinary pre-delivery state, so
-        the delivered view is the loaded one -- there is no loading paint to design for.
+        `render` is ever called on it: a frontend stops expanding at an unloaded component
+        rather than rendering it empty. Writes are ordinary pre-delivery state, so the
+        delivered view is the loaded one -- there is no loading paint to design for.
 
         A raise leaves the instance eligible to retry on the next delivery attempt, and
         nothing is delivered in the meantime. Data the component can degrade without belongs
         in declared state with a render branch, refreshed by a handler, not here.
 
-        Data that has to stay live belongs in a `sl.resource` instead. Because this runs once
-        and under no consumer, its reads are untracked: `sl.watch()` here would follow
-        nothing, and there would be no second run to reload it anyway.
+        Data that has to stay live belongs in a `resource` instead. Because this runs once
+        and under no consumer, its reads are untracked: `watch()` here would follow nothing,
+        and there would be no second run to reload it anyway.
         """
 
     def on_mount(self) -> None:
@@ -284,7 +298,11 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
         """Run after this component leaves a successfully drawn tree."""
 
     def invalidate(self) -> None:
-        """Mark this component's message as needing a re-render."""
+        """Mark this component's message as needing a re-render.
+
+        Reaches the runtime directly when mounted, otherwise through the parent chain, so a
+        deferred child's `on_load` writes still schedule a render.
+        """
         dependency = self.__dict__.get("_dependency_invalidation", False)
         if not dependency:
             self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
@@ -294,7 +312,12 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
             self._parent.invalidate()
 
     def provide[ValueT](self, key: ContextKey[ValueT], value: ValueT) -> None:
-        """Provide an ephemeral value to descendants rendered below this component."""
+        """Provide an ephemeral value to descendants rendered below this component.
+
+        Only valid inside `render`; raises `RuntimeError` anywhere else. The value lasts for
+        this render and is compared through `key.matches` when deciding whether a child's
+        cached render can be reused.
+        """
         context = _CURRENT_CONTEXT.get()
         if context is None:
             message = "provide() is only available while rendering"
@@ -308,7 +331,11 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
     def inject[ValueT](self, key: ContextKey[ValueT], default: ValueT) -> ValueT: ...
 
     def inject[ValueT](self, key: ContextKey[ValueT], default: ValueT | _Missing = _MISSING) -> ValueT:
-        """Read the nearest provided value while rendering."""
+        """Read the nearest provided value while rendering.
+
+        Root context set on the runtime counts as provided. Raises `LookupError` when nothing
+        provided `key` and no `default` was given.
+        """
         context = _CURRENT_CONTEXT.get()
         if context is not None and key in context:
             return cast(ValueT, context[key])
@@ -347,9 +374,7 @@ def _same_context(left: dict[ContextKey[Any], object], right: dict[ContextKey[An
 class IncrementalRender[RenderTargetT: RenderTarget = RenderTarget]:
     """What one runtime carries between renders so the next can reuse what did not change.
 
-    Owned by the caller, not by a render: a render reads these and updates them in place.
-    They reached :func:`render_component_tree` as six underscore-prefixed parameters, which
-    is what a caller's private state looks like when it has nowhere of its own to live. A
+    Owned by the caller, not by a render: a render reads these and updates them in place. A
     default-constructed instance is a cold render that reuses nothing.
     """
 
@@ -360,21 +385,20 @@ class IncrementalRender[RenderTargetT: RenderTarget = RenderTarget]:
     """Dirty components whose dependencies must not be consulted -- re-render regardless."""
     force_all: bool = False
     subtree_cache: dict[str, _ExpandedSubtree[RenderTargetT]] = field(default_factory=dict)
+    """Each path's last complete expansion; what a splice patches into."""
     dirty_paths: set[str] = field(default_factory=set)
+    """Paths whose cached subtree must not be reused: every dirty component's path and its ancestors'."""
     component_paths: dict[AnyComponent, str] | None = None
     """Where each component sat last time, for locating a splice. None disables splicing."""
 
 
 class _TreeRender[RenderTargetT: RenderTarget]:
-    """One expansion of one component tree, and everything it accumulates on the way.
+    """One expansion of one component tree; `run()` performs it once and returns the finished tree.
 
-    A render walks the tree once while filling a dozen parallel collections -- the components
-    it found and where, the assets and observations they declared, the subtrees it could
-    reuse. Those were locals shared by five closures, which is this object written in the one
-    spelling that cannot say what it is. `expand` remains the entry point; the rest is state.
-
-    Single use: build one, call :meth:`run`, read the tree. The reuse caches it reads and
-    writes belong to the :class:`IncrementalRender` it was handed, and outlive it.
+    The walk fills parallel collections as it goes -- the components it found and where, the
+    assets and observations they declared, the subtrees it could reuse. The reuse caches it
+    reads and writes belong to the `IncrementalRender` it was handed, and outlive it; the
+    instance itself is spent after `run()`.
     """
 
     def __init__(
@@ -401,7 +425,12 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         self.observed_bindings: list[AsyncBinding] = []
 
     def run(self) -> ComponentTree[RenderTargetT]:
-        """Expand the tree, splicing in place when only part of it changed."""
+        """Expand the tree, splicing in place when only part of it changed.
+
+        An atomic resource still pending aborts the expansion to an empty tree that carries
+        the pending binding, so the frontend can settle it and retry. Raises
+        `LayoutInvariantError` for a malformed tree (see `expand`).
+        """
         incremental = self.incremental
         spliced: _SpliceResult[RenderTargetT] | None = None
         attempted_splices: set[AnyComponent] = set()
@@ -550,7 +579,12 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         path: str,
         inherited_context: dict[ContextKey[Any], object],
     ) -> list[LayoutNode[RenderTargetT]]:
-        """Render this component and splice its children in, namespaced by boundary key."""
+        """Render this component and splice its children in, namespaced by boundary key.
+
+        Raises `LayoutInvariantError` for an embedding cycle, an instance embedded at two
+        paths, a duplicate `Boundary` key under one parent, a `Boundary` holding a
+        non-`Component`, or a keyed `Document` below the root.
+        """
         identity = id(component)
         if identity in self.active:
             message = f"{path}: component embedding cycle"
@@ -654,13 +688,14 @@ def render_component_tree[RenderTargetT: RenderTarget](
 ) -> ComponentTree[RenderTargetT]:
     """Render and expand a component tree, preserving keyed component identity.
 
-    ``defer`` makes this a *discovery* render: an embedded component it selects is recorded in
-    :attr:`ComponentTree.deferred` and not expanded, so its :meth:`Component.render` is not
-    called. That is what lets a frontend run :meth:`Component.on_load` before a component
-    renders for the first time. The resulting tree is incomplete by construction; see
-    :attr:`ComponentTree.deferred`.
+    `defer` makes this a *discovery* render: an embedded component it selects is recorded in
+    `ComponentTree.deferred` and not expanded, so its `Component.render` is not called. That
+    is what lets a frontend run `Component.on_load` before a component renders for the first
+    time. The resulting tree is incomplete by construction; see `ComponentTree.deferred`.
 
-    ``incremental`` is the caller's reuse state, updated in place. Omitting it renders cold.
+    `incremental` is the caller's reuse state, updated in place. Omitting it renders cold.
+
+    Raises `LayoutInvariantError` for a malformed tree; see `_TreeRender.expand` for the cases.
     """
     return _TreeRender(
         root,
@@ -829,7 +864,7 @@ def _namespace(nodes: list[AnyLayoutNode], prefix: str) -> list[AnyLayoutNode]: 
 
 
 def _namespace(nodes: list[AnyLayoutNode], prefix: str) -> list[AnyLayoutNode]:
-    """Rewrite an embedded subtree's control keys under ``prefix``.
+    """Rewrite an embedded subtree's control keys under `prefix`.
 
     Explicit control keys are scoped under the embed path, so inserting a sibling cannot
     change the identity of any existing action.

@@ -1,4 +1,4 @@
-"""Compatibility exports for tracked topics from :mod:`squid_reactivity`."""
+"""Re-exports `squid_reactivity.topics` under `squid_ui.runtime`; nothing here is defined by `squid_ui`."""
 
 from squid_reactivity.topics import (
     Address,

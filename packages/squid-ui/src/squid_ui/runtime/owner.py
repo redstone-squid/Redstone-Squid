@@ -22,7 +22,13 @@ from squid_ui.target_types import RenderTarget
 
 
 class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
-    """Frontend-neutral owner of a reactive component tree and presentation session."""
+    """Frontend-neutral owner of a component tree and its presentation session; `finish()` unmounts the tree.
+
+    A frontend drives it as `render()`, plan and draw, then `commit()`; `invalidate*` between
+    those marks what the next `render()` must recompute. The runtime attaches itself to every
+    component it mounts (`Component._runtime`) so state writes reach `invalidate`; `finish()`
+    detaches them all, including the root.
+    """
 
     def __init__(
         self,
@@ -59,7 +65,12 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         """Whether the committed tree is behind the inputs a fresh render would read."""
 
     def invalidate(self, component: AnyComponent | None = None, *, check_dependencies: bool = False) -> None:
-        """Declare the render inputs moved, so anything rendered before now is stale."""
+        """Declare the render inputs moved, so anything rendered before now is stale.
+
+        With no `component` the whole tree re-renders. With one, only its subtree is marked;
+        `check_dependencies` lets the next render keep its cached snapshot when nothing it
+        observed actually changed.
+        """
         self._invalidate_components(
             () if component is None else (component,),
             force_all=component is None,
@@ -67,7 +78,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         )
 
     def invalidate_addresses(self, addresses: Iterable[Address]) -> None:
-        """Invalidate only component snapshots that observed any current bus address."""
+        """Invalidate only component snapshots that observed any current bus address.
+
+        Addresses no committed or candidate tree observed are ignored. If an observed address
+        cannot be attributed to a cached snapshot, the whole tree is marked instead.
+        """
         requested = set(addresses)
         if not requested:
             return
@@ -136,10 +151,15 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         defer: Callable[[AnyComponent], bool] | None = None,
         reuse_committed: bool = False,
     ) -> ComponentTree[RenderTargetT]:
-        """Render a candidate tree; call :meth:`commit` after planning and drawing succeed.
+        """Render a candidate tree; call `commit` after planning and drawing succeed.
 
-        ``defer`` renders for discovery only -- see :func:`render_component_tree`. Such a tree
-        is missing subtrees and must never be passed to :meth:`commit`.
+        `defer` renders for discovery only -- see `render_component_tree`. Such a tree is
+        missing subtrees and must never be passed to `commit`. `reuse_committed` returns the
+        committed tree when nothing has moved since; without it, a clean runtime is
+        re-rendered in full, since a direct render samples inputs outside the reactive graph.
+
+        Raises `LayoutInvariantError` for a malformed tree: an embedding cycle, one instance
+        embedded twice, a duplicate `Boundary` key, or a keyed `Document` below the root.
         """
         if not self.dirty and not reuse_committed:
             # A direct render is an explicit request to sample inputs outside the reactive graph.
@@ -257,9 +277,12 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
     def commit(self, tree: ComponentTree[RenderTargetT], *, rendered_revision: int | None = None) -> None:
         """Publish one successfully planned tree and reconcile keyed lifecycle hooks.
 
-        `rendered_revision` is what :attr:`revision` was when `tree` was rendered. Delivery
-        succeeding does not mean nothing changed while it was in flight, so the tree stays
-        dirty when the inputs have moved since.
+        Components that left the tree get `on_unmount` (leaves first), newcomers `on_mount`
+        (root first). `rendered_revision` is what `revision` was when `tree` was rendered;
+        delivery succeeding does not mean nothing changed while it was in flight, so the tree
+        stays dirty when the inputs have moved since.
+
+        Raises `LayoutInvariantError` for a discovery tree (`tree.deferred` non-empty).
         """
         if tree.deferred:
             # A discovery tree is missing subtrees; committing one would unmount live
@@ -342,7 +365,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.dirty = rendered_revision is not None and self.revision != rendered_revision
 
     def finish(self) -> None:
-        """Unmount the current tree from leaves to root."""
+        """Unmount the committed tree from leaves to root, drop every cache, and detach the root."""
         for _path, component in sorted(
             self.components.items(),
             key=lambda item: 0 if item[0] == "$" else item[0].count(".") + 1,

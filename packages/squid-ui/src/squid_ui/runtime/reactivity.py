@@ -1,4 +1,8 @@
-"""Frontend-neutral exports for the standalone reactive runtime."""
+"""Re-exports `squid_reactivity`'s actions and core under `squid_ui.runtime`; nothing here is defined by `squid_ui`.
+
+The underscored names (`_CURRENT`, `_Cell`, `_State`, `_Transaction`) are `squid_reactivity.internals`
+for tests that poke at the transaction in flight; they are not API.
+"""
 
 from squid_reactivity.actions import (
     ActionCommit,

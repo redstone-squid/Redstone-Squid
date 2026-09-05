@@ -6,20 +6,23 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True, slots=True, eq=False)
 class ContextKey[ValueT]:
-    """Typed identity and optional cache-version contract for an ephemeral context value.
+    """Typed identity for a value passed down a component tree through `provide`/`inject`.
 
-    Args:
-        name: Diagnostic name for the provided value.
-        cache_version: Projection that certifies when distinct values are interchangeable for
-            component render caching. It must change whenever callbacks, authority, or any
-            render-observable behavior changes. Without it, cache matching uses identity.
+    Keys compare by identity, so two keys with the same `name` are different keys; `name` only
+    appears in the `LookupError` `inject` raises.
     """
 
     name: str
     cache_version: Callable[[ValueT], object] | None = field(default=None, repr=False)
+    """Projects a value to what a cached render may depend on: two values with equal projections
+    share a cached render. It must change whenever callbacks, authority, or any render-observable
+    behaviour changes. `None` matches by identity only."""
 
     def matches(self, left: ValueT, right: ValueT) -> bool:
-        """Whether two provided values may share a cached component render."""
+        """Whether two provided values may share a cached component render.
+
+        Identical objects always match. A `cache_version` that raises counts as no match.
+        """
         if left is right:
             return True
         if self.cache_version is None:

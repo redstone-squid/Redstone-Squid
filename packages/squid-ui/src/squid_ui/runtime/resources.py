@@ -1,7 +1,7 @@
-"""Compatibility exports for reactive resources.
+"""Re-exports `squid_reactivity.resources` under `squid_ui.runtime`, plus `_AtomicResourcePending`.
 
-New code that does not need the layout frontend can import this optional layer from
-``squid_reactivity.resources`` directly.
+`_AtomicResourcePending` is the `squid_reactivity.internals` exception a tree render catches to
+abort on a pending atomic resource; nothing else here is defined by `squid_ui`.
 """
 
 from squid_reactivity.internals import AtomicResourcePending as _AtomicResourcePending
