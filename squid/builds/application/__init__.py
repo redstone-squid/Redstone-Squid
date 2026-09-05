@@ -17,6 +17,9 @@ from squid.builds.application.queries import (
     BuildListSort,
     BuildQueryService,
     BuildSortField,
+    PublicBuildPreview,
+    PublicBuildSummary,
+    PublicBuildTag,
 )
 from squid.builds.application.restrictions import RestrictionDefinition, RestrictionService
 from squid.builds.application.services import (
@@ -41,6 +44,9 @@ __all__ = [
     "InferenceResult",
     "InferredBuild",
     "InlineImage",
+    "PublicBuildPreview",
+    "PublicBuildSummary",
+    "PublicBuildTag",
     "RestrictionDefinition",
     "RestrictionService",
 ]

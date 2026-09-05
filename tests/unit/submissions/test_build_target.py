@@ -10,14 +10,15 @@ import pytest
 from squid.builds.domain import Build, BuildCategory, DoorBuild, ExtenderBuild, OtherBuild
 from squid.builds.errors import InvalidBuildError
 from squid.sponsors import PublicSponsor
-from squid.submissions.application import BuildSubmissionRejectedError
 from squid.submissions.domain import (
+    BuildSubmissionRejected,
     DoorOrientation,
     DoorSubmissionDetails,
     DoorTiming,
     ExtenderOrientation,
     ExtenderSubmissionDetails,
     ExtenderTiming,
+    FinalizedBuild,
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicRightsPolicy,
@@ -166,6 +167,7 @@ async def test_adapter_creates_every_category_with_direct_account_ownership(
     )
 
     build, arguments = builds.calls[0]
+    assert isinstance(result, FinalizedBuild)
     assert result.build_id == 41
     assert arguments["submitter_account_id"] == 17
     assert arguments["source_submission_draft_id"] == DRAFT_ID
@@ -280,10 +282,11 @@ async def test_retry_rejects_a_sponsor_snapshot_that_differs_from_the_existing_b
         submission,
         sponsor=PublicSponsor(INSTALLATION_ID, display_name="Changed server"),
     )
-    with pytest.raises(BuildSubmissionRejectedError) as error:
-        await target.create_or_get(changed)
+    result = await target.create_or_get(changed)
 
-    assert error.value.issues == (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
+    assert result == BuildSubmissionRejected(
+        (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
+    )
 
 
 async def test_retry_race_rejects_a_persisted_build_with_different_sponsor_provenance() -> None:
@@ -305,10 +308,11 @@ async def test_retry_race_rejects_a_persisted_build_with_different_sponsor_prove
                 sponsor=None,
             )
 
-    with pytest.raises(BuildSubmissionRejectedError) as error:
-        await CanonicalBuildSubmissionWriter(RacingBuilds(), FakeTags(), FakeVersions()).create_or_get(submission)
+    result = await CanonicalBuildSubmissionWriter(RacingBuilds(), FakeTags(), FakeVersions()).create_or_get(submission)
 
-    assert error.value.issues == (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
+    assert result == BuildSubmissionRejected(
+        (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
+    )
 
 
 async def test_extender_timing_is_retained_when_the_legacy_build_columns_have_no_slot() -> None:
@@ -374,10 +378,11 @@ async def test_unknown_source_version_is_actionable_and_never_delegated_to_persi
     builds = FakeBuilds()
     submission = replace(_submission(SubmissionCategory.OTHER), source_version="Java 26.1.20")
 
-    with pytest.raises(BuildSubmissionRejectedError) as error:
-        await CanonicalBuildSubmissionWriter(builds, FakeTags(), FakeVersions()).create_or_get(submission)
+    result = await CanonicalBuildSubmissionWriter(builds, FakeTags(), FakeVersions()).create_or_get(submission)
 
-    assert error.value.issues == (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
+    assert result == BuildSubmissionRejected(
+        (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
+    )
     assert builds.calls == []
 
 
@@ -405,10 +410,10 @@ async def test_user_repairable_validation_failures_become_stable_attention_issue
     submission: NormalizedSubmission,
     expected_issue: SubmissionAttentionIssue,
 ) -> None:
-    with pytest.raises(BuildSubmissionRejectedError) as error:
-        await CanonicalBuildSubmissionWriter(FakeBuilds(), FakeTags(), FakeVersions()).create_or_get(submission)
+    result = await CanonicalBuildSubmissionWriter(FakeBuilds(), FakeTags(), FakeVersions()).create_or_get(submission)
 
-    assert expected_issue in error.value.issues
+    assert isinstance(result, BuildSubmissionRejected)
+    assert expected_issue in result.issues
 
 
 async def test_structured_build_rejection_becomes_target_attention() -> None:
@@ -418,7 +423,8 @@ async def test_structured_build_rejection_becomes_target_attention() -> None:
         FakeVersions(),
     )
 
-    with pytest.raises(BuildSubmissionRejectedError) as error:
-        await target.create_or_get(_submission(SubmissionCategory.UTILITY))
+    result = await target.create_or_get(_submission(SubmissionCategory.UTILITY))
 
-    assert error.value.issues == (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
+    assert result == BuildSubmissionRejected(
+        (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
+    )

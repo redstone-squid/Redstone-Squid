@@ -162,7 +162,7 @@ class BoundBuildField[ValueT]:
         try:
             value = self.spec.parser(text)
         except ValueError as error:
-            self.validation_error = str(error) or tr("Invalid value")
+            self.validation_error = str(error) or tr(tr(t"Invalid value"))
             return
         self.value = value
         self.current_text = text

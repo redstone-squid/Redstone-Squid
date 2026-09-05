@@ -2,16 +2,14 @@
 
 import hashlib
 from collections.abc import Sequence
-from typing import cast
 
-from sqlalchemy import ColumnElement, Select, Table, and_, delete, func, or_, select, update
+from sqlalchemy import ColumnElement, Select, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.artifacts import ArtifactStore
 from squid.builds.infrastructure.models import Build as SQLBuild
-from squid.builds.infrastructure.models import BuildLink
-from squid.schematics.application.queries import SchematicPublication, StoredRender, StoredSchematic
+from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
     FingerprintPreset,
     SchematicAnalysis,
@@ -20,27 +18,28 @@ from squid.schematics.domain.models import (
     SimulationResult,
 )
 from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
-from squid.schematics.infrastructure.models import (
-    BuildSchematic,
-    SchematicFile,
-    SchematicRender,
-    SchematicRenderQueueItem,
-)
+from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile
+from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
 
 _FINGERPRINT_COLUMNS = {
     FingerprintPreset.STRUCTURAL: BuildSchematic.fingerprint_structural,
     FingerprintPreset.SHAPE: BuildSchematic.fingerprint_shape,
     FingerprintPreset.EXACT: BuildSchematic.fingerprint_exact,
 }
-_BUILD_TABLE = cast(Table, SQLBuild.__table__)
 
 
-class SchematicRepository:
+class PostgresSchematicStore:
     """Persist schematic metadata and store payloads in a bounded artifact adapter."""
 
-    def __init__(self, session_factory: async_sessionmaker[AsyncSession], artifacts: ArtifactStore) -> None:
+    def __init__(
+        self,
+        session_factory: async_sessionmaker[AsyncSession],
+        artifacts: ArtifactStore,
+        previews: PostgresSchematicPreviewPublisher,
+    ) -> None:
         self._session_factory = session_factory
         self._artifacts = artifacts
+        self._previews = previews
 
     async def put_file(self, data: bytes, *, source_format: SchematicFormat) -> str:
         """Store bytes content-addressed by SHA-256, returning the digest.
@@ -143,7 +142,7 @@ class SchematicRepository:
         )
         async with self._session_factory() as session:
             if primary:
-                await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
+                await session.scalar(select(SQLBuild.id).where(SQLBuild.id == build_id).with_for_update())
                 # The partial unique index allows only one primary per build, so the previous
                 # holder must be demoted in the same transaction as the new one is promoted.
                 await session.execute(
@@ -153,22 +152,7 @@ class SchematicRepository:
                 )
             schematic_id = await session.scalar(statement)
             if primary:
-                await self._clear_projected_render(session, build_id)
-                render_job = insert(SchematicRenderQueueItem).values(build_id=build_id)
-                await session.execute(
-                    render_job.on_conflict_do_update(
-                        index_elements=[SchematicRenderQueueItem.build_id],
-                        set_={
-                            "enqueued_at": func.now(),
-                            "available_at": func.now(),
-                            "claimed_at": None,
-                            "claim_token": None,
-                            "dead_at": None,
-                            "attempts": 0,
-                            "last_error": None,
-                        },
-                    )
-                )
+                await self._previews.featured_attachment_changed(session, build_id)
             await session.commit()
         assert schematic_id is not None
         return schematic_id
@@ -185,7 +169,7 @@ class SchematicRepository:
         )
         return found[0] if found else None
 
-    async def get_primary(self, build_id: int) -> StoredSchematic | None:
+    async def get_featured(self, build_id: int) -> StoredSchematic | None:
         found = await self._fetch(
             self._joined().where(and_(BuildSchematic.build_id == build_id, BuildSchematic.is_primary)).limit(1)
         )
@@ -256,179 +240,6 @@ class SchematicRepository:
             statement = statement.where(BuildSchematic.build_id != exclude_build_id)
         return await self._fetch(statement.order_by(func.abs(BuildSchematic.block_count - blocks)).limit(limit))
 
-    async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None:
-        async with self._session_factory() as session:
-            row = await session.scalar(
-                select(SchematicRender).where(
-                    and_(
-                        SchematicRender.build_schematic_id == schematic_id,
-                        SchematicRender.recipe_hash == recipe_hash,
-                    )
-                )
-            )
-        return _stored_render(row) if row is not None else None
-
-    async def record_render(
-        self,
-        schematic_id: int,
-        recipe_hash: str,
-        url: str,
-        object_key: str,
-        *,
-        width: int,
-        height: int,
-        byte_size: int,
-    ) -> StoredRender | None:
-        """Publish one render only if its source remains the build's primary schematic.
-
-        Primary replacement takes the same build-row lock before changing the attachment.
-        Whichever transaction wins therefore leaves a coherent result: either this URL is
-        projected while its source is current, or replacement clears/rejects it.
-        """
-        statement = (
-            insert(SchematicRender)
-            .values(
-                build_schematic_id=schematic_id,
-                recipe_hash=recipe_hash,
-                url=url,
-                object_key=object_key,
-                width=width,
-                height=height,
-                byte_size=byte_size,
-            )
-            .on_conflict_do_update(
-                index_elements=[SchematicRender.build_schematic_id, SchematicRender.recipe_hash],
-                set_={
-                    "url": url,
-                    "object_key": object_key,
-                    "width": width,
-                    "height": height,
-                    "byte_size": byte_size,
-                },
-            )
-            .returning(SchematicRender)
-        )
-        async with self._session_factory() as session:
-            build_id = await session.scalar(select(BuildSchematic.build_id).where(BuildSchematic.id == schematic_id))
-            if build_id is None:
-                return None
-            await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
-            current_id = await session.scalar(
-                select(BuildSchematic.id).where(
-                    BuildSchematic.build_id == build_id,
-                    BuildSchematic.is_primary,
-                )
-            )
-            if current_id != schematic_id:
-                return None
-            row = await session.scalar(statement)
-            await self._replace_projected_render(session, build_id, url)
-            await session.commit()
-        assert row is not None
-        return _stored_render(row)
-
-    async def project_render(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
-        """Project an existing recipe only if its source remains primary."""
-        async with self._session_factory() as session:
-            build_id = await session.scalar(select(BuildSchematic.build_id).where(BuildSchematic.id == schematic_id))
-            if build_id is None:
-                return False
-            await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
-            current_id = await session.scalar(
-                select(BuildSchematic.id).where(
-                    BuildSchematic.build_id == build_id,
-                    BuildSchematic.is_primary,
-                )
-            )
-            if current_id != schematic_id:
-                return False
-            render_exists = await session.scalar(
-                select(SchematicRender.id).where(
-                    SchematicRender.build_schematic_id == schematic_id,
-                    SchematicRender.recipe_hash == recipe_hash,
-                    SchematicRender.url == url,
-                )
-            )
-            if render_exists is None:
-                return False
-            await self._replace_projected_render(session, build_id, url)
-            await session.commit()
-        return True
-
-    @staticmethod
-    async def _replace_projected_render(session: AsyncSession, build_id: int, url: str) -> None:
-        registered_urls = SchematicRepository._registered_render_urls(build_id)
-        existing = tuple(
-            await session.scalars(
-                select(BuildLink.url).where(
-                    BuildLink.build_id == build_id,
-                    BuildLink.media_type == "render",
-                    BuildLink.url.in_(registered_urls),
-                )
-            )
-        )
-        if existing == (url,):
-            return
-        await session.execute(
-            delete(BuildLink).where(
-                BuildLink.build_id == build_id,
-                BuildLink.media_type == "render",
-                BuildLink.url.in_(registered_urls),
-            )
-        )
-        await session.execute(insert(BuildLink).values(build_id=build_id, url=url, media_type="render"))
-        await session.execute(
-            update(_BUILD_TABLE).where(_BUILD_TABLE.c.id == build_id).values(revision=_BUILD_TABLE.c.revision + 1)
-        )
-
-    @staticmethod
-    async def _clear_projected_render(session: AsyncSession, build_id: int) -> None:
-        registered_urls = SchematicRepository._registered_render_urls(build_id)
-        existing = await session.scalar(
-            select(BuildLink.url)
-            .where(
-                BuildLink.build_id == build_id,
-                BuildLink.media_type == "render",
-                BuildLink.url.in_(registered_urls),
-            )
-            .limit(1)
-        )
-        if existing is None:
-            return
-        await session.execute(
-            delete(BuildLink).where(
-                BuildLink.build_id == build_id,
-                BuildLink.media_type == "render",
-                BuildLink.url.in_(registered_urls),
-            )
-        )
-        await session.execute(
-            update(_BUILD_TABLE).where(_BUILD_TABLE.c.id == build_id).values(revision=_BUILD_TABLE.c.revision + 1)
-        )
-
-    @staticmethod
-    def _registered_render_urls(build_id: int) -> Select[tuple[str]]:
-        """Return URLs whose lifecycle is owned by this schematic projection."""
-        return (
-            select(SchematicRender.url)
-            .join(BuildSchematic, SchematicRender.build_schematic_id == BuildSchematic.id)
-            .where(BuildSchematic.build_id == build_id)
-        )
-
-    async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None:
-        """Load a registered preview artifact within the API response budget."""
-        async with self._session_factory() as session:
-            row = (
-                await session.execute(
-                    select(SchematicRender.object_key, SchematicRender.byte_size).where(
-                        SchematicRender.recipe_hash == recipe_hash
-                    )
-                )
-            ).first()
-        if row is None or row.object_key is None or row.byte_size > max_bytes:
-            return None
-        return await self._artifacts.get(row.object_key, max_bytes=max_bytes)
-
     async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
         """Replace the latest moderator-triggered evidence for one schematic."""
         async with self._session_factory() as session:
@@ -450,20 +261,9 @@ class SchematicRepository:
         async with self._session_factory() as session:
             rows: Sequence[tuple[BuildSchematic, str, int]] = (await session.execute(statement)).all()  # type: ignore[assignment]
         return [
-            to_stored_schematic(row, source_format=SchematicFormat(source_format), byte_size=byte_size)
+            to_stored_schematic(row, source_format=source_format, byte_size=byte_size)
             for row, source_format, byte_size in rows
         ]
-
-
-def _stored_render(row: SchematicRender) -> StoredRender:
-    return StoredRender(
-        schematic_id=row.build_schematic_id,
-        recipe_hash=row.recipe_hash,
-        url=row.url,
-        width=row.width,
-        height=row.height,
-        byte_size=row.byte_size,
-    )
 
 
 def _dimension_within(value: int, span: int) -> ColumnElement[bool]:

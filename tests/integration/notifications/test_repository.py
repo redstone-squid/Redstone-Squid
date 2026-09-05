@@ -14,6 +14,7 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.infrastructure.models import Account, AccountIdentity
+from squid.bot.notifications import render_delivery
 from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventRecord
 from squid.notifications.domain import (
@@ -40,6 +41,7 @@ from squid.permissions.infrastructure.models import (
     PermissionRolePattern,
 )
 from squid.persistence.base import Base
+from squid.persistence.types import now
 
 _TABLES = [
     Base.metadata.tables["accounts"],
@@ -156,6 +158,33 @@ async def test_delivery_claims_use_uuid_fencing_and_database_attempt_counts(
     assert claimed[0].claim_token is not None
     assert await repository.complete_delivery(claimed[0]) is True
     assert await repository.complete_delivery(claimed[0]) is False
+
+
+async def test_delivery_claim_selects_most_recent_discord_identity_and_completes(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    delivery_id = await _seed_delivery(async_session_factory)
+    async with async_session_factory.begin() as session:
+        account_id = (await session.scalars(select(Account.id))).one()
+        verified_at = now()
+        existing = (await session.scalars(select(AccountIdentity))).one()
+        existing.verified_at = verified_at
+        session.add(
+            AccountIdentity(
+                account_id=account_id,
+                provider=IdentityProvider.DISCORD,
+                subject="456",
+                verified_at=verified_at,
+            )
+        )
+
+    (claimed,) = await repository.claim_deliveries(limit=10)
+
+    assert claimed.id == delivery_id
+    assert claimed.discord_id == 456
+    assert render_delivery(claimed, None) == "Your build was confirmed."
+    assert await repository.complete_delivery(claimed) is True
 
 
 async def test_persisted_notification_and_subscription_kinds_round_trip_as_enums(
@@ -621,13 +650,18 @@ async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
             occurred_at=Instant.now(),
         )
 
-        await repository._insert_many(  # pyright: ignore[reportPrivateUsage]
+        await repository._insert_candidates(  # pyright: ignore[reportPrivateUsage]
             session,
             event=event,
-            account_ids=sorted(accounts.values()),
-            kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-            source_key=lambda account_id: f"event:{event.id}:staff:{account_id}",
-            payload={"build_id": 7},
+            candidates=tuple(
+                NotificationCandidate(
+                    account_id=account_id,
+                    kind=NotificationKind.STAFF_BUILD_SUBMITTED,
+                    source_key=f"event:{event.id}:staff:{account_id}",
+                    payload={"build_id": 7},
+                )
+                for account_id in sorted(accounts.values())
+            ),
         )
 
     async with async_session_factory() as session:

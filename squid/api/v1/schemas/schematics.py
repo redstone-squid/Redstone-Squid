@@ -5,7 +5,7 @@ from typing import Self
 from pydantic import ConfigDict
 
 from squid.api.v1.schemas import FromDomain
-from squid.schematics.application.queries import StoredSchematic
+from squid.schematics.application.attachments import StoredSchematic
 from squid.schematics.domain import SchematicDimensions
 
 
@@ -46,12 +46,15 @@ class SchematicSummary(FromDomain[StoredSchematic]):
     download_url: str
 
     @classmethod
-    def from_domain(cls, schematic: StoredSchematic, /) -> Self:
+    def from_domain(cls, schematic: StoredSchematic, /, *, download_url: str | None = None) -> Self:
         analysis = schematic.analysis
         metrics = analysis.metrics
         license = schematic.publication.license
         if not schematic.publication.is_public_downloadable or license is None:
             msg = "Only public downloadable schematics can be rendered in the public API."
+            raise ValueError(msg)
+        if download_url is None:
+            msg = "Public schematic representations require a route-derived download URL."
             raise ValueError(msg)
         return cls(
             id=schematic.id,
@@ -69,5 +72,5 @@ class SchematicSummary(FromDomain[StoredSchematic]):
             analysis_schema_version=analysis.analysis_schema_version,
             license=license.value,
             license_url=license.uri,
-            download_url=f"/v1/builds/{schematic.build_id}/schematics/{schematic.id}/content",
+            download_url=download_url,
         )

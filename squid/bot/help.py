@@ -153,7 +153,7 @@ def _summary(command: AnyCommand) -> str:
     any other way.
     """
     text = getattr(command, "short_doc", None) or getattr(command, "description", "")
-    return text or tr("No details provided")
+    return text or tr(tr(t"No details provided"))
 
 
 def _command_section(
@@ -251,14 +251,10 @@ class Help(commands.MinimalHelpCommand):
         # We do not filter commands here, because it is too slow.
         # Every command needs to run its own checks even if the same check is used.
         # filtered_commands = await self.filter_commands(commands_, sort=True)
-        desc = dedent(
-            tr(
-                "{description}\n\nCommands:{commands}\n\n{more_information}\n",
-                description=self.context.bot.description,
-                commands=self.get_commands_brief_details(commands_),
-                more_information=tr(MORE_INFORMATION),
-            )
-        )
+        description = sl.raw_md(self.context.bot.description)
+        commands = sl.raw_md(self.get_commands_brief_details(commands_))
+        more_information = sl.raw_md(tr(MORE_INFORMATION))
+        desc = dedent(tr(tr(t"{description}\n\nCommands:{commands}\n\n{more_information}\n")))
         footer: str | None = None
         build_config = getattr(self.context.bot, "build_config", None)
         if (
@@ -267,17 +263,18 @@ class Help(commands.MinimalHelpCommand):
             and build_config.commit_message is not None
         ):
             footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
-        await send_to(self.get_destination())(render_payload([card_node(tr("Help"), desc, footer=footer)]))
+        await send_to(self.get_destination())(render_payload([card_node(tr(tr(t"Help")), desc, footer=footer)]))
 
     # !help <command>
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
+        name = command.qualified_name
         await send_to(self.get_destination())(
             render_payload(
                 [
                     card_node(
-                        tr("Command Help - `{name}`", name=command.qualified_name),
-                        command.help or tr("No details provided"),
+                        tr(tr(t"Command Help - `{name}`")),
+                        command.help or tr(tr(t"No details provided")),
                     )
                 ]
             )
@@ -292,7 +289,7 @@ class Help(commands.MinimalHelpCommand):
 
         return_as_list is helpful for passing these command details into the paginator as a list of command details.
         """
-        no_details = tr("No details provided")
+        no_details = tr(tr(t"No details provided"))
         details: list[str] = []
         for command in commands_:
             signature = f" {command.signature}" if command.signature else ""
@@ -303,7 +300,7 @@ class Help(commands.MinimalHelpCommand):
 
     @staticmethod
     def get_cog_brief_details(cogs: Sequence[Cog], return_as_list: bool = False) -> list[str] | str:
-        no_details = tr("No details provided")
+        no_details = tr(tr(t"No details provided"))
         details: list[str] = [f"\n`{cog.qualified_name}` - {cog.description or no_details}" for cog in cogs]
         if return_as_list:
             return details
@@ -323,13 +320,11 @@ class Help(commands.MinimalHelpCommand):
             return await self.send_command_help(group)
 
         command_details = self.get_commands_brief_details(list(commands_))
-        desc = tr(
-            "{description}\n\nUsable Subcommands: {commands}\n\n{more_information}",
-            description=group.cog.description,
-            commands=command_details or tr("None"),
-            more_information=tr(MORE_INFORMATION),
-        )
-        await send_to(self.get_destination())(render_payload([card_node(tr("Command Help"), desc)]))
+        description = sl.raw_md(group.cog.description)
+        commands = sl.raw_md(command_details or tr(tr(t"None")))
+        more_information = sl.raw_md(tr(MORE_INFORMATION))
+        desc = tr(tr(t"{description}\n\nUsable Subcommands: {commands}\n\n{more_information}"))
+        await send_to(self.get_destination())(render_payload([card_node(tr(tr(t"Command Help")), desc)]))
         return None
 
     # !help <cog>
@@ -338,25 +333,21 @@ class Help(commands.MinimalHelpCommand):
         """Sends help for a cog."""
         commands_ = cog.walk_commands()
         command_details = self.get_commands_brief_details(list(commands_))
-        desc = tr(
-            "{description}\n\nUsable Subcommands:{commands}\n\n{more_information}",
-            description=cog.description,
-            commands=command_details or tr("None"),
-            more_information=tr(MORE_INFORMATION),
-        )
-        await send_to(self.get_destination())(render_payload([card_node(tr("Command Help"), desc)]))
+        description = sl.raw_md(cog.description)
+        commands = sl.raw_md(command_details or tr(tr(t"None")))
+        more_information = sl.raw_md(tr(MORE_INFORMATION))
+        desc = tr(tr(t"{description}\n\nUsable Subcommands:{commands}\n\n{more_information}"))
+        await send_to(self.get_destination())(render_payload([card_node(tr(tr(t"Command Help")), desc)]))
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
-        return tr(
-            "Unable to find command `{name}`. Use /help to get a list of available commands.",
-            name=string,
-        )
+        name = string
+        return tr(tr(t"Unable to find command `{name}`. Use /help to get a list of available commands."))
 
     @override
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
-        await send_to(self.get_destination())(render_payload([error_node(tr("Error."), error)]))
+        await send_to(self.get_destination())(render_payload([error_node(tr(tr(t"Error.")), error)]))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

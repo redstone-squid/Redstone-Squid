@@ -21,9 +21,7 @@ from whenever import Instant
 
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, now
-
-MAX_SCHEMATIC_BYTES = 16 * 1024 * 1024
-"""Hard compressed-byte ceiling enforced in the database as well as at upload."""
+from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
 
 class SchematicFile(Base):
@@ -31,7 +29,10 @@ class SchematicFile(Base):
 
     __tablename__ = "schematic_files"
     __table_args__ = (
-        CheckConstraint(f"byte_size > 0 AND byte_size <= {MAX_SCHEMATIC_BYTES}", name="schematic_files_size_bounded"),
+        CheckConstraint(
+            f"byte_size > 0 AND byte_size <= {SCHEMATIC_FILE_SCHEMA_MAX_BYTES}",
+            name="schematic_files_size_bounded",
+        ),
     )
 
     sha256: Mapped[str] = mapped_column(Text, primary_key=True)
@@ -216,6 +217,31 @@ class BuildSchematic(Base, kw_only=True):
     )
 
 
+class SchematicPreviewObject(Base, kw_only=True):
+    """Durable upload and cleanup state for one generated preview object."""
+
+    __tablename__ = "schematic_preview_objects"
+    __table_args__ = (
+        CheckConstraint("byte_size > 0", name="schematic_preview_objects_size_positive"),
+        CheckConstraint(
+            "sha256 IS NULL OR sha256 ~ '^[0-9a-f]{64}$'",
+            name="schematic_preview_objects_sha256_check",
+        ),
+        Index("schematic_preview_objects_cleanup_idx", "last_seen_at"),
+    )
+
+    object_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    byte_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    sha256: Mapped[str | None] = mapped_column(Text, default=None)
+    ready_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )
+    last_seen_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )
+
+
 class SchematicRender(Base, kw_only=True):
     """A replaceable preview artifact keyed by the complete rendering recipe."""
 
@@ -234,7 +260,15 @@ class SchematicRender(Base, kw_only=True):
     recipe_hash: Mapped[str] = mapped_column(Text, nullable=False)
     """SHA-256 of the pack, camera recipe, output dimensions, and analyzer version."""
     url: Mapped[str] = mapped_column(Text, nullable=False)
-    object_key: Mapped[str | None] = mapped_column(Text, default=None)
+    object_key: Mapped[str | None] = mapped_column(
+        Text,
+        ForeignKey(
+            "schematic_preview_objects.object_key",
+            name="schematic_renders_object_key_fkey",
+            ondelete="RESTRICT",
+        ),
+        default=None,
+    )
     width: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -110,11 +110,7 @@ class FakeAccountRepository:
 
     async def get_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         return next(
-            (
-                account
-                for account in self.accounts.values()
-                if (identity := account.identity(provider)) is not None and identity.subject == subject
-            ),
+            (account for account in self.accounts.values() if account.identity_for(provider, subject) is not None),
             None,
         )
 
@@ -377,8 +373,10 @@ async def test_discord_login_creates_an_account_without_making_discord_primary()
 
     # The fake assigns identity ids because persistence does, and per-identity visibility and
     # unlink are both addressed by that id.
-    assert account.identity(IdentityProvider.DISCORD) == replace(AccountIdentity.discord(123, verified_at=NOW), id=1)
-    assert account.identity(IdentityProvider.JAVA) is None
+    assert account.identities_for(IdentityProvider.DISCORD) == (
+        replace(AccountIdentity.discord(123, verified_at=NOW), id=1),
+    )
+    assert account.identities_for(IdentityProvider.JAVA) == ()
 
 
 async def test_grant_current_consent_updates_the_internal_account() -> None:
@@ -708,6 +706,46 @@ async def test_refresh_can_name_which_java_identity_to_refresh() -> None:
         await service(repository).refresh_java_identity(account.id, java_uuid=OTHER_JAVA_UUID)
 
 
+async def test_refresh_without_uuid_deliberately_selects_most_recent_java_identity() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+    first = account.identity_for(IdentityProvider.JAVA, str(JAVA_UUID))
+    assert first is not None
+    newest = replace(
+        AccountIdentity.java(
+            OTHER_JAVA_UUID,
+            username="NewerPlayer",
+            verified_at=NOW.add(minutes=1),
+        ),
+        id=3,
+    )
+    repository.accounts[account.id] = replace(account, identities=(*account.identities, newest))
+
+    await service(repository, "RefreshedPlayer").refresh_java_identity(account.id)
+
+    assert repository.refreshed == (account.id, OTHER_JAVA_UUID, "RefreshedPlayer")
+
+
+async def test_refresh_exact_uuid_ignores_a_more_recent_java_identity() -> None:
+    repository = FakeAccountRepository()
+    account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
+    assert account.id is not None
+    newest = replace(
+        AccountIdentity.java(
+            OTHER_JAVA_UUID,
+            username="NewerPlayer",
+            verified_at=NOW.add(minutes=1),
+        ),
+        id=3,
+    )
+    repository.accounts[account.id] = replace(account, identities=(*account.identities, newest))
+
+    await service(repository, "RefreshedPlayer").refresh_java_identity(account.id, java_uuid=JAVA_UUID)
+
+    assert repository.refreshed == (account.id, JAVA_UUID, "RefreshedPlayer")
+
+
 async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> None:
     """The point of the rekeying: a Bedrock-only caller is a first-class linker.
 
@@ -718,7 +756,7 @@ async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> Non
     repository = FakeAccountRepository()
     account = repository.seed_account(555, provider=IdentityProvider.BEDROCK, consent=CONSENT, java_uuid=JAVA_UUID)
     assert account.id is not None
-    assert account.identity(IdentityProvider.DISCORD) is None
+    assert account.identities_for(IdentityProvider.DISCORD) == ()
     alias = CreatorAlias(1, "Player", account_id=account.id, claim_method=ClaimMethod.VERIFIED_IGN)
     repository.link_result = _linked(account, claimed_alias=alias)
     accounts = service(repository)
@@ -726,11 +764,11 @@ async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> Non
     linked = await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
 
     assert linked.claimed_alias == alias
-    java = repository.accounts[account.id].identity(IdentityProvider.JAVA)
+    java = repository.accounts[account.id].identity_for(IdentityProvider.JAVA, str(JAVA_UUID))
     assert java is not None
     assert java.id is not None
     await accounts.unlink_identity(account.id, java.id)
-    assert repository.accounts[account.id].identity(IdentityProvider.JAVA) is None
+    assert repository.accounts[account.id].identities_for(IdentityProvider.JAVA) == ()
 
 
 async def test_linking_against_a_missing_account_does_not_create_one() -> None:

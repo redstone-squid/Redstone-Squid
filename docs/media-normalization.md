@@ -59,6 +59,12 @@ leases, so no database cleanup design can fence a put they resume after its byte
 until the migration and new worker are both deployed; the 48-hour backfill grace protects rows committed before the
 quiesced upgrade, but it is not a substitute for quiescing an old in-flight publisher.
 
+Migration `d2e8f1a6b9c3` begins a separate rolling rename of the durable video-preview role. It expands the database and
+new readers to accept both `poster` and `video_thumbnail`, but workers intentionally continue writing `poster` in this
+deployment. The public API already presents either value as `video_thumbnail`. Switch durable writers only after every
+older API and worker binary has drained; then backfill mutable rows and contract the check in later deployments.
+Content-addressed schema-1 reports retain their historical `poster` field and are never rewritten for this rename.
+
 With the local artifact backend, `/var/lib/app/objects` must be the same durable volume in the API and worker. With the
 S3 backend, both processes instead need the same bucket, prefix, endpoint, and credentials through the existing
 `SQUID_STORAGE_*` settings.

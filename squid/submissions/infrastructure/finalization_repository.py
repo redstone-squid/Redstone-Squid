@@ -38,6 +38,7 @@ from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
 
 _CLAIM_MINUTES = 5
+_LEGACY_BUILD_TARGET_KEY = "postgres_builds"
 
 
 class PostgresFinalizationJobRepository(FinalizationJobRepository):
@@ -91,9 +92,9 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     msg = f"{status.value} draft has no matching finalization job"
                     raise InvalidStateError(msg)
                 expected_job_statuses = (
-                    {FinalizationJobStatus.PENDING.value, FinalizationJobStatus.CLAIMED.value}
+                    {FinalizationJobStatus.PENDING, FinalizationJobStatus.CLAIMED}
                     if status is DraftStatus.PROCESSING
-                    else {FinalizationJobStatus.COMPLETED.value}
+                    else {FinalizationJobStatus.COMPLETED}
                 )
                 if job.status not in expected_job_statuses:
                     msg = f"{status.value} draft has an incompatible {job.status} finalization job"
@@ -113,7 +114,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     draft_revision=draft.snapshot.revision,
                     payload=encoded,
                     payload_sha256=digest,
-                    status=FinalizationJobStatus.PENDING.value,
+                    status=FinalizationJobStatus.PENDING,
                     available_at=now,
                     created_at=now,
                     updated_at=now,
@@ -161,7 +162,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     draft_revision=draft.snapshot.revision,
                     payload=None,
                     payload_sha256=None,
-                    status=FinalizationJobStatus.NEEDS_ATTENTION.value,
+                    status=FinalizationJobStatus.NEEDS_ATTENTION,
                     available_at=now,
                     attention_at=now,
                     attention_issues=_encode_issues(normalized_issues),
@@ -181,11 +182,11 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             raise ValueError(msg)
         ready = or_(
             and_(
-                SubmissionFinalizationJob.status == FinalizationJobStatus.PENDING.value,
+                SubmissionFinalizationJob.status == FinalizationJobStatus.PENDING,
                 SubmissionFinalizationJob.available_at <= now,
             ),
             and_(
-                SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED.value,
+                SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED,
                 SubmissionFinalizationJob.claim_expires_at <= now,
             ),
         )
@@ -211,7 +212,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     msg = "claimable finalization job failed its payload integrity check"
                     raise DataIntegrityError(msg)
                 token = uuid4()
-                job.status = FinalizationJobStatus.CLAIMED.value
+                job.status = FinalizationJobStatus.CLAIMED
                 job.attempts += 1
                 job.claimed_at = now
                 job.claim_token = token
@@ -258,10 +259,12 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                     SubmissionFinalizationResult(
                         job_id=model.id,
                         build_id=result.build_id,
+                        _legacy_target_key=_LEGACY_BUILD_TARGET_KEY,
+                        _legacy_provenance=_legacy_result_provenance(job.payload),
                         created_at=now,
                     )
                 )
-            model.status = FinalizationJobStatus.COMPLETED.value
+            model.status = FinalizationJobStatus.COMPLETED
             model.completed_at = now
             model.attention_at = None
             model.dead_at = None
@@ -295,7 +298,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             if draft.status is not DraftStatus.PROCESSING:
                 msg = "claimed finalization job does not own a processing draft"
                 raise InvalidStateError(msg)
-            model.status = FinalizationJobStatus.NEEDS_ATTENTION.value
+            model.status = FinalizationJobStatus.NEEDS_ATTENTION
             model.attention_at = now
             model.dead_at = None
             model.completed_at = None
@@ -335,7 +338,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             model.updated_at = now
             if dead:
                 issue = SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED)
-                model.status = FinalizationJobStatus.DEAD.value
+                model.status = FinalizationJobStatus.DEAD
                 model.dead_at = now
                 model.attention_at = None
                 model.attention_issues = _encode_issues((issue,))
@@ -343,7 +346,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 draft.updated_at = now
                 draft.expires_at = expires_at
             else:
-                model.status = FinalizationJobStatus.PENDING.value
+                model.status = FinalizationJobStatus.PENDING
                 model.available_at = retry_at
                 model.dead_at = None
                 model.attention_at = None
@@ -399,7 +402,7 @@ async def _claimed_job(
         .where(
             SubmissionFinalizationJob.id == claim.job_id,
             SubmissionFinalizationJob.draft_id == claim.draft_id,
-            SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED.value,
+            SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED,
             SubmissionFinalizationJob.claim_token == claim.claim_token,
         )
         .with_for_update()
@@ -426,7 +429,7 @@ def _reset_pending(
     job.draft_revision = revision
     job.payload = payload
     job.payload_sha256 = digest
-    job.status = FinalizationJobStatus.PENDING.value
+    job.status = FinalizationJobStatus.PENDING
     job.attempts = 0
     job.available_at = now
     job.completed_at = None
@@ -447,7 +450,7 @@ def _reset_attention(
     job.draft_revision = revision
     job.payload = None
     job.payload_sha256 = None
-    job.status = FinalizationJobStatus.NEEDS_ATTENTION.value
+    job.status = FinalizationJobStatus.NEEDS_ATTENTION
     job.attempts = 0
     job.completed_at = None
     job.attention_at = now
@@ -472,7 +475,7 @@ def _snapshot(
         job_id=job.id,
         draft_id=job.draft_id,
         draft_revision=job.draft_revision,
-        status=FinalizationJobStatus(job.status),
+        status=job.status,
         attempts=job.attempts,
         available_at=job.available_at,
         claimed_at=job.claimed_at,
@@ -490,19 +493,53 @@ def _result(model: SubmissionFinalizationResult) -> FinalizedBuild:
     return FinalizedBuild(model.build_id)
 
 
+def _legacy_result_provenance(submission: NormalizedSubmission) -> dict[str, object]:
+    """Dual-write the retired result shape until every legacy reader has drained."""
+    return {
+        "source_draft_id": str(submission.source_draft_id),
+        "owner_account_id": submission.owner_account_id,
+        "origin": submission.origin.value,
+        "schema_id": submission.schema_id,
+        "schema_revision": submission.schema_revision,
+        "source_installation_id": (
+            str(submission.source_installation_id) if submission.source_installation_id is not None else None
+        ),
+        "sponsor_installation_id": (
+            str(submission.sponsor.installation_id) if submission.sponsor is not None else None
+        ),
+        "normalized_media_upload_ids": [str(value) for value in submission.artifacts.normalized_media_upload_ids],
+        "sanitized_schematic_id": (
+            str(submission.artifacts.sanitized_schematic_id)
+            if submission.artifacts.sanitized_schematic_id is not None
+            else None
+        ),
+    }
+
+
 def _encode_issues(issues: Sequence[SubmissionAttentionIssue]) -> list[dict[str, object]]:
     return [{"field_id": issue.field_id, "reason": issue.reason.value} for issue in issues]
 
 
-def _decode_issues(values: Sequence[Mapping[str, object]]) -> tuple[SubmissionAttentionIssue, ...]:
-    try:
-        return tuple(
-            SubmissionAttentionIssue(str(value["field_id"]), SubmissionAttentionReason(str(value["reason"])))
-            for value in values
-        )
-    except (KeyError, ValueError) as error:
-        msg = "persisted submission attention issues are invalid"
-        raise DataIntegrityError(msg) from error
+def _decode_issues(values: object) -> tuple[SubmissionAttentionIssue, ...]:
+    msg = "persisted submission attention issues are invalid"
+    if not isinstance(values, list):
+        raise DataIntegrityError(msg)
+    issues: list[SubmissionAttentionIssue] = []
+    for value in values:
+        if not isinstance(value, Mapping):
+            raise DataIntegrityError(msg)
+        try:
+            field_id = value["field_id"]
+            reason = value["reason"]
+        except KeyError as error:
+            raise DataIntegrityError(msg) from error
+        if not isinstance(field_id, str) or not isinstance(reason, str):
+            raise DataIntegrityError(msg)
+        try:
+            issues.append(SubmissionAttentionIssue(field_id, SubmissionAttentionReason(reason)))
+        except ValueError as error:
+            raise DataIntegrityError(msg) from error
+    return tuple(issues)
 
 
 def _unique_issues(issues: Sequence[SubmissionAttentionIssue]) -> tuple[SubmissionAttentionIssue, ...]:

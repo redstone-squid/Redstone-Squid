@@ -1,4 +1,4 @@
-"""PostgreSQL lifecycle coverage for durable schematic render projection."""
+"""PostgreSQL lifecycle coverage for durable schematic preview publication."""
 
 from collections.abc import AsyncGenerator
 from typing import Any, cast
@@ -15,7 +15,7 @@ from squid.schematics.application import (
     SkippedRender,
 )
 from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
-from squid.worker.rendering import SchematicRenderProjector
+from squid.worker.rendering import SchematicPreviewWorker
 
 pytestmark = pytest.mark.asyncio
 
@@ -64,12 +64,12 @@ async def _row(session_factory: async_sessionmaker[AsyncSession]) -> tuple[Any, 
         return None if row is None else tuple(row)
 
 
-def _projector(
+def _preview_worker(
     session_factory: async_sessionmaker[AsyncSession],
     outcome: RenderPreparation | Exception,
-) -> SchematicRenderProjector:
+) -> SchematicPreviewWorker:
     jobs = SchematicRenderJobService(PostgresSchematicRenderJobRepository(session_factory), max_attempts=2)
-    return SchematicRenderProjector(
+    return SchematicPreviewWorker(
         jobs,
         cast(Any, PreparedSchematics(outcome)),
         cast(Any, object()),
@@ -84,12 +84,12 @@ async def test_a_permanent_render_skip_acknowledges_and_removes_the_intent(
 ) -> None:
     del render_queue
     await _enqueue(async_session_factory)
-    projector = _projector(
+    worker = _preview_worker(
         async_session_factory,
         SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC),
     )
 
-    await projector.process_batch()
+    await worker.process_batch()
 
     assert await _row(async_session_factory) is None
 
@@ -100,14 +100,14 @@ async def test_a_transient_render_failure_backs_off_then_is_retained_as_a_dead_l
 ) -> None:
     del render_queue
     await _enqueue(async_session_factory)
-    projector = _projector(async_session_factory, RuntimeError("renderer unavailable"))
+    worker = _preview_worker(async_session_factory, RuntimeError("renderer unavailable"))
 
-    await projector.process_batch()
+    await worker.process_batch()
 
     assert await _row(async_session_factory) == (1, None, False, True, "renderer unavailable")
 
     async with async_session_factory.begin() as session:
         await session.execute(text("UPDATE schematic_render_queue SET available_at = now() WHERE build_id = 7"))
-    await projector.process_batch()
+    await worker.process_batch()
 
     assert await _row(async_session_factory) == (2, None, True, False, "renderer unavailable")

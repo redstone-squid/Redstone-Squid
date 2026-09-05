@@ -17,6 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 from uuid import UUID, uuid4
 
+import anyio
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
@@ -36,6 +37,7 @@ from squid.media.errors import (
     InvalidMediaError,
     MediaArtifactCleanupInProgressError,
     MediaDraftNotFoundError,
+    MediaDraftRevisionConflictError,
     MediaDraftStateConflictError,
     MediaJobArtifactError,
     MediaJobClaimLostError,
@@ -78,8 +80,26 @@ class MediaArtifactRole(StrEnum):
     """The purpose of a durable artifact produced by normalization."""
 
     OUTPUT = "output"
+    # Read-only compatibility for rows written before the video-thumbnail rollout.
     POSTER = "poster"
+    VIDEO_THUMBNAIL = "video_thumbnail"
     REPORT = "report"
+
+
+MEDIA_VIDEO_THUMBNAIL_ROLES = frozenset({MediaArtifactRole.POSTER, MediaArtifactRole.VIDEO_THUMBNAIL})
+
+
+@dataclass(frozen=True, slots=True)
+class MediaDraftUploadAuthorization:
+    """Owner and revision proof that persistence must revalidate atomically."""
+
+    owner_account_id: int
+    draft_revision: int
+
+    def __post_init__(self) -> None:
+        if self.owner_account_id < 1 or self.draft_revision < 0:
+            msg = tr(t"Media draft upload authorization is invalid.")
+            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,7 +279,13 @@ class TerminalMediaSource:
 class MediaJobRepository(Protocol):
     """Durable metadata and claim-fenced queue operations."""
 
-    async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome: ...
+    async def enqueue(
+        self,
+        upload: MediaUploadMetadata,
+        limits: MediaLimits,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> MediaEnqueueOutcome: ...
 
     async def get(self, upload_id: UUID) -> MediaJobSnapshot | None: ...
 
@@ -337,7 +363,12 @@ class MediaNormalizationJobService:
         """Return the same source and output limits enforced by the worker."""
         return self._limits
 
-    async def submit(self, submission: MediaUploadSubmission) -> UUID:
+    async def submit(
+        self,
+        submission: MediaUploadSubmission,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> UUID:
         """Stage a raw object and idempotently enqueue its immutable metadata."""
         if len(submission.source) > self._limits.max_source_bytes:
             limit = self._limits.max_source_bytes
@@ -364,15 +395,22 @@ class MediaNormalizationJobService:
                 source_sha256=digest,
                 source_object_key=object_key,
                 strip_audio=submission.strip_audio,
-            )
+            ),
+            authorization=authorization,
         )
 
-    async def submit_staged(self, submission: StagedMediaUploadSubmission) -> UUID:
+    async def submit_staged(
+        self,
+        submission: StagedMediaUploadSubmission,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> UUID:
         """Stage a bounded regular file without buffering it in application memory."""
-        byte_size, digest = await asyncio.to_thread(
+        byte_size, digest = await anyio.to_thread.run_sync(
             _staged_source_metadata,
             submission.source_path,
             self._limits.max_source_bytes,
+            abandon_on_cancel=False,
         )
         upload_id = submission.upload_id or uuid4()
         object_key = f"media/raw/{upload_id}/{digest}"
@@ -396,16 +434,27 @@ class MediaNormalizationJobService:
                 source_sha256=digest,
                 source_object_key=object_key,
                 strip_audio=submission.strip_audio,
-            )
+            ),
+            authorization=authorization,
         )
 
-    async def _register(self, upload: MediaUploadMetadata) -> UUID:
+    async def _register(
+        self,
+        upload: MediaUploadMetadata,
+        *,
+        authorization: MediaDraftUploadAuthorization | None,
+    ) -> UUID:
         """Register immutable staged metadata and reconcile terminal replays."""
         object_key = upload.source_object_key
         upload_id = upload.id
         try:
-            outcome = await self._repository.enqueue(upload, self._limits)
-        except MediaLimitExceededError, MediaDraftNotFoundError, MediaDraftStateConflictError:
+            outcome = await self._repository.enqueue(upload, self._limits, authorization=authorization)
+        except (
+            MediaLimitExceededError,
+            MediaDraftNotFoundError,
+            MediaDraftRevisionConflictError,
+            MediaDraftStateConflictError,
+        ):
             await self._artifacts.delete(object_key)
             raise
         except MediaUploadConflictError as error:
@@ -581,7 +630,7 @@ class MediaNormalizationJobRunner:
     async def _process(self, job: ClaimedMediaJob) -> None:
         claim_lost = asyncio.Event()
         async with task_group() as heartbeat:
-            heartbeat.start_soon(self._maintain_claim, job, claim_lost)
+            heartbeat.start_soon(self._maintain_claim, job, claim_lost, name=f"media-heartbeat-{job.upload.id}")
             try:
                 await self._process_claim(job, claim_lost)
             finally:
@@ -708,6 +757,8 @@ class MediaNormalizationJobRunner:
             prepared.append(
                 (
                     self._artifact_metadata(
+                        # Keep the legacy durable value until every reader that
+                        # predates the dual-read rollout has drained.
                         MediaArtifactRole.POSTER,
                         poster,
                         result.report.poster.content_type,
@@ -763,6 +814,7 @@ class MediaNormalizationJobRunner:
         namespace = {
             MediaArtifactRole.OUTPUT: "normalized",
             MediaArtifactRole.POSTER: "posters",
+            MediaArtifactRole.VIDEO_THUMBNAIL: "posters",
             MediaArtifactRole.REPORT: "reports",
         }[role]
         object_key = f"media/{namespace}/{digest[:2]}/{digest}"

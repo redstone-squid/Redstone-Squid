@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     ForeignKey,
+    ForeignKeyConstraint,
     Identity,
     Index,
     Integer,
@@ -113,6 +114,7 @@ class NotificationRecord(Base, kw_only=True):
             name="notifications_kind_check",
         ),
         UniqueConstraint("source_key", name="notifications_source_key_key"),
+        UniqueConstraint("id", "account_id", name="notifications_id_account_key"),
         Index("notifications_account_inbox_idx", "account_id", "id"),
         Index("notifications_created_idx", "created_at"),
     )
@@ -145,6 +147,14 @@ class NotificationDeliveryRecord(Base, kw_only=True):
 
     __tablename__ = "notification_deliveries"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ("notification_id", "account_id"),
+            ("notifications.id", "notifications.account_id"),
+            name="notification_deliveries_notification_owner_fkey",
+            ondelete="CASCADE",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         Index("notification_deliveries_account_idx", "account_id"),
         UniqueConstraint("notification_id", name="notification_deliveries_notification_id_key"),
         CheckConstraint("attempts >= 0", name="notification_deliveries_attempts_nonnegative"),
@@ -163,7 +173,6 @@ class NotificationDeliveryRecord(Base, kw_only=True):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     notification_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("notifications.id", name="notification_deliveries_notification_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
     account_id: Mapped[int] = mapped_column(

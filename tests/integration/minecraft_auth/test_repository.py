@@ -7,12 +7,14 @@ from typing import cast
 from uuid import UUID
 
 import pytest
-from sqlalchemy import Table, select, update
+from anyio import Event, create_task_group, fail_after, sleep
+from sqlalchemy import Table, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.infrastructure.models import Account, AccountIdentity
+from squid.accounts.infrastructure.repository import AccountRepository
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.domain import PublicServerProfile
@@ -22,13 +24,13 @@ from squid.minecraft_auth.errors import (
     InvalidPlayerTokenError,
     TooManyActiveChallengesError,
 )
-from squid.minecraft_auth.infrastructure.accounts import PostgresAccountIdentityAuthorizer
 from squid.minecraft_auth.infrastructure.models import (
     PaperInstallationRecord,
     PlayerChallengeRecord,
     PlayerGrantRecord,
 )
 from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
+from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
 from squid.persistence.base import Base
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 
@@ -85,18 +87,43 @@ def services(
     max_active_challenges: int = 5,
 ) -> tuple[InstallationCredentialService, PlayerAuthorizationService]:
     repository = PostgresMinecraftAuthorizationRepository(session_factory)
-    accounts = PostgresAccountIdentityAuthorizer(session_factory)
+    accounts = AccountRepository(session_factory, "unused-verification-code-pepper")
     codec = MinecraftSecretCodec("integration-test-pepper")
     return (
-        InstallationCredentialService(repository, accounts, codec, now=lambda: NOW),
+        InstallationCredentialService(repository, accounts, codec, clock=lambda: NOW),
         PlayerAuthorizationService(
             repository,
             accounts,
             codec,
-            now=lambda: NOW,
+            clock=lambda: NOW,
             max_active_challenges=max_active_challenges,
         ),
     )
+
+
+async def wait_until_advisory_lock_is_blocked(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    holder_pid: int,
+) -> None:
+    """Wait until another PostgreSQL backend is blocked by the lock holder."""
+    query = text(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM pg_stat_activity AS waiting
+            WHERE :holder_pid = ANY(pg_blocking_pids(waiting.pid))
+              AND waiting.wait_event_type = 'Lock'
+              AND waiting.wait_event = 'advisory'
+        )
+        """
+    )
+    with fail_after(5):
+        while True:
+            async with session_factory() as session:
+                if await session.scalar(query, {"holder_pid": holder_pid}):
+                    return
+            await sleep(0)
 
 
 async def test_fabric_codes_and_token_are_hash_only_and_exchange_is_one_time(
@@ -195,29 +222,135 @@ async def test_targeted_public_sponsor_lookup_isolated_from_unrelated_malformed_
     assert sponsor.display_name == "Valid server"
 
 
-async def test_postgres_advisory_fence_enforces_active_challenge_bound(
+async def test_legacy_advisory_fence_blocks_until_rollback_then_enforces_active_bound(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await consenting_account(async_session_factory)
     _, players = services(async_session_factory, max_active_challenges=1)
-
     await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
 
-    with pytest.raises(TooManyActiveChallengesError):
-        await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
+    outcomes: list[object] = []
+    started = Event()
+    finished = Event()
+
+    async def start_challenge() -> None:
+        started.set()
+        try:
+            outcomes.append(
+                await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
+            )
+        except TooManyActiveChallengesError as error:
+            outcomes.append(error)
+        finally:
+            finished.set()
+
+    async with async_session_factory() as holder:
+        transaction = await holder.begin()
+        holder_pid = await holder.scalar(select(func.pg_backend_pid()))
+        assert holder_pid is not None
+        raw_key = f"fabric:{JAVA_UUID}:-".encode()
+        legacy_lock_id = int.from_bytes(hashlib.sha256(raw_key).digest()[:8], byteorder="big", signed=True)
+        await holder.execute(select(func.pg_advisory_xact_lock(legacy_lock_id)))
+
+        async with create_task_group() as tasks:
+            tasks.start_soon(start_challenge)
+            await started.wait()
+            try:
+                await wait_until_advisory_lock_is_blocked(async_session_factory, holder_pid=holder_pid)
+                assert not finished.is_set()
+            finally:
+                await transaction.rollback()
+            with fail_after(5):
+                await finished.wait()
+
+    assert len(outcomes) == 1
+    assert isinstance(outcomes[0], TooManyActiveChallengesError)
+
+
+async def test_expired_challenge_does_not_consume_active_quota(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    _, players = services(async_session_factory, max_active_challenges=1)
+    expired = await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(PlayerChallengeRecord).where(PlayerChallengeRecord.id == expired.id).values(expires_at=NOW)
+        )
+
+    replacement = await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
+
+    assert replacement.id != expired.id
+
+
+async def test_other_advisory_namespace_does_not_block_minecraft_challenge(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    other_java_uuid = UUID("55555555-5555-4555-8555-555555555555")
+    _, players = services(async_session_factory, max_active_challenges=1)
+    outcomes: list[object] = []
+    finished = Event()
+
+    async def start_challenge() -> None:
+        try:
+            outcomes.append(
+                await players.start_fabric_challenge(java_uuid=other_java_uuid, pkce_s256_challenge=PKCE_CHALLENGE)
+            )
+        finally:
+            finished.set()
+
+    async with async_session_factory() as holder:
+        transaction = await holder.begin()
+        await lock_key(
+            holder,
+            f"fabric:{other_java_uuid}:-".encode(),
+            namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_LIFECYCLE,
+        )
+        async with create_task_group() as tasks:
+            tasks.start_soon(start_challenge)
+            try:
+                with fail_after(5):
+                    await finished.wait()
+            finally:
+                await transaction.rollback()
+
+    assert len(outcomes) == 1
 
 
 async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await consenting_account(async_session_factory)
-    authorizer = PostgresAccountIdentityAuthorizer(async_session_factory)
+    authorizer = AccountRepository(async_session_factory, "unused-verification-code-pepper")
+    second_java_uuid = UUID("24d86f82-6193-4886-94af-8bc62994192d")
+    async with async_session_factory.begin() as session:
+        session.add(
+            AccountIdentity(
+                account_id=account_id,
+                provider=IdentityProvider.JAVA,
+                subject=str(second_java_uuid),
+                verified_at=NOW,
+            )
+        )
 
     assert await authorizer.has_current_consent(account_id)
-    assert await authorizer.can_approve(account_id=account_id, java_uuid=JAVA_UUID)
-    assert not await authorizer.can_approve(
+    assert await authorizer.can_approve_minecraft_identity(account_id=account_id, java_uuid=JAVA_UUID)
+    assert await authorizer.can_approve_minecraft_identity(account_id=account_id, java_uuid=second_java_uuid)
+    assert not await authorizer.can_approve_minecraft_identity(
         account_id=account_id,
         java_uuid=UUID("041873ab-65e9-4f44-a225-89d621df8e90"),
+    )
+    assert not await authorizer.has_current_consent(999_999)
+    assert not await authorizer.can_approve_minecraft_identity(account_id=999_999, java_uuid=JAVA_UUID)
+
+    unverified_java_uuid = UUID("44444444-4444-4444-8444-444444444444")
+    async with async_session_factory.begin() as session:
+        unverified = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=NOW)
+        session.add(unverified)
+        await session.flush()
+    assert await authorizer.has_current_consent(unverified.id)
+    assert not await authorizer.can_approve_minecraft_identity(
+        account_id=unverified.id,
+        java_uuid=unverified_java_uuid,
     )
 
     async with async_session_factory.begin() as session:
@@ -226,4 +359,4 @@ async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
         account.consent_version = "outdated"
 
     assert not await authorizer.has_current_consent(account_id)
-    assert not await authorizer.can_approve(account_id=account_id, java_uuid=JAVA_UUID)
+    assert not await authorizer.can_approve_minecraft_identity(account_id=account_id, java_uuid=JAVA_UUID)

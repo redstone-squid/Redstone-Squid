@@ -16,11 +16,13 @@ from squid.schematics.application import (
     IngestRequest,
     RenderRequest,
     RenderSkipReason,
+    SchematicPreviewService,
     SchematicPublication,
     SchematicService,
     SkippedRender,
 )
 from squid.schematics.domain.models import (
+    SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
     AutostackLattice,
     FingerprintPreset,
     SchematicAnalysis,
@@ -100,6 +102,7 @@ def service(
         SchematicService(
             analyzer,
             store,
+            store,
             FakeVersionResolver(),
             limits=limits,
             engine_installed=engine_installed,
@@ -112,6 +115,12 @@ def service(
         analyzer,
         store,
     )
+
+
+def test_preview_orchestration_has_an_application_owned_boundary() -> None:
+    schematics, _, _ = service()
+
+    assert isinstance(schematics.previews, SchematicPreviewService)
 
 
 def sanitized_publication(*, public: bool = False) -> SchematicPublication:
@@ -138,7 +147,7 @@ def sanitized_publication(*, public: bool = False) -> SchematicPublication:
 def test_default_upload_budgets_match_the_public_plugin_contract() -> None:
     limits = SchematicLimits()
 
-    assert limits.max_upload_bytes == 16 * 1024 * 1024
+    assert limits.max_upload_bytes == SCHEMATIC_FILE_SCHEMA_MAX_BYTES
     assert limits.max_inflated_bytes == 64 * 1024 * 1024
     assert limits.max_allocated_volume == 20_000_000
     assert limits.max_axis_length == 512
@@ -239,6 +248,34 @@ async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
     page = await schematics.list_public_page(7)
     assert [item.id for item in page.items] == [1]
     assert page.total == 1
+
+
+async def test_two_public_attachments_download_while_only_the_featured_one_supplies_preview() -> None:
+    schematics, _analyzer, store = service(render_enabled=True, resource_pack=FakeResourcePack())
+    publication = sanitized_publication(public=True)
+    first_digest = await store.put_file(b"featured", source_format=SchematicFormat.LITEMATIC)
+    second_digest = await store.put_file(b"secondary", source_format=SchematicFormat.LITEMATIC)
+    featured_id = await store.record_analysis(
+        7,
+        first_digest,
+        make_analysis(),
+        primary=True,
+        publication=publication,
+    )
+    secondary_id = await store.record_analysis(
+        7,
+        second_digest,
+        make_analysis(),
+        primary=False,
+        publication=publication,
+    )
+
+    assert [item.id for item in await schematics.list_public_for_build(7)] == [featured_id, secondary_id]
+    assert (await schematics.public_download(7, featured_id)).content == b"featured"
+    assert (await schematics.public_download(7, secondary_id)).content == b"secondary"
+    preview = await schematics.prepare_render(7)
+    assert isinstance(preview, FreshRender)
+    assert preview.schematic_id == featured_id
 
 
 async def test_ingest_refuses_an_oversized_upload_before_reaching_the_analyzer() -> None:
@@ -416,7 +453,7 @@ async def test_attaching_a_second_schematic_can_leave_the_first_primary() -> Non
     await schematics.attach(5, IngestRequest(data=litematic_bytes(b"\x00"), filename="b.litematic"), primary=False)
 
     assert [record[3] for record in store.records] == [True, False]
-    primary = await schematics.primary_for_build(5)
+    primary = await schematics.featured_for_build(5)
     assert primary is not None
     assert primary.original_filename == "a.litematic"
 
@@ -442,7 +479,10 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
     assert isinstance(prepared, FreshRender)
     assert prepared.png == analyzer.render_output
     assert analyzer.render_calls[0][2] == VerifiedResourcePack.from_bytes(b"resource-pack")
-    assert await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png") is not None
+    assert (
+        await schematics.publish_fresh_preview(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+        is not None
+    )
 
     cached = await schematics.prepare_render(7)
     assert isinstance(cached, CachedRender)
@@ -499,7 +539,7 @@ async def test_permanent_render_skips_do_not_acquire_unavailable_render_resource
         IngestRequest(data=litematic_bytes(b"\x00"), filename="missing.litematic"),
         publication=sanitized_publication(),
     )
-    stored = await schematics.primary_for_build(8)
+    stored = await schematics.featured_for_build(8)
     assert stored is not None
     store.files.pop(stored.file_sha256)
     assert await schematics.prepare_render(8) == SkippedRender(RenderSkipReason.MISSING_FILE)
@@ -510,10 +550,10 @@ async def test_explaining_a_render_skip_costs_nothing(caplog: pytest.LogCaptureF
     """A moderator asking about a build must not set a render going to get an answer."""
     schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
     await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
-    stored = await schematics.primary_for_build(7)
+    stored = await schematics.featured_for_build(7)
     assert stored is not None
 
-    with caplog.at_level(logging.INFO, logger="squid.schematics.application.services"):
+    with caplog.at_level(logging.INFO, logger="squid.schematics.application.preview_service"):
         assert await schematics.explain_render_skip(stored) is RenderSkipReason.NOT_SANITIZED
 
     assert analyzer.render_calls == []
@@ -528,7 +568,7 @@ async def test_a_sanitized_schematic_within_budget_has_no_skip_to_explain() -> N
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=sanitized_publication(),
     )
-    stored = await schematics.primary_for_build(7)
+    stored = await schematics.featured_for_build(7)
     assert stored is not None
 
     assert await schematics.explain_render_skip(stored) is None
@@ -542,7 +582,7 @@ async def test_explaining_a_render_skip_reports_a_missing_source_without_acquiri
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=sanitized_publication(),
     )
-    stored = await schematics.primary_for_build(7)
+    stored = await schematics.featured_for_build(7)
     assert stored is not None
     store.files.clear()
 
@@ -626,7 +666,7 @@ async def test_render_skips_a_schematic_over_a_budget(
         publication=sanitized_publication(),
     )
 
-    with caplog.at_level(logging.INFO, logger="squid.schematics.application.services"):
+    with caplog.at_level(logging.INFO, logger="squid.schematics.application.preview_service"):
         assert await schematics.prepare_render(7) == SkippedRender(reason)
 
     assert analyzer.render_calls == []
@@ -685,7 +725,7 @@ async def test_rendering_now_serves_the_recipe_the_queue_already_rendered() -> N
     )
     prepared = await schematics.prepare_render(7)
     assert isinstance(prepared, FreshRender)
-    await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+    await schematics.publish_fresh_preview(prepared, "https://cdn.example/render.png", "renders/recipe.png")
     store.render_content[prepared.recipe_hash] = b"\x89PNG\r\n\x1a\ncached"
 
     rendered = await schematics.render_now(7)
@@ -705,7 +745,7 @@ async def test_rendering_now_with_a_different_camera_renders_a_different_recipe(
     )
     prepared = await schematics.prepare_render(7)
     assert isinstance(prepared, FreshRender)
-    await schematics.record_render(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+    await schematics.publish_fresh_preview(prepared, "https://cdn.example/render.png", "renders/recipe.png")
     store.render_content[prepared.recipe_hash] = b"\x89PNG\r\n\x1a\ncached"
 
     rendered = await schematics.render_now(7, request=schematics.render_recipe(yaw=45.0))

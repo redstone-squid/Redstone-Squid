@@ -1,6 +1,7 @@
 """Integration coverage for the portable Alembic migration chain."""
 
 from collections.abc import Iterator
+from io import StringIO
 
 import psycopg2
 import pytest
@@ -12,6 +13,7 @@ from testcontainers.postgres import PostgresContainer
 
 from alembic import command
 from squid.persistence.alembic_entities import alembic_util_entities
+from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.worker.queue_health import QUEUE_HEALTH_STATEMENT
 
 MIGRATION_DATABASE = "redstone_squid_migrations"
@@ -22,6 +24,10 @@ NULLABLE_VOTE_THRESHOLDS_REVISION = "b2c3d4e5f6a8"
 VOTE_SUBTYPE_INVARIANT_REVISION = "a9b5c8d3e6f0"
 IDEMPOTENCY_CALLER_REVISION = "b0c6d9e4f7a1"
 FINALIZATION_RESULT_METADATA_REVISION = "c1d7e0f5a8b2"
+SCHEMATIC_RENDER_PROJECTION_REVISION = "e1f2a3b4c5d6"
+SCHEMATIC_PUBLICATION_REVISION = "f8b9c0d1e2f3"
+NOTIFICATION_DELIVERY_OWNER_REVISION = "b5d9f2a7c0e3"
+NOTIFICATION_DELIVERY_OWNER_PARENT_REVISION = "a4c8e1f6b9d2"
 
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
@@ -253,6 +259,321 @@ def test_migrations_create_schema_without_drift(
     # re-enqueueing keeps the generation rather than restarting it.
     assert stale_post is True
     assert reissued_generation == seeded_generation
+
+
+def test_notification_delivery_owner_migration_rejects_corruption_and_downgrades(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The forward key validates old rows and the downgrade restores the legacy shape."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{NOTIFICATION_DELIVERY_OWNER_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            owner_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            other_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            event_id = connection.execute(
+                text(
+                    "INSERT INTO domain_events (event_type, aggregate_kind, aggregate_id) "
+                    "VALUES ('build.confirmed', 'build', 42) RETURNING id"
+                )
+            ).scalar_one()
+            notification_id = connection.execute(
+                text(
+                    "INSERT INTO notifications (account_id, event_id, source_key, kind, payload, web_visible) "
+                    "VALUES (:owner_id, :event_id, 'event:migration:owner', 'build_confirmed', "
+                    "'{\"build_id\": 42}'::jsonb, true) RETURNING id"
+                ),
+                {"owner_id": owner_id, "event_id": event_id},
+            ).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO notification_deliveries (notification_id, account_id) "
+                    "VALUES (:notification_id, :other_id)"
+                ),
+                {"notification_id": notification_id, "other_id": other_id},
+            )
+
+        # Simulate a process that completed the autocommitted concurrent index build but
+        # stopped before Alembic attached the constraint or advanced the revision.
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+            connection.execute(
+                text("CREATE UNIQUE INDEX CONCURRENTLY notifications_id_account_key ON notifications (id, account_id)")
+            )
+
+        with pytest.raises(DBAPIError, match="ownership mismatch blocks composite foreign key"):
+            command.upgrade(config, NOTIFICATION_DELIVERY_OWNER_REVISION)
+
+        with engine.connect() as connection:
+            constraint_names = set(
+                connection.execute(
+                    text(
+                        "SELECT conname FROM pg_constraint WHERE conname IN ("
+                        "'notifications_id_account_key', "
+                        "'notification_deliveries_notification_id_fkey', "
+                        "'notification_deliveries_notification_owner_fkey')"
+                    )
+                ).scalars()
+            )
+            interrupted_index = connection.execute(
+                text("SELECT to_regclass('public.notifications_id_account_key')")
+            ).scalar_one()
+        assert constraint_names == {"notification_deliveries_notification_id_fkey"}
+        assert interrupted_index == "notifications_id_account_key"
+
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE notification_deliveries SET account_id = :owner_id WHERE notification_id = :notification_id"
+                ),
+                {"owner_id": owner_id, "notification_id": notification_id},
+            )
+        command.upgrade(config, NOTIFICATION_DELIVERY_OWNER_REVISION)
+
+        with engine.connect() as connection:
+            constraints = {
+                row.conname: row
+                for row in connection.execute(
+                    text(
+                        "SELECT conname, convalidated, condeferrable, condeferred, pg_get_constraintdef(oid) AS definition "
+                        "FROM pg_constraint WHERE conname IN ("
+                        "'notifications_id_account_key', "
+                        "'notification_deliveries_notification_id_fkey', "
+                        "'notification_deliveries_notification_owner_fkey')"
+                    )
+                )
+            }
+        assert set(constraints) == {
+            "notifications_id_account_key",
+            "notification_deliveries_notification_owner_fkey",
+        }
+        owner_constraint = constraints["notification_deliveries_notification_owner_fkey"]
+        assert owner_constraint.convalidated is True
+        assert owner_constraint.condeferrable is True
+        assert owner_constraint.condeferred is True
+        assert "ON DELETE CASCADE" in owner_constraint.definition
+
+        def commit_mismatched_owner() -> None:
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "UPDATE notification_deliveries SET account_id = :other_id "
+                        "WHERE notification_id = :notification_id"
+                    ),
+                    {"notification_id": notification_id, "other_id": other_id},
+                )
+                # Initially deferred means multi-statement account merges can move the parent
+                # and child before commit; a transaction that ends mismatched still fails.
+                assert (
+                    connection.execute(
+                        text("SELECT account_id FROM notification_deliveries WHERE notification_id = :notification_id"),
+                        {"notification_id": notification_id},
+                    ).scalar_one()
+                    == other_id
+                )
+
+        with pytest.raises(DBAPIError, match="notification_deliveries_notification_owner_fkey"):
+            commit_mismatched_owner()
+
+        command.downgrade(config, f"{NOTIFICATION_DELIVERY_OWNER_REVISION}-1")
+        with engine.connect() as connection:
+            downgraded_constraints = {
+                row.conname: row.definition
+                for row in connection.execute(
+                    text(
+                        "SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint "
+                        "WHERE conname IN ('notifications_id_account_key', "
+                        "'notification_deliveries_notification_id_fkey', "
+                        "'notification_deliveries_notification_owner_fkey')"
+                    )
+                )
+            }
+        assert set(downgraded_constraints) == {"notification_deliveries_notification_id_fkey"}
+        assert "ON DELETE CASCADE" in downgraded_constraints["notification_deliveries_notification_id_fkey"]
+        with engine.connect() as connection:
+            assert (
+                connection.execute(text("SELECT to_regclass('public.notifications_id_account_key')")).scalar_one()
+                is None
+            )
+        with engine.begin() as connection:
+            connection.execute(
+                text("UPDATE notification_deliveries SET account_id = :other_id WHERE notification_id = :id"),
+                {"other_id": other_id, "id": notification_id},
+            )
+        with (
+            pytest.raises(DBAPIError, match="notification_deliveries_notification_id_fkey"),
+            engine.begin() as connection,
+        ):
+            connection.execute(
+                text("UPDATE notification_deliveries SET notification_id = 999999 WHERE notification_id = :id"),
+                {"id": notification_id},
+            )
+        with engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM notifications WHERE id = :notification_id"),
+                {"notification_id": notification_id},
+            )
+            assert (
+                connection.execute(
+                    text("SELECT count(*) FROM notification_deliveries WHERE notification_id = :notification_id"),
+                    {"notification_id": notification_id},
+                ).scalar_one()
+                == 0
+            )
+    finally:
+        engine.dispose()
+
+
+def test_notification_delivery_owner_offline_sql_preserves_safe_ddl_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The forward DDL builds its key before validating and replacing the legacy FK."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", "postgresql+asyncpg://squid:squid@localhost/squid")
+    output = StringIO()
+    config = Config("alembic.ini", toml_file="pyproject.toml", output_buffer=output)
+
+    command.upgrade(
+        config,
+        f"{NOTIFICATION_DELIVERY_OWNER_PARENT_REVISION}:{NOTIFICATION_DELIVERY_OWNER_REVISION}",
+        sql=True,
+    )
+
+    sql = output.getvalue()
+    concurrent_index = sql.index("CREATE UNIQUE INDEX CONCURRENTLY notifications_id_account_key")
+    attach_constraint = sql.index("UNIQUE USING INDEX notifications_id_account_key")
+    not_valid = sql.index("NOT VALID")
+    validate_constraint = sql.index("VALIDATE CONSTRAINT notification_deliveries_notification_owner_fkey")
+    drop_legacy = sql.index("DROP CONSTRAINT notification_deliveries_notification_id_fkey")
+    assert concurrent_index < not_valid < validate_constraint < attach_constraint < drop_legacy
+
+
+def test_applied_schematic_render_projection_migration_upgrades_and_downgrades(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The applied historical revision retains its filename and reversible schema contract."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{SCHEMATIC_RENDER_PROJECTION_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            user_id = connection.execute(
+                text("INSERT INTO users (discord_id) VALUES (1830001) RETURNING id")
+            ).scalar_one()
+            build_id = connection.execute(
+                text(
+                    "INSERT INTO builds (submission_status, submitter_user_id, ai_generated) "
+                    "VALUES (0, :user_id, false) RETURNING id"
+                ),
+                {"user_id": user_id},
+            ).scalar_one()
+            digest = "a" * 64
+            connection.execute(
+                text(
+                    "INSERT INTO schematic_files (sha256, data, byte_size, source_format) "
+                    "VALUES (:digest, :data, 1, 'litematic')"
+                ),
+                {"digest": digest, "data": b"x"},
+            )
+            schematic_id = connection.execute(
+                text(
+                    "INSERT INTO build_schematics ("
+                    "build_id, file_sha256, is_primary, width, height, length, "
+                    "allocated_width, allocated_height, allocated_length, block_count, bounding_volume, "
+                    "entity_count, palette_size, region_names, signs, analyzer_version, analysis_schema_version"
+                    ") VALUES ("
+                    ":build_id, :digest, true, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, ARRAY['Main'], "
+                    "'[]'::jsonb, 'migration-test', 1"
+                    ") RETURNING id"
+                ),
+                {"build_id": build_id, "digest": digest},
+            ).scalar_one()
+            render_id = connection.execute(
+                text(
+                    "INSERT INTO schematic_renders ("
+                    "build_schematic_id, recipe_hash, url, width, height, byte_size"
+                    ") VALUES (:schematic_id, :recipe, 'https://example.invalid/preview.png', 1, 1, 1) "
+                    "RETURNING id"
+                ),
+                {"schematic_id": schematic_id, "recipe": "b" * 64},
+            ).scalar_one()
+
+        command.upgrade(config, SCHEMATIC_RENDER_PROJECTION_REVISION)
+        with engine.begin() as connection:
+            render_columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'schematic_renders'"
+                    )
+                ).scalars()
+            )
+            assert "object_key" in render_columns
+            assert connection.execute(text("SELECT build_id FROM schematic_render_queue")).scalars().all() == [build_id]
+            connection.execute(
+                text("UPDATE schematic_renders SET object_key = 'renders/migrated.png' WHERE id = :id"),
+                {"id": render_id},
+            )
+            assert (
+                connection.execute(
+                    text("SELECT object_key FROM schematic_renders WHERE id = :id"), {"id": render_id}
+                ).scalar_one()
+                == "renders/migrated.png"
+            )
+
+        command.downgrade(config, f"{SCHEMATIC_RENDER_PROJECTION_REVISION}-1")
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT to_regclass('public.schematic_render_queue')")).scalar_one() is None
+            downgraded_columns = set(
+                connection.execute(
+                    text(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_schema = 'public' AND table_name = 'schematic_renders'"
+                    )
+                ).scalars()
+            )
+            assert "object_key" not in downgraded_columns
+    finally:
+        engine.dispose()
+
+
+def test_schematic_file_schema_ceiling_agrees_with_its_migration(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, SCHEMATIC_PUBLICATION_REVISION)
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            constraint = connection.execute(
+                text(
+                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'schematic_files_size_bounded'"
+                )
+            ).scalar_one()
+            assert str(SCHEMATIC_FILE_SCHEMA_MAX_BYTES) in constraint
+            connection.execute(
+                text(
+                    "INSERT INTO schematic_files (sha256, data, byte_size, source_format) "
+                    "VALUES (:digest, :data, :byte_size, 'litematic')"
+                ),
+                {"digest": "c" * 64, "data": b"x", "byte_size": SCHEMATIC_FILE_SCHEMA_MAX_BYTES},
+            )
+
+        with engine.connect() as connection, pytest.raises(DBAPIError):
+            connection.execute(
+                text(
+                    "INSERT INTO schematic_files (sha256, data, byte_size, source_format) "
+                    "VALUES (:digest, :data, :byte_size, 'litematic')"
+                ),
+                {"digest": "d" * 64, "data": b"x", "byte_size": SCHEMATIC_FILE_SCHEMA_MAX_BYTES + 1},
+            )
+    finally:
+        engine.dispose()
 
 
 def test_nullable_vote_thresholds_migrate_sentinels_in_both_directions(

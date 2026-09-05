@@ -1,6 +1,5 @@
 """PostgreSQL repository for Minecraft device authorization."""
 
-import hashlib
 import hmac
 from typing import Any, cast
 from uuid import UUID
@@ -10,6 +9,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.core.errors import InvalidStateError
 from squid.minecraft_auth.domain import (
     MinecraftClientOrigin,
     PaperInstallation,
@@ -32,6 +32,9 @@ from squid.minecraft_auth.infrastructure.models import (
     PlayerChallengeRecord,
     PlayerGrantRecord,
 )
+from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
+
+_ACTIVE_CHALLENGE_LOCK_NAMESPACE = AdvisoryLockNamespace.MINECRAFT_ACTIVE_CHALLENGE
 
 
 def _profile(record: PaperInstallationRecord) -> PublicServerProfile:
@@ -241,7 +244,9 @@ class PostgresMinecraftAuthorizationRepository:
     ) -> PlayerAuthorizationChallenge:
         """Insert under a per-identity lock after enforcing the active bound."""
         async with self._session_factory.begin() as session:
-            await session.scalar(select(func.pg_advisory_xact_lock(_challenge_lock_key(challenge))))
+            # Counting and inserting are one invariant: without this lock, two
+            # requests can both observe room and exceed the per-client bound.
+            await lock_key(session, _challenge_lock_key(challenge), namespace=_ACTIVE_CHALLENGE_LOCK_NAMESPACE)
             if challenge.origin is MinecraftClientOrigin.PAPER:
                 if challenge.installation_id is None or challenge.installation_credential_version is None:
                     raise InvalidInstallationCredentialError
@@ -472,9 +477,11 @@ class PostgresMinecraftAuthorizationRepository:
         )
         if not matches:
             msg = "Player grant does not match its approved challenge."
-            raise ValueError(msg)
+            raise InvalidStateError(
+                msg,
+                context={"challenge_id": str(record.id), "grant_id": str(grant.id)},
+            )
 
 
-def _challenge_lock_key(challenge: PlayerAuthorizationChallenge) -> int:
-    payload = f"{challenge.origin.value}:{challenge.java_uuid}:{challenge.installation_id or '-'}".encode()
-    return int.from_bytes(hashlib.sha256(payload).digest()[:8], byteorder="big", signed=True)
+def _challenge_lock_key(challenge: PlayerAuthorizationChallenge) -> bytes:
+    return f"{challenge.origin.value}:{challenge.java_uuid}:{challenge.installation_id or '-'}".encode()

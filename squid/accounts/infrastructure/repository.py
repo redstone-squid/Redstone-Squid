@@ -5,10 +5,12 @@ import hmac
 import secrets
 import uuid
 from collections.abc import Sequence
+from dataclasses import dataclass
 
-from sqlalchemy import case, column, delete, func, literal, or_, select, table, text, update
+from sqlalchemy import and_, case, column, delete, func, literal, or_, select, table, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import aliased
 from whenever import Instant
 
 from squid.accounts.application.ports import VerificationLinkResult
@@ -43,6 +45,7 @@ from squid.accounts.errors import (
     CreatorAliasNotFoundError,
     MinecraftAccountNotFoundError,
 )
+from squid.accounts.infrastructure.consent import account_consent_current
 from squid.accounts.infrastructure.models import Account as AccountModel
 from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
 from squid.accounts.infrastructure.models import AccountMergeTicket as AccountMergeTicketModel
@@ -54,10 +57,20 @@ from squid.accounts.infrastructure.models import VerificationAttempt as Verifica
 from squid.accounts.infrastructure.models import VerificationCode as VerificationCodeModel
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import tr
+from squid.notifications.domain import NotificationKind
+from squid.notifications.infrastructure.models import (
+    NotificationDeliveryRecord,
+    NotificationProfile,
+    NotificationRecord,
+    NotificationSubscriptionRecord,
+)
+from squid.permissions.infrastructure.models import PermissionGrant, PermissionRoleAssignment
 from squid.persistence.types import InstantUTC, now
+from squid.submissions.domain import FinalizationJobStatus
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.payload_integrity import submission_payload_digest
+from squid.voting.infrastructure.models import Vote
 
 _BUILD_CREDITS = table("build_creators", column("alias_id"))
 """A lightweight handle on the one column of `build_creators` this module reads.
@@ -75,6 +88,237 @@ _now = now
 It was the first place the nanosecond/microsecond mismatch was found; the definition now lives
 in `squid.persistence.types` so every persisted default gets the same treatment.
 """
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountMergeContext:
+    survivor: int
+    absorbed: int
+
+    @property
+    def parameters(self) -> dict[str, int]:
+        return {"survivor": self.survivor, "absorbed": self.absorbed}
+
+
+@dataclass(frozen=True, slots=True)
+class _AccountReference:
+    table_name: str
+    column_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class _RawMergeStatement:
+    sql: str
+    reason: str
+
+
+_IDENTITY_PROFILE_REFERENCES = (
+    _AccountReference("minecraft_paper_installations", "owner_account_id"),
+    _AccountReference("minecraft_player_challenges", "approved_by_account_id"),
+    _AccountReference("minecraft_player_grants", "account_id"),
+    _AccountReference("api_keys", "owner_account_id"),
+    _AccountReference("api_keys", "created_by_account_id"),
+    _AccountReference("web_sessions", "account_id"),
+    _AccountReference("cli_device_enrollments", "approved_by_account_id"),
+    _AccountReference("cli_devices", "account_id"),
+    _AccountReference("account_identities", "account_id"),
+)
+_SUBMISSION_REFERENCES = (
+    _AccountReference("builds", "submitter_account_id"),
+    _AccountReference("submission_drafts", "owner_account_id"),
+    _AccountReference("submission_draft_access", "account_id"),
+    _AccountReference("submission_draft_changes", "actor_account_id"),
+    _AccountReference("build_schematics", "rights_attested_by_account_id"),
+)
+_CREATOR_CREDIT_REFERENCES = (
+    _AccountReference("creator_aliases", "account_id"),
+    _AccountReference("creator_alias_claims", "resolved_by_account_id"),
+)
+_VOTING_REFERENCES = (_AccountReference("vote_sessions", "author_account_id"),)
+_NOTIFICATION_REFERENCES = (_AccountReference("notification_subscriptions", "account_id"),)
+_PERMISSION_PROVENANCE_REFERENCES = (
+    _AccountReference("permission_roles", "created_by_account_id"),
+    _AccountReference("permission_role_patterns", "added_by_account_id"),
+    _AccountReference("permission_role_includes", "added_by_account_id"),
+    _AccountReference("permission_grants", "granted_by_account_id"),
+    _AccountReference("permission_role_assignments", "granted_by_account_id"),
+    _AccountReference("permission_audit_log", "actor_account_id"),
+)
+
+_COLLAPSE_DRAFT_ACCESS = _RawMergeStatement(
+    sql="""
+    DELETE FROM submission_draft_access AS access_row
+    WHERE access_row.id IN (
+        SELECT CASE
+            WHEN draft.owner_account_id = :absorbed THEN survivor_access.id
+            ELSE absorbed_access.id
+        END
+        FROM submission_draft_access AS survivor_access
+        JOIN submission_draft_access AS absorbed_access
+          ON absorbed_access.draft_id = survivor_access.draft_id
+        JOIN submission_drafts AS draft ON draft.id = survivor_access.draft_id
+        WHERE survivor_access.account_id = :survivor
+          AND absorbed_access.account_id = :absorbed
+    )
+    """,
+    reason=(
+        "The winner depends on the draft's pre-merge owner while deleting one of two conflicting access rows; "
+        "the joined CASE delete is clearer and safer than duplicating that precedence across correlated subqueries."
+    ),
+)
+_RETAINED_MERGE_STATEMENTS = (_COLLAPSE_DRAFT_ACCESS,)
+_RETAINED_MERGE_SQL_REASONS = {statement.sql: statement.reason for statement in _RETAINED_MERGE_STATEMENTS}
+
+
+def _collapse_alias_claims_statement(context: _AccountMergeContext):
+    absorbed = aliased(CreatorAliasClaimModel, name="absorbed_claim")
+    survivor = aliased(CreatorAliasClaimModel, name="survivor_claim")
+    duplicate_ids = (
+        select(absorbed.id)
+        .join(
+            survivor,
+            and_(
+                survivor.account_id == context.survivor,
+                survivor.alias_id == absorbed.alias_id,
+                survivor.status == ClaimStatus.PENDING,
+            ),
+        )
+        .where(absorbed.account_id == context.absorbed, absorbed.status == ClaimStatus.PENDING)
+    )
+    return delete(CreatorAliasClaimModel).where(CreatorAliasClaimModel.id.in_(duplicate_ids))
+
+
+def _collapse_votes_statement(context: _AccountMergeContext):
+    absorbed = aliased(Vote, name="absorbed_vote")
+    survivor = aliased(Vote, name="survivor_vote")
+    duplicate_sessions = (
+        select(absorbed.vote_session_id)
+        .join(
+            survivor,
+            and_(
+                survivor.account_id == context.survivor,
+                survivor.vote_session_id == absorbed.vote_session_id,
+            ),
+        )
+        .where(absorbed.account_id == context.absorbed)
+    )
+    return delete(Vote).where(
+        Vote.account_id == context.absorbed,
+        Vote.vote_session_id.in_(duplicate_sessions),
+    )
+
+
+def _merge_notification_profile_statement(context: _AccountMergeContext):
+    statement = insert(NotificationProfile).from_select(
+        [
+            NotificationProfile.account_id,
+            NotificationProfile.web_enabled,
+            NotificationProfile.dm_enabled,
+            NotificationProfile.dm_suspended_at,
+            NotificationProfile.created_at,
+            NotificationProfile.updated_at,
+        ],
+        select(
+            literal(context.survivor),
+            NotificationProfile.web_enabled,
+            NotificationProfile.dm_enabled,
+            NotificationProfile.dm_suspended_at,
+            NotificationProfile.created_at,
+            NotificationProfile.updated_at,
+        ).where(NotificationProfile.account_id == context.absorbed),
+    )
+    healthy_survivor = and_(NotificationProfile.dm_enabled, NotificationProfile.dm_suspended_at.is_(None))
+    healthy_absorbed = and_(statement.excluded.dm_enabled, statement.excluded.dm_suspended_at.is_(None))
+    return statement.on_conflict_do_update(
+        index_elements=[NotificationProfile.account_id],
+        set_={
+            "web_enabled": or_(NotificationProfile.web_enabled, statement.excluded.web_enabled),
+            "dm_enabled": or_(NotificationProfile.dm_enabled, statement.excluded.dm_enabled),
+            "dm_suspended_at": case(
+                (or_(healthy_survivor, healthy_absorbed), None),
+                else_=func.coalesce(NotificationProfile.dm_suspended_at, statement.excluded.dm_suspended_at),
+            ),
+        },
+    )
+
+
+def _collapse_notification_subscriptions_statement(context: _AccountMergeContext):
+    absorbed = aliased(NotificationSubscriptionRecord, name="absorbed_subscription")
+    survivor = aliased(NotificationSubscriptionRecord, name="survivor_subscription")
+    duplicate_ids = (
+        select(absorbed.id)
+        .join(
+            survivor,
+            and_(
+                survivor.account_id == context.survivor,
+                survivor.kind == absorbed.kind,
+                survivor.subject_id.is_not_distinct_from(absorbed.subject_id),
+                survivor.filter.is_not_distinct_from(absorbed.filter),
+                survivor.enabled == absorbed.enabled,
+            ),
+        )
+        .where(absorbed.account_id == context.absorbed)
+    )
+    return delete(NotificationSubscriptionRecord).where(NotificationSubscriptionRecord.id.in_(duplicate_ids))
+
+
+def _absorbed_permission_effect(context: _AccountMergeContext):
+    absorbed = aliased(PermissionGrant, name="absorbed_grant")
+    return (
+        select(absorbed.effect)
+        .where(
+            absorbed.subject_account_id == context.absorbed,
+            absorbed.pattern == PermissionGrant.pattern,
+            absorbed.scope_guild_id.is_not_distinct_from(PermissionGrant.scope_guild_id),
+        )
+        .correlate(PermissionGrant)
+        .scalar_subquery()
+    )
+
+
+def _merge_permission_effects_statement(context: _AccountMergeContext):
+    absorbed_effect = _absorbed_permission_effect(context)
+    return (
+        update(PermissionGrant)
+        .where(PermissionGrant.subject_account_id == context.survivor, absorbed_effect.is_not(None))
+        .values(effect=func.least(PermissionGrant.effect, absorbed_effect))
+    )
+
+
+def _collapse_permission_grants_statement(context: _AccountMergeContext):
+    absorbed = aliased(PermissionGrant, name="absorbed_grant")
+    survivor = aliased(PermissionGrant, name="survivor_grant")
+    duplicate_ids = (
+        select(absorbed.id)
+        .join(
+            survivor,
+            and_(
+                survivor.subject_account_id == context.survivor,
+                survivor.pattern == absorbed.pattern,
+                survivor.scope_guild_id.is_not_distinct_from(absorbed.scope_guild_id),
+            ),
+        )
+        .where(absorbed.subject_account_id == context.absorbed)
+    )
+    return delete(PermissionGrant).where(PermissionGrant.id.in_(duplicate_ids))
+
+
+def _collapse_permission_role_assignments_statement(context: _AccountMergeContext):
+    absorbed = aliased(PermissionRoleAssignment, name="absorbed_assignment")
+    survivor = aliased(PermissionRoleAssignment, name="survivor_assignment")
+    duplicate_ids = (
+        select(absorbed.id)
+        .join(
+            survivor,
+            and_(
+                survivor.subject_account_id == context.survivor,
+                survivor.role_id == absorbed.role_id,
+                survivor.scope_guild_id.is_not_distinct_from(absorbed.scope_guild_id),
+            ),
+        )
+        .where(absorbed.subject_account_id == context.absorbed)
+    )
+    return delete(PermissionRoleAssignment).where(PermissionRoleAssignment.id.in_(duplicate_ids))
 
 
 def _to_identity(model: AccountIdentityModel) -> AccountIdentity:
@@ -154,6 +398,33 @@ class AccountRepository:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession], verification_code_pepper: str):
         self._session_factory = session_factory
         self._verification_code_pepper = verification_code_pepper
+
+    async def has_current_consent(self, account_id: int) -> bool:
+        """Return whether an extant account has a complete current consent receipt."""
+        async with self._session_factory() as session:
+            result = await session.scalar(
+                select(AccountModel.id).where(
+                    AccountModel.id == account_id,
+                    account_consent_current(),
+                )
+            )
+            return result is not None
+
+    async def can_approve_minecraft_identity(self, *, account_id: int, java_uuid: uuid.UUID) -> bool:
+        """Atomically prove current consent and exact verified Java ownership."""
+        async with self._session_factory() as session:
+            result = await session.scalar(
+                select(AccountIdentityModel.id)
+                .join(AccountModel, AccountModel.id == AccountIdentityModel.account_id)
+                .where(
+                    AccountModel.id == account_id,
+                    account_consent_current(),
+                    AccountIdentityModel.provider == IdentityProvider.JAVA,
+                    AccountIdentityModel.subject == str(java_uuid),
+                    AccountIdentityModel.verified_at.is_not(None),
+                )
+            )
+            return result is not None
 
     async def create(
         self,
@@ -468,24 +739,14 @@ class AccountRepository:
                 raise AccountNotFoundError(absorbed_account_id)
 
             await self._merge_references(session, surviving_account_id, absorbed_account_id)
-            await session.execute(
-                update(PublicCreatorRedirect)
-                .where(PublicCreatorRedirect.target_account_id == absorbed_account_id)
-                .values(target_account_id=surviving_account_id)
-            )
-            session.add(
-                PublicCreatorRedirect(
-                    retired_public_creator_id=absorbed.public_creator_id,
-                    target_account_id=surviving_account_id,
-                )
-            )
-            await session.delete(absorbed)
-            return AccountMerge(
+            result = AccountMerge(
                 surviving_account_id=surviving_account_id,
                 absorbed_account_id=absorbed_account_id,
                 surviving_public_creator_id=survivor.public_creator_id,
                 redirected_public_creator_id=absorbed.public_creator_id,
             )
+            await _retire_absorbed_account(session, survivor, absorbed)
+            return result
 
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None:
         """Return a case-insensitive creator alias."""
@@ -1197,115 +1458,295 @@ class AccountRepository:
 
     @staticmethod
     async def _merge_references(session: AsyncSession, survivor: int, absorbed: int) -> None:
-        """Move every account-keyed resource while resolving unique-key collisions deterministically."""
-        parameters = {"survivor": survivor, "absorbed": absorbed}
-        draft_ids = tuple(
-            (
-                await session.scalars(
-                    select(SubmissionDraft.id)
-                    .where(SubmissionDraft.owner_account_id == absorbed)
-                    .order_by(SubmissionDraft.id)
-                    .with_for_update()
+        """Move every account-keyed resource through named phases in this transaction."""
+        context = _AccountMergeContext(survivor, absorbed)
+        await _merge_submissions(session, context)
+        await _merge_identities_and_profiles(session, context)
+        await _merge_creator_credit(session, context)
+        await _merge_voting(session, context)
+        await _merge_notifications(session, context)
+        await _merge_permissions(session, context)
+
+
+async def _merge_submissions(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Move builds, drafts, artifact attestations, and retained finalization owners."""
+    draft_ids = tuple(
+        (
+            await session.scalars(
+                select(SubmissionDraft.id)
+                .where(SubmissionDraft.owner_account_id == context.absorbed)
+                .order_by(SubmissionDraft.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    await _canonicalize_finalization_job_owners(session, draft_ids, context.survivor, context.absorbed)
+    await _execute_merge_sql(session, _COLLAPSE_DRAFT_ACCESS, context)
+    await _move_account_references(session, _SUBMISSION_REFERENCES, context)
+
+
+async def _merge_identities_and_profiles(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Move external identities and credential ownership while retaining the survivor profile."""
+    await _move_account_references(session, _IDENTITY_PROFILE_REFERENCES, context)
+
+
+async def _merge_creator_credit(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Move creator aliases and collapse duplicate pending claims."""
+    await _move_account_references(session, _CREATOR_CREDIT_REFERENCES, context)
+    await session.execute(_collapse_alias_claims_statement(context))
+    await _move_account_reference(session, _AccountReference("creator_alias_claims", "account_id"), context)
+
+
+async def _merge_voting(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Move authored sessions and retain one ballot per merged voter."""
+    await _move_account_references(session, _VOTING_REFERENCES, context)
+    await session.execute(_collapse_votes_statement(context))
+    await _move_account_reference(session, _AccountReference("votes", "account_id"), context)
+
+
+async def _merge_notifications(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Coalesce preferences, subscriptions, inbox facts, and delivery state."""
+    await session.execute(_merge_notification_profile_statement(context))
+    await session.execute(delete(NotificationProfile).where(NotificationProfile.account_id == context.absorbed))
+    await session.execute(_collapse_notification_subscriptions_statement(context))
+    await _move_account_references(session, _NOTIFICATION_REFERENCES, context)
+    await _canonicalize_notifications(session, context)
+
+
+async def _canonicalize_notifications(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Rewrite recipient-bound idempotency keys and merge any resulting collisions."""
+    notifications = tuple(
+        (
+            await session.scalars(
+                select(NotificationRecord)
+                .where(NotificationRecord.account_id.in_((context.survivor, context.absorbed)))
+                .order_by(NotificationRecord.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    notification_ids = tuple(row.id for row in notifications)
+    deliveries = tuple(
+        (
+            await session.scalars(
+                select(NotificationDeliveryRecord)
+                .where(
+                    or_(
+                        NotificationDeliveryRecord.notification_id.in_(notification_ids),
+                        NotificationDeliveryRecord.account_id.in_((context.survivor, context.absorbed)),
+                    )
                 )
-            ).all()
+                .order_by(NotificationDeliveryRecord.id)
+                .with_for_update()
+            )
+        ).all()
+    )
+    delivery_by_notification = {delivery.notification_id: delivery for delivery in deliveries}
+    notification_by_id = {notification.id: notification for notification in notifications}
+    for delivery in deliveries:
+        notification = notification_by_id.get(delivery.notification_id)
+        if notification is None:
+            msg = "A merged-account delivery points outside the scoped notification set."
+            raise DataIntegrityError(
+                msg,
+                context={"delivery_id": delivery.id, "notification_id": delivery.notification_id},
+            )
+        if delivery.account_id != notification.account_id:
+            msg = "A notification delivery is owned by a different account than its notification."
+            raise DataIntegrityError(
+                msg,
+                context={
+                    "delivery_id": delivery.id,
+                    "notification_id": notification.id,
+                    "delivery_account_id": delivery.account_id,
+                    "notification_account_id": notification.account_id,
+                },
+            )
+    notification_by_source = {notification.source_key: notification for notification in notifications}
+
+    for absorbed_notification in notifications:
+        original_source = absorbed_notification.source_key
+        canonical_source = _canonical_notification_source_key(absorbed_notification, context)
+        survivor_notification = notification_by_source.get(canonical_source)
+        absorbed_delivery = delivery_by_notification.get(absorbed_notification.id)
+        if survivor_notification is absorbed_notification:
+            continue
+        if survivor_notification is None:
+            absorbed_notification.account_id = context.survivor
+            absorbed_notification.source_key = canonical_source
+            notification_by_source.pop(original_source, None)
+            notification_by_source[canonical_source] = absorbed_notification
+            if absorbed_delivery is not None:
+                _fence_merged_delivery(absorbed_delivery, context.survivor)
+            continue
+
+        if (
+            survivor_notification.event_id != absorbed_notification.event_id
+            or survivor_notification.kind != absorbed_notification.kind
+            or survivor_notification.payload != absorbed_notification.payload
+        ):
+            msg = "Account merge found incompatible notifications with the same canonical source key."
+            raise DataIntegrityError(msg, context={"source_key": canonical_source})
+        survivor_notification.web_visible = survivor_notification.web_visible or absorbed_notification.web_visible
+        survivor_notification.read_at = _earliest_present(
+            survivor_notification.read_at,
+            absorbed_notification.read_at,
         )
-        await _canonicalize_finalization_job_owners(session, draft_ids, survivor, absorbed)
-        statements = (
-            "UPDATE builds SET submitter_account_id = :survivor WHERE submitter_account_id = :absorbed",
-            "DELETE FROM submission_draft_access access_row WHERE access_row.id IN ("
-            "SELECT CASE WHEN draft.owner_account_id = :absorbed THEN survivor_access.id ELSE absorbed_access.id END "
-            "FROM submission_draft_access survivor_access "
-            "JOIN submission_draft_access absorbed_access ON absorbed_access.draft_id = survivor_access.draft_id "
-            "JOIN submission_drafts draft ON draft.id = survivor_access.draft_id "
-            "WHERE survivor_access.account_id = :survivor AND absorbed_access.account_id = :absorbed)",
-            "UPDATE submission_drafts SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
-            "UPDATE submission_draft_access SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE submission_draft_changes SET actor_account_id = :survivor WHERE actor_account_id = :absorbed",
-            "UPDATE build_schematics SET rights_attested_by_account_id = :survivor "
-            "WHERE rights_attested_by_account_id = :absorbed",
-            # Keep installation IDs and credential hashes stable; only the owning account changes.
-            "UPDATE minecraft_paper_installations SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
-            "UPDATE minecraft_player_challenges SET approved_by_account_id = :survivor "
-            "WHERE approved_by_account_id = :absorbed",
-            "UPDATE minecraft_player_grants SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE api_keys SET owner_account_id = :survivor WHERE owner_account_id = :absorbed",
-            "UPDATE api_keys SET created_by_account_id = :survivor WHERE created_by_account_id = :absorbed",
-            "UPDATE web_sessions SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE cli_device_enrollments SET approved_by_account_id = :survivor "
-            "WHERE approved_by_account_id = :absorbed",
-            "UPDATE cli_devices SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE creator_aliases SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE creator_alias_claims SET resolved_by_account_id = :survivor "
-            "WHERE resolved_by_account_id = :absorbed",
-            "DELETE FROM creator_alias_claims absorbed_claim USING creator_alias_claims survivor_claim "
-            "WHERE absorbed_claim.account_id = :absorbed AND survivor_claim.account_id = :survivor "
-            "AND absorbed_claim.alias_id = survivor_claim.alias_id AND absorbed_claim.status = 'pending' "
-            "AND survivor_claim.status = 'pending'",
-            "UPDATE creator_alias_claims SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE vote_sessions SET author_account_id = :survivor WHERE author_account_id = :absorbed",
-            "DELETE FROM votes absorbed_vote USING votes survivor_vote "
-            "WHERE absorbed_vote.account_id = :absorbed AND survivor_vote.account_id = :survivor "
-            "AND absorbed_vote.vote_session_id = survivor_vote.vote_session_id",
-            "UPDATE votes SET account_id = :survivor WHERE account_id = :absorbed",
-            # Only switches move now: the notice receipt this used to fold lives on `accounts`,
-            # where the survivor's own row already carries the answer.
-            "INSERT INTO notification_profiles "
-            "(account_id, web_enabled, dm_enabled, dm_suspended_at, created_at, updated_at) "
-            "SELECT :survivor, web_enabled, dm_enabled, dm_suspended_at, created_at, updated_at "
-            "FROM notification_profiles WHERE account_id = :absorbed "
-            "ON CONFLICT (account_id) DO UPDATE SET "
-            "web_enabled = notification_profiles.web_enabled OR EXCLUDED.web_enabled, "
-            "dm_enabled = notification_profiles.dm_enabled OR EXCLUDED.dm_enabled, "
-            "dm_suspended_at = COALESCE(notification_profiles.dm_suspended_at, EXCLUDED.dm_suspended_at)",
-            "DELETE FROM notification_profiles WHERE account_id = :absorbed",
-            "DELETE FROM notification_subscriptions absorbed_subscription USING notification_subscriptions survivor_subscription "
-            "WHERE absorbed_subscription.account_id = :absorbed AND survivor_subscription.account_id = :survivor "
-            "AND absorbed_subscription.kind = survivor_subscription.kind "
-            "AND absorbed_subscription.subject_id IS NOT DISTINCT FROM survivor_subscription.subject_id "
-            "AND absorbed_subscription.filter IS NOT DISTINCT FROM survivor_subscription.filter "
-            "AND absorbed_subscription.enabled = survivor_subscription.enabled",
-            "UPDATE notification_subscriptions SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE notifications SET account_id = :survivor WHERE account_id = :absorbed",
-            "UPDATE notification_deliveries SET account_id = :survivor WHERE account_id = :absorbed",
-            # Permission provenance is keyed by account with ON DELETE RESTRICT, so the grantor
-            # columns have to move before the absorbed row can go away at all.
-            "UPDATE permission_roles SET created_by_account_id = :survivor WHERE created_by_account_id = :absorbed",
-            "UPDATE permission_role_patterns SET added_by_account_id = :survivor WHERE added_by_account_id = :absorbed",
-            "UPDATE permission_role_includes SET added_by_account_id = :survivor WHERE added_by_account_id = :absorbed",
-            "UPDATE permission_grants SET granted_by_account_id = :survivor WHERE granted_by_account_id = :absorbed",
-            "UPDATE permission_role_assignments SET granted_by_account_id = :survivor "
-            "WHERE granted_by_account_id = :absorbed",
-            # `permission_grants_account_unique` keeps one row per (subject, pattern, scope), so a
-            # collision has to collapse two effects into one. Take the more restrictive of the two
-            # (-2 forbid < -1 deny < 1 allow) rather than the survivor's: a merge that silently drops
-            # the absorbed account's emergency forbid would hand back the very access it revoked.
-            "UPDATE permission_grants survivor_grant SET effect = LEAST(survivor_grant.effect, absorbed_grant.effect) "
-            "FROM permission_grants absorbed_grant "
-            "WHERE survivor_grant.subject_account_id = :survivor AND absorbed_grant.subject_account_id = :absorbed "
-            "AND absorbed_grant.pattern = survivor_grant.pattern "
-            "AND absorbed_grant.scope_guild_id IS NOT DISTINCT FROM survivor_grant.scope_guild_id",
-            "DELETE FROM permission_grants absorbed_grant USING permission_grants survivor_grant "
-            "WHERE absorbed_grant.subject_account_id = :absorbed AND survivor_grant.subject_account_id = :survivor "
-            "AND absorbed_grant.pattern = survivor_grant.pattern "
-            "AND absorbed_grant.scope_guild_id IS NOT DISTINCT FROM survivor_grant.scope_guild_id",
-            "UPDATE permission_grants SET subject_account_id = :survivor WHERE subject_account_id = :absorbed",
-            "DELETE FROM permission_role_assignments absorbed_assignment "
-            "USING permission_role_assignments survivor_assignment "
-            "WHERE absorbed_assignment.subject_account_id = :absorbed "
-            "AND survivor_assignment.subject_account_id = :survivor "
-            "AND absorbed_assignment.role_id = survivor_assignment.role_id "
-            "AND absorbed_assignment.scope_guild_id IS NOT DISTINCT FROM survivor_assignment.scope_guild_id",
-            "UPDATE permission_role_assignments SET subject_account_id = :survivor "
-            "WHERE subject_account_id = :absorbed",
-            # The audit log outlives the account it describes. Repointing it at the survivor keeps
-            # the history readable; leaving it would strand entries on an id nothing resolves.
-            "UPDATE permission_audit_log SET actor_account_id = :survivor WHERE actor_account_id = :absorbed",
-            "UPDATE permission_audit_log SET subject_id = :survivor "
-            "WHERE subject_kind = 'account' AND subject_id = :absorbed",
-            "UPDATE account_identities SET account_id = :survivor WHERE account_id = :absorbed",
+        survivor_notification.created_at = min(survivor_notification.created_at, absorbed_notification.created_at)
+        survivor_notification.account_id = context.survivor
+        survivor_delivery = delivery_by_notification.get(survivor_notification.id)
+        if survivor_delivery is None and absorbed_delivery is not None:
+            absorbed_delivery.notification_id = survivor_notification.id
+            _fence_merged_delivery(absorbed_delivery, context.survivor)
+        elif survivor_delivery is not None and absorbed_delivery is not None:
+            _coalesce_notification_deliveries(survivor_delivery, absorbed_delivery, context.survivor)
+            await session.delete(absorbed_delivery)
+        elif survivor_delivery is not None:
+            _fence_merged_delivery(survivor_delivery, context.survivor)
+        notification_by_source.pop(original_source, None)
+        notification_by_source[canonical_source] = survivor_notification
+        await session.delete(absorbed_notification)
+
+
+def _canonical_notification_source_key(
+    notification: NotificationRecord,
+    context: _AccountMergeContext,
+) -> str:
+    recipient_account_id = notification.account_id
+    if notification.kind is NotificationKind.RECORD_GAINED:
+        build_id = notification.payload.get("build_id")
+        if isinstance(build_id, bool) or not isinstance(build_id, int):
+            msg = "A record notification source key cannot be validated without its build identifier."
+            raise DataIntegrityError(msg, context={"notification_id": notification.id})
+        stem = f"event:{notification.event_id}:record-build:{build_id}"
+        accepted_sources = (f"{stem}:account:{recipient_account_id}", f"{stem}:user:{recipient_account_id}")
+        canonical_source = f"{stem}:account:{context.survivor}"
+    else:
+        label_by_kind = {
+            NotificationKind.STAFF_BUILD_SUBMITTED: "staff",
+            NotificationKind.BUILD_CONFIRMED: "owner",
+            NotificationKind.BUILD_DENIED: "owner",
+            NotificationKind.CREATOR_BUILD_CONFIRMED: "creator",
+        }
+        label = label_by_kind[notification.kind]
+        accepted_sources = (f"event:{notification.event_id}:{label}:{recipient_account_id}",)
+        canonical_source = f"event:{notification.event_id}:{label}:{context.survivor}"
+    if notification.source_key not in accepted_sources:
+        msg = "A notification source key does not match its kind, event, payload, and recipient."
+        raise DataIntegrityError(
+            msg,
+            context={"notification_id": notification.id, "source_key": notification.source_key},
         )
-        for statement in statements:
-            await session.execute(text(statement), parameters)
+    return canonical_source
+
+
+def _earliest_present(left: Instant | None, right: Instant | None) -> Instant | None:
+    values = tuple(value for value in (left, right) if value is not None)
+    return min(values) if values else None
+
+
+def _fence_merged_delivery(delivery: NotificationDeliveryRecord, account_id: int) -> None:
+    delivery.account_id = account_id
+    delivery.generation += 1
+    delivery.nonce = uuid.uuid4()
+    delivery.claimed_at = None
+    delivery.claim_token = None
+
+
+def _coalesce_notification_deliveries(
+    survivor: NotificationDeliveryRecord,
+    absorbed: NotificationDeliveryRecord,
+    account_id: int,
+) -> None:
+    """Keep one delivery without forgetting a completed send or reviving two dead attempts."""
+    survivor.account_id = account_id
+    survivor.generation = max(survivor.generation, absorbed.generation) + 1
+    survivor.nonce = uuid.uuid4()
+    survivor.claimed_at = None
+    survivor.claim_token = None
+    survivor.attempts = max(survivor.attempts, absorbed.attempts)
+    survivor.sent_at = _earliest_present(survivor.sent_at, absorbed.sent_at)
+    if survivor.sent_at is not None:
+        survivor.dead_at = None
+        survivor.last_error = None
+        return
+    live = tuple(delivery for delivery in (survivor, absorbed) if delivery.dead_at is None)
+    if live:
+        survivor.available_at = min(delivery.available_at for delivery in live)
+        survivor.dead_at = None
+        survivor.last_error = next((delivery.last_error for delivery in live if delivery.last_error is not None), None)
+        return
+    survivor.dead_at = max(value for value in (survivor.dead_at, absorbed.dead_at) if value is not None)
+    survivor.last_error = absorbed.last_error or survivor.last_error
+
+
+async def _merge_permissions(session: AsyncSession, context: _AccountMergeContext) -> None:
+    """Move permission provenance and collapse subject collisions to the restrictive effect."""
+    await _move_account_references(session, _PERMISSION_PROVENANCE_REFERENCES, context)
+    await session.execute(_merge_permission_effects_statement(context))
+    await session.execute(_collapse_permission_grants_statement(context))
+    await _move_account_reference(session, _AccountReference("permission_grants", "subject_account_id"), context)
+    await session.execute(_collapse_permission_role_assignments_statement(context))
+    await _move_account_reference(
+        session,
+        _AccountReference("permission_role_assignments", "subject_account_id"),
+        context,
+    )
+    audit = table("permission_audit_log", column("subject_kind"), column("subject_id"))
+    await session.execute(
+        update(audit)
+        .where(audit.c.subject_kind == "account", audit.c.subject_id == context.absorbed)
+        .values(subject_id=context.survivor)
+    )
+
+
+async def _move_account_references(
+    session: AsyncSession,
+    references: Sequence[_AccountReference],
+    context: _AccountMergeContext,
+) -> None:
+    for reference in references:
+        await _move_account_reference(session, reference, context)
+
+
+async def _move_account_reference(
+    session: AsyncSession,
+    reference: _AccountReference,
+    context: _AccountMergeContext,
+) -> None:
+    target = table(reference.table_name, column(reference.column_name))
+    account_column = target.c[reference.column_name]
+    await session.execute(
+        update(target).where(account_column == context.absorbed).values({reference.column_name: context.survivor})
+    )
+
+
+async def _execute_merge_sql(
+    session: AsyncSession,
+    statement: _RawMergeStatement,
+    context: _AccountMergeContext,
+) -> None:
+    await session.execute(text(statement.sql), context.parameters)
+
+
+async def _retire_absorbed_account(
+    session: AsyncSession,
+    survivor: AccountModel,
+    absorbed: AccountModel,
+) -> None:
+    """Finish the merge by preserving public redirects and deleting the source row."""
+    await session.execute(
+        update(PublicCreatorRedirect)
+        .where(PublicCreatorRedirect.target_account_id == absorbed.id)
+        .values(target_account_id=survivor.id)
+    )
+    session.add(
+        PublicCreatorRedirect(
+            retired_public_creator_id=absorbed.public_creator_id,
+            target_account_id=survivor.id,
+        )
+    )
+    await session.delete(absorbed)
 
 
 async def _canonicalize_finalization_job_owners(
@@ -1348,8 +1789,8 @@ async def _canonicalize_finalization_job_owners(
         job.payload = rewritten
         job.payload_sha256 = submission_payload_digest(rewritten)
         job.updated_at = rewritten_at
-        if job.status == "claimed":
-            job.status = "pending"
+        if job.status is FinalizationJobStatus.CLAIMED:
+            job.status = FinalizationJobStatus.PENDING
             job.available_at = rewritten_at
             job.claimed_at = None
             job.claim_token = None

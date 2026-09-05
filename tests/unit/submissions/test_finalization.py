@@ -12,7 +12,6 @@ from squid.sponsors import PublicSponsor
 from squid.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
-    BuildSubmissionRejectedError,
     ClaimedFinalizationJob,
     FinalizationFailureOutcome,
     FinalizationJobSnapshot,
@@ -24,6 +23,8 @@ from squid.submissions.application import (
     build_submission_manifest,
 )
 from squid.submissions.domain import (
+    BuildSubmissionRejected,
+    BuildSubmissionResult,
     DoorSubmissionDetails,
     DraftChange,
     DraftChangeKey,
@@ -282,11 +283,11 @@ class FakeFinalizationJobs:
 
 
 class FakeWriter:
-    def __init__(self, result: FinalizedBuild | Exception) -> None:
+    def __init__(self, result: BuildSubmissionResult | Exception) -> None:
         self.result = result
         self.payloads: list[NormalizedSubmission] = []
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> FinalizedBuild:
+    async def create_or_get(self, submission: NormalizedSubmission) -> BuildSubmissionResult:
         self.payloads.append(submission)
         if isinstance(self.result, Exception):
             raise self.result
@@ -667,6 +668,8 @@ async def test_schema_two_requires_attribution_and_verified_sponsor() -> None:
     )
     assert jobs.enqueued is not None
     encoded = encode_submission(jobs.enqueued)
+    assert submission_payload_digest(encoded) == "88dcebc6349fe4adbf6bdb7b8e04969329a487e78768bf8c937e33dd26bf8d7b"
+    assert decode_submission(encoded) == jobs.enqueued
 
     with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
         decode_submission(encoded | {"sponsor_attribution": False})
@@ -708,7 +711,7 @@ async def test_actionable_target_failure_returns_draft_to_attention() -> None:
     jobs.claimed = (_claim(payload),)
     worker = SubmissionFinalizationWorker(
         jobs,
-        FakeWriter(BuildSubmissionRejectedError((issue,))),
+        FakeWriter(BuildSubmissionRejected((issue,))),
     )
 
     await worker.process_batch(now=NOW)

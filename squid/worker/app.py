@@ -6,6 +6,8 @@ import logging
 import signal
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
+from dataclasses import dataclass
+from functools import partial
 
 import anyio
 from whenever import Instant
@@ -14,6 +16,7 @@ from squid.bootstrap import create_worker_runtime
 from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_worker_process_config
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
+from squid.media.application.jobs import MediaNormalizationJobRunner
 from squid.observability import TraceSurface, configure_observability, record_histogram, trace_span
 from squid.runtime import BackgroundTaskSupervisor, WorkerServices, start_log_capture
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
@@ -21,10 +24,21 @@ from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.topics import open_topic_bridge
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
-from squid.worker.rendering import SchematicRenderProjector
+from squid.worker.rendering import SchematicPreviewWorker
 from squid_reactivity import LocalTopicBus
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerJobSpec:
+    """Immutable scheduling and readiness policy for one periodic worker job."""
+
+    name: str
+    interval_seconds: float
+    critical: bool
+    run: Callable[[], Awaitable[None]]
+    run_immediately: bool = True
 
 
 class DatabaseWorker:
@@ -36,7 +50,7 @@ class DatabaseWorker:
         keep_database_active: Callable[[], Awaitable[None]],
         config: WorkerConfig,
         schematic_jobs: SchematicJobRunner,
-        schematic_renders: SchematicRenderProjector,
+        schematic_renders: SchematicPreviewWorker,
         *,
         supervisor: BackgroundTaskSupervisor | None = None,
         schematic_pool: SchematicWorkerPool | None = None,
@@ -62,6 +76,7 @@ class DatabaseWorker:
                 "vote_session.closed": (outcome_handler,),
             },
         )
+        self._job_specs = self._build_job_specs()
 
     @asynccontextmanager
     async def running(self) -> AsyncGenerator[None]:
@@ -71,111 +86,23 @@ class DatabaseWorker:
 
     def start(self) -> None:
         """Start all jobs after the runtime has been constructed successfully."""
-        event_interval = self._config.event_interval_seconds
-        maintenance_interval = self._config.maintenance_interval_seconds
-        self._supervisor.start_periodic(
-            self._process_events,
-            name="core-domain-events",
-            interval=event_interval,
-        )
+        for spec in self._job_specs:
+            self._supervisor.start_periodic(
+                spec.run,
+                name=spec.name,
+                interval=spec.interval_seconds,
+                run_immediately=spec.run_immediately,
+            )
         if self._services.event_wake_listener is not None:
             self._supervisor.start(
                 self._services.event_wake_listener.run(self._process_events),
                 name="domain-event-listener",
             )
-        self._supervisor.start_periodic(
-            self._process_schematic_jobs,
-            name="schematic-jobs",
-            interval=self._config.schematic_job_interval_seconds,
-        )
-        self._supervisor.start_periodic(
-            self._process_schematic_renders,
-            name="schematic-renders",
-            interval=self._config.schematic_job_interval_seconds,
-        )
-        if self._services.media_runner is not None:
-            self._supervisor.start_periodic(
-                self._process_media_jobs,
-                name="media-normalization",
-                interval=self._config.media_job_interval_seconds,
-            )
-        self._supervisor.start_periodic(
-            self._cleanup_media_storage,
-            name="media-storage-cleanup",
-            interval=self._config.media_cleanup_interval_seconds,
-        )
-        self._supervisor.start_periodic(
-            self._process_submission_finalization,
-            name="submission-finalization",
-            interval=self._config.submission_finalization_interval_seconds,
-        )
-        self._supervisor.start_periodic(
-            self._refresh_search,
-            name="search-projections",
-            interval=event_interval,
-        )
-        self._supervisor.start_periodic(
-            self._process_search_embeddings,
-            name="search-embeddings",
-            interval=event_interval,
-        )
-        self._supervisor.start_periodic(
-            self._process_records,
-            name="record-maintenance",
-            interval=maintenance_interval,
-        )
-        self._supervisor.start_periodic(
-            self._close_due_votes,
-            name="due-votes",
-            interval=maintenance_interval,
-        )
-        self._supervisor.start_periodic(
-            self._clean_stale_build_locks,
-            name="stale-build-locks",
-            interval=max(maintenance_interval, 300),
-        )
-        self._supervisor.start_periodic(
-            self._cleanup_schematic_jobs,
-            name="schematic-job-cleanup",
-            interval=max(maintenance_interval, 300),
-        )
-        self._supervisor.start_periodic(
-            self._services.record_queue_health,
-            name="queue-health",
-            interval=maintenance_interval,
-        )
-        if self._schematic_pool is not None:
-            self._supervisor.start_periodic(
-                self._schematic_pool.record_health,
-                name="schematic-pool-health",
-                interval=maintenance_interval,
-            )
-        self._supervisor.start_periodic(
-            self._cleanup_notifications,
-            name="notification-retention",
-            interval=max(maintenance_interval, 3600),
-        )
-        self._supervisor.start_periodic(
-            self._cleanup_idempotency,
-            name="idempotency-retention",
-            interval=max(maintenance_interval, 300),
-        )
-        self._supervisor.start_periodic(
-            self._expire_submission_drafts,
-            name="submission-draft-expiry",
-            interval=max(maintenance_interval, 300),
-        )
-        self._supervisor.start_periodic(
-            self._cleanup_error_reports,
-            name="error-report-retention",
-            interval=max(maintenance_interval, 300),
-        )
-        self._supervisor.start_periodic(
-            self._keep_database_active,
-            name="database-keepalive",
-            interval=self._config.keepalive_interval_seconds,
-            run_immediately=False,
-        )
+
+    @property
+    def job_specs(self) -> tuple[WorkerJobSpec, ...]:
+        """Return the immutable registry used by scheduling and readiness."""
+        return self._job_specs
 
     @property
     def supervisor(self) -> BackgroundTaskSupervisor:
@@ -188,37 +115,112 @@ class DatabaseWorker:
 
     def is_ready(self) -> bool:
         """Return whether every critical job has completed at least once."""
-        required = {
-            "core-domain-events",
-            "schematic-jobs",
-            "schematic-renders",
-            "search-projections",
-            "search-embeddings",
-            "record-maintenance",
-            "due-votes",
-            "stale-build-locks",
-            "schematic-job-cleanup",
-            "media-storage-cleanup",
-            "queue-health",
-            "notification-retention",
-            "idempotency-retention",
-            "submission-draft-expiry",
-            "submission-finalization",
-        }
-        if self._services.media_runner is not None:
-            required.add("media-normalization")
-        if self._schematic_pool is not None:
-            required.add("schematic-pool-health")
-        longest_interval = max(
-            self._config.event_interval_seconds,
-            self._config.maintenance_interval_seconds,
-            self._config.schematic_job_interval_seconds,
-            self._config.media_job_interval_seconds if self._services.media_runner is not None else 0,
-            self._config.media_cleanup_interval_seconds,
-            self._config.submission_finalization_interval_seconds,
-            300,
-        )
+        critical = tuple(spec for spec in self._job_specs if spec.critical)
+        required = {spec.name for spec in critical}
+        longest_interval = max(spec.interval_seconds for spec in critical)
         return self._supervisor.is_healthy(required, max_age_seconds=longest_interval * 3)
+
+    def _build_job_specs(self) -> tuple[WorkerJobSpec, ...]:
+        def job(
+            name: str,
+            interval_seconds: float,
+            run: Callable[[], Awaitable[None]],
+            *,
+            critical: bool = True,
+            run_immediately: bool = True,
+        ) -> WorkerJobSpec:
+            return WorkerJobSpec(
+                name=name,
+                interval_seconds=interval_seconds,
+                critical=critical,
+                run=run,
+                run_immediately=run_immediately,
+            )
+
+        event_interval = self._config.event_interval_seconds
+        maintenance_interval = self._config.maintenance_interval_seconds
+        jobs = [
+            job("core-domain-events", event_interval, self._process_events),
+            job("schematic-jobs", self._config.schematic_job_interval_seconds, self._process_schematic_jobs),
+            job(
+                "schematic-renders",
+                self._config.schematic_job_interval_seconds,
+                self._process_schematic_renders,
+            ),
+        ]
+        if self._services.media_runner is not None:
+            jobs.append(
+                job(
+                    "media-normalization",
+                    self._config.media_job_interval_seconds,
+                    partial(self._process_media_jobs, self._services.media_runner),
+                )
+            )
+        jobs.extend(
+            (
+                job(
+                    "media-storage-cleanup",
+                    self._config.media_cleanup_interval_seconds,
+                    self._cleanup_media_storage,
+                ),
+                job(
+                    "submission-finalization",
+                    self._config.submission_finalization_interval_seconds,
+                    self._process_submission_finalization,
+                ),
+                job("search-projections", event_interval, self._refresh_search),
+                job("search-embeddings", event_interval, self._process_search_embeddings),
+                job("record-maintenance", maintenance_interval, self._process_records),
+                job("due-votes", maintenance_interval, self._close_due_votes),
+                job("stale-build-locks", max(maintenance_interval, 300), self._clean_stale_build_locks),
+                job(
+                    "schematic-job-cleanup",
+                    max(maintenance_interval, 300),
+                    self._cleanup_schematic_jobs,
+                ),
+                job(
+                    "schematic-preview-cleanup",
+                    max(maintenance_interval, 300),
+                    self._cleanup_schematic_previews,
+                ),
+                job("queue-health", maintenance_interval, self._services.record_queue_health),
+            )
+        )
+        if self._schematic_pool is not None:
+            jobs.append(job("schematic-pool-health", maintenance_interval, self._schematic_pool.record_health))
+        jobs.extend(
+            (
+                job(
+                    "notification-retention",
+                    max(maintenance_interval, 3600),
+                    self._cleanup_notifications,
+                ),
+                job(
+                    "idempotency-retention",
+                    max(maintenance_interval, 300),
+                    self._cleanup_idempotency,
+                ),
+                job(
+                    "submission-draft-expiry",
+                    max(maintenance_interval, 300),
+                    self._expire_submission_drafts,
+                ),
+                job(
+                    "error-report-retention",
+                    max(maintenance_interval, 300),
+                    self._cleanup_error_reports,
+                    critical=False,
+                ),
+                job(
+                    "database-keepalive",
+                    self._config.keepalive_interval_seconds,
+                    self._keep_database_active,
+                    critical=False,
+                    run_immediately=False,
+                ),
+            )
+        )
+        return tuple(jobs)
 
     async def _process_events(self) -> None:
         async with self._event_lock:
@@ -233,10 +235,7 @@ class DatabaseWorker:
         with trace_span("squid.worker.schematic_renders", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_renders.process_batch()
 
-    async def _process_media_jobs(self) -> None:
-        runner = self._services.media_runner
-        if runner is None:
-            return
+    async def _process_media_jobs(self, runner: MediaNormalizationJobRunner) -> None:
         with trace_span("squid.worker.media_normalization", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await runner.process_batch(limit=self._config.media_job_concurrency)
 
@@ -289,6 +288,10 @@ class DatabaseWorker:
     async def _cleanup_schematic_jobs(self) -> None:
         with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_jobs.cleanup()
+
+    async def _cleanup_schematic_previews(self) -> None:
+        with trace_span("squid.worker.schematic_preview_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
+            await self._schematic_renders.cleanup()
 
     async def _cleanup_notifications(self) -> None:
         with trace_span("squid.worker.notification_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
@@ -349,9 +352,9 @@ async def _run_worker(config: WorkerProcessConfig, *, stop_event: asyncio.Event 
         # The worker subscribes to nothing, so its bus stays empty and the bridge is
         # purely an outbound path: a finished render tells the bot's panels to repaint.
         topic_bridge = await open_topic_bridge(config.runtime.database, LocalTopicBus())
-        schematic_renders = SchematicRenderProjector(
+        schematic_renders = SchematicPreviewWorker(
             runtime.services.schematic_renders,
-            runtime.services.schematics,
+            runtime.services.schematics.previews,
             runtime.services.artifacts,
             str(schematic_config.render_public_base_url)
             if schematic_config.render_public_base_url is not None

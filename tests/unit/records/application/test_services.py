@@ -1,11 +1,13 @@
 import uuid
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
 
-from squid.core.errors import ValidationError
+from squid.builds.application.queries import PublicBuildSummary
+from squid.core.errors import DataIntegrityError, ValidationError
 from squid.records.application.models import (
     CandidateFacet,
     CategoryIdentity,
@@ -17,7 +19,7 @@ from squid.records.application.models import (
     TitleDiagnosticGap,
 )
 from squid.records.application.ports import RecomputeLease
-from squid.records.application.services import RecordComputationService, RecordService
+from squid.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
 from squid.records.domain import (
     BuildKind,
     CategoryText,
@@ -26,6 +28,7 @@ from squid.records.domain import (
     RecordClass,
     ResolutionStatus,
     TimingVariant,
+    VersionScope,
 )
 from squid.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 
@@ -119,6 +122,53 @@ class FakeRuns:
 
     async def fail_recompute(self, lease: RecomputeLease, error: str) -> None:
         self.failed = (lease.kinds, error)
+
+
+class FakePublicBuilds:
+    def __init__(self, summaries: Sequence[PublicBuildSummary]) -> None:
+        self.summaries = {summary.id: summary for summary in summaries}
+        self.requests: list[tuple[int, ...]] = []
+
+    async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]:
+        self.requests.append(tuple(build_ids))
+        return tuple(self.summaries[build_id] for build_id in build_ids if build_id in self.summaries)
+
+
+def _public_build(build_id: int) -> PublicBuildSummary:
+    return PublicBuildSummary(
+        id=build_id,
+        revision=1,
+        title=f"Build {build_id}",
+        display_name=None,
+        status="confirmed",
+        category="Door",
+        dimensions=(2, 3, 4),
+        creators=(),
+        tags=(),
+        preview=None,
+        version_spec=None,
+        versions=(),
+        opening_time=None,
+        closing_time=None,
+        created_at=None,
+        updated_at=None,
+    )
+
+
+def _published_record(*holder_build_ids: int) -> PublishedRecord:
+    return PublishedRecord(
+        id=7,
+        definition_id=3,
+        competition_id=uuid.UUID("22222222-2222-2222-2222-222222222222"),
+        title="Fastest 2x3 door",
+        subtitle=None,
+        record_class=RecordClass.FASTEST,
+        build_kind=BuildKind.DOOR,
+        version_scope=VersionScope.ALL_TIME,
+        status=ResolutionStatus.RESOLVED,
+        holder_build_ids=holder_build_ids,
+        computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
+    )
 
 
 def _door(
@@ -408,6 +458,80 @@ async def test_gaps_delegates_active_result_query() -> None:
     service = RecordService(candidates, runs, RecordComputationService(candidates, runs))
 
     assert await service.gaps(kind=BuildKind.DOOR) == (gap,)
+
+
+@pytest.mark.asyncio
+async def test_public_record_query_preserves_holder_order() -> None:
+    runs = FakeRuns()
+    runs.published_records[7] = _published_record(41, 42)
+    builds = FakePublicBuilds((_public_build(42), _public_build(41)))
+    service = PublicRecordQueryService(runs, builds)
+
+    detail = await service.get(7)
+
+    assert detail is not None
+    assert [build.id for build in detail.holder_builds] == [41, 42]
+    assert builds.requests == [(41, 42)]
+
+
+@pytest.mark.asyncio
+async def test_public_record_query_rejects_unavailable_holder() -> None:
+    runs = FakeRuns()
+    runs.published_records[7] = _published_record(41, 42)
+    service = PublicRecordQueryService(runs, FakePublicBuilds((_public_build(41),)))
+
+    with pytest.raises(DataIntegrityError) as exc_info:
+        await service.get(7)
+
+    assert exc_info.value.context == {"record_id": 7, "unavailable_holder_build_ids": [42]}
+
+
+@pytest.mark.asyncio
+async def test_public_record_query_accepts_empty_nonresolved_standing() -> None:
+    runs = FakeRuns()
+    runs.published_records[7] = replace(
+        _published_record(41),
+        status=ResolutionStatus.NO_CANDIDATE,
+        holder_build_ids=(),
+    )
+    builds = FakePublicBuilds(())
+    service = PublicRecordQueryService(runs, builds)
+
+    detail = await service.get(7)
+
+    assert detail is not None
+    assert detail.holder_builds == ()
+    assert builds.requests == [()]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "standing",
+    [
+        _published_record(),
+        replace(_published_record(41), status=ResolutionStatus.UNRESOLVED),
+    ],
+)
+async def test_public_record_query_rejects_status_holder_corruption(standing: PublishedRecord) -> None:
+    runs = FakeRuns()
+    runs.published_records[7] = standing
+    service = PublicRecordQueryService(runs, FakePublicBuilds((_public_build(41),)))
+
+    with pytest.raises(DataIntegrityError, match="status contradicts") as exc_info:
+        await service.get(7)
+
+    assert exc_info.value.context == {
+        "record_id": 7,
+        "status": standing.status.value,
+        "holder_build_ids": list(standing.holder_build_ids),
+    }
+
+
+@pytest.mark.asyncio
+async def test_public_record_query_returns_none_for_unknown_standing() -> None:
+    service = PublicRecordQueryService(FakeRuns(), FakePublicBuilds(()))
+
+    assert await service.get(999) is None
 
 
 @pytest.mark.asyncio

@@ -24,9 +24,10 @@ from squid.records.domain import (
 )
 from squid.records.infrastructure.models import (
     RecordComputationRun,
-    RecordDefinition,
     RecordHolderHistory,
-    RecordResult,
+    RecordMaterializationSource,
+    RecordRule,
+    RecordStanding,
 )
 from squid.records.infrastructure.repository import (
     CALCULATOR_VERSION,
@@ -62,7 +63,7 @@ class FakeSession:
         for value in self.added:
             identity = id(value)
             if (
-                isinstance(value, (RecordComputationRun, RecordResult, RecordHolderHistory))
+                isinstance(value, (RecordComputationRun, RecordStanding, RecordHolderHistory))
                 and identity not in self.assigned
             ):
                 value.id = len(self.assigned) + 1
@@ -92,21 +93,21 @@ def test_requested_category_parser_ignores_malformed_legacy_key() -> None:
 
 
 def test_gap_rows_carry_the_definition_title() -> None:
-    definition = RecordDefinition(
+    definition = RecordRule(
         ruleset_id=1,
-        record_class=RecordClass.FASTEST.value,
-        build_kind=BuildKind.DOOR.value,
-        version_scope=VersionScope.ALL_TIME.value,
+        record_class=RecordClass.FASTEST,
+        build_kind=BuildKind.DOOR,
+        version_scope=VersionScope.ALL_TIME,
         category_key="door:door|2x2|t[20]|Door:r[]:p[]",
         title="Fastest 2x2 Door",
         subtitle="All-time",
-        materialization_source="eager",
+        materialization_source=RecordMaterializationSource.EAGER,
     )
     definition.id = 5
-    result = RecordResult(
+    result = RecordStanding(
         run_id=1,
         definition_id=5,
-        status="unresolved",
+        status=ResolutionStatus.UNRESOLVED,
         gap_reasons={"missing": [{"build_id": 4, "field": "closing"}]},
     )
 
@@ -120,11 +121,11 @@ def test_gap_rows_carry_the_definition_title() -> None:
 
 
 def test_record_definitions_persist_canonical_title_metadata() -> None:
-    assert {"title", "subtitle", "title_diagnostics"} <= set(RecordDefinition.__table__.columns.keys())
+    assert {"title", "subtitle", "title_diagnostics"} <= set(RecordRule.__table__.columns.keys())
 
 
 def test_record_definitions_allow_every_record_class() -> None:
-    table = cast(Table, RecordDefinition.__table__)
+    table = cast(Table, RecordRule.__table__)
     constraint = next(
         constraint
         for constraint in table.constraints
@@ -182,17 +183,17 @@ async def test_activate_flushes_holder_history_as_one_batch() -> None:
         ),
     )
     batch = ComputationBatch(ruleset_id=7, kind=BuildKind.DOOR, version_id=None, records=(computed,))
-    definition = RecordDefinition(
+    definition = RecordRule(
         ruleset_id=7,
-        record_class=RecordClass.SMALLEST.value,
-        build_kind=BuildKind.DOOR.value,
-        version_scope=VersionScope.ALL_TIME.value,
+        record_class=RecordClass.SMALLEST,
+        build_kind=BuildKind.DOOR,
+        version_scope=VersionScope.ALL_TIME,
         version_id=None,
         category_key=competition.identity.key,
         title=computed.title.title,
         subtitle=None,
         title_diagnostics=[],
-        materialization_source="eager",
+        materialization_source=RecordMaterializationSource.EAGER,
     )
     definition.id = 10
     session = FakeSession()

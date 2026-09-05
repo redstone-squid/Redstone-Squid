@@ -80,21 +80,18 @@ class MediaLimits:
             msg = tr(t"Every media limit must be positive.")
             raise ValidationError(msg)
 
-    def batch_violation(self, totals: MediaBatchTotals) -> MediaViolation | None:
-        """Return the first aggregate violation in a stable order."""
+    def batch_violations(self, totals: MediaBatchTotals) -> tuple[MediaViolation, ...]:
+        """Return every aggregate violation in a stable public order."""
         checks = (
             (MediaLimitMeasure.IMAGE_COUNT, totals.image_count, self.max_images),
             (MediaLimitMeasure.VIDEO_COUNT, totals.video_count, self.max_videos),
             (MediaLimitMeasure.SOURCE_BYTES, totals.source_bytes, self.max_source_bytes),
             (MediaLimitMeasure.OUTPUT_BYTES, totals.output_bytes, self.max_output_bytes),
         )
-        return next(
-            (MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit),
-            None,
-        )
+        return tuple(MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit)
 
-    def probe_violation(self, kind: MediaKind, probe: MediaProbe) -> MediaViolation | None:
-        """Return a decoded-work violation without using floating-point arithmetic."""
+    def probe_violations(self, kind: MediaKind, probe: MediaProbe) -> tuple[MediaViolation, ...]:
+        """Return every decoded-work violation without floating-point arithmetic."""
         checks: list[tuple[MediaLimitMeasure, int, int]] = [
             (MediaLimitMeasure.PIXELS_PER_FRAME, probe.pixels_per_frame, self.max_pixels_per_frame)
         ]
@@ -114,10 +111,7 @@ class MediaLimits:
                     self.max_decoded_pixels_per_second,
                 )
             )
-        return next(
-            (MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit),
-            None,
-        )
+        return tuple(MediaViolation(measure, actual, limit) for measure, actual, limit in checks if actual > limit)
 
 
 @dataclass(frozen=True, slots=True)

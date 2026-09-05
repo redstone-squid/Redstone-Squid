@@ -6,10 +6,18 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
+from squid.accounts.application.ports import AccountMinecraftAuthorization
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
-from squid.minecraft_auth.application.crypto import MinecraftSecretCodec, SecretPurpose
-from squid.minecraft_auth.application.ports import AccountIdentityAuthorizer, MinecraftAuthorizationRepository
+from squid.minecraft_auth.application.crypto import (
+    MAX_INSTALLATION_ID_CHARS,
+    MAX_INSTALLATION_SECRET_CHARS,
+    MIN_INSTALLATION_ID_CHARS,
+    MIN_INSTALLATION_SECRET_CHARS,
+    MinecraftSecretCodec,
+    SecretPurpose,
+)
+from squid.minecraft_auth.application.ports import MinecraftAuthorizationRepository
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     IssuedInstallationCredential,
@@ -48,16 +56,16 @@ class InstallationCredentialService:
     def __init__(
         self,
         repository: MinecraftAuthorizationRepository,
-        accounts: AccountIdentityAuthorizer,
+        accounts: AccountMinecraftAuthorization,
         codec: MinecraftSecretCodec,
         *,
-        now: Callable[[], Instant] = Instant.now,
+        clock: Callable[[], Instant] = Instant.now,
         new_uuid: Callable[[], UUID] = uuid4,
     ) -> None:
         self._repository = repository
         self._accounts = accounts
         self._codec = codec
-        self._now = now
+        self._clock = clock
         self._new_uuid = new_uuid
 
     async def register(
@@ -71,7 +79,7 @@ class InstallationCredentialService:
         if not await self._accounts.has_current_consent(owner_account_id):
             raise AccountConsentRequiredError
         normalized_label = _installation_label(label)
-        issued_at = self._now()
+        issued_at = self._clock()
         secret = self._codec.random_secret()
         installation = await self._repository.add_installation(
             PaperInstallation(
@@ -96,7 +104,7 @@ class InstallationCredentialService:
             installation_id=installation_id,
             owner_account_id=owner_account_id,
             secret_hash=self._codec.digest(SecretPurpose.INSTALLATION, secret),
-            rotated_at=self._now(),
+            rotated_at=self._clock(),
         )
         if installation is None:
             raise InstallationUnavailableError
@@ -110,7 +118,7 @@ class InstallationCredentialService:
         installation = await self._repository.revoke_installation(
             installation_id=installation_id,
             owner_account_id=owner_account_id,
-            revoked_at=self._now(),
+            revoked_at=self._clock(),
         )
         if installation is None:
             raise InstallationUnavailableError
@@ -144,7 +152,7 @@ class InstallationCredentialService:
             raise InvalidInstallationCredentialError
         installation_id, secret = parsed
         installation = await self._repository.get_installation(installation_id)
-        now = self._now()
+        now = self._clock()
         if (
             installation is None
             or not installation.is_active_at(now)
@@ -159,6 +167,24 @@ class InstallationCredentialService:
             owner_account_id=installation.owner_account_id,
             credential_version=installation.credential_version,
         )
+
+    async def authenticate_headers(
+        self,
+        installation_id: str | None,
+        installation_secret: str | None,
+    ) -> AuthenticatedPaperInstallation:
+        """Authenticate opaque Paper credential headers as one indistinguishable credential."""
+        if installation_id is None or installation_secret is None:
+            raise InvalidInstallationCredentialError
+        if not MIN_INSTALLATION_ID_CHARS <= len(installation_id) <= MAX_INSTALLATION_ID_CHARS:
+            raise InvalidInstallationCredentialError
+        if not MIN_INSTALLATION_SECRET_CHARS <= len(installation_secret) <= MAX_INSTALLATION_SECRET_CHARS:
+            raise InvalidInstallationCredentialError
+        try:
+            parsed_id = UUID(installation_id)
+        except ValueError:
+            raise InvalidInstallationCredentialError from None
+        return await self.authenticate(self._codec.installation_token(parsed_id, installation_secret))
 
     async def public_servers(self) -> tuple[PublishedPaperServer, ...]:
         """Return only safe projections for installations that explicitly opted into listing."""
@@ -175,10 +201,10 @@ class PlayerAuthorizationService:
     def __init__(
         self,
         repository: MinecraftAuthorizationRepository,
-        accounts: AccountIdentityAuthorizer,
+        accounts: AccountMinecraftAuthorization,
         codec: MinecraftSecretCodec,
         *,
-        now: Callable[[], Instant] = Instant.now,
+        clock: Callable[[], Instant] = Instant.now,
         new_uuid: Callable[[], UUID] = uuid4,
         challenge_lifetime_seconds: int = CHALLENGE_LIFETIME_SECONDS,
         grant_lifetime_seconds: int = PLAYER_GRANT_LIFETIME_SECONDS,
@@ -190,7 +216,7 @@ class PlayerAuthorizationService:
         self._repository = repository
         self._accounts = accounts
         self._codec = codec
-        self._now = now
+        self._clock = clock
         self._new_uuid = new_uuid
         self._challenge_lifetime_seconds = challenge_lifetime_seconds
         self._grant_lifetime_seconds = grant_lifetime_seconds
@@ -235,13 +261,16 @@ class PlayerAuthorizationService:
         )
         if challenge is None:
             raise InvalidChallengeError
-        self._ensure_approvable(challenge, self._now())
-        if not await self._accounts.can_approve(account_id=account_id, java_uuid=challenge.java_uuid):
+        self._ensure_approvable(challenge, self._clock())
+        if not await self._accounts.can_approve_minecraft_identity(
+            account_id=account_id,
+            java_uuid=challenge.java_uuid,
+        ):
             raise ChallengeApprovalDeniedError
         return await self._repository.approve_challenge(
             challenge_id=challenge.id,
             account_id=account_id,
-            approved_at=self._now(),
+            approved_at=self._clock(),
         )
 
     async def exchange_paper(
@@ -287,7 +316,7 @@ class PlayerAuthorizationService:
         current_installation = await self._repository.get_installation(installation.id)
         if (
             current_installation is None
-            or not current_installation.is_active_at(self._now())
+            or not current_installation.is_active_at(self._clock())
             or current_installation.credential_version != installation.credential_version
         ):
             raise InvalidPlayerTokenError
@@ -305,12 +334,12 @@ class PlayerAuthorizationService:
         return await self._repository.revoke_grant(
             grant_id=grant_id,
             account_id=account_id,
-            revoked_at=self._now(),
+            revoked_at=self._clock(),
         )
 
     async def revoke_account_grants(self, account_id: int) -> int:
         """Revoke every outstanding Minecraft player grant for an account."""
-        return await self._repository.revoke_account_grants(account_id=account_id, revoked_at=self._now())
+        return await self._repository.revoke_account_grants(account_id=account_id, revoked_at=self._clock())
 
     async def _start_challenge(
         self,
@@ -320,7 +349,7 @@ class PlayerAuthorizationService:
         installation: AuthenticatedPaperInstallation | None,
         pkce_s256_challenge: str | None,
     ) -> IssuedPlayerChallenge:
-        now = self._now()
+        now = self._clock()
         device_code = self._codec.random_secret()
         user_code = self._codec.random_user_code()
         normalized_user_code = self._codec.normalize_user_code(user_code)
@@ -355,7 +384,7 @@ class PlayerAuthorizationService:
         )
         if challenge is None:
             raise InvalidChallengeError
-        now = self._now()
+        now = self._clock()
         if challenge.revoked_at is not None:
             raise InvalidChallengeError
         if challenge.is_expired_at(now):
@@ -374,7 +403,7 @@ class PlayerAuthorizationService:
         account_id = challenge.approved_by_account_id
         if account_id is None:
             raise AuthorizationPendingError
-        now = self._now()
+        now = self._clock()
         secret = self._codec.random_secret()
         grant = await self._repository.exchange_challenge(
             challenge_id=challenge.id,
@@ -404,14 +433,17 @@ class PlayerAuthorizationService:
             raise InvalidPlayerTokenError
         grant_id, secret = parsed
         grant = await self._repository.get_grant(grant_id)
-        now = self._now()
+        now = self._clock()
         if (
             grant is None
             or not grant.is_active_at(now)
             or not hmac.compare_digest(grant.token_hash, self._codec.digest(SecretPurpose.PLAYER_TOKEN, secret))
         ):
             raise InvalidPlayerTokenError
-        if not await self._accounts.can_approve(account_id=grant.account_id, java_uuid=grant.java_uuid):
+        if not await self._accounts.can_approve_minecraft_identity(
+            account_id=grant.account_id,
+            java_uuid=grant.java_uuid,
+        ):
             raise InvalidPlayerTokenError
         return (
             MinecraftPlayerContext(

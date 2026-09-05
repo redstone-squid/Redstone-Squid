@@ -1,20 +1,22 @@
 """PostgreSQL coverage for account-keyed synchronized build targets."""
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import replace
-from typing import Any
 
+import anyio
 import pytest
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.domain import AccountIdentity as AccountIdentityValue
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.infrastructure.models import Account, AccountIdentity
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.builds.application import BuildService
-from squid.builds.domain import BUILD_CLASS_BY_CATEGORY, Build, BuildCategory, DoorBuild, ExtenderBuild, Status
+from squid.builds.domain import Build, BuildCategory, BuildLink, Status
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.models import Build as SQLBuild
@@ -22,54 +24,47 @@ from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.core.errors import DataIntegrityError
+from squid.events import DomainEvent
+from squid.events.infrastructure.models import DomainEventRecord
+from squid.minecraft_auth.infrastructure.models import PaperInstallationRecord, PlayerChallengeRecord, PlayerGrantRecord
+from squid.notifications.infrastructure.models import (
+    NotificationDeliveryRecord,
+    NotificationProfile,
+    NotificationRecord,
+)
+from squid.notifications.infrastructure.repository import PostgresNotificationRepository
+from squid.permissions.domain import BuiltinRoleKeys
+from squid.permissions.infrastructure.models import (
+    PermissionAuditEntry,
+    PermissionGrant,
+    PermissionRole,
+    PermissionRoleAssignment,
+    PermissionRolePattern,
+)
+from squid.persistence.types import now
+from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile
 from squid.sponsors import PublicSponsor
-from squid.submissions.application import BuildSubmissionRejectedError, StoredDraft
+from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
+    BuildSubmissionRejected,
     DraftSnapshot,
     DraftStatus,
     FinalizationJobStatus,
     FinalizedBuild,
-    GeneralSubmissionDetails,
-    NormalizedSubmission,
-    SchematicRightsPolicy,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
-    SubmissionCategory,
-    SubmissionDimensions,
     SubmissionOrigin,
-    SubmissionSchematicVisibility,
-    SubmissionTaxonomy,
-    VerifiedSubmissionArtifacts,
 )
 from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
-from squid.submissions.infrastructure.models import SubmissionDraft
+from squid.submissions.infrastructure.models import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.payload_integrity import submission_payload_digest
 from squid.tags.domain import TagDefinition
 from squid.versions.application import VersionService
-from squid.versions.infrastructure.models import Version
 from squid.versions.infrastructure.repository import VersionRepository
-
-
-async def _seed_account_and_version(session_factory: async_sessionmaker[AsyncSession]) -> int:
-    async with session_factory.begin() as session:
-        account = Account()
-        session.add_all(
-            [
-                account,
-                Version(
-                    edition="Java",
-                    major_version=1,
-                    minor_version=21,
-                    patch_number=0,
-                    data_version=3953,
-                ),
-            ]
-        )
-        await session.flush()
-        return account.id
+from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
 
 
 class NoopEmbeddings:
@@ -85,69 +80,22 @@ class NoApprovedTags:
         return ()
 
 
-def _normalized_submission(account_id: int, draft_id: uuid.UUID, source_version: str) -> NormalizedSubmission:
-    return NormalizedSubmission(
-        source_draft_id=draft_id,
-        owner_account_id=account_id,
-        origin=SubmissionOrigin.WEB,
-        schema_id="build_submission.v1",
-        schema_revision=1,
-        category=SubmissionCategory.OTHER,
-        display_name="Version integrity test",
-        description=None,
-        creators=("Builder",),
-        capture_dimensions=SubmissionDimensions(3, 4, 5),
-        source_version=source_version,
-        version_compatibility=None,
-        taxonomy=SubmissionTaxonomy(),
-        schematic_policy=SchematicRightsPolicy(
-            visibility=SubmissionSchematicVisibility.REVIEWER_ONLY,
-            license=None,
-            rights_attested=False,
-            include_inventories=False,
-            include_free_text=False,
-        ),
-        completion=None,
-        ai_generated=False,
-        sponsor_attribution=False,
-        artifacts=VerifiedSubmissionArtifacts(),
-        details=GeneralSubmissionDetails(),
-    )
+class PublicSummaryOnlyBuildRepository(BuildRepository):
+    """Fail if the public read model falls back to aggregate hydration."""
 
-
-def _build(
-    category: BuildCategory,
-    account_id: int,
-    *,
-    draft_id: uuid.UUID | None = None,
-    sponsor: PublicSponsor | None = None,
-) -> Build:
-    common: dict[str, Any] = {
-        "submission_status": Status.PENDING,
-        "submitter_account_id": account_id,
-        "source_submission_draft_id": draft_id,
-        "sponsor": sponsor,
-        "display_name": "Workshop prototype" if draft_id is not None else None,
-        "versions": ["Java 1.21.0"],
-        "width": 3,
-        "height": 4,
-        "depth": 5,
-    }
-    if category is BuildCategory.DOOR:
-        return DoorBuild(**common, door_width=2, door_height=3, orientation="Door")
-    if category is BuildCategory.EXTENDER:
-        return ExtenderBuild(**common, orientation="Upward", extension_length=3, extender_type="Regular")
-    return BUILD_CLASS_BY_CATEGORY[category](**common)
+    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
+        del build_ids
+        raise AssertionError("public summaries must not hydrate private build aggregates")
 
 
 async def test_repository_round_trips_and_updates_every_manifest_category(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    account_id = await _seed_account_and_version(migrated_session_factory)
+    account_id = await seed_account_and_version(migrated_session_factory)
     repository = BuildRepository(migrated_session_factory)
     draft_id = uuid.UUID("11111111-1111-1111-1111-111111111111")
     builds = [
-        _build(category, account_id, draft_id=draft_id if category is BuildCategory.OTHER else None)
+        submission_build(category, account_id, draft_id=draft_id if category is BuildCategory.OTHER else None)
         for category in BuildCategory
     ]
 
@@ -185,7 +133,7 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
         assert reloaded.description == f"Updated {category.value}"
         assert reloaded.revision == 2
 
-    duplicate = _build(BuildCategory.OTHER, account_id, draft_id=draft_id)
+    duplicate = submission_build(BuildCategory.OTHER, account_id, draft_id=draft_id)
     with pytest.raises(IntegrityError):
         await repository.save(duplicate)
 
@@ -193,7 +141,7 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
 async def test_repository_round_trips_immutable_public_sponsor_snapshot(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    account_id = await _seed_account_and_version(migrated_session_factory)
+    account_id = await seed_account_and_version(migrated_session_factory)
     repository = BuildRepository(migrated_session_factory)
     installation_id = uuid.UUID("77777777-7777-4777-8777-777777777777")
     sponsor = PublicSponsor(
@@ -202,7 +150,7 @@ async def test_repository_round_trips_immutable_public_sponsor_snapshot(
         address="play.example.test",
         website_url="https://example.test/server",
     )
-    build = _build(BuildCategory.OTHER, account_id, sponsor=sponsor)
+    build = submission_build(BuildCategory.OTHER, account_id, sponsor=sponsor)
 
     await repository.save(build)
     assert build.id is not None
@@ -213,20 +161,52 @@ async def test_repository_round_trips_immutable_public_sponsor_snapshot(
     async with migrated_session_factory() as session:
         row = (
             await session.execute(
-                text(
-                    "SELECT sponsor_installation_id, sponsor_display_name, sponsor_address, sponsor_website_url "
-                    "FROM builds WHERE id = :build_id"
-                ),
-                {"build_id": build.id},
+                select(
+                    SQLBuild.sponsor_installation_id,
+                    SQLBuild.sponsor_display_name,
+                    SQLBuild.sponsor_address,
+                    SQLBuild.sponsor_website_url,
+                ).where(SQLBuild.id == build.id)
             )
         ).one()
     assert row == (installation_id, "Example server", "play.example.test", "https://example.test/server")
 
 
+async def test_public_summaries_select_only_allowlisted_fields_and_preserve_requested_order(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await seed_account_and_version(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+    confirmed = submission_build(BuildCategory.OTHER, account_id)
+    confirmed.submission_status = Status.CONFIRMED
+    confirmed.display_name = "Public prototype"
+    confirmed.description = "moderation-only description"
+    confirmed.extra_info = {"submission_provenance": {"private": True}}
+    confirmed.links = [
+        BuildLink(url="https://cdn.example.test/render.png", media_type="render"),
+        BuildLink(url="https://cdn.example.test/evidence.mp4", media_type="video"),
+    ]
+    pending = submission_build(BuildCategory.OTHER, account_id)
+    await repository.save(confirmed)
+    await repository.save(pending)
+    assert confirmed.id is not None
+    assert pending.id is not None
+
+    summaries = await PublicSummaryOnlyBuildRepository(migrated_session_factory).get_public_summaries(
+        [confirmed.id, pending.id, confirmed.id, 999_999]
+    )
+
+    assert [summary.id for summary in summaries] == [confirmed.id, confirmed.id]
+    assert summaries[0] == summaries[1]
+    assert summaries[0].display_name == "Public prototype"
+    assert summaries[0].preview is not None
+    assert summaries[0].preview.url == "https://cdn.example.test/render.png"
+
+
 async def test_submission_target_persists_only_the_exact_canonical_source_version(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    account_id = await _seed_account_and_version(migrated_session_factory)
+    account_id = await seed_account_and_version(migrated_session_factory)
     repository = BuildRepository(migrated_session_factory)
     versions = VersionService(VersionRepository(migrated_session_factory))
     builds = BuildService(
@@ -240,26 +220,226 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     target = CanonicalBuildSubmissionWriter(builds, NoApprovedTags(), versions)
     canonical_draft_id = uuid.UUID("77777777-7777-4777-8777-777777777777")
 
-    result = await target.create_or_get(_normalized_submission(account_id, canonical_draft_id, "Java 1.21.0"))
+    result = await target.create_or_get(normalized_submission(account_id, canonical_draft_id, "Java 1.21.0"))
 
+    assert isinstance(result, FinalizedBuild)
     persisted = await repository.get_by_id(result.build_id)
     assert persisted is not None
     assert persisted.versions == ["Java 1.21.0"]
 
     unknown_draft_id = uuid.UUID("88888888-8888-4888-8888-888888888888")
-    with pytest.raises(BuildSubmissionRejectedError) as error:
-        await target.create_or_get(_normalized_submission(account_id, unknown_draft_id, "Java 1.21.99"))
+    rejected = await target.create_or_get(normalized_submission(account_id, unknown_draft_id, "Java 1.21.99"))
 
-    assert error.value.issues == (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
+    assert rejected == BuildSubmissionRejected(
+        (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
+    )
     assert await repository.get_by_source_submission_draft_id(unknown_draft_id) is None
 
-    invalid_build = _build(BuildCategory.OTHER, account_id)
+    invalid_build = submission_build(BuildCategory.OTHER, account_id)
     invalid_build.versions = ["Java 1.21.99"]
     with pytest.raises(InvalidBuildError, match="Unknown canonical Minecraft versions"):
         await repository.save(invalid_build)
     assert invalid_build.id is None
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(SQLBuild)) == 1
+
+
+async def test_concurrent_source_draft_writes_publish_and_materialize_one_submission_event(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await seed_account_and_version(migrated_session_factory)
+    draft_id = uuid.UUID("99999999-9999-4999-8999-999999999999")
+    repository = BuildRepository(migrated_session_factory)
+    versions = VersionService(VersionRepository(migrated_session_factory))
+    writer = CanonicalBuildSubmissionWriter(
+        BuildService(
+            repository,
+            BuildLockRepository(migrated_session_factory),
+            RestrictionRepository(migrated_session_factory),
+            versions,
+            NoopEmbeddings(),
+            OfficialTagResolver(migrated_session_factory),
+        ),
+        NoApprovedTags(),
+        versions,
+    )
+    results: list[FinalizedBuild | BuildSubmissionRejected] = []
+
+    async def create() -> None:
+        results.append(await writer.create_or_get(normalized_submission(account_id, draft_id, "Java 1.21.0")))
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(create)
+        tasks.start_soon(create)
+
+    assert len(results) == 2
+    assert all(isinstance(result, FinalizedBuild) for result in results)
+    assert results[0] == results[1]
+    result = results[0]
+    assert isinstance(result, FinalizedBuild)
+
+    async with migrated_session_factory.begin() as session:
+        staff = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        session.add(staff)
+        await session.flush()
+        role_id = await session.scalar(
+            select(PermissionRole.id).where(PermissionRole.builtin_key == BuiltinRoleKeys.GLOBAL_ADMIN)
+        )
+        assert role_id is not None
+        session.add(PermissionRoleAssignment(role_id=role_id, subject_account_id=staff.id))
+        session.add(NotificationProfile(account_id=staff.id, web_enabled=True, dm_enabled=False))
+
+    async with migrated_session_factory() as session:
+        assert (
+            await session.scalar(
+                select(func.count()).select_from(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id)
+            )
+            == 1
+        )
+        events = tuple(
+            (
+                await session.scalars(
+                    select(DomainEventRecord).where(
+                        DomainEventRecord.event_type == "build.submitted",
+                        DomainEventRecord.aggregate_id == result.build_id,
+                    )
+                )
+            ).all()
+        )
+    assert len(events) == 1
+    event = events[0]
+    notification_event = DomainEvent(
+        id=event.id,
+        event_type=event.event_type,
+        aggregate_kind=event.aggregate_kind,
+        aggregate_id=event.aggregate_id,
+        occurred_at=event.occurred_at,
+        payload=event.payload,
+        schema_version=event.schema_version,
+    )
+    notifications = PostgresNotificationRepository(migrated_session_factory)
+
+    await notifications.materialize(notification_event)
+    await notifications.materialize(notification_event)
+
+    async with migrated_session_factory() as session:
+        materialized = tuple(
+            (
+                await session.scalars(
+                    select(NotificationRecord).where(NotificationRecord.event_id == notification_event.id)
+                )
+            ).all()
+        )
+    assert len(materialized) == 1
+    assert materialized[0].account_id == staff.id
+
+
+async def test_notification_materialize_merge_and_replay_coalesces_recipient_state(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    owner_id = await seed_account_and_version(migrated_session_factory)
+    build = submission_build(BuildCategory.OTHER, owner_id)
+    await BuildRepository(migrated_session_factory).save(build)
+    assert build.id is not None
+
+    async with migrated_session_factory.begin() as session:
+        survivor = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        absorbed = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        session.add_all([survivor, absorbed])
+        await session.flush()
+        role_id = await session.scalar(
+            select(PermissionRole.id).where(PermissionRole.builtin_key == BuiltinRoleKeys.GLOBAL_ADMIN)
+        )
+        assert role_id is not None
+        session.add_all(
+            [
+                AccountIdentity(
+                    account_id=survivor.id,
+                    provider=IdentityProvider.DISCORD,
+                    subject="700000000000000001",
+                ),
+                AccountIdentity(
+                    account_id=absorbed.id,
+                    provider=IdentityProvider.DISCORD,
+                    subject="700000000000000002",
+                ),
+                PermissionRoleAssignment(role_id=role_id, subject_account_id=survivor.id),
+                PermissionRoleAssignment(role_id=role_id, subject_account_id=absorbed.id),
+                NotificationProfile(account_id=survivor.id, web_enabled=True, dm_enabled=True),
+                NotificationProfile(account_id=absorbed.id, web_enabled=True, dm_enabled=True),
+            ]
+        )
+        event = DomainEventRecord(event_type="build.submitted", aggregate_kind="build", aggregate_id=build.id)
+        session.add(event)
+        await session.flush()
+        survivor_id = survivor.id
+        absorbed_id = absorbed.id
+        notification_event = DomainEvent(
+            id=event.id,
+            event_type=event.event_type,
+            aggregate_kind=event.aggregate_kind,
+            aggregate_id=event.aggregate_id,
+            occurred_at=event.occurred_at,
+            payload=event.payload,
+            schema_version=event.schema_version,
+        )
+
+    notifications = PostgresNotificationRepository(migrated_session_factory)
+    await notifications.materialize(notification_event)
+    claimed = await notifications.claim_deliveries(limit=10)
+    assert len(claimed) == 2
+    stale_absorbed_claim = next(delivery for delivery in claimed if delivery.discord_id == 700000000000000002)
+    seeded_at = now()
+    async with migrated_session_factory.begin() as session:
+        rows = tuple(
+            (
+                await session.scalars(
+                    select(NotificationRecord)
+                    .where(NotificationRecord.event_id == notification_event.id)
+                    .order_by(NotificationRecord.account_id)
+                )
+            ).all()
+        )
+        assert len(rows) == 2
+        by_account = {row.account_id: row for row in rows}
+        by_account[absorbed_id].read_at = seeded_at
+        deliveries = tuple(
+            (
+                await session.scalars(
+                    select(NotificationDeliveryRecord).where(
+                        NotificationDeliveryRecord.notification_id.in_([row.id for row in rows])
+                    )
+                )
+            ).all()
+        )
+        assert len(deliveries) == 2
+        for delivery in deliveries:
+            if delivery.account_id == survivor_id:
+                delivery.sent_at = seeded_at
+
+    await AccountRepository(migrated_session_factory, "test-pepper").merge(survivor_id, absorbed_id)
+    assert await notifications.complete_delivery(stale_absorbed_claim) is False
+    await notifications.materialize(notification_event)
+
+    async with migrated_session_factory() as session:
+        merged = tuple(
+            (
+                await session.scalars(
+                    select(NotificationRecord).where(NotificationRecord.event_id == notification_event.id)
+                )
+            ).all()
+        )
+        merged_deliveries = tuple((await session.scalars(select(NotificationDeliveryRecord))).all())
+    assert len(merged) == 1
+    assert merged[0].account_id == survivor_id
+    assert merged[0].source_key == f"event:{notification_event.id}:staff:{survivor_id}"
+    assert merged[0].read_at == seeded_at
+    assert len(merged_deliveries) == 1
+    assert merged_deliveries[0].account_id == survivor_id
+    assert merged_deliveries[0].sent_at == seeded_at
+    assert merged_deliveries[0].claimed_at is None
+    assert merged_deliveries[0].claim_token is None
+    assert merged_deliveries[0].attempts == 1
 
 
 async def test_account_merge_transfers_submission_and_minecraft_authorization_ownership(
@@ -276,106 +456,103 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
     challenge_id = uuid.UUID("55555555-5555-5555-5555-555555555555")
     grant_id = uuid.UUID("66666666-6666-6666-6666-666666666666")
     installation_secret_hash = bytes.fromhex("11" * 32)
+    seeded_at = Instant.now()
+    build = submission_build(BuildCategory.UTILITY, absorbed.id)
+    build.versions = []
+    await BuildRepository(migrated_session_factory).save(build)
+    assert build.id is not None
+    build_id = build.id
 
     async with migrated_session_factory.begin() as session:
-        build_id = (
-            await session.execute(
-                text(
-                    "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated) "
-                    "VALUES (0, 'Utility', :absorbed, false) RETURNING id"
+        session.add_all(
+            [
+                SubmissionDraft(
+                    id=draft_id,
+                    owner_account_id=absorbed.id,
+                    schema_id="redstone_squid.submission",
+                    schema_revision=1,
+                    category="utility",
+                    origin=SubmissionOrigin.PAPER,
+                    source_installation_id=installation_id,
+                    expires_at=seeded_at.add(days=7, days_assumed_24h_ok=True),
                 ),
-                {"absorbed": absorbed.id},
+                PaperInstallationRecord(
+                    id=installation_id,
+                    owner_account_id=absorbed.id,
+                    label="Merge test",
+                    secret_hash=installation_secret_hash,
+                ),
+                SchematicFile(
+                    sha256="merge-test-sha",
+                    byte_size=1,
+                    source_format="schem",
+                    object_key="merge-test-object-key",
+                ),
+            ]
+        )
+        await session.flush()
+        session.add_all(
+            [
+                SubmissionDraftAccess(draft_id=draft_id, account_id=absorbed.id, role="owner"),
+                SubmissionDraftAccess(draft_id=draft_id, account_id=survivor.id, role="editor"),
+                SubmissionDraftChange(
+                    draft_id=draft_id,
+                    actor_account_id=absorbed.id,
+                    base_revision=0,
+                    resulting_revision=1,
+                    client_instance_id="web-test",
+                    idempotency_key="merge-test-key",
+                    operations=[{"op": "set"}],
+                ),
+                BuildSchematic(
+                    build_id=build_id,
+                    file_sha256="merge-test-sha",
+                    is_primary=True,
+                    width=1,
+                    height=1,
+                    length=1,
+                    allocated_width=1,
+                    allocated_height=1,
+                    allocated_length=1,
+                    block_count=1,
+                    bounding_volume=1,
+                    palette_size=1,
+                    analyzer_version="test-1",
+                    analysis_schema_version=1,
+                    visibility="reviewer_only",
+                    rights_attested_at=seeded_at,
+                    rights_attested_by_account_id=absorbed.id,
+                ),
+                PlayerChallengeRecord(
+                    id=challenge_id,
+                    device_code_hash=bytes.fromhex("22" * 32),
+                    user_code_hash=bytes.fromhex("33" * 32),
+                    origin="paper",
+                    java_uuid=java_uuid,
+                    installation_id=installation_id,
+                    installation_credential_version=1,
+                    created_at=seeded_at,
+                    expires_at=seeded_at.add(minutes=10),
+                    approved_by_account_id=absorbed.id,
+                    approved_at=seeded_at,
+                    exchanged_at=seeded_at,
+                ),
+            ]
+        )
+        await session.flush()
+        session.add(
+            PlayerGrantRecord(
+                id=grant_id,
+                challenge_id=challenge_id,
+                token_hash=bytes.fromhex("44" * 32),
+                account_id=absorbed.id,
+                java_uuid=java_uuid,
+                origin="paper",
+                installation_id=installation_id,
+                installation_credential_version=1,
+                issued_at=seeded_at,
+                expires_at=seeded_at.add(minutes=5),
             )
-        ).scalar_one()
-        await session.execute(text("INSERT INTO utilities (build_id) VALUES (:build_id)"), {"build_id": build_id})
-        await session.execute(
-            text(
-                "INSERT INTO submission_drafts "
-                "(id, owner_account_id, schema_id, schema_revision, category, answers, origin, "
-                "source_installation_id, expires_at) "
-                "VALUES (:draft_id, :absorbed, 'redstone_squid.submission', 1, 'utility', '{}'::jsonb, "
-                "'paper', :installation_id, now() + interval '7 days')"
-            ),
-            {"draft_id": draft_id, "absorbed": absorbed.id, "installation_id": installation_id},
-        )
-        await session.execute(
-            text(
-                "INSERT INTO submission_draft_access (draft_id, account_id, role) VALUES "
-                "(:draft_id, :absorbed, 'owner'), (:draft_id, :survivor, 'editor')"
-            ),
-            {"draft_id": draft_id, "absorbed": absorbed.id, "survivor": survivor.id},
-        )
-        await session.execute(
-            text(
-                "INSERT INTO submission_draft_changes "
-                "(draft_id, actor_account_id, base_revision, resulting_revision, client_instance_id, "
-                "idempotency_key, operations) VALUES "
-                "(:draft_id, :absorbed, 0, 1, 'web-test', 'merge-test-key', '[{\"op\": \"set\"}]'::jsonb)"
-            ),
-            {"draft_id": draft_id, "absorbed": absorbed.id},
-        )
-        await session.execute(
-            text(
-                "INSERT INTO schematic_files (sha256, byte_size, source_format, object_key) "
-                "VALUES ('merge-test-sha', 1, 'schem', 'merge-test-object-key')"
-            )
-        )
-        await session.execute(
-            text(
-                "INSERT INTO build_schematics "
-                "(build_id, file_sha256, is_primary, width, height, length, allocated_width, allocated_height, "
-                "allocated_length, block_count, bounding_volume, entity_count, palette_size, region_names, signs, "
-                "analyzer_version, analysis_schema_version, visibility, rights_attested_at, "
-                "rights_attested_by_account_id) VALUES "
-                "(:build_id, 'merge-test-sha', true, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, ARRAY[]::text[], "
-                "'[]'::jsonb, 'test-1', 1, 'reviewer_only', now(), :absorbed)"
-            ),
-            {"build_id": build_id, "absorbed": absorbed.id},
-        )
-        await session.execute(
-            text(
-                "INSERT INTO minecraft_paper_installations (id, owner_account_id, label, secret_hash) "
-                "VALUES (:installation_id, :absorbed, 'Merge test', :secret_hash)"
-            ),
-            {
-                "installation_id": installation_id,
-                "absorbed": absorbed.id,
-                "secret_hash": installation_secret_hash,
-            },
-        )
-        await session.execute(
-            text(
-                "INSERT INTO minecraft_player_challenges "
-                "(id, device_code_hash, user_code_hash, origin, java_uuid, installation_id, "
-                "installation_credential_version, created_at, expires_at, approved_by_account_id, approved_at, "
-                "exchanged_at) VALUES (:challenge_id, :device_hash, :user_hash, 'paper', :java_uuid, "
-                ":installation_id, 1, now(), now() + interval '10 minutes', :absorbed, now(), now())"
-            ),
-            {
-                "challenge_id": challenge_id,
-                "device_hash": bytes.fromhex("22" * 32),
-                "user_hash": bytes.fromhex("33" * 32),
-                "java_uuid": java_uuid,
-                "installation_id": installation_id,
-                "absorbed": absorbed.id,
-            },
-        )
-        await session.execute(
-            text(
-                "INSERT INTO minecraft_player_grants "
-                "(id, challenge_id, token_hash, account_id, java_uuid, origin, installation_id, "
-                "installation_credential_version, issued_at, expires_at) VALUES "
-                "(:grant_id, :challenge_id, :token_hash, :absorbed, :java_uuid, 'paper', :installation_id, 1, "
-                "now(), now() + interval '5 minutes')"
-            ),
-            {
-                "grant_id": grant_id,
-                "challenge_id": challenge_id,
-                "token_hash": bytes.fromhex("44" * 32),
-                "absorbed": absorbed.id,
-                "java_uuid": java_uuid,
-                "installation_id": installation_id,
-            },
         )
 
     await accounts.merge(survivor.id, absorbed.id)
@@ -384,51 +561,56 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
         build_owner = await session.scalar(select(SQLBuild.submitter_account_id).where(SQLBuild.id == build_id))
         draft_owner = (
             await session.execute(
-                text("SELECT owner_account_id, source_installation_id FROM submission_drafts WHERE id = :draft_id"),
-                {"draft_id": draft_id},
+                select(SubmissionDraft.owner_account_id, SubmissionDraft.source_installation_id).where(
+                    SubmissionDraft.id == draft_id
+                )
             )
         ).one()
         access = (
             await session.execute(
-                text("SELECT account_id, role FROM submission_draft_access WHERE draft_id = :draft_id"),
-                {"draft_id": draft_id},
+                select(SubmissionDraftAccess.account_id, SubmissionDraftAccess.role).where(
+                    SubmissionDraftAccess.draft_id == draft_id
+                )
             )
         ).all()
         change_actor = await session.scalar(
-            text("SELECT actor_account_id FROM submission_draft_changes WHERE draft_id = :draft_id"),
-            {"draft_id": draft_id},
+            select(SubmissionDraftChange.actor_account_id).where(SubmissionDraftChange.draft_id == draft_id)
         )
         rights_actor = await session.scalar(
-            text("SELECT rights_attested_by_account_id FROM build_schematics WHERE build_id = :build_id"),
-            {"build_id": build_id},
+            select(BuildSchematic.rights_attested_by_account_id).where(BuildSchematic.build_id == build_id)
         )
         installation = (
             await session.execute(
-                text(
-                    "SELECT owner_account_id, id, secret_hash FROM minecraft_paper_installations "
-                    "WHERE id = :installation_id"
-                ),
-                {"installation_id": installation_id},
+                select(
+                    PaperInstallationRecord.owner_account_id,
+                    PaperInstallationRecord.id,
+                    PaperInstallationRecord.secret_hash,
+                ).where(PaperInstallationRecord.id == installation_id)
             )
         ).one()
         challenge = (
             await session.execute(
-                text(
-                    "SELECT approved_by_account_id, java_uuid, installation_id FROM minecraft_player_challenges "
-                    "WHERE id = :challenge_id"
-                ),
-                {"challenge_id": challenge_id},
+                select(
+                    PlayerChallengeRecord.approved_by_account_id,
+                    PlayerChallengeRecord.java_uuid,
+                    PlayerChallengeRecord.installation_id,
+                ).where(PlayerChallengeRecord.id == challenge_id)
             )
         ).one()
         grant = (
             await session.execute(
-                text("SELECT account_id, java_uuid, installation_id FROM minecraft_player_grants WHERE id = :grant_id"),
-                {"grant_id": grant_id},
+                select(
+                    PlayerGrantRecord.account_id,
+                    PlayerGrantRecord.java_uuid,
+                    PlayerGrantRecord.installation_id,
+                ).where(PlayerGrantRecord.id == grant_id)
             )
         ).one()
         java_identity_owner = await session.scalar(
-            text("SELECT account_id FROM account_identities WHERE provider = 'java' AND subject = :subject"),
-            {"subject": str(java_uuid)},
+            select(AccountIdentity.account_id).where(
+                AccountIdentity.provider == IdentityProvider.JAVA,
+                AccountIdentity.subject == str(java_uuid),
+            )
         )
 
     assert build_owner == survivor.id
@@ -479,12 +661,12 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     await drafts.create(pending_draft)
     await drafts.create(claimed_draft)
     pending_payload = replace(
-        _normalized_submission(absorbed.id, pending_draft_id, "Java 1.21.0"),
+        normalized_submission(absorbed.id, pending_draft_id, "Java 1.21.0"),
         origin=SubmissionOrigin.PAPER,
         source_installation_id=installation_id,
     )
     claimed_payload = replace(
-        _normalized_submission(absorbed.id, claimed_draft_id, "Java 1.21.0"),
+        normalized_submission(absorbed.id, claimed_draft_id, "Java 1.21.0"),
         origin=SubmissionOrigin.PAPER,
         sponsor_attribution=True,
         source_installation_id=installation_id,
@@ -506,23 +688,11 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     (stale_claim,) = await finalizations.claim(now=queued_at, limit=1)
     assert stale_claim.draft_id == claimed_draft_id
 
-    async with migrated_session_factory.begin() as session:
-        build_id = (
-            await session.execute(
-                text(
-                    "INSERT INTO builds (submission_status, category, submitter_account_id, "
-                    "source_submission_draft_id, ai_generated, sponsor_installation_id, sponsor_display_name) "
-                    "VALUES (0, 'Other', :absorbed, :draft_id, false, :installation_id, 'Merge-safe server') "
-                    "RETURNING id"
-                ),
-                {
-                    "absorbed": absorbed.id,
-                    "draft_id": claimed_draft_id,
-                    "installation_id": installation_id,
-                },
-            )
-        ).scalar_one()
-        await session.execute(text("INSERT INTO other_builds (build_id) VALUES (:build_id)"), {"build_id": build_id})
+    build = submission_build(BuildCategory.OTHER, absorbed.id, draft_id=claimed_draft_id, sponsor=sponsor)
+    build.versions = []
+    await BuildRepository(migrated_session_factory).save(build)
+    assert build.id is not None
+    build_id = build.id
 
     await accounts.merge(survivor.id, absorbed.id)
 
@@ -547,8 +717,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
         }
         build_owner = await session.scalar(select(SQLBuild.submitter_account_id).where(SQLBuild.id == build_id))
         pending_status = await session.scalar(
-            text("SELECT status FROM submission_drafts WHERE id = :draft_id"),
-            {"draft_id": pending_draft_id},
+            select(SubmissionDraft.status).where(SubmissionDraft.id == pending_draft_id)
         )
 
     pending_job = jobs[pending_draft_id]
@@ -566,7 +735,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     assert stale_claim.claim_token != replacement_claim.claim_token
     assert replacement_claim.attempts == stale_claim.attempts + 1
     assert build_owner == survivor.id
-    assert pending_status == DraftStatus.PROCESSING.value
+    assert pending_status is DraftStatus.PROCESSING
 
 
 async def test_account_merge_refuses_to_bless_a_conflicting_finalization_digest(
@@ -595,7 +764,7 @@ async def test_account_merge_refuses_to_bless_a_conflicting_finalization_digest(
     await PostgresDraftRepository(migrated_session_factory).create(draft)
     await PostgresFinalizationJobRepository(migrated_session_factory).enqueue(
         draft,
-        _normalized_submission(absorbed.id, draft_id, "Java 1.21.0"),
+        normalized_submission(absorbed.id, draft_id, "Java 1.21.0"),
         now=queued_at,
         expires_at=draft.expires_at,
     )
@@ -629,55 +798,77 @@ async def test_account_merge_carries_permission_rules_and_keeps_the_stricter_eff
     absorbed = await accounts.create()
     assert survivor.id is not None
     assert absorbed.id is not None
-    parameters = {"survivor": survivor.id, "absorbed": absorbed.id}
-
     async with migrated_session_factory.begin() as session:
-        await session.execute(
-            text(
-                "INSERT INTO permission_grants (pattern, effect, subject_account_id, granted_by_account_id) VALUES "
-                "('build.submission.edit', 1, :survivor, :absorbed), "
-                "('build.submission.edit', -2, :absorbed, :absorbed), "
-                "('vote.poll.cast', 1, :absorbed, :absorbed)"
-            ),
-            parameters,
+        builtin_roles = {
+            role.builtin_key: role
+            for role in (
+                await session.scalars(
+                    select(PermissionRole).where(
+                        PermissionRole.builtin_key.in_(
+                            (BuiltinRoleKeys.GLOBAL_ADMIN.value, BuiltinRoleKeys.TRUSTED.value)
+                        )
+                    )
+                )
+            ).all()
+        }
+        global_admin = builtin_roles[BuiltinRoleKeys.GLOBAL_ADMIN.value]
+        trusted = builtin_roles[BuiltinRoleKeys.TRUSTED.value]
+        custom_role = PermissionRole(
+            slug="legacy-crew",
+            name="Legacy crew",
+            guild_id=123,
+            created_by_account_id=absorbed.id,
         )
-        await session.execute(
-            text(
-                "INSERT INTO permission_role_assignments (role_id, subject_account_id, granted_by_account_id) "
-                "SELECT id, :survivor, :absorbed FROM permission_roles WHERE builtin_key = 'global-admin'"
-            ),
-            parameters,
-        )
-        await session.execute(
-            text(
-                "INSERT INTO permission_role_assignments (role_id, subject_account_id, granted_by_account_id) "
-                "SELECT id, :absorbed, :absorbed FROM permission_roles "
-                "WHERE builtin_key IN ('global-admin', 'trusted')"
-            ),
-            parameters,
-        )
-        await session.execute(
-            text(
-                "INSERT INTO permission_roles (slug, name, guild_id, created_by_account_id) "
-                "VALUES ('legacy-crew', 'Legacy crew', 123, :absorbed)"
-            ),
-            parameters,
-        )
-        await session.execute(
-            text(
-                "INSERT INTO permission_role_patterns (role_id, pattern, mode, added_by_account_id) "
-                "SELECT id, 'build.submission.edit', 1, :absorbed FROM permission_roles WHERE slug = 'legacy-crew'"
-            ),
-            parameters,
-        )
-        await session.execute(
-            text(
-                # `actor_account_id` is an integer and `subject_id` a bigint, so one bind
-                # parameter cannot fill both: asyncpg refuses the ambiguous deduction.
-                "INSERT INTO permission_audit_log (action, actor_account_id, subject_kind, subject_id) "
-                "VALUES ('grant', :absorbed, 'account', :absorbed_subject)"
-            ),
-            {**parameters, "absorbed_subject": absorbed.id},
+        session.add(custom_role)
+        await session.flush()
+        session.add_all(
+            [
+                PermissionGrant(
+                    pattern="build.submission.edit",
+                    effect=1,
+                    subject_account_id=survivor.id,
+                    granted_by_account_id=absorbed.id,
+                ),
+                PermissionGrant(
+                    pattern="build.submission.edit",
+                    effect=-2,
+                    subject_account_id=absorbed.id,
+                    granted_by_account_id=absorbed.id,
+                ),
+                PermissionGrant(
+                    pattern="vote.poll.cast",
+                    effect=1,
+                    subject_account_id=absorbed.id,
+                    granted_by_account_id=absorbed.id,
+                ),
+                PermissionRoleAssignment(
+                    role_id=global_admin.id,
+                    subject_account_id=survivor.id,
+                    granted_by_account_id=absorbed.id,
+                ),
+                PermissionRoleAssignment(
+                    role_id=global_admin.id,
+                    subject_account_id=absorbed.id,
+                    granted_by_account_id=absorbed.id,
+                ),
+                PermissionRoleAssignment(
+                    role_id=trusted.id,
+                    subject_account_id=absorbed.id,
+                    granted_by_account_id=absorbed.id,
+                ),
+                PermissionRolePattern(
+                    role_id=custom_role.id,
+                    pattern="build.submission.edit",
+                    mode=1,
+                    added_by_account_id=absorbed.id,
+                ),
+                PermissionAuditEntry(
+                    action="grant",
+                    actor_account_id=absorbed.id,
+                    subject_kind="account",
+                    subject_id=absorbed.id,
+                ),
+            ]
         )
 
     await accounts.merge(survivor.id, absorbed.id)
@@ -685,27 +876,38 @@ async def test_account_merge_carries_permission_rules_and_keeps_the_stricter_eff
     async with migrated_session_factory() as session:
         grants = (
             await session.execute(
-                text(
-                    "SELECT pattern, effect, subject_account_id, granted_by_account_id "
-                    "FROM permission_grants ORDER BY pattern"
-                )
+                select(
+                    PermissionGrant.pattern,
+                    PermissionGrant.effect,
+                    PermissionGrant.subject_account_id,
+                    PermissionGrant.granted_by_account_id,
+                ).order_by(PermissionGrant.pattern)
             )
         ).all()
         assignments = (
             await session.execute(
-                text(
-                    "SELECT roles.builtin_key, assignment.subject_account_id, assignment.granted_by_account_id "
-                    "FROM permission_role_assignments assignment "
-                    "JOIN permission_roles roles ON roles.id = assignment.role_id "
-                    "ORDER BY roles.builtin_key"
+                select(
+                    PermissionRole.builtin_key,
+                    PermissionRoleAssignment.subject_account_id,
+                    PermissionRoleAssignment.granted_by_account_id,
                 )
+                .join(PermissionRole, PermissionRole.id == PermissionRoleAssignment.role_id)
+                .order_by(PermissionRole.builtin_key)
             )
         ).all()
         role_creator = await session.scalar(
-            text("SELECT created_by_account_id FROM permission_roles WHERE slug = 'legacy-crew'")
+            select(PermissionRole.created_by_account_id).where(PermissionRole.slug == "legacy-crew")
         )
-        pattern_author = await session.scalar(text("SELECT added_by_account_id FROM permission_role_patterns"))
-        audit = (await session.execute(text("SELECT actor_account_id, subject_id FROM permission_audit_log"))).one()
+        pattern_author = await session.scalar(
+            select(PermissionRolePattern.added_by_account_id).where(PermissionRolePattern.role_id == custom_role.id)
+        )
+        audit = (
+            await session.execute(
+                select(PermissionAuditEntry.actor_account_id, PermissionAuditEntry.subject_id).where(
+                    PermissionAuditEntry.action == "grant"
+                )
+            )
+        ).one()
 
     # The absorbed forbid outranks the survivor's own allow on the same pattern and scope.
     assert grants == [
