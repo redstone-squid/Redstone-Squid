@@ -66,9 +66,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
                     route=route,
                     expires_at=expires_at,
                 )
-                .on_conflict_do_nothing(
-                    index_elements=[IdempotencyRequest.caller, IdempotencyRequest.idempotency_key]
-                )
+                .on_conflict_do_nothing(index_elements=[IdempotencyRequest.caller, IdempotencyRequest.idempotency_key])
                 .returning(IdempotencyRequest.id)
             )
             if request_id is not None:
