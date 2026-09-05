@@ -889,6 +889,7 @@ typing-extensions==4.16.0 \
     #   pydantic
     #   pydantic-core
     #   sqlalchemy
+    #   squid-ui-discord
     #   typing-inspection
 typing-inspection==0.4.2 \
     --hash=sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7 \
