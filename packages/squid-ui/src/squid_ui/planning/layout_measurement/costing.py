@@ -38,7 +38,12 @@ from squid_ui.primitives.nodes import (
 
 
 def measure_nodes(nodes: Sequence[Node], *, limits: MessageLimits = LIMITS) -> ResourceCost:
-    """Measure preferred cost per named axis, without applying any budget pressure."""
+    """Measure preferred cost per named axis, without applying any budget pressure.
+
+    `ControlGroup` and `MediaCollection` are lowered to rows and galleries first, and a
+    `Variants` is priced at its first rung. Raises `LayoutInvariantError` for a
+    `MediaCollection` outside `V2Limits`.
+    """
 
     def lower_shape(node: Node) -> list[Node]:
         match node:
@@ -105,7 +110,7 @@ def prune(children: list[Realized]) -> list[Realized]:
 
 
 def validated_nav(nodes: Sequence[NavNode]) -> list[Node]:
-    """Validate that navigation contributes only component-bearing nodes."""
+    """The nav factory's nodes, checked to spend no text. Raises `ValueError` for a text-bearing node."""
     for node in nodes:
         match node:
             case Row(items=items) if not any(isinstance(item, RawItem) and item.text_cost for item in items):
@@ -125,7 +130,12 @@ def _item_component_cost(item: object) -> int:
 
 
 def structural_cost(children: Sequence[Realized]) -> dict[Axis, int]:
-    """Count every structural axis at once, whichever target budgets them."""
+    """Count every structural axis at once, whichever target budgets them.
+
+    A card costs one embed and one component; a section costs one component plus one per text
+    and one for its accessory; a row costs one plus its items; a select costs two; `RawItem`
+    reports its own count.
+    """
     totals = {Axis.COMPONENTS: 0, Axis.EMBEDS: 0, Axis.ROWS: 0, Axis.CONTROLS: 0}
 
     def walk(nodes: Sequence[Realized]) -> None:
@@ -162,5 +172,5 @@ def structural_cost(children: Sequence[Realized]) -> dict[Axis, int]:
 
 
 def component_count(children: Sequence[Realized]) -> int:
-    """Count components in one realized V2 subtree."""
+    """`structural_cost` on `Axis.COMPONENTS` alone; `reposition` compares nav shapes with it."""
     return structural_cost(children)[Axis.COMPONENTS]

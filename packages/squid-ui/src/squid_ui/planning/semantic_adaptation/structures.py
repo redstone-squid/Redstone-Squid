@@ -80,6 +80,11 @@ from squid_ui.sources import Position
 
 
 def _table(node: Table, path: str, context: _Context) -> list[Node]:
+    """`Table` → under `matrix`/`tabular`, one `Never` code block of space-aligned columns.
+
+    Under `records`, a `Lines` of one `**heading:** cell` paragraph per row, paginated on
+    `node.key`.
+    """
     columns = node.columns.columns
     strategy = _select_strategy(_table_axis(node, path, context.session), context)
     if strategy in {"matrix", "tabular"}:
@@ -108,7 +113,7 @@ def _table(node: Table, path: str, context: _Context) -> list[Node]:
 
 
 def _column_name(index: int) -> str:
-    """Return a zero-based spreadsheet column name."""
+    """The spreadsheet column name for a zero-based index: 0 → `A`, 25 → `Z`, 26 → `AA`."""
     name = ""
     cursor = index + 1
     while cursor:
@@ -122,6 +127,7 @@ def _coordinate(index: int, columns: int) -> str:
 
 
 def _grid_matrix(node: Grid, context: _Context) -> PrimitiveCode:
+    """The `coordinate` board: a `Never` code block, columns lettered, rows numbered, `[ ]` free and `[x]` taken."""
     labels = [f"{'[ ]' if cell.available else '[x]'} {_resolve(cell.label, context)}" for cell in node.cells]
     column_names = [_column_name(index) for index in range(node.columns)]
     widths = [
@@ -160,6 +166,11 @@ def _grid_select(cells: Sequence[tuple[int, GridCell]], node: Grid, key: str, co
 
 
 def _grid(node: Grid, path: str, context: _Context) -> list[Node]:
+    """`Grid` → under `buttons`, one `Row` per grid row with taken cells disabled.
+
+    Under `coordinate`, the matrix code block plus one select of the available cells; under
+    `paged_select`, that select windowed 25 cells at a time with page controls.
+    """
     strategy = _select_strategy(_grid_axis(node, path, context.limits, context.session), context)
     if strategy == "buttons":
         rows: list[Node] = []
@@ -192,6 +203,12 @@ def _grid(node: Grid, path: str, context: _Context) -> list[Node]:
 
 
 def _roster(node: Roster, context: _Context) -> list[Node]:
+    """`Roster` → per slot: a heading with the member count, a `Spill` member list, and a join button.
+
+    The button is session-bound through `on_join` or routed through `routes`, and disabled
+    when the roster is locked or a slot that rejects overflow is full. The waitlist follows
+    as its own heading and list when shown.
+    """
     lowered: list[Node] = []
     for group in node.placement.groups:
         slot = group.slot
@@ -246,6 +263,11 @@ def _roster(node: Roster, context: _Context) -> list[Node]:
 
 
 def _media(node: Media, path: str, context: _Context) -> list[Node]:
+    """`Media` → under `featured`, a one-item `Gallery` with the description repeated as a `Never` footer.
+
+    Under `collection`, one `Gallery` per `gallery_items` items. Raises `LayoutInvariantError`
+    for a spoiler on a classic target, or a collection outside `V2Limits`.
+    """
     strategy = _select_strategy(_media_axis(node, path, context.session), context)
     if not node.items:
         return []
@@ -281,6 +303,11 @@ def _media(node: Media, path: str, context: _Context) -> list[Node]:
 
 
 def _actions(node: ActionControls, path: str, context: _Context) -> list[Node]:
+    """`ActionControls` → its groups under the chosen strategy, then links and routed controls as one button group.
+
+    Ungrouped actions between explicit groups form an implicit `default` group. Records an
+    `actions.<strategy>` adaptation event.
+    """
     strategy = _select_strategy(_action_axis(node, path, context.limits, context.session), context)
     groups: list[tuple[str, tuple[ActionControl, ...], str | None]] = []
     # Links and routed controls carry no binding, so they can never be folded into a select
@@ -338,6 +365,11 @@ def _individual(actions: Sequence[ActionControl], key: str, context: _Context) -
 
 
 def _grouped(actions: Sequence[ActionControl], key: str, label: str | None, path: str, context: _Context) -> list[Node]:
+    """One group's eligible actions as select menus of 25, or one paged picker past 75; the rest stay buttons.
+
+    An action is eligible when `allow_grouping` says so, defaulting to not strong and of
+    neutral or info tone — a destructive or emphasised action is not hidden in a menu.
+    """
     eligible: list[ActionControl] = []
     direct: list[ActionControl] = []
     for action in actions:
@@ -374,6 +406,7 @@ def _paged_picker(actions: Sequence[ActionControl], key: str, label: str | None,
 
 
 def _picker(actions: Sequence[ActionControl], key: str, label: str | None, context: _Context) -> SelectMenu:
+    """A `SelectMenu` that routes each option to its action's `ActionBinding`, keeping the action's guard and mode."""
     routes = {
         action.key: ActionBinding(
             action.key,

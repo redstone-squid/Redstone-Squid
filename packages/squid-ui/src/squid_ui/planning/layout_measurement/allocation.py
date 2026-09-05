@@ -234,7 +234,13 @@ def allocate(
     chrome: Chrome,
     degradation: DegradationRecorder,
 ) -> None:
-    """Allocate one text pool by hard policy and authored priority."""
+    """Allocate one text pool by hard policy and authored priority.
+
+    `Never` units are granted first at full need — a shortfall is a `NEVER_BUDGET` failure —
+    then `Condense` units, then the rest by descending priority, pro rata within a tie with
+    the remainder going to earlier units. A unit its policy drops refunds its grant and the
+    pass reruns without it, so at most `len(units) + 1` passes.
+    """
     active = list(units)
     for _ in range(len(units) + 1):
         remaining = budget
@@ -305,7 +311,13 @@ def allocate_budgeted(
     chrome: Chrome,
     degradation: DegradationRecorder,
 ) -> None:
-    """Allocate transparent budget regions as siblings, then solve inside each grant."""
+    """Allocate `Budget` regions and their unbudgeted siblings as peers, then `allocate` inside each grant.
+
+    Hard floors are held back first — exceeding `budget` is a `BUDGET_FLOOR` failure — then
+    best-effort floors, breached with a `BEST_EFFORT_FLOOR` note; what remains is shared by
+    priority. A region holding one `Paginate` unit whose need exceeds its ceiling is
+    pre-split so its demand is one page, not the whole.
+    """
     claimed: set[int] = set()
     groups: list[_GrantGroup] = []
     for region in reversed(regions):

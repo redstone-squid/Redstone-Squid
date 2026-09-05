@@ -99,6 +99,10 @@ from squid_ui.sources import Position
 
 
 def _form(node: FormTrigger, context: _Context) -> list[Node]:
+    """`FormTrigger` → one `FormButton` that opens the spec, adapted to the target's modal capabilities, as a modal.
+
+    Raises `LayoutInvariantError` when the target has no `forms.modal` capability.
+    """
     if Capability.FORMS_MODAL not in context.capabilities:
         message = "target does not support forms"
         raise LayoutInvariantError(message)
@@ -126,6 +130,7 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
 
 
 def _with_overflow(node: Node, overflow: Overflow) -> Node:
+    """Set `overflow` on every text node under `node`, descending through panels, budgets and breaks only."""
     if isinstance(node, Text | PrimitiveHeading | Footer | PrimitiveCode | Lines):
         return replace(node, overflow=overflow)
     if isinstance(node, Panel):
@@ -136,6 +141,7 @@ def _with_overflow(node: Node, overflow: Overflow) -> Node:
 
 
 def _with_best_effort(node: Node) -> Node:
+    """Mark every `Budget` under `node` best-effort, so its floor may be breached rather than fail the layout."""
     if isinstance(node, Budget):
         return replace(
             node,
@@ -148,6 +154,12 @@ def _with_best_effort(node: Node) -> Node:
 
 
 def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
+    """`Choices` → buttons for a single-select of two to five options, else a `SelectMenu` windowed 25 at a time.
+
+    The window follows the reader's cursor and carries page controls. Raises
+    `LayoutInvariantError` for a multi-select wider than one window: a selection across
+    pages has no single answer.
+    """
     available = tuple(choice for choice in node.choices if choice.available)
     match node.selection:
         case Controlled(value=value):
@@ -200,6 +212,11 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
 
 
 def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
+    """`Entities` → a native `EntitySelect` under `actions.entity`, else its enumerated `choices` as a `Choices`.
+
+    The fallback keeps only previously selected refs that are still enumerated. Raises
+    `LayoutInvariantError` when the target lacks the capability and the node lists no choices.
+    """
     match node.selection:
         case Controlled(value=value):
             previous = tuple(value)
@@ -250,7 +267,10 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
 
 
 def _routed_choices(node: RoutedChoices, path: str, context: _Context) -> list[Node]:
-    """Lower an explicitly stateless picker without inventing mount-owned pagination."""
+    """`RoutedChoices` → one `RoutedSelect` of every available choice; no cursor, so no paging.
+
+    Raises `LayoutInvariantError` when no choice is available.
+    """
     available = tuple(choice for choice in node.choices if choice.available)
     if not available:
         message = f"{path}: RoutedChoices needs at least one available choice"
@@ -280,6 +300,11 @@ def _items(
     context: _Context,
     lower_children: Callable[[Sequence[LayoutNode], str, _Context], list[Node]],
 ) -> list[Node]:
+    """`Items` → under `opened`, the item's heading, lowered children and a back button.
+
+    Under `overview`, a `Never` summary list and a focus `SelectMenu`, windowed 25 items at a
+    time with page controls. `opened` with nothing open opens the first item.
+    """
     opened, _fixed = _item_state(node, context.session)
     strategy = _select_strategy(_items_axis(node, path, context.limits, context.session), context)
     if strategy == "opened" and opened is None and node.items:
@@ -316,6 +341,10 @@ def _items(
 
 
 def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
+    """`Navigation` → under `grouped`, a `SelectMenu` windowed 25 at a time with the current destination defaulted.
+
+    Under `individual`, one button per available destination, the current one primary.
+    """
     available = tuple(destination for destination in node.options if destination.available)
     strategy = _select_strategy(_navigation_axis(node, path, context.limits, context.session), context)
     grouped = strategy == "grouped"
@@ -361,6 +390,7 @@ def _details(
     context: _Context,
     lower_children: Callable[[Sequence[LayoutNode], str, _Context], list[Node]],
 ) -> list[Node]:
+    """`Details` → a summary button that toggles disclosure, followed by the lowered children when open."""
     open_ = disclosure_state(node, context.session)
 
     result: list[Node] = [
@@ -380,6 +410,7 @@ def _details(
 
 
 def _toggle(node: Toggle, context: _Context) -> list[Node]:
+    """`Toggle` → one button labelled `label: state`, the state falling back to `Chrome.on`/`Chrome.off`."""
     on = toggle_state(node, context.session)
 
     state_label = node.on_label if on else node.off_label

@@ -136,7 +136,13 @@ def nominate_decisions(
     session: PresentationState,
     fallbacks: Mapping[str, int] | None = None,
 ) -> SemanticDecisions:
-    """Collect the semantic decisions reachable through the selected fallback branches."""
+    """Collect the semantic decisions reachable through the selected fallback branches.
+
+    Only the selected branch of a `FallbackContent`, the open item of an `Items`, and the
+    disclosed children of a `Details` are walked, so an axis inside an unselected branch is
+    not offered. Raises `LayoutInvariantError` for a node that is neither semantic nor a
+    Discord primitive, or when two axes share a path.
+    """
     axes: list[StrategyAxis] = []
     occurrences: list[FallbackAxis] = []
     selected_rungs = {} if fallbacks is None else fallbacks
@@ -288,6 +294,12 @@ def strategy_axis(
     session: PresentationState,
     active_pagers: frozenset[str] = frozenset(),
 ) -> StrategyAxis:
+    """One strategy axis whose baseline is the session's remembered choice, if still in `available`.
+
+    Each candidate's `transition_distance` is its index gap in `order` from the baseline (or
+    `preferred` without one), so the search prefers not to move a reader's view; strategies
+    in `active_pagers` cost one pager.
+    """
     baseline = session.strategy(key, adapter_id, adapter_version)
     if baseline not in available:
         baseline = None
@@ -305,11 +317,18 @@ def strategy_axis(
 
 
 def individual_fits(controls: int, limits: MessageLimits) -> bool:
+    """Whether `controls` buttons, packed `row_buttons` per row, fit the target's control and row caps."""
     rows = (controls + limits.components.row_buttons - 1) // limits.components.row_buttons
     return limits.fits_controls(controls, rows)
 
 
 def items_axis(node: Items, path: str, limits: MessageLimits, session: PresentationState) -> StrategyAxis:
+    """`overview` (a summary list and focus select) or `opened` (one item's children).
+
+    A controlled or already-recorded open state offers one strategy only. The baseline is cleared when nothing
+    is open and the display is not `OPENED`, so the search is not pulled toward a remembered
+    `opened` view the reader has since left.
+    """
     opened, fixed = item_state(node, session)
     if fixed:
         available = ("opened",) if opened is not None else ("overview",)
@@ -340,6 +359,11 @@ def items_axis(node: Items, path: str, limits: MessageLimits, session: Presentat
 
 
 def navigation_axis(node: Navigation, path: str, limits: MessageLimits, session: PresentationState) -> StrategyAxis:
+    """`individual` buttons when they fit the control caps, and `grouped` (a select) when any destination is available.
+
+    `AUTO` prefers buttons up to five destinations; `grouped` counts as a pager past
+    `select_options` destinations.
+    """
     available = tuple(destination for destination in node.options if destination.available)
     strategies = ["individual"]
     if not individual_fits(len(available), limits):
@@ -368,6 +392,7 @@ def navigation_axis(node: Navigation, path: str, limits: MessageLimits, session:
 
 
 def table_axis(node: Table, path: str, session: PresentationState) -> StrategyAxis:
+    """`AUTO` offers `tabular` (preferred up to four columns) and `records`; an explicit display offers only itself."""
     if node.display is TableDisplay.AUTO:
         preferred = "tabular" if len(node.columns.columns) <= 4 else "records"
         available = ("tabular", "records")
@@ -388,6 +413,11 @@ def table_axis(node: Table, path: str, session: PresentationState) -> StrategyAx
 
 
 def grid_axis(node: Grid, path: str, limits: MessageLimits, session: PresentationState) -> StrategyAxis:
+    """`buttons` when a grid row fits a component row and the cells fit the control caps, then one select strategy.
+
+    `coordinate` (a matrix code block plus one select) up to `select_options` available cells,
+    else `paged_select`. The first available strategy is preferred; `Grid` has no display hint.
+    """
     rows = (len(node.cells) + node.columns - 1) // node.columns
     strategies: list[str] = []
     if node.columns <= limits.components.row_buttons and limits.fits_controls(len(node.cells), rows):
@@ -410,6 +440,7 @@ def grid_axis(node: Grid, path: str, limits: MessageLimits, session: Presentatio
 
 
 def media_axis(node: Media, path: str, session: PresentationState) -> StrategyAxis:
+    """`collection` (galleries of every item) and, when there are items, `featured` (the first item only)."""
     preferred = "featured" if node.display.value == "featured" else "collection"
     return strategy_axis(
         path=path,
@@ -425,6 +456,11 @@ def media_axis(node: Media, path: str, session: PresentationState) -> StrategyAx
 
 
 def action_axis(node: ActionControls, path: str, limits: MessageLimits, session: PresentationState) -> StrategyAxis:
+    """`individual` buttons, `grouped` selects of 25, or `paged` when any group holds more than 75 actions.
+
+    Over 75 (three full select menus) `individual` is withdrawn and `paged` is preferred;
+    otherwise `individual` is withdrawn only when the buttons exceed the control caps.
+    """
     actions = [action for item in node.items for action in contained_actions(item)]
     forced_pager = any(
         len(tuple(contained_actions(item))) > 75 for item in node.items if isinstance(item, ControlGroup)
@@ -456,6 +492,7 @@ def action_axis(node: ActionControls, path: str, limits: MessageLimits, session:
 
 
 def contained_actions(item: object) -> Sequence[ActionControl]:
+    """The session-bound actions in one `ActionControls` item; links and routed controls are not counted."""
     if isinstance(item, ActionControl):
         return (item,)
     if isinstance(item, ControlGroup):

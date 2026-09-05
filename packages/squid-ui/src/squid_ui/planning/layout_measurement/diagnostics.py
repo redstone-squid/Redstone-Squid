@@ -8,7 +8,11 @@ from squid_ui.errors import LayoutError
 
 
 class SolveNoteCode(StrEnum):
-    """Stable identities for diagnostics emitted by the measured solver."""
+    """Stable identities for solver diagnostics; the dotted prefix names the family.
+
+    `clamp.` is Discord's shape enforced on the way in, `degradation.` is content that did not
+    fit, `failure.` is a hard constraint the solver could not meet, `adaptation.` is lossless.
+    """
 
     CLAMP_BUTTON_LABEL = "clamp.button_label"
     CLAMP_SELECT_OPTIONS = "clamp.select_options"
@@ -43,24 +47,24 @@ class SolveNoteCode(StrEnum):
 
 
 class SolveNoteSeverity(Enum):
-    """How a solver note affects feasibility and reporting."""
+    """What a note costs the reader; `measure(strict=True)` accepts only `ADAPTATION`."""
 
     ADAPTATION = "adaptation"
-    """The layout took another shape and lost nothing; `strict=True` accepts this.
-
-    Stepping a ladder to an exact rung is the case that matters: paginating a long region
-    or splitting it across cards shows every word the author wrote, so a caller who asked
-    for no degradation has not been given any.
-    """
+    """The layout took another exact shape — paginated, split across cards — and lost nothing."""
 
     CLAMP = "clamp"
+    """Discord's own shape enforced on the way in (25 options, 3 section texts); happens at any budget."""
+
     DEGRADATION = "degradation"
+    """Content did not fit and something was trimmed, stepped, spilled or dropped."""
+
     FAILURE = "failure"
+    """A `Never` node or a `Budget` floor could not be met; `MeasuredLayout.failures` lists these."""
 
 
 @dataclass(frozen=True, slots=True)
 class SolveNote:
-    """A stable solver diagnostic whose meaning does not depend on message wording."""
+    """One solver diagnostic. Match on `code`; `message` is prose for humans and may change."""
 
     code: SolveNoteCode
     message: str
@@ -80,12 +84,11 @@ def note(
     message: str,
     severity: SolveNoteSeverity = SolveNoteSeverity.DEGRADATION,
 ) -> SolveNote:
-    """Build one solver diagnostic."""
     return SolveNote(code, message, severity)
 
 
 class LayoutOverflowError(LayoutError):
-    """The document cannot fit its hard constraints into Discord's budgets."""
+    """Raised by `measure(strict=True)` when the layout carries a lossy note; `notes` holds them."""
 
     def __init__(self, notes: list[SolveNote]) -> None:
         super().__init__("; ".join(note.message for note in notes))

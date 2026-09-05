@@ -65,19 +65,30 @@ from squid_ui.primitives.nodes import (
 
 @dataclass(slots=True)
 class Builder:
+    """Realizes primitives into `Realized` values and registers every text node as a `TextUnit`.
+
+    Only Discord's own shape is enforced here — button labels, option counts, three section
+    texts, ten gallery items, embed slot lengths — each recorded as a `CLAMP` note. Budget
+    pressure is applied later by `allocate` against `units` and `budgets`.
+    """
+
     limits: MessageLimits = LIMITS
     notes: list[SolveNote] = field(default_factory=list)
     units: list[TextUnit] = field(default_factory=list)
+    """Every text node in realization order; a unit's index is its identity in notes and paths."""
     raw_text_cost: dict[Axis, int] = field(default_factory=dict)
     """Text no overflow policy can shrink, per axis: timestamps and prepared native items."""
     budgets: list[BudgetRegion] = field(default_factory=list)
+    """One region per `Budget` realized, holding the units created inside it; inner regions come first."""
     axis: Axis = Axis.DISPLAY_TEXT
     """The pool text realized right now draws from; target shape moves it, nothing else."""
 
     def charge(self, characters: int) -> None:
+        """Count characters no policy can shrink against the current axis."""
         self.raw_text_cost[self.axis] = self.raw_text_cost.get(self.axis, 0) + characters
 
     def unit(self, node: TextBearing, slot: MeasuredText) -> None:
+        """Register `node` for allocation into `slot`; a node with no text marks the slot dropped instead."""
         made = make_unit(node, slot, len(self.units), self.axis)
         if made is not None:
             self.units.append(made)
@@ -93,7 +104,7 @@ class Builder:
             self.axis = previous
 
     def slot(self, value: CardText | None, cap: int, what: str) -> MeasuredText | None:
-        """Realize one card text slot, clamping it to its own local cap first."""
+        """Realize one card text slot, clamping it to its own local cap first; None when absent or blank."""
         if value is None:
             return None
         node = card_text(value)
@@ -114,6 +125,11 @@ class Builder:
         return slot
 
     def card(self, node: Card) -> MeasuredCard:
+        """Realize one embed, keeping the first `embeds.fields` fields.
+
+        Raises `LayoutInvariantError` when `limits` has no embeds or a kept field has a blank
+        name or value.
+        """
         embeds = self.limits.embeds
         if embeds is None:
             message = "a Card cannot be realized in a message mode that has no embeds"
@@ -229,6 +245,13 @@ class Builder:
         return [self.realize(node) for node in nodes]
 
     def realize(self, node: Node) -> Realized:
+        """Realize one normalized primitive.
+
+        Raises:
+            LayoutInvariantError: an unresolved `Variants`, a `Card` without embed limits, or
+                a node normalization should have lowered (`ControlGroup`, `MediaCollection`).
+            ValueError: a `Boundary` that expansion left in place.
+        """
         match node:
             case Text() | Heading() | Footer() | Code() | Lines():
                 slot = MeasuredText()

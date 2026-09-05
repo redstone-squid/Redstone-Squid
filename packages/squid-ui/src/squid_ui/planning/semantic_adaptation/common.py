@@ -19,6 +19,11 @@ def _remember(key: str, adapter_id: str, version: int, strategy: str, context: _
 
 
 def _select_strategy(axis: StrategyAxis, context: _Context) -> str:
+    """The strategy for `axis`: the search's assignment when it has one, else `choose_strategy`.
+
+    Either way the choice is staged as a session update. Raises `ValueError` when the
+    assignment names a strategy the axis does not offer.
+    """
     selected = context.strategies.get(axis.path)
     if selected is None:
         choice = choose_strategy(
@@ -54,7 +59,11 @@ def _page_items[T](
     *,
     identity: Callable[[T], str],
 ) -> tuple[tuple[T, ...], int, int]:
-    """Window a list of options 25 at a time, following the item the reader was on."""
+    """Window `items` one select menu (`select_options`) at a time, following the item the reader was on.
+
+    Returns the visible window, its page index, and the page count; the cursor is granted and
+    recorded on `context.pages`.
+    """
     per = context.limits.components.select_options
     keys = [identity(item) for item in items]
     anchors: dict[str, int] = {}

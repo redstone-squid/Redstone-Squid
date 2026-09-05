@@ -197,7 +197,18 @@ def lower_semantics(
     strategies: Mapping[str, str] | None = None,
     fallbacks: Mapping[str, int] | None = None,
 ) -> SemanticLowering:
-    """Lower one semantic decision set into the primitives `measure()` will price."""
+    """Lower one semantic decision set into the primitives `measure()` will price.
+
+    `strategies` and `fallbacks` are the search's assignment; an axis they omit is chosen
+    locally. On a target with `layout.embed`, loose prose is folded into implicit cards.
+
+    Raises:
+        LayoutInvariantError: a node that is neither semantic nor a Discord primitive, or a
+            node the target cannot host (spoilers on classic, forms without modals, a
+            multi-select `Choices` wider than one menu).
+        UnsolvableLayoutError: a `Paged` region with no page set that fits its `chars`.
+        ValueError: `strategies` names a strategy an axis does not offer.
+    """
     broker = pages if pages is not None else CursorCoordinator(session, chrome)
     context = _Context(
         limits,
@@ -247,6 +258,17 @@ def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
 
 
 def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Node]:
+    """Lower one builtin node.
+
+    Wrappers (`Truncated`, `Spilled`, `BestEffort`, `Budgeted`, `Unbreakable`, `KeepWithNext`)
+    lower their child and then stamp the policy or group onto the result. Regions become a
+    `Card` on embed targets and a `Panel` otherwise, flattened when already inside one. Prose
+    leaves lower to `Never` text so only an explicit wrapper makes them trimmable; a `List`
+    paginates on its key and `Fields` condenses (or becomes embed fields under
+    `layout.embed_fields`). A `Download` on a classic target records a
+    `download.attachment_only` degradation event. Raises `LayoutInvariantError` for a spoiler
+    on a classic target.
+    """
     match node:
         case Truncated(node=child, keep=keep):
             return [
@@ -524,11 +546,10 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Nod
 
 
 def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
-    """Real embed fields, keeping the name/value split the semantic node already made.
+    """Real embed fields, keeping the name/value split that `_field_entry` flattens away.
 
-    This is the whole reason lowering has to know the target. `_field_entry` flattens a field
-    into one line of text, and a target that decided embed structure downstream of lowering
-    would have nothing left to decide with.
+    A field's fallbacks become its value's `alts` ladder, so the solver steps down authored
+    rungs before trimming mid-string; rungs longer than the value are skipped.
     """
     entries: list[CardField] = []
     for field in fields:
@@ -677,7 +698,7 @@ def _required_card_text(value: CardText, context: _Context) -> Text:
 
 
 def _gallery_item(value: str | GalleryItem) -> GalleryItem:
-    """Return the normalized item guaranteed by Gallery construction."""
+    """Raises `LayoutInvariantError` for a shorthand URL that `Gallery` construction left unnormalized."""
     if isinstance(value, str):
         message = "Gallery left a shorthand URL unnormalized"
         raise LayoutInvariantError(message)

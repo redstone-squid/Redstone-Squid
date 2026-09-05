@@ -16,24 +16,30 @@ type TextBearing = Text | Heading | Footer | Code | Lines
 
 @dataclass(slots=True)
 class TextUnit:
-    """One text-bearing node's mutable allocation state."""
+    """One text-bearing node's allocation state: `allocate` sets `grant`, `_apply` writes `slot`."""
 
     node: TextBearing
     slot: MeasuredText
     index: int
+    """Position in `Builder.units`; the `$.text.{index}` path in notes and degradation effects."""
     axis: Axis
     """Which message-wide text pool this unit draws from."""
     prefix: str
     suffix: str
+    """Exact chrome: heading hashes, the `-# ` footer marker, code fences. Never trimmed."""
     content: str
     ladders: tuple[tuple[str, ...], ...] | None
+    """A `Lines` node's entries, each a ladder from full text to its shortest alternate; None otherwise."""
     ranks: tuple[int, ...]
     """One drop priority per ladder; empty for nodes that are not entry lists."""
     join: str
+    """Separator between `Lines` entries and between spill markers; `\\n` for other nodes."""
     priority: int
     overflow: Overflow
     grant: int = 0
+    """Characters this unit may spend, chrome included."""
     fragments: list[str] | None = None
+    """Pages once a `Paginate` policy split the content; a single fragment means it fit."""
     count_pages: list[str] | None = None
     """Count-based pages, when the node paginates every N entries rather than on overflow."""
 
@@ -43,6 +49,7 @@ class TextUnit:
 
     @property
     def need(self) -> int:
+        """Characters to show the node whole: chrome plus its content, or its widest count page."""
         if self.count_pages is not None:
             return self.chrome_len + max(len(page) for page in self.count_pages)
         return self.chrome_len + len(self.content)
@@ -50,15 +57,25 @@ class TextUnit:
 
 @dataclass(frozen=True, slots=True)
 class BudgetRegion:
+    """The units under one `Budget` node and the reservation `allocate_budgeted` grants them as a block.
+
+    `minimum` is the floor held back before priorities are weighed; `preferred` is the demand;
+    `preferred + stretch` is the ceiling above which the region asks for `preferred` only.
+    """
+
     units: tuple[TextUnit, ...]
     minimum: int
     preferred: int
     stretch: int
     best_effort: bool
+    """A floor the allocator may breach (noted as `BEST_EFFORT_FLOOR`) instead of failing the layout."""
 
     @property
     def axis(self) -> str | None:
-        """The single text pool this region reserves from, or None if it holds no text."""
+        """The single text pool this region reserves from, or None if it holds no text.
+
+        Raises `LayoutInvariantError` when the region's units span more than one pool.
+        """
         axes = {unit.axis for unit in self.units}
         if len(axes) > 1:
             named = ", ".join(sorted(axes))
@@ -72,7 +89,7 @@ def _escape_fences(content: str) -> str:
 
 
 def make_unit(node: TextBearing, slot: MeasuredText, index: int, axis: Axis = Axis.DISPLAY_TEXT) -> TextUnit | None:
-    """Create the allocation unit for one text-bearing primitive."""
+    """The allocation unit for one text-bearing primitive; None, with `slot` marked dropped, when it has no text."""
     prefix, suffix, content, ladders, join = "", "", "", None, "\n"
     ranks: tuple[int, ...] = ()
     match node:
@@ -128,7 +145,11 @@ def split_pages(
     min_fill: int = 0,
     widows: int = 1,
 ) -> list[str]:
-    """Balance ``text`` across the fewest bounded pages, preferring semantic cuts."""
+    """Balance `text` across the fewest pages of at most `limit` characters, cutting at `boundary`.
+
+    A single segment longer than `limit` is hard-split. Raises `ValueError` when `limit` is
+    below one.
+    """
     if limit < 1:
         message = "page limit must be positive"
         raise ValueError(message)
@@ -160,7 +181,7 @@ def split_pages(
 
 
 def trim_keep(text: str, limit: int, keep: str) -> str:
-    """Trim text to a limit while preserving the requested end."""
+    """Trim `text` to `limit` characters, keeping its `"head"` or `"tail"` and marking the cut with `ELLIPSIS`."""
     if len(text) <= limit:
         return text
     if limit <= 1:
@@ -182,7 +203,12 @@ def split_text_node(
     min_fill: int = 0,
     widows: int = 1,
 ) -> tuple[Node, ...] | None:
-    """Losslessly split one text primitive into independently renderable fragments."""
+    """Split one text primitive into fragments of at most `limit` characters, chrome included.
+
+    Each fragment is the same node type with `Never()` overflow, so the solver cannot trim what
+    was already cut to fit; a split `Lines` becomes plain `Text` fragments. Returns None for a
+    node that is not text-bearing or whose chrome alone exceeds `limit`.
+    """
     if not isinstance(node, Text | Heading | Footer | Code | Lines):
         return None
     slot = MeasuredText()

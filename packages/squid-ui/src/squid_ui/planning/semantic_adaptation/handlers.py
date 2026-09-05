@@ -39,6 +39,8 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class PresentForm(GeneratedHandler[PressEvent]):
+    """Opens the adapted `FormSpec` as a modal on press; `spec` is what the reader is shown, not `node.spec`."""
+
     spec: FormSpec
     key: str
     on_submit: SubmitHandler
@@ -59,6 +61,12 @@ class PresentForm(GeneratedHandler[PressEvent]):
 
 @dataclass(frozen=True, slots=True)
 class ChoiceCommit:
+    """Applies a `Choices` selection.
+
+    Controlled fires `on_change` with the diff against `previous`; uncontrolled writes the
+    session and invalidates the view.
+    """
+
     ownership: ChoiceOwnership
     key: str
     previous: tuple[str, ...]
@@ -86,6 +94,8 @@ class ChoiceCommit:
 
 @dataclass(frozen=True, slots=True)
 class ChooseChoice(GeneratedHandler[PressEvent]):
+    """One button of a `Choices` lowered to buttons; commits exactly `key`."""
+
     commit: ChoiceCommit
     key: str
 
@@ -95,6 +105,8 @@ class ChooseChoice(GeneratedHandler[PressEvent]):
 
 @dataclass(frozen=True, slots=True)
 class SelectChoices(GeneratedHandler[SelectionEvent]):
+    """The select menu of a `Choices`; commits the menu's values."""
+
     commit: ChoiceCommit
 
     async def __call__(self, event: SelectionEvent) -> None:
@@ -103,6 +115,8 @@ class SelectChoices(GeneratedHandler[SelectionEvent]):
 
 @dataclass(frozen=True, slots=True)
 class EntityCommit:
+    """`ChoiceCommit` for `Entities`; an uncontrolled selection stores encoded refs in the session."""
+
     ownership: EntityOwnership
     key: str
     previous: tuple[EntityRef, ...]
@@ -130,6 +144,8 @@ class EntityCommit:
 
 @dataclass(frozen=True, slots=True)
 class SelectEntities(GeneratedHandler[EntitySelectionEvent]):
+    """The native `EntitySelect` of an `Entities` node."""
+
     commit: EntityCommit
 
     async def __call__(self, event: EntitySelectionEvent) -> None:
@@ -138,6 +154,11 @@ class SelectEntities(GeneratedHandler[EntitySelectionEvent]):
 
 @dataclass(frozen=True, slots=True)
 class SelectEntityFallback(GeneratedHandler[ChoiceEvent]):
+    """The `Choices` fallback of an `Entities` node on targets without `actions.entity`.
+
+    Maps chosen keys back through `by_key`; a key it does not know is dropped.
+    """
+
     commit: EntityCommit
     by_key: Mapping[str, EntityRef]
 
@@ -147,6 +168,8 @@ class SelectEntityFallback(GeneratedHandler[ChoiceEvent]):
 
 @dataclass(frozen=True, slots=True)
 class ItemCommit:
+    """Applies which `Items` entry is open; `None` closes it."""
+
     ownership: ItemOwnership
     key: str
     session: PresentationState
@@ -163,6 +186,8 @@ class ItemCommit:
 
 @dataclass(frozen=True, slots=True)
 class CloseItem(GeneratedHandler[PressEvent]):
+    """The back button of an opened `Items` entry."""
+
     commit: ItemCommit
 
     async def __call__(self, event: PressEvent) -> None:
@@ -171,6 +196,8 @@ class CloseItem(GeneratedHandler[PressEvent]):
 
 @dataclass(frozen=True, slots=True)
 class FocusItem(GeneratedHandler[SelectionEvent]):
+    """The focus select of an `Items` overview; an empty selection closes."""
+
     commit: ItemCommit
 
     async def __call__(self, event: SelectionEvent) -> None:
@@ -179,6 +206,8 @@ class FocusItem(GeneratedHandler[SelectionEvent]):
 
 @dataclass(frozen=True, slots=True)
 class NavigationCommit:
+    """Applies a `Navigation` destination: controlled fires `on_change`; uncontrolled writes the session."""
+
     ownership: NavOwnership
     key: str
     session: PresentationState
@@ -195,6 +224,8 @@ class NavigationCommit:
 
 @dataclass(frozen=True, slots=True)
 class SelectDestination(GeneratedHandler[SelectionEvent]):
+    """The grouped `Navigation` select; an empty selection is ignored."""
+
     commit: NavigationCommit
 
     async def __call__(self, event: SelectionEvent) -> None:
@@ -204,6 +235,8 @@ class SelectDestination(GeneratedHandler[SelectionEvent]):
 
 @dataclass(frozen=True, slots=True)
 class GoToDestination(GeneratedHandler[PressEvent]):
+    """One button of an individual `Navigation`; commits `key`."""
+
     commit: NavigationCommit
     key: str
 
@@ -213,6 +246,12 @@ class GoToDestination(GeneratedHandler[PressEvent]):
 
 @dataclass(frozen=True, slots=True)
 class ToggleDetails(GeneratedHandler[PressEvent]):
+    """The disclosure button of a `Details`.
+
+    Uncontrolled flips the session's current state, not `open`, so a press on a stale view
+    still toggles from the live value.
+    """
+
     node: Details
     open: bool
     session: PresentationState
@@ -232,6 +271,8 @@ class ToggleDetails(GeneratedHandler[PressEvent]):
 
 @dataclass(frozen=True, slots=True)
 class FlipToggle(GeneratedHandler[PressEvent]):
+    """The button of a `Toggle`; uncontrolled flips the session's current state, not `on`."""
+
     node: Toggle
     on: bool
     session: PresentationState
@@ -249,6 +290,8 @@ class FlipToggle(GeneratedHandler[PressEvent]):
 
 @dataclass(frozen=True, slots=True)
 class ForwardSelection(GeneratedHandler[PressEvent]):
+    """Presents a button press as a one-value `SelectionEvent`, for `Grid.on_pick` and `Roster.on_join`."""
+
     handler: Callable[[SelectionEvent], Awaitable[None]]
     key: str
 
@@ -258,6 +301,8 @@ class ForwardSelection(GeneratedHandler[PressEvent]):
 
 @dataclass(frozen=True, slots=True)
 class RouteSelection(GeneratedHandler[SelectionEvent]):
+    """Dispatches a single-value selection to its `ActionBinding`; multi-value or unknown selections are ignored."""
+
     routes: Mapping[str, ActionBinding]
 
     async def __call__(self, event: SelectionEvent) -> None:

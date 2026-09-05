@@ -229,6 +229,10 @@ class _RegionItem:
 
 
 def _region_items(nodes: Sequence[Node], *, keep_heading: bool) -> list[_RegionItem]:
+    """One breakable item per node, with `Break` groups kept whole and their annotations carried over.
+
+    `keep_heading` glues a leading heading to what follows it, so a page never ends on a title.
+    """
     items: list[_RegionItem] = []
     for node in nodes:
         if isinstance(node, Break):
@@ -249,6 +253,11 @@ def _split_oversized_region_items(
     limits: MessageLimits,
     path: str,
 ) -> list[_RegionItem]:
+    """Split any item wider than one page into `Never` text fragments that each fit.
+
+    Raises `UnsolvableLayoutError` for an oversized item that is unbreakable, holds more than
+    one node, or is not text.
+    """
     result: list[_RegionItem] = []
     for item in items:
         cost = measure_nodes(item.nodes, limits=limits)
@@ -283,6 +292,10 @@ def _break_region(
     limits: MessageLimits,
     path: str,
 ) -> list[tuple[_RegionItem, ...]]:
+    """Cut `items` into balanced pages within `chars` and the component budget, honouring `keep_with_next`.
+
+    Raises `UnsolvableLayoutError` when `balanced_breaks` finds no feasible cut set.
+    """
     if not items:
         return [()]
     costs = [measure_nodes(item.nodes, limits=limits) for item in items]
@@ -323,6 +336,13 @@ def _paged_region(
     preferred: int,
     stretch: int,
 ) -> list[Node]:
+    """Lower a `Paged` region to the cursor's current page inside a `Budget`, plus its page controls.
+
+    Pages are balanced at lowering time from preferred costs, so the page count is a plain
+    cursor extent rather than a solver output. When the region lowers to one `Panel`, the
+    budget and controls go inside it. More than one page records a `pagination.region`
+    adaptation event. Raises `UnsolvableLayoutError` when no page set fits `node.chars`.
+    """
     lowered = lower_node(node.node, path, context)
     shell: Panel | None = lowered[0] if len(lowered) == 1 and isinstance(lowered[0], Panel) else None
     children = shell.children if shell is not None else tuple(lowered)

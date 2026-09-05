@@ -66,22 +66,22 @@ class MeasuredLayout:
     """One concrete primitive layout, measured against one target's budgets."""
 
     children: list[Realized]
+    """The pruned tree with every text slot allocated; the dialect converts it to a scene."""
     notes: list[SolveNote]
+    """Every clamp, degradation, adaptation and failure, in the order recorded."""
     pagers: tuple[Pager, ...] = ()
+    """One per keyed `Paginate` node that split, in document order; `pager` is the first."""
     cost: ResourceCost = EMPTY_COST
     """Everything this layout spends, per named axis, including every pager's controls.
 
-    One cost rather than a components scalar beside a text scalar: a target with two text
-    pools has no single number to report, and a caller asking "does this fit?" has to ask
-    it of every axis the target budgets or it is not asking the question at all.
+    Per axis rather than one scalar: a target with two text pools has no single number, and
+    `fits` has to ask every axis the target budgets.
     """
     overflowed: bool = False
-    """Whether anything had to give to fit, as opposed to being clamped on the way in.
+    """Whether content degraded, spilled, dropped or stepped a ladder to fit.
 
-    Not every note is a defeat. Trimming a select's options to 25 or a section's texts to
-    3 is Discord's shape being enforced and happens whatever the budget; degrading,
-    spilling, dropping or stepping a ladder means the content did not fit. A caller
-    deciding whether more will fit — the root packer — needs to tell those apart.
+    Clamps to Discord's own shape — 25 select options, 3 section texts — do not count; they
+    happen at any budget. The root packer uses this to decide whether more will fit.
     """
     nav: PlannedNav | None = None
     chrome: Chrome = DEFAULT_CHROME
@@ -100,12 +100,10 @@ class MeasuredLayout:
     def reposition(self, positions: Mapping[str, Position]) -> None:
         """Show a different position in each named pager without re-fitting.
 
-        Which page is showing is a display decision, not a layout one: every fragment
-        already fits the grant its pager was allocated, the footer reservation was
-        measured at its widest, and a nav factory may not vary its shape by page. So a
-        caller that only learns where the reader belongs *after* fitting — which is
-        anyone reconciling against a stored cursor, since the page count is an output —
-        can move the page here instead of measuring again.
+        Safe because every fragment already fits its pager's grant, the footer was reserved
+        at its widest, and a nav factory may not vary its shape by page. Pagers absent from
+        `positions` keep their page. Raises `LayoutInvariantError` when the nav factory
+        returns a different number or shape of components for the new page.
         """
         for pager in self.pagers:
             position = positions.get(pager.key)
@@ -136,10 +134,12 @@ class MeasuredLayout:
 
     @property
     def page(self) -> int:
+        """The first pager's current page; 0 without one."""
         return self.pager.page if self.pager is not None else 0
 
     @property
     def pages(self) -> int:
+        """The first pager's page count; 1 without one."""
         return self.pager.pages if self.pager is not None else 1
 
 
@@ -150,7 +150,7 @@ class MeasuredLayout:
 
 
 def _count_pages(unit: TextUnit, per: int) -> list[str]:
-    """Group a Lines node's entries into pages of ``per`` entries."""
+    """Group a `Lines` node's entries into pages of `per` entries, at their full (top-rung) text."""
     entries = [ladder[0] for ladder in unit.ladders or ()]
     pages = [unit.join.join(entries[start : start + per]) for start in range(0, len(entries), per)]
     return pages or [unit.content]
@@ -183,10 +183,16 @@ def measure(
 ) -> MeasuredLayout:
     """Fit one concrete primitive layout into its target budgets.
 
-    Exactly one deterministic pass over one already-decided tree: no alternatives are
-    weighed here. Choosing between them — semantic strategies, semantic fallbacks, and
-    primitive `Variants` — belongs to the planner's search, which calls this per candidate.
-    An unresolved `Variants` reaching here is a planner bug, not a layout to fit.
+    One deterministic pass over one already-decided tree: semantic strategies, fallbacks and
+    `Variants` are chosen by the planner's search, which calls this per candidate. `reserved`
+    is subtracted from each text axis before allocation; `position` opens the named pagers
+    (or the first one, when a bare `Position`) on that page.
+
+    Raises:
+        LayoutOverflowError: `strict` and any note is lossy (see `lossy_notes`).
+        LayoutInvariantError: an unresolved `Variants`, a `Card` under limits with no embeds,
+            a `Budget` spanning two text pools, or a nav factory that changes shape by page.
+        ValueError: two `Paginate` policies share a key, or an unexpanded `Boundary`.
     """
     chrome = localize_chrome(chrome, localization)
     measured = _measure_once(
@@ -207,6 +213,11 @@ def _configure_paginators(
     builder: Builder,
     chrome: Chrome,
 ) -> tuple[list[TextUnit], dict[int, str], dict[int, Callable[[int, int], str]]]:
+    """The paginating units with their keys (`page{index}` when unkeyed) and localized footers.
+
+    A `per` policy on anything but `Lines` falls back to overflow paging with a
+    `PAGINATE_PER_FALLBACK` note. Raises `ValueError` when two units share a key.
+    """
     units = [unit for unit in builder.units if isinstance(unit.overflow, Paginate)]
     keys: dict[int, str] = {}
     footers: dict[int, Callable[[int, int], str]] = {}
@@ -372,7 +383,7 @@ def _measure_once(
         if placement is None:
             placement = (children, len(children))
             children.extend(additions)
-        # The nav follows the footer slot, and `repage` replaces exactly that span.
+        # The nav follows the footer slot, and `reposition` replaces exactly that span.
         pager.nav_host, pager.nav_at, pager.nav_count = placement[0], placement[1] + 1, len(additions) - 1
         pagers.append(pager)
 
