@@ -373,7 +373,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
         """Claim due keys, perform storage I/O outside transactions, and token-fence acknowledgments."""
         return await self._publications.cleanup(delete, limit=limit)
 
-
     @override
     async def fail(
         self,
