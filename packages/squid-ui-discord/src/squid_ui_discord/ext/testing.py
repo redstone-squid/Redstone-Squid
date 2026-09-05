@@ -1,4 +1,9 @@
-"""Facade-level staging and command invocation without a Discord gateway."""
+"""Facade-level staging and command invocation without a Discord gateway.
+
+`stage` presents a component through a throwaway `commands.Bot` and yields a `StagedUI` to
+press and read; `invoke` runs an `sd.command` callback against a harness source. Built on
+`squid_ui_discord.testing`, which stands in for the Discord boundary one level down.
+"""
 
 import hashlib
 import inspect
@@ -29,11 +34,12 @@ from squid_ui_discord.testing import (
 
 @dataclass(frozen=True, slots=True)
 class StagedControl:
-    """One currently rendered control selected by its semantic key."""
+    """One rendered control, found by the custom id its semantic key lowers to."""
 
     key: str
     custom_id: str
     payload: Mapping[str, Any]
+    """The serialized component dict Discord would receive."""
 
     @property
     def label(self) -> str | None:
@@ -42,7 +48,7 @@ class StagedControl:
 
 
 class StagedForm:
-    """A generated Discord modal whose authority ends after ``submit()``."""
+    """A generated Discord modal; `submit()` may run once."""
 
     def __init__(self, modal: discord.ui.Modal, *, client: discord.Client, user_id: int) -> None:
         self.modal = modal
@@ -51,7 +57,11 @@ class StagedForm:
         self._submitted = False
 
     async def submit(self, values: Mapping[str, object]) -> InteractionHarness:
-        """Populate native modal controls and invoke their real submission callback once."""
+        """Fill the modal's controls by custom id and run its real `on_submit` once.
+
+        Raises `RuntimeError` on a second submit and `KeyError` when `values` names a field
+        the modal does not have.
+        """
         if self._submitted:
             message = "this staged form was already submitted"
             raise RuntimeError(message)
@@ -114,7 +124,7 @@ class StagedUI[ComponentT: Component[ComponentsV2Target]]:
         return payload_texts(self._view())
 
     def control(self, key: str) -> StagedControl:
-        """Select one currently rendered control by stable semantic key."""
+        """The rendered control for semantic `key`. Raises `KeyError` when none is rendered."""
         expected = _custom_id(self.root, key)
         payloads = iter_component_payloads(self._view().to_components())
         payload = next((candidate for candidate in payloads if candidate.get("custom_id") == expected), None)
@@ -125,7 +135,10 @@ class StagedUI[ComponentT: Component[ComponentsV2Target]]:
         return StagedControl(key, expected, payload)
 
     async def press(self, key: str, *, user_id: int | None = None) -> InteractionHarness:
-        """Dispatch one button or form trigger through ``MessageRoot.dispatch``."""
+        """Dispatch a button press through `MessageRoot.dispatch` at the current generation.
+
+        Raises `KeyError` when `key` is not rendered and `TypeError` when it is not a button.
+        """
         control = self.control(key)
         if control.payload.get("type") != 2:
             message = f"control {key!r} is not a button"
@@ -145,7 +158,10 @@ class StagedUI[ComponentT: Component[ComponentsV2Target]]:
         *,
         user_id: int | None = None,
     ) -> InteractionHarness:
-        """Dispatch string choices through ``MessageRoot.dispatch``."""
+        """Dispatch a select's chosen `values` through `MessageRoot.dispatch` at the current generation.
+
+        Raises `KeyError` when `key` is not rendered and `TypeError` when it is not a select.
+        """
         control = self.control(key)
         if control.payload.get("type") not in {3, 5, 6, 7, 8}:
             message = f"control {key!r} is not a select"
@@ -160,7 +176,7 @@ class StagedUI[ComponentT: Component[ComponentsV2Target]]:
         return interaction
 
     async def press_for_form(self, key: str, *, user_id: int | None = None) -> StagedForm:
-        """Press a semantic form trigger and return the generated native modal."""
+        """Press `key` and return the one modal it opened; fails the test when it opened none or several."""
         actor = self._user_id if user_id is None else user_id
         interaction = await self.press(key, user_id=actor)
         records = interaction.modals
@@ -217,7 +233,12 @@ async def stage[OwnerT, ComponentT: Component[ComponentsV2Target]](
     defaults: ResponseSpec | None = None,
     **overrides: Unpack[ResponseOverrides],
 ) -> AsyncIterator[StagedUI[ComponentT]]:
-    """Present a component through an isolated owner-scoped facade and run its runtime."""
+    """Present `content` through a fresh `commands.Bot` and facade scope, running its runtime for the block.
+
+    `config` defaults to the one behind `owner.ui` or `owner.app_ui`, else `DiscordUIConfig()`.
+    Leaving the block cancels the runtime and closes both it and the bot. Raises `TypeError`
+    when the response is not `Presented`, and re-raises anything the block raised.
+    """
     client = commands.Bot(command_prefix="!", intents=discord.Intents.none())
     runtime = install(client, _owner_config(owner, config))
     client.ui = runtime  # type: ignore[attr-defined]
@@ -254,7 +275,12 @@ async def invoke(
     source: Literal["interaction", "context"] = "interaction",
     **kwargs: object,
 ) -> InteractionHarness | ContextHarness:
-    """Invoke a real outward Squid command wrapper with a gateway-free native source."""
+    """Call `command`'s callback with a harness in place of the interaction or context.
+
+    The harness is passed after `owner` when one is given, first otherwise; the client comes
+    from `client`, else `owner.ui`/`owner.app_ui`, else `owner` itself. Raises `TypeError`
+    when `command` is not callable or not async, or when no client can be found.
+    """
     callback = getattr(command, "callback", command)
     if not callable(callback):
         message = "invoke() needs a command or async command callback"

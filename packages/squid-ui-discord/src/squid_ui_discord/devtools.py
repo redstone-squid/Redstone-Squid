@@ -44,7 +44,7 @@ from squid_ui_discord.routing import routers
 from squid_ui_discord.sessions import SessionManager
 
 if TYPE_CHECKING:
-    # Annotation only; see the note in operations.py about the `durable` extra.
+    # Annotation only; see the note in devtools_runtime.py about the `durable` extra.
     from squid_ui_discord.durability import RecoveryReport
 
 
@@ -54,12 +54,17 @@ SESSION_SECONDS = 300
 
 
 async def _owner_only[BotT: commands.Bot](ctx: Context[BotT]) -> bool:
-    """Use discord.py's configured owner as the safe default authorization policy."""
+    """The default `DevToolsCheck`: `Bot.is_owner`."""
     return await ctx.bot.is_owner(ctx.author)
 
 
 class DevTools[BotT: commands.Bot](commands.Cog):
-    """The unified ``!dev ui`` operational control plane."""
+    """The `!dev ui` command group over a `DevToolsRuntime`.
+
+    `check` gates every command through `cog_check`, owner-only by default. Builds a runtime
+    from `manager`/`scheduler`/`bus`/`profiler` unless `runtime` is given, and owns an
+    `ActionLedger` of 200 events, closed at `cog_unload`, unless `action_ledger` is given.
+    """
 
     def __init__(
         self,

@@ -34,7 +34,7 @@ ALLOWED_SCHEMES = frozenset({"http", "https", "attachment"})
 
 
 class ViolationCode(StrEnum):
-    """What a violation is, independent of how it is worded."""
+    """The limit a `Violation` breaks; `conform` picks its repair by this, not by the message."""
 
     TOTAL_COMPONENTS = "total_components"
     TOTAL_TEXT = "total_text"
@@ -63,8 +63,11 @@ class Violation:
     code: ViolationCode
     message: str
     repairable: bool
+    """Whether `conform` can clamp it. Counts, custom ids and URLs cannot be clamped."""
     path: Path = ()
+    """Child indices from the view root; empty for a message-wide budget."""
     item: object | None = None
+    """The discord.py item to clamp; `None` for a message-wide budget."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,7 +120,7 @@ class MessageReservation:
 
     @property
     def cost(self) -> ResourceCost:
-        """What planning must withhold. The reservation *is* the smaller target."""
+        """`reserved`: the figure a fragment subtracts from its target. `usage` is for reporting only."""
         return self.reserved
 
     @property
@@ -184,10 +187,9 @@ def measure(
 ) -> MessageReservation:
     """Measure what a host message or view already spends, mutating and repairing nothing.
 
-    One function over three shapes because a caller reserving room does not care which one
-    it holds — it cares what is left. What it holds decides the axes, not the API, and it
-    decides the limits too: a V2 host is measured against the V2 table and a classic one
-    against the classic table, with nothing for a caller to get wrong.
+    The host's shape picks the axes and the limit table: a `MessagePayload` by its mode, a
+    `LayoutView` against the V2 table, a bare `View` as a classic message with no content
+    or embeds. Raises `TypeError` for anything else.
     """
     if isinstance(host, MessagePayload):
         if host.mode is MessageMode.CLASSIC:
@@ -209,9 +211,9 @@ def effective_rows(view: discord.ui.View) -> tuple[int, ...]:
     No public API exposes this: `Item.row` is what the author *asked* for and is `None`
     whenever they did not ask, while `_ViewWeights` decides where the item really lands.
     Contributing after a host's controls needs the real answer, so this reads the private
-    state and immediately cross-checks it against the serialized payload — if the number of
-    distinct assigned rows ever stops matching the number of action rows discord.py emits,
-    that assumption has broken and this raises instead of placing items wrongly.
+    `_rendered_row` and cross-checks it against the serialized payload. Raises
+    `LimitViolationError` when a child has no assigned row or the count of distinct rows
+    differs from the action rows discord.py emits — the private state has drifted.
     """
     assigned = tuple(getattr(item, "_rendered_row", None) for item in view.children)
     if any(row is None for row in assigned):
@@ -233,7 +235,11 @@ def measure_classic(
     attachments: int = 0,
     limits: ClassicLimits = CLASSIC_LIMITS,
 ) -> MessageReservation:
-    """Measure a complete classic host message across the axes a classic target budgets."""
+    """Measure a classic host message across the axes a classic target budgets.
+
+    Raises `TypeError` when `host.mode` is not `CLASSIC`, and `LimitViolationError` from
+    `effective_rows` when discord.py's row state cannot be read.
+    """
     if host.mode is not MessageMode.CLASSIC:
         message = f"measure_classic expects a classic payload, not {host.mode.value}"
         raise TypeError(message)

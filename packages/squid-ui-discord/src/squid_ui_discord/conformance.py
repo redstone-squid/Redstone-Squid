@@ -42,15 +42,13 @@ def trim(text: str, limit: int) -> str:
 
 
 def conform(view: discord.ui.LayoutView, *, strict: bool = False, limits: V2Limits = LIMITS) -> list[str]:
-    """Clamp ``view`` in place to Discord's limits and describe every clamp applied.
+    """Clamp `view` in place to Discord's limits and describe every violation found.
 
-    Args:
-        view: The built view; mutated when anything exceeds a limit.
-        strict: Raise :class:`LimitViolationError` after clamping instead of returning quietly.
-        limits: The limit table to enforce.
+    Returns one line per violation, empty when the view already fit. Unrepairable ones —
+    counts, custom ids, URLs — are reported but left as they are.
 
-    Returns:
-        One human-readable description per intervention; empty when the view already fit.
+    Raises:
+        LimitViolationError: With `strict`, after clamping, when anything was found.
     """
     report = audit(view, limits=limits)
     for violation in report.violations:
@@ -96,7 +94,10 @@ def _repair(violation: Violation, view: discord.ui.LayoutView, limits: V2Limits)
 def conform_modal(
     modal: discord.ui.Modal, *, strict: bool = False, limits: ComponentLimits = COMPONENT_LIMITS
 ) -> list[str]:
-    """Clamp ``modal`` in place to Discord's limits; same contract as :func:`conform`."""
+    """Clamp `modal` in place to Discord's limits; same contract as `conform`.
+
+    Raises `LimitViolationError` with `strict`, after clamping, when anything was found.
+    """
     interventions: list[str] = []
 
     if len(modal.title) > limits.modal_title:

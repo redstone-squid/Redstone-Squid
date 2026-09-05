@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 
 class DevToolsAction(StrEnum):
-    """An operation exposed by the development control plane."""
+    """One `DevToolsRuntime` action, as `DevToolsPolicy` enables and gates it."""
 
     REFRESH_MOUNT = "refresh_mount"
     CLOSE_SESSION = "close_session"
@@ -61,34 +61,39 @@ _DEFAULT_CONFIRMATIONS = frozenset(
 
 @dataclass(frozen=True, slots=True)
 class DevToolsPolicy:
-    """Capabilities and confirmation rules for operational actions."""
+    """Which actions a `DevToolsRuntime` runs, and which need `confirmed=True`.
+
+    By default everything but `RECOVER_PERSISTENCE` and `PURGE_PERSISTENCE` is enabled, and
+    closing a session, recovering and purging need confirmation.
+    """
 
     enabled: frozenset[DevToolsAction] = _DEFAULT_ACTIONS
     confirmations: frozenset[DevToolsAction] = _DEFAULT_CONFIRMATIONS
 
     def permits(self, action: DevToolsAction) -> bool:
-        """Whether ``action`` is enabled for this runtime."""
         return action in self.enabled
 
     def requires_confirmation(self, action: DevToolsAction) -> bool:
-        """Whether the caller must explicitly confirm ``action``."""
         return action in self.confirmations
 
 
 @dataclass(frozen=True, slots=True)
 class SessionInspection:
-    """A stable, read-only description of one logical session."""
+    """One live `Session`, flattened to JSON-safe values for the dashboard and export."""
 
     id: str
     key: str
+    """`repr` of the session key, which need not be a string."""
     actor_id: int | None
     durable: bool
     local: bool
     opened_at: datetime
     participants: tuple[int, ...]
     message_roots: tuple[str, ...]
+    """Ids of the message roots the session holds."""
     members: tuple[int, ...] = ()
     capacity: int | None = None
+    """`None` when membership is unbounded; `remaining_capacity` is `None` with it."""
     remaining_capacity: int | None = None
     quota: int | None = None
     domain: str | None = None
@@ -101,13 +106,16 @@ class MessageRootInspection:
     snapshot: MessageRootSnapshot
     middleware: tuple[str, ...]
     observed: tuple[str, ...]
+    """Addresses the last render read, as `Topic` text or `module.Class.field` for a cell."""
     followed: tuple[str, ...]
+    """Addresses the root is subscribed to, in the same form as `observed`."""
     histories: tuple[HistorySnapshot, ...]
+    """Every history stack declared by any component in the tree, without invoking inverses."""
 
 
 @dataclass(frozen=True, slots=True)
 class DurableRecordInspection:
-    """Metadata for one persisted durable session record."""
+    """Sizes and identity of one persisted durable record, read without claiming it."""
 
     key: str
     scope: str
@@ -117,7 +125,11 @@ class DurableRecordInspection:
 
 @dataclass(frozen=True, slots=True)
 class OperationalSnapshot:
-    """The bounded process-wide view rendered by the devtools dashboard."""
+    """Everything `DevToolsRuntime.snapshot()` reads; `!dev ui export` serializes it whole.
+
+    `scheduler`, `topics` and `durable` are `None` when that runtime is not configured or,
+    for `topics`, when the bus is not a `SnapshotableBus`.
+    """
 
     sessions: tuple[SessionInspection, ...]
     message_roots: tuple[MessageRootSnapshot, ...]
@@ -129,17 +141,18 @@ class OperationalSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class DevToolsOperation:
-    """The result sent to an optional operational audit hook."""
+    """What `DevToolsRuntime.audit` receives: one per action run, refused, or missing confirmation."""
 
     action: DevToolsAction
     target: str | None
+    """The message root id, session id, or comma-joined record keys; `None` for runtime-wide actions."""
     success: bool
     detail: str
 
 
 @dataclass(frozen=True, slots=True)
 class OperationResult:
-    """A user-facing result for one operational action."""
+    """A completed action; `detail` is the sentence the command shows the caller."""
 
     action: DevToolsAction
     target: str | None
@@ -147,23 +160,23 @@ class OperationResult:
 
 
 class DevToolsError(SquidUiError, RuntimeError):
-    """Base error for refused or unavailable operational actions."""
+    """Base of every refusal a `DevToolsRuntime` action raises."""
 
 
 class ActionDisabled(DevToolsError):
-    """The configured policy does not permit an action."""
+    """`DevToolsPolicy.enabled` does not contain the action."""
 
 
 class ConfirmationRequired(DevToolsError):
-    """The caller must explicitly confirm an action before it can run."""
+    """The action is in `DevToolsPolicy.confirmations` and the caller passed `confirmed=False`."""
 
 
 class TargetNotFound(DevToolsError):
-    """A requested message root, session, or durable record does not exist."""
+    """No live message root or session has the given id."""
 
 
 class RuntimeUnavailable(DevToolsError):
-    """An optional runtime required by an action was not supplied."""
+    """The action needs `sessions` or `durable`, and the runtime was built without it."""
 
 
 AuditHook = Callable[[DevToolsOperation], None]
@@ -178,7 +191,9 @@ class SnapshotableBus(Protocol):
     `isinstance` rather than a `getattr` and a cast at each call site.
     """
 
-    def snapshot(self) -> BusSnapshot: ...
+    def snapshot(self) -> BusSnapshot:
+        """Queue depth, in-flight count and per-topic subscriber counts at this instant."""
+        ...
 
 
 def _bus_snapshot(bus: TopicBus) -> BusSnapshot | None:
@@ -187,7 +202,14 @@ def _bus_snapshot(bus: TopicBus) -> BusSnapshot | None:
 
 
 class DevToolsRuntime:
-    """Coordinate diagnostics and bounded operational actions for one process."""
+    """Diagnostics and policy-gated actions over one process's message roots and sessions.
+
+    `bus` defaults to `scheduler.bus`; `profiler` to the scheduler's, then the bus's, then a
+    `NoOpProfiler`. Every action first consults `policy` and raises `ActionDisabled` when it
+    is not enabled or `ConfirmationRequired` when it needs `confirmed=True`; both refusals
+    reach `audit` before raising. Actions on `durable` raise `RuntimeUnavailable` when none
+    was supplied.
+    """
 
     def __init__(
         self,
@@ -230,7 +252,7 @@ class DevToolsRuntime:
         )
 
     async def records(self) -> tuple[DurableRecordInspection, ...]:
-        """List persisted durable records without claiming or changing them."""
+        """List persisted durable records without claiming or changing them. Raises `RuntimeUnavailable`."""
         runtime = self._require_durable()
         return tuple(
             DurableRecordInspection(record.key, record.scope, len(record.snapshot_payload), len(record.record_payload))
@@ -238,7 +260,10 @@ class DevToolsRuntime:
         )
 
     def inspect_root(self, message_root_id: str) -> MessageRootInspection:
-        """Inspect a live message root and its component-owned history stacks."""
+        """Inspect a live message root and its component-owned history stacks.
+
+        Not policy-gated. Raises `TargetNotFound` when no live root has the id.
+        """
         message_root = find(message_root_id)
         if message_root is None:
             message = f"no live message root {message_root_id!r}"
@@ -257,7 +282,7 @@ class DevToolsRuntime:
         )
 
     async def refresh_root(self, message_root_id: str) -> OperationResult:
-        """Render and deliver one message root immediately."""
+        """Render and deliver one message root immediately. Raises `TargetNotFound`."""
         self._authorize(DevToolsAction.REFRESH_MOUNT, message_root_id, confirmed=True)
         message_root = find(message_root_id)
         if message_root is None:
@@ -267,7 +292,11 @@ class DevToolsRuntime:
         return self._success(DevToolsAction.REFRESH_MOUNT, message_root_id, "message root refreshed")
 
     async def close_session(self, session_id: str, *, confirmed: bool = False) -> OperationResult:
-        """Finish one logical session through its owning registry."""
+        """Finish one logical session through `sessions`.
+
+        Raises `RuntimeUnavailable` without a session registry and `TargetNotFound` when no
+        live session has the id.
+        """
         self._authorize(DevToolsAction.CLOSE_SESSION, session_id, confirmed=confirmed)
         if self.sessions is None:
             message = "no session registry is configured"
@@ -280,7 +309,11 @@ class DevToolsRuntime:
         return self._success(DevToolsAction.CLOSE_SESSION, session_id, "session closed")
 
     async def wait_idle(self) -> OperationResult:
-        """Wait for all configured refresh and topic queues to reach a stable idle point."""
+        """Return once the bus and scheduler both report empty queues across two consecutive checks.
+
+        The second check runs after one loop tick, so work the first drain enqueued is seen.
+        Never times out.
+        """
         self._authorize(DevToolsAction.WAIT_IDLE, None, confirmed=True)
         while True:
             await self._wait_bus_idle()
@@ -317,14 +350,14 @@ class DevToolsRuntime:
         return True
 
     async def flush_persistence(self) -> OperationResult:
-        """Checkpoint pending durable sessions without resetting application state."""
+        """Checkpoint dirty durable sessions through `durable.flush()`. Raises `RuntimeUnavailable`."""
         self._authorize(DevToolsAction.FLUSH_PERSISTENCE, None, confirmed=True)
         runtime = self._require_durable()
         await runtime.flush()
         return self._success(DevToolsAction.FLUSH_PERSISTENCE, None, "durable checkpoints flushed")
 
     async def recover_persistence(self, *, confirmed: bool = False) -> OperationResult:
-        """Run a supervised durable recovery sweep."""
+        """Run `durable.recover()`; the result counts restored sessions. Raises `RuntimeUnavailable`."""
         self._authorize(DevToolsAction.RECOVER_PERSISTENCE, None, confirmed=confirmed)
         runtime = self._require_durable()
         report = await runtime.recover()
@@ -332,7 +365,7 @@ class DevToolsRuntime:
         return self._success(DevToolsAction.RECOVER_PERSISTENCE, None, f"recovery completed; restored={restored}")
 
     def clear_profile(self) -> OperationResult:
-        """Clear bounded profiler diagnostics."""
+        """`profiler.clear()`: drop retained traces, aggregates and health counters."""
         self._authorize(DevToolsAction.CLEAR_PROFILE, None, confirmed=True)
         self.profiler.clear()
         return self._success(DevToolsAction.CLEAR_PROFILE, None, "profiler diagnostics cleared")
@@ -340,7 +373,12 @@ class DevToolsRuntime:
     async def purge_persistence(
         self, record_keys: Sequence[str], *, confirmed: bool = False
     ) -> tuple[PurgeResult, ...]:
-        """Purge explicitly named inactive durable records through fenced claims."""
+        """Delete the named durable records through `durable.purge()`.
+
+        A key that is active, missing, or claimed elsewhere comes back undeleted with its
+        reason rather than raising; the audit entry succeeds only when every key was deleted.
+        Raises `RuntimeUnavailable`.
+        """
         target = ",".join(record_keys)
         self._authorize(DevToolsAction.PURGE_PERSISTENCE, target, confirmed=confirmed)
         runtime = self._require_durable()

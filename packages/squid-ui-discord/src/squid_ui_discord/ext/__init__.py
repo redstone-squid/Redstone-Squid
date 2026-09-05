@@ -1,4 +1,4 @@
-"""Transitional re-exports; everything here now lives at the package top level."""
+"""Re-exports of names `squid_ui_discord` also exports, plus `ext.testing`, the facade-level test harness."""
 
 from squid_ui_discord.cog import Cog
 from squid_ui_discord.commands import autocomplete, command, context_menu

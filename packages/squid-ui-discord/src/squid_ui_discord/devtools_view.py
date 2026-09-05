@@ -1,9 +1,7 @@
-"""The `/dev ui` inspector: every live message root, and why one of them is odd.
+"""The `!dev ui` inspectors: the message roots this process holds, and one of them opened.
 
-squid-ui has excellent *planning* diagnostics — reports, fingerprints, plan metrics —
-and every one of them describes a render that already happened. Nothing answered "show me
-the UI sessions this process is holding right now". `squid_ui_discord.message_roots()` is that list, and
-this component is the reading of it.
+Planning reports, fingerprints and metrics each describe a render that already happened;
+`squid_ui_discord.message_roots()` is the live list, and these components render it.
 
 Deliberately untranslated, unlike the rest of `squid.bot`: it is owner-only, and most of what
 it prints is Python identifiers, state field names and planner event codes, which no
@@ -25,7 +23,7 @@ from squid_ui.runtime.topics import BusSnapshot
 from squid_ui_discord.devtools_runtime import DevToolsRuntime
 
 if TYPE_CHECKING:
-    # Annotations only; see the note in operations.py about the `durable` extra.
+    # Annotations only; see the note in devtools_runtime.py about the `durable` extra.
     from squid_ui_discord.durability import DurableRuntimeSnapshot, RecoveryReport
 
 
@@ -37,11 +35,10 @@ _SELECT_LIMIT = 25
 
 
 class MessageRootInspector(sl.Component):
-    """The message roots, and one of them opened.
+    """The message root list, or the one `focus` names opened.
 
-    Reads `squid_ui_discord.message_roots()` on every render rather than holding a list, so a panel left
-    open keeps telling the truth: sessions that finished while it was open are simply gone
-    from the next render.
+    Reads `squid_ui_discord.message_roots()` on every render rather than holding a list, so
+    roots that finished while the panel was open are gone from the next render.
     """
 
     focus: str | None = sl.state(None)
@@ -212,7 +209,11 @@ class MessageRootInspector(sl.Component):
 
 
 class OperationalInspector(sl.Component):
-    """The process-wide operational dashboard for the development owner."""
+    """The `!dev ui` dashboard over `DevToolsRuntime.snapshot()`.
+
+    `section` picks the page: `overview`, `roots`, `sessions`, `queues`, `profile` or
+    `persistence`. Closing a session from the sessions page needs a second press to confirm.
+    """
 
     section: str = sl.state("overview")
     message_root_id: str | None = sl.state(None)
@@ -479,7 +480,7 @@ class OperationalInspector(sl.Component):
 
 
 def scene_attachment(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> sl.document.Asset | None:
-    """The message root's committed scene as the protocol JSON, for reading outside Discord."""
+    """The committed scene as protocol JSON, or `None` before the first commit."""
     if snapshot.scene is None:
         return None
     return sl.document.Asset(
@@ -709,5 +710,5 @@ def _members(session: squid_ui_discord.devtools_runtime.SessionInspection) -> st
 
 
 def _dump(value: object) -> str:
-    """Whatever this is, as something readable. `repr` is the floor, not the ideal."""
+    """`pprint.pformat` at width 88 with sorted keys; `{}` when the value formats to nothing."""
     return pprint.pformat(value, width=88, sort_dicts=True) or "{}"

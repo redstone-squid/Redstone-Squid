@@ -7,9 +7,8 @@ for the Discord boundary, so a test can send a message root to nowhere and then 
 serialized wire payload, not the Python objects, so they verify exactly what Discord will see,
 including any chrome discord.py adds during serialization.
 
-This module is public and versioned like the rest of the package. It is imported by tests
-rather than by a running bot, so it is reachable as `squid_ui_discord.testing.X` and promotes no
-names to `squid_ui_discord` itself.
+Public and versioned like the rest of the package, but reachable only as
+`squid_ui_discord.testing.X`: nothing here is re-exported from `squid_ui_discord`.
 """
 
 import asyncio
@@ -58,7 +57,7 @@ def without_capabilities[LimitsT: MessageLimits, BodyT: scene.Body, RenderTarget
 
 
 def iter_component_payloads(components: list[ComponentPayload]) -> Iterator[ComponentPayload]:
-    """Yield every component dict in a payload tree, depth first."""
+    """Yield every component dict in a payload tree, depth first, including `accessory` and `component`."""
     for component in components:
         yield component
         yield from iter_component_payloads(component.get("components", []))
@@ -153,7 +152,12 @@ class CallRecord:
 
 
 class AsyncCallRecorder:
-    """A typed async endpoint that records calls and can inject one explicit fault."""
+    """An awaitable endpoint that records every call as a `CallRecord`.
+
+    `error` is raised on every call until cleared; otherwise `callback` computes the result,
+    falling back to `result`. `return_value`, `side_effect` and `assert_awaited_*` mirror
+    `unittest.mock.AsyncMock` so the two are interchangeable at a call site.
+    """
 
     def __init__(self, *, result: Any = None, error: BaseException | None = None) -> None:
         self.records: list[CallRecord] = []
@@ -271,10 +275,9 @@ class _FollowupHarness:
 
 
 class MessageHarness:
-    """A stateful Discord message harness.
+    """A message-shaped double: `edit` returns the harness itself and `delete` only records.
 
-    `delete` ends the source message's simulated availability. Production calls go through
-    `.source`; edit and deletion records remain on the harness for assertions.
+    Production code takes `.source`; `edits` and `deletions` are the records left behind.
     """
 
     def __init__(
@@ -314,10 +317,11 @@ class MessageHarness:
 
 
 class InteractionHarness:
-    """A stateful Discord interaction harness.
+    """An interaction-shaped double whose response, followup and original-response endpoints record.
 
-    The interaction expires when `expired` is set. Production calls go through `.source`; typed
-    response, edit, send, deletion, modal, and deferral records remain available for assertions.
+    `is_expired()` reports `expired`; `expires_at` is fifteen minutes after construction.
+    Production code takes `.source`; `edits`, `sends`, `deletions`, `modals` and `deferrals`
+    merge the records across the endpoints that can produce each.
     """
 
     def __init__(
@@ -459,7 +463,7 @@ def commit_render(message_root: MessageRoot, *, disabled: bool = False) -> Mount
     Reaches past `send` on purpose: the alternative is making every one of these call sites
     await, for no coverage of anything the real send path does. For the same reason it runs no
     `on_load` -- a test that wants a loaded render wants the real seam,
-    `await message root.send(delivered_to(message_harness()))`.
+    `await message_root.send(delivered_to(message_harness()))`.
     """
     view = _commit(message_root, disabled=disabled)
     assert isinstance(view, MountedView), "this message root draws a classic message; use commit_classic_render"
@@ -567,6 +571,8 @@ def http_error(status: int = 500, *, code: int = 0, message: str = "nope") -> di
 
     @dataclass(frozen=True, slots=True)
     class Response:
+        """The two attributes `discord.HTTPException` reads off an aiohttp response."""
+
         status: int
         reason: str
 
@@ -590,9 +596,8 @@ async def drain(scheduler: MessageRootScheduler, *, timeout: float = 1) -> None:
     """Run `scheduler` until its queue is empty, then cancel it.
 
     Reaches into `_queue` on purpose, the way `commit_render` reaches past `send`: the queue's
-    join is the only honest "everything enqueued has been handled" signal, and the alternative
-    is polling a render count and hoping. Four test files each carried this, all four reaching
-    into the same private, and one of them took a `bus` argument it immediately discarded.
+    join is the only signal that everything enqueued has been handled, and the alternative is
+    polling a render count. Raises `TimeoutError` when the queue does not drain in `timeout`.
     """
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(scheduler.run)
@@ -607,7 +612,8 @@ async def invoke_context_menu(owner: object, method: Any, interaction: Any, targ
     """Run one `@sd.context_menu` method through the dispatch its registered menu would use.
 
     `method` is the declared function, unbound or bound; the defer and return handling of its
-    declaration apply, so a test sees the same interaction traffic as production.
+    declaration apply, so a test sees the same interaction traffic as production. Raises
+    `TypeError` when `method` carries no declaration.
     """
     callback: Any = getattr(method, "__func__", method)
     declaration = context_menu_declaration(callback)
