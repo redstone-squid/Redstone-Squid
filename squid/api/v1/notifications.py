@@ -26,10 +26,21 @@ from squid.api.v1.schemas.notifications import (
     NotificationSubscriptionDetail,
 )
 from squid.core.errors import AuthenticationError
+from squid.notifications import InboxVisibility
 from squid.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
 
 router = APIRouter(prefix="/users/me/notifications", tags=["notifications"])
 UserCaller = Annotated[Caller, Depends(requires(ACCOUNT_SELF_READ))]
+
+
+async def resolve_inbox_visibility(permissions: Permissions, caller: UserCaller) -> InboxVisibility:
+    """Resolve notification visibility once for one authenticated request."""
+    return InboxVisibility(
+        include_staff=await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING),
+    )
+
+
+type InboxAccess = Annotated[InboxVisibility, Depends(resolve_inbox_visibility)]
 
 
 @router.get(
@@ -133,8 +144,8 @@ async def delete_subscription(
 )
 async def list_inbox(
     notifications: Notifications,
-    permissions: Permissions,
     caller: UserCaller,
+    visibility: InboxAccess,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
@@ -142,17 +153,12 @@ async def list_inbox(
 ) -> Page[InboxNotificationDetail]:
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
     account_id = _account_id(caller)
-    # Staff notifications are *about* pending submissions, so the node that governs
-    # reading those governs reading these. Credential-bounded, so a leaked API key
-    # without the node cannot read staff items -- which the old config allowlist,
-    # keyed on a snowflake rather than on a credential, could not express.
-    include_staff = await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING)
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await notifications.inbox(
         account_id,
         selector=selector,
         page_size=page_size,
-        include_staff=include_staff,
+        visibility=visibility,
     )
     return render_page(page, InboxNotificationDetail.from_domain)
 
@@ -168,16 +174,30 @@ async def list_inbox(
 async def mark_read(
     notification_id: int,
     notifications: Notifications,
-    permissions: Permissions,
     caller: UserCaller,
+    visibility: InboxAccess,
 ) -> Response:
     """Mark one visible inbox item as read."""
-    # Staff notifications are *about* pending submissions, so the node that governs
-    # reading those governs reading these. Credential-bounded, so a leaked API key
-    # without the node cannot read staff items -- which the old config allowlist,
-    # keyed on a snowflake rather than on a credential, could not express.
-    include_staff = await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING)
-    await notifications.mark_read(_account_id(caller), notification_id, include_staff=include_staff)
+    await notifications.mark_read(_account_id(caller), notification_id, visibility=visibility)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/inbox/{notification_id}/unread",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=responses(401, 403, 404, 409, 503),
+    dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="notification_inbox_mark_unread",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
+)
+async def mark_unread(
+    notification_id: int,
+    notifications: Notifications,
+    caller: UserCaller,
+    visibility: InboxAccess,
+) -> Response:
+    """Mark one visible inbox item as unread."""
+    await notifications.mark_unread(_account_id(caller), notification_id, visibility=visibility)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

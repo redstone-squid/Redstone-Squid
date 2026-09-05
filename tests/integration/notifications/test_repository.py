@@ -1,11 +1,14 @@
 """Integration coverage for notification opt-ins and fenced DM delivery."""
 
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
+from contextlib import contextmanager
 from typing import cast
 from uuid import UUID
 
+import anyio
 import pytest
-from sqlalchemy import Table, select
+from sqlalchemy import Table, event, select
+from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -13,14 +16,29 @@ from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.infrastructure.models import Account, AccountIdentity
 from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventRecord
-from squid.notifications.domain import NotificationKind, RecordSubscriptionFilter, SubscriptionKind
+from squid.notifications.domain import (
+    InboxVisibility,
+    NotificationCandidate,
+    NotificationKind,
+    RecordSubscriptionFilter,
+    SubscriptionKind,
+)
 from squid.notifications.infrastructure.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
     NotificationRecord,
     NotificationSubscriptionRecord,
 )
-from squid.notifications.infrastructure.repository import PostgresNotificationRepository
+from squid.notifications.infrastructure.repository import (
+    PostgresNotificationRepository,
+    _is_durable_staff_notification_recipient,
+)
+from squid.permissions.domain import BuiltinRoleKeys
+from squid.permissions.infrastructure.models import (
+    PermissionRole,
+    PermissionRoleAssignment,
+    PermissionRolePattern,
+)
 from squid.persistence.base import Base
 
 _TABLES = [
@@ -30,6 +48,7 @@ _TABLES = [
     # Replaced `global_administrators` when permissions moved to RBAC; the
     # notification repository joins it to find who may be notified.
     Base.metadata.tables["permission_roles"],
+    Base.metadata.tables["permission_role_patterns"],
     Base.metadata.tables["permission_role_assignments"],
     Base.metadata.tables["domain_event_consumers"],
     Base.metadata.tables["domain_events"],
@@ -60,6 +79,29 @@ def repository(
     return PostgresNotificationRepository(async_session_factory)
 
 
+@contextmanager
+def _counting(session_factory: async_sessionmaker[AsyncSession]) -> Generator[list[str]]:
+    statements: list[str] = []
+    engine = session_factory.kw["bind"].sync_engine
+
+    def before_cursor_execute(
+        connection: Connection,
+        cursor: object,
+        statement: str,
+        parameters: object,
+        context: object,
+        executemany: bool,
+    ) -> None:
+        del connection, cursor, parameters, context, executemany
+        statements.append(statement)
+
+    event.listen(engine, "before_cursor_execute", before_cursor_execute)
+    try:
+        yield statements
+    finally:
+        event.remove(engine, "before_cursor_execute", before_cursor_execute)
+
+
 async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession], *, consented: bool = True) -> int:
     async with session_factory.begin() as session:
         account = Account(
@@ -88,7 +130,7 @@ async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession], *, c
             account_id=account.id,
             event_id=event.id,
             source_key="event:1:account:1",
-            kind="build_confirmed",
+            kind=NotificationKind.BUILD_CONFIRMED,
             payload={"build_id": 42},
             web_visible=True,
         )
@@ -114,6 +156,28 @@ async def test_delivery_claims_use_uuid_fencing_and_database_attempt_counts(
     assert claimed[0].claim_token is not None
     assert await repository.complete_delivery(claimed[0]) is True
     assert await repository.complete_delivery(claimed[0]) is False
+
+
+async def test_persisted_notification_and_subscription_kinds_round_trip_as_enums(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _seed_delivery(async_session_factory)
+    async with async_session_factory.begin() as session:
+        account_id = (await session.scalars(select(Account.id))).one()
+    await repository.add_subscription(
+        account_id,
+        kind=SubscriptionKind.CREATOR,
+        subject_id=UUID("11111111-1111-1111-1111-111111111111"),
+        record_filter=None,
+    )
+
+    async with async_session_factory() as session:
+        notification_kind = (await session.scalars(select(NotificationRecord.kind))).one()
+        subscription_kind = (await session.scalars(select(NotificationSubscriptionRecord.kind))).one()
+
+    assert notification_kind is NotificationKind.BUILD_CONFIRMED
+    assert subscription_kind is SubscriptionKind.CREATOR
 
 
 async def test_forbidden_delivery_suspends_only_the_dm_channel(
@@ -153,6 +217,197 @@ async def test_disabling_dms_cancels_pending_deliveries_without_hiding_the_inbox
         assert delivery.dead_at is not None
         assert notification is not None
         assert notification.web_visible is True
+
+
+async def test_read_state_changes_are_idempotent_and_visibility_safe(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _seed_delivery(async_session_factory)
+    async with async_session_factory.begin() as session:
+        account_id = (await session.scalars(select(NotificationProfile.account_id))).one()
+        ordinary_id = (await session.scalars(select(NotificationRecord.id))).one()
+        event = DomainEventRecord(event_type="build.submitted", aggregate_kind="build", aggregate_id=43)
+        session.add(event)
+        await session.flush()
+        staff = NotificationRecord(
+            account_id=account_id,
+            event_id=event.id,
+            source_key="event:2:staff:1",
+            kind=NotificationKind.STAFF_BUILD_SUBMITTED,
+            payload={"build_id": 43},
+            web_visible=True,
+        )
+        session.add(staff)
+        await session.flush()
+        staff_id = staff.id
+
+    ordinary = InboxVisibility()
+    staff = InboxVisibility(include_staff=True)
+    assert await repository.mark_read(account_id, ordinary_id, visibility=ordinary) is True
+    assert await repository.mark_read(account_id, ordinary_id, visibility=ordinary) is True
+    assert await repository.mark_unread(account_id, ordinary_id, visibility=ordinary) is True
+    assert await repository.mark_unread(account_id, ordinary_id, visibility=ordinary) is True
+    assert await repository.mark_read(account_id, staff_id, visibility=ordinary) is False
+    assert await repository.mark_read(account_id + 1, ordinary_id, visibility=staff) is False
+    assert await repository.mark_read(account_id, staff_id, visibility=staff) is True
+
+
+@pytest.mark.parametrize("gate", ["web", "consent"])
+async def test_read_state_changes_require_current_inbox_eligibility(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    gate: str,
+) -> None:
+    await _seed_delivery(async_session_factory)
+    async with async_session_factory.begin() as session:
+        account = (await session.scalars(select(Account))).one()
+        notification_id = (await session.scalars(select(NotificationRecord.id))).one()
+        if gate == "web":
+            profile = (await session.scalars(select(NotificationProfile))).one()
+            profile.web_enabled = False
+        else:
+            account.consent_version = None
+            account.consented_at = None
+
+    assert await repository.mark_read(account.id, notification_id, visibility=InboxVisibility()) is False
+
+
+async def test_inbox_count_and_both_keyset_directions_share_visibility(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with async_session_factory.begin() as session:
+        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        session.add(account)
+        await session.flush()
+        session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=False))
+        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        session.add(event)
+        await session.flush()
+        session.add_all(
+            NotificationRecord(
+                account_id=account.id,
+                event_id=event.id,
+                source_key=f"event:{event.id}:account:{index}",
+                kind=NotificationKind.STAFF_BUILD_SUBMITTED if index == 5 else NotificationKind.BUILD_CONFIRMED,
+                payload={"build_id": index},
+                web_visible=True,
+            )
+            for index in range(1, 6)
+        )
+
+    ordinary = InboxVisibility()
+    newest = await repository.list_inbox(
+        account.id,
+        offset=0,
+        after_id=None,
+        before_id=None,
+        limit=2,
+        visibility=ordinary,
+    )
+    older = await repository.list_inbox(
+        account.id,
+        offset=0,
+        after_id=newest[-1].id,
+        before_id=None,
+        limit=2,
+        visibility=ordinary,
+    )
+    newer = await repository.list_inbox(
+        account.id,
+        offset=0,
+        after_id=None,
+        before_id=older[0].id,
+        limit=2,
+        visibility=ordinary,
+    )
+
+    assert [item.payload["build_id"] for item in newest] == [4, 3]
+    assert [item.payload["build_id"] for item in older] == [2, 1]
+    assert [item.payload["build_id"] for item in newer] == [4, 3]
+    assert await repository.count_inbox(account.id, visibility=ordinary) == 4
+    assert await repository.count_inbox(account.id, visibility=InboxVisibility(include_staff=True)) == 5
+
+
+async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_readers(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    del repository
+    async with async_session_factory.begin() as session:
+        global_admin = PermissionRole(
+            slug="global-admin",
+            name="Global administrator",
+            builtin_key=BuiltinRoleKeys.GLOBAL_ADMIN.value,
+        )
+        owner = PermissionRole(slug="owner", name="Owner", builtin_key=BuiltinRoleKeys.OWNER.value)
+        custom = PermissionRole(slug="submission-reader", name="Submission reader")
+        session.add_all((global_admin, owner, custom))
+        accounts = [Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(3)]
+        session.add_all(accounts)
+        await session.flush()
+        session.add(
+            PermissionRolePattern(
+                role_id=custom.id,
+                pattern="build.submission.view_pending",
+                mode=1,
+            )
+        )
+        session.add_all(
+            PermissionRoleAssignment(role_id=role.id, subject_account_id=account.id)
+            for role, account in zip((global_admin, owner, custom), accounts, strict=True)
+        )
+
+    async with async_session_factory() as session:
+        recipients = tuple(
+            (
+                await session.scalars(
+                    select(Account.id).where(_is_durable_staff_notification_recipient(Account.id)).order_by(Account.id)
+                )
+            ).all()
+        )
+
+    assert recipients == (accounts[0].id,)
+
+
+@pytest.mark.parametrize("recipient_count", [0, 1, 100])
+async def test_durable_staff_audience_discovery_has_constant_query_count(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    recipient_count: int,
+) -> None:
+    del repository
+    async with async_session_factory.begin() as session:
+        role = PermissionRole(
+            slug="global-admin",
+            name="Global administrator",
+            builtin_key=BuiltinRoleKeys.GLOBAL_ADMIN.value,
+        )
+        session.add(role)
+        accounts = [
+            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(recipient_count)
+        ]
+        session.add_all(accounts)
+        await session.flush()
+        session.add_all(
+            PermissionRoleAssignment(role_id=role.id, subject_account_id=account.id) for account in accounts
+        )
+
+    with _counting(async_session_factory) as statements:
+        async with async_session_factory() as session:
+            recipients = tuple(
+                (
+                    await session.scalars(
+                        select(Account.id)
+                        .where(_is_durable_staff_notification_recipient(Account.id))
+                        .order_by(Account.id)
+                    )
+                ).all()
+            )
+
+    assert len(recipients) == recipient_count
+    assert len(statements) == 1
 
 
 async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(
@@ -212,6 +467,85 @@ async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
     assert filtered.id == filtered_again.id
     async with async_session_factory() as session:
         assert len((await session.scalars(select(NotificationSubscriptionRecord))).all()) == 2
+
+
+@pytest.mark.parametrize(("recipient_count", "expected_statements"), [(0, 0), (1, 3), (100, 3)])
+async def test_candidate_materialization_has_constant_query_count(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    recipient_count: int,
+    expected_statements: int,
+) -> None:
+    async with async_session_factory.begin() as session:
+        accounts = [
+            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(recipient_count)
+        ]
+        session.add_all(accounts)
+        await session.flush()
+        for index, account in enumerate(accounts, start=1):
+            session.add(AccountIdentity(account_id=account.id, provider=IdentityProvider.DISCORD, subject=str(index)))
+            session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=True))
+        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        session.add(event)
+        await session.flush()
+        materialized_event = DomainEvent(
+            event.id, event.event_type, event.aggregate_kind, event.aggregate_id, Instant.now()
+        )
+        candidates = tuple(
+            NotificationCandidate(
+                account_id=account.id,
+                source_key=f"event:{event.id}:account:{account.id}",
+                kind=NotificationKind.BUILD_CONFIRMED,
+                payload={"build_id": 42},
+            )
+            for account in accounts
+        )
+
+    with _counting(async_session_factory) as statements:
+        async with async_session_factory.begin() as session:
+            await repository._insert_candidates(session, event=materialized_event, candidates=candidates)
+
+    assert len(statements) == expected_statements
+
+
+async def test_candidate_materialization_is_unique_under_concurrent_replay(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with async_session_factory.begin() as session:
+        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        session.add(account)
+        await session.flush()
+        session.add(AccountIdentity(account_id=account.id, provider=IdentityProvider.DISCORD, subject="123"))
+        session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=True))
+        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        session.add(event)
+        await session.flush()
+        materialized_event = DomainEvent(
+            event.id,
+            event.event_type,
+            event.aggregate_kind,
+            event.aggregate_id,
+            Instant.now(),
+        )
+        candidate = NotificationCandidate(
+            account_id=account.id,
+            source_key=f"event:{event.id}:account:{account.id}",
+            kind=NotificationKind.BUILD_CONFIRMED,
+            payload={"build_id": 42},
+        )
+
+    async def replay() -> None:
+        async with async_session_factory.begin() as session:
+            await repository._insert_candidates(session, event=materialized_event, candidates=(candidate,))
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(replay)
+        tasks.start_soon(replay)
+
+    async with async_session_factory() as session:
+        assert len((await session.scalars(select(NotificationRecord))).all()) == 1
+        assert len((await session.scalars(select(NotificationDeliveryRecord))).all()) == 1
 
 
 async def test_an_unconsented_account_keeps_its_switches_but_receives_nothing(

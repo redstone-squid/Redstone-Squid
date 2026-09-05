@@ -22,6 +22,7 @@ from squid.bot.voting.sessions import start_delete_log_vote
 from squid.core.i18n import tr
 from squid.runtime import JobHandle
 from squid.voting.domain import (
+    CastVoteResult,
     PollScope,
     VoteActor,
     VoteKind,
@@ -113,7 +114,8 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             return
 
         emoji_name = str(payload.emoji)
-        if snapshot.option_by_emoji(emoji_name, payload.guild_id or 0) is None:
+        option = snapshot.option_by_emoji(emoji_name, payload.guild_id or 0)
+        if option is None:
             return
 
         if payload.guild_id is None:
@@ -126,7 +128,15 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
         actor = await resolve_actor(self.bot, user, account_id=account_id)
         previous = snapshot.selection_for(actor.account_id)
-        result = await self.vote_service.cast_vote(payload.message_id, actor, emoji_name)
+        if not snapshot.is_anonymous and previous is not None and previous.option_id != option.id:
+            await self._remove_reaction(message, previous.emoji, user)
+        result, changed = await self._set_reaction_selection(
+            snapshot,
+            payload.message_id,
+            actor,
+            emoji_name,
+            selected=True,
+        )
         if result.rejection is not None:
             if snapshot.should_remove_reaction_on_cast():
                 await self._remove_reaction(message, payload.emoji, user)
@@ -147,9 +157,8 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
         # A public poll keeps reactions as the visible ballot, so a changed vote has
         # to have its previous reaction taken back or the message would show both.
-        if not result.session.is_anonymous and previous is not None and previous.emoji != emoji_name:
-            await self._remove_reaction(message, previous.emoji, user)
-        await self.bot.refresh_posts("vote_session", str(snapshot.id))
+        if changed:
+            await self.bot.refresh_posts("vote_session", str(snapshot.id))
 
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
         """Synchronize reaction removal for polls that publicly retain reactions."""
@@ -166,17 +175,18 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, payload.user_id)
         if account_id is None:
             return
-        selection = snapshot.selection_for(account_id)
-        if selection is None or selection.emoji != str(payload.emoji):
-            return
         member = await event.resolve_member()
         if member is None or member.bot:
             return
         actor = await resolve_actor(self.bot, member, account_id=account_id)
-        # Re-casting the same option toggles it off, which is what removing the
-        # reaction means for a poll whose reactions are the ballots.
-        result = await self.vote_service.cast_vote(payload.message_id, actor, selection.emoji)
-        if result.accepted and result.session is not None:
+        result, changed = await self._set_reaction_selection(
+            snapshot,
+            payload.message_id,
+            actor,
+            str(payload.emoji),
+            selected=False,
+        )
+        if result.accepted and changed and result.session is not None:
             await self.bot.refresh_posts("vote_session", str(result.session.id))
 
     async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
@@ -209,16 +219,19 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         account_id = await self._consented_account_id(member.id)
         if account_id is None:
             return
-        selection = snapshot.selection_for(account_id)
-        accepted = selection is not None and selection.emoji == emoji
-        if not accepted:
-            actor = await resolve_actor(self.bot, member, account_id=account_id)
-            result = await self.vote_service.cast_vote(payload.message_id, actor, emoji)
-            accepted = result.accepted
-            if result.rejection is not None and snapshot.should_remove_reaction_on_cast():
-                await self._remove_reaction(message, payload.emoji, member)
-            if accepted:
-                await self.bot.refresh_posts("vote_session", str(snapshot.id))
+        actor = await resolve_actor(self.bot, member, account_id=account_id)
+        result, changed = await self._set_reaction_selection(
+            snapshot,
+            payload.message_id,
+            actor,
+            emoji,
+            selected=True,
+        )
+        accepted = result.accepted
+        if result.rejection is not None and snapshot.should_remove_reaction_on_cast():
+            await self._remove_reaction(message, payload.emoji, member)
+        if accepted and changed:
+            await self.bot.refresh_posts("vote_session", str(snapshot.id))
         if accepted and snapshot.should_remove_reaction_on_cast():
             await self._remove_reaction(message, payload.emoji, member)
 
@@ -235,15 +248,18 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, payload.user_id)
         if account_id is None:
             return
-        selection = snapshot.selection_for(account_id)
-        if selection is None or selection.emoji != str(payload.emoji):
-            return
         member = await event.resolve_member()
         if member is None or member.bot:
             return
         actor = await resolve_actor(self.bot, member, account_id=account_id)
-        result = await self.vote_service.cast_vote(payload.message_id, actor, selection.emoji)
-        if result.accepted:
+        result, changed = await self._set_reaction_selection(
+            snapshot,
+            payload.message_id,
+            actor,
+            str(payload.emoji),
+            selected=False,
+        )
+        if result.accepted and changed:
             await self.bot.refresh_posts("vote_session", str(snapshot.id))
 
     async def recover_reaction_clear(self, event: ReactionClearEvent) -> None:
@@ -300,6 +316,27 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             self._reaction_state_lock = lock
         return lock
 
+    async def _set_reaction_selection(
+        self,
+        snapshot: VoteSessionSnapshot,
+        message_id: int,
+        actor: VoteActor,
+        emoji: str,
+        *,
+        selected: bool,
+    ) -> tuple[CastVoteResult, bool]:
+        """Apply one reaction's desired state without replaying repository toggle semantics."""
+        message = next((item for item in snapshot.messages if item.id == message_id), None)
+        guild_id = actor.guild_id if message is None else message.guild_id
+        option = snapshot.option_by_emoji(emoji, guild_id)
+        if option is None:
+            return CastVoteResult(snapshot, VoteRejection.INVALID_OPTION), False
+        current = snapshot.selection_for(actor.account_id)
+        already_selected = current is not None and current.option_id == option.id
+        if selected is already_selected:
+            return CastVoteResult(snapshot), False
+        return await self.vote_service.cast_vote(message_id, actor, emoji), True
+
     async def _reconcile_session_reactions(self, snapshot: VoteSessionSnapshot) -> None:
         """Converge all of one session's cards without multi-card vote oscillation."""
         cards: list[tuple[VoteMessage, discord.Message, dict[str, discord.Reaction]]] = []
@@ -324,9 +361,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                     if account_id is None:
                         await self._remove_reaction(message, option.emoji, member)
                         continue
-                    observed.setdefault(account_id, []).append(
-                        (location.id, message, member, option.emoji, option.id)
-                    )
+                    observed.setdefault(account_id, []).append((location.id, message, member, option.emoji, option.id))
 
         changed = False
         for account_id, reactions_for_account in observed.items():
@@ -336,16 +371,23 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                 reactions_for_account[0],
             )
             reacted_message_id, _message, member, desired_emoji, desired_option_id = desired
-            accepted = selection is not None and selection.option_id == desired_option_id
-            if not accepted:
+            if selection is not None and selection.option_id == desired_option_id:
+                result, mutation = CastVoteResult(snapshot), False
+            else:
                 actor = await resolve_actor(self.bot, member, account_id=account_id)
-                result = await self.vote_service.cast_vote(reacted_message_id, actor, desired_emoji)
-                accepted = result.accepted
-                changed = changed or accepted
-                if result.rejection is not None:
-                    for _message_id, reacted_message, reacted_member, emoji, option_id in reactions_for_account:
-                        if snapshot.is_anonymous or selection is None or option_id != selection.option_id:
-                            await self._remove_reaction(reacted_message, emoji, reacted_member)
+                result, mutation = await self._set_reaction_selection(
+                    snapshot,
+                    reacted_message_id,
+                    actor,
+                    desired_emoji,
+                    selected=True,
+                )
+            accepted = result.accepted
+            changed = changed or (accepted and mutation)
+            if result.rejection is not None:
+                for _message_id, reacted_message, reacted_member, emoji, option_id in reactions_for_account:
+                    if snapshot.is_anonymous or selection is None or option_id != selection.option_id:
+                        await self._remove_reaction(reacted_message, emoji, reacted_member)
             if accepted:
                 for _message_id, reacted_message, reacted_member, emoji, option_id in reactions_for_account:
                     if snapshot.is_anonymous or option_id != desired_option_id:
@@ -359,9 +401,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         if changed:
             await self.bot.refresh_posts("vote_session", str(snapshot.id))
 
-    async def _reaction_member(
-        self, guild_id: int, user: discord.Member | discord.User
-    ) -> discord.Member | None:
+    async def _reaction_member(self, guild_id: int, user: discord.Member | discord.User) -> discord.Member | None:
         if isinstance(user, discord.Member):
             return user
         guild = self.bot.get_guild(guild_id)
@@ -372,7 +412,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             return member
         try:
             return await guild.fetch_member(user.id)
-        except (discord.NotFound, discord.Forbidden):
+        except discord.NotFound, discord.Forbidden:
             return None
 
     async def _restore_reactions(self, message_id: int) -> None:
@@ -439,7 +479,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                 isinstance(actor, discord.Member) and await self.publisher.may_create_network(actor)
             ):
                 raise InvalidVoteConfigurationError(tr(t"You may no longer publish a poll to every server."))
-            message = await self.publisher.create_and_publish(
+            publication = await self.publisher.create_and_publish(
                 author_account_id=account.id,
                 channel=cast(GuildMessageable, channel),
                 question=draft.question,
@@ -448,7 +488,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                 options=options,
                 scope=draft.scope,
             )
-            return message.jump_url
+            return publication.message.jump_url
 
         return PollScreen(resolve_options, publish, allow_network=allow_network)
 

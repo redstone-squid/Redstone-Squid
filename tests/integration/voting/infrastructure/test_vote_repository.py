@@ -13,6 +13,7 @@ from whenever import Instant
 from squid.accounts.infrastructure.models import Account
 from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Build
+from squid.core.errors import DataIntegrityError
 from squid.messages.infrastructure.models import Message
 from squid.persistence.alembic_entities import alembic_util_entities
 from squid.persistence.base import Base
@@ -47,6 +48,7 @@ from tests.support.voting import (
     TARGET_MESSAGE_ID,
     VOTER_ACCOUNT_IDS,
     attach_vote_message,
+    record_vote_message,
     seed_delete_log_vote,
 )
 
@@ -470,12 +472,52 @@ async def test_a_guild_less_poll_becomes_addressable_once_a_card_is_attached(
     assert await repository.get_by_message(7_001) is None
 
     async with async_session_factory.begin() as session:
-        await attach_vote_message(session, message_id=7_001, vote_session_id=session_id)
+        await record_vote_message(session, message_id=7_001)
+    await repository.attach_message(session_id, 7_001)
+    await repository.attach_message(session_id, 7_001)
 
     snapshot = await repository.get_by_message(7_001)
     assert snapshot is not None
     assert snapshot.id == session_id
     assert snapshot.message_ids == (7_001,)
+
+
+async def test_a_message_cannot_be_attached_to_two_vote_sessions(
+    repository: VoteRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    first_id, _ = await seed_generic_poll(
+        async_session_factory,
+        repository,
+        question="First",
+        visibility=VoteVisibility.ANONYMOUS_LIVE,
+        deadline=Instant.now().add(hours=1),
+        options=(
+            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
+            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
+        ),
+        guild_id=None,
+        attach=False,
+    )
+    second_id, _ = await seed_generic_poll(
+        async_session_factory,
+        repository,
+        question="Second",
+        visibility=VoteVisibility.ANONYMOUS_LIVE,
+        deadline=Instant.now().add(hours=1),
+        options=(
+            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
+            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
+        ),
+        guild_id=None,
+        attach=False,
+    )
+    async with async_session_factory.begin() as session:
+        await record_vote_message(session, message_id=7_002)
+
+    await repository.attach_message(first_id, 7_002)
+    with pytest.raises(DataIntegrityError, match="different resource"):
+        await repository.attach_message(second_id, 7_002)
 
 
 async def test_a_poll_shown_in_two_places_tracks_both_locations(
@@ -496,7 +538,8 @@ async def test_a_poll_shown_in_two_places_tracks_both_locations(
     assert message_id is not None
 
     async with async_session_factory.begin() as session:
-        await attach_vote_message(session, message_id=8_002, vote_session_id=session_id, channel_id=CHANNEL_ID + 1)
+        await record_vote_message(session, message_id=8_002, channel_id=CHANNEL_ID + 1)
+    await repository.attach_message(session_id, 8_002)
 
     snapshot = await repository.get_by_id(session_id)
     assert snapshot is not None

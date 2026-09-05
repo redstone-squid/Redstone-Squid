@@ -27,3 +27,5 @@ render neutral with logs and metrics; edits are revision-fenced; and post-save d
 cannot invite a duplicate submission. Timed-out editors retain only a durable fresh-editor route,
 which loads current state before normal authorization and reports that staged edits were discarded.
 The authorized, denied, stale, timeout, and no-mutation paths are covered directly.
+`7089781f` drives the mounted edit screen through an invalid modal submission and proves that its
+retry action prefills every attempted URL while leaving the bound build values untouched.

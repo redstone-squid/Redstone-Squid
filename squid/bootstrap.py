@@ -108,16 +108,13 @@ from squid.submissions.application import (
     SubmissionFinalizationService,
     SubmissionFinalizationWorker,
     SubmissionFormService,
+    SubmissionPreparation,
 )
 from squid.submissions.infrastructure.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
     FailClosedDraftSchematicReader,
 )
-from squid.submissions.infrastructure.build_target import BuildSubmissionTarget
-from squid.submissions.infrastructure.finalization_events import (
-    ExistingBuildReviewPublisher,
-    PollableFinalizationStatusPublisher,
-)
+from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
@@ -415,14 +412,18 @@ class _ServiceGraph:
         return TagService(PostgresTagDefinitionRepository(self.db.async_session))
 
     @cached_property
+    def submission_manifests(self) -> CheckedInFormManifestRegistry:
+        return CheckedInFormManifestRegistry()
+
+    @cached_property
     def submission_forms(self) -> SubmissionFormService:
-        return SubmissionFormService(SuggestionFormOptionCatalog(self.suggestions))
+        return SubmissionFormService(SuggestionFormOptionCatalog(self.suggestions), self.submission_manifests)
 
     @cached_property
     def submission_drafts(self) -> SubmissionDraftService:
         return SubmissionDraftService(
             PostgresDraftRepository(self.db.async_session),
-            CheckedInFormManifestRegistry(),
+            self.submission_manifests,
         )
 
     @cached_property
@@ -443,18 +444,15 @@ class _ServiceGraph:
         )
         return SubmissionFinalizationService(
             self.submission_drafts,
-            readiness,
+            SubmissionPreparation(readiness, sponsors),
             self.submission_finalization_jobs,
-            sponsors,
         )
 
     @cached_property
     def submission_finalization_worker(self) -> SubmissionFinalizationWorker:
         return SubmissionFinalizationWorker(
             self.submission_finalization_jobs,
-            BuildSubmissionTarget(self.builds, self.tags, self.version_service),
-            PollableFinalizationStatusPublisher(),
-            ExistingBuildReviewPublisher(),
+            CanonicalBuildSubmissionWriter(self.builds, self.tags, self.version_service),
         )
 
     @cached_property
@@ -754,6 +752,7 @@ def _create_runtime[ServicesT](
     service_factory: Callable[[DatabaseEngine, RuntimeConfig, AsyncExitStack], ServicesT],
     db: DatabaseEngine | None,
 ) -> ApplicationRuntime[ServicesT]:
+    """Share resource ownership behind the concrete process runtime constructors."""
     database = db or DatabaseEngine(config.database)
     resources_stack = AsyncExitStack()
     # Registered first so LIFO shutdown keeps the database alive until every adapter

@@ -1,6 +1,9 @@
 """Isolated tests for the submission HTTP contract, which no client has to draw one way."""
 
+import hashlib
+import json
 from dataclasses import replace
+from typing import override
 from uuid import UUID, uuid4
 
 import pytest
@@ -19,6 +22,9 @@ from squid.api.v1.schemas.submissions import (
 )
 from squid.api.v1.submissions import (
     AuthenticatedSubmissionActor,
+    SubmissionDraftCommands,
+    SubmissionFinalizationCommands,
+    SubmissionFormReader,
     SubmissionFormRevisionNotFoundError,
     authenticated_account,
     authenticated_submission_actor,
@@ -30,6 +36,7 @@ from squid.api.v1.submissions import (
 from squid.core.errors import AuthenticationError
 from squid.submissions.application import (
     AppliedDraftChange,
+    AppliedDraftUpgrade,
     FinalizationJobSnapshot,
     FormOptionSet,
     StoredDraft,
@@ -40,10 +47,11 @@ from squid.submissions.domain import (
     DraftChange,
     DraftSnapshot,
     FinalizationJobStatus,
+    FinalizedBuild,
+    FormManifest,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
     SubmissionOrigin,
-    SubmissionTargetResult,
 )
 
 ACCOUNT_ID = 42
@@ -74,34 +82,44 @@ def stored_draft(
     )
 
 
-class FakeForms:
+class FakeForms(SubmissionFormReader):
     def __init__(self) -> None:
         self.manifest_locales: list[str | None] = []
         self.revision_calls: list[tuple[str, int, str | None]] = []
         self.option_calls: list[tuple[str, str, str | None]] = []
 
-    def manifest(self, *, locale: str | None):
+    @override
+    async def manifest(self, *, locale: str | None) -> FormManifest:
         self.manifest_locales.append(locale)
         return build_submission_manifest(locale)
 
-    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None):
+    @override
+    async def manifest_revision(
+        self,
+        schema_id: str,
+        revision: int,
+        *,
+        locale: str | None,
+    ) -> FormManifest | None:
         self.revision_calls.append((schema_id, revision, locale))
         if schema_id == "build_submission.v1" and revision == 1:
-            return build_submission_manifest(locale)
+            return build_submission_manifest(locale, revision=revision)
         return None
 
+    @override
     async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
         self.option_calls.append((source, category, locale))
         return FormOptionSet(source, category, 8, (ChoiceOption("slim", "Slim"),))
 
 
-class FakeDrafts:
+class FakeDrafts(SubmissionDraftCommands):
     def __init__(self) -> None:
         self.current = stored_draft()
         self.created_with: tuple[int, str, SubmissionOrigin, frozenset[str], str | None, UUID | None] | None = None
         self.change_seen: DraftChange | None = None
         self.deleted: tuple[UUID, int] | None = None
 
+    @override
     async def create(
         self,
         *,
@@ -127,16 +145,19 @@ class FakeDrafts:
         )
         return self.current
 
+    @override
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
         assert account_id == ACCOUNT_ID
         assert limit == 10
         return (self.current,)
 
+    @override
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
         assert account_id == ACCOUNT_ID
         return self.current
 
+    @override
     async def apply_change(
         self,
         draft_id: UUID,
@@ -152,11 +173,37 @@ class FakeDrafts:
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
         return AppliedDraftChange(self.current)
 
+    @override
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_revision: int,
+        locale: str | None,
+    ) -> AppliedDraftUpgrade:
+        assert draft_id == self.current.snapshot.id
+        assert account_id == ACCOUNT_ID
+        assert expected_revision == self.current.snapshot.revision
+        assert target_revision == 2
+        assert locale == "en"
+        self.current = replace(
+            self.current,
+            snapshot=replace(
+                self.current.snapshot,
+                schema_revision=target_revision,
+                revision=self.current.snapshot.revision + 1,
+            ),
+        )
+        return AppliedDraftUpgrade(self.current)
+
+    @override
     async def delete(self, draft_id: UUID, account_id: int) -> None:
         self.deleted = (draft_id, account_id)
 
 
-class FakeFinalization:
+class FakeFinalization(SubmissionFinalizationCommands):
     def __init__(self, draft_id: UUID) -> None:
         self.snapshot = FinalizationJobSnapshot(
             job_id=UUID("3ff2c7e7-8df7-4147-853f-fea71a8c39e4"),
@@ -171,6 +218,7 @@ class FakeFinalization:
         self.submit_calls: list[tuple[UUID, int, str | None]] = []
         self.status_calls: list[tuple[UUID, int]] = []
 
+    @override
     async def submit(
         self,
         draft_id: UUID,
@@ -181,6 +229,7 @@ class FakeFinalization:
         self.submit_calls.append((draft_id, account_id, locale))
         return self.snapshot
 
+    @override
     async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None:
         self.status_calls.append((draft_id, account_id))
         return self.snapshot
@@ -219,6 +268,10 @@ def test_draft_change_rejects_non_json_and_client_schematic_assertions() -> None
     with pytest.raises(PydanticValidationError):
         DraftChangeRequest.model_validate({**base, "has_sanitized_schematic": True})
 
+    for invalid_key in (123, {}, [], None, "short"):
+        with pytest.raises(PydanticValidationError):
+            DraftChangeRequest.model_validate({**base, "idempotency_key": invalid_key})
+
     with pytest.raises(PydanticValidationError):
         DraftChangeRequest.model_validate(
             {
@@ -235,6 +288,34 @@ def test_draft_change_rejects_non_json_and_client_schematic_assertions() -> None
                 ],
             }
         )
+
+
+def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
+    key_schema = DraftChangeRequest.model_json_schema()["properties"]["idempotency_key"]
+
+    assert key_schema == {
+        "maxLength": 255,
+        "minLength": 8,
+        "pattern": r"^[\x21-\x7e]{8,255}$",
+        "title": "Idempotency Key",
+        "type": "string",
+    }
+
+
+@pytest.mark.parametrize(
+    ("revision", "expected_digest"),
+    [
+        (1, "d1c73dfb23e7c62c5f79a55493e6918a5998161007ab5dc92f091887925a59d5"),
+        (2, "6242f48c2ed797de8cefd9eea11dd72ef744050e5c37a5a8b9053c7d2c507a82"),
+    ],
+)
+def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_digest: str) -> None:
+    payload = FormManifestResponse.from_domain(build_submission_manifest("en", revision=revision)).model_dump(
+        mode="json"
+    )
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+
+    assert hashlib.sha256(canonical).hexdigest() == expected_digest
 
 
 async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
@@ -306,6 +387,10 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
                 ],
             },
         )
+        upgrade_response = await client.post(
+            f"/submissions/drafts/{draft_id}/manifest-upgrade",
+            json={"base_revision": 1, "target_revision": 2},
+        )
         list_response = await client.get("/submissions/drafts")
         get_response = await client.get(f"/submissions/drafts/{draft_id}")
         submit_response = await client.post(f"/submissions/drafts/{draft_id}/submission")
@@ -340,14 +425,16 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert drafts.change_seen is not None
     assert drafts.change_seen.operations[0].value == "Compact door"
     assert list_response.status_code == 200
+    assert upgrade_response.status_code == 200
+    assert upgrade_response.json()["draft"]["schema_revision"] == 2
     assert list_response.json() == {
         "drafts": [
             {
                 "id": draft_id,
                 "schema_id": "build_submission.v1",
-                "schema_revision": 1,
+                "schema_revision": 2,
                 "category": "door",
-                "revision": 1,
+                "revision": 2,
                 "status": "editing",
                 "origin": "web",
                 "display_name": "Compact door",
@@ -444,7 +531,7 @@ def test_finalization_response_does_not_expose_worker_or_target_internals() -> N
         claim_token=None,
         completed_at=NOW,
         last_error="private worker detail",
-        result=SubmissionTargetResult(91, "postgres_builds", {"private": "value"}),
+        result=FinalizedBuild(91),
     )
 
     payload = SubmissionFinalizationResponse.from_domain(snapshot).model_dump(mode="json")

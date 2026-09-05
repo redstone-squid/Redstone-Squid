@@ -3208,9 +3208,9 @@ export type User = {
  *
  * The caller's own account: who they are, how they sign in, and what they publish.
  *
- * Provider-neutral on purpose. The previous shape flattened one Discord identity and one Java
- * identity into four top-level fields, which could not describe a caller with two of either and
- * implied Discord by omission for callers that have none.
+ * The identity list supports any number of Discord, Java, or future provider identities. The
+ * previous shape flattened one Discord identity and one Java identity into four top-level fields,
+ * which could not describe a caller with two of either and implied Discord for callers with none.
  */
 export type UserMe = {
     /**

@@ -1,4 +1,4 @@
-"""Submission form and synchronized-draft schemas.
+"""Submission form and draft schemas.
 
 The form describes fields and constraints; how they are drawn is the client's
 decision.
@@ -8,15 +8,29 @@ from datetime import datetime
 from typing import Annotated, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, model_validator
+from pydantic import (
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    JsonValue,
+    TypeAdapter,
+    WithJsonSchema,
+    model_validator,
+)
 
 from squid.core.errors import JSONValue
-from squid.submissions.application import FinalizationJobSnapshot, FormOptionSet, StoredDraft
+from squid.core.errors import ValidationError as DomainValidationError
+from squid.submissions.application import AppliedDraftUpgrade, FinalizationJobSnapshot, FormOptionSet, StoredDraft
 from squid.submissions.domain import (
+    DRAFT_CHANGE_KEY_MAX_LENGTH,
+    DRAFT_CHANGE_KEY_MIN_LENGTH,
+    DRAFT_CHANGE_KEY_PATTERN,
     CategoryForm,
     ChoiceOption,
     ControlKind,
     DraftChange,
+    DraftChangeKey,
     DraftStatus,
     FieldConstraints,
     FieldOperation,
@@ -34,14 +48,37 @@ from squid.submissions.domain import (
 
 StableIdentifier = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
 ClientInstanceIdentifier = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")]
-IdempotencyKey = Annotated[str, Field(min_length=8, max_length=255, pattern=r"^[\x21-\x7e]+$")]
+
+
+def _draft_change_key(value: object) -> DraftChangeKey:
+    if not isinstance(value, str):
+        msg = "draft change key must be a string"
+        raise ValueError(msg)  # noqa: TRY004 - Pydantic validators must raise ValueError, not TypeError.
+    try:
+        return DraftChangeKey(value)
+    except DomainValidationError as error:
+        raise ValueError(str(error)) from error
+
+
+DraftChangeKeyInput = Annotated[
+    DraftChangeKey,
+    BeforeValidator(_draft_change_key),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "minLength": DRAFT_CHANGE_KEY_MIN_LENGTH,
+            "maxLength": DRAFT_CHANGE_KEY_MAX_LENGTH,
+            "pattern": DRAFT_CHANGE_KEY_PATTERN,
+        }
+    ),
+]
 _JSON_VALUE = TypeAdapter(JsonValue)
 
 
 class StrictSchema(BaseModel):
     """Base model which rejects contract fields unknown to this server."""
 
-    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False, arbitrary_types_allowed=True)
 
 
 class ChoiceOptionResponse(StrictSchema):
@@ -244,7 +281,7 @@ class DraftChangeRequest(StrictSchema):
 
     base_revision: int = Field(ge=0)
     client_instance_id: ClientInstanceIdentifier
-    idempotency_key: IdempotencyKey
+    idempotency_key: DraftChangeKeyInput
     operations: list[FieldOperationRequest] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")
@@ -263,7 +300,7 @@ class DraftChangeRequest(StrictSchema):
 
 
 class StoredDraftResponse(StrictSchema):
-    """The compacted current state of one caller-owned synchronized draft."""
+    """The compacted current state of one caller-owned draft."""
 
     id: UUID
     schema_id: str
@@ -344,6 +381,24 @@ class DraftChangeResponse(StrictSchema):
 
     draft: StoredDraftResponse
     replayed: bool
+
+
+class DraftManifestUpgradeRequest(StrictSchema):
+    """Move a draft to the next checked-in form revision."""
+
+    base_revision: int = Field(ge=0)
+    target_revision: int = Field(ge=2)
+
+
+class DraftManifestUpgradeResponse(StrictSchema):
+    """The upgraded draft and whether the requested target was already current."""
+
+    draft: StoredDraftResponse
+    replayed: bool
+
+    @classmethod
+    def from_domain(cls, result: AppliedDraftUpgrade) -> DraftManifestUpgradeResponse:
+        return cls(draft=StoredDraftResponse.from_domain(result.draft), replayed=result.replayed)
 
 
 class SubmissionAttentionIssueResponse(StrictSchema):

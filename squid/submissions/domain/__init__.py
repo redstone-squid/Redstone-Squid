@@ -1,7 +1,11 @@
 """Submission form and draft domain values."""
 
 from squid.submissions.domain.drafts import (
+    DRAFT_CHANGE_KEY_MAX_LENGTH,
+    DRAFT_CHANGE_KEY_MIN_LENGTH,
+    DRAFT_CHANGE_KEY_PATTERN,
     DraftChange,
+    DraftChangeKey,
     DraftRevisionConflictError,
     DraftSnapshot,
     DraftStatus,
@@ -16,6 +20,7 @@ from squid.submissions.domain.finalization import (
     ExtenderSubmissionDetails,
     ExtenderTiming,
     FinalizationJobStatus,
+    FinalizedBuild,
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicArtifactState,
@@ -27,7 +32,6 @@ from squid.submissions.domain.finalization import (
     SubmissionDimensions,
     SubmissionSchematicLicense,
     SubmissionSchematicVisibility,
-    SubmissionTargetResult,
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
@@ -46,6 +50,9 @@ from squid.submissions.domain.forms import (
 )
 
 __all__ = [
+    "DRAFT_CHANGE_KEY_MAX_LENGTH",
+    "DRAFT_CHANGE_KEY_MIN_LENGTH",
+    "DRAFT_CHANGE_KEY_PATTERN",
     "CategoryForm",
     "ChoiceOption",
     "ControlKind",
@@ -53,6 +60,7 @@ __all__ = [
     "DoorSubmissionDetails",
     "DoorTiming",
     "DraftChange",
+    "DraftChangeKey",
     "DraftRevisionConflictError",
     "DraftSnapshot",
     "DraftStatus",
@@ -63,6 +71,7 @@ __all__ = [
     "FieldOperation",
     "FieldOperationKind",
     "FinalizationJobStatus",
+    "FinalizedBuild",
     "FormField",
     "FormManifest",
     "FormSection",
@@ -78,7 +87,6 @@ __all__ = [
     "SubmissionOrigin",
     "SubmissionSchematicLicense",
     "SubmissionSchematicVisibility",
-    "SubmissionTargetResult",
     "SubmissionTaxonomy",
     "ValueKind",
     "VerifiedSubmissionArtifacts",

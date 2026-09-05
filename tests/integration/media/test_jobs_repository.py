@@ -33,7 +33,7 @@ from squid.media.infrastructure.models import (
 )
 from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.persistence.base import Base
-from squid.submissions.domain import DraftStatus
+from squid.submissions.domain import DraftStatus, SubmissionOrigin
 from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 
@@ -89,9 +89,9 @@ async def create_submission_draft(
                 schema_id="build_submission.v1",
                 schema_revision=1,
                 category="other",
-                status=status.value,
+                status=status,
                 answers={},
-                origin="web",
+                origin=SubmissionOrigin.WEB,
                 created_at=now,
                 updated_at=now,
                 expires_at=now.add(days=7, days_assumed_24h_ok=True),

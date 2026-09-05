@@ -19,7 +19,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC, StrEnumText, now
+from squid.submissions.domain import DraftStatus, SubmissionOrigin
 
 
 class SubmissionDraft(Base, kw_only=True):
@@ -65,9 +66,14 @@ class SubmissionDraft(Base, kw_only=True):
     schema_revision: Mapped[int] = mapped_column(Integer, nullable=False)
     category: Mapped[str] = mapped_column(Text, nullable=False)
     revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'editing'"), default="editing")
+    status: Mapped[DraftStatus] = mapped_column(
+        StrEnumText(DraftStatus),
+        nullable=False,
+        server_default=text("'editing'"),
+        default=DraftStatus.EDITING,
+    )
     answers: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
-    origin: Mapped[str] = mapped_column(Text, nullable=False)
+    origin: Mapped[SubmissionOrigin] = mapped_column(StrEnumText(SubmissionOrigin), nullable=False)
     source_installation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         default=None,

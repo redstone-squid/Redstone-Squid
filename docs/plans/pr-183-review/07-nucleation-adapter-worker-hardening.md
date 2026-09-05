@@ -36,7 +36,16 @@
 base64, frame headers, numeric ranges, vectors, RGBA, payload totals, and every operation's arity
 are decoded strictly before allocation or slicing. Optional sign/lattice evidence alone may be
 dropped, with malformed evidence covered; simulation failures keep stable user copy and developer
-context. Queue wait and every operation timeout are covered. A clean `0.10.14` reproducer confirmed
+context. One cumulative deadline now covers queue wait, cold process start, request write, and
+response read for every operation; failed-process cleanup has a separate bounded budget and
+restart backoff is charged to the next caller. A clean `0.10.14` reproducer confirmed
 the current exception-type documentation mismatch and it is reported as
 [Nucleation #40](https://github.com/Schem-at/Nucleation/issues/40), cited beside the sole narrow
 workaround.
+
+A final every-readable-format worker test found that pinned Nucleation 0.10.14 rejects raw and
+gzip vanilla Java structure `.nbt` from `Schematic.from_data`. Rechecking the current upstream
+format guide corrected the initial assessment: Nucleation supports textual Java structure `.snbt`,
+not binary structure-block `.nbt`, and `from_data` detects only its supported containers. This is
+therefore neither an upstream bug nor a documentation mismatch. Squid intentionally accepts the
+additional binary format through its own byte-, depth-, value-, axis-, and volume-bounded decoder.

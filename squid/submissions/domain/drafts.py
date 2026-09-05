@@ -14,7 +14,10 @@ from squid.core.i18n import tr
 
 _FIELD_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _CLIENT_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
-_IDEMPOTENCY_KEY = re.compile(r"^[\x21-\x7e]{8,255}$")
+DRAFT_CHANGE_KEY_MIN_LENGTH = 8
+DRAFT_CHANGE_KEY_MAX_LENGTH = 255
+DRAFT_CHANGE_KEY_PATTERN = rf"^[\x21-\x7e]{{{DRAFT_CHANGE_KEY_MIN_LENGTH},{DRAFT_CHANGE_KEY_MAX_LENGTH}}}$"
+_IDEMPOTENCY_KEY = re.compile(DRAFT_CHANGE_KEY_PATTERN)
 MAX_DRAFT_OPERATIONS = 100
 MAX_DRAFT_OPERATION_VALUE_BYTES = 16 * 1024
 MAX_DRAFT_ANSWERS_BYTES = 64 * 1024
@@ -37,6 +40,16 @@ class FieldOperationKind(StrEnum):
 
     SET = "set"
     UNSET = "unset"
+
+
+class DraftChangeKey(str):
+    """A retry identity for one atomic draft edit."""
+
+    def __new__(cls, value: str) -> DraftChangeKey:
+        if not isinstance(value, str) or _IDEMPOTENCY_KEY.fullmatch(value) is None:
+            msg = tr(t"draft change keys must be 8-255 visible ASCII characters")
+            raise ValidationError(msg)
+        return super().__new__(cls, value)
 
 
 class DraftRevisionConflictError(ConflictError):
@@ -83,18 +96,16 @@ class DraftChange:
 
     base_revision: int
     client_instance_id: str
-    idempotency_key: str
+    idempotency_key: DraftChangeKey
     operations: tuple[FieldOperation, ...]
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "idempotency_key", DraftChangeKey(self.idempotency_key))
         if self.base_revision < 0:
             msg = tr(t"base_revision cannot be negative")
             raise ValidationError(msg)
         if _CLIENT_ID.fullmatch(self.client_instance_id) is None:
             msg = tr(t"client_instance_id has an invalid format")
-            raise ValidationError(msg)
-        if _IDEMPOTENCY_KEY.fullmatch(self.idempotency_key) is None:
-            msg = tr(t"idempotency_key must be 8-255 visible ASCII characters")
             raise ValidationError(msg)
         if not self.operations:
             msg = tr(t"draft changes require at least one operation")

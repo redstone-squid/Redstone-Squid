@@ -16,6 +16,7 @@ from squid.media.infrastructure.models import MediaNormalizationJobRecord, Media
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
     DraftChange,
+    DraftChangeKey,
     DraftRevisionConflictError,
     DraftSnapshot,
     DraftStatus,
@@ -93,7 +94,7 @@ def _change(*, key: str, operation_id: str) -> DraftChange:
     return DraftChange(
         base_revision=0,
         client_instance_id="web:integration-test",
-        idempotency_key=key,
+        idempotency_key=DraftChangeKey(key),
         operations=(
             FieldOperation(
                 UUID(operation_id),
@@ -153,6 +154,40 @@ async def test_paper_draft_round_trip_retains_server_derived_installation(
     assert loaded is not None
     assert loaded.origin is SubmissionOrigin.PAPER
     assert loaded.source_installation_id == UUID("00000000-0000-4000-8000-000000000299")
+
+
+@pytest.mark.asyncio
+async def test_manifest_upgrade_is_optimistic_and_idempotent_by_target(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+    await repository.create(_stored(account_id))
+
+    upgraded = await repository.upgrade_manifest(
+        DRAFT_ID,
+        account_id,
+        expected_revision=0,
+        target_schema_revision=2,
+        answers={"completion": "Built at spawn"},
+        updated_at=NOW.add(seconds=1),
+        expires_at=NOW.add(days=7, seconds=1, days_assumed_24h_ok=True),
+    )
+    replayed = await repository.upgrade_manifest(
+        DRAFT_ID,
+        account_id,
+        expected_revision=0,
+        target_schema_revision=2,
+        answers={"completion": "ignored replay payload"},
+        updated_at=NOW.add(seconds=2),
+        expires_at=NOW.add(days=7, seconds=2, days_assumed_24h_ok=True),
+    )
+
+    assert upgraded.draft.snapshot.schema_revision == 2
+    assert upgraded.draft.snapshot.revision == 1
+    assert upgraded.draft.snapshot.answers == {"completion": "Built at spawn"}
+    assert replayed.replayed
+    assert replayed.draft == upgraded.draft
 
 
 @pytest.mark.asyncio
@@ -298,7 +333,7 @@ async def test_expiry_fences_finalization_and_discards_media(
         media = await session.get(MediaNormalizationJobRecord, upload_id)
 
     assert draft is not None
-    assert draft.status == DraftStatus.EXPIRED.value
+    assert draft.status is DraftStatus.EXPIRED
     assert finalization is None
     assert media is not None
     assert media.status == "discarded"
@@ -317,7 +352,7 @@ async def test_delete_owned_rechecks_noneditable_status_under_repository_lock(
     async with async_session_factory.begin() as session:
         draft = await session.get(SubmissionDraft, DRAFT_ID)
         assert draft is not None
-        draft.status = status.value
+        draft.status = status
 
     with pytest.raises(DraftStateConflictError) as exc_info:
         await repository.delete_owned(DRAFT_ID, account_id)
@@ -336,7 +371,7 @@ async def test_delete_owned_accepts_needs_attention(
     async with async_session_factory.begin() as session:
         draft = await session.get(SubmissionDraft, DRAFT_ID)
         assert draft is not None
-        draft.status = DraftStatus.NEEDS_ATTENTION.value
+        draft.status = DraftStatus.NEEDS_ATTENTION
 
     assert await repository.delete_owned(DRAFT_ID, account_id) is True
     assert await repository.get(DRAFT_ID) is None

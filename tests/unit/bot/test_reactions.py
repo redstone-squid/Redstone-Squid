@@ -401,6 +401,30 @@ async def test_reaction_arriving_after_close_uses_bounded_recovery() -> None:
     assert recovered == [4]
 
 
+async def test_failed_recovery_logs_the_complete_replay_identity(caplog: pytest.LogCaptureFixture) -> None:
+    async def handle(_event: ReactionEvent) -> None:
+        pytest.fail("closed intake must not call the ordinary handler")
+
+    async def recover(_event: ReactionEvent) -> None:
+        msg = "database unavailable"
+        raise RuntimeError(msg)
+
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        router = ReactionRouter(make_reaction_bot().bot, supervisor)
+        router.subscribe("vote", add=handle, recover_add=recover)
+        await router.close()
+        with caplog.at_level(logging.ERROR, logger="squid.bot.reactions"):
+            await router.dispatch_add(make_reaction_payload(user_id=4))
+
+    failed = next(record for record in caplog.records if "requires operator reconciliation" in record.getMessage())
+    assert failed.__dict__["squid.reaction.consumer"] == "vote"
+    assert failed.__dict__["squid.reaction.message_id"] == 10
+    assert failed.__dict__["squid.reaction.channel_id"] == 20
+    assert failed.__dict__["squid.reaction.guild_id"] == 30
+    assert failed.__dict__["squid.reaction.user_id"] == 4
+    assert failed.__dict__["squid.reaction.emoji"] == "⭐"
+
+
 async def test_close_bounds_a_hanging_recovery_handoff(caplog: pytest.LogCaptureFixture) -> None:
     entered = anyio.Event()
 
@@ -427,3 +451,7 @@ async def test_close_bounds_a_hanging_recovery_handoff(caplog: pytest.LogCapture
             await router.close()
 
     assert any("recovery handoff did not finish" in record.getMessage() for record in caplog.records)
+    deferred = next(record for record in caplog.records if "requires operator reconciliation" in record.getMessage())
+    assert deferred.__dict__["squid.reaction.message_id"] == 10
+    assert deferred.__dict__["squid.reaction.user_id"] == 1
+    assert deferred.__dict__["squid.reaction.emoji"] == "⭐"

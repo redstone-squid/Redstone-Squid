@@ -5,13 +5,15 @@ dispatch and every service on the bot. It needs exactly three things: the guild'
 emoji palette, option parsing, and "create this poll and put it in this channel".
 """
 
+import logging
 from collections.abc import Sequence
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Protocol
 
 import discord
 
 from squid.bot._types import GuildMessageable
+from squid.bot.message_adapter import to_message_fact
 from squid.bot.ui import render_payload, text_node
 from squid.bot.utils.permissions import build_subject
 from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
@@ -20,6 +22,32 @@ from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class PollPublication:
+    """A poll session and the Discord message now attached to it."""
+
+    vote_session_id: int
+    message: discord.Message
+
+
+@dataclass(frozen=True, slots=True)
+class PendingPollPublication:
+    """The durable state a failed publication can resume from."""
+
+    vote_session_id: int
+    message: discord.Message | None
+
+
+class PollPublicationError(RuntimeError):
+    """A poll remains durable but its Discord publication did not finish."""
+
+    def __init__(self, pending: PendingPollPublication) -> None:
+        super().__init__(f"Poll {pending.vote_session_id} remains attachable after publication failed.")
+        self.pending = pending
 
 
 class PollPublisher(Protocol):
@@ -37,7 +65,9 @@ class PollPublisher(Protocol):
         duration_seconds: int,
         options: Sequence[VoteOption],
         scope: PollScope = PollScope.GUILD,
-    ) -> discord.Message: ...
+    ) -> PollPublication: ...
+
+    async def resume(self, pending: PendingPollPublication, channel: GuildMessageable) -> PollPublication: ...
 
     async def may_create_network(self, member: discord.Member) -> bool: ...
 
@@ -73,7 +103,7 @@ class DiscordPollPublisher:
         duration_seconds: int,
         options: Sequence[VoteOption],
         scope: PollScope = PollScope.GUILD,
-    ) -> discord.Message:
+    ) -> PollPublication:
         """Persist the poll, then hand one Discord message to the reconciler.
 
         Creation comes first and takes no channel, so a send that fails leaves an
@@ -94,7 +124,25 @@ class DiscordPollPublisher:
             guild_id=channel.guild.id,
             scope=scope,
         )
-        return await self.attach(session_id, channel)
+        try:
+            return await self.attach(session_id, channel)
+        except PollPublicationError as first_failure:
+            try:
+                return await self.resume(first_failure.pending, channel)
+            except PollPublicationError as final_failure:
+                pending = final_failure.pending
+                attributes: dict[str, int | str] = {"squid.vote.session_id": pending.vote_session_id}
+                if pending.message is not None:
+                    attributes.update(
+                        {
+                            "squid.message.id": pending.message.id,
+                            "squid.channel.id": pending.message.channel.id,
+                        }
+                    )
+                    if pending.message.guild is not None:
+                        attributes["squid.guild.id"] = pending.message.guild.id
+                logger.exception("Poll publication remains incomplete after retry", extra=attributes)
+                raise
 
     async def may_create_network(self, member: discord.Member) -> bool:
         """Whether `member` may publish a poll into every server's vote channel."""
@@ -102,16 +150,36 @@ class DiscordPollPublisher:
         capabilities = await self._bot.services.permissions.capabilities(subject, (VOTE_POLL_NETWORK_CREATE,))
         return VOTE_POLL_NETWORK_CREATE.name in capabilities
 
-    async def attach(self, vote_session_id: int, channel: GuildMessageable) -> discord.Message:
-        """Post one card for an existing poll and let the reconcile loop own it."""
+    async def attach(self, vote_session_id: int, channel: GuildMessageable) -> PollPublication:
+        """Send and attach one card, preserving retry state if either step fails."""
+        try:
+            message = await self._send_placeholder(channel)
+        except Exception as error:
+            raise PollPublicationError(PendingPollPublication(vote_session_id, None)) from error
+        return await self.attach_message(vote_session_id, message)
+
+    async def attach_message(self, vote_session_id: int, message: discord.Message) -> PollPublication:
+        """Attach an already sent message, safe to repeat after a partial failure."""
+        try:
+            await self._bot.services.messages.observe(to_message_fact(message))
+            await self._bot.services.votes.attach_message(vote_session_id, message.id)
+            await self._bot.refresh_posts("vote_session", str(vote_session_id))
+        except Exception as error:
+            raise PollPublicationError(PendingPollPublication(vote_session_id, message)) from error
+        return PollPublication(vote_session_id, message)
+
+    async def resume(self, pending: PendingPollPublication, channel: GuildMessageable) -> PollPublication:
+        """Resume the same session and reuse a message that Discord already accepted."""
+        if pending.message is None:
+            return await self.attach(pending.vote_session_id, channel)
+        return await self.attach_message(pending.vote_session_id, pending.message)
+
+    async def _send_placeholder(self, channel: GuildMessageable) -> discord.Message:
         result = await send_to(channel)(render_payload([text_node("Publishing poll…")]))
-        message = result.message
-        if message is None:
+        if result.message is None:
             detail = "poll placeholder delivery returned no message"
             raise RuntimeError(detail)
-        await self._bot.post_reconciler.adopt(message, "vote_session", str(vote_session_id), "vote_card")
-        await self._bot.refresh_posts("vote_session", str(vote_session_id))
-        return message
+        return result.message
 
 
 def _emoji_is_usable(bot: squid.bot.app.RedstoneSquid, guild_id: int, emoji: str) -> bool:

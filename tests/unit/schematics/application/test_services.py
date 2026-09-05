@@ -67,10 +67,15 @@ def litematic_bytes(payload: bytes = b"") -> bytes:
 class FakeResourcePack:
     """Return deterministic operator-owned pack bytes without filesystem I/O."""
 
-    def __init__(self, data: bytes = b"resource-pack") -> None:
+    def __init__(self, data: bytes = b"resource-pack", *, failure: Exception | None = None) -> None:
         self.data = data
+        self.failure = failure
+        self.load_calls = 0
 
     async def load(self) -> VerifiedResourcePack:
+        self.load_calls += 1
+        if self.failure is not None:
+            raise self.failure
         return VerifiedResourcePack.from_bytes(self.data)
 
     async def aclose(self) -> None:
@@ -480,6 +485,27 @@ async def test_render_is_skipped_when_the_stored_file_has_gone_missing() -> None
     assert analyzer.render_calls == []
 
 
+async def test_permanent_render_skips_do_not_acquire_unavailable_render_resources() -> None:
+    pack = FakeResourcePack(failure=SchematicRenderUnavailableError("pack unavailable"))
+    schematics, _, store = service(render_enabled=True, resource_pack=pack)
+
+    assert await schematics.prepare_render(404) == SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC)
+
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
+    assert await schematics.prepare_render(7) == SkippedRender(RenderSkipReason.NOT_SANITIZED)
+
+    await schematics.attach(
+        8,
+        IngestRequest(data=litematic_bytes(b"\x00"), filename="missing.litematic"),
+        publication=sanitized_publication(),
+    )
+    stored = await schematics.primary_for_build(8)
+    assert stored is not None
+    store.files.pop(stored.file_sha256)
+    assert await schematics.prepare_render(8) == SkippedRender(RenderSkipReason.MISSING_FILE)
+    assert pack.load_calls == 0
+
+
 async def test_explaining_a_render_skip_costs_nothing(caplog: pytest.LogCaptureFixture) -> None:
     """A moderator asking about a build must not set a render going to get an answer."""
     schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
@@ -488,7 +514,7 @@ async def test_explaining_a_render_skip_costs_nothing(caplog: pytest.LogCaptureF
     assert stored is not None
 
     with caplog.at_level(logging.INFO, logger="squid.schematics.application.services"):
-        assert schematics.explain_render_skip(stored) is RenderSkipReason.NOT_SANITIZED
+        assert await schematics.explain_render_skip(stored) is RenderSkipReason.NOT_SANITIZED
 
     assert analyzer.render_calls == []
     assert analyzer.capabilities_calls == 0
@@ -505,7 +531,23 @@ async def test_a_sanitized_schematic_within_budget_has_no_skip_to_explain() -> N
     stored = await schematics.primary_for_build(7)
     assert stored is not None
 
-    assert schematics.explain_render_skip(stored) is None
+    assert await schematics.explain_render_skip(stored) is None
+
+
+async def test_explaining_a_render_skip_reports_a_missing_source_without_acquiring_resources() -> None:
+    pack = FakeResourcePack(failure=SchematicRenderUnavailableError("pack unavailable"))
+    schematics, _, store = service(render_enabled=True, resource_pack=pack)
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        publication=sanitized_publication(),
+    )
+    stored = await schematics.primary_for_build(7)
+    assert stored is not None
+    store.files.clear()
+
+    assert await schematics.explain_render_skip(stored) is RenderSkipReason.MISSING_FILE
+    assert pack.load_calls == 0
 
 
 async def test_render_recipe_includes_the_schematic_content_identity() -> None:

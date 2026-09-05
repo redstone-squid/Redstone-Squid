@@ -161,9 +161,7 @@ def test_malformed_optional_sign_entries_are_skipped_without_inventing_coordinat
         {"pos":[1,2,3],"lines":["line one","line two"]}
     ]"""
 
-    assert nucleation_adapter._signs(schematic) == (
-        nucleation_adapter.SchematicSign(1, 2, 3, "line one\nline two"),
-    )
+    assert nucleation_adapter._signs(schematic) == (nucleation_adapter.SchematicSign(1, 2, 3, "line one\nline two"),)
 
 
 @pytest.mark.parametrize(

@@ -1,10 +1,12 @@
 from uuid import UUID
 
+import anyio
 import pytest
 
 from squid.core.errors import JSONValue
 from squid.submissions.application import (
     CURRENT_SUBMISSION_PROTOCOL,
+    CheckedInFormManifestRegistry,
     FormOptionSet,
     SubmissionFormService,
     build_submission_manifest,
@@ -13,6 +15,7 @@ from squid.submissions.domain import (
     ChoiceOption,
     ControlKind,
     DraftChange,
+    DraftChangeKey,
     DraftRevisionConflictError,
     DraftSnapshot,
     DraftStatus,
@@ -20,6 +23,7 @@ from squid.submissions.domain import (
     FieldOperationKind,
     SubmissionOrigin,
 )
+from squid_ui.text import Localization
 
 
 class FakeOptionCatalog:
@@ -102,12 +106,67 @@ def test_partial_validation_allows_incomplete_draft_but_rejects_wrong_values() -
 
 
 @pytest.mark.asyncio
+async def test_checked_in_registry_retains_v1_and_serves_v2_vocabulary() -> None:
+    registry = CheckedInFormManifestRegistry()
+
+    current = await registry.current(locale="en")
+    revision_one = await registry.get("build_submission.v1", 1, locale="en")
+    revision_two = await registry.get("build_submission.v1", 2, locale="en")
+
+    assert revision_one is not None
+    assert revision_two is not None
+    assert current.revision == 1
+    old_context = next(section for section in revision_one.common_sections if section.id == "provenance")
+    new_context = next(section for section in revision_two.common_sections if section.id == "submission_context")
+    assert (
+        tuple(field.id for field in old_context.fields)
+        == tuple(field.id for field in new_context.fields)
+        == (
+            "completion",
+            "ai_generated",
+            "sponsor_attribution",
+        )
+    )
+    assert new_context.title == "About this submission"
+    assert next(field for field in new_context.fields if field.id == "sponsor_attribution").label == (
+        "Credit the Minecraft server this submission came from"
+    )
+    door = revision_two.category("door")
+    geometry = next(section for section in door.sections if section.id == "door_geometry")
+    assert [field.label for field in geometry.fields[:3]] == [
+        "Clear opening width",
+        "Clear opening height",
+        "Clear opening depth",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_manifest_localization_is_isolated_between_tasks(monkeypatch: pytest.MonkeyPatch) -> None:
+    def prefixed_localization(locale: str | None) -> Localization:
+        prefix = locale or "default"
+        return Localization(locale=locale, gettext=lambda message: f"{prefix}:{message}")
+
+    monkeypatch.setattr("squid.submissions.application.forms.localization_for", prefixed_localization)
+    titles: dict[str, str] = {}
+
+    async def build_for(locale: str) -> None:
+        await anyio.lowlevel.checkpoint()
+        titles[locale] = build_submission_manifest(locale).common_sections[0].title
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(build_for, "alpha")
+        tasks.start_soon(build_for, "beta")
+
+    assert titles == {"alpha": "alpha:Build identity", "beta": "beta:Build identity"}
+
+
+@pytest.mark.asyncio
 async def test_dynamic_options_remain_category_aware() -> None:
-    service = SubmissionFormService(FakeOptionCatalog())
+    service = SubmissionFormService(FakeOptionCatalog(), CheckedInFormManifestRegistry())
 
     option_set = await service.options("approved_patterns", "door", locale="en")
 
-    assert service.manifest(locale="en").category("door").code == "door"
+    assert (await service.manifest(locale="en")).category("door").code == "door"
     assert option_set == FormOptionSet(
         "approved_patterns",
         "door",
@@ -128,7 +187,7 @@ def test_draft_field_operations_are_atomic_and_revisioned() -> None:
     change = DraftChange(
         base_revision=0,
         client_instance_id="fabric:device-1",
-        idempotency_key="edit-0001",
+        idempotency_key=DraftChangeKey("edit-0001"),
         operations=(
             FieldOperation(
                 UUID("00000000-0000-4000-8000-000000000002"),
@@ -170,7 +229,7 @@ def test_draft_lifecycle_prevents_edits_while_processing() -> None:
             DraftChange(
                 base_revision=0,
                 client_instance_id="web:browser-1",
-                idempotency_key="edit-0002",
+                idempotency_key=DraftChangeKey("edit-0002"),
                 operations=(
                     FieldOperation(
                         UUID("00000000-0000-4000-8000-000000000005"),

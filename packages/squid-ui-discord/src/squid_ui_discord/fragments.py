@@ -102,6 +102,7 @@ class Fragment:
         return self.plan.report
 
     def build_files(self) -> list[discord.File]:
+        """Materialize fresh file wrappers for this planned fragment."""
         return files_for(self.assets)
 
     def release(self) -> tuple[discord.ui.Item[Any], ...]:

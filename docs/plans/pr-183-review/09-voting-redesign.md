@@ -289,4 +289,6 @@ its target and subtype payload, with deferred PostgreSQL invariant triggers and 
 migration rollout. Rejection mappings and stable option IDs across Discord aliases are exhaustive.
 Application and REST discriminator matrices, VoteCog add/remove/clear recovery, sentinel migration,
 incoherent-upgrade rejection, and downgrade-removal scenarios close subplan 5. PostgreSQL execution
-is pending external CI; all test implementations are present.
+is pending external CI; all test implementations are present. `a6b772f1`, `dab73e7f`, and
+`542b9d45` additionally make Discord-message attachment idempotent and resume a partially published
+poll with the original vote session and message rather than creating duplicates.

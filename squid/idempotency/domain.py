@@ -1,10 +1,27 @@
 """Idempotency request and response values."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from uuid import UUID
 
 from squid.core.errors import ConflictError, ErrorCode
 from squid.core.i18n import tr
+
+
+class IdempotencyState(StrEnum):
+    """Durable lifecycle states for one caller-scoped reservation."""
+
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+
+class UnsafeHttpMethod(StrEnum):
+    """HTTP methods eligible for durable mutation replay."""
+
+    POST = "POST"
+    PUT = "PUT"
+    PATCH = "PATCH"
+    DELETE = "DELETE"
 
 
 @dataclass(frozen=True, slots=True)

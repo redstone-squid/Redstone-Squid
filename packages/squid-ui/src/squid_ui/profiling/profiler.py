@@ -296,6 +296,8 @@ class _NoOpOperation(AbstractContextManager[OperationRecorder], OperationRecorde
 
 
 class _NoOpDetachedSpan(_NoOpSpan, DetachedSpanRecorder):
+    """A detached no-op span whose inert lifetime ends when ``finish`` is called."""
+
     def finish(self, status: TraceStatus = TraceStatus.COMPLETED) -> None:
         pass
 
@@ -548,6 +550,8 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
 
 
 class _DetachedSpan(DetachedSpanRecorder):
+    """A manually recorded span whose lifetime ends when ``finish`` records it."""
+
     def __init__(self, profiler: MemoryProfiler, trace: _MutableTrace, span: _MutableSpan) -> None:
         self._profiler = profiler
         self._trace = trace

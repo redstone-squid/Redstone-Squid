@@ -114,6 +114,7 @@ class AttachedClassicContribution:
         return self.plan.report
 
     def build_files(self) -> list[discord.File]:
+        """Materialize fresh file wrappers for this contribution."""
         return files_for(self.assets)
 
     def stale(self) -> bool:

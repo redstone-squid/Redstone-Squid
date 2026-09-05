@@ -1,5 +1,6 @@
 """Notification domain values and subscription validation."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import cast
@@ -31,6 +32,26 @@ class NotificationKind(StrEnum):
     CREATOR_BUILD_CONFIRMED = "creator_build_confirmed"
     RECORD_GAINED = "record_gained"
     STAFF_BUILD_SUBMITTED = "staff_build_submitted"
+
+
+@dataclass(frozen=True, slots=True)
+class InboxVisibility:
+    """The notification kinds one authenticated inbox request may observe."""
+
+    include_staff: bool = False
+
+
+DEFAULT_INBOX_VISIBILITY = InboxVisibility()
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationCandidate:
+    """One recipient-specific notification awaiting preference materialization."""
+
+    account_id: int
+    source_key: str
+    kind: NotificationKind
+    payload: Mapping[str, object]
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,13 +148,19 @@ class RecordSubscriptionFilter:
                 raise DataIntegrityError(tr(t"invalid tag predicate"))
             if predicate_value is not None and not isinstance(predicate_value, (str, int, float, bool)):
                 raise DataIntegrityError(tr(t"invalid exact tag value"))
-            tags.append(TagPredicate(tag_id=tag_id, operator=operator, value=predicate_value))
-        return cls(
-            build_kinds=_string_set(value.get("build_kinds", []), "build_kinds"),
-            record_classes=_string_set(value.get("record_classes", []), "record_classes"),
-            version_scopes=_string_set(value.get("version_scopes", []), "version_scopes"),
-            tags=tuple(tags),
-        )
+            try:
+                tags.append(TagPredicate(tag_id=tag_id, operator=operator, value=predicate_value))
+            except ValidationError as error:
+                raise DataIntegrityError(tr(t"persisted tag predicate violates the notification contract")) from error
+        try:
+            return cls(
+                build_kinds=_string_set(value.get("build_kinds", []), "build_kinds"),
+                record_classes=_string_set(value.get("record_classes", []), "record_classes"),
+                version_scopes=_string_set(value.get("version_scopes", []), "version_scopes"),
+                tags=tuple(tags),
+            )
+        except ValidationError as error:
+            raise DataIntegrityError(tr(t"persisted record filter violates the notification contract")) from error
 
 
 @dataclass(frozen=True, slots=True)

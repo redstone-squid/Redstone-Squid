@@ -167,7 +167,9 @@ async def test_cancel_and_privacy_never_record_consent() -> None:
     assert privacy_prompt.consent is None
     assert not privacy_prompt.closed
     assert answers == [None]
-    assert privacy_responder.notices == [(resolve_text(tr(PRIVACY_NOTICE), NEUTRAL).content, sl.interactions.Visibility.PRIVATE)]
+    assert privacy_responder.notices == [
+        (resolve_text(tr(PRIVACY_NOTICE), NEUTRAL).content, sl.interactions.Visibility.PRIVATE)
+    ]
 
 
 def answer(view_holder: list[Any], *, agree: bool) -> None:
@@ -334,6 +336,7 @@ class _Gate(sl.Component):
 
     presses: int = sl.state(default=0)
     granted: bool = sl.state(default=False)
+    abandoned: int = sl.state(default=0)
 
     def render(self) -> Any:
         return [
@@ -348,7 +351,13 @@ class _Gate(sl.Component):
 
     async def _ask(self, event: sl.PressEvent) -> None:
         request = await sd.request(event)
-        await request_consent(request, user_id=USER_ID, on_answer=self._answered, parent=request.root)
+        await request_consent(
+            request,
+            user_id=USER_ID,
+            on_answer=self._answered,
+            on_abandon=self._abandoned,
+            parent=request.root,
+        )
 
     async def _count(self, event: sl.PressEvent) -> None:
         del event
@@ -356,6 +365,9 @@ class _Gate(sl.Component):
 
     async def _answered(self, _prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
         self.granted = consent is not None
+
+    async def _abandoned(self) -> None:
+        self.abandoned += 1
 
 
 def _clicked(client: Any, *, message_id: int) -> Any:
@@ -415,4 +427,21 @@ async def test_the_prompt_carries_the_answer_back_to_the_panel() -> None:
     await prompt.dispatch("accept", _clicked(bot, message_id=3))
 
     assert panel.granted
+    assert panel.abandoned == 0
     assert prompt.finished
+
+
+async def test_an_unanswered_prompt_runs_cleanup_from_its_owned_finish_lifecycle() -> None:
+    bot = make_layout_bot()
+    registry = bot.sessions
+    panel = _Gate()
+    message_root = sd.MessageRoot(panel, access=Everyone(), timeout=None)
+    assert isinstance(await registry.open(message_root, delivered_to(message_harness())), Opened)
+    commit_render(message_root)
+    await message_root.dispatch("ask", _clicked(bot, message_id=1))
+
+    prompt = _prompt_of(registry, message_root)
+    assert prompt is not None
+    await prompt.finish()
+
+    assert panel.abandoned == 1

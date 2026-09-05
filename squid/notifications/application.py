@@ -10,14 +10,16 @@ from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.events import DomainEvent
 from squid.notifications.domain import (
+    DEFAULT_INBOX_VISIBILITY,
     InboxNotification,
+    InboxVisibility,
     NotificationPreferences,
     NotificationSubscription,
     PendingNotificationDelivery,
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.errors import NotificationSubscriptionNotFoundError
+from squid.notifications.errors import NotificationNotFoundError, NotificationSubscriptionNotFoundError
 
 
 class NotificationRepository(Protocol):
@@ -52,12 +54,14 @@ class NotificationRepository(Protocol):
         after_id: int | None,
         before_id: int | None,
         limit: int,
-        include_staff: bool,
+        visibility: InboxVisibility,
     ) -> Sequence[InboxNotification]: ...
 
-    async def count_inbox(self, account_id: int, *, include_staff: bool) -> int: ...
+    async def count_inbox(self, account_id: int, *, visibility: InboxVisibility) -> int: ...
 
-    async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool) -> bool: ...
+    async def mark_read(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool: ...
+
+    async def mark_unread(self, account_id: int, notification_id: int, *, visibility: InboxVisibility) -> bool: ...
 
     async def materialize(self, event: DomainEvent) -> None: ...
 
@@ -140,7 +144,7 @@ class NotificationService:
         *,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        include_staff: bool = False,
+        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
     ) -> Page[InboxNotification]:
         """Return one page of web-visible inbox items in newest-first display order."""
         if not 1 <= page_size <= 100:
@@ -153,23 +157,38 @@ class NotificationService:
             before_id=selector.before_id,
             # One row past the page proves whether another page follows.
             limit=page_size + 1,
-            include_staff=include_staff,
+            visibility=visibility,
         )
         return keyset_page(
             rows,
             selector=selector,
             page_size=page_size,
-            total=await self._repository.count_inbox(account_id, include_staff=include_staff),
+            total=await self._repository.count_inbox(account_id, visibility=visibility),
             keyset=True,
             id_of=lambda item: item.id,
         )
 
-    async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool = False) -> None:
+    async def mark_read(
+        self,
+        account_id: int,
+        notification_id: int,
+        *,
+        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
+    ) -> None:
         """Mark a visible caller-owned inbox item as read."""
-        if not await self._repository.mark_read(account_id, notification_id, include_staff=include_staff):
-            raise NotificationSubscriptionNotFoundError(
-                resource="notification", public_context={"notification_id": notification_id}
-            )
+        if not await self._repository.mark_read(account_id, notification_id, visibility=visibility):
+            raise NotificationNotFoundError(public_context={"notification_id": notification_id})
+
+    async def mark_unread(
+        self,
+        account_id: int,
+        notification_id: int,
+        *,
+        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
+    ) -> None:
+        """Mark a visible caller-owned inbox item as unread."""
+        if not await self._repository.mark_unread(account_id, notification_id, visibility=visibility):
+            raise NotificationNotFoundError(public_context={"notification_id": notification_id})
 
     async def materialize(self, event: DomainEvent) -> None:
         """Project one event into inbox and DM work; safe on redelivery."""

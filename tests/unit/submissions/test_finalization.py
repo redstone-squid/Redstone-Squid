@@ -1,6 +1,6 @@
 """Submission finalization tests: the same path serves the bot and the API."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from uuid import UUID
 
@@ -10,8 +10,9 @@ from whenever import Instant
 from squid.core.errors import DataIntegrityError, JSONValue
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import (
-    ActionableSubmissionError,
     AppliedDraftChange,
+    AppliedDraftUpgrade,
+    BuildSubmissionRejectedError,
     ClaimedFinalizationJob,
     FinalizationFailureOutcome,
     FinalizationJobSnapshot,
@@ -19,17 +20,18 @@ from squid.submissions.application import (
     SubmissionDraftService,
     SubmissionFinalizationService,
     SubmissionFinalizationWorker,
-    SubmissionNotificationEvent,
-    SubmissionReviewEvent,
+    SubmissionPreparation,
     build_submission_manifest,
 )
 from squid.submissions.domain import (
     DoorSubmissionDetails,
     DraftChange,
+    DraftChangeKey,
     DraftSnapshot,
     DraftStatus,
     ExtenderSubmissionDetails,
     FinalizationJobStatus,
+    FinalizedBuild,
     FormManifest,
     GeneralSubmissionDetails,
     NormalizedSubmission,
@@ -39,10 +41,10 @@ from squid.submissions.domain import (
     SubmissionAttentionReason,
     SubmissionCategory,
     SubmissionOrigin,
-    SubmissionTargetResult,
 )
 from squid.submissions.errors import DraftAccessDeniedError
-from squid.submissions.infrastructure.finalization_repository import _decode_submission, _encode_submission
+from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
+from squid.submissions.payload_integrity import submission_payload_digest
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000401")
 JOB_ID = UUID("00000000-0000-4000-8000-000000000402")
@@ -73,9 +75,8 @@ class FakeManifestRegistry:
         *,
         locale: str | None,
     ) -> FormManifest | None:
-        del locale
-        if (schema_id, revision) == (self.manifest.schema_id, self.manifest.revision):
-            return self.manifest
+        if schema_id == self.manifest.schema_id and revision in {1, 2}:
+            return build_submission_manifest(locale, revision=revision)
         return None
 
 
@@ -108,7 +109,7 @@ class FakeDraftRepository:
         self,
         draft_id: UUID,
         account_id: int,
-        idempotency_key: str,
+        idempotency_key: DraftChangeKey,
     ) -> AppliedDraftChange | None:
         del draft_id, account_id, idempotency_key
         return None
@@ -143,6 +144,20 @@ class FakeDraftRepository:
             expires_at=expires_at,
         )
         return self.draft
+
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_schema_revision: int,
+        answers: Mapping[str, JSONValue],
+        updated_at: Instant,
+        expires_at: Instant,
+    ) -> AppliedDraftUpgrade:
+        del draft_id, account_id, expected_revision, target_schema_revision, answers, updated_at, expires_at
+        raise NotImplementedError
 
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
         del draft_id, account_id
@@ -179,7 +194,7 @@ class FakeFinalizationJobs:
         self.enqueued: NormalizedSubmission | None = None
         self.attention: tuple[SubmissionAttentionIssue, ...] = ()
         self.claimed: tuple[ClaimedFinalizationJob, ...] = ()
-        self.completed: SubmissionTargetResult | None = None
+        self.completed: FinalizedBuild | None = None
         self.worker_attention: tuple[SubmissionAttentionIssue, ...] = ()
         self.failures: list[str] = []
 
@@ -227,7 +242,7 @@ class FakeFinalizationJobs:
     async def complete(
         self,
         job: ClaimedFinalizationJob,
-        result: SubmissionTargetResult,
+        result: FinalizedBuild,
         *,
         now: Instant,
     ) -> bool:
@@ -266,32 +281,16 @@ class FakeFinalizationJobs:
         return FinalizationFailureOutcome(applied=True, dead=job.attempts >= max_attempts)
 
 
-class FakeTarget:
-    def __init__(self, result: SubmissionTargetResult | Exception) -> None:
+class FakeWriter:
+    def __init__(self, result: FinalizedBuild | Exception) -> None:
         self.result = result
         self.payloads: list[NormalizedSubmission] = []
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> SubmissionTargetResult:
+    async def create_or_get(self, submission: NormalizedSubmission) -> FinalizedBuild:
         self.payloads.append(submission)
         if isinstance(self.result, Exception):
             raise self.result
         return self.result
-
-
-class FakeNotifications:
-    def __init__(self) -> None:
-        self.events: list[SubmissionNotificationEvent] = []
-
-    async def publish(self, event: SubmissionNotificationEvent) -> None:
-        self.events.append(event)
-
-
-class FakeReviews:
-    def __init__(self) -> None:
-        self.events: list[SubmissionReviewEvent] = []
-
-    async def publish(self, event: SubmissionReviewEvent) -> None:
-        self.events.append(event)
 
 
 def _answers() -> dict[str, JSONValue]:
@@ -361,7 +360,11 @@ async def _submit(
     repository = FakeDraftRepository(_stored(origin, category=category, answers=answers))
     drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
-    service = SubmissionFinalizationService(drafts, FakeArtifacts(readiness), jobs, FakeSponsors(sponsor))
+    service = SubmissionFinalizationService(
+        drafts,
+        SubmissionPreparation(FakeArtifacts(readiness), FakeSponsors(sponsor)),
+        jobs,
+    )
     return await service.submit(DRAFT_ID, 7, locale="en", now=NOW), jobs
 
 
@@ -440,7 +443,7 @@ async def test_paper_sponsor_request_snapshots_only_resolved_public_profile() ->
     assert jobs.enqueued is not None
     assert jobs.enqueued.source_installation_id == INSTALLATION_ID
     assert jobs.enqueued.sponsor == sponsor
-    assert _encode_submission(jobs.enqueued)["payload_schema"] == 2
+    assert encode_submission(jobs.enqueued)["payload_schema"] == 2
 
 
 @pytest.mark.asyncio
@@ -455,8 +458,8 @@ async def test_non_attributed_paper_payload_stays_schema_one_and_retains_new_pro
 
     assert result.status is FinalizationJobStatus.PENDING
     assert jobs.enqueued is not None
-    encoded = _encode_submission(jobs.enqueued)
-    decoded = _decode_submission(encoded)
+    encoded = encode_submission(jobs.enqueued)
+    decoded = decode_submission(encoded)
     assert encoded["payload_schema"] == 1
     assert decoded.source_installation_id == INSTALLATION_ID
     assert decoded.sponsor_attribution is False
@@ -589,7 +592,11 @@ async def test_status_rechecks_draft_ownership_before_returning_job() -> None:
     drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
     jobs.snapshot = _snapshot(FinalizationJobStatus.PENDING)
-    service = SubmissionFinalizationService(drafts, FakeArtifacts(SubmissionArtifactReadiness()), jobs)
+    service = SubmissionFinalizationService(
+        drafts,
+        SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
+        jobs,
+    )
 
     assert await service.status(DRAFT_ID, 7) == jobs.snapshot
 
@@ -601,7 +608,11 @@ async def _payload() -> NormalizedSubmission:
     repository = FakeDraftRepository(_stored(SubmissionOrigin.WEB))
     drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
-    service = SubmissionFinalizationService(drafts, FakeArtifacts(SubmissionArtifactReadiness()), jobs)
+    service = SubmissionFinalizationService(
+        drafts,
+        SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
+        jobs,
+    )
 
     await service.submit(DRAFT_ID, 7, locale="en", now=NOW)
     assert jobs.enqueued is not None
@@ -610,12 +621,58 @@ async def _payload() -> NormalizedSubmission:
 
 @pytest.mark.asyncio
 async def test_legacy_sponsor_request_is_refused_instead_of_silently_dropped() -> None:
-    encoded = _encode_submission(await _payload())
+    encoded = encode_submission(await _payload())
     encoded["payload_schema"] = 1
     encoded["sponsor_attribution"] = True
 
     with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
-        _decode_submission(encoded)
+        decode_submission(encoded)
+
+
+@pytest.mark.asyncio
+async def test_schema_one_fixture_retains_shape_digest_and_round_trip() -> None:
+    payload = await _payload()
+    encoded = encode_submission(payload)
+
+    assert encoded["payload_schema"] == 1
+    assert encoded["sponsor_attribution"] is False
+    assert encoded["source_installation_id"] is None
+    assert encoded["sponsor"] is None
+    assert submission_payload_digest(encoded) == "d48727ce2b8d2b8a57a2e754387fe7ecf8134e683ae7cc3aa64e3647317acd67"
+    assert decode_submission(encoded) == payload
+
+
+@pytest.mark.asyncio
+async def test_payload_codec_rejects_unknown_fields_and_type_coercion() -> None:
+    encoded = encode_submission(await _payload())
+
+    with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
+        decode_submission(encoded | {"unknown": "field"})
+
+    with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
+        decode_submission(encoded | {"owner_account_id": True})
+
+
+@pytest.mark.asyncio
+async def test_schema_two_requires_attribution_and_verified_sponsor() -> None:
+    sponsor = PublicSponsor(INSTALLATION_ID, display_name="Example server")
+    _, jobs = await _submit(
+        SubmissionOrigin.PAPER,
+        SubmissionArtifactReadiness(
+            schematic_state=SchematicArtifactState.SANITIZED,
+            sanitized_schematic_id=SCHEMATIC_ID,
+        ),
+        answers=_answers() | {"sponsor_attribution": True},
+        sponsor=sponsor,
+    )
+    assert jobs.enqueued is not None
+    encoded = encode_submission(jobs.enqueued)
+
+    with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
+        decode_submission(encoded | {"sponsor_attribution": False})
+
+    with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):
+        decode_submission(encoded | {"sponsor": None})
 
 
 def _claim(payload: NormalizedSubmission, attempts: int = 1) -> ClaimedFinalizationJob:
@@ -631,21 +688,16 @@ def _claim(payload: NormalizedSubmission, attempts: int = 1) -> ClaimedFinalizat
 
 
 @pytest.mark.asyncio
-async def test_worker_completes_and_emits_events_naming_no_chat_client() -> None:
+async def test_worker_completes_after_retry_safe_build_creation() -> None:
     payload = await _payload()
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload),)
-    target_result = SubmissionTargetResult(41, "postgres_builds", {"source": "draft"})
-    notifications = FakeNotifications()
-    reviews = FakeReviews()
-    worker = SubmissionFinalizationWorker(jobs, FakeTarget(target_result), notifications, reviews)
+    target_result = FinalizedBuild(41)
+    worker = SubmissionFinalizationWorker(jobs, FakeWriter(target_result))
 
     await worker.process_batch(now=NOW)
 
     assert jobs.completed == target_result
-    assert notifications.events[0].build_id == 41
-    assert reviews.events[0].build_id == 41
-    assert notifications.events[0].event_id != reviews.events[0].event_id
 
 
 @pytest.mark.asyncio
@@ -654,31 +706,23 @@ async def test_actionable_target_failure_returns_draft_to_attention() -> None:
     issue = SubmissionAttentionIssue("restrictions", SubmissionAttentionReason.TARGET_REJECTED)
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload),)
-    notifications = FakeNotifications()
     worker = SubmissionFinalizationWorker(
         jobs,
-        FakeTarget(ActionableSubmissionError((issue,))),
-        notifications,
-        FakeReviews(),
+        FakeWriter(BuildSubmissionRejectedError((issue,))),
     )
 
     await worker.process_batch(now=NOW)
 
     assert jobs.worker_attention == (issue,)
-    assert notifications.events[0].issues == (issue,)
 
 
 @pytest.mark.asyncio
-async def test_unexpected_failure_retries_then_notifies_after_dead_letter() -> None:
+async def test_unexpected_failure_retries_then_dead_letters() -> None:
     payload = await _payload()
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload, attempts=3),)
-    notifications = FakeNotifications()
-    worker = SubmissionFinalizationWorker(jobs, FakeTarget(RuntimeError("secret")), notifications, FakeReviews())
+    worker = SubmissionFinalizationWorker(jobs, FakeWriter(RuntimeError("secret")))
 
     await worker.process_batch(now=NOW)
 
     assert jobs.failures == ["RuntimeError"]
-    assert notifications.events[0].issues == (
-        SubmissionAttentionIssue("submission", SubmissionAttentionReason.RETRY_EXHAUSTED),
-    )

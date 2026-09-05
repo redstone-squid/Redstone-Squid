@@ -28,7 +28,7 @@ async def get_services(request: Request) -> ApiServices:
     return runtime.services
 
 
-Services = Annotated[ApiServices, Depends(get_services)]
+type Services = Annotated[ApiServices, Depends(get_services)]
 
 
 def get_builds(services: Services) -> BuildService:
@@ -91,19 +91,19 @@ def get_error_reports(services: Services) -> ErrorReportService:
     return services.error_reports
 
 
-Permissions = Annotated[PermissionService, Depends(get_permissions)]
-ErrorReports = Annotated[ErrorReportService, Depends(get_error_reports)]
-BuildCommands = Annotated[BuildService, Depends(get_builds)]
-BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]
-CurrentCaller = Annotated[Caller, Depends(current_caller)]
-Records = Annotated[RecordService, Depends(get_records)]
-Notifications = Annotated[NotificationService, Depends(get_notifications)]
-Schematics = Annotated[SchematicService, Depends(get_schematics)]
-Search = Annotated[SearchService, Depends(get_search)]
-Suggestions = Annotated[SuggestionService, Depends(get_suggestions)]
-Tags = Annotated[TagService, Depends(get_tags)]
-Accounts = Annotated[AccountService, Depends(get_accounts)]
-Versions = Annotated[VersionService, Depends(get_versions)]
-VoteMembers = Annotated[InteractiveVoteActorResolver | None, Depends(get_vote_members)]
-Votes = Annotated[VoteService, Depends(get_votes)]
-WebAuth = Annotated[WebSessionService | None, Depends(get_web_auth)]
+type Permissions = Annotated[PermissionService, Depends(get_permissions)]
+type ErrorReports = Annotated[ErrorReportService, Depends(get_error_reports)]
+type BuildCommands = Annotated[BuildService, Depends(get_builds)]
+type BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]
+type CurrentCaller = Annotated[Caller, Depends(current_caller)]
+type Records = Annotated[RecordService, Depends(get_records)]
+type Notifications = Annotated[NotificationService, Depends(get_notifications)]
+type Schematics = Annotated[SchematicService, Depends(get_schematics)]
+type Search = Annotated[SearchService, Depends(get_search)]
+type Suggestions = Annotated[SuggestionService, Depends(get_suggestions)]
+type Tags = Annotated[TagService, Depends(get_tags)]
+type Accounts = Annotated[AccountService, Depends(get_accounts)]
+type Versions = Annotated[VersionService, Depends(get_versions)]
+type VoteMembers = Annotated[InteractiveVoteActorResolver | None, Depends(get_vote_members)]
+type Votes = Annotated[VoteService, Depends(get_votes)]
+type WebAuth = Annotated[WebSessionService | None, Depends(get_web_auth)]

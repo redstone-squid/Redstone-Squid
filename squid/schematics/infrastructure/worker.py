@@ -97,6 +97,14 @@ asyncio's 64 KiB default, and overrunning it raises `ValueError` out of `readlin
 exactly the diagnostics this pipe exists to carry.
 """
 
+WORKER_FAILURE_CLEANUP_SECONDS = 0.1
+"""Extra bounded reap budget after an operation deadline or worker crash.
+
+The user deadline ends engine work. Process-group kill happens synchronously, then this
+separate budget collects the exit code and buffered diagnostics without turning a timeout
+into the previous multi-second wait.
+"""
+
 
 @dataclasses.dataclass(slots=True)
 class _StderrPump:
@@ -136,6 +144,7 @@ class _Worker:
         self._lock = asyncio.Lock()
         self._next_id = 0
         self._started_once = False
+        self._restart_not_before = 0.0
 
     async def request(
         self, operation: Operation, params: Mapping[str, Any], payloads: Sequence[bytes], timeout: float
@@ -161,11 +170,11 @@ class _Worker:
                     response = await wire.read_frame(process.stdout)
                     wire.validate_worker_response(response, request_id=self._next_id, operation=operation)
         except TimeoutError:
-            exit_code = await self._terminate()
+            exit_code = await self._cleanup_failed_worker()
             _record_worker_failure(exit_code, reason="timeout")
             raise SchematicTimeoutError(operation=operation, timeout_seconds=timeout) from None
         except FrameStreamClosed, ConnectionResetError, BrokenPipeError:
-            exit_code = await self._terminate()
+            exit_code = await self._cleanup_failed_worker()
             _record_worker_failure(exit_code, reason="crash")
             raise SchematicWorkerCrashedError(operation=operation, exit_code=exit_code) from None
         return response
@@ -173,6 +182,10 @@ class _Worker:
     async def _ensure_started(self) -> asyncio.subprocess.Process:
         if self._process is not None and self._process.returncode is None:
             return self._process
+
+        restart_delay = self._restart_not_before - asyncio.get_running_loop().time()
+        if restart_delay > 0:
+            await asyncio.sleep(restart_delay)
 
         limits = json.dumps(
             {
@@ -200,6 +213,16 @@ class _Worker:
         self._started_once = True
         self._start_pump(self._process)
         return self._process
+
+    def defer_restart(self, delay: float) -> None:
+        """Withhold this worker from respawn without delaying the failed caller."""
+        self._restart_not_before = max(self._restart_not_before, asyncio.get_running_loop().time() + delay)
+
+    async def _cleanup_failed_worker(self) -> int | None:
+        """Kill immediately, then spend only the documented failure-cleanup budget reaping."""
+        with anyio.move_on_after(WORKER_FAILURE_CLEANUP_SECONDS):
+            return await self._terminate()
+        return None
 
     def _start_pump(self, process: asyncio.subprocess.Process) -> _StderrPump:
         """Hand one pump to whoever owns this worker, keeping the handle to stop it by."""
@@ -260,18 +283,22 @@ class _Worker:
                 await pump.finished.wait()
             return None
 
-        if process.returncode is None:
-            with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
-                if os.name == "posix":
-                    os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-                else:  # pragma: no cover - Windows
-                    process.kill()
-        with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(process.wait(), 5.0)
-        # Drain after the process is gone, never before: on a crash the traceback we care about
-        # is still sitting in the pipe at exactly the moment the old code cancelled the pump.
-        if pump is not None:
-            await pump.drain(2.0)
+        try:
+            if process.returncode is None:
+                with contextlib.suppress(ProcessLookupError, PermissionError, OSError):
+                    if os.name == "posix":
+                        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+                    else:  # pragma: no cover - Windows
+                        process.kill()
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(process.wait(), 5.0)
+            # Drain after the process is gone, never before: on a crash the traceback we care about
+            # is still sitting in the pipe at exactly the moment the old code cancelled the pump.
+            if pump is not None:
+                await pump.drain(2.0)
+        finally:
+            if pump is not None and not pump.finished.is_set():
+                pump.scope.cancel()
         if process.returncode is not None:
             logger.log(
                 logging.INFO if process.returncode == 0 else logging.WARNING,
@@ -617,9 +644,9 @@ class SchematicWorkerPool:
                 loop_time = asyncio.get_running_loop().time()
                 self._breaker.record_failure(loop_time)
                 self._note_breaker_state(loop_time)
-                # A pause before this worker is next handed out, so a payload a user keeps
-                # retrying cannot spawn processes as fast as they can press the button.
-                await asyncio.sleep(self._breaker.backoff_seconds(self._config.restart_backoff_seconds))
+                # The next caller pays this restart cooldown inside its own deadline; the
+                # caller that already timed out returns after only the cleanup budget.
+                worker.defer_restart(self._breaker.backoff_seconds(self._config.restart_backoff_seconds))
                 raise
             finally:
                 self._idle.append(worker)

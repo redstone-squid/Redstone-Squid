@@ -15,21 +15,19 @@ from squid.builds.domain import (
 )
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import InvalidStateError, JSONValue
-from squid.submissions.application.finalization import ActionableSubmissionError
+from squid.submissions.application.finalization import BuildSubmissionRejectedError
 from squid.submissions.domain.finalization import (
     DoorSubmissionDetails,
     ExtenderOrientation,
     ExtenderSubmissionDetails,
+    FinalizedBuild,
     NormalizedSubmission,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
     SubmissionCategory,
-    SubmissionTargetResult,
 )
 from squid.tags.domain import TagAssignment, TagDefinition, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.versions.domain import MinecraftVersion
-
-TARGET_KEY = "postgres_builds"
 
 _CATEGORY_MAP = {
     SubmissionCategory.DOOR: BuildCategory.DOOR,
@@ -51,7 +49,7 @@ _RESTRICTION_FIELDS = {
 }
 
 
-class ProviderNeutralBuilds(Protocol):
+class SubmissionBuildCommands(Protocol):
     """The build command needed by synchronized finalization."""
 
     async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None: ...
@@ -79,12 +77,12 @@ class CanonicalSubmissionVersions(Protocol):
     async def list_all(self) -> Sequence[MinecraftVersion]: ...
 
 
-class BuildSubmissionTarget:
+class CanonicalBuildSubmissionWriter:
     """Create or retrieve one build using its source draft as the retry key."""
 
     def __init__(
         self,
-        builds: ProviderNeutralBuilds,
+        builds: SubmissionBuildCommands,
         tags: ApprovedSubmissionTags,
         versions: CanonicalSubmissionVersions,
     ) -> None:
@@ -92,13 +90,13 @@ class BuildSubmissionTarget:
         self._tags = tags
         self._versions = versions
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> SubmissionTargetResult:
+    async def create_or_get(self, submission: NormalizedSubmission) -> FinalizedBuild:
         """Translate a normalized payload and delegate retry-safe creation to builds."""
         existing = await self._builds.get_by_source_submission_draft_id(submission.source_draft_id)
         if existing is not None:
             if existing.submitter_account_id != submission.owner_account_id or existing.sponsor != submission.sponsor:
                 raise _target_rejected()
-            return _target_result(existing, submission)
+            return _target_result(existing)
 
         await self._validate_source_version(submission.source_version)
         definitions = await self._resolve_tags(submission)
@@ -115,12 +113,12 @@ class BuildSubmissionTarget:
             raise _target_rejected() from error
         if persisted.submitter_account_id != submission.owner_account_id or persisted.sponsor != submission.sponsor:
             raise _target_rejected()
-        return _target_result(persisted, submission)
+        return _target_result(persisted)
 
     async def _validate_source_version(self, source_version: str) -> None:
         canonical_versions = {str(version) for version in await self._versions.list_all()}
         if source_version not in canonical_versions:
-            raise ActionableSubmissionError(
+            raise BuildSubmissionRejectedError(
                 (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
             )
 
@@ -162,7 +160,7 @@ class BuildSubmissionTarget:
         if not any(creator.strip() for creator in submission.creators):
             issues.append(SubmissionAttentionIssue("creators", SubmissionAttentionReason.TOO_SHORT))
         if issues:
-            raise ActionableSubmissionError(tuple(issues))
+            raise BuildSubmissionRejectedError(tuple(issues))
         return selected
 
 
@@ -235,19 +233,15 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
     return BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[submission.category]](**common)
 
 
-def _target_result(build: Build, submission: NormalizedSubmission) -> SubmissionTargetResult:
+def _target_result(build: Build) -> FinalizedBuild:
     if build.id is None:
         msg = "Build persistence returned an aggregate without an identifier."
         raise RuntimeError(msg)
-    return SubmissionTargetResult(
-        build_id=build.id,
-        target_key=TARGET_KEY,
-        provenance=_result_provenance(submission),
-    )
+    return FinalizedBuild(build.id)
 
 
-def _target_rejected() -> ActionableSubmissionError:
-    return ActionableSubmissionError(
+def _target_rejected() -> BuildSubmissionRejectedError:
+    return BuildSubmissionRejectedError(
         (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
     )
 
@@ -295,28 +289,6 @@ def _submission_provenance(submission: NormalizedSubmission) -> dict[str, JSONVa
                 else None
             ),
         },
-    }
-
-
-def _result_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue]:
-    return {
-        "source_draft_id": str(submission.source_draft_id),
-        "owner_account_id": submission.owner_account_id,
-        "origin": submission.origin.value,
-        "schema_id": submission.schema_id,
-        "schema_revision": submission.schema_revision,
-        "source_installation_id": (
-            str(submission.source_installation_id) if submission.source_installation_id is not None else None
-        ),
-        "sponsor_installation_id": (
-            str(submission.sponsor.installation_id) if submission.sponsor is not None else None
-        ),
-        "normalized_media_upload_ids": [str(value) for value in submission.artifacts.normalized_media_upload_ids],
-        "sanitized_schematic_id": (
-            str(submission.artifacts.sanitized_schematic_id)
-            if submission.artifacts.sanitized_schematic_id is not None
-            else None
-        ),
     }
 
 

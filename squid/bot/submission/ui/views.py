@@ -25,36 +25,178 @@ from squid.bot.submission.ui.fields import (
 from squid.bot.ui import DISCORD_YELLOW, tr
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
-from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, BuildDraft, Status
+from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, BuildDraft, DoorBuild, Status
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.topics import resource_topic
 from squid_ui_discord.sessions import AdmissionSpec, Reject
 
 _DOOR_ONLY = frozenset({BuildCategory.DOOR})
 
-EDIT_FIELDS: tuple[BuildFieldSpec, ...] = (
-    field_spec("dimensions", "Width x Height x Depth", required=True),
-    field_spec("door_dimensions", "2x2", required=True, categories=_DOOR_ONLY),
-    field_spec("version_spec", "1.16 - 1.17.3"),
-    field_spec("door_type", "Full lamp, Funnel"),
-    field_spec("door_orientation_type", "Door, Trapdoor, Skydoor", categories=_DOOR_ONLY),
-    field_spec("wiring_placement_restrictions", "Seamless, Full Flush"),
-    field_spec("animated_restrictions", "Symmetrical, Full Sync"),
-    field_spec("component_restrictions", "Observerless"),
-    field_spec("miscellaneous_restrictions", "Directional, Locational"),
-    field_spec("normal_closing_time", "in gameticks", categories=_DOOR_ONLY),
-    field_spec("normal_opening_time", "in gameticks", categories=_DOOR_ONLY),
-    field_spec("creators_ign", "Me, My Dog"),
-    field_spec("image_urls", "any urls, comma separated", parser=parse_web_urls),
-    field_spec("video_urls", "any urls, comma separated", parser=parse_web_urls),
-    field_spec("world_download_urls", "any urls, comma separated", parser=parse_web_urls),
-    field_spec("completion_time", "Any time format works"),
-    field_spec("extra_user_info", "Anything a reader should know", display=FieldDisplay.PARAGRAPH),
-    field_spec("server_ip", "play.example.com"),
-    field_spec("coordinates", "x y z"),
-    field_spec("command_to_get_to_build", "/warp door"),
+
+def _door(build: Build) -> DoorBuild:
+    if not isinstance(build, DoorBuild):
+        message = "door-only field bound to a non-door build"
+        raise TypeError(message)
+    return build
+
+
+def _server_info_value(build: Build, key: str) -> str | None:
+    return cast(str | None, build.extra_info.get("server_info", {}).get(key))
+
+
+EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
+    field_spec(
+        "dimensions",
+        tuple[int | None, int | None, int | None],
+        "Width x Height x Depth",
+        reader=lambda build: build.dimensions,
+        patch=lambda value: BuildEditPatch(dimensions=value),
+        required=True,
+    ),
+    field_spec(
+        "door_dimensions",
+        tuple[int | None, int | None, int | None],
+        "2x2",
+        reader=lambda build: _door(build).door_dimensions,
+        patch=lambda value: BuildEditPatch(door_dimensions=value),
+        required=True,
+        categories=_DOOR_ONLY,
+    ),
+    field_spec(
+        "version_spec",
+        str | None,
+        "1.16 - 1.17.3",
+        reader=lambda build: build.version_spec,
+        patch=lambda value: BuildEditPatch(version_spec=value),
+    ),
+    field_spec(
+        "door_type",
+        list[str],
+        "Full lamp, Funnel",
+        reader=lambda build: list(build.patterns),
+        patch=lambda value: BuildEditPatch(door_type=value),
+    ),
+    field_spec(
+        "door_orientation_type",
+        str | None,
+        "Door, Trapdoor, Skydoor",
+        reader=lambda build: _door(build).orientation,
+        patch=lambda value: BuildEditPatch(door_orientation_type=value),
+        categories=_DOOR_ONLY,
+    ),
+    field_spec(
+        "wiring_placement_restrictions",
+        list[str],
+        "Seamless, Full Flush",
+        reader=lambda build: list(build.wiring_placement_restrictions),
+        patch=lambda value: BuildEditPatch(wiring_placement_restrictions=value),
+    ),
+    field_spec(
+        "animated_restrictions",
+        list[str],
+        "Symmetrical, Full Sync",
+        reader=lambda build: list(build.animated_restrictions),
+        patch=lambda value: BuildEditPatch(animated_restrictions=value),
+    ),
+    field_spec(
+        "component_restrictions",
+        list[str],
+        "Observerless",
+        reader=lambda build: list(build.component_restrictions),
+        patch=lambda value: BuildEditPatch(component_restrictions=value),
+    ),
+    field_spec(
+        "miscellaneous_restrictions",
+        list[str],
+        "Directional, Locational",
+        reader=lambda build: list(build.miscellaneous_restrictions),
+        patch=lambda value: BuildEditPatch(miscellaneous_restrictions=value),
+    ),
+    field_spec(
+        "normal_closing_time",
+        int | None,
+        "in gameticks",
+        reader=lambda build: _door(build).normal_closing_time,
+        patch=lambda value: BuildEditPatch(normal_closing_time=value),
+        categories=_DOOR_ONLY,
+    ),
+    field_spec(
+        "normal_opening_time",
+        int | None,
+        "in gameticks",
+        reader=lambda build: _door(build).normal_opening_time,
+        patch=lambda value: BuildEditPatch(normal_opening_time=value),
+        categories=_DOOR_ONLY,
+    ),
+    field_spec(
+        "creators_ign",
+        list[str],
+        "Me, My Dog",
+        reader=lambda build: list(build.creators_ign),
+        patch=lambda value: BuildEditPatch(creators_ign=value),
+    ),
+    field_spec(
+        "image_urls",
+        list[str],
+        "any urls, comma separated",
+        reader=lambda build: list(build.image_urls),
+        patch=lambda value: BuildEditPatch(image_urls=value),
+        parser=parse_web_urls,
+    ),
+    field_spec(
+        "video_urls",
+        list[str],
+        "any urls, comma separated",
+        reader=lambda build: list(build.video_urls),
+        patch=lambda value: BuildEditPatch(video_urls=value),
+        parser=parse_web_urls,
+    ),
+    field_spec(
+        "world_download_urls",
+        list[str],
+        "any urls, comma separated",
+        reader=lambda build: list(build.world_download_urls),
+        patch=lambda value: BuildEditPatch(world_download_urls=value),
+        parser=parse_web_urls,
+    ),
+    field_spec(
+        "completion_time",
+        str | None,
+        "Any time format works",
+        reader=lambda build: build.completion_time,
+        patch=lambda value: BuildEditPatch(completion_time=value),
+    ),
+    field_spec(
+        "extra_user_info",
+        str | None,
+        "Anything a reader should know",
+        reader=lambda build: build.description,
+        patch=lambda value: BuildEditPatch(extra_user_info=value),
+        display=FieldDisplay.PARAGRAPH,
+    ),
+    field_spec(
+        "server_ip",
+        str | None,
+        "play.example.com",
+        reader=lambda build: _server_info_value(build, "server_ip"),
+        patch=lambda value: BuildEditPatch(server_ip=value),
+    ),
+    field_spec(
+        "coordinates",
+        str | None,
+        "x y z",
+        reader=lambda build: _server_info_value(build, "coordinates"),
+        patch=lambda value: BuildEditPatch(coordinates=value),
+    ),
+    field_spec(
+        "command_to_get_to_build",
+        str | None,
+        "/warp door",
+        reader=lambda build: _server_info_value(build, "command_to_build"),
+        patch=lambda value: BuildEditPatch(command_to_get_to_build=value),
+    ),
 )
-"""Every entry must name a BuildEditPatch field; a test pins that."""
+"""Every entry owns its typed read and patch operations; UI keys carry no mutation authority."""
 
 
 def _format_dimensions(value: tuple[int | None, ...]) -> str:
@@ -586,14 +728,15 @@ class SubmissionScreen(sd.Screen):
         await event.finish()
 
 
-def _edit_form(items: Sequence[BoundBuildField], page: int) -> sl.forms.FormSpec:
+def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.FormSpec:
+    page_items = items[5 * (page - 1) : 5 * page]
     fields: list[sl.forms.FormField[Any]] = []
-    for item in items[5 * (page - 1) : 5 * page]:
+    for item in page_items:
         spec = item.spec
         field_type = sl.forms.TextAreaField if spec.display is FieldDisplay.PARAGRAPH else sl.forms.TextField
         fields.append(
             field_type(
-                key=item.attribute,
+                key=item.key,
                 label=tr(spec.label),
                 placeholder=tr(spec.placeholder),
                 default=item.current_text,
@@ -602,7 +745,17 @@ def _edit_form(items: Sequence[BoundBuildField], page: int) -> sl.forms.FormSpec
                 maximum=spec.maximum,
             )
         )
-    return sl.forms.FormSpec(tr("Edit build, section {page}", page=page), tuple(fields))
+
+    def validate(values: Mapping[str, object]) -> tuple[sl.forms.FormIssue, ...]:
+        errors: list[sl.forms.FormIssue] = []
+        for item in page_items:
+            try:
+                item.spec.parser(cast(str, values[item.key]))
+            except ValueError as error:
+                errors.append(sl.forms.FieldError(item.key, str(error) or tr(t"Invalid value")))
+        return tuple(errors)
+
+    return sl.forms.FormSpec(tr(t"Edit build, section {page}"), tuple(fields), validator=validate)
 
 
 class BuildEditScreen(sd.Screen):
@@ -623,7 +776,7 @@ class BuildEditScreen(sd.Screen):
         self,
         build: Build,
         builds: BuildService,
-        items: Sequence[BoundBuildField] | DefaultType = DEFAULT,
+        items: Sequence[BoundBuildField[Any]] | DefaultType = DEFAULT,
         *,
         node: sl.LayoutNode[sl.ComponentsV2Target] | None = None,
         authorize: Callable[[], Awaitable[bool]],
@@ -685,9 +838,9 @@ class BuildEditScreen(sd.Screen):
     def max_pages(self) -> int:
         return max(1, (len(self.items) + 4) // 5)
 
-    def stage(self, attribute: str, text: str) -> bool:
+    def stage(self, key: str, text: str) -> bool:
         for item in self.items:
-            if item.attribute == attribute:
+            if item.key == key:
                 item.stage(text)
                 previous = self.validation_error if isinstance(self.validation_error, str) else None
                 self.validation_error = "\n".join(error for error in (previous, item.validation_error) if error) or None
@@ -798,7 +951,7 @@ class BuildEditScreen(sd.Screen):
     async def _edited(self, event: sl.SubmitEvent) -> None:
         errors: list[str] = []
         for item in self.items[5 * (self.page - 1) : 5 * self.page]:
-            item.stage(cast(str, event.values[item.attribute]))
+            item.stage(cast(str, event.values[item.key]))
             if item.validation_error:
                 errors.append(f"**{item.spec.label}:** {item.validation_error}")
         self.validation_error = "\n".join(errors) or None
@@ -833,7 +986,7 @@ class BuildEditScreen(sd.Screen):
             return
         changed = [item for item in self.items if item.modified]
         await event.acknowledge()
-        patch = BuildEditPatch.from_attributes({item.attribute: item.actual_value for item in changed})
+        patch = BuildEditPatch.combine(item.to_patch() for item in changed)
         edited_build_id: int | None = None
         build = self.build
         if build.id is None:

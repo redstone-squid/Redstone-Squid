@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Any, Generic, TypeVar, cast
 
-from squid_ui.document import Document, DocumentLike
+from squid_ui.document import DocumentLike, as_document
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import Form, FormField, FormIssue, FormLike, FormSpec
 from squid_ui.semantic import (
@@ -28,14 +28,17 @@ from squid_ui_widgets.commit import CommitMode
 from squid_ui_widgets.drivers import (
     ComponentDriver,
     FormPresentingMachine,
+    FormValues,
     MachineControls,
     StateMachine,
     TransitionEvent,
 )
 
-type EditorValues = Mapping[str, object]
+type EditorValues = FormValues
 type EditorCommitHandler = Callable[[TransitionEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]]
 
+# PEP 695 infers variance but cannot require it. Sections must remain contravariant in
+# their render target so portable sections compose into target-specific editors.
 StateT = TypeVar("StateT")
 ValueT = TypeVar("ValueT")
 RenderTargetT = TypeVar("RenderTargetT", bound=RenderTarget, contravariant=True, default=RenderTarget)
@@ -59,6 +62,7 @@ class EditorState:
 
 
 def _formatted(value: object) -> str:
+    """Format a scalar or sequence without exposing text dataclass reprs."""
     if isinstance(value, tuple | list):
         return ", ".join(display_text(item) for item in value)
     return display_text(value)
@@ -97,8 +101,8 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
         label: TextLike,
         form: FormLike,
         *,
-        summary: Callable[[Mapping[str, object]], TextLike] | None = None,
-    ) -> EditorSection[tuple[tuple[str, object], ...], Mapping[str, object], RenderTarget]:
+        summary: Callable[[FormValues], TextLike] | None = None,
+    ) -> EditorSection[tuple[tuple[str, object], ...], FormValues, RenderTarget]:
         """Adapt one form schema into an editor section."""
         spec = form.spec() if isinstance(form, Form) else form
         initial_values = {
@@ -107,7 +111,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
             if isinstance(field, FormField)
         }
 
-        def load(value: Mapping[str, object]) -> tuple[tuple[str, object], ...]:
+        def load(value: FormValues) -> tuple[tuple[str, object], ...]:
             if not isinstance(value, Mapping):
                 message = f"Editor section {key!r} needs a mapping value"
                 raise TypeError(message)
@@ -118,10 +122,10 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
                 raise ValueError(message)
             return tuple((field_key, value.get(field_key)) for field_key in spec.field_keys)
 
-        def dump(state: tuple[tuple[str, object], ...]) -> Mapping[str, object]:
+        def dump(state: tuple[tuple[str, object], ...]) -> FormValues:
             return MappingProxyType(dict(state))
 
-        def default_summary(value: Mapping[str, object]) -> TextLike:
+        def default_summary(value: FormValues) -> TextLike:
             parts = []
             for field in spec.items:
                 if not isinstance(field, FormField):
@@ -130,7 +134,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
                 parts.append(f"{display_text(field.label)}: {_formatted(formatted)}")
             return " · ".join(parts)
 
-        return EditorSection[tuple[tuple[str, object], ...], Mapping[str, object], RenderTarget](
+        return EditorSection[tuple[tuple[str, object], ...], FormValues, RenderTarget](
             key,
             label,
             initial=tuple(initial_values.items()),
@@ -173,7 +177,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
             raise KeyError(message)
         return self.dump(cast(StateT, slot.state))
 
-    def form_prefill(self, state: StateT) -> Mapping[str, object]:
+    def form_prefill(self, state: StateT) -> FormValues:
         """Project a form section to string-keyed values, rejecting a mismatched adapter."""
         value = self.dump(state)
         if not isinstance(value, Mapping):
@@ -221,6 +225,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
 
     @property
     def initial_state(self) -> EditorState:
+        """Return state initialized from every section default."""
         return self._initial_state
 
     def initial_from(self, values: EditorValues) -> EditorState:
@@ -232,6 +237,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         return self._state_from(values)
 
     def _state_from(self, values: EditorValues) -> EditorState:
+        """Load all sections from overrides layered on their defaults."""
         slots = []
         for section in self.sections:
             state = section.initial if section.key not in values else section.load(values[section.key])
@@ -259,6 +265,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         return ComponentDriver(self, initial=state, on_change=changed)
 
     def _slot(self, state: EditorState, key: MachineKeySegment) -> EditorSectionState | None:
+        """Find one section slot by validated key."""
         return next((slot for slot in state.sections if slot.key == key), None)
 
     def values(self, state: EditorState) -> EditorValues:
@@ -287,12 +294,14 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         return tuple(issues)
 
     def _replace_slot(self, state: EditorState, replacement: EditorSectionState) -> EditorState:
+        """Replace one section slot without mutating editor state."""
         return replace(
             state,
             sections=tuple(replacement if slot.key == replacement.key else slot for slot in state.sections),
         )
 
     def _commit_valid(self, state: EditorState) -> EditorState:
+        """Commit valid dirty values when using immediate mode."""
         if self.commit is CommitMode.EXPLICIT or self.issues(state):
             return state
         dirty = self.dirty_sections(state)
@@ -307,6 +316,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         )
 
     def _nested_action(self, action: str) -> tuple[EditorSection[Any, Any, RenderTargetT], str] | None:
+        """Resolve an encoded nested-machine action to its section."""
         nested = NestedAction.parse(action)
         if nested is None:
             return None
@@ -319,8 +329,9 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> EditorState:
+        """Apply editor, form, or nested-machine input to immutable state."""
         if action == "back":
             return replace(state, editing=None)
         if action == "save" and self.commit is CommitMode.EXPLICIT:
@@ -381,18 +392,14 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
 
     @staticmethod
     def _committed_changes(previous: EditorState, state: EditorState) -> frozenset[str]:
+        """Return section keys whose committed projection changed."""
         before = {slot.key: slot.committed for slot in previous.sections}
         return frozenset(slot.key for slot in state.sections if before.get(slot.key) != slot.committed)
-
-    @staticmethod
-    def _nodes(rendered: DocumentLike[RenderTargetT]) -> tuple[LayoutNode[RenderTargetT], ...]:
-        if isinstance(rendered, Document):
-            return rendered.children
-        return tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
 
     def render(
         self, state: EditorState, controls: MachineControls[EditorState, RenderTargetT]
     ) -> DocumentLike[RenderTargetT]:
+        """Render the section overview or active nested workspace."""
         if state.editing is not None:
             section = self._sections.get(state.editing)
             slot = self._slot(state, state.editing)
@@ -409,7 +416,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
                 return stack(
                     heading(self.title),
                     heading(section.label, level=3),
-                    *self._nodes(nested),
+                    *as_document(nested).children,
                     action_controls(
                         controls.action_control(controls.chrome.back, "back", key=f"{self.key}.back"),
                         key=f"{self.key}.workspace",
@@ -497,9 +504,11 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget]:
         self.chrome = parent.chrome
 
     def _action(self, action: str) -> str:
+        """Namespace a child action under its editor section."""
         return NestedAction(self.section_key, action).encode()
 
     def _key(self, key: str) -> str:
+        """Namespace a child control key under its editor section."""
         if self.pattern_key is not None:
             key = key.removeprefix(f"{self.pattern_key}.")
         return f"{self.editor_key}.{self.section_key}.{key}"
@@ -507,6 +516,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget]:
     def content(
         self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
     ) -> tuple[LayoutNode[RenderTargetT], ...]:
+        """Delegate child content through the namespaced prefix."""
         return self.parent.content(content, prefix=self._key(prefix))
 
     def action_control(
@@ -519,6 +529,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget]:
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
     ) -> ActionControl | RoutedActionControl:
+        """Delegate a child action through namespaced action and control keys."""
         return self.parent.action_control(
             label,
             self._action(action_name),
@@ -540,6 +551,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget]:
         placeholder: TextLike | None = None,
         available: bool = True,
     ) -> Choices | RoutedChoices:
+        """Delegate child choices through namespaced action and control keys."""
         return self.parent.choices(
             entries,
             self._action(action_name),
@@ -561,6 +573,7 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget]:
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
     ) -> FormTrigger | RoutedActionControl:
+        """Delegate a child form through namespaced action and control keys."""
         return self.parent.form(
             spec,
             self._action(action_name),

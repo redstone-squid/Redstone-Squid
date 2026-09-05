@@ -353,7 +353,7 @@ def test_a_network_poll_follows_its_author_but_pins_everyone_else() -> None:
 
 async def test_publishing_a_network_poll_unscopes_its_options() -> None:
     """Guild-scoped aliases would leave every other server's card unvotable."""
-    from squid.bot.voting.publisher import DiscordPollPublisher
+    from squid.bot.voting.publisher import DiscordPollPublisher, PollPublication
 
     class VoteRecorder(VoteService):
         def __init__(self) -> None:
@@ -401,9 +401,9 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
         services: Services
 
     class PublisherRecorder(DiscordPollPublisher):
-        async def attach(self, vote_session_id: int, channel: Any) -> discord.Message:
+        async def attach(self, vote_session_id: int, channel: Any) -> PollPublication:
             assert vote_session_id == 7
-            return cast(discord.Message, object())
+            return PollPublication(vote_session_id, cast(discord.Message, object()))
 
     votes = VoteRecorder()
     channel = Channel(id=200, guild=Guild(id=10))

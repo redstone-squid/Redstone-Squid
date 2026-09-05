@@ -147,7 +147,7 @@ def _component(view: Any) -> BuildEditScreen | None:
 
 
 def _staged(component: BuildEditScreen) -> dict[str, Any]:
-    return {item.attribute: item.actual_value for item in component.items if item.modified}
+    return {item.key: item.value for item in component.items if item.modified}
 
 
 def _door() -> DoorBuild:

@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Callable
 from unittest.mock import AsyncMock
 
+import anyio
 import pytest
 from pydantic import SecretStr
 
@@ -55,3 +56,37 @@ async def test_listener_processes_startup_and_commit_wake_hints(monkeypatch: pyt
 
     connect.assert_awaited_once_with("postgresql://user:password@database.example/squid")
     assert connection.closed is True
+
+
+async def test_listener_reconnects_after_postgres_terminates_the_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_connection = FakeConnection()
+    second_connection = FakeConnection()
+    connect = AsyncMock(side_effect=[first_connection, second_connection])
+    monkeypatch.setattr(listener_module.asyncpg, "connect", connect)
+    listener = DomainEventWakeListener(
+        SecretStr("postgresql+asyncpg://user:password@database.example/squid"),
+        reconnect_seconds=0,
+    )
+    processed = 0
+    started = asyncio.Event()
+    reconnected = asyncio.Event()
+
+    async def process_events() -> None:
+        nonlocal processed
+        processed += 1
+        (started if processed == 1 else reconnected).set()
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(listener.run, process_events)
+        await asyncio.wait_for(started.wait(), timeout=1)
+        assert first_connection.terminated is not None
+        first_connection.closed = True
+        first_connection.terminated(first_connection)
+        await asyncio.wait_for(reconnected.wait(), timeout=1)
+        tasks.cancel_scope.cancel()
+
+    assert connect.await_count == 2
+    assert first_connection.closed is True
+    assert second_connection.closed is True

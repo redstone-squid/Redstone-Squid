@@ -6,9 +6,9 @@ raw or normalized object keys public.
 
 ## Worker image contract
 
-The normal application image has no media toolchain. Local Compose and the production release workflow build the
-worker with `WITH_MEDIA=1`, which installs both `/usr/bin/ffmpeg` and `/usr/bin/ffprobe`. `WITH_MEDIA` only adds the
-executables; it does **not** set `SQUID_MEDIA_ENABLED`.
+The normal application image has no media toolchain. Local Compose and the production release workflow select the
+`runtime-media` target, which installs both `/usr/bin/ffmpeg` and `/usr/bin/ffprobe`. Selecting that target only adds
+the executables; it does **not** set `SQUID_MEDIA_ENABLED`.
 
 The image pins all three inputs involved in installing FFmpeg:
 
@@ -120,7 +120,7 @@ uv run pytest tests/deployment/test_media_worker_image.py --no-cov
 To exercise the actual package snapshot and final user locally:
 
 ```console
-docker build --build-arg WITH_MEDIA=1 --build-arg WITH_OBSERVABILITY=0 -t redstone-squid-media-worker .
+docker build --target runtime-media --build-arg WITH_OBSERVABILITY=0 -t redstone-squid-media-worker .
 docker run --rm --entrypoint sh redstone-squid-media-worker -ec \
   'test "$(id -u)" = 10001; test -w "$TMPDIR"; test -w /var/lib/app/media-tmp; ffmpeg -version; ffprobe -version'
 ```

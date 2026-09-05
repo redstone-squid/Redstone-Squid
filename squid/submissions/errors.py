@@ -25,9 +25,9 @@ class DraftAccessDeniedError(AuthorizationError):
 
 
 class DraftCapacityExceededError(ConflictError):
-    """An account has no free synchronized draft capacity."""
+    """An account has no free draft capacity."""
 
-    default_message = "Your synchronized draft capacity is full."
+    default_message = "Your draft capacity is full."
     default_title = "Draft capacity full"
     default_resource = "submission_draft"
     default_end_user_action = "Submit, delete, or wait for an existing draft to expire before creating another."
@@ -51,12 +51,13 @@ class DraftStateConflictError(ConflictError):
 class DraftArtifactsChangedError(ConflictError):
     """Artifact readiness changed before finalization acquired its durable fence."""
 
-    default_message = "The submission draft's media changed while finalization was starting."
-    default_title = "Draft media changed"
+    default_message = "The submission draft's attachments changed while submission was starting."
+    default_title = "Draft attachments changed"
     default_resource = "submission_draft"
-    default_end_user_action = "Review the latest media status and submit the draft again."
+    default_end_user_action = "Review the latest attachment status and submit the draft again."
 
     def __init__(self) -> None:
+        # Stable wire reason retained while presentation uses submitter-facing attachment terminology.
         super().__init__(public_context={"reason": "media_changed"})
 
 
@@ -72,12 +73,16 @@ class DraftSchemaUnsupportedError(ValidationError):
         super().__init__(public_context={"missing_capabilities": capabilities})
 
 
-class DraftIncompleteError(ValidationError):
-    """A draft cannot enter processing until every required value is valid."""
+class DraftValidationError(ValidationError):
+    """One or more draft answers are missing or invalid."""
 
-    default_message = "The submission draft is incomplete."
-    default_title = "Draft incomplete"
+    default_message = "The submission draft has missing or invalid answers."
+    default_title = "Draft needs changes"
     default_resource = "submission_draft"
 
     def __init__(self, errors: dict[str, str]) -> None:
         super().__init__(public_context={"field_errors": errors})
+
+
+# Compatibility name for callers matching the former Python exception symbol.
+DraftIncompleteError = DraftValidationError

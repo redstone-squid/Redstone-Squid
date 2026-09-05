@@ -279,7 +279,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
         self._schematic_result = _describe(
             stored,
             locale=event.locale,
-            render_skip=self._schematics.explain_render_skip(stored),
+            render_skip=await self._schematics.explain_render_skip(stored),
         )
 
     async def _schematic_download(self, event: sl.PressEvent) -> None:

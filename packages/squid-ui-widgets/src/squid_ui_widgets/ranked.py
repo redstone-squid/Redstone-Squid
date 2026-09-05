@@ -1,6 +1,6 @@
 """A pure materialized ranking machine for component and router shells."""
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from squid_ui.document import DocumentLike
@@ -12,7 +12,7 @@ from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, require_key
 from squid_ui_widgets._paging import FIRST_PAGE, PagePosition, window
 from squid_ui_widgets._ranked import Projector, RankedEntry, RankedRows
-from squid_ui_widgets.drivers import ComponentDriver, MachineControls
+from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +65,7 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
 
     @property
     def initial_state(self) -> RankedListState:
+        """Return the configured initial page."""
         return self._initial_state
 
     def build_component(
@@ -81,8 +82,9 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> RankedListState:
+        """Move one page while clamping to the materialized extent."""
         del values, submitted
         last_page = self._page_count() - 1
         if action == "previous":
@@ -92,6 +94,7 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
         return state
 
     def _page_count(self) -> int:
+        """Return the page count after applying the optional top limit."""
         total = len(self.entries) if self.top_n is None else min(len(self.entries), self.top_n)
         return 1 if self.page_size is None else max(1, (total + self.page_size - 1) // self.page_size)
 
@@ -103,12 +106,14 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
         *,
         name: str,
     ) -> tuple[LayoutNode[RenderTargetT], ...]:
+        """Resolve and normalize header or footer content."""
         value = hook(total) if callable(hook) else hook
         return controls.content(normalize_content(value, name=name), prefix=name)
 
     def render(
         self, state: RankedListState, controls: MachineControls[RankedListState, RenderTargetT]
     ) -> DocumentLike[RenderTargetT]:
+        """Render the ranked window with stable global row numbers."""
         displayed = self.entries if self.top_n is None else self.entries[: self.top_n]
         total = len(displayed)
         if self.page_size is None:

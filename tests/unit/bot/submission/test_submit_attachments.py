@@ -179,12 +179,18 @@ async def test_media_survives_a_sibling_schematic_analysis_failure() -> None:
     image = await commands._prepare_attachment(
         cast(discord.Attachment, Attachment(1, "image.png", "image/png")), uploader_account_id=7
     )
+    schematic = await commands._prepare_attachment(
+        cast(discord.Attachment, Attachment(3, "door.litematic", "application/octet-stream")),
+        uploader_account_id=7,
+    )
     broken = await commands._prepare_attachment(
         cast(discord.Attachment, Attachment(2, "broken.litematic", None)), uploader_account_id=7
     )
 
     assert image.media_url == "https://files.example/image.png"
     assert image.failure is None
+    assert schematic.request is not None
+    assert schematic.request.uploaded_by_account_id == 7
     assert broken.analysis is None
     assert broken.failure is not None
     assert broken.failure.stage == "analysis"

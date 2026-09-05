@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import replace
 from uuid import UUID
 
@@ -7,6 +8,8 @@ from whenever import Instant
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.submissions.application import (
     AppliedDraftChange,
+    AppliedDraftUpgrade,
+    CheckedInFormManifestRegistry,
     FixedAccountDraftCapacity,
     StoredDraft,
     SubmissionDraftService,
@@ -14,6 +17,8 @@ from squid.submissions.application import (
 )
 from squid.submissions.domain import (
     DraftChange,
+    DraftChangeKey,
+    DraftRevisionConflictError,
     DraftSnapshot,
     DraftStatus,
     FieldOperation,
@@ -27,6 +32,7 @@ from squid.submissions.errors import (
     DraftIncompleteError,
     DraftSchemaUnsupportedError,
     DraftStateConflictError,
+    DraftValidationError,
 )
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000101")
@@ -58,8 +64,8 @@ class FakeManifestRegistry:
         locale: str | None,
     ) -> FormManifest | None:
         assert locale == "en"
-        if (schema_id, revision) == (self.manifest.schema_id, self.manifest.revision):
-            return self.manifest
+        if schema_id == self.manifest.schema_id and revision in {1, 2}:
+            return build_submission_manifest(locale, revision=revision)
         return None
 
 
@@ -108,7 +114,7 @@ class FakeDraftRepository:
         self,
         draft_id: UUID,
         account_id: int,
-        idempotency_key: str,
+        idempotency_key: DraftChangeKey,
     ) -> AppliedDraftChange | None:
         replay = self.replays.get((draft_id, idempotency_key))
         if replay is not None and replay.draft.snapshot.owner_account_id != account_id:
@@ -160,6 +166,37 @@ class FakeDraftRepository:
         self.drafts[draft_id] = updated
         return updated
 
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_schema_revision: int,
+        answers: Mapping[str, JSONValue],
+        updated_at: Instant,
+        expires_at: Instant,
+    ) -> AppliedDraftUpgrade:
+        current = self.drafts[draft_id]
+        assert current.snapshot.owner_account_id == account_id
+        if current.snapshot.schema_revision == target_schema_revision:
+            return AppliedDraftUpgrade(current, replayed=True)
+        if current.snapshot.revision != expected_revision:
+            raise DraftRevisionConflictError(expected=expected_revision, actual=current.snapshot.revision)
+        updated = replace(
+            current,
+            snapshot=replace(
+                current.snapshot,
+                schema_revision=target_schema_revision,
+                revision=current.snapshot.revision + 1,
+                answers=answers,
+            ),
+            updated_at=updated_at,
+            expires_at=expires_at,
+        )
+        self.drafts[draft_id] = updated
+        return AppliedDraftUpgrade(updated)
+
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
         current = self.drafts.get(draft_id)
         if current is None or current.snapshot.owner_account_id != account_id:
@@ -188,7 +225,7 @@ def _change(base_revision: int = 0) -> DraftChange:
     return DraftChange(
         base_revision=base_revision,
         client_instance_id="fabric:device-1",
-        idempotency_key="operation-0001",
+        idempotency_key=DraftChangeKey("operation-0001"),
         operations=(FieldOperation(OPERATION_ID, "display_name", FieldOperationKind.SET, "My build"),),
     )
 
@@ -506,3 +543,144 @@ async def test_processing_reports_field_errors_for_incomplete_web_draft() -> Non
             locale="en",
         )
     assert error.value.public_context["field_errors"]
+
+
+@pytest.mark.asyncio
+async def test_manifest_upgrade_preserves_answers_and_is_idempotent_by_target_revision() -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(repository, CheckedInFormManifestRegistry(), now=lambda: NOW)
+    created = await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.PAPER,
+        client_capabilities=frozenset({"repeatable_text"}),
+        locale="en",
+        source_installation_id=INSTALLATION_ID,
+        now=NOW,
+        draft_id=DRAFT_ID,
+    )
+    repository.drafts[DRAFT_ID] = replace(
+        created,
+        snapshot=replace(
+            created.snapshot,
+            schema_revision=1,
+            answers={
+                "completion": "Built at spawn",
+                "ai_generated": False,
+                "sponsor_attribution": False,
+            },
+        ),
+    )
+
+    upgraded = await service.upgrade_manifest(
+        DRAFT_ID,
+        7,
+        expected_revision=0,
+        target_revision=2,
+        locale="en",
+    )
+    replayed = await service.upgrade_manifest(
+        DRAFT_ID,
+        7,
+        expected_revision=0,
+        target_revision=2,
+        locale="en",
+    )
+
+    assert upgraded.draft.snapshot.schema_revision == 2
+    assert upgraded.draft.snapshot.revision == 1
+    assert upgraded.draft.snapshot.answers == {
+        "completion": "Built at spawn",
+        "ai_generated": False,
+        "sponsor_attribution": False,
+    }
+    assert not upgraded.replayed
+    assert replayed.replayed
+    assert replayed.draft == upgraded.draft
+
+
+@pytest.mark.asyncio
+async def test_manifest_upgrade_failure_does_not_touch_the_draft() -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(repository, CheckedInFormManifestRegistry(), now=lambda: NOW)
+    created = await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.WEB,
+        client_capabilities=frozenset({"repeatable_text"}),
+        locale="en",
+        now=NOW,
+        draft_id=DRAFT_ID,
+    )
+    before = replace(
+        created,
+        snapshot=replace(created.snapshot, schema_revision=1, answers={"unknown_answer": True}),
+    )
+    repository.drafts[DRAFT_ID] = before
+
+    with pytest.raises(DraftValidationError):
+        await service.upgrade_manifest(
+            DRAFT_ID,
+            7,
+            expected_revision=0,
+            target_revision=2,
+            locale="en",
+        )
+
+    assert repository.drafts[DRAFT_ID] == before
+
+
+@pytest.mark.asyncio
+async def test_manifest_upgrade_rejects_stale_edit_without_touching_the_draft() -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(repository, CheckedInFormManifestRegistry(), now=lambda: NOW)
+    created = await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.WEB,
+        client_capabilities=frozenset({"repeatable_text"}),
+        locale="en",
+        now=NOW,
+        draft_id=DRAFT_ID,
+    )
+    before = replace(created, snapshot=replace(created.snapshot, schema_revision=1, revision=2))
+    repository.drafts[DRAFT_ID] = before
+
+    with pytest.raises(DraftRevisionConflictError):
+        await service.upgrade_manifest(
+            DRAFT_ID,
+            7,
+            expected_revision=1,
+            target_revision=2,
+            locale="en",
+        )
+
+    assert repository.drafts[DRAFT_ID] == before
+
+
+@pytest.mark.asyncio
+async def test_manifest_upgrade_rejects_an_unretained_source_without_touching_the_draft() -> None:
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(repository, CheckedInFormManifestRegistry(), now=lambda: NOW)
+    created = await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.WEB,
+        client_capabilities=frozenset({"repeatable_text"}),
+        locale="en",
+        now=NOW,
+        draft_id=DRAFT_ID,
+    )
+    before = replace(created, snapshot=replace(created.snapshot, schema_revision=999))
+    repository.drafts[DRAFT_ID] = before
+
+    with pytest.raises(DraftSchemaUnsupportedError):
+        await service.upgrade_manifest(
+            DRAFT_ID,
+            7,
+            expected_revision=0,
+            target_revision=2,
+            locale="en",
+        )
+
+    assert repository.drafts[DRAFT_ID] == before
