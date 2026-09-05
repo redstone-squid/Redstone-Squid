@@ -537,9 +537,7 @@ def render_rate_limit_headers(states: Sequence[RateLimitState]) -> RateLimitHead
         policy=", ".join(
             f'"{state.policy.name}";q={state.policy.limit};w={state.policy.window_seconds}' for state in states
         ),
-        state=", ".join(
-            f'"{state.policy.name}";r={state.remaining};t={state.reset_after}' for state in states
-        ),
+        state=", ".join(f'"{state.policy.name}";r={state.remaining};t={state.reset_after}' for state in states),
     )
 
 

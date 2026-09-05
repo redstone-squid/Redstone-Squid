@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
 class AdvisoryLockNamespace(StrEnum):
     """Closed namespaces whose existing values are stable lock-wire contracts."""
 
