@@ -6,8 +6,12 @@ This directory organizes the review comments made by `Glinte` on
 [PR #183](https://github.com/redstone-squid/Redstone-Squid/pull/183), using each inline comment's
 original commit anchor to enforce the cutoff at `5edfd3e`.
 
-- 184 comments are in scope across 86 files.
-- All 184 threads remain open on GitHub; 33 are marked outdated and 151 still have current anchors.
+- 184 comments are in scope, across 85 paths as GitHub names them today (86 at the last refresh;
+  a thread is reported against a file's present name, so a rename can merge two).
+- All 184 threads remain open on GitHub. Outdatedness has moved sharply as the branch advanced:
+  175 are now marked outdated and only 9 still have current anchors, against 33/151 at the last
+  refresh. Only three threads on the whole PR are resolved and all three are CodeQL bot findings,
+  not review comments.
 - Starboard paths and behavior are excluded. Shared reaction routing remains in scope because it
   serves non-starboard consumers.
 - The later comment on the legacy `/verify` endpoint is excluded because its original commit is
@@ -44,36 +48,38 @@ shared reaction routing (8).
   pending review batch: 104 comments grouped by primary concern. It excludes the CLI, web
   frontend, and Minecraft plugin by their `cli/`, `web/`, and `minecraft/` paths, while retaining
   comments on shared backend code under `squid/` regardless of commit-subject prefix.
+- **Uncovered:** 52 further `Glinte` threads anchor to commits after `aa85f68` and so fall outside
+  both the `5edfd3e` plan cutoff and that inventory's range. They cluster on `squid/accounts/`
+  (repository, services, models, ports), `squid/bot/verify.py`, `squid/bot/voting/vote.py`,
+  `squid/diagnostics/log_capture.py`, and `squid/api/v1/schemas/me.py`. Nothing here plans them;
+  inventorying them is the next scoping step.
 
 ## Status
 
-As of `56369af4` (2026-08-18). Each plan's own Findings section already audits current HEAD, so this
-table is a summary, not a replacement — read the plan for the item-level detail. Statuses:
-**Done** (all in-scope items landed), **In progress** (some items landed, some open),
-**Not started** (open per the plan's own findings, unchanged since), **Blocked** (needs external
-input, e.g. CI, to close).
+As of `df1302d1` (2026-08-30), the numbered plans have been implemented and independently
+re-audited against current code. Each plan's findings and dispositions remain the historical
+reasoning; this table records the resulting implementation state. **Done** means every in-scope
+implementation and test case is present. **Blocked** is reserved for verification that requires
+external CI infrastructure rather than more repository work.
 
-Note: a branch rebase during this refresh invalidated most commit hashes cited across these plans
-(the underlying commits still exist under new hashes, matched by message/content, not lost). Plans
-were re-verified against current file:line citations rather than the old hashes; a few citations
-were left uncorrected where doing so risked colliding with concurrent edits — treat any hash in a
-plan below as historical, not resolvable with `git show`.
+The review inventories below the numbered plans are scoping records, not implementation plans.
+GitHub replies and thread resolution also remain separately authorized work.
 
 | # | Plan | Status | Notes |
 |---|---|---|---|
-| 1 | [Consent and verification UX](01-consent-verification-ux.md) | Done | All five subplans re-verified against current code: the card-based consent view with a real preview, two-step verification-code reservation (`reserve_verification_code`/`release_verification_code`, `LinkReservationExpiredError`), shared link/refresh reconciliation rendering, claimant naming, and `AliasAlreadyClaimedError` carrying both the public and internal holder identity. Two `BUGS.md` entries it deferred remain open and untouched. |
-| 2 | [User identity and persistence](02-user-identity-persistence.md) | Done | Subplans 1–5 confirmed already in place; subplan 6 re-verified: `generate_verification_code` mints a ten-digit (~33-bit) code in the application layer, `hash_verification_code` uses a keyed HMAC, and `verification_attempts` caps consecutive failures per `(provider, subject)`. Keyed on the external identity rather than an account because the guesser may not have one yet, which also lets plan 1's anonymous reservation share the guard. |
-| 3 | [Submission UI architecture](03-submission-ui-architecture.md) | Not started | Re-verified unchanged: `EDIT_FIELDS` centralization is the only landed piece; the typed field-spec/factory redesign, submission-input module, and presentation-colour value type have not started. |
-| 4 | [Submission behavior and recovery](04-submission-behavior-recovery.md) | In progress | Re-verified unchanged: invalid-URL rejection and search/confirmation copy remain fixed; the URL error still omits offending values, edit-session expiry still has no recovery action, and build-card status still falls back to green for an unknown/`None` state. |
-| 5 | [Multi-attachment semantics](05-multi-attachment-semantics.md) | Not started | Re-verified unchanged: attachment classification/error text remains fixed; primary-schematic selection is still implicit "first successfully analysed", and duplicate lookup still only examines `analyses[0]`. |
-| 6 | [Schematic domain upload safety](06-schematic-domain-upload-safety.md) | In progress | Updated since the last audit: `IngestRequest.uploaded_by_discord_id` is gone, replaced by a provider-neutral `uploaded_by_account_id: int \| None` (landed alongside the Discord de-privileging work). `RenderRequest.background`'s unlabelled RGBA tuple, the resource-pack value object, and `SimulationRequest` field documentation remain open. |
-| 7 | [Nucleation adapter, wire, and worker hardening](07-nucleation-adapter-worker-hardening.md) | In progress | Worker timeout/queue-wait accounting was already fixed pre-audit. The silent `or SchematicFormat.LITEMATIC` fallback is still live; typed JSON decoding is still open. The plan's cited nucleation pin (`0.10.1`) is stale — the project now pins `0.10.14` — so the upstream #7/#8 reproduction needs to run against the current pin before this can close. |
-| 8 | [Schematic rendering and simulation](08-schematic-rendering-simulation.md) | Done | All six steps re-verified in current code: `prepare_render()` answers `FreshRender \| CachedRender \| SkippedRender`, the ambiguous-input refusal lists the coordinates it will accept, and the stderr pumps are owned by the pool's anyio task group. `SimulationResult` is retained with a recorded rationale. |
-| 9 | [Voting redesign](09-voting-redesign.md) | Mostly done | Subplans 1–4 (domain typing, transport-independent polls, the `/poll` UI, session cleanup) re-verified fully landed — the presentation layer was generalized further than planned, into a shared reconciler/renderer. Subplan 5 is genuinely partial: fixture/builder extraction landed (`tests/support/voting.py`, `tests/support/schema.py`), but the described cross-product test matrix across `VoteKind`/`VoteTarget`/`VoteVisibility`/`VoteChoice`/`VoteRejection` was never started — only scattered single-axis parametrization exists. |
-| 10 | [Shared reaction routing](10-shared-reaction-routing.md) | Not started | Re-verified unchanged: `squid/bot/reactions.py` still spawns shard workers with bare `asyncio.create_task` and drives shutdown/subscriber dispatch off raw tasks and `asyncio.gather`, even though `BackgroundTaskSupervisor` is already used elsewhere in the bot. No task-ownership, observability, or contract-narrowing work has landed. |
-| 11 | [API, auth, records, and sync](11-api-auth-records-sync.md) | Done | All eight subplans re-verified landed, and all three recorded caveats (pinned 422 reason phrase, `ReconciliationResource`'s hand-mapped `post_kind`, three surviving "principal" external contracts) remain accurate as documented. The later `contract()`/OPERATIONS-table migration work is unrelated follow-on scope, confirmed to belong to [`rest-api.md`](../completed/rest-api.md), not this plan. |
-| 12 | [Runtime and observability](12-runtime-observability.md) | In progress | Subplan 2 (short correlation-id display reference) confirmed done, and it went on to enable error-report storage with a per-invocation correlation ID bound around every Discord command. Subplan 1 (log-transport documentation) is still not started, though an unrelated Docker fix incidentally settled the log-volume-ownership question by switching to a named volume. Subplans 3–8 (telemetry-guard collapse, worker trace-header field, command-span naming, the `squid/api/errors.py` FastAPI revert, the welcome-relay sleep/correlation fix, and the entry-point lifecycle test rewrite) show no code changes at all. |
-| 13 | [Test and tooling cleanup](13-test-tooling-cleanup.md) / [dispositions](13-test-tooling-dispositions.md) | In progress | The previously unassigned `alembic_entities.py` counts thread (3782845586) is now **Fixed**: `parse_entities(sql)` takes the SQL as an argument, an `EXPECTED_FUNCTIONS`/`EXPECTED_TRIGGERS` guard replaces the two hand-maintained magic numbers, and `tests/unit/persistence/test_alembic_entities.py` covers it; the doc-remnant bump instructions in `rbac.md`/`durable-queues.md` and the stale path in `new-migration.md` are also now fixed. Every other thread has a recorded disposition (mostly Fixed/Already fixed, one Retained-with-rationale each for taxonomy and migration-downgrade tests, one Deferred to plan 12). The two integration-test changes (`test_vote_repository.py`, `test_alembic_migrations.py`) still need a CI run against Postgres before their threads can close. |
+| 1 | [Consent and verification UX](01-consent-verification-ux.md) | Done | Reservation/error contracts remain intact. `61eb77e0` adds the complete consent-card payload/interaction branches, claim approve/reject/conflict presentation, and the missing resolution query-count scenario. |
+| 2 | [User identity and persistence](02-user-identity-persistence.md) | Done | Provider-neutral identity, keyed verification-code hashing, and schema constraints remain intact. `61eb77e0` also makes service-unavailable identity failures a stable bot presentation and pins that path. |
+| 3 | [Submission UI architecture](03-submission-ui-architecture.md) | Done | `2a17f95d`, `3e278df6`, and `36f5e9d9` make creation/edit specs the single typed source for metadata, parsing, formatting, and draft/patch application; shared input parsing, colour typing, translated edit metadata, strict Discord boundaries, and unexpected-parser propagation are covered. |
+| 4 | [Submission behavior and recovery](04-submission-behavior-recovery.md) | Done | Detailed URL errors, exhaustive neutral status rendering, revision fencing, truthful saved-vs-delivery outcomes, durable timeout controls, and current-state fresh-editor recovery landed across `40db03e7` through `2fcba94b`, with authorization and stale-state tests. |
+| 5 | [Multi-attachment semantics](05-multi-attachment-semantics.md) | Done | Identity-based lifecycles, explicit primary selection, partial failure evidence, all-file duplicate merging, same-digest coalescing, compact titled review evidence, and post-save recovery landed in `d5c14d7a` through `7f63c81b`. |
+| 6 | [Schematic domain upload safety](06-schematic-domain-upload-safety.md) | Done | `e1ed933a` adds `RgbaColor`, the resource-pack value contract, request documentation, and wire/config reuse. `da36c94c` pins cache invalidation and provider-neutral uploader attribution; the bounded pre-parser remains deliberately retained and adversarially covered. |
+| 7 | [Nucleation adapter, wire, and worker hardening](07-nucleation-adapter-worker-hardening.md) | Done | `4bd049e9`, `a31e8aa7`, `6ec2b579`, and `b57c1445` remove the format fallback, strictly decode native/wire data, contain optional evidence failures, validate all operation arities, and prove queue/per-operation deadlines. The current `0.10.14` exception mismatch is reported as [Nucleation #40](https://github.com/Schem-at/Nucleation/issues/40) and cited beside the narrow workaround. |
+| 8 | [Schematic rendering and simulation](08-schematic-rendering-simulation.md) | Done | Typed render outcomes and durable retry behavior remain intact. `47b53ebb` adds permanent-skip/retry/backoff/dead-letter PostgreSQL scenarios and replaces bare integration-test tasks with structured anyio ownership; real worker-pool tests pass locally. |
+| 9 | [Voting redesign](09-voting-redesign.md) | Done | Domain and persistence subtype invariants, serialized rollout, complete rejection/alias mappings, application/REST discriminator matrices, reaction recovery, and upgrade/downgrade scenarios landed through `bc8874e6`. PostgreSQL execution is pending external CI, but the implementation and tests are present. |
+| 10 | [Shared reaction routing](10-shared-reaction-routing.md) | Done | Typed subscriptions, supervisor-owned anyio workers, FIFO/backpressure accounting, resolver memoization, failure/latency/shutdown telemetry, and consumer-owned recovery for shutdown-aborted vote events landed through `9d460311`. |
+| 11 | [API, auth, records, and sync](11-api-auth-records-sync.md) | Done | Existing caller/error/sync decisions remain intact. `b1032ee7` adds canonical persisted-scope-array coverage and substantive multi-item schematic pagination/anchor coverage. |
+| 12 | [Runtime and observability](12-runtime-observability.md) | Done | The authoritative log transport, correlation display, resolved telemetry record, explicit worker trace field, typed public command surfaces, FastAPI error registration, join/message correlation, and three-process lifecycle contract all landed from `ae9edae0` through `89d9dde0`. |
+| 13 | [Test and tooling cleanup](13-test-tooling-cleanup.md) / [dispositions](13-test-tooling-dispositions.md) | Blocked | All repository work and thread dispositions are complete, including the typed reaction-callback update in `df1302d1`. The remaining condition is the already-documented green GitHub CI/PostgreSQL verification; local Docker access is unavailable. |
 
 ## Suggested sequence
 

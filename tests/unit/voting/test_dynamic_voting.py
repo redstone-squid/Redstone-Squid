@@ -12,6 +12,10 @@ from squid.bot.voting.rendering import generic_poll_text, render_generic_poll
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
 from squid.voting.application import RoleVoteWeightPolicy, VoteService
 from squid.voting.domain import (
+    DEFAULT_VOTE_OPTIONS,
+    BuildVoteTarget,
+    DeleteLogVoteTarget,
+    GenericPoll,
     PollScope,
     RoleWeight,
     VoteActor,
@@ -59,7 +63,6 @@ async def test_delete_policy_rejects_a_member_without_the_delete_log_node() -> N
     snapshot = build_snapshot(
         kind=VoteKind.DELETE_LOG,
         options=(VoteOption("👍", VoteChoice.APPROVE), VoteOption("👎", VoteChoice.DENY)),
-        target=None,
     )
 
     assert await policy.calculate(VoteActor(1, 100, 10), snapshot, "👍") is None
@@ -154,7 +157,7 @@ def test_anonymous_polls_strip_the_voter_reaction(visibility: VoteVisibility) ->
 
 @pytest.mark.parametrize("kind", [VoteKind.BUILD, VoteKind.DELETE_LOG])
 def test_threshold_kinds_never_carry_anonymity_metadata(kind: VoteKind) -> None:
-    snapshot = build_snapshot(kind=kind, target=None)
+    snapshot = build_snapshot(kind=kind)
 
     assert snapshot.visibility is None
     assert snapshot.is_anonymous
@@ -172,7 +175,7 @@ def test_poll_creator_and_staff_may_close_but_a_bystander_may_not() -> None:
 
 @pytest.mark.parametrize("kind", [VoteKind.BUILD, VoteKind.DELETE_LOG])
 def test_threshold_kinds_are_not_closable_by_the_poll_command(kind: VoteKind) -> None:
-    snapshot = build_snapshot(kind=kind, target=None)
+    snapshot = build_snapshot(kind=kind)
 
     assert snapshot.can_close(VoteActor(7, 70, guild_id=10)) is VoteRejection.NOT_AUTHORIZED
 
@@ -192,6 +195,67 @@ def test_generic_polls_reject_thresholds_entirely() -> None:
     validate_thresholds(VoteKind.GENERIC, None, None)
     with pytest.raises(InvalidVoteConfigurationError, match="must not carry vote thresholds"):
         validate_thresholds(VoteKind.GENERIC, 32767, -32768)
+
+
+@pytest.mark.parametrize(
+    ("snapshot", "changes"),
+    [
+        (build_snapshot(), {"target": DeleteLogVoteTarget(1, 2, 3)}),
+        (build_snapshot(kind=VoteKind.DELETE_LOG), {"target": BuildVoteTarget(42)}),
+        (
+            build_snapshot(),
+            {
+                "poll": GenericPoll(
+                    "Unexpected poll",
+                    VoteVisibility.ANONYMOUS_LIVE,
+                    Instant.now().add(hours=1),
+                )
+            },
+        ),
+        (build_snapshot(), {"options": GENERIC_OPTIONS}),
+        (poll_snapshot(), {"target": BuildVoteTarget(42)}),
+        (poll_snapshot(), {"poll": None}),
+        (poll_snapshot(), {"options": DEFAULT_VOTE_OPTIONS}),
+    ],
+    ids=(
+        "build-delete-target",
+        "delete-build-target",
+        "threshold-poll",
+        "threshold-generic-options",
+        "generic-target",
+        "generic-missing-poll",
+        "generic-binary-options",
+    ),
+)
+def test_vote_kind_payload_matrix_rejects_incompatible_state(
+    snapshot: Any,
+    changes: dict[str, object],
+) -> None:
+    with pytest.raises(InvalidVoteConfigurationError):
+        replace(snapshot, **changes)
+
+
+@pytest.mark.parametrize(
+    ("visibility", "status", "anonymous", "shows_tallies"),
+    [
+        (VoteVisibility.ANONYMOUS_LIVE, VoteStatus.OPEN, True, True),
+        (VoteVisibility.ANONYMOUS_LIVE, VoteStatus.CLOSED, True, True),
+        (VoteVisibility.VISIBLE_LIVE, VoteStatus.OPEN, False, True),
+        (VoteVisibility.VISIBLE_LIVE, VoteStatus.CLOSED, False, True),
+        (VoteVisibility.ANONYMOUS_HIDDEN, VoteStatus.OPEN, True, False),
+        (VoteVisibility.ANONYMOUS_HIDDEN, VoteStatus.CLOSED, True, True),
+    ],
+)
+def test_poll_visibility_matrix(
+    visibility: VoteVisibility,
+    status: VoteStatus,
+    anonymous: bool,
+    shows_tallies: bool,
+) -> None:
+    snapshot = poll_snapshot(visibility=visibility, status=status)
+
+    assert snapshot.is_anonymous is anonymous
+    assert snapshot.shows_tallies is shows_tallies
 
 
 def test_binary_aliases_may_repeat_choice_but_not_emoji_per_guild() -> None:

@@ -28,6 +28,7 @@ from squid.voting.domain.models import (
     VoteTarget,
     VoteVisibility,
     normalize_vote_options,
+    validate_session_payload,
     validate_thresholds,
 )
 
@@ -59,5 +60,6 @@ __all__ = [
     "VoteTarget",
     "VoteVisibility",
     "normalize_vote_options",
+    "validate_session_payload",
     "validate_thresholds",
 ]

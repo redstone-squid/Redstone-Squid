@@ -2475,7 +2475,6 @@ dependencies = [
  "rand_core 0.6.4",
  "ratatui",
  "reqwest",
- "semver",
  "serde",
  "serde_json",
  "sha2",
@@ -2487,10 +2486,6 @@ dependencies = [
  "uuid",
  "zeroize",
 ]
-
-[[package]]
-name = "squid-cli-test-support"
-version = "0.1.0"
 
 [[package]]
 name = "stable_deref_trait"

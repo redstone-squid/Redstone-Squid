@@ -1,12 +1,12 @@
 """A cog with commands to editing builds."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import discord
-from discord import app_commands
 
 import squid_ui_discord as sd
 from squid.bot.submission.groups import BuildCommandGroup
+from squid.bot.submission.input import split_values
 from squid.bot.submission.ui.opening import open_build_editor, prepare_build_editor, show_build_editor
 from squid.bot.ui import error_node, text_node
 from squid.builds.application import BuildService
@@ -18,26 +18,12 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-def _split_list(value: str) -> list[str]:
-    """Split a comma-separated option value, dropping empty entries."""
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
 class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[BotT]):
     """A cog with commands for editing builds."""
 
     bot: BotT
     builds: BuildService
     messages: MessageService
-
-    def register_edit_context_menu(self) -> None:
-        """Register the build edit context menu."""
-        # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
-        self.edit_ctx_menu = app_commands.ContextMenu(
-            name="Edit Build",
-            callback=self.edit_context_menu,
-        )
-        self.bot.tree.add_command(self.edit_ctx_menu)
 
     async def edit_build(
         self,
@@ -53,19 +39,20 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         creators: str | None = None,
         notes: str | None = None,
     ) -> None:
-        """Edit a build. Whatever you fill in is staged; the workspace opens for the rest."""
-        await interaction.response.defer(ephemeral=True)
-        invocation = await sd.Invocation.of(interaction)
+        """Edit a build. Whatever you fill in is staged; the workspace opens for the rest.
+
+        Not registered as a command since `26002d83`; kept for the staging logic until the
+        slash form returns.
+        """
+        request = await self.ui.request(interaction)
+        await request.defer("private")
 
         build = await self.builds.get(build_id)
         if build is None:
-            await invocation.reply(
-                error_node(tr("Error"), tr("No build with that ID.")),
-                visibility="personal",
-            )
+            await request.respond(error_node(tr("Error"), tr("No build with that ID.")))
             return
 
-        screen = await prepare_build_editor(interaction, build, self.builds)
+        screen = await prepare_build_editor(request, build, self.builds)
         staged: dict[str, str] = {
             attribute: value
             for attribute, value in (
@@ -83,7 +70,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
             # One option replaces all four buckets, the same way `/build submit` reads one:
             # which bucket a restriction belongs in is a fact about the restriction, not a
             # decision the person editing should have to make.
-            buckets = await self.builds.sort_restrictions(_split_list(restrictions))
+            buckets = await self.builds.sort_restrictions(split_values(restrictions))
             staged["wiring_placement_restrictions"] = ", ".join(buckets["wiring-placement"])
             staged["animated_restrictions"] = ", ".join(buckets["animated"])
             staged["component_restrictions"] = ", ".join(buckets["component"])
@@ -93,38 +80,33 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         if inapplicable:
             # Dropping a typed option silently is the failure mode this command was merged to
             # end, so a door option on a build with no door is a refusal rather than a no-op.
-            await invocation.reply(
+            await request.respond(
                 error_node(
                     tr("Not a field of this build"),
                     tr(
                         "This build has no {fields}. Open the workspace to see what it does have.",
                         fields=", ".join(sorted(inapplicable)),
                     ),
-                ),
-                visibility="personal",
+                )
             )
             return
 
-        await show_build_editor(interaction, screen)
+        await show_build_editor(request, screen)
 
-    async def edit_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
+    @sd.context_menu(name="Edit Build", defer="private")
+    async def edit_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """A context menu command to edit a build."""
-        await interaction.response.defer(ephemeral=True)
-        invocation = await sd.Invocation.of(interaction)
-
         if message.author.id != self.bot.user.id:  # type: ignore
-            await invocation.reply(text_node(tr("This does not look like a build.")), visibility="personal")
-            return
+            return text_node(tr("This does not look like a build."))
 
         # Which build a card shows is a property of the post, not of the message: the
         # same message row is just a fact about a Discord message.
         post = await self.bot.services.posts.resolve(message.id)
         if post is None or post.resource_kind != "build":
-            await invocation.reply(text_node(tr("This does not look like a build.")), visibility="personal")
-            return
+            return text_node(tr("This does not look like a build."))
 
         build = await self.builds.get(int(post.resource_key))
         if build is None:
-            await invocation.reply(text_node(tr("This does not look like a build.")), visibility="personal")
-            return
-        await open_build_editor(interaction, build)
+            return text_node(tr("This does not look like a build."))
+        await open_build_editor(request, build)
+        return None

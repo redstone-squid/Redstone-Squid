@@ -291,7 +291,7 @@ impl<'a> CliAuthApi<'a> {
             label,
         };
         Ok(self.client.send_json(
-            ApiRequest::new(ApiMethod::Post, "/api/v1/cli/auth/enrollments")
+            ApiRequest::new(ApiMethod::Post, "/v1/cli/auth/enrollments")
                 .with_json(&request)?
                 .with_idempotency_key(idempotency_key),
             None,
@@ -311,7 +311,7 @@ impl<'a> CliAuthApi<'a> {
             signature: identity.sign(&message),
         };
         Ok(self.client.send_json(
-            ApiRequest::new(ApiMethod::Post, "/api/v1/cli/auth/enrollments/exchange")
+            ApiRequest::new(ApiMethod::Post, "/v1/cli/auth/enrollments/exchange")
                 .with_json(&request)?
                 .with_idempotency_key(idempotency_key),
             None,
@@ -325,7 +325,7 @@ impl<'a> CliAuthApi<'a> {
         idempotency_key: Uuid,
     ) -> Result<ApiResponse<CliSessionChallenge>, CliAuthError> {
         Ok(self.client.send_json(
-            ApiRequest::new(ApiMethod::Post, "/api/v1/cli/auth/session-challenges")
+            ApiRequest::new(ApiMethod::Post, "/v1/cli/auth/session-challenges")
                 .with_json(&CliSessionChallengeRequest { device_id })?
                 .with_idempotency_key(idempotency_key),
             None,
@@ -347,7 +347,7 @@ impl<'a> CliAuthApi<'a> {
             signature: identity.sign(&message),
         };
         Ok(self.client.send_json(
-            ApiRequest::new(ApiMethod::Post, "/api/v1/cli/auth/sessions")
+            ApiRequest::new(ApiMethod::Post, "/v1/cli/auth/sessions")
                 .with_json(&request)?
                 .with_idempotency_key(idempotency_key),
             None,
@@ -361,7 +361,7 @@ impl<'a> CliAuthApi<'a> {
         idempotency_key: Uuid,
     ) -> Result<ApiResponse<()>, CliAuthError> {
         Ok(self.client.send_no_content(
-            ApiRequest::new(ApiMethod::Delete, "/api/v1/cli/auth/sessions/current")
+            ApiRequest::new(ApiMethod::Delete, "/v1/cli/auth/sessions/current")
                 .with_idempotency_key(idempotency_key),
             Some(token),
         )?)
@@ -592,10 +592,10 @@ mod tests {
             .join()
             .map_err(|_error| io::Error::other("test server panicked"))??;
         assert_eq!(requests.len(), 3);
-        assert!(requests[0].starts_with("POST /api/v1/cli/auth/enrollments HTTP/1.1"));
+        assert!(requests[0].starts_with("POST /v1/cli/auth/enrollments HTTP/1.1"));
         assert!(requests[0].contains(&identity.public_key()));
         assert!(!requests[0].to_ascii_lowercase().contains("account_id"));
-        assert!(requests[1].starts_with("POST /api/v1/cli/auth/enrollments/exchange HTTP/1.1"));
+        assert!(requests[1].starts_with("POST /v1/cli/auth/enrollments/exchange HTTP/1.1"));
         assert!(requests[1].contains("\"signature\":"));
         assert!(!requests[1].contains("private_key"));
         assert!(!requests[1].contains("session_token"));

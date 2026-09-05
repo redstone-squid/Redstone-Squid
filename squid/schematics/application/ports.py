@@ -16,6 +16,7 @@ from squid.schematics.domain.models import (
     SimulationResult,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import VerifiedResourcePack
 
 
 class SchematicAnalyzer(Protocol):
@@ -58,7 +59,9 @@ class SchematicAnalyzer(Protocol):
         """Compare two files, optionally under a stricter caller-owned deadline."""
         ...
 
-    async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes: ...
+    async def render(
+        self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
+    ) -> bytes: ...
 
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult: ...
 
@@ -105,7 +108,10 @@ class SchematicStore(Protocol):
         exclude_build_id: int | None = None,
         limit: int = 25,
     ) -> list[StoredSchematic]:
-        """Return builds attached to exactly the same uploaded bytes."""
+        """Return builds attached to exactly the same uploaded bytes.
+
+        `exclude_build_id` omits only the build whose submission is currently being edited.
+        """
         ...
 
     async def find_fingerprint_matches(
@@ -121,6 +127,7 @@ class SchematicStore(Protocol):
 
         Fingerprints are only comparable within the version that produced them, so callers
         must never widen this beyond a single `analyzer_version`.
+        `exclude_build_id` omits only the build whose submission is currently being edited.
         """
         ...
 
@@ -132,7 +139,10 @@ class SchematicStore(Protocol):
         limit: int = 25,
         exclude_build_id: int | None = None,
     ) -> list[StoredSchematic]:
-        """Shortlist schematics of comparable size for pairwise near-duplicate ranking."""
+        """Shortlist schematics of comparable size for pairwise near-duplicate ranking.
+
+        `exclude_build_id` omits only the build whose submission is currently being edited.
+        """
         ...
 
     async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None: ...
@@ -163,9 +173,9 @@ class SchematicStore(Protocol):
 
 
 class SchematicResourcePackProvider(Protocol):
-    """Lazy source for verified resource-pack bytes and their SHA-256 digest."""
+    """Lazy source for digest-verified resource-pack bytes and media metadata."""
 
-    async def load(self) -> tuple[bytes, str]: ...
+    async def load(self) -> VerifiedResourcePack: ...
 
     async def aclose(self) -> None: ...
 

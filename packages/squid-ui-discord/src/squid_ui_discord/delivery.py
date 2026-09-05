@@ -527,6 +527,7 @@ def respond_to(
     files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
+    complete_deferred: bool = False,
 ) -> MessageDestination:
     """Answer an interaction, whether or not it was already responded to.
 
@@ -540,6 +541,11 @@ def respond_to(
     async def send(payload: MessagePayload) -> DeliveryResult:
         merged_files = _merged_files(files, payload)
         mode = payload.mode
+        if complete_deferred:
+            fields = payload._send_fields()
+            fields["attachments"] = merged_files
+            message = await interaction.edit_original_response(**fields)
+            return DeliveryResult(message, _OriginalResponseHandle(interaction, message, mode=mode))
         if interaction.response.is_done():
             message = await interaction.followup.send(
                 files=merged_files,

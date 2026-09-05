@@ -333,3 +333,12 @@ Subplans 3 and 4 touch the same module and should land together, ahead of 5, whi
 
 Replying on GitHub and resolving these threads still requires separate explicit authorization, per
 [README.md](README.md).
+
+## Completion update (2026-08-30)
+
+**Done.** Filelog is documented as the authoritative backend stream and stdout as the deliberate
+operator duplicate. Correlation display, optional telemetry resolution, PID/shutdown behavior,
+worker trace propagation, typed trace surfaces, public command naming, FastAPI exception
+registration, welcome join/message correlation, and the three-process lifecycle contract are all
+implemented. Live optional-SDK tests cover parent propagation, metrics/privacy, and an empty worker
+trace mapping starting a root span.

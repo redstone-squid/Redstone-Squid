@@ -124,9 +124,9 @@ def _manager(source: SessionManager | RuntimeSource) -> SessionManager:
     # Imported here because a runtime installs a challenge presenter, which uses a session spec: the
     # two modules are genuinely mutually recursive, and this is the one direction that is
     # not needed at import time.
-    from squid_ui_discord.runtime import ClientRuntime
+    from squid_ui_discord.runtime import DiscordUIRuntime
 
-    return ClientRuntime.of(source).sessions
+    return DiscordUIRuntime.of(source).sessions
 
 
 type SessionOptions = MessageRootBehaviorOptions

@@ -8,10 +8,13 @@
   --deepslate-850: #131718;
   --deepslate-800: #181d1e;
   --deepslate-700: #263032;
+  --ink-soft: #d3d1ca;
   --redstone: #ff4d40;
   --redstone-dark: #a9231f;
+  --redstone-soft: #ffb7b0;
   --copper: #e2915a;
   --copper-dark: #704328;
+  --copper-soft: #e6b18e;
   --signal: #ffbf3f;
   --success: #7bc994;
   --danger: #ff756b;
@@ -901,7 +904,7 @@ textarea:disabled {
   padding: 0.3rem 0.55rem;
   border: 1px solid var(--copper-dark);
   border-radius: 99px;
-  color: #e6b18e;
+  color: var(--copper-soft);
   background: rgb(112 67 40 / 16%);
   font-family: var(--mono);
   font-size: 0.7rem;
@@ -969,7 +972,7 @@ textarea:disabled {
 }
 
 .text-content {
-  color: #d3d1ca;
+  color: var(--ink-soft);
   white-space: pre-wrap;
 }
 
@@ -1104,7 +1107,7 @@ textarea:disabled {
 .prose code {
   padding: 0.12rem 0.3rem;
   border-radius: 3px;
-  color: #ffb7b0;
+  color: var(--redstone-soft);
   background: var(--deepslate-800);
   font-family: var(--mono);
   overflow-wrap: anywhere;

@@ -215,6 +215,44 @@ def validate_thresholds(kind: VoteKind, pass_threshold: int | None, fail_thresho
         raise InvalidVoteConfigurationError(msg, context={"kind": kind.value})
 
 
+def validate_session_payload(
+    kind: VoteKind,
+    target: VoteTarget,
+    poll: GenericPoll | None,
+    options: Sequence[VoteOption],
+) -> None:
+    """Enforce the discriminated target, poll, and option contract for one vote kind."""
+    match kind:
+        case VoteKind.BUILD:
+            valid_target = isinstance(target, BuildVoteTarget)
+            requires_poll = False
+            valid_choices = {VoteChoice.APPROVE, VoteChoice.DENY}
+        case VoteKind.DELETE_LOG:
+            valid_target = isinstance(target, DeleteLogVoteTarget)
+            requires_poll = False
+            valid_choices = {VoteChoice.APPROVE, VoteChoice.DENY}
+        case VoteKind.GENERIC:
+            valid_target = target is None
+            requires_poll = True
+            valid_choices = {VoteChoice.GENERIC}
+    if not valid_target:
+        msg = f"{kind.value} vote session has the wrong target payload."
+        raise InvalidVoteConfigurationError(
+            msg,
+            context={"kind": kind.value, "target_type": type(target).__name__},
+        )
+    if (poll is not None) is not requires_poll:
+        msg = f"{kind.value} vote session has the wrong poll payload."
+        raise InvalidVoteConfigurationError(msg, context={"kind": kind.value})
+    invalid_choices = sorted({option.choice.value for option in options if option.choice not in valid_choices})
+    if invalid_choices:
+        msg = f"{kind.value} vote session has incompatible option choices."
+        raise InvalidVoteConfigurationError(
+            msg,
+            context={"kind": kind.value, "invalid_choices": invalid_choices},
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class VoteSessionSnapshot:
     """Persisted state needed by application and presentation adapters."""
@@ -235,6 +273,7 @@ class VoteSessionSnapshot:
 
     def __post_init__(self) -> None:
         validate_thresholds(self.kind, self.pass_threshold, self.fail_threshold)
+        validate_session_payload(self.kind, self.target, self.poll, self.options)
 
     @property
     def message_ids(self) -> tuple[int, ...]:

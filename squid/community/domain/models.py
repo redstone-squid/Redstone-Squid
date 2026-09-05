@@ -34,7 +34,10 @@ class RedstonerDecision:
 
 @dataclass(frozen=True, slots=True)
 class WelcomeRelayPolicy:
-    """Configuration for forwarding Discord welcome messages."""
+    """Configuration for forwarding Discord welcome messages.
+
+    `max_pending_members` is the legacy setting name; it bounds joins and messages independently.
+    """
 
     welcome_channel_id: int
     forward_chance: float
@@ -63,8 +66,17 @@ class PendingWelcomeMember:
 
 
 @dataclass(frozen=True, slots=True)
+class PendingWelcomeMessage:
+    """A recent welcome message waiting for its member join event."""
+
+    system_content: str
+    received_at: float
+
+
+@dataclass(frozen=True, slots=True)
 class WelcomeRelayDecision:
-    """A resolved member mention for a welcome message."""
+    """A resolved member and the original welcome content to relay."""
 
     member_id: int
     matched_name: str
+    system_content: str

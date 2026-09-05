@@ -156,6 +156,21 @@ by CI; they do not need Git, Python, or `uv`. A failed service cutover automatic
 Repository deployment secrets are `SSH_HOST`, `SSH_USER`, `SSH_KEY`, and `SSH_KNOWN_HOSTS`. The last value must contain
 the pinned OpenSSH `known_hosts` entry for the production host; CI intentionally does not trust a live `ssh-keyscan`.
 
+Production deliberately writes each JSON log record to two destinations. Standard output is the operator stream used
+by `docker logs`; the rotating files are the authoritative input to the observability collector and any backend wired
+through it. Keeping collection file-based means logs continue to be recorded when the collector is stopped, the
+observability profile or Python extra is disabled, or the application is run without a container log driver.
+
+Compose stores the files in the Docker-managed `squid-logs` volume. The application image initializes
+`/var/log/app` for `appuser`, and the API, bot, and worker mount the volume read-write; the collector mounts the same
+volume read-only at `/var/log/app`. Each configured log file rotates at 32 MiB and retains five backups. The volume has
+no separate retention or pruning job, so rotation is the only bound on its log files.
+
+If a future deployment platform provides a reliable, access-controlled container-stdout source, log ingestion can
+move to that source as one coordinated change: switch the collector receiver and then remove the application file
+handlers and `squid-logs` mounts. Until then, the duplicate stdout and file output is intentional, and only the file
+stream is sent through the collector.
+
 The API exposes `/livez` and database/schema-aware `/readyz` on port 8000. Redis availability deliberately does not
 affect readiness because the API has a local abuse-control fallback. The bot and worker expose the same endpoints on
 their process-local `SQUID_BOT_HEALTH_PORT` (8001) and `SQUID_WORKER_HEALTH_PORT` (8002) listeners.

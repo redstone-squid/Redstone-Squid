@@ -11,8 +11,9 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.infrastructure.models import Account, AccountIdentity
+from squid.events import DomainEvent
 from squid.events.infrastructure.models import DomainEventRecord
-from squid.notifications.domain import RecordSubscriptionFilter, SubscriptionKind
+from squid.notifications.domain import NotificationKind, RecordSubscriptionFilter, SubscriptionKind
 from squid.notifications.infrastructure.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
@@ -249,3 +250,55 @@ async def test_a_consented_account_can_set_channels_without_a_separate_accept_st
     assert preferences.web_enabled is True
     assert preferences.dm_enabled is False
     assert preferences.consent_pending is False
+
+
+async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """The batched fan-out honours the same per-account gates the single insert did."""
+    async with async_session_factory.begin() as session:
+        accounts: dict[str, int] = {}
+        for name, consented, web, dm in (
+            ("both", True, True, True),
+            ("web_only", True, True, False),
+            ("unconsented", False, True, True),
+            ("opted_out", True, False, False),
+        ):
+            account = Account(
+                consent_version=CURRENT_CONSENT_VERSION if consented else None,
+                consented_at=Instant.now() if consented else None,
+            )
+            session.add(account)
+            await session.flush()
+            session.add(
+                AccountIdentity(account_id=account.id, provider=IdentityProvider.DISCORD, subject=f"discord-{name}")
+            )
+            session.add(NotificationProfile(account_id=account.id, web_enabled=web, dm_enabled=dm))
+            accounts[name] = account.id
+        record = DomainEventRecord(event_type="build.submitted", aggregate_kind="build", aggregate_id=7)
+        session.add(record)
+        await session.flush()
+        event = DomainEvent(
+            id=record.id,
+            event_type="build.submitted",
+            aggregate_kind="build",
+            aggregate_id=7,
+            occurred_at=Instant.now(),
+        )
+
+        await repository._insert_many(  # pyright: ignore[reportPrivateUsage]
+            session,
+            event=event,
+            account_ids=sorted(accounts.values()),
+            kind=NotificationKind.STAFF_BUILD_SUBMITTED,
+            source_key=lambda account_id: f"event:{event.id}:staff:{account_id}",
+            payload={"build_id": 7},
+        )
+
+    async with async_session_factory() as session:
+        notified = set((await session.scalars(select(NotificationRecord.account_id))).all())
+        delivered = set((await session.scalars(select(NotificationDeliveryRecord.account_id))).all())
+
+    assert notified == {accounts["both"], accounts["web_only"]}
+    assert delivered == {accounts["both"]}

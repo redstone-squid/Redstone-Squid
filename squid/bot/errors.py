@@ -14,11 +14,12 @@ import squid_ui_discord as sd
 from squid.accounts.errors import ConsentRequiredError
 from squid.bot.ui import error_node
 from squid.bot.utils.permissions import PermissionNodeRequired
-from squid.core.errors import DomainError, JSONValue, SquidError
+from squid.core.errors import DomainError, JSONValue, ServiceUnavailableError, SquidError
 from squid.core.i18n import localization_for, tr
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.log_capture import captured
 from squid.observability import (
+    TraceSurface,
     correlated_log_buffer,
     correlation_id,
     correlation_reference,
@@ -170,7 +171,7 @@ def _build_error_notice(error: BaseException) -> ErrorNotice:
             tr("Consent required"),
             tr("Run `/account consent` to read the privacy notice and accept it."),
         )
-    if isinstance(error, DomainError):
+    if isinstance(error, (DomainError, ServiceUnavailableError)):
         detail = tr(error.message)
         if error.end_user_action:
             detail = f"{detail} {tr(error.end_user_action)}"
@@ -317,21 +318,54 @@ async def _handle_discord_error(
         mark_error_presented(original)
 
 
+def _error_responder(request: sd.Request[Any]) -> ErrorResponder:
+    """Answer privately unless a managed defer already fixed the audience.
+
+    A public "thinking" placeholder can only be completed publicly; an ephemeral follow-up
+    would leave it spinning forever.
+    """
+
+    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
+        if request.deferred is None:
+            await request.respond(node, audience="personal")
+        else:
+            await request.respond(node)
+
+    return respond
+
+
+def render_request_error(request: sd.Request[Any], error: Exception) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    """Render a failed `pending=` command's notice in the request's locale."""
+    return build_error_notice(error, request.localization.locale).to_node()
+
+
+async def observe_request_error(
+    request: sd.Request[Any], error: Exception, delivery: sd.delivery.DeliveryResult | None
+) -> None:
+    """Record a failed `pending=` command once its notice has replaced the card."""
+    await record_operation_error(
+        error,
+        locale=request.localization.locale,
+        result=delivery,
+        presented=delivery is not None,
+        reports=_reports_from(request.client),
+    )
+
+
+COMMAND_ERRORS = sd.ErrorPolicy(render=render_request_error, observe=observe_request_error)
+
+
 async def handle_context_error[BotT: commands.Bot](
     context: commands.Context[BotT],
     error: BaseException,
 ) -> None:
     """Handle an exception raised by a prefix or hybrid command."""
 
-    invocation = await sd.Invocation.of(context)
-
-    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
-        await invocation.reply(node, visibility="personal")
-
+    request = await sd.request(context)
     command_name = context.command.qualified_name if context.command is not None else None
     await _handle_discord_error(
         error,
-        respond,
+        _error_responder(request),
         surface="command",
         context={
             "command": command_name,
@@ -351,15 +385,11 @@ async def handle_interaction_error(
 ) -> None:
     """Handle an exception raised by an application command or UI interaction."""
 
-    invocation = await sd.Invocation.of(interaction)
-
-    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
-        await invocation.reply(node, visibility="personal")
-
+    request = await sd.request(interaction)
     command = interaction.command
     await _handle_discord_error(
         error,
-        respond,
+        _error_responder(request),
         surface=surface,
         context={
             "command": command.name if command is not None else None,
@@ -419,10 +449,11 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
             await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
             return
 
-        command_name = _interaction_command_name(interaction.data)
+        command = interaction.command
+        command_name = command.qualified_name if command is not None else "unknown"
         attributes: dict[str, str | int] = {
             "squid.command.name": command_name,
-            "squid.surface": "application_command",
+            "squid.surface": TraceSurface.APPLICATION_COMMAND,
         }
         if interaction.guild_id is not None:
             attributes["squid.guild.id"] = interaction.guild_id
@@ -434,11 +465,10 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
         with (
             trace_span(f"discord.command {command_name}", attributes) as span,
             correlation_scope(),
-            sd.invocation_scope(interaction),
         ):
             try:
-                localization = (await sd.Invocation.of(interaction)).localization
-            except sd.ClientRuntimeMissing:
+                localization = (await sd.request(interaction)).localization
+            except sd.DiscordUIRuntimeMissing:
                 localization = NEUTRAL
             with localization_scope(localization):
                 await super()._call(interaction)  # pyright: ignore[reportPrivateUsage]
@@ -454,21 +484,3 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
     ) -> None:
         record_current_exception(error)
         await handle_interaction_error(interaction, error, surface="application_command")
-
-
-def _interaction_command_name(data: Mapping[str, Any] | None) -> str:
-    """Read a qualified command name from Discord's nested interaction payload."""
-    names: list[str] = []
-    current = data
-    while current is not None:
-        name = current.get("name")
-        if isinstance(name, str):
-            names.append(name)
-        options = current.get("options")
-        if not isinstance(options, list):
-            break
-        current = next(
-            (option for option in options if isinstance(option, Mapping) and option.get("type") in {1, 2}),
-            None,
-        )
-    return " ".join(names) or "unknown"

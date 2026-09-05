@@ -59,8 +59,7 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
         await _refuse(interaction, result.rejection or VoteRejection.NOT_FOUND)
         return
     await bot.refresh_posts("vote_session", str(result.session.id))
-    invocation = await sd.Invocation.of(interaction)
-    await invocation.reply(text_node(tr("Poll closed.")), visibility="personal")
+    await bot.app_ui.respond(interaction, text_node(tr("Poll closed.")), audience="personal")
 
 
 @polls.route(poll_refresh)
@@ -82,8 +81,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
             "{count} voter(s) could not be resolved, so their cached weight was kept.",
             count=len(result.unresolved_account_ids),
         )
-    invocation = await sd.Invocation.of(interaction)
-    await invocation.reply(text_node(text), visibility="personal")
+    await bot.app_ui.respond(interaction, text_node(text), audience="personal")
 
 
 async def _authorize(
@@ -115,5 +113,9 @@ async def _authorize(
 
 
 async def _refuse(interaction: discord.Interaction[Any], rejection: VoteRejection) -> None:
-    invocation = await sd.Invocation.of(interaction)
-    await invocation.reply(text_node(describe_rejection(rejection)), visibility="personal")
+    runtime = sd.DiscordUIRuntime.of(interaction)
+    await runtime.scope(runtime.client).respond(
+        interaction,
+        text_node(describe_rejection(rejection)),
+        audience="personal",
+    )

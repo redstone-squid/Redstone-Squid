@@ -14,7 +14,7 @@ from squid.bootstrap import create_worker_runtime
 from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_worker_process_config
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
-from squid.observability import configure_observability, record_histogram, trace_span
+from squid.observability import TraceSurface, configure_observability, record_histogram, trace_span
 from squid.runtime import BackgroundTaskSupervisor, WorkerServices, start_log_capture
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.schematics.infrastructure.durable import SchematicJobRunner
@@ -222,34 +222,34 @@ class DatabaseWorker:
 
     async def _process_events(self) -> None:
         async with self._event_lock:
-            with trace_span("squid.worker.domain_events", {"squid.surface": "background_loop"}):
+            with trace_span("squid.worker.domain_events", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
                 await self._events.process_batch()
 
     async def _process_schematic_jobs(self) -> None:
-        with trace_span("squid.worker.schematic_jobs", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.schematic_jobs", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_jobs.process_batch()
 
     async def _process_schematic_renders(self) -> None:
-        with trace_span("squid.worker.schematic_renders", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.schematic_renders", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_renders.process_batch()
 
     async def _process_media_jobs(self) -> None:
         runner = self._services.media_runner
         if runner is None:
             return
-        with trace_span("squid.worker.media_normalization", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.media_normalization", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await runner.process_batch(limit=self._config.media_job_concurrency)
 
     async def _cleanup_media_storage(self) -> None:
-        with trace_span("squid.worker.media_storage_cleanup", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.media_storage_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.media_cleanup.process_batch()
 
     async def _process_submission_finalization(self) -> None:
-        with trace_span("squid.worker.submission_finalization", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.submission_finalization", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.submission_finalization.process_batch()
 
     async def _refresh_search(self) -> None:
-        with trace_span("squid.worker.search_projection", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.search_projection", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             succeeded, failed = await self._services.refresh_search_index()
         if failed:
             logger.warning(
@@ -258,7 +258,7 @@ class DatabaseWorker:
             )
 
     async def _process_search_embeddings(self) -> None:
-        with trace_span("squid.worker.search_embeddings", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.search_embeddings", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             succeeded, failed = await self._services.search_embeddings.process_batch()
         if failed:
             logger.warning(
@@ -267,11 +267,11 @@ class DatabaseWorker:
             )
 
     async def _process_records(self) -> None:
-        with trace_span("squid.worker.record_maintenance", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.record_maintenance", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.records.process_queue()
 
     async def _close_due_votes(self) -> None:
-        with trace_span("squid.worker.close_due_votes", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.close_due_votes", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             now = Instant.now()
             snapshots = await self._services.votes.close_due(now)
         for snapshot in snapshots:
@@ -283,19 +283,19 @@ class DatabaseWorker:
                 )
 
     async def _clean_stale_build_locks(self) -> None:
-        with trace_span("squid.worker.stale_build_locks", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.stale_build_locks", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
 
     async def _cleanup_schematic_jobs(self) -> None:
-        with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._schematic_jobs.cleanup()
 
     async def _cleanup_notifications(self) -> None:
-        with trace_span("squid.worker.notification_retention", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.notification_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.notifications.cleanup()
 
     async def _cleanup_idempotency(self) -> None:
-        with trace_span("squid.worker.idempotency_retention", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.idempotency_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             deleted = await self._services.purge_idempotency()
         if deleted:
             logger.info(
@@ -304,7 +304,7 @@ class DatabaseWorker:
             )
 
     async def _expire_submission_drafts(self) -> None:
-        with trace_span("squid.worker.submission_draft_expiry", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.submission_draft_expiry", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             expired = await self._services.expire_submission_drafts()
         if expired:
             logger.info(
@@ -313,7 +313,7 @@ class DatabaseWorker:
             )
 
     async def _cleanup_error_reports(self) -> None:
-        with trace_span("squid.worker.error_report_retention", {"squid.surface": "background_loop"}):
+        with trace_span("squid.worker.error_report_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             deleted = await self._services.error_reports.purge_expired()
         if deleted:
             logger.info(
@@ -322,11 +322,8 @@ class DatabaseWorker:
             )
 
 
-async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:
-    """Run the worker until a process signal or caller-owned stop event fires."""
-    resolved_config = process_config or load_or_exit(load_worker_process_config)
-    configure_service_worker_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
-    observability = configure_observability(resolved_config.observability, service_name="worker")
+async def _run_worker(config: WorkerProcessConfig, *, stop_event: asyncio.Event | None = None) -> None:
+    """Run the configured worker until a signal or caller-owned stop event fires."""
     stop = stop_event or asyncio.Event()
     loop = asyncio.get_running_loop()
     if stop_event is None:
@@ -334,73 +331,81 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
             with contextlib.suppress(NotImplementedError):
                 loop.add_signal_handler(process_signal, stop.set)
 
-    try:
-        async with create_worker_runtime(resolved_config.runtime) as runtime, AsyncExitStack() as analyzers:
-            schematic_config = resolved_config.runtime.schematics
-            if schematic_config.enabled and engine_installed():
-                # `running()` owns the workers' stderr pumps, and an anyio task group can only
-                # be exited by the task that entered it -- this one.
-                pool = SchematicWorkerPool(schematic_config)
-                native_analyzer = await analyzers.enter_async_context(pool.running())
-            else:
-                native_analyzer = NullSchematicAnalyzer("The worker does not have the schematic engine installed.")
-            schematic_jobs = SchematicJobRunner(
-                runtime.services.schematic_jobs,
-                runtime.services.artifacts,
-                native_analyzer,
-                schematic_config,
-            )
-            # The worker subscribes to nothing, so its bus stays empty and the bridge is
-            # purely an outbound path: a finished render tells the bot's panels to repaint.
-            topic_bridge = await open_topic_bridge(resolved_config.runtime.database, LocalTopicBus())
-            schematic_renders = SchematicRenderProjector(
-                runtime.services.schematic_renders,
-                runtime.services.schematics,
-                runtime.services.artifacts,
-                str(schematic_config.render_public_base_url)
-                if schematic_config.render_public_base_url is not None
-                else None,
-                enabled=schematic_config.render_enabled,
-                topics=topic_bridge,
-            )
-            worker = DatabaseWorker(
-                runtime.services,
-                runtime.keep_database_active,
-                resolved_config.worker,
-                schematic_jobs,
-                schematic_renders,
-                schematic_pool=native_analyzer if isinstance(native_analyzer, SchematicWorkerPool) else None,
-            )
+    async with create_worker_runtime(config.runtime) as runtime, AsyncExitStack() as analyzers:
+        schematic_config = config.runtime.schematics
+        if schematic_config.enabled and engine_installed():
+            # `running()` owns the workers' stderr pumps, and an anyio task group can only
+            # be exited by the task that entered it -- this one.
+            pool = SchematicWorkerPool(schematic_config)
+            native_analyzer = await analyzers.enter_async_context(pool.running())
+        else:
+            native_analyzer = NullSchematicAnalyzer("The worker does not have the schematic engine installed.")
+        schematic_jobs = SchematicJobRunner(
+            runtime.services.schematic_jobs,
+            runtime.services.artifacts,
+            native_analyzer,
+            schematic_config,
+        )
+        # The worker subscribes to nothing, so its bus stays empty and the bridge is
+        # purely an outbound path: a finished render tells the bot's panels to repaint.
+        topic_bridge = await open_topic_bridge(config.runtime.database, LocalTopicBus())
+        schematic_renders = SchematicRenderProjector(
+            runtime.services.schematic_renders,
+            runtime.services.schematics,
+            runtime.services.artifacts,
+            str(schematic_config.render_public_base_url)
+            if schematic_config.render_public_base_url is not None
+            else None,
+            enabled=schematic_config.render_enabled,
+            topics=topic_bridge,
+        )
+        worker = DatabaseWorker(
+            runtime.services,
+            runtime.keep_database_active,
+            config.worker,
+            schematic_jobs,
+            schematic_renders,
+            schematic_pool=native_analyzer if isinstance(native_analyzer, SchematicWorkerPool) else None,
+        )
 
-            async def worker_ready() -> bool:
-                await runtime.ready()
-                return worker.is_ready()
+        async def worker_ready() -> bool:
+            await runtime.ready()
+            return worker.is_ready()
 
-            # The supervisor's task group must be entered and exited by the same
-            # task, so it is held here rather than inside DatabaseWorker.
-            async with worker.running():
-                worker.start()
+        # The supervisor's task group must be entered and exited by the same
+        # task, so it is held here rather than inside DatabaseWorker.
+        async with worker.running():
+            worker.start()
+            if topic_bridge is not None:
+                worker.supervisor.start(topic_bridge.run(), name="layout-topic-bridge")
+            start_log_capture(
+                worker.supervisor,
+                runtime.services.error_reports,
+                enabled=config.diagnostics.capture_logged_errors,
+                capacity=config.diagnostics.log_capture_queue,
+            )
+            try:
+                async with ProcessHealthServer(worker_ready, port=config.worker.health_port):
+                    await stop.wait()
+            finally:
+                await worker.close()
                 if topic_bridge is not None:
-                    worker.supervisor.start(topic_bridge.run(), name="layout-topic-bridge")
-                start_log_capture(
-                    worker.supervisor,
-                    runtime.services.error_reports,
-                    enabled=resolved_config.diagnostics.capture_logged_errors,
-                    capacity=resolved_config.diagnostics.log_capture_queue,
-                )
-                try:
-                    async with ProcessHealthServer(worker_ready, port=resolved_config.worker.health_port):
-                        await stop.wait()
-                finally:
-                    await worker.close()
-                    if topic_bridge is not None:
-                        with anyio.move_on_after(3.0):
-                            await topic_bridge.pool.close()
-                        topic_bridge.pool.terminate()
-                    # The pool's own `running()` closes it; only the null analyzer, which owns
-                    # no task group and so is not on the stack, still needs closing here.
-                    if not isinstance(native_analyzer, SchematicWorkerPool):
-                        await native_analyzer.aclose()
+                    with anyio.move_on_after(3.0):
+                        await topic_bridge.pool.close()
+                    topic_bridge.pool.terminate()
+                # The pool's own `running()` closes it; only the null analyzer, which owns
+                # no task group and so is not on the stack, still needs closing here.
+                if not isinstance(native_analyzer, SchematicWorkerPool):
+                    await native_analyzer.aclose()
+
+
+async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:
+    """Run the worker with process-owned logging and telemetry."""
+    resolved_config = process_config or load_or_exit(load_worker_process_config)
+    configure_service_worker_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
+    observability = configure_observability(resolved_config.observability, service_name="worker")
+    try:
+        await _run_worker(resolved_config, stop_event=stop_event)
     finally:
         observability.shutdown()
 

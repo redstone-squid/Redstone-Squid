@@ -19,6 +19,7 @@ from squid.schematics.domain.models import (
     SimulationResult,
     VersionLossEntry,
 )
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import SchematicSupportUnavailableError
 
 ENGINE_MODULE = "nucleation"
@@ -80,7 +81,9 @@ class NullSchematicAnalyzer:
     ) -> SchematicComparison:
         raise self._unavailable()
 
-    async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes:
+    async def render(
+        self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
+    ) -> bytes:
         raise self._unavailable()
 
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:

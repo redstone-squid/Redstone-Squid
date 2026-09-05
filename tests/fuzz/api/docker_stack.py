@@ -73,6 +73,68 @@ _FAKE_HEALTHCHECK = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class _ContainerLimits:
+    """One statement of a container's hardening, in both spellings it needs.
+
+    `containers.run` takes a size string and the removal attestation takes a
+    byte count. Written twice, they drift, and the attestation then refuses to
+    remove the container it was protecting -- so the safety layer leaks the
+    disposable containers it exists to clean up.
+    """
+
+    memory_mib: int
+    nano_cpus: int
+    pids_limit: int
+    log_max_size: str
+    tmpfs: Mapping[str, str]
+
+    @property
+    def mem_limit(self) -> str:
+        return f"{self.memory_mib}m"
+
+    @property
+    def memory_bytes(self) -> int:
+        return self.memory_mib * 1024 * 1024
+
+    @property
+    def log_config(self) -> LogConfig:
+        return LogConfig(type=LogConfig.types.JSON, config={"max-size": self.log_max_size, "max-file": "1"})
+
+
+_POSTGRES_LIMITS = _ContainerLimits(
+    memory_mib=768,
+    nano_cpus=750_000_000,
+    pids_limit=128,
+    log_max_size="10m",
+    tmpfs={
+        "/var/lib/postgresql/data": "rw,noexec,nosuid,size=512m,uid=999,gid=999,mode=0700",
+        "/var/run/postgresql": "rw,noexec,nosuid,size=4m,uid=999,gid=999,mode=0755",
+    },
+)
+_REDIS_LIMITS = _ContainerLimits(
+    memory_mib=128,
+    nano_cpus=250_000_000,
+    pids_limit=64,
+    log_max_size="5m",
+    tmpfs={"/data": "rw,noexec,nosuid,size=8m,mode=0777"},
+)
+_FAKE_LIMITS = _ContainerLimits(
+    memory_mib=256,
+    nano_cpus=250_000_000,
+    pids_limit=64,
+    log_max_size="5m",
+    tmpfs={"/tmp": "rw,noexec,nosuid,size=16m"},
+)
+_API_LIMITS = _ContainerLimits(
+    memory_mib=512,
+    nano_cpus=500_000_000,
+    pids_limit=128,
+    log_max_size="10m",
+    tmpfs={"/tmp": "rw,noexec,nosuid,size=32m"},
+)
+
+
 def docker_api_environment() -> ApiEnvironment:
     """Return an environment backed by the concrete local Docker starter."""
     return ApiEnvironment(start_docker_stack)
@@ -134,16 +196,13 @@ def _start_docker_stack_sync(identity: RunIdentity, stack: AsyncExitStack) -> Ru
         "postgres",
         network_id,
         POSTGRES_CONTAINER_PORT,
-        tmpfs_targets=frozenset({"/var/lib/postgresql/data", "/var/run/postgresql"}),
-        tmpfs_options={
-            "/var/lib/postgresql/data": "rw,noexec,nosuid,size=512m,uid=999,gid=999,mode=0700",
-            "/var/run/postgresql": "rw,noexec,nosuid,size=4m,uid=999,gid=999,mode=0755",
-        },
+        tmpfs_targets=frozenset(_POSTGRES_LIMITS.tmpfs),
+        tmpfs_options=dict(_POSTGRES_LIMITS.tmpfs),
         require_published_port=False,
-        memory_bytes=805_306_368,
-        nano_cpus=750_000_000,
-        pids_limit=128,
-        log_max_size="10m",
+        memory_bytes=_POSTGRES_LIMITS.memory_bytes,
+        nano_cpus=_POSTGRES_LIMITS.nano_cpus,
+        pids_limit=_POSTGRES_LIMITS.pids_limit,
+        log_max_size=_POSTGRES_LIMITS.log_max_size,
     )
     stack.callback(guarded_remove_container, postgres, identity, postgres_expectation)
     redis = _run_redis(client, identity, redis_credentials, network)
@@ -153,13 +212,13 @@ def _start_docker_stack_sync(identity: RunIdentity, stack: AsyncExitStack) -> Ru
         "redis",
         network_id,
         REDIS_CONTAINER_PORT,
-        tmpfs_targets=frozenset({"/data"}),
-        tmpfs_options={"/data": "rw,noexec,nosuid,size=8m,mode=0777"},
+        tmpfs_targets=frozenset(_REDIS_LIMITS.tmpfs),
+        tmpfs_options=dict(_REDIS_LIMITS.tmpfs),
         require_published_port=False,
-        memory_bytes=134_217_728,
-        nano_cpus=250_000_000,
-        pids_limit=64,
-        log_max_size="5m",
+        memory_bytes=_REDIS_LIMITS.memory_bytes,
+        nano_cpus=_REDIS_LIMITS.nano_cpus,
+        pids_limit=_REDIS_LIMITS.pids_limit,
+        log_max_size=_REDIS_LIMITS.log_max_size,
     )
     stack.callback(guarded_remove_container, redis, identity, redis_expectation)
     _verify_live_resources(
@@ -210,14 +269,14 @@ def _start_docker_stack_sync(identity: RunIdentity, stack: AsyncExitStack) -> Ru
         "fake",
         network_id,
         FAKE_CONTAINER_PORT,
-        tmpfs_targets=frozenset({"/tmp"}),
-        tmpfs_options={"/tmp": "rw,noexec,nosuid,size=16m"},
+        tmpfs_targets=frozenset(_FAKE_LIMITS.tmpfs),
+        tmpfs_options=dict(_FAKE_LIMITS.tmpfs),
         require_published_port=False,
         healthcheck_test=_FAKE_HEALTHCHECK,
-        memory_bytes=268_435_456,
-        nano_cpus=250_000_000,
-        pids_limit=64,
-        log_max_size="5m",
+        memory_bytes=_FAKE_LIMITS.memory_bytes,
+        nano_cpus=_FAKE_LIMITS.nano_cpus,
+        pids_limit=_FAKE_LIMITS.pids_limit,
+        log_max_size=_FAKE_LIMITS.log_max_size,
     )
     stack.callback(guarded_remove_container, fake, identity, fake_expectation)
     _verify_live_resources(
@@ -260,17 +319,17 @@ def _start_docker_stack_sync(identity: RunIdentity, stack: AsyncExitStack) -> Ru
         "api",
         network_id,
         API_CONTAINER_PORT,
-        tmpfs_targets=frozenset({"/tmp"}),
-        tmpfs_options={"/tmp": "rw,noexec,nosuid,size=32m"},
+        tmpfs_targets=frozenset(_API_LIMITS.tmpfs),
+        tmpfs_options=dict(_API_LIMITS.tmpfs),
         require_published_port=False,
         require_identity_environment=False,
         forbidden_environment=frozenset(
             {CONTROL_NONCE_ENV, "REDSTONE_SQUID_FUZZ_RUN_ID", "REDSTONE_SQUID_FUZZ_SENTINEL"}
         ),
-        memory_bytes=536_870_912,
-        nano_cpus=500_000_000,
-        pids_limit=128,
-        log_max_size="10m",
+        memory_bytes=_API_LIMITS.memory_bytes,
+        nano_cpus=_API_LIMITS.nano_cpus,
+        pids_limit=_API_LIMITS.pids_limit,
+        log_max_size=_API_LIMITS.log_max_size,
     )
     stack.callback(guarded_remove_container, api, identity, api_expectation)
     proxy = LoopbackTcpProxy(_container_ipv4(api, network_id), API_CONTAINER_PORT)
@@ -388,17 +447,14 @@ def _run_postgres(
             "REDSTONE_SQUID_FUZZ_SENTINEL": identity.sentinel,
         },
         user="postgres",
-        tmpfs={
-            "/var/lib/postgresql/data": "rw,noexec,nosuid,size=512m,uid=999,gid=999,mode=0700",
-            "/var/run/postgresql": "rw,noexec,nosuid,size=4m,uid=999,gid=999,mode=0755",
-        },
+        tmpfs=dict(_POSTGRES_LIMITS.tmpfs),
         read_only=True,
         cap_drop=["ALL"],
         security_opt=["no-new-privileges:true"],
-        mem_limit="768m",
-        nano_cpus=750_000_000,
-        pids_limit=128,
-        log_config=LogConfig(type=LogConfig.types.JSON, config={"max-size": "10m", "max-file": "1"}),
+        mem_limit=_POSTGRES_LIMITS.mem_limit,
+        nano_cpus=_POSTGRES_LIMITS.nano_cpus,
+        pids_limit=_POSTGRES_LIMITS.pids_limit,
+        log_config=_POSTGRES_LIMITS.log_config,
     )
 
 
@@ -457,14 +513,14 @@ def _run_redis(
             "REDSTONE_SQUID_FUZZ_SENTINEL": identity.sentinel,
         },
         user="redis",
-        tmpfs={"/data": "rw,noexec,nosuid,size=8m,mode=0777"},
+        tmpfs=dict(_REDIS_LIMITS.tmpfs),
         read_only=True,
         cap_drop=["ALL"],
         security_opt=["no-new-privileges:true"],
-        mem_limit="128m",
-        nano_cpus=250_000_000,
-        pids_limit=64,
-        log_config=LogConfig(type=LogConfig.types.JSON, config={"max-size": "5m", "max-file": "1"}),
+        mem_limit=_REDIS_LIMITS.mem_limit,
+        nano_cpus=_REDIS_LIMITS.nano_cpus,
+        pids_limit=_REDIS_LIMITS.pids_limit,
+        log_config=_REDIS_LIMITS.log_config,
     )
 
 
@@ -493,13 +549,13 @@ def _run_fake(
             "REDSTONE_SQUID_FUZZ_SENTINEL": identity.sentinel,
             "TMPDIR": "/tmp",
         },
-        tmpfs={"/tmp": "rw,noexec,nosuid,size=16m"},
+        tmpfs=dict(_FAKE_LIMITS.tmpfs),
         read_only=True,
         cap_drop=["ALL"],
         security_opt=["no-new-privileges:true"],
-        mem_limit="256m",
-        nano_cpus=250_000_000,
-        pids_limit=64,
+        mem_limit=_FAKE_LIMITS.mem_limit,
+        nano_cpus=_FAKE_LIMITS.nano_cpus,
+        pids_limit=_FAKE_LIMITS.pids_limit,
         healthcheck={
             "test": [*_FAKE_HEALTHCHECK],
             "interval": 30_000_000_000,
@@ -507,7 +563,7 @@ def _run_fake(
             "start_period": 10_000_000_000,
             "retries": 3,
         },
-        log_config=LogConfig(type=LogConfig.types.JSON, config={"max-size": "5m", "max-file": "1"}),
+        log_config=_FAKE_LIMITS.log_config,
     )
 
 
@@ -525,14 +581,14 @@ def _run_api(
         network=_required_identifier(network.name, "network name"),
         labels=resource_labels(identity, "api"),
         environment=dict(environment),
-        tmpfs={"/tmp": "rw,noexec,nosuid,size=32m"},
+        tmpfs=dict(_API_LIMITS.tmpfs),
         read_only=True,
         cap_drop=["ALL"],
         security_opt=["no-new-privileges:true"],
-        mem_limit="512m",
-        nano_cpus=500_000_000,
-        pids_limit=128,
-        log_config=LogConfig(type=LogConfig.types.JSON, config={"max-size": "10m", "max-file": "1"}),
+        mem_limit=_API_LIMITS.mem_limit,
+        nano_cpus=_API_LIMITS.nano_cpus,
+        pids_limit=_API_LIMITS.pids_limit,
+        log_config=_API_LIMITS.log_config,
     )
 
 

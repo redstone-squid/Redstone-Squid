@@ -14,30 +14,51 @@ One runtime per Discord client. `install()` starts no background work; supervise
 
 ::: squid_ui_discord.install
 
-::: squid_ui_discord.ClientRuntime
+::: squid_ui_discord.DiscordUIRuntime
 
-::: squid_ui_discord.ClientRuntimeMissing
+::: squid_ui_discord.DiscordUIRuntimeMissing
 
 ## Entry points
 
-`Screen` declares reusable opening policy; `Invocation` handles one event directly.
-`current_invocation` reaches the live invocation from inside a handler.
+`DiscordUIRuntime` owns process resources. Its exact-identity owner scopes provide delivery, while
+`DiscordRequest` normalizes one event and its acknowledgement state. `Screen` declares reusable
+opening policy and is always presented through an owner scope.
 
 ::: squid_ui_discord.Screen
 
-::: squid_ui_discord.Invocation
+::: squid_ui_discord.DiscordUI
 
-::: squid_ui_discord.current_invocation
+::: squid_ui_discord.DiscordRequest
 
-::: squid_ui_discord.invocation_scope
+::: squid_ui_discord.DiscordAction
+
+::: squid_ui_discord.ResponseSpec
 
 ::: squid_ui_discord.OpenContext
 
 ::: squid_ui_discord.Visibility
 
-::: squid_ui_discord.InvocationSource
+::: squid_ui_discord.ResponseSource
 
 ::: squid_ui_discord.StackNavigator
+
+## Optional discord.py integration
+
+`squid_ui_discord.ext` composes owner request injection and cog lifecycle with ordinary discord.py
+decorators. Its testing stage exercises facade presentation, access, sessions, dispatch, generated
+forms, and serialized payload limits without connecting a gateway.
+
+::: squid_ui_discord.ext.Cog
+
+::: squid_ui_discord.ext.command
+
+::: squid_ui_discord.ext.context_menu
+
+::: squid_ui_discord.ext.autocomplete
+
+::: squid_ui_discord.ext.testing.stage
+
+::: squid_ui_discord.ext.testing.invoke
 
 ## Access policies
 
@@ -56,7 +77,7 @@ Every message root names who may use it.
 ## Message roots
 
 A `MessageRoot` owns one live Discord message for its whole life. Most hosts construct them
-through `ClientRuntime.mount` or a session spec rather than directly.
+through `DiscordUI.respond` or a session spec rather than directly.
 
 ::: squid_ui_discord.MessageRoot
 
@@ -252,7 +273,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui_discord.grids` | Exact Discord grid construction. |
 | `squid_ui_discord.guards` | Discord-layer admission sugar over the portable guard vocabulary. |
 | `squid_ui_discord.inspection` | Read-only measurement and validation of a host-owned layout. |
-| `squid_ui_discord.invocation` | One localized Discord invocation and its delivery policy. |
+| `squid_ui_discord.request` | One localized, owner-bound Discord request and its acknowledgement ledger. |
 | `squid_ui_discord.limits` | Discord presentation limits as data, for both message modes. |
 | `squid_ui_discord.live` | Which message roots are live right now. |
 | `squid_ui_discord.message_payload` | The whole outgoing Discord message surface, as one value. |
@@ -265,7 +286,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui_discord.roles` | Persistent, router-owned self-role panels. |
 | `squid_ui_discord.routing` | Dispatch for stateless routed controls. |
 | `squid_ui_discord.runtime` | One installed Discord runtime, reachable from its client. |
-| `squid_ui_discord.screen` | Declarative component opening policy built on `Invocation`. |
+| `squid_ui_discord.screen` | Declarative component response policy presented by an owner scope. |
 | `squid_ui_discord.session_specs` | Reusable recipes for opening logical Discord sessions. |
 | `squid_ui_discord.sessions` | Live sessions, their attachment trees, and cardinality policy. |
 | `squid_ui_discord.target` | Discord target conveniences bound to the shipped adapter. |

@@ -8,18 +8,23 @@ from uuid import UUID
 import discord
 import pytest
 
+import squid_ui as sl
 import squid_ui_discord as sd
+from squid.bot.submission import build_handler as build_handler_module
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
+from squid.bot.ui import DISCORD_GREEN, DISCORD_GREY, DISCORD_RED, DISCORD_YELLOW, DiscordColour
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Status
+from squid.builds.errors import BuildRevisionMismatchError
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
 from squid.versions.application import VersionService
 from squid.versions.domain import Edition
-from squid_ui_discord.testing import commit_render, delivered_to, message_harness
+from squid_ui.testing import RecordingResponder, press_event
+from squid_ui_discord.testing import assert_within_limits, commit_render, delivered_to, message_harness
 from tests.support.discord import make_layout_bot
 
 if TYPE_CHECKING:
@@ -47,6 +52,41 @@ class SearchRecorder(SearchService):
 class BuildRecorder(BuildService):
     def __init__(self) -> None:
         pass
+
+
+class EditRecorder(BuildService):
+    def __init__(self, build: Build, *, conflict: bool = False) -> None:
+        self.build = build
+        self.conflict = conflict
+        self.expected_revision: int | None = None
+
+    def edit(
+        self,
+        build_id: int,
+        patch: Any,
+        *,
+        blocking: bool = False,
+        timeout: float = 30,
+        expected_revision: int | None = None,
+    ) -> Any:
+        del patch, blocking, timeout
+        assert build_id == self.build.id
+        self.expected_revision = expected_revision
+        recorder = self
+
+        class Lease:
+            async def __aenter__(self) -> Any:
+                if recorder.conflict:
+                    raise BuildRevisionMismatchError(build_id, expected_revision=expected_revision, current_revision=2)
+                return self
+
+            async def __aexit__(self, *args: object) -> None:
+                pass
+
+            async def commit(self) -> Build:
+                return replace(recorder.build, revision=recorder.build.revision + 1)
+
+        return Lease()
 
 
 @dataclass(frozen=True)
@@ -101,6 +141,43 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
     assert "Submission ID: 7" in str(payload)
 
 
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (Status.PENDING, DISCORD_YELLOW),
+        (Status.CONFIRMED, DISCORD_GREEN),
+        (Status.DENIED, DISCORD_RED),
+    ],
+)
+def test_build_statuses_have_exhaustive_named_colours(status: Status, expected: DiscordColour) -> None:
+    assert build_handler_module._status_colour(status, build_id=7) is expected
+
+
+@pytest.mark.parametrize("status", [None, cast(Status, "legacy")])
+def test_missing_or_unknown_build_status_is_neutral_and_reported(
+    status: Status | None,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    metrics: list[tuple[str, dict[str, object]]] = []
+    monkeypatch.setattr(
+        build_handler_module,
+        "add_counter",
+        lambda name, *, attributes: metrics.append((name, attributes)),
+    )
+
+    colour = build_handler_module._status_colour(status, build_id=7)
+
+    assert colour is DISCORD_GREY
+    assert metrics == [
+        (
+            "squid.build.invalid_submission_status",
+            {"squid.build.status": "None" if status is None else "legacy"},
+        )
+    ]
+    assert "Build 7 has no valid submission status" in caplog.text
+
+
 async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
     field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
     component = BuildEditScreen(
@@ -120,13 +197,83 @@ async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) 
 
     assert component.max_pages == 1
     assert "Edit this section" in str(component.render())
+    assert "Reload fresh editor" in str(component.render())
+    assert "discards every staged change" in str(component.render())
     assert component._current()[0] is display_build
 
 
 def test_build_editor_declares_keyed_topic_following_policy() -> None:
-    assert BuildEditScreen.session_name == "build-edit"
+    assert BuildEditScreen.session is not None
+    assert BuildEditScreen.session.name == "build-edit"
     assert BuildEditScreen.timeout == 900
     assert BuildEditScreen.follow_topics is True
+    assert BuildEditScreen.root_options["retain_routed_on_timeout"] is True
+
+
+async def test_expired_build_editor_retains_only_the_fresh_recovery_route(display_build: Build) -> None:
+    component = BuildEditScreen(
+        display_build,
+        BuildRecorder(),
+        authorize=AsyncMock(return_value=True),
+        render_build=AsyncMock(return_value=sl.status("card")),
+        refresh_posts=AsyncMock(),
+    )
+    bot = make_layout_bot()
+    message_root = bot.ui.mount(
+        component,
+        access=sd.Owner(7),
+        timeout=BuildEditScreen.timeout,
+        **BuildEditScreen.root_options,
+    )
+    message = message_harness()
+    await message_root.send(delivered_to(message))
+
+    await message_root.handle_timeout()
+
+    expired = message.edit.await_args.kwargs["view"]
+    buttons = {item.label: item.disabled for item in expired.walk_children() if isinstance(item, discord.ui.Button)}
+    assert buttons["Reload fresh editor"] is False
+    assert all(disabled for label, disabled in buttons.items() if label != "Reload fresh editor")
+
+
+async def test_build_editor_commits_against_the_revision_it_presented(display_build: Build) -> None:
+    builds = EditRecorder(display_build)
+    field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
+    field.stage("1.21+")
+    component = BuildEditScreen(
+        display_build,
+        builds,
+        [field],
+        authorize=AsyncMock(return_value=True),
+        render_build=AsyncMock(return_value=sl.status("updated")),
+        refresh_posts=AsyncMock(),
+    )
+
+    await component._apply(press_event(responder=RecordingResponder()))
+
+    assert builds.expected_revision == display_build.revision
+    assert component.saved is True
+
+
+async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(display_build: Build) -> None:
+    builds = EditRecorder(display_build, conflict=True)
+    field = next(spec for spec in EDIT_FIELDS if spec.patch_key == "version_spec").bind(display_build)
+    field.stage("1.21+")
+    component = BuildEditScreen(
+        display_build,
+        builds,
+        [field],
+        authorize=AsyncMock(return_value=True),
+        render_build=AsyncMock(),
+        refresh_posts=AsyncMock(),
+    )
+
+    await component._apply(press_event(responder=RecordingResponder()))
+    await component.projection.reload()
+
+    assert component.saved is False
+    assert "changed while you were editing" in str(component.validation_error)
+    assert "Reload latest" in str(component.render())
 
 
 @pytest.mark.asyncio
@@ -154,6 +301,50 @@ def test_build_handler_credits_the_sponsoring_server_and_website(display_build: 
     assert metadata["Sponsor Website"] == "https://example.test/"
 
 
+async def test_build_handler_renders_bounded_human_attachment_evidence(display_build: Build) -> None:
+    display_build.extra_info["schematic_duplicates"] = [
+        {
+            "build_id": 7,
+            "title": "2x2 Seamless Door",
+            "tier": "identical",
+            "footprint_distance": 0.0,
+            "source_attachments": [
+                {"attachment_id": "a", "filename": "alternate.litematic"},
+                {"attachment_id": "b", "filename": "second.litematic"},
+                {"attachment_id": "c", "filename": "third.litematic"},
+                {"attachment_id": "d", "filename": "fourth.litematic"},
+            ],
+        }
+        for _ in range(8)
+    ]
+    display_build.extra_info["attachment_failures"] = [
+        {
+            "attachment_id": str(index),
+            "filename": f"broken-{index}.litematic",
+            "stage": "analysis",
+            "detail": "bad\nnews " + "x" * 2_000,
+        }
+        for index in range(8)
+    ]
+    handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", handler_bot()), display_build)
+
+    metadata = handler.get_metadata_fields()
+    presentation = await handler.render_payload()
+
+    duplicate = metadata["⚠ Possible duplicate"]
+    failure = metadata["⚠ Attachment issues"]
+    assert "2x2 Seamless Door (#7)" in duplicate
+    assert "alternate.litematic" in duplicate
+    assert "and 2 more" in duplicate
+    assert "…and 3 more" in duplicate
+    assert "broken-0.litematic — bad news" in failure
+    assert "…and 4 more" in failure
+    assert len(duplicate) <= 1_000
+    assert len(failure) <= 1_000
+    assert "Attachment issues" in str(presentation.layout.to_components())
+    assert_within_limits(presentation.layout)
+
+
 def test_search_results_use_named_selection_and_direct_build_action() -> None:
     record = RecordSearchHit(
         "record-1",
@@ -173,7 +364,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     view = SearchScreen(SearchRecorder(), SearchRequest("door"), page)
 
     bot = make_layout_bot()
-    message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
+    message_root = bot.ui.mount(view, access=sd.Owner(123), timeout=180)
     rendered = commit_render(message_root)
     result_buttons = [
         child
@@ -197,7 +388,7 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
     view = SearchScreen(service, SearchRequest("door"), page)
 
     bot = make_layout_bot()
-    payload = commit_render(bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)).to_components()
+    payload = commit_render(bot.ui.mount(view, access=sd.Owner(123), timeout=180)).to_components()
 
     assert service.calls == []
     assert "Semantic fallback used" in str(payload)
@@ -208,7 +399,7 @@ async def test_search_timeout_disables_bound_controls() -> None:
     page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
     view = SearchScreen(SearchRecorder(), SearchRequest("door"), page)
     bot = make_layout_bot()
-    message_root = bot.client_runtime.mount(view, access=sd.Owner(123), timeout=180)
+    message_root = bot.ui.mount(view, access=sd.Owner(123), timeout=180)
     message = message_harness()
     await message_root.send(delivered_to(message))
 

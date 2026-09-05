@@ -3,8 +3,14 @@ package com.redstonesquid.minecraft.core.submission
 import com.redstonesquid.minecraft.protocol.ChoiceOption
 import com.redstonesquid.minecraft.protocol.FieldConstraints
 import com.redstonesquid.minecraft.protocol.FormField
+import java.io.File
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -47,6 +53,24 @@ class DraftFieldValueParserTest {
         assertFailsWith<IllegalArgumentException> { DraftFieldValueParser.parse(number, "0") }
         assertFailsWith<IllegalArgumentException> {
             DraftFieldValueParser.parse(field("game_ticks", "duration"), "0.01s")
+        }
+    }
+
+    @Test
+    fun `parser matches the shared duration fixture`() {
+        // Gradle runs tests with the module directory as the working directory.
+        val fixture = Json
+            .parseToJsonElement(File("../../contracts/fixtures/duration-cases.json").readText())
+            .jsonObject
+        val duration = field("game_ticks", "duration")
+        for (case in fixture.getValue("core").jsonArray.map { it.jsonObject }) {
+            val input = case.getValue("input").jsonPrimitive.content
+            val ticks = case.getValue("ticks").jsonPrimitive.long
+            assertEquals(JsonPrimitive(ticks), DraftFieldValueParser.parse(duration, input), input)
+        }
+        for (case in fixture.getValue("client_rejects").jsonArray.map { it.jsonObject }) {
+            val input = case.getValue("input").jsonPrimitive.content
+            assertFailsWith<IllegalArgumentException>(input) { DraftFieldValueParser.parse(duration, input) }
         }
     }
 

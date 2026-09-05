@@ -5,12 +5,14 @@ from dataclasses import dataclass
 from typing import cast, override
 from uuid import UUID
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CreatorAlias, CreditedAlias, PublicCreatorProfile
 from squid.api.dependencies import get_services
+from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.builds.application import BuildQueryService
 from squid.builds.domain import Build, DoorBuild, Status
 from squid.runtime import ApiServices
@@ -27,8 +29,8 @@ from squid.tags.domain import (
 from squid.versions.application.services import VersionService
 from squid.versions.domain import MinecraftVersion
 from squid.voting.application import VoteService
-from squid.voting.domain import VoteChoice, VoteOption, VoteSelection, VoteSessionSnapshot, VoteVisibility
-from tests.support.voting import poll_snapshot
+from squid.voting.domain import VoteChoice, VoteKind, VoteOption, VoteSelection, VoteSessionSnapshot, VoteVisibility
+from tests.support.voting import build_snapshot, poll_snapshot
 from tests.unit.api.fakes import MockDatabaseManager
 
 CREATOR_PUBLIC_ID = UUID("22222222-2222-2222-2222-222222222222")
@@ -333,6 +335,32 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
     assert payload["options"] == [{"id": "red", "label": "Red", "choice": "generic", "position": 0}]
     assert "111" not in response.text
     assert "author_id" not in response.text
+
+
+@pytest.mark.parametrize(
+    ("session", "expected_kind", "expected_build_id", "expected_visibility"),
+    [
+        (build_snapshot(), VoteKind.BUILD, 42, None),
+        (build_snapshot(kind=VoteKind.DELETE_LOG), VoteKind.DELETE_LOG, None, None),
+        *[
+            (poll_snapshot(visibility=visibility), VoteKind.GENERIC, None, visibility)
+            for visibility in VoteVisibility
+        ],
+    ],
+    ids=["build", "delete-log", *[f"generic-{visibility.value}" for visibility in VoteVisibility]],
+)
+def test_vote_read_kind_visibility_target_matrix(
+    session: VoteSessionSnapshot,
+    expected_kind: VoteKind,
+    expected_build_id: int | None,
+    expected_visibility: VoteVisibility | None,
+) -> None:
+    """The REST projection preserves each valid discriminator without leaking other targets."""
+    detail = VoteSessionDetail.from_domain(session)
+
+    assert detail.kind is expected_kind
+    assert detail.build_id == expected_build_id
+    assert (detail.poll.visibility if detail.poll is not None else None) is expected_visibility
 
 
 class TestTypedNotFound:

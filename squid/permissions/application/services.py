@@ -12,6 +12,7 @@ from squid.permissions.application.ports import (
 from squid.permissions.domain import (
     BUILTIN_ROLES_BY_KEY,
     CATALOGUE,
+    BuiltinRoleKeys,
     Catalogue,
     Decision,
     Effect,
@@ -29,9 +30,6 @@ from squid.permissions.domain import (
     resolve_many,
     rules_from_role,
 )
-
-GUILD_ADMIN_KEY = "guild-admin"
-"""The built-in role standing in for Discord's Manage Server permission."""
 
 
 def _role_specs(roles: Iterable[RoleRecord]) -> dict[str, RoleSpec]:
@@ -166,7 +164,7 @@ class PermissionService:
         """
         if not subject.discord_guild_admin or subject.guild_id is None:
             return []
-        key = next((str(role.id) for role in records.roles if role.builtin_key == GUILD_ADMIN_KEY), None)
+        key = next((str(role.id) for role in records.roles if role.builtin_key == BuiltinRoleKeys.GUILD_ADMIN), None)
         if key is None:
             return []
         return list(

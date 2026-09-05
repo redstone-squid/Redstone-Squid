@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 
 import anyio
 
-from squid.observability import trace_span
+from squid.observability import TraceSurface, trace_span
 from squid.runtime import BackgroundTaskSupervisor, JobHandle
 
 logger = logging.getLogger(__name__)
@@ -79,7 +79,7 @@ class EntryDebouncer:
         try:
             with trace_span(
                 "squid.background.starboard_refresh",
-                {"squid.surface": "background_work"},
+                {"squid.surface": TraceSurface.BACKGROUND_WORK},
             ):
                 await self._callback(key, force)
         except Exception:

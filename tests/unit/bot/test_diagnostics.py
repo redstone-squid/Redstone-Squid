@@ -107,7 +107,7 @@ def decision_event(responder: RecordingResponder) -> sp.TransitionEvent[sp.Decis
 async def message_root_browser(browser: ErrorReportScreen) -> tuple[MessageRoot, discord.ui.LayoutView]:
     await browser.on_load()
     bot = make_layout_bot()
-    message_root = bot.client_runtime.mount(browser, access=Owner(1), chrome=browser.chrome())
+    message_root = bot.ui.mount(browser, access=Owner(1), chrome=browser.chrome)
     if browser._browser is not None:
         await browser._browser.window._load()
     return message_root, commit_render(message_root)
@@ -259,9 +259,10 @@ async def test_going_back_removes_the_attachment() -> None:
 
 
 def test_errors_are_a_private_session() -> None:
-    assert ErrorReportScreen.session_name == "errors"
+    assert ErrorReportScreen.session is not None
+    assert ErrorReportScreen.session.name == "errors"
     assert ErrorReportScreen.timeout == 300
-    assert isinstance(ErrorReportScreen.visibility, Private)
+    assert isinstance(ErrorReportScreen.audience, Private)
 
 
 async def test_filtering_reloads_from_the_service() -> None:

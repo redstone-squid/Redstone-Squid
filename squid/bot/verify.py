@@ -1,12 +1,11 @@
 """A cog for verifying minecraft accounts."""
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -36,76 +35,62 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
+class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"):
     def __init__(self, bot: BotT):
-        self.bot = bot
+        super().__init__(bot)
         self.account_service = bot.services.accounts
 
-    @app_commands.command(name="account", description="Manage your account or view a creator page")
+    @sd.command(name="account", description="Manage your account or view a creator page")
     @app_commands.describe(user=app_commands.locale_str("Whose creator page to show. Defaults to your own account."))
     async def account(
-        self, interaction: discord.Interaction[BotT], user: discord.Member | discord.User | None = None
-    ) -> None:
+        self, request: sd.Request[Self], user: discord.Member | discord.User | None = None
+    ) -> sd.CommandResult:
         """Show your account, or somebody else's creator page."""
-        if user is not None and user.id != interaction.user.id:
-            await self._show_creator_page(interaction, user)
-            return
+        actor = request.user
+        if user is not None and user.id != actor.id:
+            return await self._creator_page(request, user)
 
-        account = await self.account_service.get_account_by_identity(
-            IdentityProvider.DISCORD,
-            str(interaction.user.id),
-        )
+        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(actor.id))
         if account is not None:
-            await self._refresh_discord_avatar_key(account, interaction.user)
+            await self._refresh_discord_avatar_key(account, actor)
 
         async def open_consent(
             event: sl.ActionEvent,
             answered: Callable[[AccountConsent | None], Awaitable[None]],
         ) -> None:
-            message_root = sd.responder(event).message_root
+            press = await sd.request(event)
+            message_root = press.root
+            assert message_root is not None, "a press always arrives from a mounted message"
 
             async def completed(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
                 await answered(consent)
                 if consent is not None:
                     await message_root.schedule()
 
-            await request_consent(
-                sd.native(event),
-                user_id=interaction.user.id,
-                on_answer=completed,
-                parent=message_root,
-            )
+            await request_consent(press, user_id=actor.id, on_answer=completed, parent=message_root)
 
         async def authorize_claim(node) -> bool:
-            return await allows(interaction, node)
+            return await allows(request, node)
 
-        await AccountWorkspace(
+        return AccountWorkspace(
             accounts=self.account_service,
-            actor_id=interaction.user.id,
+            actor_id=actor.id,
             account=account,
             request_consent=open_consent,
-            can_review_claims=await allows(interaction, ACCOUNT_CLAIM_LIST),
-            can_approve_claims=await allows(interaction, ACCOUNT_CLAIM_APPROVE),
-            can_reject_claims=await allows(interaction, ACCOUNT_CLAIM_REJECT),
+            can_review_claims=await allows(request, ACCOUNT_CLAIM_LIST),
+            can_approve_claims=await allows(request, ACCOUNT_CLAIM_APPROVE),
+            can_reject_claims=await allows(request, ACCOUNT_CLAIM_REJECT),
             authorize_claim=authorize_claim,
-        ).show(interaction)
+        )
 
-    async def _show_creator_page(
-        self,
-        interaction: discord.Interaction[BotT],
-        user: discord.Member | discord.User,
-    ) -> None:
-        """Show somebody else's page, which is shared content and answers where the channel sees it."""
-        invocation = await sd.Invocation.of(interaction)
+    async def _creator_page(self, request: sd.Request[Self], user: discord.Member | discord.User) -> sd.CommandResult:
+        """Somebody else's page is shared content and answers where the channel sees it."""
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
         if account is None or account.public_creator_id is None:
-            await invocation.reply(
-                text_node(tr("{user} doesn't have a creator page.", user=user.display_name)),
-                visibility="personal",
+            return sd.Response(
+                text_node(tr("{user} doesn't have a creator page.", user=user.display_name)), audience="personal"
             )
-            return
-        node = await self._public_profile_card(account.public_creator_id, user.display_name)
-        await invocation.reply(node)
+        return await self._public_profile_card(account.public_creator_id, user.display_name)
 
     async def _public_profile_card(self, public_id: UUID, fallback_name: str):
         """Render somebody else's page from the same filtered view the API serves."""

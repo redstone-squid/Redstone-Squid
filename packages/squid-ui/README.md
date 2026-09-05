@@ -54,7 +54,7 @@ pip install squid-ui==0.1.0a1
 ```
 
 Most Discord applications should install `squid-ui-discord`, which brings this package with it
-and provides the `Invocation` and `Screen` entry points.
+and provides owner-scoped `DiscordUI`, `DiscordRequest`, and `Screen` entry points.
 Applications compiling Block Kit should install `squid-ui-slack`, which adds Slack SDK drawing
 without a listener or delivery runtime.
 

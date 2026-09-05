@@ -467,7 +467,7 @@ impl<'a> SubmissionApi<'a> {
         token: Option<&SecretBytes>,
     ) -> Result<ApiResponse<FormManifest>, TransportError> {
         self.client.send_json(
-            ApiRequest::new(ApiMethod::Get, "/api/v1/submissions/form/current"),
+            ApiRequest::new(ApiMethod::Get, "/v1/submissions/form/current"),
             token,
         )
     }
@@ -485,7 +485,7 @@ impl<'a> SubmissionApi<'a> {
         self.client.send_json(
             ApiRequest::new(
                 ApiMethod::Get,
-                format!("/api/v1/submissions/form/schemas/{schema_id}/revisions/{revision}"),
+                format!("/v1/submissions/form/schemas/{schema_id}/revisions/{revision}"),
             ),
             token,
         )
@@ -502,7 +502,7 @@ impl<'a> SubmissionApi<'a> {
         self.client.send_json(
             ApiRequest::new(
                 ApiMethod::Get,
-                format!("/api/v1/submissions/form/options/{source}"),
+                format!("/v1/submissions/form/options/{source}"),
             )
             .with_query_param("category", category)?,
             token,
@@ -514,7 +514,7 @@ impl<'a> SubmissionApi<'a> {
         token: &SecretBytes,
     ) -> Result<ApiResponse<DraftList>, TransportError> {
         self.client.send_json(
-            ApiRequest::new(ApiMethod::Get, "/api/v1/submissions/drafts"),
+            ApiRequest::new(ApiMethod::Get, "/v1/submissions/drafts"),
             Some(token),
         )
     }
@@ -528,7 +528,7 @@ impl<'a> SubmissionApi<'a> {
     ) -> Result<ApiResponse<StoredDraft>, TransportError> {
         FormCode::parse(category).map_err(|_error| TransportError::InvalidEndpointPath)?;
         self.client.send_json(
-            ApiRequest::new(ApiMethod::Post, "/api/v1/submissions/drafts")
+            ApiRequest::new(ApiMethod::Post, "/v1/submissions/drafts")
                 .with_json(&DraftCreateRequest {
                     category,
                     origin: "cli",
@@ -547,7 +547,7 @@ impl<'a> SubmissionApi<'a> {
         self.client.send_json(
             ApiRequest::new(
                 ApiMethod::Get,
-                format!("/api/v1/submissions/drafts/{draft_id}"),
+                format!("/v1/submissions/drafts/{draft_id}"),
             ),
             Some(token),
         )
@@ -563,7 +563,7 @@ impl<'a> SubmissionApi<'a> {
         self.client.send_json(
             ApiRequest::new(
                 ApiMethod::Post,
-                format!("/api/v1/submissions/drafts/{draft_id}/changes"),
+                format!("/v1/submissions/drafts/{draft_id}/changes"),
             )
             .with_json(change)?
             .with_idempotency_key(idempotency_key),
@@ -580,7 +580,7 @@ impl<'a> SubmissionApi<'a> {
         self.client.send_no_content(
             ApiRequest::new(
                 ApiMethod::Delete,
-                format!("/api/v1/submissions/drafts/{draft_id}"),
+                format!("/v1/submissions/drafts/{draft_id}"),
             )
             .with_idempotency_key(idempotency_key),
             Some(token),
@@ -596,7 +596,7 @@ impl<'a> SubmissionApi<'a> {
         self.client.send_json(
             ApiRequest::new(
                 ApiMethod::Post,
-                format!("/api/v1/submissions/drafts/{draft_id}/submission"),
+                format!("/v1/submissions/drafts/{draft_id}/submission"),
             )
             .with_idempotency_key(idempotency_key),
             Some(token),
@@ -611,7 +611,7 @@ impl<'a> SubmissionApi<'a> {
         self.client.send_json(
             ApiRequest::new(
                 ApiMethod::Get,
-                format!("/api/v1/submissions/drafts/{draft_id}/submission"),
+                format!("/v1/submissions/drafts/{draft_id}/submission"),
             ),
             Some(token),
         )

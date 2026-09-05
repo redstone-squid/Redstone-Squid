@@ -173,7 +173,7 @@ def create_api_app(
     install_openapi_contract(api)
     api.add_middleware(RateLimitMiddleware)
     api.add_middleware(IdempotencyResponseMiddleware)
-    api.add_middleware(BoundedRequestBodyMiddleware)
+    api.add_middleware(BoundedRequestBodyMiddleware, routes=api.routes)
     api.add_middleware(PrivateResponseHeadersMiddleware, path_prefixes=PRIVATE_API_PATH_PREFIXES)
     # Added last of the unconditional stack so it is outermost: it stamps Request-Id onto rate-limit
     # rejections and idempotency replays alike, and its binding is visible to every inner layer.
@@ -210,22 +210,27 @@ def create_api_app(
 app = create_api_app()
 
 
-def main(process_config: ApiProcessConfig | None = None) -> None:
-    """Run the FastAPI server."""
+def _run_api(config: ApiProcessConfig) -> None:
+    """Serve the configured API process until uvicorn stops."""
     import uvicorn
 
+    uvicorn.run(
+        create_api_app(config=config),
+        host="0.0.0.0",
+        port=config.api.port,
+        log_config=None,
+        proxy_headers=bool(config.api.trusted_proxy_ips),
+        forwarded_allow_ips=list(config.api.trusted_proxy_ips),
+    )
+
+
+def main(process_config: ApiProcessConfig | None = None) -> None:
+    """Run the FastAPI server with process-owned logging and telemetry."""
     resolved_config = process_config or load_or_exit(load_api_process_config)
     configure_api_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="api")
     try:
-        uvicorn.run(
-            create_api_app(config=resolved_config),
-            host="0.0.0.0",
-            port=resolved_config.api.port,
-            log_config=None,
-            proxy_headers=bool(resolved_config.api.trusted_proxy_ips),
-            forwarded_allow_ips=list(resolved_config.api.trusted_proxy_ips),
-        )
+        _run_api(resolved_config)
     finally:
         observability.shutdown()
 

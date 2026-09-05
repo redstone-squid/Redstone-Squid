@@ -62,9 +62,9 @@ class HelpClient(Protocol):
 class HelpScreen(sd.Screen):
     """A command browser that ends when closed, replaced, or timed out."""
 
-    session_name = "help"
+    session = sd.SessionSpec("help")
     timeout = 300
-    visibility = "public"
+    audience = "public"
 
     def __init__(self, bot: HelpClient, commands_: Sequence[AnyCommand], command: str | None) -> None:
         self._bot = bot
@@ -167,11 +167,11 @@ def _command_section(
     )
 
 
-class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
+class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     """Show help for a command or a group of commands."""
 
     def __init__(self, bot: BotT):
-        self.bot = bot
+        super().__init__(bot)
         self.bot.help_command = Help()
 
     # /help [command]
@@ -179,7 +179,7 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @app_commands.describe(command=app_commands.locale_str("The command to get help for."))
     async def help(self, interaction: discord.Interaction[BotT], command: str | None):
         """Show a grouped command directory or focused command details."""
-        await HelpScreen(self.bot, self._all_commands(), command).show(interaction)
+        await self.ui.respond(interaction, HelpScreen(self.bot, self._all_commands(), command))
 
     def _all_commands(self) -> list[AnyCommand]:
         """Every command in either public tree, de-duplicated by qualified name."""
