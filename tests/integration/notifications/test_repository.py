@@ -344,9 +344,7 @@ async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_r
         owner = PermissionRole(slug="owner", name="Owner", builtin_key=BuiltinRoleKeys.OWNER.value)
         custom = PermissionRole(slug="submission-reader", name="Submission reader")
         session.add_all((global_admin, owner, custom))
-        accounts = [
-            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(3)
-        ]
+        accounts = [Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(3)]
         session.add_all(accounts)
         await session.flush()
         session.add(
@@ -365,9 +363,7 @@ async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_r
         recipients = tuple(
             (
                 await session.scalars(
-                    select(Account.id)
-                    .where(_is_durable_staff_notification_recipient(Account.id))
-                    .order_by(Account.id)
+                    select(Account.id).where(_is_durable_staff_notification_recipient(Account.id)).order_by(Account.id)
                 )
             ).all()
         )
@@ -390,8 +386,7 @@ async def test_durable_staff_audience_discovery_has_constant_query_count(
         )
         session.add(role)
         accounts = [
-            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
-            for _ in range(recipient_count)
+            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(recipient_count)
         ]
         session.add_all(accounts)
         await session.flush()

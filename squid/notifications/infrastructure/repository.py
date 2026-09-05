@@ -482,9 +482,7 @@ class PostgresNotificationRepository:
             return
         staff_account_ids = (
             await session.execute(
-                select(Account.id)
-                .where(_is_durable_staff_notification_recipient(Account.id))
-                .order_by(Account.id)
+                select(Account.id).where(_is_durable_staff_notification_recipient(Account.id)).order_by(Account.id)
             )
         ).scalars()
         payload = {"build_id": build.id, "category": None if build.category is None else str(build.category)}
