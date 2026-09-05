@@ -161,7 +161,7 @@ class Request[OwnerT = Any]:
 
     @property
     def locale(self) -> str | None:
-        """The resolved locale identifier."""
+        """Shorthand for `localization.locale`."""
         return self.localization.locale
 
     @property
@@ -319,7 +319,15 @@ class Request[OwnerT = Any]:
         session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
-        """Answer this request; a managed defer fixes the audience unless one is given."""
+        """Answer this request; a managed defer fixes the audience unless one is given.
+
+        Raises:
+            RuntimeError: A form was already opened in this dispatch, a `Screen` is presented a
+                second time, the audience contradicts the managed defer, or the interaction was
+                deferred outside this ledger.
+            TypeError: `parent` and `session_key` are combined, either is given for static
+                content or without a session policy, or the scope's access policy is invalid.
+        """
         if self._form_opened:
             message = "a form response cannot be followed by message content in the same dispatch"
             raise RuntimeError(message)
@@ -358,7 +366,11 @@ class Request[OwnerT = Any]:
         )
 
     async def defer(self, policy: Deferral = "private") -> None:
-        """Acknowledge this request; the first later response completes it."""
+        """Acknowledge this request; the first later response completes it.
+
+        A no-op without an interaction, or when this ledger already deferred. Raises
+        `RuntimeError` when the interaction was acknowledged outside the ledger.
+        """
         interaction = self.interaction
         if interaction is None:
             return
@@ -376,7 +388,11 @@ class Request[OwnerT = Any]:
         *,
         on_submit: Callable[[discord.Interaction[discord.Client], dict[str, object]], Awaitable[None]] | None = None,
     ) -> None:
-        """Open a declarative or native modal as this request's initial acknowledgement."""
+        """Open a declarative or native modal as this request's initial acknowledgement.
+
+        Raises `TypeError` for a request without an interaction and `RuntimeError` when the
+        interaction was already answered. `on_submit` applies to a `FormSpec` only.
+        """
         interaction = self.interaction
         if interaction is None:
             message = "forms require an interaction request"
@@ -412,6 +428,12 @@ async def request(source: RequestOrigin, *, owner: object | None = None) -> Requ
     middleware that resolves a request before dispatch (for its localization, say) leaves
     it there, and the first owner claim before any response moves it into the owner's
     scope. A request that has responded keeps the scope it responded under.
+
+    Raises:
+        LookupError: `source` is an event from a frontend other than Discord.
+        TypeError: `source` is neither an interaction, a command context nor a message, or
+            names no user.
+        DiscordUIRuntimeMissing: No runtime is installed on the client `source` carries.
     """
     from squid_ui_discord.runtime import DiscordUIRuntime
 

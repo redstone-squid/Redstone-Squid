@@ -87,7 +87,7 @@ class RouteComponent(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class RouteDescription:
-    """A stable, read-only description of one registered routed control."""
+    """One row of `Router.describe()`; `params` pairs each parameter name with its converter's name."""
 
     component: RouteComponent
     format: str
@@ -97,11 +97,17 @@ class RouteDescription:
     handler_qualname: str
     group_prefix: str | None = None
     middleware: tuple[str, ...] = ()
+    """Qualified class names of the middleware that runs for this route, outermost first."""
 
 
 @dataclass(frozen=True, slots=True)
 class RouteRequest[BotT: discord.Client]:
-    """Immutable dispatch facts supplied to routed-control middleware."""
+    """What middleware sees for one dispatch.
+
+    `route` and `group_prefix` are `None` when no registration owns `route_id` (a retired or
+    unknown id); `values` is empty for buttons; `matched_alias` is set when the id matched one
+    of the route's aliases rather than its canonical pattern.
+    """
 
     interaction: discord.Interaction[BotT]
     component: RouteComponent
@@ -114,11 +120,18 @@ class RouteRequest[BotT: discord.Client]:
 
 
 class Middleware[BotT: discord.Client](ABC):
-    """A reusable routed-control policy attached to a router or route group."""
+    """A policy run around every dispatch of a router or route group.
+
+    Order is router middleware first, then each group's from the outermost ancestor inward,
+    each in the order it was added.
+    """
 
     @abstractmethod
     async def dispatch(self, request: RouteRequest[BotT], proceed: RouteProceed) -> None:
-        """Continue once through ``proceed``, or return to short-circuit."""
+        """Continue once through ``proceed``, or return to short-circuit.
+
+        `proceed` raises `RuntimeError` when called twice or after this call returns.
+        """
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,7 +193,13 @@ def _accepted(route: Route, handler: RouteHandler, component: RouteComponent) ->
 
 
 class RouteGroup[BotT: discord.Client]:
-    """A stable route prefix with feature-owned identities and handlers."""
+    """A route prefix owning the identities defined under it and their handlers.
+
+    `Router.register` freezes the group: after that `group`, `define`, `add_middleware` and a
+    new `add` raise `RuntimeError`, while `add` for an already-bound route still replaces the
+    handler so an extension reload works. Every identity needs a handler by registration time.
+    Raises `ValueError` when `prefix` is empty or a segment is not one literal.
+    """
 
     def __init__(self, *prefix: str, _parent: RouteGroup[BotT] | None = None) -> None:
         if not prefix:
@@ -202,7 +221,10 @@ class RouteGroup[BotT: discord.Client]:
         self._frozen = False
 
     def group(self, *prefix: str) -> RouteGroup[BotT]:
-        """Create a child whose final prefix is composed immediately."""
+        """Create a child whose prefix is this group's followed by `prefix`.
+
+        Raises `RuntimeError` once this group is registered and `ValueError` for a bad prefix.
+        """
         if self._frozen:
             message = f"child groups of {self.prefix!r} must be created before registration"
             raise RuntimeError(message)
@@ -214,7 +236,11 @@ class RouteGroup[BotT: discord.Client]:
         return child
 
     def define(self, format: str, *, aliases: tuple[str, ...] = ()) -> Route:
-        """Define and return one final, context-free route identity."""
+        """Define the `Route` for `format` under this group's prefix.
+
+        Raises `ValueError` when it overlaps a route this group or an including router already
+        owns, and `RuntimeError` once the group is registered.
+        """
         if self._frozen:
             message = f"new route {format!r} must be defined before the route group is registered"
             raise RuntimeError(message)
@@ -234,7 +260,7 @@ class RouteGroup[BotT: discord.Client]:
         [Callable[Concatenate[discord.Interaction[BotT], P], Awaitable[None]]],
         Callable[Concatenate[discord.Interaction[BotT], P], Awaitable[None]],
     ]:
-        """Register a button handler for one identity defined by this group."""
+        """Register a button handler for one identity defined by this group; see `add` for what it raises."""
 
         def decorate(
             handler: Callable[Concatenate[discord.Interaction[BotT], P], Awaitable[None]],
@@ -250,7 +276,7 @@ class RouteGroup[BotT: discord.Client]:
         [Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]]],
         Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]],
     ]:
-        """Register a select handler for one identity defined by this group."""
+        """Register a select handler, receiving the chosen values before path parameters; see `add`."""
 
         def decorate(
             handler: Callable[Concatenate[discord.Interaction[BotT], tuple[str, ...], P], Awaitable[None]],
@@ -267,7 +293,14 @@ class RouteGroup[BotT: discord.Client]:
         *,
         component: RouteComponent = RouteComponent.BUTTON,
     ) -> None:
-        """Bind a handler to a route this group defined, replacing it on reload."""
+        """Bind a handler to a route this group defined, replacing an existing binding.
+
+        Raises:
+            ValueError: `route` was not defined by this group, or the handler's signature does
+                not take the interaction (and values, for a select) first or names parameters
+                the route lacks.
+            RuntimeError: The route has no handler yet and the group is already registered.
+        """
         if route not in self._definitions:
             message = f"route {route.format!r} was not defined by group {self.prefix!r}"
             raise ValueError(message)
@@ -282,7 +315,7 @@ class RouteGroup[BotT: discord.Client]:
         self._routes.append(registration)
 
     def add_middleware(self, middleware: Middleware[BotT]) -> None:
-        """Append one middleware instance, idempotently by object identity."""
+        """Append one middleware instance, idempotently by identity; raises `RuntimeError` once registered."""
         if any(existing is middleware for existing in self._middleware):
             return
         if self._frozen:
@@ -324,7 +357,18 @@ class RouteGroup[BotT: discord.Client]:
 
 
 class Router[BotT: discord.Client]:
-    """A table of routes and their handlers, registered once with the client."""
+    """A table of routes and their handlers, registered once with the client.
+
+    A `namespace` reserves every id under one first segment: routes must live inside it, and
+    an id in it that no route owns reaches `on_gone` instead of a warning. Handler failures go
+    to `on_error` or the log; nothing escapes `dispatch`. `acknowledgement_timeout` is when an
+    unanswered interaction is deferred so Discord does not time it out.
+
+    Raises:
+        ValueError: The namespace is not one literal segment, is namespaced without `on_gone`,
+            or the timeout is outside `(0, 3)` seconds.
+        LayoutInvariantError: `adapter` cannot dispatch interactions.
+    """
 
     def __init__(
         self,
@@ -388,7 +432,11 @@ class Router[BotT: discord.Client]:
         )
 
     def include(self, group: RouteGroup[BotT]) -> None:
-        """Include one stable feature group in this router."""
+        """Adopt `group` and its descendants; a second include of the same group is a no-op.
+
+        Raises `ValueError` when the group sits outside this router's namespace or any of its
+        routes overlaps one already owned here, and `RuntimeError` after `register`.
+        """
         if group in self._all_groups():
             return
         if self._registered:
@@ -410,7 +458,7 @@ class Router[BotT: discord.Client]:
         group._attach(self)
 
     def add_middleware(self, middleware: Middleware[BotT]) -> None:
-        """Append one router-wide middleware instance, idempotently by identity."""
+        """Append one router-wide middleware, idempotently by identity; raises `RuntimeError` after `register`."""
         if any(existing is middleware for existing in self._middleware):
             return
         if self._registered:
@@ -513,14 +561,19 @@ class Router[BotT: discord.Client]:
 
         Replacement rather than rejection because loading an extension re-executes its
         module, so a reload registers every route in it a second time with a fresh function
-        object. The newest handler wins, exactly as it did when these were `DynamicItem`
-        classes keyed by template. It also leaves the template unchanged, which is why a
-        reload is allowed after `register` while a genuinely new route is not.
+        object. The newest handler wins. Replacement leaves the template unchanged, which is
+        why a reload is allowed after `register` while a genuinely new route is not.
 
         A route that *shadows* another is rejected outright, by `Route.overlaps`, which is
         exact rather than sampled: the segment grammar makes "could one id belong to both"
         a per-position decision. So resolution order cannot decide which handler a click
         reaches, because an ambiguous table never registers in the first place.
+
+        Raises:
+            ValueError: The route enters the mount's reserved `ctl:` namespace, sits outside
+                this router's namespace, overlaps a registered or included route, or the
+                handler's signature does not fit it (see `RouteGroup.add`).
+            RuntimeError: After `register`, the route is new or changes its aliases.
         """
         route = Route(route) if isinstance(route, str) else route
         if route.accepts_first_segment("ctl"):
@@ -605,6 +658,10 @@ class Router[BotT: discord.Client]:
         every click twice. A *different* router is rejected when any custom id could reach
         both, with the same exact-intersection check `add()` uses, because the losing
         router would answer ids it does not own with a warning or its gone hook.
+
+        Raises:
+            ValueError: Another router on `client` accepts an id this one does.
+            RuntimeError: An included group defined an identity that has no handler.
         """
         for group in self._groups:
             group._freeze()
@@ -649,7 +706,13 @@ class Router[BotT: discord.Client]:
         component: RouteComponent = RouteComponent.BUTTON,
         values: tuple[str, ...] = (),
     ) -> None:
-        """Run the handler owning ``custom_id`` under the acknowledgement deadline."""
+        """Run the handler owning ``custom_id`` under the acknowledgement deadline.
+
+        An id nobody owns reaches `on_gone` when it is in this router's namespace and is
+        logged otherwise. A handler or middleware failure goes to `on_error` (or the log) and
+        does not propagate. Whatever the outcome, an interaction still unanswered at the
+        deadline, or at the end, is deferred.
+        """
         found = self.resolve(custom_id, component=component)
         registration: _Registration | None = None
         params: Mapping[str, Any] = MappingProxyType({})
@@ -837,6 +900,8 @@ def _dispatch_item(router: Router[Any]) -> type[discord.ui.DynamicItem[discord.u
         discord.ui.DynamicItem[discord.ui.Item[Any]],
         template=router.template(),
     ):
+        """Forwards every click matching the template to `router.dispatch`, as a select when the item is one."""
+
         @classmethod
         @override
         async def from_custom_id(  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]

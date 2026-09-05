@@ -72,7 +72,7 @@ class Scope[OwnerT = Any]:
 
     @property
     def closed(self) -> bool:
-        """Whether this scope has ended."""
+        """True once `close()` ran; `request`, `respond`, `send` and `edit` then raise `RuntimeError`."""
         return self._closed
 
     def _require_live(self) -> None:
@@ -88,14 +88,21 @@ class Scope[OwnerT = Any]:
         return policy.overlay(None, **overrides)
 
     async def request(self, source: ResponseSource) -> Request[OwnerT]:
-        """The request for `source`, created under this scope if no request has seen it yet."""
+        """The request for `source`, created under this scope if no request has seen it yet.
+
+        Raises `RuntimeError` when the scope is closed, and whatever `sd.request` raises.
+        """
         self._require_live()
         from squid_ui_discord.request import request
 
         return await request(source, owner=self._owner)
 
     def render(self, content: FacadeContent, *, localization: Localization | None = None) -> MessagePayload:
-        """Render supported static content through installed rendering defaults."""
+        """Render `content` to one payload with the installed target, chrome and palette.
+
+        Native discord.py objects and payloads pass through untouched; a `Component` is
+        rendered once, sessionless, with no mount to answer its controls.
+        """
         defaults = self._runtime.defaults
         selected = defaults.localization if localization is None else localization
         if isinstance(content, MessagePayload):
@@ -152,7 +159,11 @@ class Scope[OwnerT = Any]:
         session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
-        """Transitional: `(await scope.request(source)).respond(...)` for call sites not yet ported."""
+        """Resolve `source`'s request under this scope and answer it through `Request.respond`.
+
+        For a caller holding a raw source; one holding a `Request` calls `Request.respond`
+        directly. Raises what `request` and `Request.respond` raise.
+        """
         request = await self.request(source)
         return await request.respond(content, files=files, parent=parent, session_key=session_key, **overrides)
 
@@ -165,7 +176,12 @@ class Scope[OwnerT = Any]:
         files: Sequence[discord.File] = (),
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
-        """Send out-of-band content to a channel or DM destination."""
+        """Send content nobody asked for to a channel or DM.
+
+        Live content is mounted under `access`, which must be explicit since there is no
+        invoker. Raises `TypeError` when the resolved audience is not `"public"` or live
+        content has no access policy, and `RuntimeError` when the scope is closed.
+        """
         self._require_live()
         policy = self._policy(content, overrides)
         audience = self._setting(policy.audience, default="public")
@@ -190,7 +206,11 @@ class Scope[OwnerT = Any]:
         files: Sequence[discord.File] = (),
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
-        """Replace a Discord message with static or newly scoped live content."""
+        """Replace `target`'s content in place; live content gets a fresh root tracked by this scope.
+
+        Raises `TypeError` when `audience` is given (a message keeps its audience) or live
+        content has no explicit `access`, and `RuntimeError` when the scope is closed.
+        """
         self._require_live()
         if "audience" in overrides:
             message = "editing an existing message cannot change its audience"
@@ -360,7 +380,7 @@ class Scope[OwnerT = Any]:
         self._closed = True
 
 
-# Transitional name; removed once the bot is ported.
+# Alias kept while the docs still name `DiscordUI`; the bot uses `Scope`.
 DiscordUI = Scope
 
 __all__ = ["DiscordUI", "Scope"]

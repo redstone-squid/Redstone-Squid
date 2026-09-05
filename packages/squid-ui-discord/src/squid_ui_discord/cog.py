@@ -13,11 +13,16 @@ type ContextMenuTarget = discord.Message | discord.Member | discord.User
 
 
 class Cog[BotT: commands.Bot](commands.Cog):
-    """A Discord cog whose unload closes its UI scope.
+    """A Discord cog owning the UI scope `self.ui`, which `cog_unload` closes.
 
     `@sd.command` members are ordinary discord.py commands and need nothing from the cog;
     `@sd.context_menu` methods are registered on the tree here because discord.py cannot
-    hold a `ContextMenu` on a cog class.
+    hold a `ContextMenu` on a cog class. Subclasses override `ui_load` and `ui_unload`, not
+    `cog_load` and `cog_unload`.
+
+    Raises:
+        TypeError: A subclass defines `cog_load` or `cog_unload`, or `bot.ui` does not hold the
+            `DiscordUIRuntime` that `sd.install` returned.
     """
 
     def __init_subclass__(cls, **kwargs: object) -> None:
@@ -39,13 +44,17 @@ class Cog[BotT: commands.Bot](commands.Cog):
         self._squid_context_menus: list[app_commands.ContextMenu] = []
 
     async def ui_load(self) -> None:
-        """Run application-specific work after facade declarations are installed."""
+        """Hook run after the context menus are on the tree; raising unregisters them and closes `ui`."""
 
     async def ui_unload(self) -> None:
-        """Run application-specific work before facade declarations are removed."""
+        """Hook run before the context menus leave the tree; they are removed and `ui` closed even if it raises."""
 
     async def cog_load(self) -> None:
-        """Register declarations and roll them back if application loading fails."""
+        """Register declarations and roll them back if application loading fails.
+
+        Raises `app_commands.CommandAlreadyRegistered` when the tree already holds a context
+        menu of the same name and type.
+        """
         try:
             self._register_context_menus()
             await self.ui_load()

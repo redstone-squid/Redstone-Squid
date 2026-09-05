@@ -33,22 +33,17 @@ to the panel's own session and dies with it.
 
 
 class ChallengeRunner:
-    """Runs approved presses in a task whose context predates the press that approved it.
+    """Queue of approved presses; `run()` drains it in a task the host owns, until the host cancels it.
 
     `resume` is a plain queue push and copies no context, so it is safe to call from inside
-    the dialog's transaction; `run` is the host's background task that drains it. Started
-    once, alongside the scheduler:
-
-    ```python
-    background.start(runner.run(), name="layout-challenges")
-    ```
-
-    Without a running drain, approvals queue silently and nothing resumes -- which is the
-    honest failure for a host that wired the presenter but forgot the task.
+    the dialog's transaction; the press then runs in `run()`'s task, whose context has no
+    transaction. Without a running `run()`, approvals queue silently and nothing resumes.
+    `DiscordUIRuntime.run()` starts it alongside the scheduler.
 
     `concurrency` bounds how many approved presses run at once and `capacity` how many wait;
     past both, `resume` drops. A press that never returns holds its slot, so a host that
-    resumes work of unbounded duration should give it a timeout of its own.
+    resumes work of unbounded duration should give it a timeout of its own. Raises
+    `ValueError` when either bound is not positive.
     """
 
     def __init__(self, *, capacity: int = 256, concurrency: int = 16) -> None:
@@ -62,11 +57,11 @@ class ChallengeRunner:
 
     @property
     def active_count(self) -> int:
-        """Return how many approved presses are running right now."""
+        """How many approved presses are running right now; at most `concurrency`."""
         return self._active
 
     def resume(self, press: ResumedPress) -> None:
-        """Queue an approved press. Never blocks, and never runs it here."""
+        """Queue an approved press; never blocks, never runs it here, and drops it with a warning when full."""
         try:
             self._queue.put_nowait(press)
         except asyncio.QueueFull:
@@ -76,7 +71,7 @@ class ChallengeRunner:
             logger.warning("challenge runner is full; an approved press was dropped")
 
     async def run(self) -> None:
-        """Serve approved presses until the host cancels this coroutine."""
+        """Serve approved presses until the host cancels this coroutine; raises `RuntimeError` if already running."""
         if self._running:
             message = "challenge runner is already running"
             raise RuntimeError(message)
@@ -143,7 +138,12 @@ class DialogPresenter:
     session_spec: SessionSpec = field(default=CHALLENGE_SESSION_SPEC)
 
     async def present(self, request: ChallengeRequest) -> None:
-        """Open the dialog through the interaction that asked, and return."""
+        """Open the dialog as an ephemeral reply to `request.interaction`, attached under `request.message_root`.
+
+        Returns once the dialog is posted, not when it is answered. The dialog lives for
+        `challenge.deadline`; expiring unanswered declines. When the panel's session has
+        already finished nothing opens and the rejection is dropped.
+        """
         resolver: ChallengeResolver = _Resolver(request, self.supervisor)
         await self.session_spec.attach(
             request.challenge.ask(resolver),

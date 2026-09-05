@@ -36,13 +36,13 @@ class _InvokerOnly:
 
 
 invoker_only = _InvokerOnly()
-"""Resolve live-component access to the actor who initiated presentation."""
+"""Resolve live-component access to `Owner(actor_id)` at delivery; `None` means the same."""
 
 type AccessSetting = AccessPolicy | _InvokerOnly | None
 
 
 class ResponseOverrides(TypedDict, total=False):
-    """Call-specific values accepted by facade operations."""
+    """Per-call values for one facade operation, overlaid on the scope's `ResponseSpec`; keys as there."""
 
     audience: Audience
     access: AccessSetting
@@ -56,19 +56,31 @@ class ResponseOverrides(TypedDict, total=False):
 
 @dataclass(frozen=True, slots=True)
 class ResponseSpec:
-    """Immutable audience, delivery, and live-presentation policy."""
+    """One layer of response policy; `UNSET` fields fall through to the layer below.
+
+    Layers, least specific first: `DEFAULT_RESPONSE_SPEC`, `DiscordUIConfig.responses`, the
+    scope's defaults, the content class's `__response_spec__`, then a call's
+    `ResponseOverrides`. Fields that concern only live components (`access`, `timeout`,
+    `expiry`, `follow_topics`, `session`, `chrome`) are ignored for static content.
+    """
 
     audience: Setting[Audience] = UNSET
     access: Setting[AccessSetting] = UNSET
+    """Who may click the live controls; `None` or `invoker_only` resolves to the acting user."""
     timeout: Setting[float | None] = UNSET
+    """Seconds since the last accepted click before a live mount finishes; `None` never."""
     expiry: Setting[ExpiryPolicy | None] = UNSET
+    """What happens as edit authority lapses; `RenewEphemeral` becomes `PauseUpdates` when no scheduler runs."""
     follow_topics: Setting[bool] = UNSET
+    """Give the mount the runtime scheduler so it refreshes from topics and shared state."""
     session: Setting[SessionSpec | None] = UNSET
+    """Open live content under this session policy; `None` mounts it outside any session."""
     allowed_mentions: Setting[discord.AllowedMentions | None] = UNSET
+    """`None` sends with no mentions allowed."""
     chrome: Setting[Chrome | None] = UNSET
 
     def overlay(self, other: ResponseSpec | None = None, /, **overrides: Unpack[ResponseOverrides]) -> ResponseSpec:
-        """Return this policy with specified values from the more-specific layer."""
+        """Return this policy with `other`'s set fields on top, then `overrides` on top of those."""
         values = {field.name: getattr(self, field.name) for field in fields(self)}
         if other is not None:
             values.update(
@@ -91,9 +103,10 @@ DEFAULT_RESPONSE_SPEC = ResponseSpec(
 
 
 class Response[ContentT: FacadeContent = FacadeContent]:
-    """Content paired with the call-level policy it should be delivered under.
+    """Content paired with the `ResponseOverrides` it is delivered under.
 
     What a command handler returns when the content alone would get the wrong audience.
+    `Request.respond` unpacks it; overrides passed to `respond` itself win over these.
     """
 
     __slots__ = ("content", "overrides")
@@ -108,12 +121,12 @@ class Response[ContentT: FacadeContent = FacadeContent]:
 
 @dataclass(frozen=True, slots=True)
 class Sent:
-    """Static content was delivered; retained authority expires with its handles."""
+    """Static content was delivered; `edit` and `delete` work only while `delivery`'s handles are live."""
 
     delivery: DeliveryResult
 
     async def edit(self, payload: MessagePayload, *, keep_attachments: bool = False) -> None:
-        """Replace this delivery using its retained edit authority."""
+        """Replace the message; raises `RuntimeError` when the delivery exposed no edit handle."""
         handle = self.delivery.handle
         if handle is None:
             message = "this delivery exposed no edit authority"
@@ -121,7 +134,7 @@ class Sent:
         await handle.write(payload, keep_attachments=keep_attachments)
 
     async def delete(self) -> None:
-        """Delete this delivery using its retained delete authority."""
+        """Delete the message; raises `RuntimeError` when the delivery exposed no delete handle."""
         handle = self.delivery.delete_handle
         if handle is None:
             message = "this delivery exposed no delete authority"
@@ -131,17 +144,22 @@ class Sent:
 
 @dataclass(frozen=True, slots=True)
 class Presented[ComponentT: Component[ComponentsV2Target]]:
-    """A live component was delivered; its root ends with its owner scope."""
+    """A live component was delivered; `root` finishes with its owner scope at the latest."""
 
     component: ComponentT
     root: MessageRoot
     session: Session | None
+    """`None` when the response policy had no `session`, so the mount stands alone."""
     delivery: DeliveryResult
 
 
 @dataclass(frozen=True, slots=True)
 class Rejected:
-    """Session admission was refused after any configured notice was delivered."""
+    """Session admission was refused; falsy.
+
+    `delivery` is the rejection notice sent to the actor, or `None` when the session policy
+    configured none.
+    """
 
     reason: RejectionReason
     delivery: DeliveryResult | None = None
@@ -152,7 +170,7 @@ class Rejected:
 
 @dataclass(frozen=True, slots=True)
 class Abandoned:
-    """Delivery was deliberately abandoned after any required notice."""
+    """The destination chose not to deliver and already told the user why (`DeliveryAbandoned`); falsy."""
 
     def __bool__(self) -> bool:
         return False

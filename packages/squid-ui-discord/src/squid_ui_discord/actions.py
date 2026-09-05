@@ -17,7 +17,11 @@ if TYPE_CHECKING:
 
 
 class ActionResponder:
-    """Translate portable response intents onto one Discord interaction."""
+    """The `sl.ActionResponder` for one Discord interaction; `finish()` ends the mount through that interaction.
+
+    Reached from a portable event through `responder(event)`. `selected_entities` holds the
+    Discord objects an entity select resolved, empty for every other control.
+    """
 
     def __init__(
         self,
@@ -41,7 +45,8 @@ class ActionResponder:
         """Present a form, stated in Discord's own types.
 
         Not part of `sl.ActionResponder`: a form's payload is a frontend object, so no
-        portable protocol can type it. Reach this through `squid_ui_discord.responder(event)`.
+        portable protocol can type it. Raises `RuntimeError` when the interaction already
+        replied, since a modal must be its initial response.
         """
         modal = build_modal(form, limits=self.message_root.limits.components) if isinstance(form, ModalSpec) else form
         if self.interaction.response.is_done():
@@ -59,7 +64,11 @@ class ActionResponder:
         label: TextLike = "",
         record: History | None = None,
     ) -> None:
-        """Present a portable form and route its submission back through this mount."""
+        """Open `form` as a modal whose submission runs through `MessageRoot.dispatch_submit`.
+
+        Raises `TypeError` from `bind_form` when `on_submit` is missing for a spec or given for
+        a `Form`, and `RuntimeError` when the interaction already replied.
+        """
         spec, handler, default_mode = bind_form(form, on_submit)
         selected_mode = mode or default_mode
         modal = self._form_modal(spec, key, handler, selected_mode, self.message_root.generation, label, record)
@@ -112,7 +121,10 @@ class ActionResponder:
         label: TextLike,
         record: History | None,
     ) -> None:
-        """Render validation errors with a button that reopens the attempted form."""
+        """Reply privately with the validation errors and a "Try again" button that reopens the form.
+
+        Only `actor_id` may press the button, and the view expires after five minutes.
+        """
         lines: list[str] = []
         labels = {field.key: field.label or field.key for field in spec.items if isinstance(field, FormField)}
         for error in errors:
@@ -194,7 +206,10 @@ def native(event: ActionEvent) -> discord.Interaction[Any]:
 
 
 def selected_entities(event: ActionEvent) -> tuple[object, ...]:
-    """Return the Discord objects resolved for an entity-selection event."""
+    """The members, roles or channels an entity select resolved; empty for any other control.
+
+    Raises `LookupError` when the event came from a frontend other than Discord.
+    """
     return responder(event).selected_entities
 
 

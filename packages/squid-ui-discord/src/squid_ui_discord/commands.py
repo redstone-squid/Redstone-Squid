@@ -235,7 +235,12 @@ def _group_policy(req: Request[Any]) -> CommandPolicy:
 
 
 async def present_return(req: Request[Any], result: CommandResult) -> ResponseResult | None:
-    """Present one supported handler return through its request."""
+    """Present one handler return through its request.
+
+    `None` and outcomes pass through; a form opens as a modal and yields `None`; anything
+    else goes through `Request.respond`. Raises `RuntimeError` when the handler already
+    responded and also returned content.
+    """
     if result is None or isinstance(result, _OUTCOMES):
         return result
     if req.responded:
@@ -250,7 +255,7 @@ async def present_return(req: Request[Any], result: CommandResult) -> ResponseRe
 async def _run_pending(req: Request[Any], card: PendingCard, work: Callable[[], Awaitable[object]]) -> None:
     """Show `card` at once, run `work` behind it, and replace it with the returned document.
 
-    The error policy from `Config.errors` renders and observes a failure; the failure is
+    The error policy from `DiscordUIConfig.errors` renders and observes a failure; the failure is
     re-raised afterwards so discord.py's error handling still sees it.
     """
     errors = req.runtime.config.errors
@@ -329,6 +334,8 @@ def command(
 
     `defer` acknowledges before the handler runs; `pending` shows a card while it runs and
     replaces it with the returned document. Both inherit from an enclosing `sd.Group`.
+    Decorating raises `TypeError` when the callback is not a coroutine function or its
+    source slot is not annotated `Request`.
     """
     own = CommandPolicy(defer=defer, pending=pending)
 
@@ -345,7 +352,10 @@ def hybrid_command(
     defer: Deferral | None = None,
     **native: Unpack[NativeHybridKwargs],
 ) -> HybridCommandDecorator:
-    """`commands.hybrid_command`, with the handler receiving a `Request` in the context slot."""
+    """`commands.hybrid_command`, with the handler receiving a `Request` in the context slot.
+
+    Raises `TypeError` on the same callbacks `sd.command` rejects.
+    """
     own = CommandPolicy(defer=defer, pending=pending)
 
     def decorate(callback: Callable[..., Awaitable[CommandResult]]) -> commands.HybridCommand[Any, ..., None]:
@@ -364,7 +374,7 @@ def prefix_command(
     """`commands.command`, with the handler receiving a `Request` in the context slot.
 
     `defer` is accepted for symmetry and does nothing: a prefix context has no interaction
-    to acknowledge.
+    to acknowledge. Raises `TypeError` on the same callbacks `sd.command` rejects.
     """
     own = CommandPolicy(defer=defer, pending=pending)
 
@@ -452,7 +462,10 @@ def hybrid_group(
     defer: Deferral | None = None,
     **native: Unpack[NativeHybridKwargs],
 ) -> Callable[[Callable[..., Awaitable[CommandResult]]], HybridGroup]:
-    """`commands.hybrid_group`; the decorated callback runs when no subcommand is named."""
+    """`commands.hybrid_group`; the decorated callback runs when no subcommand is named.
+
+    Raises `TypeError` on the same callbacks `sd.command` rejects.
+    """
     own = CommandPolicy(defer=defer, pending=pending)
 
     def decorate(callback: Callable[..., Awaitable[CommandResult]]) -> HybridGroup:
@@ -473,7 +486,8 @@ def context_menu(
     """Declare a cog method as a context menu; `sd.Cog` registers it on load.
 
     discord.py cannot hold a `ContextMenu` on a cog class, so the declaration waits for the
-    bound instance.
+    bound instance. Raises `ValueError` for a `type` other than message or user, and
+    `TypeError` when the method's second parameter is not annotated `Request`.
     """
     if type not in _MENU_TYPES:
         message = "context menus must target messages or users"
@@ -491,7 +505,7 @@ def context_menu(
 
 
 def context_menu_declaration(callback: AsyncHandler) -> ContextMenuDeclaration | None:
-    """Return a callback's context-menu declaration, if it has one."""
+    """The declaration `sd.context_menu` attached to `callback`; `None` when absent or the callable is unhashable."""
     try:
         return _CONTEXT_MENUS.get(callback)
     except TypeError:
@@ -525,7 +539,11 @@ def autocomplete[OwnerT, **P]() -> Callable[
         Coroutine[None, None, list[app_commands.Choice[ChoiceValue]]],
     ],
 ]:
-    """Inject a request and normalize autocomplete choices to Discord's limit."""
+    """Inject a request and normalize the returned choices, keeping the first 25.
+
+    Each call raises `TypeError` when the handler returns something other than a sequence of
+    `Choice`s or `(label, value)` pairs, and `ValueError` for a label over 100 characters.
+    """
 
     def decorate(
         callback: Callable[Concatenate[OwnerT, Request[OwnerT], P], Awaitable[Sequence[AutocompleteItem]]],

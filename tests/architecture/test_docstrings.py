@@ -13,16 +13,8 @@ import pytest
 
 from tests.support.source_tree import TERMINATING_VERBS, classes_in_source
 
-LIFETIME_EXEMPTIONS: frozenset[str] = frozenset(
-    {
-        # Seeded with the offenders at the start of the docstring pass; each unit of that
-        # pass removes its own. Nothing should be added here without a reason beside it.
-        "packages/squid-ui-discord/src/squid_ui_discord/actions.py::ActionResponder",
-        "packages/squid-ui-discord/src/squid_ui_discord/challenges.py::ChallengeRunner",
-        "packages/squid-ui-discord/src/squid_ui_discord/runtime.py::DiscordUIRuntime",
-    }
-)
-"""`path::Class` whose first paragraph does not yet name its verb. Listed so an exemption is a decision."""
+LIFETIME_EXEMPTIONS: frozenset[str] = frozenset()
+"""`path::Class` whose first paragraph does not name its verb. Empty; add an entry only with a reason beside it."""
 
 
 def _classes_defining_terminating_verbs() -> list[pytest.ParameterSet]:

@@ -1,15 +1,14 @@
 """One installed Discord runtime, reachable from the client it was installed on.
 
-:class:`MessageRootDefaults` answered *construction*: the values every mount on this host shares.
-It cannot answer *lookup*, because it is a value — nothing hands one back from an
-interaction. A challenge presenter needs the session registry and the background runner, and
-a panel opened from a click holds neither, so a host that wanted both ended up minting a
-process global to stand in for the lookup this module now offers.
+:class:`MessageRootDefaults` answers *construction*: the values every mount on this host shares.
+It is a value, so nothing hands one back from an interaction. A challenge presenter needs the
+session registry and the background runner, and a panel opened from a click holds neither, so
+the lookup lives here instead of in a process global.
 
 :func:`install` performs the assembly once — registry, challenge runner, dialog presenter,
 and optionally a scheduler — and records the result against the client. Anything carrying that
 client reaches it again through :meth:`DiscordUIRuntime.of`. The client-keyed weak table is the
-same shape :mod:`squid_ui_discord.routing` already uses for installed routers.
+same shape :mod:`squid_ui_discord.routing` uses for installed routers.
 
 Nothing here starts a task. `DiscordUIRuntime.run()` is offered for a host that wants one job, and
 declined by a host that wants per-job health granularity; either way the host supervises it.
@@ -77,7 +76,10 @@ def _candidates(source: RuntimeSource) -> Iterator[Any]:
 
 
 class DiscordUIRuntime[ClientT: discord.Client]:
-    """The Discord runtime installed on one client; `close()` ends it.
+    """The runtime installed on one client; `run()` serves it until cancelled, `close()` ends its sessions.
+
+    `close()` finishes every scope and session, then stops answering `of` for the client; it
+    does not cancel `run()`, which belongs to whoever started it.
 
     Holds the objects whose construction is circular — the session registry, the challenge
     runner, and the dialog presenter that needs both — plus the scheduler, when the installing
@@ -188,7 +190,11 @@ class DiscordUIRuntime[ClientT: discord.Client]:
     def scope[OwnerT](self, owner: OwnerT, *, defaults: ResponseSpec | None = None) -> Scope[OwnerT]: ...
 
     def scope[OwnerT](self, owner: OwnerT | None, *, defaults: ResponseSpec | None = None) -> Scope[OwnerT]:
-        """Return the one live scope registered for ``owner`` by exact identity."""
+        """The one live scope for ``owner`` by identity, created on first call.
+
+        Raises `TypeError` for a `None` owner and `ValueError` when `defaults` differs from
+        what the existing scope was registered with.
+        """
         from squid_ui_discord.facade import Scope
         from squid_ui_discord.response import ResponseSpec
 
@@ -266,6 +272,7 @@ def install[ClientT: discord.Client](
         ValueError: A host is already installed on this client. One client has one host, the
             way one client has one router per id language -- a second would give the same
             click two answers.
+        TypeError: `config` is combined with any of the keyword arguments it subsumes.
     """
     from squid_ui_discord.response import DEFAULT_RESPONSE_SPEC
 
