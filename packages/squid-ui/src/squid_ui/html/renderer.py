@@ -30,6 +30,7 @@ textarea,select,input:not([type=checkbox]){width:100%;max-width:36rem;padding:.5
 """.strip()
 
 type AssetResolver = Callable[[scene.Asset], str | None]
+"""Maps a scene asset to a URL; `None` falls back to the plan resource, a `data:` URL if inline, else its reference."""
 
 _MARKDOWN = MarkdownIt("js-default", {"html": False, "linkify": False})
 _MEDIA_TYPE = re.compile(r"[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*\Z")
@@ -72,10 +73,12 @@ def _token_attribute(token: Token, name: str) -> str | None:
 
 
 class Renderer:
-    """Draw a semantic HTML scene, without adding browser behavior or transport.
+    """Draws `HtmlBody` scenes; `draw()` returns a `<main>` fragment, or a whole document when `standalone`.
 
-    Passing ``css`` opts into trusted host configuration. It is embedded verbatim in a
-    standalone document and must never contain untrusted authored content.
+    Markdown text goes through markdown-it inline parsing with raw HTML off; only `http(s)` URLs
+    are emitted, and a link whose URL fails that test is drawn `aria-disabled`. `css` is embedded
+    verbatim in a standalone document, so it is host configuration and must never carry authored
+    content.
     """
 
     def __init__(
@@ -97,7 +100,12 @@ class Renderer:
         *,
         plan: PlanResult[scene.HtmlBody] | None = None,
     ) -> str:
-        """Draw one planned HTML scene as a fragment or standalone document."""
+        """Draw one planned scene; `plan` supplies asset bytes when no `asset_resolver` answers.
+
+        Raises `DrawInvariantError` for a scene of another protocol, target version or body type,
+        and for a tree that breaks an element rule: a `time` reference on a non-`time` tag, a URL
+        on a tag other than `a` or `img`, an asset on a non-`a` tag, or children on a void tag.
+        """
         if document.protocol != scene.Codec.protocol:
             message = f"Renderer cannot draw scene protocol {document.protocol}"
             raise DrawInvariantError(message)

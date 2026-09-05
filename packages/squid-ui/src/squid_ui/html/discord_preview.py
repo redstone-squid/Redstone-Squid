@@ -1,4 +1,4 @@
-"""Legacy HTML preview drawing for Discord Components V2 scenes."""
+"""Browser preview of Discord Components V2 scenes, for inspection and tests."""
 
 import base64
 import json
@@ -43,7 +43,11 @@ def _url(value: str) -> str | None:
 
 
 class DiscordPreviewRenderer:
-    """Draw a Discord Components V2 scene as an inspection-oriented HTML preview."""
+    """Draws `ComponentsV2` scenes as Discord-styled HTML: a `<div>` fragment, or a whole document when `standalone`.
+
+    Text is escaped, not rendered as markdown. Only `http(s)` URLs are emitted: a bad link draws
+    `aria-disabled`, a bad image is skipped. Classic bodies have no component tree and are refused.
+    """
 
     def __init__(
         self,
@@ -62,6 +66,11 @@ class DiscordPreviewRenderer:
         *,
         plan: PlanResult[scene.ComponentsV2] | None = None,
     ) -> str:
+        """Draw one planned scene; `plan` supplies file bytes when no `asset_resolver` answers.
+
+        Raises `DrawInvariantError` for a scene of another protocol, target version or body type,
+        or a node kind the preview has no drawing for.
+        """
         if document.protocol != scene.Codec.protocol:
             message = f"DiscordPreviewRenderer cannot draw scene protocol {document.protocol}"
             raise DrawInvariantError(message)

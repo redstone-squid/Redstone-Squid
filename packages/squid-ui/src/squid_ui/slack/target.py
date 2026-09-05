@@ -14,7 +14,7 @@ from squid_ui.target_types import SlackAdapter, SlackHomeTarget, SlackMessageTar
 
 @dataclass(frozen=True, slots=True)
 class SlackComponentLimits:
-    """Local Block Kit caps shared by messages and views."""
+    """Per-block Block Kit caps, the same on every surface; the planner cuts to these and the renderer audits them."""
 
     action_id: int = 255
     block_id: int = 255
@@ -31,11 +31,14 @@ class SlackComponentLimits:
     option_description: int = 75
     option_value: int = 150
     select_options: int = 100
+    """Options in one static select; the planner keeps the first this many."""
     choice_options: int = 10
+    """Options in one radio or checkbox group."""
     placeholder: int = 150
     table_rows: int = 100
     table_columns: int = 20
     table_text: int = 10000
+    """Characters across every cell of one table, not per cell."""
     card_title: int = 150
     card_body: int = 200
     carousel_cards: int = 10
@@ -59,9 +62,10 @@ def _limit_values(value: Any, prefix: str = "") -> tuple[tuple[str, object], ...
 
 @dataclass(frozen=True, slots=True)
 class SlackLimits:
-    """Common target-wide and local limits for one Slack surface."""
+    """Limits for one Slack surface; `blocks` is the only reservable axis (`Axis.BLOCKS`)."""
 
     blocks: int
+    """Top-level blocks per payload: 50 for a message, 100 for a view."""
     components: SlackComponentLimits = SLACK_COMPONENT_LIMITS
 
     @property
@@ -77,28 +81,31 @@ class SlackLimits:
 
 @dataclass(frozen=True, slots=True)
 class SlackMessageLimits(SlackLimits):
-    """Hard limits for one Slack message."""
+    """Limits for one Slack message; also caps the plain-text `text` field the planner derives from the document."""
 
     blocks: int = 50
     fallback_text: int = 40000
+    """Hard cap on the message's plain-text `text`; the planner truncates to it."""
     recommended_fallback_text: int = 4000
+    """Slack's advisory cap for `text`; nothing enforces it."""
 
 
 @dataclass(frozen=True, slots=True)
 class SlackModalLimits(SlackLimits):
-    """Hard limits for one Slack modal view."""
+    """Limits for one modal view; `title`, `submit` and `close` cap the view's own button and title text."""
 
     blocks: int = 100
     title: int = 24
     submit: int = 24
     close: int = 24
     callback_id: int = 255
+    """Cap on the modal form's key, which becomes the view `callback_id`."""
     private_metadata: int = 3000
 
 
 @dataclass(frozen=True, slots=True)
 class SlackHomeLimits(SlackLimits):
-    """Hard limits for one Slack App Home view."""
+    """Limits for one App Home view: 100 blocks and the view-level ids, with no form or title text."""
 
     blocks: int = 100
     callback_id: int = 255
@@ -124,7 +131,7 @@ _COMMON_CAPABILITIES = frozenset(
 
 
 class SlackMessageDialect:
-    """Slack Block Kit message scene and planner contract."""
+    """`slack.block-kit.message`: carousels, galleries and tables, but no forms or alerts."""
 
     id = "slack.block-kit.message"
     version = 1
@@ -144,7 +151,7 @@ class SlackMessageDialect:
 
 
 class SlackModalDialect:
-    """Slack Block Kit modal scene and planner contract."""
+    """`slack.block-kit.modal`: modal forms and alerts, but no carousel, gallery or table blocks."""
 
     id = "slack.block-kit.modal"
     version = 1
@@ -162,7 +169,7 @@ class SlackModalDialect:
 
 
 class SlackHomeDialect:
-    """Slack App Home scene and planner contract."""
+    """`slack.block-kit.home`: the message dialect's block set on a 100-block view with no forms."""
 
     id = "slack.block-kit.home"
     version = 1
@@ -189,21 +196,21 @@ SLACK_HOME_DIALECT = SlackHomeDialect()
 def message_target[AdapterT: SlackAdapter](
     *, adapter: AdapterProfile[AdapterT], limits: SlackMessageLimits = SLACK_MESSAGE_LIMITS
 ) -> Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, AdapterT]:
-    """Return a Slack message target realized by ``adapter``."""
+    """A target for `SLACK_MESSAGE_DIALECT`; `limits` enters the target fingerprint, so custom caps plan apart."""
     return Target(SLACK_MESSAGE_DIALECT, adapter, limits)
 
 
 def modal_target[AdapterT: SlackAdapter](
     *, adapter: AdapterProfile[AdapterT], limits: SlackModalLimits = SLACK_MODAL_LIMITS
 ) -> Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, AdapterT]:
-    """Return a Slack modal target realized by ``adapter``."""
+    """A target for `SLACK_MODAL_DIALECT`; `limits` enters the target fingerprint, so custom caps plan apart."""
     return Target(SLACK_MODAL_DIALECT, adapter, limits)
 
 
 def home_target[AdapterT: SlackAdapter](
     *, adapter: AdapterProfile[AdapterT], limits: SlackHomeLimits = SLACK_HOME_LIMITS
 ) -> Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, AdapterT]:
-    """Return a Slack App Home target realized by ``adapter``."""
+    """A target for `SLACK_HOME_DIALECT`; `limits` enters the target fingerprint, so custom caps plan apart."""
     return Target(SLACK_HOME_DIALECT, adapter, limits)
 
 

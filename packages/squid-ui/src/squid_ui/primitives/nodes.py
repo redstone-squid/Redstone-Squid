@@ -36,13 +36,19 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class Text(Renderable[DiscordTarget]):
+    """One markdown paragraph. Truncates by default."""
+
     content: TextLike
     overflow: Overflow = field(default_factory=Truncate)
     priority: int = 0
+    """Text-budget rank, compared across the whole message: higher priorities are granted in full before lower
+    ones shrink, and ties share what is left. `Heading` defaults to 10, `Footer` to -10."""
 
 
 @dataclass(frozen=True, slots=True)
 class Heading(Renderable[DiscordTarget]):
+    """A markdown heading: `level` leading `#`s on Discord, `h1`-`h6` (clamped) on HTML."""
+
     content: TextLike
     level: int = 2
     overflow: Overflow = field(default_factory=Truncate)
@@ -70,13 +76,11 @@ class Code(Renderable[DiscordTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Lines(Renderable[DiscordTarget]):
-    """A list of entries joined by ``join``; spills to "…and N more" by default.
+    """Entries joined by `join`; spills to "…and N more" by default.
 
-    Entries may span multiple lines themselves — Spill keeps or drops whole entries. An entry
-    may also be an :class:`~squid_ui.primitives.constraints.Alt` carrying a degradation ladder:
-    under pressure the solver steps the largest entries down their fallbacks before it spills
-    any entry. Each :class:`~squid_ui.primitives.constraints.Alt` may carry a drop priority; lower
-    priorities disappear first, while surviving entries keep document order.
+    `Spill` keeps or drops whole entries, so an entry may span lines. An `Alt` entry carries its
+    own fallback ladder: under pressure the solver steps the largest entries down before it spills
+    any, and `Alt.priority` decides which spill first. Survivors keep document order.
     """
 
     lines: tuple[TextLike | Alt, ...]
@@ -87,16 +91,17 @@ class Lines(Renderable[DiscordTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Time(Renderable[DiscordTarget]):
-    """A typed instant retained through scene conversion."""
+    """An instant drawn as a Discord `<t:unix:style>` tag, so the viewer's client localizes it."""
 
     instant: datetime
     style: str
+    """One of Discord's timestamp style letters: `t T d D f F R`."""
     prefix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ZonedTime(Renderable[DiscordTarget]):
-    """An exact instant visibly retained with its named timezone."""
+    """An instant shown in its own named timezone rather than the viewer's."""
 
     value: ZonedDateTime
     prefix: str | None = None
@@ -104,7 +109,7 @@ class ZonedTime(Renderable[DiscordTarget]):
 
 @dataclass(frozen=True, slots=True)
 class File(Renderable[ComponentsV2Target]):
-    """A visible file component backed by a separately carried asset resource."""
+    """A Components V2 file component; the bytes travel separately as the `asset:{asset_key}` plan resource."""
 
     asset_key: str
     name: str
@@ -114,12 +119,16 @@ class File(Renderable[ComponentsV2Target]):
 
 @dataclass(frozen=True, slots=True)
 class Sep(Renderable[ComponentsV2Target]):
+    """A Components V2 separator; `visible=False` keeps the spacing but drops the line."""
+
     large: bool = False
     visible: bool = True
 
 
 @dataclass(frozen=True, slots=True)
 class LinkButton(Renderable[DiscordTarget]):
+    """A link-style button; Discord opens `url` itself, so it carries no handler and needs no binding."""
+
     label: TextLike | None
     url: str
     emoji: EmojiLike | None = None
@@ -131,7 +140,7 @@ class LinkButton(Renderable[DiscordTarget]):
 
 @dataclass(frozen=True, slots=True)
 class PremiumButton(Renderable[DiscordTarget]):
-    """A Discord premium button identified solely by its application SKU."""
+    """A Discord premium button; Discord draws the SKU's name and price. Raises `ValueError` for `sku_id <= 0`."""
 
     sku_id: int
 
@@ -163,10 +172,10 @@ class Button(Renderable[DiscordTarget]):
 
 @dataclass(frozen=True, slots=True)
 class FormButton(Button):
-    """A button that presents a form, carrying the binding its handler closes over.
+    """A button that presents a form.
 
-    The handler alone is opaque: a frontend holding it cannot tell which form it presents,
-    so it cannot resolve the newest one for a submission that arrived late. This states it.
+    `form` names the binding the handler closes over, so a frontend can resolve the newest form for
+    a submission that arrives late; the handler alone does not reveal which form it presents.
     """
 
     form: FormBinding | None = None
@@ -194,6 +203,8 @@ class RoutedButton(Renderable[DiscordTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Option:
+    """One choice in a `SelectMenu` or `RoutedSelect`; `value` is what the selection handler receives."""
+
     label: TextLike
     value: str
     description: TextLike | None = None
@@ -217,11 +228,17 @@ class SelectMenu(Renderable[DiscordTarget]):
     disabled: bool = False
     mode: ActionMode = ActionMode.EXCLUSIVE
     routes: Mapping[str, ActionBinding] = field(default_factory=dict)
+    """Per-value bindings that replace `on_select`: a single selected value dispatches its route, and a
+    value with no route, or a multi-value selection, is rejected as an invalid selection."""
 
 
 @dataclass(frozen=True, slots=True)
 class EntitySelect(Renderable[DiscordTarget]):
-    """A frontend-resolved entity picker; occupies its own row."""
+    """A user, role, channel or mentionable picker the frontend resolves; occupies its own row.
+
+    Raises `ValueError` when `conversation_types` is set on a non-conversation picker or a default
+    value's kind does not fit `entity_type`.
+    """
 
     entity_type: EntityType
     on_select: EntitySelectionHandler
@@ -257,7 +274,11 @@ class RoutedSelect(Renderable[DiscordTarget]):
 
 @dataclass(frozen=True, slots=True)
 class RawItem(Renderable[DiscordTarget]):
-    """Internal prepared target item retained until scene drawing."""
+    """What an `Extension` lowers to once its adapter has prepared it; not for authors.
+
+    The planner charges `text_cost` and `component_cost` without looking inside; `factory` yields
+    the adapter's resource when the scene is drawn.
+    """
 
     factory: Callable[[], object]
     text_cost: int = 0
@@ -269,12 +290,11 @@ class RawItem(Renderable[DiscordTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Boundary(Renderable[RenderTarget]):
-    """A keyed component boundary expanded before portable planning.
+    """A keyed child component the runtime renders and splices in before planning sees the tree.
 
-    Named for what it is rather than what it draws to. The runtime removes it before planning,
-    so it is portable even when the child it protects is target-specific. The child component's
-    target parameter carries that restriction; assigning one to this transient marker as well
-    would erase it when the marker stores the component as an opaque object.
+    Typed for every target because it never reaches a planner; the child's own target parameter
+    carries any restriction. Raises `ValueError` for an empty `key` or one containing `.`, which
+    is the path separator.
     """
 
     component: object
@@ -300,14 +320,10 @@ class Boundary(Renderable[RenderTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Content(Renderable[ClassicTarget]):
-    """The classic message's `content` field: the text a reply preview or push shows.
+    """The classic message's `content` field: the text a reply preview or push notification quotes.
 
-    A Components V2 message has no `content` at all, which is the whole reason the classic
-    target is a permanent capability rather than a migration ramp. At most one may appear in
-    a document, because a message has exactly one such field.
-
-    Defaults to `Never` because content is usually the part that must survive: it is what a
-    notification quotes, and silently shortening it defeats the reason it was written.
+    At most one per document, since a message has one such field; a Components V2 message has
+    none. Defaults to `Never` because a notification quotes it and a clipped one misleads.
     """
 
     content: TextLike
@@ -340,6 +356,8 @@ class CardField:
 
 @dataclass(frozen=True, slots=True)
 class CardAuthor:
+    """The embed author line; `url` makes the name a link."""
+
     name: CardText
     url: str | None = None
     icon_url: str | None = None
@@ -347,13 +365,15 @@ class CardAuthor:
 
 @dataclass(frozen=True, slots=True)
 class CardFooter:
+    """The embed footer line, drawn beside `Card.timestamp` when both are set."""
+
     text: CardText
     icon_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class CardMedia:
-    """An embed image or thumbnail. The description is kept even where Discord drops it."""
+    """An embed image or thumbnail. Discord's embed has no alt text; `description` survives for other targets."""
 
     url: str
     description: TextLike | None = None
@@ -361,15 +381,12 @@ class CardMedia:
 
 @dataclass(frozen=True, slots=True)
 class Card(Renderable[ClassicTarget]):
-    """One embed: a titled, coloured, field-structured block beside the message text.
+    """One classic embed.
 
-    ``children`` are description blocks, joined with blank lines in document order — one
-    deterministic joining rule, so the same card always produces the same description and the
-    same fingerprint.
-
-    Every text-bearing slot takes the ordinary overflow policies through :data:`CardText`.
-    Server-generated embed properties — provider, video, and anything Discord fills in from a
-    URL it unfurls — are not offered, because Squid cannot own what it did not write.
+    `children` become the description, joined with blank lines in document order, so equal cards
+    fingerprint equally. Every text slot takes an overflow policy through `CardText`. Properties
+    Discord fills in itself (provider, video, unfurled URLs) are not offered, since a render
+    cannot be diffed against text it did not write.
     """
 
     children: tuple[Node, ...] = ()
@@ -386,7 +403,7 @@ class Card(Renderable[ClassicTarget]):
 
 @dataclass(frozen=True, slots=True)
 class Extension[PayloadT = object, RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
-    """Target extension with a mandatory portable fallback."""
+    """A node only an adapter registered for `kind` can draw; targets without one plan `fallback` instead."""
 
     kind: ExtensionKind[PayloadT, Any]
     version: int
@@ -396,20 +413,22 @@ class Extension[PayloadT = object, RenderTargetT = DiscordTarget](Renderable[Ren
 
 @dataclass(frozen=True, slots=True)
 class Row(Renderable[DiscordTarget]):
-    """An exact target row; invalid local structure is a planning error."""
+    """One action row as written; more buttons than the row limit is a planning error, not a reflow."""
 
     items: tuple[LinkButton | PremiumButton | Button | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class ControlGroup(Renderable[DiscordTarget]):
-    """Buttons automatically arranged into as many valid target rows as needed."""
+    """Buttons chunked into as many `Row`s as the target's row limit requires, in order."""
 
     items: tuple[LinkButton | PremiumButton | Button | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class Thumbnail(Renderable[ComponentsV2Target]):
+    """A Components V2 thumbnail; only legal as a `Section.accessory`."""
+
     url: str
     description: TextLike | None = None
     spoiler: bool = False
@@ -417,7 +436,7 @@ class Thumbnail(Renderable[ComponentsV2Target]):
 
 @dataclass(frozen=True, slots=True)
 class GalleryItem:
-    """One gallery image with its accessible description and spoiler state."""
+    """One gallery image; a bare URL in `Gallery.items` becomes one with no description."""
 
     url: str
     description: TextLike | None = None
@@ -426,7 +445,7 @@ class GalleryItem:
 
 @dataclass(frozen=True, slots=True)
 class Gallery(Renderable[ComponentsV2Target]):
-    """One exact target gallery."""
+    """One media gallery as written; more items than the gallery limit is a planning error, not a split."""
 
     items: tuple[str | GalleryItem, ...]
 
@@ -438,7 +457,7 @@ class Gallery(Renderable[ComponentsV2Target]):
 
 @dataclass(frozen=True, slots=True)
 class MediaCollection(Renderable[ComponentsV2Target]):
-    """Media automatically arranged into valid target galleries."""
+    """Images chunked into as many `Gallery` nodes as the target's gallery limit requires, in order."""
 
     items: tuple[str | GalleryItem, ...]
 
@@ -450,7 +469,7 @@ class MediaCollection(Renderable[ComponentsV2Target]):
 
 @dataclass(frozen=True, slots=True)
 class Section(Renderable[ComponentsV2Target]):
-    """Up to three text nodes beside an accessory; extra texts are dropped with a note."""
+    """Up to three text nodes beside an accessory; a fourth text, or a `Paginate` policy inside, is a planning error."""
 
     texts: tuple[Text | Heading | Footer, ...]
     accessory: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem
@@ -458,7 +477,7 @@ class Section(Renderable[ComponentsV2Target]):
 
 @dataclass(frozen=True, slots=True)
 class Panel(Renderable[ComponentsV2Target]):
-    """A Container: children grouped under an optional accent colour."""
+    """A Components V2 container; `accent` is its left-edge colour."""
 
     children: tuple[Node, ...]
     accent: Color | None = None
@@ -467,32 +486,36 @@ class Panel(Renderable[ComponentsV2Target]):
 
 @dataclass(frozen=True, slots=True)
 class Budget[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
-    """Transparent group carrying an author-sized character reservation and ceiling."""
+    """Invisible group that reserves text for its children as a block before priorities are weighed.
+
+    `minimum` is held back first; `preferred` is the demand; above `preferred + stretch` the group asks
+    for `preferred` only. Draws from one text pool: children spanning two pools is a layout error.
+    """
 
     children: tuple[Node, ...]
     minimum: int
     preferred: int
     stretch: int = 0
     best_effort: bool = False
+    """Let the allocator breach `minimum` (noted as `BEST_EFFORT_FLOOR`) instead of failing the layout."""
 
 
 @dataclass(frozen=True, slots=True)
 class Break[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
-    """Transparent group carrying region-break annotations through semantic lowering."""
+    """Invisible group that region pagination treats as one item; drawn flat."""
 
     children: tuple[Node, ...]
     unbreakable: bool = False
+    """Never split the group across pages; a group wider than one page is then an `UnsolvableLayoutError`."""
     keep_with_next: bool = False
+    """No page break directly after the group, so it never ends a page; a leading heading gets this implicitly."""
 
 
 class Fidelity(StrEnum):
-    """How faithfully one variant reproduces the region it represents.
+    """What a `Variant` costs the reader; priced separately from its position in the ladder.
 
-    Rung order is a *preference*, not a loss ladder. A later rung may be a perfectly
-    faithful alternative — paginating a long region loses nothing — so the solver must be
-    told which rungs actually cost the reader something rather than inferring it from
-    position. Without this, an exact but late rung would be priced as loss and a lossy
-    early rung would be priced as free, and `strict=True` could reject neither honestly.
+    Rung order is preference, not loss: a later rung may be exact (paginating loses nothing), so
+    the solver reads loss from here. `strict=True` rejects any chosen rung that is not `EXACT`.
     """
 
     EXACT = "exact"
@@ -507,19 +530,16 @@ class Fidelity(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Variant[RenderTargetT = DiscordTarget]:
-    """One structural representation of a region and the capabilities it requires.
+    """One rung of a `Variants` ladder. Raises `ValueError` when `nodes` is empty.
 
-    ``nodes`` is a tuple because a variant may lower to several nodes — an ControlGroup becomes
-    one Row per five buttons — and splicing them into the parent is exact where wrapping them
-    in a Panel would invent the very container component the ladder exists to save.
-
-    ``fidelity`` defaults to :attr:`Fidelity.EXACT` because most alternatives are: an author
-    writing a ladder by hand is usually offering a smaller faithful shape. A library adapter
-    offering a rung that reformats or discards content must say so explicitly.
+    `nodes` are spliced into the parent rather than wrapped, so a rung can be several rows
+    without spending a container. A rung that reformats or discards content must say so in
+    `fidelity`; the default assumes a hand-written alternative is a smaller faithful shape.
     """
 
     nodes: tuple[Node, ...]
     requires: frozenset[str] = frozenset()
+    """Capability names the target must have; a rung missing any is dropped from the ladder before planning."""
     fidelity: Fidelity = Fidelity.EXACT
 
     def __post_init__(self) -> None:
@@ -530,30 +550,22 @@ class Variant[RenderTargetT = DiscordTarget]:
 
 @dataclass(frozen=True, slots=True)
 class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
-    """An ordered ladder of structural representations for one region.
+    """An ordered ladder of shapes for one region; the only way to give up *components* under pressure.
 
-    Overflow policies shrink *text*; nothing they do returns a component, so a document with
-    too many components would otherwise only be reportable. A ladder gives the solver
-    something to give up: a button panel stepping to one select, a gallery to a link row.
+    Overflow policies shrink text only. A ladder lets the solver trade a button panel for one
+    select, or a gallery for a link row. Raises `ValueError` when `variants` is empty.
 
-    A rung's *position* prices preference; its :class:`Fidelity` prices loss. A later exact
-    rung therefore beats an earlier reformatted one, and `strict=True` rejects the reformatted
-    or lossy rung it would otherwise have to accept silently.
-
-    Rungs unsupported by the target are dropped at planning time; the survivors form a budget
-    ladder. The solver opens every ladder at rung 0 and searches reachable rung assignments
-    best-first under component pressure. Every candidate is measured together with text loss,
-    so an ineffective early ladder cannot force a later sibling to degrade as well.
-
-    Two rules follow from stepping being a whole-tree decision. ``priority`` compares
-    **globally**, not among siblings: lower-priority loss is cheaper, and equal priorities
-    compare breadth-first, each reaching rung 1 before any reaches rung 2. A nested ladder only
-    becomes searchable once its ancestor's *selected* rung exposes it; stepping the ancestor
-    abandons it and opens whatever the new rung holds at rung 0.
+    Rungs whose `requires` the target lacks are dropped first. The solver opens every ladder at
+    rung 0 and searches rung assignments best-first, measuring each candidate together with text
+    loss. Position prices preference and `Fidelity` prices loss, so a later exact rung beats an
+    earlier reformatted one. A nested ladder is searchable only while its ancestor's selected
+    rung exposes it; stepping the ancestor reopens whatever the new rung holds at rung 0.
     """
 
     variants: tuple[Variant[Any], ...]
     priority: int = 0
+    """Compared across the whole document, not among siblings: lower-priority ladders step first, and
+    equal priorities step breadth-first, each reaching rung 1 before any reaches rung 2."""
 
     def __post_init__(self) -> None:
         if not self.variants:

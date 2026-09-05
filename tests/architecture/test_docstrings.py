@@ -20,9 +20,6 @@ LIFETIME_EXEMPTIONS: frozenset[str] = frozenset(
         "packages/squid-ui-discord/src/squid_ui_discord/actions.py::ActionResponder",
         "packages/squid-ui-discord/src/squid_ui_discord/challenges.py::ChallengeRunner",
         "packages/squid-ui-discord/src/squid_ui_discord/runtime.py::DiscordUIRuntime",
-        "packages/squid-ui/src/squid_ui/profiling/profiler.py::DetachedSpanRecorder",
-        "packages/squid-ui/src/squid_ui/profiling/profiler.py::_DetachedSpan",
-        "packages/squid-ui/src/squid_ui/profiling/profiler.py::_NoOpDetachedSpan",
     }
 )
 """`path::Class` whose first paragraph does not yet name its verb. Listed so an exemption is a decision."""

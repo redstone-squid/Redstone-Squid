@@ -56,21 +56,30 @@ type SampleSource = Callable[[], float]
 
 
 class SpanRecorder(Protocol):
-    """Controls the status of the current span."""
+    """The open span handed out by `OperationRecorder.span`; every method is a no-op once the span ends."""
 
-    def set_status(self, status: TraceStatus) -> None: ...
+    def set_status(self, status: TraceStatus) -> None:
+        """Set the status recorded at exit; an exception leaving the block overrides it."""
+        ...
 
-    def set_attribute(self, key: str, value: AttributeValue) -> None: ...
+    def set_attribute(self, key: str, value: AttributeValue) -> None:
+        """Set one attribute, subject to the same key, length and count bounds as construction-time attributes."""
+        ...
 
 
 class DetachedSpanRecorder(SpanRecorder, Protocol):
-    """A manually finished span for work that overlaps its lexical caller."""
+    """A span that `finish()` ends, for work that outlives the block that started it.
 
-    def finish(self, status: TraceStatus = TraceStatus.COMPLETED) -> None: ...
+    A span left unfinished when its operation closes is recorded as `TraceStatus.ABANDONED`.
+    """
+
+    def finish(self, status: TraceStatus = TraceStatus.COMPLETED) -> None:
+        """End the span; a status set earlier through `set_status` wins over `status`. Idempotent."""
+        ...
 
 
 class OperationRecorder(Protocol):
-    """Controls one operation and creates structurally nested spans."""
+    """The open operation handed out by `Profiler.operation`; every method is a no-op once the operation closes."""
 
     def span(
         self,
@@ -78,13 +87,21 @@ class OperationRecorder(Protocol):
         *,
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
-    ) -> AbstractContextManager[SpanRecorder]: ...
+    ) -> AbstractContextManager[SpanRecorder]:
+        """Open a child of the innermost span open in this context, or of the root when none is."""
+        ...
 
-    def set_result(self, result: TraceResult) -> None: ...
+    def set_result(self, result: TraceResult) -> None:
+        """Set the result recorded when the operation closes normally; an exception overrides its status."""
+        ...
 
-    def mark_deadline_missed(self) -> None: ...
+    def mark_deadline_missed(self) -> None:
+        """Flag the trace for the deadline-miss retention bucket regardless of its status or duration."""
+        ...
 
-    def increment(self, name: str, amount: int = 1) -> None: ...
+    def increment(self, name: str, amount: int = 1) -> None:
+        """Add to a per-trace counter; negative or non-int amounts and over-long names are dropped."""
+        ...
 
     def start_span(
         self,
@@ -92,7 +109,9 @@ class OperationRecorder(Protocol):
         *,
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
-    ) -> DetachedSpanRecorder: ...
+    ) -> DetachedSpanRecorder:
+        """Open a span that is not bound to the calling context; the caller must `finish()` it."""
+        ...
 
     def record_span(
         self,
@@ -102,11 +121,13 @@ class OperationRecorder(Protocol):
         status: TraceStatus = TraceStatus.COMPLETED,
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
-    ) -> None: ...
+    ) -> None:
+        """Record an already-finished span ending now and lasting `duration` seconds, clamped to the trace start."""
+        ...
 
 
 class Profiler(Protocol):
-    """Runtime tracing seam accepted by framework owners."""
+    """Runtime tracing seam accepted by framework owners; `MemoryProfiler` and `NoOpProfiler` satisfy it."""
 
     def operation(
         self,
@@ -116,13 +137,21 @@ class Profiler(Protocol):
         attributes: Mapping[str, AttributeValue] | None = None,
         links: Sequence[TraceLink] = (),
         started: float | None = None,
-    ) -> AbstractContextManager[OperationRecorder]: ...
+    ) -> AbstractContextManager[OperationRecorder]:
+        """Open a root trace; `started` backdates it to an earlier monotonic instant, never a later one."""
+        ...
 
-    def capture_link(self) -> TraceLink | None: ...
+    def capture_link(self) -> TraceLink | None:
+        """The innermost open span of this profiler in the calling context, or `None` outside any operation."""
+        ...
 
-    def snapshot(self) -> RuntimeSnapshot: ...
+    def snapshot(self) -> RuntimeSnapshot:
+        """A frozen copy of active operations, retained traces and aggregates; safe to hold across `clear()`."""
+        ...
 
-    def clear(self) -> None: ...
+    def clear(self) -> None:
+        """Drop retained traces, aggregates and health counters; configuration survives."""
+        ...
 
 
 @dataclass(slots=True)
@@ -237,13 +266,7 @@ class _NoOpSpan(AbstractContextManager[SpanRecorder]):
 
 
 class _NoOpOperation(AbstractContextManager[OperationRecorder], OperationRecorder):
-    """The no-op operation.
-
-    Deliberately not a `_NoOpSpan`: `OperationRecorder` and `SpanRecorder` are separate
-    protocols, so one object cannot enter as both. Sharing an instance made `__enter__`
-    advertise only the span half, which is what the profiler's `operation()` return type
-    could not honour.
-    """
+    """Not a `_NoOpSpan`: `__enter__` can return only one of the two protocols, and `operation()` needs this one."""
 
     def __enter__(self) -> OperationRecorder:
         return self
@@ -296,6 +319,8 @@ class _NoOpOperation(AbstractContextManager[OperationRecorder], OperationRecorde
 
 
 class _NoOpDetachedSpan(_NoOpSpan, DetachedSpanRecorder):
+    """The detached span `start_span` returns when nothing is recording; `finish()` ends nothing."""
+
     def finish(self, status: TraceStatus = TraceStatus.COMPLETED) -> None:
         pass
 
@@ -306,7 +331,7 @@ _NOOP = _NoOpOperation()
 
 
 class NoOpProfiler:
-    """Profiler implementation whose instrumented hot path performs no work."""
+    """Profiler whose recorders are shared constants; `snapshot()` reports process id `"disabled"` and epoch times."""
 
     def operation(
         self,
@@ -343,10 +368,12 @@ class NoOpProfiler:
         )
 
     def clear(self) -> None:
-        """Discarding disabled diagnostics is already a no-op."""
+        """Nothing is retained, so there is nothing to drop."""
 
 
 class _SpanScope(AbstractContextManager[SpanRecorder], SpanRecorder):
+    """Context-bound span; a failure inside `__enter__` degrades it to a no-op and counts an internal failure."""
+
     def __init__(
         self,
         profiler: MemoryProfiler,
@@ -412,6 +439,14 @@ class _SpanScope(AbstractContextManager[SpanRecorder], SpanRecorder):
 
 
 class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecorder):
+    """Root trace of one operation.
+
+    Exit finishes the trace: an exception sets `FAILED` (or `CANCELLED` for `CancelledError`, also
+    inside an exception group) while keeping any dispatch and presentation facts set through
+    `set_result`. Child spans parent to the innermost span open in the calling context, so a
+    span opened from a task that inherited this context nests under whatever span that task saw.
+    """
+
     def __init__(
         self,
         profiler: MemoryProfiler,
@@ -548,6 +583,8 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
 
 
 class _DetachedSpan(DetachedSpanRecorder):
+    """Span that `finish()` ends; it sets no context variable, so spans opened after it do not nest under it."""
+
     def __init__(self, profiler: MemoryProfiler, trace: _MutableTrace, span: _MutableSpan) -> None:
         self._profiler = profiler
         self._trace = trace
@@ -586,25 +623,28 @@ def _exception_name(error: BaseException) -> str:
 
 
 class MemoryProfiler:
-    """Bounded in-memory runtime profiler with active-operation snapshots and tail retention.
+    """Thread-safe in-memory profiler with fixed retention; recording never raises into instrumented code.
+
+    A finished trace lands in every bucket it qualifies for: `failed` for any non-completed status,
+    `slow` at or above `slow_threshold` seconds, `deadline_misses` when flagged, and `recent` for
+    ordinary traces that pass `sample_rate`. Each bucket evicts oldest-first at its cap; a trace
+    that qualified but landed in no bucket (all caps 0) is counted as dropped. Aggregates past
+    `max_*_keys` share one `<overflow>` key. `window_seconds` is split into `window_slices`
+    rotating slices, so window figures cover between `window_seconds - slice` and `window_seconds`
+    of history. Names are cut to 120 characters, details to 240, and attributes to 16 per span
+    with 64-character keys and 256-character strings; the rest is counted in
+    `ProfilerHealth.rejected_attributes`. Internal errors are swallowed into
+    `ProfilerHealth.internal_failures`.
+
+    Raises `ValueError` for a negative bound, a non-positive `window_slices` or `window_seconds`,
+    a `sample_rate` outside `[0, 1]`, or `histogram_bounds` that are not finite, positive and
+    strictly increasing.
 
     Args:
-        recent: Maximum sampled ordinary traces retained.
-        slow: Maximum slow traces retained.
-        failed: Maximum failed or cancelled traces retained.
-        deadline_misses: Maximum acknowledgement deadline misses retained.
-        slow_threshold: Duration in seconds at which a trace enters slow retention.
-        sample_rate: Fraction of ordinary successful traces retained in ``recent``.
-        window_seconds: Duration represented by rolling aggregate histograms.
-        window_slices: Number of rotating histogram slices in the rolling window.
-        max_aggregate_keys: Maximum lifetime aggregate keys before overflow grouping.
-        max_span_aggregate_keys: Maximum lifetime span aggregate keys before overflow grouping.
-        max_counter_keys: Maximum lifetime counter keys before overflow grouping.
-        max_links: Maximum causal links retained on one trace or span.
-        clock: Monotonic clock used for durations and rolling windows.
-        wall_clock: UTC wall clock used only for snapshot/export correlation.
-        id_source: Source of random identifier bytes.
-        sample_source: Source of values in ``[0, 1)`` for deterministic sampling tests.
+        clock: Monotonic seconds; drives durations and window rotation.
+        wall_clock: UTC `datetime`; appears only in snapshot `started_at` and `captured_at`.
+        id_source: Random bytes of a requested size for trace and span ids.
+        sample_source: Values in `[0, 1)` compared against `sample_rate`; injectable for tests.
     """
 
     def __init__(
@@ -767,7 +807,7 @@ class MemoryProfiler:
             )
 
     def clear(self) -> None:
-        """Clear retained traces and aggregates while keeping profiler configuration."""
+        """An operation open when this runs leaves `active` snapshots but is still recorded when it finishes."""
         with self._lock:
             self._active.clear()
             self._recent.clear()
@@ -793,6 +833,7 @@ class MemoryProfiler:
         constructor: Callable[[bytes], IdT],
         used: Container[IdT] | None = None,
     ) -> IdT:
+        """Three draws, then `ValueError`; a zero or colliding id from `id_source` is retried, not repaired."""
         for _ in range(3):
             value = self._id_source(size)
             if len(value) == size and any(value):
@@ -923,6 +964,7 @@ class MemoryProfiler:
             self._note_internal_failure()
 
     def _finish_trace(self, trace: _MutableTrace, result: TraceResult) -> None:
+        """Close the trace once; still-open spans end now as `ABANDONED`, and a failure here drops the trace."""
         try:
             ended = self._clock()
             with self._lock:
@@ -982,6 +1024,7 @@ class MemoryProfiler:
         )
 
     def _record(self, trace: RuntimeTrace, ended: float) -> None:
+        """Fold a frozen trace into lifetime and window aggregates, then into every bucket it qualifies for."""
         key = self._aggregate_key(trace)
         self._lifetime.setdefault(key, _Histogram.empty(self._bounds)).observe(trace.duration)
 

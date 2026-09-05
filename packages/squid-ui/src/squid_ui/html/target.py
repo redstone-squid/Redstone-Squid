@@ -14,7 +14,10 @@ from squid_ui.target_types import HtmlAdapter, HtmlTarget
 
 @dataclass(frozen=True, slots=True)
 class HtmlLimits:
-    """Unbounded target limits: semantic HTML has no reservable global axes."""
+    """Unbounded target limits: semantic HTML budgets no axis.
+
+    `with_capacities` raises `ValueError` for any non-empty reduction rather than ignoring it.
+    """
 
     @property
     def capacities(self) -> Mapping[Axis, int]:
@@ -34,7 +37,7 @@ HTML_LIMITS = HtmlLimits()
 
 
 class HtmlDialect:
-    """Native semantic HTML scene shape and its complete planner backend."""
+    """The `html.semantic` dialect: no budget axes, and an `Extension` always takes its fallback."""
 
     id = "html.semantic"
     version = 1
@@ -83,7 +86,7 @@ def target[AdapterT: HtmlAdapter](
 def target(
     *, adapter: AdapterProfile[HtmlAdapter] = HTML_ADAPTER
 ) -> Target[HtmlLimits, scene.HtmlBody, HtmlTarget, HtmlAdapter]:
-    """Return a semantic HTML target realized by the selected HTML adapter."""
+    """A target for `HTML_DIALECT` on `HTML_LIMITS`; there is no `limits` argument because HTML budgets nothing."""
     return Target(HTML_DIALECT, adapter, HTML_LIMITS)
 
 

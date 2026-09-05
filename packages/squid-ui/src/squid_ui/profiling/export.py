@@ -32,7 +32,10 @@ def _json_value(value: object) -> Any:
 
 
 def snapshot_json(snapshot: RuntimeSnapshot, *, indent: int | None = None) -> str:
-    """Serialize a runtime snapshot without consulting live profiler state."""
+    """Serialize a snapshot to JSON: ids as hex, datetimes as ISO 8601, enums as their values, tuples as arrays.
+
+    Compact separators unless `indent` is given. Raises `TypeError` for anything but a `RuntimeSnapshot`.
+    """
     if not isinstance(snapshot, RuntimeSnapshot):
         message = "snapshot_json expects RuntimeSnapshot"
         raise TypeError(message)

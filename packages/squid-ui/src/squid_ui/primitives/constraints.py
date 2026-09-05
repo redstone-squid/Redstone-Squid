@@ -27,25 +27,27 @@ class Spill:
 class Paginate:
     """Split content into pages; the solver adds nav controls and a page footer.
 
-    Splits at ``boundary`` where possible, hard-splitting single oversized segments. One
-    The key gives this paginator independent state and must be explicit when using the planner.
-    ``initial`` picks the page first shown — "end" suits content whose interesting part is its
-    tail, like a traceback whose failing frame is the last one.
-
-    ``per`` switches to count-based pages: a `Lines` node paginates every ``per`` entries
-    whether or not the budget is tight, which is the "10 results per page" pin a list command
-    wants. A count-page too large for the budget is split further, so a page always fits.
-    ``footer`` overrides `Chrome.page_footer` for this node — how a list keeps "Page 1 of 3 ·
-    40 in total" while the rest of the framework says "Page 1 of 3".
+    Splits at `boundary` where possible, hard-splitting single oversized segments. Raises
+    `ValueError` at construction for `per < 1`, `min_fill < 0` or `widows < 1`; the planner raises
+    `ValueError` when two paginators in one document share a key.
     """
 
     key: str | None = None
+    """Names this paginator's page state. `None` defaults to `page{N}` by position in the document, which
+    shifts when a node is added before it; give a key to any paginator whose page must survive re-renders."""
     boundary: str = "\n"
     initial: Literal["start", "end"] = "start"
+    """`"end"` opens on the last page, for content whose interesting part is its tail (a traceback)."""
     per: int | None = None
+    """Count-based pages: a `Lines` node breaks every `per` entries whether or not the budget is tight, the
+    "10 results per page" pin. A count page too large for the budget is split further. Ignored, with a
+    `PAGINATE_PER_FALLBACK` note, on any node but `Lines`."""
     footer: Callable[[int, int], TextLike] | None = None
+    """`(page, pages)` to footer text, overriding `Chrome.page_footer` for this node only."""
     min_fill: int = 0
+    """Characters a page should reach before breaking; a preference the breaker minimizes violations of."""
     widows: int = 1
+    """Fewest entries the last page should hold; a preference, like `min_fill`, weighed before page count."""
 
     def __post_init__(self) -> None:
         if self.per is not None and self.per < 1:
@@ -74,13 +76,11 @@ def _validate_ladder(steps: tuple[str, ...], *, of: str = "ladder") -> None:
 
 @dataclass(frozen=True, slots=True)
 class Alts:
-    """A degradation ladder: fallbacks tried in order when the node's content does not fit.
+    """Whole-node fallbacks tried in order when the content does not fit; the last is ellipsis-trimmed if it must.
 
-    Semantically-aware shrinking beats mid-string trimming: `[all links] → [count + first
-    link] → [count]` degrades meaningfully where an ellipsis would leave `https://exampl…`.
-    The node's own content is the preferred form; the last fallback that still does not fit
-    is ellipsis-trimmed as the final resort. Validated at construction: at least one step,
-    no empty steps, non-increasing lengths.
+    `[all links] → [count + first link] → [count]` degrades meaningfully where an ellipsis would
+    leave `https://exampl…`. Raises `ValueError` for an empty ladder, an empty step, or a step
+    longer than the one before it.
     """
 
     ladder: tuple[str, ...]
@@ -90,22 +90,23 @@ class Alts:
 
 
 def alts(*ladder: str) -> Alts:
+    """`Alts` from positional steps; raises `ValueError` under the same rules."""
     return Alts(ladder=ladder)
 
 
 @dataclass(frozen=True, slots=True)
 class Alt:
-    """One list entry with its degradation ladder: a primary form plus validated fallbacks.
+    """One `Lines` entry with its own fallback ladder.
 
-    Used as a `Lines` entry. Under budget pressure the solver steps the largest entries down
-    their fallbacks before it spills any entry whole. ``priority`` decides what disappears
-    when stepping is not enough: the lowest-priority entries spill first, ties from the tail.
-    Plain string entries are priority 0.
+    Under pressure the solver steps the largest entries down their fallbacks before it spills any
+    entry whole. Raises `ValueError` for an empty `primary`, a fallback ladder that fails the
+    `Alts` rules, or a first fallback longer than `primary`.
     """
 
     primary: str
     fallbacks: tuple[str, ...] = ()
     priority: int = 0
+    """Which entries spill when stepping is not enough: lowest first, ties from the tail. Plain strings are 0."""
 
     def __post_init__(self) -> None:
         if not self.primary:
@@ -119,6 +120,7 @@ class Alt:
 
     @property
     def steps(self) -> tuple[str, ...]:
+        """The full ladder, `primary` first."""
         return (self.primary, *self.fallbacks)
 
 
