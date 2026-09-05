@@ -6,7 +6,7 @@ from squid_ui.text import TextLike
 
 
 def text(value: TextLike) -> str:
-    """Return lowered text, rejecting a primitive that escaped semantic resolution."""
+    """`value` as the `str` lowering left it; raises `LayoutInvariantError` for any other `TextLike`."""
     if not isinstance(value, str):
         message = f"semantic lowering left {type(value).__name__} text unresolved"
         raise LayoutInvariantError(message)
@@ -14,12 +14,12 @@ def text(value: TextLike) -> str:
 
 
 def optional_text(value: TextLike | None) -> str | None:
-    """Return optional lowered text, rejecting an unresolved value."""
+    """`text(value)`, or `None` for `None`; raises `LayoutInvariantError` for unresolved text."""
     return None if value is None else text(value)
 
 
 def emoji(value: EmojiLike | None) -> Emoji | None:
-    """Return normalized emoji metadata, rejecting shorthand past the lowering seam."""
+    """`value` as the `Emoji` lowering left it; raises `LayoutInvariantError` for string shorthand."""
     if value is not None and not isinstance(value, Emoji):
         message = "semantic lowering left emoji shorthand unnormalized"
         raise LayoutInvariantError(message)

@@ -23,11 +23,13 @@ from squid_ui.planning.limits import Axis, MessageLimits
 from squid_ui.primitives.nodes import Break, Budget, Card, Fidelity, Node, Panel, Variants
 
 type VariantPath = tuple[int | str, ...]
+"""A top-level index, then `rung, child` through each ladder and `"panel", child` through each container."""
 type Positions = Mapping[VariantPath, int]
+"""Selected rung per ladder path; an absent path means rung 0, an over-long one clamps to the last rung."""
 
 
 def format_path(path: VariantPath) -> str:
-    """Render a ladder's path for a note. A reader's landmark, not an addressing scheme."""
+    """Render a ladder's path for a note as `$.a.b.c`; drops the `"panel"` markers, so it is not invertible."""
     return "$." + ".".join(str(part) for part in path if part != "panel")
 
 
@@ -88,16 +90,13 @@ def canonical_positions(nodes: Sequence[Node], positions: Positions) -> dict[Var
 
 
 def variant_profile(nodes: Sequence[Node], positions: Positions) -> DegradationProfile:
-    """Price the selected rungs: fidelity as loss, distance as the tie beneath it.
+    """Price the selected rungs: fidelity as loss, distance from rung 0 as `semantic_steps` beneath it.
 
-    Two things are being ordered and they are not the same thing. A rung that says it
-    reformats or discards content costs the reader something, and must lose to any faithful
-    alternative however far down the ladder that alternative sits — that is what makes
-    exact pagination beat a lossy one-pager. A rung's *distance* from rung 0 costs the
-    reader nothing; it is only the author's stated preference, so it ranks below every real
-    loss axis. It stays in the profile rather than moving to the cost vector because
-    `Variants.priority` groups it, and priority has to keep steering which ladder gives way
-    first even when every rung on offer is exact.
+    A reformatted or lossy rung must lose to any exact alternative however far down its
+    ladder, which is what makes exact pagination beat a lossy one-pager. Distance costs the
+    reader nothing, so it ranks below every loss axis, but it stays in the profile rather
+    than the cost vector because `Variants.priority` groups it, and priority steers which
+    ladder gives way first even when every rung on offer is exact.
     """
     profile = DegradationProfile()
 
@@ -159,7 +158,7 @@ _FIDELITY_SEVERITY = {
 
 
 def variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
-    """Count reachable rung assignments, stopping once a bounded search cannot exhaust them."""
+    """The number of reachable rung assignments, or `cutoff + 1` as soon as it is known to exceed `cutoff`."""
 
     def multiply(values: Sequence[int]) -> int:
         product = 1
@@ -202,16 +201,13 @@ def static_cost(nodes: Sequence[Node], limits: MessageLimits) -> ResourceCost:
 
 
 def guided_step(nodes: Sequence[Node], positions: Positions, limits: MessageLimits) -> dict[VariantPath, int] | None:
-    """Pick the one step a budget-starved product should take next.
+    """The one step to take next when `variant_state_bound` exceeds the evaluations left of `search_budget`.
 
-    Breadth and priority still decide *which* ladders are eligible; among equals the step
-    that frees the most, summed over every axis it frees anything on, wins, and document
-    order breaks the remaining tie. This keeps an intractable product linear in the budget
-    instead of abandoning it.
-
-    Summing across axes is a heuristic and is only used here, where the search has already
-    given up its guarantee. Everywhere a decision is actually *made*, axes are compared one
-    at a time and never traded against each other.
+    Eligible ladders are those at the lowest priority and rung; among them the step that
+    frees the most, summed over every axis, wins, and document order breaks the tie. Returns
+    `None` when no ladder has a rung left. Summing across axes is a heuristic used only here,
+    after the search has given up its guarantee; everywhere a decision is *made*, axes are
+    compared one at a time and never traded.
     """
     remaining = steppable(nodes, positions)
     if not remaining:

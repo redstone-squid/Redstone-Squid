@@ -11,14 +11,22 @@ from squid_ui.scene.model import PlanReport, PlanResult, PlanReuse
 
 @dataclass(frozen=True, slots=True)
 class CachedPlan[BodyT: scene.Body = scene.Body]:
+    """One `PlanCache` entry: the planned scene plus the decisions needed to rebuild a `PlanResult` from it.
+
+    Holds no callbacks, so one entry serves every owner whose request digests to the same key.
+    """
+
     scene: scene.Scene[BodyT]
     report: PlanReport
     session_updates: tuple[SessionUpdate, ...] = ()
     """Replayed on a hit: the session is part of the key, so these stay correct."""
     strategies: tuple[tuple[str, str], ...] = ()
+    """Selected strategy id per semantic path; a hit re-lowers with these pinned instead of searching."""
     states_explored: int = 0
     search_fallback: bool = False
+    """Both copied into the hit's metrics, so a replay reports the search that produced it."""
     variant_positions: tuple[tuple[tuple[int | str, ...], int], ...] = ()
+    """Selected rung per `Variants` ladder path, re-spliced with `frontier.resolve_variants` on a hit."""
     fallbacks: tuple[tuple[str, int], ...] = ()
     """Fallback decisions for entries whose selected primitive tree could not be compiled."""
     lowered_template: object | None = None
@@ -26,11 +34,11 @@ class CachedPlan[BodyT: scene.Body = scene.Body]:
 
 
 class PlanCache[BodyT: scene.Body = Any]:
-    """A deliberately small LRU; runtimes do not retain unbounded document history.
+    """LRU of callback-free plans keyed by the `PlanRequest.cache_context` digest, `capacity` entries deep.
 
-    A bare cache starts unbound because its constructor has no target-bearing input from which
-    to infer `BodyT`. Owners that know their target specialize it; passing an unbound cache to
-    the first planner call binds the checked operation without pretending construction knew.
+    Safe to share across owners. `BodyT` defaults to `Any` because the constructor has no
+    target to infer it from; the first planner call binds it. Raises `ValueError` when
+    `capacity` is below one.
     """
 
     def __init__(self, capacity: int = 32) -> None:
@@ -42,12 +50,14 @@ class PlanCache[BodyT: scene.Body = Any]:
         self._incremental: OrderedDict[str, None] = OrderedDict()
 
     def get(self, key: str) -> CachedPlan[BodyT] | None:
+        """The entry under `key`, refreshed as most recent, or `None` on a miss."""
         value = self._entries.get(key)
         if value is not None:
             self._entries.move_to_end(key)
         return value
 
     def put(self, key: str, value: CachedPlan[BodyT]) -> None:
+        """Insert or refresh `key`, evicting the least recently used entries past `capacity`."""
         self._entries[key] = value
         self._entries.move_to_end(key)
         while len(self._entries) > self.capacity:
@@ -72,10 +82,11 @@ class PlanCache[BodyT: scene.Body = Any]:
 
 
 class PlanMemo[BodyT: scene.Body = Any]:
-    """One runtime's callback-bearing exact result; :meth:`clear` ends its retention.
+    """One owner's most recent exact `PlanResult`, callbacks included; `clear()` drops it.
 
-    This is deliberately separate from :class:`PlanCache`: the latter is safe to share because
-    it is callback-free, while this memo retains only the current render of one owner.
+    Not shareable, unlike `PlanCache`: the result holds the owner's live callbacks, and a hit
+    requires the same `source` object, an equal key, the same session object, and a session
+    revision this memo has accepted.
     """
 
     def __init__(self) -> None:
@@ -88,6 +99,7 @@ class PlanMemo[BodyT: scene.Body = Any]:
     def get(
         self, source: object, key: object, session: PresentationState, session_revision: int
     ) -> PlanResult[BodyT] | None:
+        """The retained result as stored, or `None` unless every part of the key matches."""
         if (
             self._source is source
             and self._key == key
@@ -105,6 +117,7 @@ class PlanMemo[BodyT: scene.Body = Any]:
         session_revision: int,
         result: PlanResult[BodyT],
     ) -> None:
+        """Replace whatever is held; only `session_revision` hits until `promote` accepts another."""
         self._source = source
         self._key = key
         self._session = session
@@ -112,11 +125,10 @@ class PlanMemo[BodyT: scene.Body = Any]:
         self._result = result
 
     def replay(self, source: object, key: object, session: PresentationState) -> PlanResult[BodyT] | None:
-        """The retained result re-marked as an exact hit, or None if this is not one.
+        """The retained result with `cache_hit=True` and `PlanReuse.EXACT` in its metrics, or `None` on a miss.
 
-        Re-marking belongs here rather than at each planner backend: a caller that returned
-        the retained result unchanged would report the metrics of the render that produced
-        it, and both backends previously had to remember not to.
+        Re-marked here rather than by each backend, so a hit never reports the metrics of the
+        search that produced it.
         """
         retained = self.get(source, key, session, session.revision)
         if retained is None:

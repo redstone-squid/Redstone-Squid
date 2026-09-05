@@ -2,7 +2,10 @@
 
 
 def truncate_text(value: str, capacity: int, *, keep: str = "head") -> tuple[str, int]:
-    """Fit text to an authored cap and return the fitted text plus characters omitted."""
+    """Cut `value` to `capacity` characters, keeping the `"head"` or `"tail"`, and return it with the count cut.
+
+    Raises `ValueError` when `capacity` is negative.
+    """
     if capacity < 0:
         message = "text capacity must not be negative"
         raise ValueError(message)

@@ -64,7 +64,7 @@ from squid_ui.target_types import ComponentsV2Target
 
 
 def _gallery_item(value: str | GalleryItem) -> GalleryItem:
-    """Return the item normalized by Gallery construction."""
+    """The item as `Gallery` construction normalized it; raises `LayoutInvariantError` for a bare URL."""
     if isinstance(value, str):
         message = "Gallery left a shorthand URL unnormalized"
         raise LayoutInvariantError(message)
@@ -273,7 +273,7 @@ def _lower(
 
 
 def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
-    """Reject what a Components V2 message cannot express, naming the node that cannot be drawn."""
+    """Raise `LayoutInvariantError` for what a Components V2 message cannot express, naming the node's path."""
     pager_keys: set[str] = set()
 
     def walk(node: Node, path: str) -> None:
@@ -322,6 +322,11 @@ def _paginate_v2(
     nav: PlannedNav,
     broker: CursorCoordinator,
 ) -> tuple[MeasuredLayout, int]:
+    """Pack top-level nodes into the fewest legal pages, in source order.
+
+    Each page is the longest legal prefix left once the footer and navigation row have
+    reserved their slots. Raises `UnsolvableLayoutError` when one node alone overspends a page.
+    """
     maximum_pages = max(1, len(nodes))
 
     def measure_page(children: Sequence[Node], index: int, pages: int) -> MeasuredLayout:
@@ -370,7 +375,11 @@ def _paginate_v2(
 
 
 class V2Dialect:
-    """Discord Components V2 shape. Everything else about planning is shared."""
+    """The `discord.components-v2` dialect: panels, sections and galleries under one component and text budget.
+
+    The only Discord dialect that draws extensions; an `Extension` node whose kind the target's
+    adapter registers lowers to a native `RawItem` here.
+    """
 
     id = "discord.components-v2"
     version = 1
@@ -403,9 +412,16 @@ class V2Dialect:
     def normalize(
         self, nodes: Sequence[Node], target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, Any]
     ) -> tuple[Node, ...]:
+        """Split `ControlGroup`s and `MediaCollection`s, drop unsupported `Variants` rungs, prepare extensions.
+
+        Raises `LayoutInvariantError` when a `Variants` ladder has no rung this target supports,
+        a `PremiumButton` appears without `ACTIONS_DISCORD_PREMIUM`, or an extension adapter
+        returns a cost with no components or negative text.
+        """
         return _lower(nodes, target, target.limits)
 
     def validate(self, nodes: Sequence[Node], limits: V2Limits) -> None:
+        """Raises `LayoutInvariantError` for an over-cap gallery or section, `Paginate` in a `Section`, or a bad SKU."""
         _validate_v2(nodes, limits)
 
     def paginate(
@@ -419,9 +435,11 @@ class V2Dialect:
         nav: PlannedNav,
         broker: CursorCoordinator,
     ) -> tuple[MeasuredLayout, int]:
+        """The visible page and the page count; raises `UnsolvableLayoutError` when one node overspends a page."""
         return _paginate_v2(nodes, key=key, capacities=capacities, limits=limits, chrome=chrome, nav=nav, broker=broker)
 
     def body(self, children: Sequence[Realized], bindings: SceneBindings) -> scene.ComponentsV2:
+        """Raises `LayoutInvariantError` for a realized node no V2 scene can hold, or a thumbnail in a row."""
         return scene.ComponentsV2(_V2Converter(bindings).children(children))
 
 

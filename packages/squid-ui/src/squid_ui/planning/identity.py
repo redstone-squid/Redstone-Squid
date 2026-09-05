@@ -8,13 +8,18 @@ from enum import Enum
 
 
 def stable_fingerprint(values: Sequence[object]) -> str:
-    """Hash logical structure without callback identity or process addresses."""
+    """A 32-hex-digit blake2s digest of `stable_value(values)`, stable across processes."""
     payload = json.dumps(stable_value(values), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.blake2s(payload.encode(), digest_size=16).hexdigest()
 
 
 def stable_value(value: object) -> object:
-    """Reduce a logical value to deterministic JSON-compatible data."""
+    """Reduce a logical value to deterministic JSON-compatible data.
+
+    Callables become `"<callback>"`, enums their value, dataclasses their qualified name and
+    fields (skipping a field whose `metadata` sets `stable_identity` to false), bytes a digest,
+    and anything else its type name. Mappings are sorted by stringified key.
+    """
     if callable(value):
         return "<callback>"
     if isinstance(value, Enum):

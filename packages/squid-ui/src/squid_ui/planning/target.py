@@ -20,27 +20,36 @@ from squid_ui.planning.resources import Axis, ResourceCost, TargetLimits
 
 
 class TargetIdentity(Protocol):
-    """What a target is called and what it can do -- everything but how to compile for it.
+    """What a target is called and what it can do, without how to compile for it.
 
-    Enough for the layers that only need to *name* a target: cache keys, diagnostics,
-    capability checks. They took `Target[Any, Any, Any, Any]` before, which said nothing
-    about what they read and erased four parameters to say it.
+    The parameter type for layers that only name a target: cache keys, diagnostics and
+    capability checks take this rather than `AnyTarget`.
     """
 
     @property
-    def id(self) -> str: ...
+    def id(self) -> str:
+        """The dialect's stable protocol name, such as `discord.components-v2`."""
+        ...
 
     @property
-    def version(self) -> int: ...
+    def version(self) -> int:
+        """The dialect's scene format version; a renderer refuses a scene whose version it cannot draw."""
+        ...
 
     @property
-    def triple(self) -> str: ...
+    def triple(self) -> str:
+        """`{dialect id}+{adapter name}`, the name a durable mount records."""
+        ...
 
     @property
-    def fingerprint(self) -> str: ...
+    def fingerprint(self) -> str:
+        """A digest of both axes, the capabilities and the limits; two targets with equal fingerprints plan alike."""
+        ...
 
     @property
-    def capabilities(self) -> frozenset[str]: ...
+    def capabilities(self) -> frozenset[str]:
+        """Protocol, adapter and extension capabilities as one flat string set."""
+        ...
 
 
 LimitsT = TypeVar("LimitsT", bound=TargetLimits)
@@ -59,14 +68,11 @@ markers those refine. `runtime.component.RenderTargetT` is the contravariant cou
 class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
     """What a document is compiled to: a protocol dialect and an adapter for it.
 
-    Two axes and nothing else, the way a compiler names `x86_64-unknown-linux-gnu` rather
-    than threading arch, OS and ABI separately. The dialect says what a legal message is;
-    the adapter says which library has been verified to produce one. Everything the planner
-    used to be handed alongside a target — its id, version, render target, body type and protocol
-    capabilities — is derived from one of the two, so no two of them can fall out of step.
-
-    Only `limits` is stored separately, because it is not a fact about either axis: it is
-    the dialect's table after any reservation has been withheld from it.
+    Two axes, like a compiler's `x86_64-unknown-linux-gnu`: the dialect says what a legal
+    message is, the adapter which library is verified to produce one. The id, version,
+    render target, body type and protocol capabilities are read off the dialect, so none
+    can disagree with it. `limits` is stored apart because it is the dialect's table after
+    any `reserve` has been withheld from it.
     """
 
     dialect: TargetDialect[LimitsT, BodyT, Any]
@@ -150,10 +156,10 @@ class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
         return self.protocol_capabilities | self.adapter_capabilities
 
     def restrict_adapter_capabilities(self, capabilities: frozenset[str]) -> Self:
-        """Freeze planning to a recorded subset supplied by the current adapter.
+        """Freeze planning to a recorded subset of the adapter's capabilities.
 
-        Nothing is subtracted back out: protocol capabilities live on the dialect and were
-        never mixed into the adapter's set to begin with.
+        Only `adapter_capabilities` and `extensions` narrow; protocol capabilities live on the
+        dialect and are untouched.
         """
         if capabilities == self.adapter_capabilities:
             return self
@@ -163,11 +169,10 @@ class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
     def fingerprint(self) -> str:
         """A digest of everything about this target that changes what a legal document is.
 
-        Recovery compares it against the one a snapshot recorded. Two targets sharing a
-        triple but differing in capabilities or limits would rebuild the mount against
-        budgets the stored render was never fitted to, and the resulting message would be
-        legal only by luck. The dialect object and the extension adapters are excluded
-        deliberately: they are process-local objects, not facts about the message.
+        Covers the dialect id and version, both capability sets, the adapter name and
+        `limits.digest()`; the dialect object and extension adapters are process-local and
+        excluded. Recovery compares it against the one a snapshot recorded, so a mount is
+        never rebuilt against budgets its stored render was not fitted to.
         """
         return self._fingerprint
 
@@ -185,11 +190,11 @@ class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
         return tuple(cost.over(self.capacities))
 
     def reserve(self, cost: ResourceCost) -> Self:
-        """Return this target with every reserved resource withheld from its budget.
+        """This target with each axis of `cost` subtracted from its capacities, clamped at zero.
 
-        A reservation is a smaller target, not a parameter threaded beside one: planning,
-        adaptation, and measurement then all see the same room, and no stage can pick a
-        strategy that fits the full budget but not the remaining one.
+        Returned as a smaller target rather than a parameter threaded beside one, so planning,
+        adaptation and measurement all see the same room. Raises `LayoutInvariantError` when
+        `cost` names an axis this target does not budget.
         """
         if not cost.values:
             return self
@@ -203,10 +208,8 @@ class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
 
 
 type AnyTarget = Target[Any, Any, Any, Any]
-"""A target whose four parameters are deliberately erased.
+"""A target with all four parameters erased.
 
-For the layers that need both real axes -- the search hands the target to its own dialect,
-the adapter check reads the adapter -- but are written once for every dialect. Stating the
-erasure once beats spelling `Any` four times at each site, and distinguishes it from the
-places that only need `TargetIdentity`.
+For layers that need both real axes but are written once for every dialect, such as the
+search and the adapter check; a layer that only names a target takes `TargetIdentity`.
 """

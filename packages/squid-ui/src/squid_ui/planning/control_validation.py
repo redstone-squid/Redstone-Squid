@@ -2,12 +2,11 @@
 
 Components V2 and classic messages disagree about structure — panels and sections against
 embeds and content — but they draw the same buttons and selects under the same
-`ComponentLimits`. Both validators had grown their own copy of those checks, so a cap
-corrected in one dialect stayed wrong in the other.
+`ComponentLimits`, so those checks live here and neither dialect carries its own copy.
 
 A dialect's own `match` runs first and delegates here for whatever it does not claim. That
 order is load-bearing: a structure one dialect rejects outright is rejected before the shared
-rules can read it as an ordinary control.
+rules can read it as an ordinary control. Every rejection is a `LayoutInvariantError`.
 """
 
 from collections.abc import Callable
@@ -39,16 +38,17 @@ type Walk = Callable[[Node, str], None]
 
 
 def fail(path: str, detail: str) -> NoReturn:
-    """Reject a node, naming where in the document it sits."""
+    """Raise `LayoutInvariantError` with `detail` prefixed by the node's document `path`."""
     message = f"{path}: {detail}"
     raise LayoutInvariantError(message)
 
 
 def register_pager(node: Node, path: str, pager_keys: set[str]) -> None:
-    """Claim this node's pager key, rejecting a missing or already-taken one.
+    """Claim this node's `Paginate` key in `pager_keys`.
 
-    `Boundary` is rejected here too. It is a mount-expansion placeholder, and every walk that
-    collects pager keys is also a walk that must not still be seeing one.
+    Raises `LayoutInvariantError` for a `Paginate` without a key, a key already claimed, or a
+    `Boundary` node: that is a mount-expansion placeholder, and every walk that collects
+    pager keys runs after expansion.
     """
     if isinstance(node, Boundary):
         fail(path, "Boundary must be expanded by a component mount before planning")
@@ -66,8 +66,9 @@ def register_pager(node: Node, path: str, pager_keys: set[str]) -> None:
 def validate_component(node: Node, path: str, *, limits: MessageLimits, walk: Walk) -> None:
     """Check the controls and wrappers that mean the same thing in either dialect.
 
-    Anything else is left alone: the dialect has already had its turn, so a node neither
-    layer claims is one with no shared component rule to break.
+    Raises `LayoutInvariantError` for a control over a `limits.components` cap, an empty or
+    unlabeled control, or invalid select bounds. Anything else is left alone: the dialect has
+    already had its turn, so a node neither layer claims has no shared rule to break.
     """
     match node:
         case Button(label=label) | RoutedButton(label=label):

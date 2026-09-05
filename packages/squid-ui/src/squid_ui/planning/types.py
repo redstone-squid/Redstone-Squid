@@ -1,4 +1,4 @@
-"""Compatibility exports for target types now housed at a dependency leaf."""
+"""Re-exports of `squid_ui.target_types`, so `squid_ui.planning` imports of the marker types keep resolving."""
 
 from squid_ui.target_types import (
     ClassicTarget,

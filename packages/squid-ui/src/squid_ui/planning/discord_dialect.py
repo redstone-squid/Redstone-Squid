@@ -3,18 +3,17 @@
 Almost all of planning is target-neutral. Semantic adaptation, resource allocation, the
 variant search, action bindings, caching, degradation accounting, and session state work
 the same whichever message a document ends up in. Four things do not, and a
-:class:`TargetDialect` is exactly those four and nothing else:
+`DiscordDialect` is exactly those four and nothing else:
 
 1. normalizing lowered primitives into the target's own shape;
 2. validating structure only that target can judge;
 3. paginating a document losslessly across that target's message-wide budgets;
 4. building the exact scene body a renderer will draw.
 
-The list is short on purpose. Anything else that wants to branch on the target is a shared
-operation that has not been extracted yet, and adding a fifth *method* is the signal to go
-extract it instead. The data members below are not methods: they are the protocol's own
-identity — what it is called, what it can draw, what a legal message of it holds — and a
-target is the product of one of them and one adapter.
+Anything else that wants to branch on the target is a shared operation that has not been
+extracted yet; a fifth method is the signal to extract it instead. The data members are the
+protocol's identity — what it is called, what it can draw, what a legal message holds — and a
+target is the product of one dialect and one adapter.
 """
 
 from collections.abc import Mapping, Sequence
@@ -61,9 +60,15 @@ class SceneBindings:
 
     bindings: dict[str, ActionBinding] = field(default_factory=dict)
     form_bindings: dict[str, FormBinding] = field(default_factory=dict)
+    """Forms a `FormButton` presents, beside the binding that submits them, under the same key."""
     resources: dict[str, object] = field(default_factory=dict)
+    """Native items by `native:{path}`, the reference the scene's `Extension` payload carries."""
 
     def action(self, node: Button | SelectMenu | EntitySelect) -> str:
+        """Bind the node's handler under its key and return that key.
+
+        Raises `LayoutInvariantError` when the key, or one of a select's route keys, is already bound.
+        """
         key = node.key
         if isinstance(node, FormButton) and node.form is not None:
             # Recorded beside the binding, not in place of it: the button presents the form
@@ -100,7 +105,7 @@ class SceneBindings:
     def control(
         self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str
     ) -> scene.Node:
-        """Convert one leaf every target draws the same way."""
+        """Convert one leaf every target draws the same way; a `RawItem` is stored in `resources` under `path`."""
         match node:
             case Thumbnail(url=url, description=description, spoiler=spoiler):
                 return scene.Thumbnail(url, resolved_optional_text(description), spoiler)
@@ -138,27 +143,32 @@ class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT](P
 
     The first axis of a target. Bound to its own limits and body types, so each dialect's
     four methods can narrow to what it actually handles instead of declaring the union and
-    narrowing anyway.
+    narrowing anyway. The data members repeat `TargetDialect`'s, since a Discord dialect
+    satisfies both.
     """
 
     id: str
     """This protocol's stable name, recorded in every scene planned against it."""
     version: int
+    """The scene's `target_version` and part of the target fingerprint; a renderer refuses one it cannot draw."""
     capabilities: frozenset[Capability]
     """What the *protocol* can draw. Never an adapter behavior or an extension string."""
     render_target: type[RenderTargetT]
     """The marker type that decides which nodes a document for this dialect may hold."""
     body_type: type[BodyT]
+    """The `scene.Body` subclass `body` builds."""
     default_limits: LimitsT
+    """The limits a target built without an explicit table gets."""
     realizes_extensions: bool
-    """Whether this protocol can draw a native item at all.
-
-    False for classic, whose inability to hold one used to be expressed only by a factory
-    omitting a keyword argument.
-    """
+    """Whether an `Extension` can lower to a native item here; false for classic, which always takes the fallback."""
 
     def normalize(self, nodes: Sequence[Node], target: Target[LimitsT, BodyT, RenderTargetT, Any]) -> tuple[Node, ...]:
-        """Rewrite semantically lowered nodes into this target's own primitive shape."""
+        """Rewrite semantically lowered nodes into this target's own primitive shape.
+
+        Runs once before validation: `ControlGroup`s become rows, `Variants` rungs the target
+        cannot draw are dropped, extensions are prepared or replaced by their fallback. Raises
+        `LayoutInvariantError` when a `Variants` ladder has no supported rung.
+        """
         ...
 
     def validate(self, nodes: Sequence[Node], limits: LimitsT) -> None:
@@ -176,9 +186,18 @@ class DiscordDialect[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT](P
         nav: PlannedNav,
         broker: CursorCoordinator,
     ) -> tuple[MeasuredLayout, int]:
-        """Split an over-budget document into the fewest lossless pages this target allows."""
+        """Split an over-budget document into the fewest lossless pages this target allows.
+
+        Returns the measured page the cursor under `key` selects, with its footer and `nav`
+        controls, and the page count. Records the cursor with `broker`. Raises
+        `UnsolvableLayoutError` when one node alone overspends `capacities`.
+        """
         ...
 
     def body(self, children: Sequence[Realized], bindings: SceneBindings) -> BodyT:
-        """Build the exact scene body a renderer for this target will draw."""
+        """Build the exact scene body a renderer for this target will draw.
+
+        Every action key is bound into `bindings` on the way. Raises `LayoutInvariantError` for
+        a realized node this dialect has no scene form for.
+        """
         ...

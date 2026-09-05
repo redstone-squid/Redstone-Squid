@@ -1,14 +1,13 @@
-"""The structural rules every semantic traversal states identically, stated once.
+"""The structural rules every semantic traversal shares, stated once.
 
-The HTML compiler, the Discord lowering pass, and the decision nomination walk all visit the
-same semantic tree, and each had grown its own copy of the grammar that names a position in
-it. A spelling corrected in one walk stayed wrong in the others, and the planner's
-path-keyed state only holds together while every walk agrees on the spelling.
+The HTML compiler, the Discord lowering pass and the decision nomination walk all visit the
+same semantic tree, and the planner's path-keyed state only holds together while every walk
+spells a position the same way.
 
-What belongs here is target-neutral by definition: how a child's path is derived from its
-parent's, how a fallback branch is named and selected, how a stateful node's current state
-is read from author control or session memory, and how a control's action key is spelled.
-How a target reacts to what it finds there does not.
+What belongs here is target-neutral: how a child's path is derived from its parent's, how a
+fallback branch is named and selected, how a stateful node's current state is read from
+author control or session memory, and how a control's action key is spelled. How a target
+reacts to what it finds there does not.
 """
 
 from collections.abc import Iterator, Mapping, Sequence
@@ -28,12 +27,12 @@ def indexed_children[T](children: Sequence[T], path: str) -> Iterator[tuple[T, s
 
 
 def branch_paths(path: str, branches: int) -> tuple[str, ...]:
-    """Give each semantic fallback branch a stable path."""
+    """`{path}.primary`, then `{path}.alternate.{i}` for each further branch."""
     return (f"{path}.primary", *(f"{path}.alternate.{index}" for index in range(branches - 1)))
 
 
 def fallback_rung(path: str, branches: int, selected: Mapping[str, int]) -> int:
-    """Return one validated selected fallback rung."""
+    """The rung `selected` names for `path`, defaulting to 0; raises `ValueError` when it is not below `branches`."""
     rung = selected.get(path, 0)
     if not 0 <= rung < branches:
         message = f"{path}: planner selected unavailable fallback branch {rung}"
@@ -42,9 +41,10 @@ def fallback_rung(path: str, branches: int, selected: Mapping[str, int]) -> int:
 
 
 class PaletteHolder(Protocol):
-    """Traversal state whose active palette a Themed region rescopes."""
+    """Traversal state whose active palette a `Themed` region rescopes through `scoped_palette`."""
 
     palette: Palette
+    """The palette in force for the nodes being visited; assigned, not replaced, by `scoped_palette`."""
 
 
 @contextmanager

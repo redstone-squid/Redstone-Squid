@@ -47,6 +47,7 @@ class NavigationState:
     has_previous: bool
     has_next: bool
     backward: bool
+    """Whether a previous control is offered at all; a forward-only source window has none."""
     previous_label: TextLike
     next_label: TextLike
     previous_key: str
@@ -114,7 +115,7 @@ type MountNavNode = Row | SelectMenu | RoutedSelect | RawItem
 
 `NavNode` is wider because planner-internal pagination already knows its concrete target and
 may use V2-only structural nodes. A mount navigation factory runs above that decision, so
-admitting `Gallery`, `Thumbnail`, or `Sep` here falsely made every consumer target-erased.
+`Gallery`, `Thumbnail` and `Sep` are excluded here to keep its consumers target-typed.
 """
 type NavFactory = Callable[[NavigationContext], Sequence[MountNavNode]]
 type PlannedNav = Callable[[NavigationState], Sequence[NavNode]]
@@ -193,7 +194,7 @@ def seek_control(context: NavigationContext) -> SelectMenu | None:
 def page_select_nav(context: NavigationContext) -> Sequence[MountNavNode]:
     """`default_nav` plus a jump select wherever the cursor can address a page.
 
-    Opt in per mount (`MessageRoot(..., nav=sl.page_select_nav)`): a select is a whole component
+    Opt in per mount (`MessageRoot(..., nav=page_select_nav)`): a select is a whole component
     row, and spending one on every paginator in the process is the host's call, not the
     framework's.
     """

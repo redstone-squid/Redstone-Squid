@@ -10,7 +10,12 @@ from squid_ui.errors import LayoutInvariantError
 
 
 class Axis(StrEnum):
-    """One target-wide resource budget measured during planning."""
+    """One message-wide budget a target may declare in `TargetLimits.capacities`.
+
+    Components V2 budgets `DISPLAY_TEXT`, `COMPONENTS` and `ATTACHMENTS`; classic budgets
+    `CONTENT_TEXT`, `EMBED_TEXT`, `EMBEDS`, `ROWS`, `CONTROLS` and `ATTACHMENTS`; Slack
+    budgets `BLOCKS`. A cost on an axis the target does not declare is never over capacity.
+    """
 
     DISPLAY_TEXT = "display_text"
     CONTENT_TEXT = "content_text"
@@ -29,7 +34,10 @@ TEXT_AXES = frozenset({Axis.DISPLAY_TEXT, Axis.CONTENT_TEXT, Axis.EMBED_TEXT})
 
 @dataclass(frozen=True, slots=True)
 class ResourceCost:
-    """Named resource consumption measured against target-wide budgets."""
+    """Consumption per axis; zero entries are dropped and the rest sorted, so equal costs compare equal.
+
+    Raises `LayoutInvariantError` when any value is negative.
+    """
 
     values: Mapping[Axis, int] = field(default_factory=dict)
 
@@ -60,12 +68,14 @@ class ResourceCost:
         return not any(self.over(capacities))
 
     def over(self, capacities: Mapping[Axis, int]) -> Iterator[tuple[Axis, int, int]]:
+        """`(axis, spent, capacity)` for each declared axis this overspends, in axis order."""
         for name, capacity in sorted(capacities.items()):
             spent = self.get(name)
             if spent > capacity:
                 yield name, spent, capacity
 
     def cheaper_anywhere(self, other: ResourceCost) -> bool:
+        """Whether some axis costs strictly less here than in `other`; the Pareto test the search archive uses."""
         return any(self.get(name) < other.get(name) for name in {*self.values, *other.values})
 
 
@@ -73,14 +83,20 @@ EMPTY_COST = ResourceCost()
 
 
 class TargetLimits(Protocol):
-    """The small limits surface shared by every planning target."""
+    """What planning reads from a target's limits; `MessageLimits`, `SlackLimits` and `HtmlLimits` satisfy it."""
 
     @property
-    def capacities(self) -> Mapping[Axis, int]: ...
+    def capacities(self) -> Mapping[Axis, int]:
+        """Every axis this target budgets, with the room left on each."""
+        ...
 
-    def with_capacities(self, reductions: Mapping[Axis, int]) -> Self: ...
+    def with_capacities(self, reductions: Mapping[Axis, int]) -> Self:
+        """A copy with each named amount subtracted from that axis, clamped at zero; undeclared axes are ignored."""
+        ...
 
-    def digest(self) -> tuple[tuple[str, object], ...]: ...
+    def digest(self) -> tuple[tuple[str, object], ...]:
+        """Every cap by dotted name, in name order; part of `Target.fingerprint`."""
+        ...
 
 
 __all__ = ["EMPTY_COST", "TEXT_AXES", "Axis", "ResourceCost", "TargetLimits"]

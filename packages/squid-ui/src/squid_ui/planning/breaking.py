@@ -6,12 +6,17 @@ from math import inf
 
 @dataclass(frozen=True, slots=True)
 class BreakItem:
-    """One atomic fragment and the cost of placing it after its leading separator."""
+    """One atomic fragment and the cost of placing it after its leading separator.
+
+    Raises `ValueError` when any cost is negative.
+    """
 
     chars: int
     components: int = 0
     leading_chars: int = 0
+    """Characters of the separator before this item; not charged when the item opens a page."""
     break_after: bool = True
+    """Whether a page may end after this item; the final item always may."""
 
     def __post_init__(self) -> None:
         if self.chars < 0 or self.components < 0 or self.leading_chars < 0:
@@ -36,12 +41,17 @@ def balanced_breaks(
     widows: int = 1,
     ideal_total: int | None = None,
 ) -> tuple[int, ...]:
-    """Return exact page-end offsets in fragmentation objective order.
+    """Return exclusive page-end offsets, the last always `len(items)`, or `()` for no items.
 
-    Preference violations are minimized first, followed by page count, squared distance
-    from the mean fill, and stable fuller-first cuts. The first pass finds the first two
-    tiers on the page-boundary DAG. A second, fixed-depth pass optimizes balance without
-    carrying whole cut tuples through every state.
+    Minimized in order: preference violations (pages under `min_fill` characters, a final
+    page under `widows` items), page count, squared distance of each page from the mean fill
+    (`ideal_total` over the page count, defaulting to the items' total `chars`), then
+    fuller-first cuts as the stable tie. The first pass finds the first two tiers on the
+    page-boundary DAG; a second, fixed-depth pass optimizes balance without carrying whole
+    cut tuples through every state.
+
+    Raises `ValueError` when a limit is out of range or no legal break set exists, as when a
+    single item exceeds `max_chars` or `max_components`.
     """
     if max_chars < 1:
         message = "page character limit must be positive"

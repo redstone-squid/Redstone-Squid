@@ -14,29 +14,37 @@ from squid_ui.scene.model import JsonValue
 
 @dataclass(frozen=True, slots=True)
 class PreparedExtension[ResourceT]:
-    """One target extension prepared and measured exactly once.
+    """What one `ExtensionAdapter.prepare` call returns: the extension's cost, scene record, and frontend object.
 
-    Parameterized by what it produces, so the renderer downcasting `resource` back to a
-    frontend object has something to check the downcast against.
+    Parameterized by `ResourceT` so a renderer downcasting `resource` has a type to check against.
     """
 
     cost: ResourceCost
+    """Charged against the page: at least one `Axis.COMPONENTS`, `Axis.DISPLAY_TEXT` at or above zero."""
     scene_payload: Mapping[str, JsonValue]
+    """Recorded on the planned `scene.Extension`; must be JSON, since the scene is serialized."""
     resource: ResourceT
+    """The frontend object the renderer draws; process-local and never serialized."""
 
 
 class ExtensionAdapter[PayloadT, ResourceT](Protocol):
-    """Prepare a logical extension payload for target planning and drawing."""
+    """Turns one `Extension` node's payload into a native item a target can draw.
 
-    def prepare(self, payload: PayloadT) -> PreparedExtension[ResourceT]: ...
+    An `AdapterProfile.extensions` entry, keyed by the `ExtensionKind` wire name it answers for.
+    """
+
+    def prepare(self, payload: PayloadT) -> PreparedExtension[ResourceT]:
+        """Build and measure the native item once, during lowering.
+
+        Called for each `Extension` node whose kind this adapter is registered for; a kind with no
+        adapter lowers to its portable fallback instead. V2 lowering raises `LayoutInvariantError`
+        when the returned cost charges no components or negative display text.
+        """
+        ...
 
 
 def extension_capability(kind: str) -> str:
-    """The capability string one extension kind contributes.
-
-    One spelling, because the synthesized name was written out at four call sites and a
-    typo at any of them would silently drop an extension from planning.
-    """
+    """`extension.{kind}`, the capability string one extension kind contributes; every call site spells it here."""
     return f"extension.{kind}"
 
 
@@ -62,20 +70,24 @@ class AdapterCapability(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class AdapterProfile[AdapterT]:
-    """Verified behavior supplied by one library family and version range."""
+    """Verified behavior supplied by one library family and version range.
+
+    The second axis of a `Target`; `name` is what `Target.triple` and the fingerprint record.
+    Raises `ValueError` when `name` or `version_expression` is empty.
+    """
 
     family: type[AdapterT]
+    """The marker type (`DiscordPyAdapter`, `SlackSdkAdapter`, ...) documents narrow to."""
     name: str
     version_expression: str
+    """A PEP 440 specifier set such as `">=2.7,<2.8"`; the frontend checks the installed library against it."""
     capabilities: frozenset[AdapterCapability] = frozenset()
     extensions: Mapping[str, ExtensionAdapter[Any, Any]] = field(default_factory=dict)
     """Extension adapters, by the wire name of the `ExtensionKind` each answers for.
 
-    `Any` at the container is unavoidable and now costs nothing: the mapping is genuinely
-    heterogeneous, each kind pairing its own payload with its own frontend object, and no
-    single pair can stand for all of them. What changed is that the pairing is recovered
-    either side of this crossing -- an `ExtensionKind` carries it to the author, and the
-    adapter's own signature states it -- rather than being erased everywhere at once.
+    Heterogeneous, so the container is `Any`: each kind pairs its own payload with its own
+    frontend object, and the pairing is checked at the `ExtensionKind` and the adapter's own
+    signature instead.
     """
 
     def __post_init__(self) -> None:
@@ -90,9 +102,9 @@ class AdapterProfile[AdapterT]:
 
     @property
     def extension_capabilities(self) -> frozenset[str]:
-        """Capabilities contributed by this profile's target extensions."""
+        """`extension_capability(kind)` for every registered extension kind."""
         return frozenset(extension_capability(kind) for kind in self.extensions)
 
     def combine_capabilities(self, protocol: frozenset[str]) -> frozenset[str]:
-        """Combine protocol, behavior, and extension capabilities."""
+        """The flat string set a target exposes: `protocol` plus this profile's behaviors and extensions."""
         return protocol | self.capabilities | self.extension_capabilities

@@ -38,12 +38,12 @@ def classic_target[AdapterT: DiscordAdapter](
 def dynamic_components_v2_target(
     adapter: AdapterProfile[DiscordAdapter], *, limits: V2Limits = LIMITS
 ) -> Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, Any]:
-    """Explicit gradual-typing escape hatch for runtime-selected adapters."""
+    """`components_v2_target` with `AdapterT` erased to `Any`, for an adapter chosen at runtime."""
     return components_v2_target(adapter, limits=limits)
 
 
 def dynamic_classic_target(
     adapter: AdapterProfile[DiscordAdapter], *, limits: ClassicLimits = CLASSIC_LIMITS
 ) -> Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, Any]:
-    """Explicit gradual-typing escape hatch for runtime-selected adapters."""
+    """`classic_target` with `AdapterT` erased to `Any`, for an adapter chosen at runtime."""
     return classic_target(adapter, limits=limits)

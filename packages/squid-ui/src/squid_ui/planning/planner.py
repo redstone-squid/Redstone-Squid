@@ -37,7 +37,13 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     memo: PlanMemo[BodyT] | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> PlanResult[BodyT]:
-    """Resolve a logical document through the selected target's planner backend."""
+    """Compile `rendered` through `target.dialect.planner`; the keyword form of `plan_request`.
+
+    Raises:
+        LayoutInvariantError: the document or `reservation` is something the target cannot express.
+        UnsolvableLayoutError: no layout fits the target's budgets.
+        LayoutDegradedError: `strict` and the chosen layout is not lossless.
+    """
     request = PlanRequest(
         target=target,
         chrome=chrome,
@@ -60,11 +66,10 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     cache: PlanCache[BodyT] | None = None,
     memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
-    """Plan against an already-assembled request.
+    """Plan against an already-assembled request; raises what `plan` raises.
 
-    The keyword form above is the authoring entry point; this one is for callers that hold a
-    request already and would otherwise have to spread it back out only for it to be
-    reassembled -- every layer between a mount and a backend is one of those.
+    For the layers between a mount and a backend, which hold a request already and would
+    otherwise spread it back out only for it to be reassembled.
     """
     backend: Any = request.target.dialect.planner
     return backend.plan(rendered, request, cache=cache, memo=memo)

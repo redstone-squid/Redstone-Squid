@@ -111,7 +111,7 @@ def _lower(nodes: Sequence[Node], target: Target, limits: ClassicLimits) -> tupl
 
 
 def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
-    """Reject what a classic message cannot express, naming the node that cannot be drawn."""
+    """Raise `LayoutInvariantError` for what a classic message cannot express, naming the node's path."""
     pager_keys: set[str] = set()
     contents = 0
 
@@ -173,7 +173,8 @@ def _paginate(
     Explicit `Content` is pinned: it is the message's one content field and every page has
     one, so repeating it unchanged is the only representation that does not invent or lose
     text. Everything else flows in source order, and each page is the longest legal prefix
-    left once the navigation row has reserved its slot.
+    left once the navigation row has reserved its slot. Raises `UnsolvableLayoutError` when
+    one node alone overspends a page.
     """
     pinned = tuple(node for node in nodes if isinstance(node, Content))
     flowing = [node for node in nodes if not isinstance(node, Content)]
@@ -372,7 +373,10 @@ def _as_control(node: scene.Node, path: str) -> scene.Control:
 
 
 class ClassicDialect:
-    """Pre-Components-V2 message shape. Everything else about planning is shared."""
+    """The `discord.components-v1` dialect: one content field, up to ten embeds, up to five action rows.
+
+    Draws no extensions; an `Extension` node always lowers to its portable fallback here.
+    """
 
     id = "discord.components-v1"
     version = 1
@@ -404,9 +408,14 @@ class ClassicDialect:
     def normalize(
         self, nodes: Sequence[Node], target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, Any]
     ) -> tuple[Node, ...]:
+        """Split `ControlGroup`s into rows, drop unsupported `Variants` rungs, replace extensions with fallbacks.
+
+        Raises `LayoutInvariantError` when a `Variants` ladder has no rung this target supports.
+        """
         return _lower(nodes, target, target.limits)
 
     def validate(self, nodes: Sequence[Node], limits: ClassicLimits) -> None:
+        """Raises `LayoutInvariantError` for V2-only structure, a second `Content`, or an over-cap embed value."""
         _validate(nodes, limits)
 
     def paginate(
@@ -420,9 +429,11 @@ class ClassicDialect:
         nav: PlannedNav,
         broker: CursorCoordinator,
     ) -> tuple[MeasuredLayout, int]:
+        """The visible page and the page count; raises `UnsolvableLayoutError` when one node overspends a page."""
         return _paginate(nodes, key=key, capacities=capacities, limits=limits, chrome=chrome, nav=nav, broker=broker)
 
     def body(self, children: Sequence[Realized], bindings: SceneBindings) -> scene.ClassicMessage:
+        """Raises `LayoutInvariantError` for a realized node no classic message can hold."""
         converter = _ClassicConverter(bindings)
         converter.convert(children)
         return scene.ClassicMessage(

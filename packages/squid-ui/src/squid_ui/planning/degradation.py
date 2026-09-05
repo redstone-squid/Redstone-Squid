@@ -6,11 +6,15 @@ from functools import total_ordering
 
 @dataclass(frozen=True, slots=True)
 class DegradationEffect:
+    """Loss recorded at one document path, charged to the author's `priority` for that region."""
+
     priority: int
     path: str
     semantic_steps: int = 0
+    """Rungs stepped down a fallback or text ladder; a preference cost, not content lost."""
     truncated_chars: int = 0
     spilled_items: int = 0
+    """Entries of a spillable list omitted from the page."""
     dropped_nodes: int = 0
     reformatted_nodes: int = 0
     """Regions kept whole but redrawn in another shape, by an explicitly non-exact variant."""
@@ -49,6 +53,8 @@ def _accumulate(totals: list[int], effect: DegradationEffect) -> None:
 
 @dataclass(frozen=True, slots=True)
 class DegradationLevel:
+    """Every axis summed over the effects at one `priority`."""
+
     priority: int
     dropped_nodes: int = 0
     spilled_items: int = 0
@@ -81,9 +87,15 @@ def _level_values(level: DegradationLevel) -> list[int]:
 @total_ordering
 @dataclass(frozen=True, slots=True)
 class DegradationProfile:
-    """Loss grouped by author priority, with deterministic paths as the final tie."""
+    """Loss grouped by author priority, with deterministic paths as the final tie.
+
+    Ordered lexicographically: the highest priority present in either side is compared first by
+    `DegradationLevel.rank`, a priority absent from one side counts as zero, and `ties` decide
+    the rest. Empty `levels` is `lossless`.
+    """
 
     levels: tuple[DegradationLevel, ...] = ()
+    """Highest priority first; a priority whose every axis is zero is omitted."""
     ties: tuple[Tie, ...] = ()
 
     @classmethod
@@ -141,6 +153,8 @@ class DegradationProfile:
 
 @dataclass(slots=True)
 class DegradationRecorder:
+    """Collects effects during one measurement; `freeze` folds them into a profile. All-zero effects are dropped."""
+
     effects: list[DegradationEffect]
 
     @classmethod

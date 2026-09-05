@@ -7,41 +7,60 @@ from heapq import heappop, heappush
 from squid_ui.semantic import Flexibility
 
 DEFAULT_SEARCH_BUDGET = 512
+"""Layout states the planner's search evaluates before returning its best incumbent with `search_fallback` set."""
 
 
 @dataclass(frozen=True, slots=True, order=True)
 class CostVector:
-    """Coarse planner tiers, ordered from sacred to cosmetic."""
+    """The planner's tie-breaker below `DegradationProfile`, compared field by field in declaration order.
+
+    A change to a `STABLE` axis outranks any number of `NORMAL` ones, and so on down; `path`
+    and `strategy_id` make the order total, so equal-cost assignments still sort deterministically.
+    """
 
     stable_changes: int = 0
+    """Axes of `Flexibility.STABLE` whose selected strategy differs from their baseline."""
     normal_changes: int = 0
     flexible_changes: int = 0
     preference_mismatches: int = 0
+    """Axes whose selected strategy is not the adapter's `preferred` one."""
     active_pagers: int = 0
+    """Strategies that open a local pager."""
     transitions: int = 0
+    """Summed `StrategyCandidate.transition_distance`."""
     path: str = ""
     strategy_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class StrategyCandidate:
+    """One selectable strategy of an axis, with the two costs `candidate_cost` cannot derive from the id alone."""
+
     strategy_id: str
     active_pagers: int = 0
+    """Whether choosing this opens a local pager (0 or 1)."""
     transition_distance: int = 0
+    """Index gap in the adapter's strategy order from the baseline, or from `preferred` without one."""
 
 
 @dataclass(frozen=True, slots=True)
 class StrategyAxis:
-    """One semantic occurrence's finite, independently selectable strategies."""
+    """One semantic occurrence's finite, independently selectable strategies.
+
+    Raises `ValueError` when `candidates` is empty or repeats a strategy id.
+    """
 
     path: str
     key: str
     adapter_id: str
     adapter_version: int
     flexibility: Flexibility
+    """How dearly a change from `baseline` is priced; see `CostVector`."""
     preferred: str
+    """The adapter's first choice; any other selection costs one `preference_mismatch`."""
     candidates: tuple[StrategyCandidate, ...]
     baseline: str | None = None
+    """The strategy the session remembers for `key`, or `None` when it has none or it is no longer offered."""
 
     def __post_init__(self) -> None:
         strategies = tuple(candidate.strategy_id for candidate in self.candidates)
@@ -55,7 +74,7 @@ class StrategyAxis:
 
 @dataclass(frozen=True, slots=True)
 class StrategyAssignment:
-    """One complete assignment in global lexicographic order."""
+    """One strategy per axis, as `(path, strategy_id)` pairs in axis order, with the summed cost."""
 
     strategies: tuple[tuple[str, str], ...]
     cost: CostVector
@@ -63,6 +82,8 @@ class StrategyAssignment:
 
 @dataclass(frozen=True, slots=True)
 class StrategyChoice:
+    """What `choose_strategy` returns; `states_explored` is the number of candidates priced."""
+
     candidate: StrategyCandidate
     cost: CostVector
     states_explored: int
@@ -90,7 +111,10 @@ def ranked_candidates(axis: StrategyAxis) -> tuple[tuple[CostVector, StrategyCan
 
 
 def assignment_cost(axes: Sequence[StrategyAxis], strategies: Mapping[str, str]) -> CostVector:
-    """Price one complete assignment the same way `iter_assignments` prices its own."""
+    """Price one complete assignment the same way `iter_assignments` prices its own.
+
+    `strategies` must map every axis's path to one of its candidate ids.
+    """
     costs = [
         candidate_cost(next(item for item in axis.candidates if item.strategy_id == strategies[axis.path]), axis=axis)
         for axis in axes
@@ -121,7 +145,7 @@ def choose_strategy(
     preferred: str,
     baseline: str | None,
 ) -> StrategyChoice:
-    """Choose one valid candidate by stable lexicographic tiers and deterministic ties."""
+    """The cheapest candidate under `candidate_cost`. Raises `ValueError` when `candidates` is empty."""
     if not candidates:
         message = f"{path}: adapter produced no valid strategies"
         raise ValueError(message)
@@ -132,7 +156,10 @@ def choose_strategy(
 
 
 def iter_assignments(axes: tuple[StrategyAxis, ...]) -> Iterator[StrategyAssignment]:
-    """Enumerate a strategy product best-first without materializing the product."""
+    """Yield every assignment of the axes' product once, in nondecreasing `CostVector` order.
+
+    Expands one axis by one rank per step from a heap, so the product is never materialized.
+    """
     ranked = tuple(
         tuple(
             sorted(

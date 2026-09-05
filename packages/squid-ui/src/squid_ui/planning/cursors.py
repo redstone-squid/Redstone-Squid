@@ -27,13 +27,19 @@ class MaterializedCursorRequest:
 
     key: str
     extent: int
+    """Page count; treated as at least one."""
     fingerprint: str
+    """Identity of the sliced content; a stored cursor with a different one is stale and resets to the origin."""
     anchors: Mapping[str, int] | None = None
+    """Page offset per anchor name, for a stored position that names an anchor rather than an offset."""
     initial: Literal["start", "end"] = "start"
+    """Which end to open on when nothing else decides the position."""
 
 
 @dataclass(frozen=True, slots=True)
 class CursorGrant:
+    """A position clamped to `[0, extent - 1]`, with `extent` at least one."""
+
     position: Position
     extent: int
 
@@ -45,19 +51,26 @@ def content_fingerprint(parts: Sequence[str]) -> str:
 
 @dataclass(slots=True)
 class CursorCoordinator:
-    """Resolve, stage, and draw every materialized cursor in one plan."""
+    """Resolve, stage, and draw every materialized cursor in one plan.
+
+    Each key is granted once and recorded once; `updates` is what the plan commits to the session.
+    """
 
     session: PresentationState
     chrome: Chrome
     nav: PlannedNav | None = None
     overrides: Mapping[str, Position] | None = None
+    """Caller-supplied positions by key (`PlanRequest.positions`); these win over everything stored."""
     policy: PositionResolver = POSITION_RESOLVER
     _pagers: list[scene.Pager] = field(default_factory=list, init=False)
     _granted: set[str] = field(default_factory=set, init=False)
     _updates: list[SessionUpdate] = field(default_factory=list, init=False)
 
     def grant(self, request: MaterializedCursorRequest) -> CursorGrant:
-        """Resolve one keyed position through the shared precedence policy."""
+        """Resolve one keyed position: override, then anchor, then the stored cursor unless stale, then `initial`.
+
+        Pure: nothing is staged until `record`.
+        """
         extent = max(1, request.extent)
         cursor = self.session.cursor(request.key)
         anchor = cursor.position.anchor
@@ -79,7 +92,10 @@ class CursorCoordinator:
         *,
         anchor: str | None = None,
     ) -> None:
-        """Stage the cursor and scene pager produced by a materialized slice."""
+        """Stage the cursor write and scene pager for one slice; a single-page slice stages nothing.
+
+        Raises `LayoutInvariantError` when `request.key` has already been recorded in this plan.
+        """
         if request.key in self._granted:
             message = f"duplicate cursor key {request.key!r}"
             raise LayoutInvariantError(message)
@@ -92,7 +108,7 @@ class CursorCoordinator:
         self._updates.append(CursorUpdate(request.key, CursorState(resolved, extent, request.fingerprint)))
 
     def controls(self, key: str, position: Position, extent: int) -> list[Node]:
-        """Build mandatory numeric chrome and optional navigation for a cursor."""
+        """The page footer, then `nav`'s controls when one is set; empty for a single page."""
         if extent <= 1:
             return []
         result: list[Node] = [Footer(self.chrome.page_footer(position.offset + 1, extent), overflow=Never())]
@@ -102,9 +118,10 @@ class CursorCoordinator:
 
     @property
     def pagers(self) -> tuple[scene.Pager, ...]:
+        """Every multi-page cursor recorded so far, in record order."""
         return tuple(self._pagers)
 
     @property
     def updates(self) -> tuple[SessionUpdate, ...]:
-        """Return staged writes followed by garbage collection of absent cursors."""
+        """The staged cursor writes, then an `ActivePagers` that drops every cursor not recorded here."""
         return (*self._updates, ActivePagers(frozenset(pager.key for pager in self._pagers)))

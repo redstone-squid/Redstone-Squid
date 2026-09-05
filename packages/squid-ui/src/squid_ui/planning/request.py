@@ -32,44 +32,45 @@ class Identity:
 class StaticPlanOptions(TypedDict, total=False):
     """The planner inputs a sessionless render accepts.
 
-    Split from :class:`PlanOptions` so that an entry point which plans no session cannot be
-    handed one: `render_static` takes this, and rejecting `session` there is the point of it.
+    Split from `PlanOptions` so that `render_static`, which plans no session, cannot be
+    handed one.
     """
 
     chrome: Chrome
     localization: Localization
     palette: Palette
     strict: bool
+    """Raise `LayoutDegradedError` for any lossy layout: truncation, spill, drop, or a non-exact variant."""
     reservation: ResourceCost
+    """Room withheld from the target before planning, through `Target.reserve`."""
 
 
 class PlanOptions(StaticPlanOptions, total=False):
     """Every planner input except the target, which each entry point defaults differently.
 
-    Spelled as a TypedDict so that a function forwarding planner inputs declares them once
-    rather than restating ten parameters and ten forwardings. :class:`PlanRequest` remains the
-    value the planner sees; this is only how a caller's keywords reach it.
+    A TypedDict so that a function forwarding planner inputs declares them once. `PlanRequest`
+    is the value the planner sees; this is only how a caller's keywords reach it.
     """
 
     positions: Mapping[str, Position] | None
+    """Cursor positions by pager key that override whatever the session stores."""
     nav: PlannedNav | None
     session: PresentationState | None
     search_budget: int
+    """Layout states the search may evaluate before settling for its best incumbent."""
 
 
 @dataclass(frozen=True, slots=True)
 class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
     """Everything one call to a planner backend is asked to compile against.
 
-    These travel together through every layer of planning -- the public dispatcher, each
-    backend, the layout search, and both cache key encodings -- so they are one value rather
-    than a keyword bundle re-declared at each boundary. The two caches are deliberately *not*
-    part of this: they are per-runtime storage handed in alongside a request, not a property
-    of what was asked for.
+    One value through the dispatcher, each backend, the layout search and both cache key
+    encodings. The two caches are not part of it: they are per-runtime storage handed in
+    alongside a request. Raises `ValueError` when `search_budget` is below one.
 
     Held values are the caller's, unresolved. A backend that reserves resources from its
     target or localizes its chrome does so into locals and passes the results to
-    :meth:`cache_context`, because the exact memo keys on what the caller supplied while the
+    `cache_context`, because the exact memo keys on what the caller supplied while the
     structural cache keys on what was actually compiled against.
     """
 
@@ -78,11 +79,15 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
     localization: Localization = NEUTRAL
     palette: Palette = DEFAULT_PALETTE
     strict: bool = False
+    """Raise `LayoutDegradedError` for any lossy layout: truncation, spill, drop, or a non-exact variant."""
     reservation: ResourceCost = EMPTY_COST
+    """Room withheld from `target` before planning, through `Target.reserve`."""
     positions: Mapping[str, Position] | None = None
+    """Cursor positions by pager key that override whatever `session` stores."""
     nav: PlannedNav | None = None
     session: PresentationState | None = None
     search_budget: int = DEFAULT_SEARCH_BUDGET
+    """Layout states the search may evaluate before settling for its best incumbent."""
     presentation: PresentationState = field(init=False, compare=False, repr=False)
     """`session`, or the empty state standing in for it -- resolved once, so that a request
     without a session still has one stable presentation identity to key a memo on."""
