@@ -39,15 +39,17 @@ class OpenContext:
 
     user_id: int
     guild_id: int | None = None
+    """`None` in a DM."""
 
     @classmethod
     def of(cls, source: discord.Interaction[Any] | Replyable | discord.Message) -> OpenContext:
-        """Build an open context from an interaction or command context.
+        """Build an open context from an interaction, command context or message.
 
         Read duck-typed, the way `reply_to` peeks at `ctx.interaction`: an interaction names
         its user and guild directly, a command context names an `author` and a `guild`. The
         two surfaces never meet in discord.py's type hierarchy, and a session recipe does
-        not care which one a reader arrived through.
+        not care which one a reader arrived through. Raises `TypeError` when `source` names
+        neither a `user` nor an `author`.
         """
         user = getattr(source, "user", None)
         if user is None:
@@ -66,11 +68,11 @@ class OpenContext:
         return UserScope(self.user_id)
 
     def guild(self) -> GuildScope:
-        """This context's guild, as a keyable scope. Raises in a DM."""
+        """This context's guild, as a keyable scope. Raises `TypeError` in a DM."""
         return GuildScope(self._require_guild("guild"))
 
     def user_guild(self) -> UserGuildScope:
-        """This context's user within its guild, as a keyable scope. Raises in a DM."""
+        """This context's user within its guild, as a keyable scope. Raises `TypeError` in a DM."""
         return UserGuildScope(self.user_id, self._require_guild("user_guild"))
 
     def global_(self) -> GlobalScope:
@@ -85,7 +87,7 @@ class OpenContext:
 
 
 class ScopeKind(StrEnum):
-    """Session-key scope derivable from an :class:`OpenContext`."""
+    """Session-key scope derivable from an `OpenContext`."""
 
     USER = "user"
     GUILD = "guild"
@@ -95,12 +97,11 @@ class ScopeKind(StrEnum):
     def resolve(self, open_context: OpenContext) -> SessionScope:
         """Build this kind of scope as a value, for a kind chosen at runtime.
 
-        `SessionSpec` declares its scope as a member and resolves it here, so this returns the union.
-        A caller that knows the kind statically should ask the open context instead --
-        `open_context.user_guild()` is a `UserGuildScope`, which is what lets a `SharedState[UserGuildScope]`
-        pool refuse the wrong scope at the call site rather than missing at runtime. Both spellings
-        build the same values, and those are the values a `SessionKey` already carries, so a panel
-        holding its session key reaches a pool through `key.scope` with nothing to convert.
+        `SessionSpec` declares its scope as a member and resolves it here, so this returns the
+        union. A caller that knows the kind statically should ask the open context instead:
+        `open_context.user_guild()` is a `UserGuildScope`, which lets a
+        `SharedState[UserGuildScope]` pool refuse the wrong scope at the call site. Raises
+        `TypeError` for `GUILD` or `USER_GUILD` in a DM.
         """
         match self:
             case ScopeKind.USER:
@@ -142,10 +143,16 @@ def _empty_options() -> SessionOptions:
 
 @dataclass(frozen=True, slots=True)
 class SessionSpec:
-    """Reusable recipe shared by every opening of one logical screen."""
+    """Reusable recipe shared by every opening of one logical screen.
+
+    `open`, `attach`, `respond` and `respond_attached` raise `DiscordUIRuntimeMissing` when
+    `sessions` is an interaction or context whose client has no installed runtime.
+    """
 
     name: str
+    """The session key's name and, unless `domain` is set, its membership family."""
     scope: ScopeKind = ScopeKind.USER
+    """Resolved against each opener; `GUILD` and `USER_GUILD` raise `TypeError` in a DM."""
     admission: AdmissionSpec = DEFAULT_ADMISSION
     capacity: int | None = None
     """The most members one opening of this screen admits; `None` is unbounded.
@@ -166,8 +173,10 @@ class SessionSpec:
     "game" for the purpose of "one game at a time".
     """
     access: Callable[[OpenContext], AccessPolicy] = _owner
+    """Access policy per opening; by default only the opener may interact."""
     options: SessionOptions = field(default_factory=_empty_options)
     resolve_options: SessionOptionsResolver | None = None
+    """Per-opening options, overriding `options` and overridden by call-site keywords."""
 
     def __post_init__(self) -> None:
         """Snapshot mount options into a read-only mapping."""
@@ -200,6 +209,7 @@ class SessionSpec:
         `sessions` is the registry, or anything an installed host can be found from -- the
         interaction or command context the opening came from will do, which is what spares a
         caller holding neither from dispatching over the two invocation surfaces itself.
+        `key` overrides the one derived from `open_context`.
         """
         sessions = _manager(sessions)
         options = await self._message_root_options(open_context, overrides)
@@ -225,7 +235,11 @@ class SessionSpec:
         parent: MessageRoot,
         **overrides: Unpack[SessionOptions],
     ) -> OpenResult:
-        """Construct and attach a mount below one known live parent."""
+        """Construct and attach a mount below one known live parent.
+
+        Rejected with `SESSION_FINISHED` when no live session owns `parent`. The screen's
+        `admission`, `capacity` and `quota` do not apply: the parent's session decides.
+        """
         sessions = _manager(sessions)
         parent_session = sessions.session_for(parent)
         if parent_session is None:
@@ -270,7 +284,7 @@ class SessionSpec:
         wait: bool = False,
         **overrides: Unpack[SessionOptions],
     ) -> OpenResult:
-        """Attach this screen as an interaction response below a live parent."""
+        """Attach this screen as an interaction response below a live parent; see `respond` for `sessions`."""
         return await self.attach(
             component,
             respond_to(interaction, ephemeral=ephemeral, wait=wait),

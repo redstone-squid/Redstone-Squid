@@ -9,26 +9,27 @@ from .runtime import DurableSessionRuntime, RecoveryReport
 class DurableBot(commands.Bot):
     """A bot that recovers durable sessions between login and gateway connect.
 
-    Subclasses implement :meth:`build_durable_runtime`. The runtime is created
-    before ``login()`` so ``setup_hook()`` and cogs can use ``durable_sessions``.
-    Recovery then completes before the gateway starts dispatching interactions.
+    Subclasses implement `build_durable_runtime`. The runtime is created before `login()` so
+    `setup_hook()` and cogs can use `durable_sessions`. Recovery then completes before the
+    gateway starts dispatching interactions.
     """
 
     _durable_sessions: DurableSessionRuntime | None = None
     recovery_report: RecoveryReport | None = None
+    """The report from this bot's most recent `connect`; `None` before the first."""
 
     def build_durable_runtime(self) -> DurableSessionRuntime:
-        """Construct this bot's durable-session runtime once.
+        """Construct this bot's durable-session runtime, normally with `DiscordFrontend(self)`.
 
-        Returns:
-            The configured runtime, normally using ``DiscordFrontend(self)``.
+        Called once, on the first `durable_sessions` read. Raises `NotImplementedError` unless
+        overridden.
         """
         message = f"{type(self).__name__} must implement build_durable_runtime()"
         raise NotImplementedError(message)
 
     @property
     def durable_sessions(self) -> DurableSessionRuntime:
-        """The lazily constructed runtime available during ``setup_hook()``."""
+        """The lazily constructed runtime available during `setup_hook()`."""
         if self._durable_sessions is None:
             self._durable_sessions = self.build_durable_runtime()
         return self._durable_sessions
@@ -37,12 +38,12 @@ class DurableBot(commands.Bot):
         """Run after recovery is ready and before gateway interaction dispatch."""
 
     async def login(self, token: str) -> None:
-        """Authenticate after making the runtime available to ``setup_hook()``."""
+        """Authenticate after making the runtime available to `setup_hook()`."""
         _ = self.durable_sessions
         await super().login(token)
 
     async def connect(self, *, reconnect: bool = True) -> None:
-        """Recover under supervision before connecting to the gateway."""
+        """Recover under supervision before connecting to the gateway; the runtime stops when the gateway does."""
         runtime = self.durable_sessions
         async with anyio.create_task_group() as tasks:
             report = await tasks.start(runtime.run)

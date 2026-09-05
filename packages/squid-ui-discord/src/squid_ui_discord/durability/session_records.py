@@ -23,22 +23,30 @@ class SessionRootRecord:
     """One stored mount and its position in a durable session graph."""
 
     id: str
+    """Unique within its record; the runtime uses `"root"` for the mount a session opens with."""
     state: MessageRootState
     address: FrontendAddress
     parent_id: str | None
+    """`None` for the root; must name an earlier entry of `message_roots`."""
     actor_id: int | None
 
 
 @dataclass(frozen=True, slots=True)
 class DurableSessionRecord:
-    """Every recoverable fact owned by one logical session record."""
+    """Every recoverable fact owned by one logical session record.
+
+    `DurableSessionCodec` accepts only a record whose `message_roots` starts with its single
+    parentless root, lists parents before children, and has no cycle.
+    """
 
     protocol: int
     id: str
     key: SessionKey
     actor_id: int | None
     opened_at: float
+    """POSIX timestamp."""
     expires_at: float | None
+    """POSIX timestamp; recovery deletes a record past it."""
     message_roots: tuple[SessionRootRecord, ...]
     members: frozenset[int] = frozenset()
     capacity: int | None = None
@@ -53,6 +61,7 @@ class DurableSessionCodec:
 
     @classmethod
     def dumps(cls, record: DurableSessionRecord) -> str:
+        """Encode as sorted-key JSON; raises `MessageRootStateError` for an invalid graph, protocol or key."""
         cls._validate(record)
         raw = {
             "protocol": record.protocol,
@@ -84,6 +93,7 @@ class DurableSessionCodec:
 
     @classmethod
     def loads(cls, payload: str) -> DurableSessionRecord:
+        """Decode `dumps` output; raises `MessageRootStateError` for bad JSON, another protocol or an invalid graph."""
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
@@ -197,6 +207,8 @@ class DurableSessionCodec:
 
 
 class SessionScopeKind(StrEnum):
+    """The `type` discriminator of an encoded session scope."""
+
     USER = "user"
     GUILD = "guild"
     USER_GUILD = "user_guild"
@@ -205,7 +217,11 @@ class SessionScopeKind(StrEnum):
 
 
 def encode_session_key(key: SessionKey) -> dict[str, Any]:
-    """Return the canonical JSON object used for storage scope and record payloads."""
+    """Return the canonical JSON object used for storage scope and record payloads.
+
+    Raises `MessageRootStateError` for an empty name or a `CustomScope` value that is not a
+    JSON scalar or nested tuple of them.
+    """
     scope = key.scope
     if isinstance(scope, UserScope):
         encoded = {"type": SessionScopeKind.USER, "user_id": scope.user_id}
@@ -227,7 +243,7 @@ def encode_session_key(key: SessionKey) -> dict[str, Any]:
 
 
 def decode_session_key(raw: dict[str, Any]) -> SessionKey:
-    """Decode a session key produced by :func:`encode_session_key`."""
+    """Decode `encode_session_key` output; raises `MessageRootStateError` for a malformed object."""
     name = _string(raw, "name")
     scope = _object(raw.get("scope"), "session scope")
     kind = _string(scope, "type")
@@ -246,7 +262,7 @@ def decode_session_key(raw: dict[str, Any]) -> SessionKey:
 
 
 def encode_session_scope(key: SessionKey) -> str:
-    """Return the canonical store index for a durable logical session key."""
+    """Return the store scope string for `key`: `encode_session_key` as compact sorted-key JSON."""
     return json.dumps(encode_session_key(key), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 

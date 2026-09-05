@@ -59,7 +59,9 @@ class DurabilityHealth(StrEnum):
 
     HEALTHY = "healthy"
     CHECKPOINT_PENDING = "checkpoint_pending"
+    """A change is not yet saved; the next maintenance sweep or `flush` retries it."""
     CLAIM_LOST = "claim_lost"
+    """The runtime no longer owns the record: the store fenced it out, or it released the claim at shutdown."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,20 +70,29 @@ class RecoveryItem:
 
     record_key: str
     session_key: SessionKey | None
+    """`None` when the stored snapshot could not be decoded."""
     addresses: tuple[FrontendAddress, ...]
     reason: str
+    """Free text, truncated to 240 characters for an unexpected exception."""
 
 
 @dataclass(frozen=True, slots=True)
 class RecoveryReport:
-    """Per-record recovery outcomes; one bad record never aborts the sweep."""
+    """Per-record recovery outcomes; one bad record never aborts the sweep.
+
+    `missing` and `expired` records are deleted from the store. `unreachable`, `incompatible`
+    and `failed` ones are released for a later recovery; `claimed_elsewhere` ones are left to
+    their owner.
+    """
 
     restored: tuple[RecoveryItem, ...] = ()
     missing: tuple[RecoveryItem, ...] = ()
     expired: tuple[RecoveryItem, ...] = ()
     unreachable: tuple[RecoveryItem, ...] = ()
     incompatible: tuple[RecoveryItem, ...] = ()
+    """The record raised `MessageRootStateError`: a codec, registry, target or graph mismatch."""
     failed: tuple[RecoveryItem, ...] = ()
+    """Any other exception; it is logged with a traceback."""
     claimed_elsewhere: tuple[RecoveryItem, ...] = ()
 
 
@@ -92,7 +103,9 @@ class DurableRuntimeSnapshot:
     running: bool
     shutting_down: bool
     active: tuple[tuple[str, DurabilityHealth, int], ...]
+    """`(record key, health, mount count)` per owned session, sorted by key."""
     dirty: tuple[str, ...]
+    """Record keys awaiting a checkpoint."""
     last_recovery: RecoveryReport | None
 
 
@@ -170,16 +183,12 @@ class DurableSession(Session):
     ) -> OpenResult:
         """Deliver and durably attach one child mount to this session graph.
 
-        `recipe` names the registered component the mount is rebuilt from after a restart, and
-        has no counterpart on `Session.attach`. It defaults so that this stays a valid override:
-        a caller holding a plain `Session` that happens to be durable -- which is every caller
-        going through `SessionManager.session_for` -- would otherwise raise `TypeError`. Attaching
-        without one is refused rather than served, because a mount this session cannot rebuild
-        would disappear from the graph at the next recovery.
-
-        A promotion that fails after delivery is reported as a refusal for the same reason the
-        base class only promises `OpenResult`: an override may not hand back an outcome its
-        callers have no way to know about.
+        `recipe` names the registered component the mount is rebuilt from after a restart. It
+        defaults to `None` only so this remains a valid override of `Session.attach`; attaching
+        without one is rejected with `RECIPE_REQUIRED`, since a mount this session cannot
+        rebuild would vanish at the next recovery. A delivery that cannot be promoted is
+        rejected with `NOT_DURABLE`, keeping the base class's `OpenResult` promise. Raises
+        `MessageRootStateError` when `recipe` is not registered.
         """
         runtime = self._durable_runtime
         if runtime is None:
@@ -226,7 +235,12 @@ type DurableOpenResult = Opened[DurableSession] | Rejected | Abandoned | NotDura
 
 
 class DurableSessionRuntime:
-    """Coordinate fenced admission, whole-session checkpoints, and frontend recovery."""
+    """Fenced admission, whole-session checkpoints and recovery; `run()` supervises until its host cancels it.
+
+    `open`, `flush`, `purge` and `recover` raise `RuntimeError` unless `run()` is active. The
+    constructor raises `ValueError` for a non-positive lease or a maintenance interval that is
+    not within `(0, lease_seconds)`; the interval defaults to a third of the lease.
+    """
 
     def __init__(
         self,
@@ -284,7 +298,11 @@ class DurableSessionRuntime:
         await self._maintain()
 
     async def purge(self, record_keys: Sequence[str]) -> tuple[PurgeResult, ...]:
-        """Delete explicitly selected inactive records through a fresh fenced claim."""
+        """Delete explicitly selected inactive records through a fresh fenced claim.
+
+        A key active in this runtime, missing, or claimed elsewhere is reported undeleted
+        with its reason rather than raised.
+        """
         self._require_running()
         async with self._maintenance_lock:
             return await self._purge(record_keys)
@@ -322,7 +340,13 @@ class DurableSessionRuntime:
         quota: int | None = None,
         domain: str | None = None,
     ) -> DurableOpenResult:
-        """Reserve, deliver, persist, and register one durable session atomically."""
+        """Reserve, deliver, persist, and register one durable session atomically.
+
+        Returns `Rejected` with `ADMISSION_BUSY` when another process holds the key's
+        reservation, and `NotDurable` when the delivered message cannot be promoted. Raises
+        `MessageRootStateError` when `recipe` is unregistered or the reservation is lost before
+        the first commit.
+        """
         self._require_running()
         if not self.components.has(recipe):
             message = f"durable component {recipe!r} is not registered"
@@ -424,7 +448,12 @@ class DurableSessionRuntime:
         *,
         task_status: TaskStatus[RecoveryReport] = anyio.TASK_STATUS_IGNORED,
     ) -> None:
-        """Recover once, report readiness, then supervise claims and checkpoints."""
+        """Recover once, report readiness, then supervise claims and checkpoints until cancelled.
+
+        `task_status` receives the recovery report. On exit every claim is released, not
+        deleted, so the next runtime recovers the sessions. Raises `RuntimeError` when already
+        running.
+        """
         if self._running:
             message = "durable session runtime is already running"
             raise RuntimeError(message)
@@ -558,6 +587,7 @@ class DurableSessionRuntime:
         return frozen
 
     def health_for(self, session: DurableSession) -> DurabilityHealth:
+        """`CLAIM_LOST` for a session this runtime does not own."""
         record_id = self._by_session.get(session)
         if record_id is None or (active := self._active.get(record_id)) is None:
             return DurabilityHealth.CLAIM_LOST

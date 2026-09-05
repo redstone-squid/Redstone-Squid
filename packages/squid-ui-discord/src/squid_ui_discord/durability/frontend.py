@@ -52,6 +52,7 @@ class Missing:
 
     record_message_root_ids: tuple[str, ...]
     reasons: tuple[str, ...]
+    """Parallel to `record_message_root_ids`."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +61,7 @@ class Unreachable:
 
     record_message_root_ids: tuple[str, ...]
     reasons: tuple[str, ...]
+    """Parallel to `record_message_root_ids`."""
 
 
 type ReconnectResult = Reconnected | Missing | Unreachable
@@ -68,9 +70,22 @@ type ReconnectResult = Reconnected | Missing | Unreachable
 class DurableFrontend(Protocol):
     """A frontend that can promote live deliveries and reconnect restored sessions."""
 
-    async def promote(self, message_root: MessageRoot, result: DeliveryResult) -> PromotionResult: ...
+    async def promote(self, message_root: MessageRoot, result: DeliveryResult) -> PromotionResult:
+        """Give a just-delivered mount an address and edit authority that outlive this process.
 
-    async def reconnect(self, bindings: Sequence[RecoveredBinding]) -> ReconnectResult: ...
+        Returns `NotDurable` rather than raising when the delivery cannot be recovered
+        (no message, ephemeral, or already gone); the caller then finishes the mount.
+        """
+        ...
+
+    async def reconnect(self, bindings: Sequence[RecoveredBinding]) -> ReconnectResult:
+        """Redraw every restored mount onto its stored message, resolving all of them first.
+
+        `Missing` names the mounts whose messages are gone for good; the runtime prunes them
+        and their descendants, or drops the record when the root is among them. `Unreachable`
+        leaves the record for a later recovery.
+        """
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,7 +103,11 @@ class DiscordFrontend:
         self.client = client
 
     async def promote(self, message_root: MessageRoot, result: DeliveryResult) -> PromotionResult:
-        """Trade a recoverable public delivery up to permanent bot-token authority."""
+        """Trade a recoverable public delivery up to permanent bot-token authority.
+
+        A webhook or interaction message is re-fetched through the client so its `edit` uses
+        the bot token. Discord errors other than `NotFound` propagate.
+        """
         message = result.message
         if message is None:
             return NotDurable("the delivery did not expose an addressable message")
@@ -117,7 +136,11 @@ class DiscordFrontend:
         return Promoted(FrontendAddress(self.frontend, values), handle)
 
     async def reconnect(self, bindings: Sequence[RecoveredBinding]) -> ReconnectResult:
-        """Resolve a whole session before redrawing any of its restored message roots."""
+        """Resolve a whole session before redrawing any of its restored message roots.
+
+        Raises `ValueError` for an address of another frontend and `TypeError` for one whose
+        ids or mode are not what this frontend writes.
+        """
         resolved: list[_ResolvedBinding] = []
         missing: list[tuple[str, str]] = []
         unreachable: list[tuple[str, str]] = []
@@ -176,7 +199,7 @@ class DiscordFrontend:
         return Reconnected(tuple(binding.record_message_root_id for binding in bindings))
 
     async def _normal_message(self, message: discord.Message) -> discord.Message:
-        """Return a message whose ``edit`` endpoint uses the bot token."""
+        """Return a message whose `edit` endpoint uses the bot token."""
         if type(message) is discord.Message:
             return message
         return await self._fetch_message(message.channel.id, message.id)

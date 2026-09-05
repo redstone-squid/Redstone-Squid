@@ -19,10 +19,7 @@ LIFETIME_EXEMPTIONS: frozenset[str] = frozenset(
         # pass removes its own. Nothing should be added here without a reason beside it.
         "packages/squid-ui-discord/src/squid_ui_discord/actions.py::ActionResponder",
         "packages/squid-ui-discord/src/squid_ui_discord/challenges.py::ChallengeRunner",
-        "packages/squid-ui-discord/src/squid_ui_discord/durability/runtime.py::DurableSessionRuntime",
         "packages/squid-ui-discord/src/squid_ui_discord/runtime.py::DiscordUIRuntime",
-        "packages/squid-ui-discord/src/squid_ui_discord/sessions.py::Session",
-        "packages/squid-ui-discord/src/squid_ui_discord/sessions.py::SessionManager",
         "packages/squid-ui/src/squid_ui/profiling/profiler.py::DetachedSpanRecorder",
         "packages/squid-ui/src/squid_ui/profiling/profiler.py::_DetachedSpan",
         "packages/squid-ui/src/squid_ui/profiling/profiler.py::_NoOpDetachedSpan",

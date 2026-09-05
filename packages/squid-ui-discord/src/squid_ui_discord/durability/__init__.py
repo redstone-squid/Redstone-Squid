@@ -85,13 +85,19 @@ class MessageRootStateError(SquidUiError, ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ComponentState:
+    """One component's exported reactive state, keyed by its path in the rendered tree."""
+
     path: str
+    """`"$"` for the root; every other path is assigned by `render_component_tree`."""
     type_id: str
+    """`module:qualname` of the component class; restore refuses a component of another type."""
     state: Mapping[str, object]
 
 
 @dataclass(frozen=True, slots=True)
 class PresentationSnapshot:
+    """Per-node presentation state of a mount, copied out of `PresentationState` for storage."""
+
     cursors: Mapping[str, CursorState]
     selections: Mapping[str, SelectionState]
     disclosures: Mapping[str, DisclosureState]
@@ -100,6 +106,13 @@ class PresentationSnapshot:
 
 @dataclass(frozen=True, slots=True)
 class MessageRootState:
+    """A whole mount's component and presentation state, pinned to the target it was planned for.
+
+    `protocol` is the codec version (`MessageRootStateCodec.protocol`); `component_version` is
+    the registered version of `component_key`, and `ComponentRegistry.restore` migrates older
+    states forward one version at a time.
+    """
+
     protocol: int
     component_key: str
     component_version: int
@@ -108,13 +121,14 @@ class MessageRootState:
     target_triple: str = DISCORD_V2_DPY27.triple
     target_version: int = DISCORD_V2_DPY27.version
     target_fingerprint: str = ""
-    target_adapter_capabilities: tuple[str, ...] = ()
-    """A digest of the target this mount was planned against.
+    """Digest of the target this mount was planned against.
 
-    Recorded beside the triple because neither axis alone pins the budgets. Recovery refuses
-    a target that has since changed rather than rebuilding a stored render against limits it
-    was never fitted to.
+    Recorded beside the triple because neither axis alone pins the budgets: recovery refuses a
+    target that has since changed rather than rebuilding a stored render against limits it was
+    never fitted to.
     """
+    target_adapter_capabilities: tuple[str, ...] = ()
+    """Sorted and unique; the codec rejects any other order."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,6 +156,7 @@ class DurableMessageRootCodec:
 
     @classmethod
     def dumps(cls, record: DurableMessageRootRecord) -> str:
+        """Encode as sorted-key JSON; raises `MessageRootStateError` for another protocol or unserializable state."""
         if record.protocol != cls.protocol:
             message = f"unsupported durable mount record protocol {record.protocol}"
             raise MessageRootStateError(message)
@@ -162,6 +177,7 @@ class DurableMessageRootCodec:
 
     @classmethod
     def loads(cls, payload: str) -> DurableMessageRootRecord:
+        """Decode `dumps` output; raises `MessageRootStateError` for malformed JSON or another protocol."""
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
@@ -198,6 +214,7 @@ class MessageRootStateCodec:
 
     @classmethod
     def dumps(cls, state: MessageRootState) -> str:
+        """Encode as sorted-key JSON; raises `MessageRootStateError` for another protocol or unserializable state."""
         if state.protocol != cls.protocol:
             message = f"unsupported mount state protocol {state.protocol}"
             raise MessageRootStateError(message)
@@ -225,6 +242,7 @@ class MessageRootStateCodec:
 
     @classmethod
     def loads(cls, payload: str) -> MessageRootState:
+        """Decode `dumps` output; raises `MessageRootStateError` for malformed JSON or another protocol."""
         try:
             raw = json.loads(payload)
         except json.JSONDecodeError as error:
@@ -285,7 +303,12 @@ def migrate_component_state(
     *,
     type_id: str | None = None,
 ) -> MessageRootState:
-    """Transform one component snapshot and advance the root's version by one."""
+    """Transform one component snapshot and advance the root's version by one.
+
+    `transform` receives a codec round-tripped copy, so it cannot alias `current`. Raises
+    `MessageRootStateError` when `path` is missing or duplicated, `type_id` is empty, or the
+    result is not a string-keyed mapping that serializes.
+    """
     isolated = MessageRootStateCodec.loads(MessageRootStateCodec.dumps(current))
     matches = [index for index, component in enumerate(isolated.components) if component.path == path]
     if len(matches) != 1:
@@ -384,10 +407,13 @@ class RestoreContext:
     record_id: str
     session_key: SessionKey
     actor_id: int | None
+    """The session's opening actor."""
     message_root_actor_id: int | None
+    """The actor attributed to this mount, which differs from `actor_id` for attached children."""
     address: FrontendAddress
     expires_at: float | None
     parent_id: str | None
+    """`None` for the session's root mount."""
 
 
 type MessageRootStateMigration = Callable[[MessageRootState], MessageRootState]
@@ -423,8 +449,11 @@ class ComponentRegistry:
         """Register one known root and every sequential migration to its current version.
 
         `restore` is the durable-session path: it reconstructs the complete mount, including
-        its explicit access policy and host dependencies. `factory` remains the low-level
-        component-only path for direct snapshot codec use.
+        its explicit access policy and host dependencies. `factory` is the component-only path
+        for direct snapshot codec use. Exactly one of them is required.
+
+        Raises `ValueError` for an empty key, a version below 1, a key already registered, or a
+        migration source outside `1 <= source < version`.
         """
         if not key or version < 1:
             message = "durable component keys must be non-empty and versions positive"
@@ -442,6 +471,11 @@ class ComponentRegistry:
         self._registrations[key] = _Registration(version, factory, restore, migration_map)
 
     def capture(self, message_root: AnyMessageRoot, component_key: str) -> MessageRootState:
+        """Snapshot a built mount's components and presentation at `component_key`'s registered version.
+
+        Raises `MessageRootStateError` when the key is unregistered, the mount has not been built,
+        or a component's state does not serialize.
+        """
         registration = self._registrations.get(component_key)
         if registration is None:
             message = f"durable component {component_key!r} is not registered"
@@ -485,6 +519,13 @@ class ComponentRegistry:
         The target is resolved *before* anything is built, so an unavailable or changed
         profile fails while the record is still just data — not after a mount exists and a
         reader could already be clicking it.
+
+        Raises:
+            LayoutInvariantError: The stored target triple, version, fingerprint or
+                capabilities do not match a registered target.
+            MessageRootStateError: The component key is unregistered, a `restore` recipe is
+                given no `context`, no migration path reaches the registered version, or the
+                rebuilt tree's paths or types differ from the stored ones.
         """
         target = targets.resolve(
             state.target_triple,

@@ -47,7 +47,11 @@ class GlobalScope:
 
 @dataclass(frozen=True, slots=True)
 class CustomScope:
-    """An application-defined stable, hashable scope."""
+    """An application-defined scope.
+
+    A durable session can store it only when `value` is a JSON scalar or a nested tuple of
+    them; see `durability.encode_session_key`.
+    """
 
     value: Hashable
 
@@ -57,7 +61,10 @@ type SessionScope = UserScope | GuildScope | UserGuildScope | GlobalScope | Cust
 
 @dataclass(frozen=True, slots=True)
 class SessionKey:
-    """The conventional serializable spelling for a keyed logical session."""
+    """A keyed logical session's identity: the form durable storage encodes and recovery looks up.
+
+    `name` doubles as the default membership `domain` a quota counts within.
+    """
 
     name: str
     scope: SessionScope
@@ -87,9 +94,13 @@ class RejectionReason(Enum):
     """Why a session request was refused before delivery."""
 
     COLLISION = "collision"
+    """The key is full and the collision policy declined to name victims."""
     PROTECTED = "protected"
+    """A selected victim was kept by the replacement policy."""
     SESSION_FINISHED = "session_finished"
+    """An attach or join named a session, or a parent mount, that is already finished."""
     ADMISSION_BUSY = "admission_busy"
+    """Another process holds the durable reservation for this key."""
     QUOTA_REACHED = "quota_reached"
     RECIPE_REQUIRED = "recipe_required"
     """A durable session was attached to without the recipe its recovery would need."""
@@ -101,17 +112,20 @@ class RejectionReason(Enum):
 class SessionSnapshot:
     """Immutable facts a session policy may use during local admission.
 
-    ``id`` and ``opened_at`` do not change over a session's lifetime. Membership fields
-    are a point-in-time copy too: the registry creates a fresh snapshot for a decision after
-    a membership or attachment change while retaining the same identity and opening time.
+    `id` and `opened_at` do not change over a session's lifetime. Membership fields are a
+    point-in-time copy: the registry creates a fresh snapshot for a decision after a
+    membership or attachment change while retaining the same identity and opening time.
     """
 
     id: str
     opened_at: datetime
     key: Hashable | None
     actor_id: int | None
+    """The opener; `None` for a session opened without an actor."""
     durable: bool = False
+    """Whether the session is backed by a stored record."""
     local: bool = True
+    """Whether this process owns the live session; `False` for an occupant read from the store."""
     members: frozenset[int] = frozenset()
     attachment_actors: frozenset[int] = frozenset()
     capacity: int | None = None
@@ -134,12 +148,12 @@ class SessionSnapshot:
 
     @property
     def is_durable(self) -> bool:
-        """Whether the session has durable ownership/state."""
+        """Alias of `durable`."""
         return self.durable
 
     @property
     def is_local(self) -> bool:
-        """Whether this process owns the live session."""
+        """Alias of `local`."""
         return self.local
 
 
@@ -158,8 +172,10 @@ class Rejected:
     """Admission was refused without attempting delivery."""
 
     occupants: tuple[SessionSnapshot, ...]
+    """The key's occupants at refusal, oldest first; empty when no key was contested."""
     reason: RejectionReason
     notice: TextLike | None = None
+    """The collision policy's `Refuse.notice`, for the caller to show; `None` for every other reason."""
 
     def __bool__(self) -> Literal[False]:
         return False
@@ -177,11 +193,16 @@ class AdmissionRequest:
     newcomer: SessionSnapshot
     actor_id: int | None
     required_victims: int
+    """How many occupants must be retired for the newcomer to fit under the key's limit."""
 
 
 @dataclass(frozen=True, slots=True)
 class Replace:
-    """Replace these exact occupants."""
+    """Retire these occupants.
+
+    `SessionManager.open` raises `ValueError` unless `victims` holds exactly
+    `AdmissionRequest.required_victims` distinct current occupants.
+    """
 
     victims: tuple[SessionSnapshot, ...]
 
@@ -198,40 +219,59 @@ type CollisionDecision = Replace | Refuse
 
 
 class CollisionPolicy(Protocol):
-    """Asynchronously select exact replacement victims from immutable snapshots."""
+    """Chooses which occupants of a full key give way to a newcomer.
 
-    async def select(self, request: AdmissionRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision: ...
+    Consulted under the key's registry lock, before anything is delivered.
+    """
+
+    async def select(self, request: AdmissionRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision:
+        """Return `Replace` naming exactly `request.required_victims` of `occupants`, or `Refuse`.
+
+        `occupants` is oldest first and includes remote occupants a durable store reported.
+        """
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class Reject:
-    """Reject any open that would exceed the key's limit."""
+    """Refuse any open that would exceed the key's limit, with `COLLISION` and this notice."""
 
     notice: TextLike | None = None
 
     async def select(self, request: AdmissionRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision:
+        """Always `Refuse`."""
         return Refuse(notice=self.notice)
 
 
 @dataclass(frozen=True, slots=True)
 class ReplaceOldest:
-    """Retire the oldest occupants needed to admit the newcomer."""
+    """Retire the oldest occupants needed to admit the newcomer. The default collision policy."""
 
     async def select(self, request: AdmissionRequest, occupants: tuple[SessionSnapshot, ...]) -> CollisionDecision:
+        """`Replace` the first `required_victims` occupants."""
         return Replace(occupants[: request.required_victims])
 
 
 class ReplacementPolicy(Protocol):
-    """Asynchronously decide whether one immutable collision victim may be retired."""
+    """Vetoes individual victims a `CollisionPolicy` selected.
 
-    async def permits(self, request: AdmissionRequest, victim: SessionSnapshot) -> bool: ...
+    One refusal rejects the whole open with `PROTECTED`.
+    """
+
+    async def permits(self, request: AdmissionRequest, victim: SessionSnapshot) -> bool:
+        """Whether `victim` may be finished to admit `request.newcomer`."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class ProtectCrossUserAttachments:
-    """Keep sessions that another participant or attachment actor is using."""
+    """Keep sessions that another participant is using, and durable ones from a non-durable open.
+
+    The default replacement policy.
+    """
 
     async def permits(self, request: AdmissionRequest, victim: SessionSnapshot) -> bool:
+        """Permit when only the requesting actor participates, and the newcomer is durable or the victim is not."""
         actor_id = request.actor_id
         others = victim.participants if actor_id is None else victim.participants - {actor_id}
         allowed = not others
@@ -243,17 +283,22 @@ class ProtectCrossUserAttachments:
 
 @dataclass(frozen=True, slots=True)
 class Unprotected:
-    """Allow every collision-selected replacement."""
+    """Allow every collision-selected replacement, durable victims included."""
 
     async def permits(self, request: AdmissionRequest, victim: SessionSnapshot) -> bool:
+        """Always `True`."""
         return True
 
 
 @dataclass(frozen=True, slots=True)
 class AdmissionSpec:
-    """Cardinality, collision, and replacement protection for one open."""
+    """Cardinality, collision, and replacement protection for one open.
+
+    Raises `ValueError` for a non-positive `limit`.
+    """
 
     limit: int | None = 1
+    """The most sessions the key may hold at once; `None` never collides."""
     collision: CollisionPolicy = field(default_factory=ReplaceOldest)
     replacement: ReplacementPolicy = field(default_factory=ProtectCrossUserAttachments)
 
@@ -276,7 +321,9 @@ class MembershipStatus(StrEnum):
     AT_CAPACITY = "at_capacity"
     QUOTA_REACHED = "quota_reached"
     REFUSED = "refused"
+    """The caller's `when` rule declined."""
     CONFLICT = "conflict"
+    """The members differ from the caller's `expect`; re-read and retry."""
     SESSION_FINISHED = "session_finished"
 
 
@@ -314,9 +361,7 @@ def _require_user_id(user_id: int) -> int:
 class _Membership:
     """One mount's place in a session: under which parent, and attributed to whom.
 
-    Attaching a mount used to write a list and two parallel dicts that had to stay in step
-    by inspection, and detaching had to unwind all three. One record per mount makes the
-    session's ownership a single entry that is either there or not.
+    One record per mount, so attaching and detaching each touch a single graph entry.
     """
 
     parent: MessageRoot | None
@@ -326,7 +371,12 @@ class _Membership:
 
 
 class Session:
-    """One root mount and every child mount in its operational lifetime."""
+    """One root mount and every child mount attached under it; `finish()` ends them all and unregisters it.
+
+    The root mount finishing on its own ends the session the same way. Raises `ValueError` for
+    a non-positive `capacity` or `quota`, or a `quota` with no `domain` and no `SessionKey` to
+    take one from.
+    """
 
     def __init__(
         self,
@@ -399,7 +449,6 @@ class Session:
 
     @property
     def remaining_capacity(self) -> int | None:
-        """Free member slots, or `None` when this session is unbounded."""
         return None if self._capacity is None else max(self._capacity - len(self._members), 0)
 
     @property
@@ -462,12 +511,10 @@ class Session:
 
     @property
     def durable(self) -> bool:
-        """Whether this session is backed by durable state."""
         return self._snapshot.durable
 
     @property
     def local(self) -> bool:
-        """Whether this process owns the live session."""
         return self._snapshot.local
 
     async def attach(
@@ -478,7 +525,11 @@ class Session:
         actor_id: int | None = None,
         parent: MessageRoot | None = None,
     ) -> OpenResult:
-        """Deliver and attach a child mount to this session."""
+        """Deliver and attach a child mount under `parent`, the root by default.
+
+        Rejected with `SESSION_FINISHED` when the session or the parent is finished; an
+        `Abandoned` delivery is returned as-is and nothing is attached.
+        """
         async with self._lifecycle_lock:
             if self._closed or self.root.finished:
                 return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
@@ -511,6 +562,8 @@ class Session:
         `attach` and `finish`, so I/O inside it stalls the whole session. A rule that is both
         asynchronous and set-dependent belongs outside the lock instead: read `members`, make
         the async decision, then commit with `expect=` and retry on `CONFLICT`.
+
+        Raises `ValueError` for a `user_id` that is not a positive integer.
         """
         _require_user_id(user_id)
         # Outside the lifecycle lock and before it, because a quota spans sessions: this one
@@ -534,7 +587,8 @@ class Session:
         """Remove `user_id` from this session.
 
         The opener and the final member may both leave. An empty session stays alive; only
-        the application knows when a lobby or game is over.
+        the application knows when a lobby or game is over. Raises `ValueError` for a
+        `user_id` that is not a positive integer.
         """
         _require_user_id(user_id)
         async with self._lifecycle_lock:
@@ -570,7 +624,10 @@ class Session:
         return MembershipResult(user_id, status, self._members, self.remaining_capacity)
 
     async def finish(self, *, disable: bool = True) -> None:
-        """Finish every mount depth-first and unregister the session."""
+        """Finish every mount depth-first and unregister the session; a no-op once closed.
+
+        One mount's teardown failure is logged and does not stop the others.
+        """
         async with self._lifecycle_lock:
             if self._closed:
                 return
@@ -651,7 +708,11 @@ def _resolve_victims(selected: tuple[SessionSnapshot, ...], occupants: tuple[Ses
 
 
 class SessionManager:
-    """The live logical sessions owned by this process."""
+    """The live logical sessions owned by this process; `close()` finishes every session under one key.
+
+    `close_all()` finishes every session it holds. Sessions also leave the registry on their
+    own when they finish, so it never holds a finished one for long.
+    """
 
     def __init__(self, defaults: MessageRootDefaults = MessageRootDefaults()) -> None:  # noqa: B008  # frozen value
         self.defaults = defaults
@@ -678,10 +739,15 @@ class SessionManager:
     ) -> OpenResult:
         """Admit, deliver, and register one new root session.
 
-        ``durable`` and ``local`` are descriptive admission facts.  A caller restoring a
-        session may pass its immutable ``snapshot`` instead to retain the original identity
-        and opening time.  ``capacity`` caps the session's explicit members; it is a fact of
-        this session rather than of the key contest, so it is not part of ``policy``.
+        `durable` and `local` are descriptive admission facts. A caller restoring a session
+        may pass its immutable `snapshot` instead to retain the original identity and opening
+        time. `capacity` caps the session's explicit members; it is a fact of this session
+        rather than of the key contest, so it is not part of `admission`.
+
+        Raises:
+            TypeError: `message_root` is not a `MessageRoot`.
+            ValueError: The collision policy did not select exactly the required occupants,
+                or the session arguments fail `Session`'s checks.
         """
         if not isinstance(message_root, MessageRoot):
             message = "SessionManager.open requires a MessageRoot; use MessageRootDefaults.mount or SessionSpec.open"
@@ -801,7 +867,7 @@ class SessionManager:
         return tuple(self._by_key.get(key, ()))
 
     def session_for(self, message_root: MessageRoot) -> Session | None:
-        """Return the logical session that owns `mount`, if this registry knows it."""
+        """Return the logical session that owns `message_root`, if this registry knows it."""
         return self._by_root.get(message_root)
 
     def sessions_for_member(
@@ -835,7 +901,7 @@ class SessionManager:
         return next((session for session in self._sessions if session.id == session_id), None)
 
     async def close(self, key: Hashable, *, disable: bool = True) -> None:
-        """Finish every session under `key`."""
+        """Finish every session under `key`, oldest first."""
         for session in self.get(key):
             await session.finish(disable=disable)
 
