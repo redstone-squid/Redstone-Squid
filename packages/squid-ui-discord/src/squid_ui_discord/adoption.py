@@ -2,11 +2,9 @@
 
 A live view — one that has been sent and will edit its own message — stays rejected, and
 `docs/plans/squid-ui-redesign/90-deferred.md` records why: two writers on one message make
-budget measurement unsound. An unsent view claims nothing. It is items and callbacks that have
-not met Discord, so Squid can translate the items into its own exact primitives, become the
-sole writer, and keep the legacy object as a model plus a set of handlers. Renderer ownership,
-the property the rejection protects, is preserved rather than traded away: Squid constructs
-every item it draws.
+budget measurement unsound. An unsent view is items and callbacks that have not met Discord,
+so Squid translates the items into its own primitives, becomes the sole writer, and keeps the
+legacy object as a model plus a set of handlers. Squid constructs every item it draws.
 
 The seam is the interaction proxy. `await interaction.response.edit_message(view=self)` is the
 last line of nearly every discord.py callback, and here it means "I am done mutating; flush" --
@@ -136,7 +134,7 @@ def adopt(
       cleanup is disposable.
     * **In-place mutations do not roll back.** A callback that raises reaches the mount's error
       hook with component state restored, but the view keeps whatever the callback wrote to it
-      before raising. Holding a mutable collaborator costs exactly this.
+      before raising.
     * **Generated custom ids are positional.** A view that rebuilds its items with
       `clear_items()` and gives them no explicit `custom_id` is identified by position, so
       reordering controls moves per-control state between them. Pass `keys=` for such a view.
@@ -170,8 +168,7 @@ def adopt(
         raise AdoptionError(message)
     _validate_adoptable(view, discard_timeout=discard_timeout)
     adopted = _AdoptedView(view, keys=keys)
-    # Translate once here so a view that cannot be drawn says so at the adopt() call site
-    # rather than from inside the first render, where the traceback names none of this.
+    # Same eager translation as the LayoutView branch above.
     adopted.render()
     return adopted
 
@@ -687,7 +684,7 @@ def _index_assets(assets: Sequence[Asset]) -> tuple[dict[str, Asset], dict[str, 
 
 
 def _width(item: Item) -> int:
-    """A select owns a whole row; a button costs one fifth of one."""
+    """Row slots an item takes: all `_ROWS` for a select, one for a button."""
     return _ROWS if isinstance(item, _SELECTS) else 1
 
 

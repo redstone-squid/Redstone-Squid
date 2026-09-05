@@ -60,10 +60,12 @@ class RenderedMessage[ViewT: (discord.ui.LayoutView, discord.ui.View | None), Bo
 
     @property
     def page(self) -> int:
+        """The first pager's current page; 0 when the scene has no pager."""
         return self.plan.scene.pagers[0].page if self.plan.scene.pagers else 0
 
     @property
     def pages(self) -> int:
+        """The first pager's page count; 1 when the scene has no pager."""
         return self.plan.scene.pagers[0].pages if self.plan.scene.pagers else 1
 
 

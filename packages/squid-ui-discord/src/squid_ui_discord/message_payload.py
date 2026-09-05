@@ -73,7 +73,7 @@ class MessagePayload:
 
     Absent content and embeds are explicit clears rather than omitted kwargs: a payload
     describes the whole surface Squid owns, so what it does not name is what the message must
-    stop showing.
+    stop showing. Construction raises `MessageModeError` when the fields contradict `mode`.
     """
 
     mode: MessageMode
@@ -91,7 +91,7 @@ class MessagePayload:
 
     @classmethod
     def components_v2(cls, view: discord.ui.LayoutView, *, assets: Sequence[Asset] = ()) -> MessagePayload:
-        """A Components V2 message: the layout is the message."""
+        """Takes only `view` and `assets`: the V2 flag forbids content and embeds outright."""
         return cls(MessageMode.COMPONENTS_V2, view=view, assets=tuple(assets))
 
     @classmethod
@@ -103,7 +103,7 @@ class MessagePayload:
         view: discord.ui.View | None = None,
         assets: Sequence[Asset] = (),
     ) -> MessagePayload:
-        """A pre-Components-V2 message: content, embeds, and at most five action rows."""
+        """Raises `MessageModeError` when `view` is a `LayoutView` or reports Components V2 items."""
         return cls(MessageMode.CLASSIC, content=content, embeds=tuple(embeds), view=view, assets=tuple(assets))
 
     @property

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True, slots=True)
 class RenderProgramCacheSnapshot:
-    """One immutable view of renderer-program cache activity."""
+    """Counters are cumulative since construction; `certified` counts entries that skip the renderer's audit."""
 
     entries: int
     certified: int
@@ -23,7 +23,12 @@ class _Entry:
 
 
 class RenderProgramCache:
-    """A bounded LRU of callback-free Discord constructor programs."""
+    """A bounded LRU of callback-free Discord constructor programs.
+
+    A `capacity` below 1 raises `ValueError`. A certified entry is one whose drawing passed the
+    renderer's audit with a static view factory and no wiring, so the renderer draws it again
+    without re-auditing.
+    """
 
     def __init__(self, capacity: int = 32) -> None:
         if capacity < 1:
@@ -36,7 +41,7 @@ class RenderProgramCache:
         self._evictions = 0
 
     def get(self, key: Hashable) -> tuple[object, bool] | None:
-        """Return a program and its audit certificate, recording its disposition."""
+        """`None` on a miss; a hit is moved to most-recently-used."""
         entry = self._entries.get(key)
         if entry is None:
             self._misses += 1
@@ -46,7 +51,7 @@ class RenderProgramCache:
         return entry.program, entry.certified
 
     def put(self, key: Hashable, program: object, *, certified: bool) -> None:
-        """Retain one successfully executed program and its strongest certificate."""
+        """A certificate once earned survives a later uncertified `put` of the same key."""
         previous = self._entries.get(key)
         if previous is not None:
             certified = certified or previous.certified
@@ -57,7 +62,7 @@ class RenderProgramCache:
             self._evictions += 1
 
     def snapshot(self) -> RenderProgramCacheSnapshot:
-        """Return bounded cache size and cumulative disposition counters."""
+        """Counters keep counting across `clear()`; only `entries` and `certified` drop."""
         return RenderProgramCacheSnapshot(
             entries=len(self._entries),
             certified=sum(entry.certified for entry in self._entries.values()),
@@ -67,7 +72,7 @@ class RenderProgramCache:
         )
 
     def clear(self) -> None:
-        """Discard every retained program and audit certificate."""
+        """Drop every entry; the hit, miss and eviction counters keep their values."""
         self._entries.clear()
 
     def __len__(self) -> int:

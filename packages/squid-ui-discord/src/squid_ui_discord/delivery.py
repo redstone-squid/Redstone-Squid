@@ -16,9 +16,8 @@ not views: a handle knows which mode the message it addresses is in, so the lega
 pre-Components-V2 message has to clear are a stated transition rather than a guess at a
 `discord.Message` that is very often `None`.
 
-Absorbs the three helpers that previously lived in the host bot (`edit_layout`,
-`edit_interaction_layout`, `reply_layout`): every path defaults to `AllowedMentions.none()`.
-Delivery *policy* (ephemeral rules, DM fallback) stays host-side.
+Every path defaults to `AllowedMentions.none()`. Delivery *policy* (ephemeral rules, DM
+fallback) stays host-side.
 """
 
 from collections.abc import Sequence
@@ -77,7 +76,7 @@ class Delivered:
 
 @dataclass(frozen=True, slots=True)
 class Abandoned:
-    """A destination deliberately declined to deliver a mount."""
+    """A destination raised `DeliveryAbandoned`, so the mount committed nothing. Always falsy."""
 
     def __bool__(self) -> Literal[False]:
         return False
@@ -391,7 +390,9 @@ class Replyable(Protocol):
         content: str | None = ...,
         embeds: Sequence[discord.Embed] = ...,
         view: Any = ...,
-    ) -> discord.Message: ...
+    ) -> discord.Message:
+        """`Context.send`'s shape: sends one message and returns it, never `None`."""
+        ...
 
 
 class MessageDestination(Protocol):
@@ -411,7 +412,9 @@ class MessageDestination(Protocol):
     are merged ahead of `payload.build_files()`.
     """
 
-    async def __call__(self, payload: MessagePayload, /) -> DeliveryResult: ...
+    async def __call__(self, payload: MessagePayload, /) -> DeliveryResult:
+        """Deliver `payload` once; see the class docstring for what the result and each raise mean."""
+        ...
 
 
 class Messageable(Protocol):
@@ -426,7 +429,9 @@ class Messageable(Protocol):
         content: str | None = ...,
         embeds: Sequence[discord.Embed] = ...,
         view: Any = ...,
-    ) -> discord.Message: ...
+    ) -> discord.Message:
+        """`abc.Messageable.send`'s shape: no `ephemeral`, and `delete_after` is honoured."""
+        ...
 
 
 def reply_to(
@@ -442,6 +447,9 @@ def reply_to(
     Mentions stay off unless asked for. The classic target exists partly so a message can
     ping someone *and* be readable in the notification, so this has to be reachable — but a
     UI library that pings by default would eventually ping a whole server by accident.
+
+    The destination raises `LimitViolationError` when `files` plus the payload's assets exceed
+    `LIMITS.attachments`.
     """
     require_discord_py_capability(adapter, AdapterCapability.INTERACTION_DELIVERY, "deliver a command reply")
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
@@ -499,6 +507,9 @@ def send_to(
     because discord.py's `send` is overloaded per channel type precisely so a `LayoutView`
     and a `content` cannot be named together, and no single signature covers both; the
     structural overload is what keeps a test double, or a host's own wrapper, usable.
+
+    The destination raises `LimitViolationError` when `files` plus the payload's assets exceed
+    `LIMITS.attachments`.
     """
     # The one cast between discord.py's overload family and this package's structural view of
     # it. `_send_fields` has already decided which of the two shapes the payload is.
@@ -533,7 +544,12 @@ def respond_to(
 
     `wait` costs a round trip only when the caller needs the message itself. A fresh response
     remains writable through `@original` without fetching it. Mentions stay off unless asked
-    for; see `reply_to` for why that default is not negotiable.
+    for; see `reply_to` for why that default is not negotiable. `complete_deferred` writes the
+    payload onto a response the caller already deferred, through `@original`, instead of
+    sending a follow-up.
+
+    The destination raises `LimitViolationError` when `files` plus the payload's assets exceed
+    `LIMITS.attachments`.
     """
     require_discord_py_capability(adapter, AdapterCapability.INTERACTION_DELIVERY, "deliver an interaction response")
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
@@ -584,6 +600,13 @@ def edit_to(
 
     The mode transition is read here rather than guessed: the message says what it is showing
     now, the payload says what it will show, and Discord refuses some pairs of the two.
+
+    The destination, not this factory, raises the following.
+
+    Raises:
+        StaleHandleError: The bot can no longer edit `message`.
+        MessageModeError: `message` is Components V2 and the payload is classic.
+        LimitViolationError: `files` plus the payload's assets exceed `LIMITS.attachments`.
     """
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 

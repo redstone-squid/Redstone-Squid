@@ -1,9 +1,9 @@
 """Composing classic Discord messages: `squid_ui_discord.classic.render_message` and friends.
 
-A separate module rather than a mode flag on `squid_ui_discord.render_message`, because the author picks
-the message mode and should have to say so. The two produce different messages with different
-capabilities, and a default that silently decides which one you get is the thing this whole
-target exists to avoid.
+A separate module rather than a mode flag on `squid_ui_discord.render_message`, because the
+author picks the message mode and should have to say so: the two modes produce different
+messages with different capabilities, and the Components V2 flag cannot be taken back off a
+sent message.
 """
 
 import logging
@@ -114,6 +114,7 @@ class AttachedClassicContribution:
         return self.plan.report
 
     def build_files(self) -> list[discord.File]:
+        """Materialize fresh file wrappers; a sent `discord.File` cannot be re-sent."""
         return files_for(self.assets)
 
     def stale(self) -> bool:
@@ -170,6 +171,13 @@ def contribute(
 
     This never sends: delivery stays with the owner of the message. Note that routed controls
     do not run the host view's checks and do not refresh its timeout.
+
+    Raises:
+        MessageModeError: `to` is not a classic payload.
+        ExistingLayoutError: `to` already breaks a limit, or the merged message would break
+            one, repeat a custom id, or take a trailing item another view owns.
+        FragmentOwnershipError: The drawn region holds a control the host would have to
+            dispatch.
     """
     if to.mode is not MessageMode.CLASSIC:
         message = f"classic.contribute needs a classic host payload, not {to.mode.value}"

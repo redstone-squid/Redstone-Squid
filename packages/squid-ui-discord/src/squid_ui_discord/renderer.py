@@ -42,8 +42,7 @@ class MountedRenderer[BodyT: scene.Body](Renderer[BodyT, MessagePayload], Protoc
     `Renderer` is the mechanical contract: a scene in, a drawn thing out. A mount needs one
     more thing from it -- `wire`, which turns each interactive control into an item bound to
     that mount's generation -- and a mount picks its renderer by dialect id at runtime, so
-    the two concrete renderers have to be reachable through one type. Without this, the call
-    went through `cast(Any, renderer)` and nothing checked either half.
+    the two concrete renderers have to be reachable through one type.
     """
 
     def draw(
@@ -52,7 +51,19 @@ class MountedRenderer[BodyT: scene.Body](Renderer[BodyT, MessagePayload], Protoc
         *,
         plan: PlanResult[BodyT] | None = None,
         wire: Wire | None = None,
-    ) -> MessagePayload: ...
+    ) -> MessagePayload:
+        """Draw `document` as one complete payload.
+
+        `plan` supplies the action bindings, extension resources and uploadable assets;
+        without it the draw is sessionless and uploads nothing. `wire` builds the item for
+        each interactive control and must come with `plan`.
+
+        Raises:
+            DrawInvariantError: The scene is not one this renderer draws, a control has no
+                binding, or the drawing breaks a limit the plan promised to respect.
+            TypeError: The scene holds an interactive control and no `wire` was given.
+        """
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,13 +180,11 @@ class RoutedItem(discord.ui.Button[Any]):
     Discord's payload is an ordinary button; the override is purely about discord.py's
     in-process bookkeeping. `ViewStore.add_view` files an item into the stored dispatch
     table only when `is_dispatchable()` is true, and `dispatch_view` runs *both* the dynamic
-    lookup and that table. A stored routed button would therefore take a second dispatch
-    whose callback is `Item`'s no-op — harmless for responses, but `_scheduled_task` resets
-    the view's timeout expiry before awaiting it, so clicking a routed control inside a
-    mounted message silently extended that mount's life.
+    lookup and that table. A stored routed button would take a second dispatch whose callback
+    is `Item`'s no-op, and `_scheduled_task` resets the view's timeout before awaiting it, so
+    a click on a routed control would silently extend the surrounding mount's life.
 
-    Staying out of the table gives the control exactly one dispatch path. Dynamic dispatch
-    is unaffected: `schedule_dynamic_item_call` rebuilds the view with
+    Dynamic dispatch is unaffected: `schedule_dynamic_item_call` rebuilds the view with
     `LayoutView.from_message` and finds the base item by component type and custom id there,
     on stock `Button` objects this class never touches.
     """
@@ -274,7 +283,12 @@ def _compile_program(document: scene.Scene[scene.ComponentsV2]) -> _V2Program:
 
 
 class V2Renderer:
-    """Draw a resolved Components V2 scene without making layout decisions."""
+    """Draw a resolved Components V2 scene without making layout decisions.
+
+    `audit` re-checks each drawing against `limits` with `conform`. A drawing made with the
+    default `StaticView` factory, no `wire` and no extension resources is certified in `cache`
+    once it passes, and later draws of the same scene skip the audit.
+    """
 
     def __init__(
         self,
@@ -298,11 +312,9 @@ class V2Renderer:
         plan: PlanResult[scene.ComponentsV2] | None = None,
         wire: Wire | None = None,
     ) -> MessagePayload:
-        """Draw the complete message this scene resolves to.
+        """Draw the complete message this scene resolves to; see `MountedRenderer.draw` for what it raises.
 
-        A payload rather than a view, because a message is both halves. For Components
-        V2 the layout happens to be the whole message, so this looks like ceremony — it stops
-        looking like it the moment the other renderer has content and embeds to return.
+        Only assets `plan` names are attached, so a planless draw uploads nothing.
         """
         return MessagePayload.components_v2(
             self.view(document, plan=plan, wire=wire),
@@ -316,6 +328,14 @@ class V2Renderer:
         plan: PlanResult[scene.ComponentsV2] | None = None,
         wire: Wire | None = None,
     ) -> discord.ui.LayoutView:
+        """The view half of `draw`, for a caller that attaches its own assets.
+
+        Raises:
+            DrawInvariantError: The scene is not a `DISCORD_V2_DPY27` version-1 scene, a
+                control has no binding, an extension resource is not an `Item`, or the audit
+                finds a limit the drawing breaks.
+            TypeError: The scene holds an interactive control and `plan` or `wire` is missing.
+        """
         if document.protocol != scene.Codec.protocol:
             message = f"V2Renderer cannot draw scene protocol {document.protocol}"
             raise DrawInvariantError(message)

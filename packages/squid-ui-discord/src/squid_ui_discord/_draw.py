@@ -2,9 +2,8 @@
 
 `squid_ui_discord.render_message` and `squid_ui_discord.classic.render_message` are separate
 entry points on purpose -- the author picks the message mode and should have to say so -- but
-what they *do* between a document and a payload never differed: plan, record the planner's
-metrics, draw, warn about degradation. That part lives here so the two stay one implementation
-while remaining two APIs.
+the work between a document and a payload is the same: plan, record the planner's metrics,
+draw, warn about degradation. That part lives here so the two stay one implementation.
 """
 
 import logging

@@ -40,7 +40,10 @@ def attachment_assets(plan: PlanResult) -> tuple[Asset, ...]:
 
 
 def files_for(assets: Sequence[Asset]) -> list[discord.File]:
-    """Materialize fresh `discord.File` wrappers; a sent file cannot be re-sent."""
+    """Materialize fresh `discord.File` wrappers; a sent file cannot be re-sent.
+
+    Raises `TypeError` for a `StoredAsset`, which only a host resolver can turn into bytes.
+    """
     files: list[discord.File] = []
     for asset in assets:
         if not isinstance(asset.source, InlineAsset):

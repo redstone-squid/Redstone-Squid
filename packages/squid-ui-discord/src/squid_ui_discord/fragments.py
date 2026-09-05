@@ -102,6 +102,7 @@ class Fragment:
         return self.plan.report
 
     def build_files(self) -> list[discord.File]:
+        """Materialize fresh file wrappers; a sent `discord.File` cannot be re-sent."""
         return files_for(self.assets)
 
     def release(self) -> tuple[discord.ui.Item[Any], ...]:
@@ -109,7 +110,8 @@ class Fragment:
 
         Deliberately not called `detach`: the inverse of `attach` is
         `AttachedFragment.remove`, and a pair of names that look like inverses but are not is
-        a trap. After this the caller owns ordering, preflight, and rollback.
+        a trap. After this the caller owns ordering, preflight, and rollback. Raises
+        `FragmentOwnershipError` when the fragment was already placed or released.
         """
         self._claim()
         self._detach_all()
@@ -120,6 +122,13 @@ class Fragment:
 
         Nothing is moved until the whole result is known to be legal, and a host subclass
         that raises from `add_item` gets everything rolled back.
+
+        Raises:
+            FragmentOwnershipError: The fragment was already placed or released, or an item
+                is parented in a view other than `view`.
+            StaleReservationError: `view` changed since `fragment()` measured it.
+            ExistingLayoutError: The prospective view breaks a message limit, repeats a
+                custom id, or a contributed item fails its own audit.
         """
         staging = self._staging
         self._claim()
@@ -203,6 +212,11 @@ def fragment(
     has not claimed yet. An already-invalid host raises before anything is planned, because
     fragment composition cannot repair arbitrary host content or choose which of its items
     should be lost.
+
+    Raises:
+        ExistingLayoutError: `alongside` already breaks a limit on its own.
+        FragmentOwnershipError: The drawn region holds a control the host would have to
+            dispatch.
     """
     host = measure(alongside, attachments=attachments) if alongside is not None else _empty_reservation(attachments)
     host.raise_if_invalid()
@@ -252,7 +266,9 @@ def contribute(
     The host view is named once. Measuring against one view and attaching to another would
     void every guarantee here, and the two-step `fragment()` + `attach()` form takes it twice.
 
-    This never sends: delivery stays with the owner of the message.
+    This never sends: delivery stays with the owner of the message. Raises what `fragment()`
+    and `Fragment.attach` raise: `ExistingLayoutError`, `FragmentOwnershipError` and
+    `StaleReservationError`.
     """
     planned = fragment(
         document,

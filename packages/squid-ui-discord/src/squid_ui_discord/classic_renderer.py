@@ -109,7 +109,17 @@ class StaticClassicView(discord.ui.View):
 
 
 class ClassicRenderer:
-    """Draw a resolved classic scene. It makes no layout decisions and repairs nothing."""
+    """Draw a resolved classic scene. It makes no layout decisions and repairs nothing.
+
+    `always_view` builds a `View` even for a document with no controls. A static render of
+    pure prose sends none; a *mounted* one needs it, because the view owns the mount's
+    timeout and is what discord.py stores, so a screen showing no buttons would otherwise
+    never time out.
+
+    `audit` re-checks each drawing with `audit_classic_payload`. A drawing made with the
+    default `StaticClassicView` factory, no `wire` and no extensions is certified in `cache`
+    once it passes, and later draws of the same scene skip the audit.
+    """
 
     def __init__(
         self,
@@ -127,12 +137,6 @@ class ClassicRenderer:
         self.view_factory = view_factory
         self.always_view = always_view
         self.cache = cache if cache is not None else RenderProgramCache()
-        """Build a view even for a document with no controls.
-
-        A static render of pure prose needs no view and should send none. A *mounted* one
-        does: the view is what owns the mount's timeout and what discord.py stores, so a
-        screen that currently shows no buttons would otherwise never time out.
-        """
 
     def draw(
         self,
@@ -141,6 +145,15 @@ class ClassicRenderer:
         plan: PlanResult[scene.ClassicMessage] | None = None,
         wire: Wire | None = None,
     ) -> MessagePayload:
+        """Draw the complete classic message; `view` is `None` for a control-less document unless `always_view`.
+
+        Raises:
+            DrawInvariantError: The scene is not a `DISCORD_V1_DPY27` version-1 classic scene,
+                a row mixes a select with other controls or overflows, a control has no
+                binding, an extension is present, or the audit finds a limit the drawing
+                breaks.
+            TypeError: The scene holds an interactive control and `plan` or `wire` is missing.
+        """
         body = self._body(document)
         key = self._cache_key(document, plan)
         cached = self.cache.get(key)
