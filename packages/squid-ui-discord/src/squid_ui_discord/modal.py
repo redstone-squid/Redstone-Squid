@@ -53,7 +53,13 @@ type FormSubmitHandler = Callable[[discord.Interaction, dict[str, object]], Awai
 
 @dataclass(frozen=True, slots=True)
 class EntityField(ExtensionField[object]):
-    """A Discord user, role, channel, or mentionable picker."""
+    """A Discord user, role, channel, or mentionable picker.
+
+    Lowers to the matching `discord.ui.*Select`. `parse` returns the discord.py objects the
+    select resolved (`Member`, `Role`, channel), one value when `maximum == 1` and a tuple
+    otherwise; `None` or `()` when nothing was picked. Raises `FormValueError` when required
+    and empty.
+    """
 
     entity_type: EntityType = EntityType.USER
     minimum: int = 1
@@ -73,7 +79,13 @@ class EntityField(ExtensionField[object]):
 
 @dataclass(frozen=True, slots=True)
 class FileField(ExtensionField[object]):
-    """One or more Discord attachments uploaded through a modal."""
+    """One or more Discord attachments uploaded through a modal.
+
+    Lowers to `discord.ui.FileUpload`, which allows at most 10 files; `build_form_modal` raises
+    `LayoutInvariantError` for bounds outside 0-10. `parse` returns one `UploadedFile` when
+    `maximum == 1` and a tuple otherwise, and raises `FormValueError` when the count is outside
+    `minimum..maximum` or the field is required and empty.
+    """
 
     minimum: int = 1
     maximum: int = 1
@@ -100,7 +112,14 @@ class FileField(ExtensionField[object]):
 
 @dataclass(frozen=True, slots=True)
 class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
-    """A Discord-native group of typed checkbox choices."""
+    """A Discord-native group of typed checkbox choices.
+
+    Lowers to `discord.ui.CheckboxGroup`, which holds 1-10 options; construction raises
+    `ValueError` outside that range, for duplicate option keys, or for bounds that do not satisfy
+    `0 <= minimum <= maximum <= len(options)`. `parse` returns the chosen values in option
+    order and raises `FormValueError` for an unknown key, a count outside the bounds, or a
+    required field left empty.
+    """
 
     options: tuple[ChoiceOption[ValueT], ...] = ()
     minimum: int = 0
@@ -153,8 +172,11 @@ class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
 
 @dataclass(frozen=True, slots=True)
 class TextInputSpec:
+    """One `discord.ui.TextInput`; `long` selects the paragraph style, and lengths are clamped by `conform_modal`."""
+
     label: str
     key: str | None = None
+    """The name under which the submit handler receives the value; defaults to `label`."""
     default: str | None = None
     placeholder: str | None = None
     required: bool = True
@@ -165,6 +187,8 @@ class TextInputSpec:
 
 @dataclass(frozen=True, slots=True)
 class LabelSpec:
+    """A `discord.ui.Label` wrapping one text input; `text` and `description` resolve under the neutral locale."""
+
     text: TextLike
     input: TextInputSpec
     description: TextLike | None = None
@@ -172,6 +196,8 @@ class LabelSpec:
 
 @dataclass(frozen=True, slots=True)
 class ModalSpec:
+    """The input to `build_modal`; a `FormText` item lowers to a `discord.ui.TextDisplay` and submits nothing."""
+
     title: TextLike
     items: tuple[LabelSpec | FormText, ...]
 
@@ -491,7 +517,12 @@ def build_modal(
 ) -> discord.ui.Modal:
     """Build a modal from a spec, clamped so `send_modal` can never 50035 on lengths.
 
-    ``on_submit`` receives the input values keyed by each field's ``key`` (or label).
+    `on_submit` receives the input values keyed by each field's `key` (or label).
+
+    Raises:
+        LayoutInvariantError: `adapter` lacks `MODAL_FORMS` or does not match the installed
+            discord.py.
+        LimitViolationError: `strict` is set and a length had to be clamped.
     """
     require_discord_py_capability(adapter, AdapterCapability.MODAL_FORMS, "build a modal form")
     modal = _SpecModal(spec, on_submit, timeout)
@@ -511,7 +542,20 @@ def build_form_modal(
     strict: bool = False,
     adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> discord.ui.Modal:
-    """Build a Discord modal from a portable form schema."""
+    """Build a Discord modal from a portable form schema.
+
+    `on_submit` receives parsed values keyed by field key. Each field lowers to the native
+    component its type names: text-like fields to `TextInput`, `ScaleField` to a `RadioGroup`
+    (a `TextInput` above 10 points), `ChoiceField` to a `RadioGroup` (a `Select` when any option
+    has an emoji), `MultiChoiceField` to a `Select`, `BoolField` to a `Checkbox`.
+
+    Raises:
+        LayoutInvariantError: `adapter` lacks `MODAL_FORMS` or does not match the installed
+            discord.py; the form exceeds `limits.modal_components` items; a field type has no
+            Discord lowering; or a choice/multi-choice/file field has an option or file count
+            outside Discord's 2-10, 1-25 or 0-10 bounds.
+        LimitViolationError: `strict` is set and a length had to be clamped.
+    """
     require_discord_py_capability(adapter, AdapterCapability.MODAL_FORMS, "build a modal form")
     adapted = spec.adapt(
         frozenset(

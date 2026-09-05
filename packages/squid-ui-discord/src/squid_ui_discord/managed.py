@@ -66,16 +66,13 @@ class _ManagedResult[ValueT](Component):
 
     @property
     def initial(self) -> DocumentLike:
-        """Return the scene shown while the callback is running."""
         return self._initial
 
     @property
     def render_error(self) -> ErrorRenderer | None:
-        """Return the optional failure renderer."""
         return self._render_error
 
     def render(self) -> DocumentLike:
-        """Render the pending or terminal result."""
         match self.execution.status:
             case Pending():
                 return self._initial
@@ -143,9 +140,11 @@ async def run_managed_result[ValueT](
     result is reconciled into the same mount. Without ``initial``, the callback completes before
     a mount is created, so a caller can avoid showing anything while it runs.
 
-    Exceptions from ``work`` are observed and re-raised. ``render_error`` controls an optional
-    scene for the failure, while ``on_error`` is an independent reporting hook. Callers that want
-    to suppress an exception should catch it inside ``work`` and return an appropriate value.
+    Exceptions from ``work`` are passed to ``on_error`` as a `ManagedError`, then re-raised.
+    ``render_error`` supplies the failure scene; without it a mounted ``initial`` stays as it is
+    and an unmounted failure sends nothing. Callers that want to suppress an exception catch it
+    inside ``work`` and return a value. ``dismiss_on_success`` deletes the message only when it
+    was actually delivered.
     """
     renderer: SuccessRenderer[ValueT] = _identity if render_success is None else render_success
     if initial is None:

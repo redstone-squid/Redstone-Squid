@@ -22,7 +22,11 @@ def button_grid(
     columns: int,
     on_pick: Callable[[SelectionEvent], Awaitable[None]],
 ) -> tuple[Row, ...]:
-    """Build exact button rows; target planning rejects any Discord-illegal shape."""
+    """Build exact button rows; target planning rejects any Discord-illegal shape.
+
+    Each button is keyed `{key}.{cell.key}` and reports a pick as a one-value `SelectionEvent`.
+    Raises `ValueError` for an empty `key`, no cells, `columns < 1`, or a repeated cell key.
+    """
     if not key:
         message = "button grid key must not be empty"
         raise ValueError(message)

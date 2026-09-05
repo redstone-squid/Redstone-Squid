@@ -30,7 +30,10 @@ from squid_ui_discord.routing import RouteComponent, RouteGroup
 
 @dataclass(frozen=True, slots=True)
 class Cardinality:
-    """The minimum and maximum number of roles a category may contain."""
+    """The minimum and maximum number of roles a category may contain; `None` means no maximum.
+
+    Raises `ValueError` for a negative bound or a minimum above the maximum.
+    """
 
     minimum: int = 0
     maximum: int | None = None
@@ -62,7 +65,7 @@ EXACTLY_ONE = Cardinality(minimum=1, maximum=1)
 
 @dataclass(frozen=True, slots=True)
 class RoleOption:
-    """One Discord role offered by a :class:`RoleCategory`."""
+    """One Discord role offered by a `RoleCategory`; raises `ValueError` for a non-positive `role_id`."""
 
     role_id: int
     label: TextLike
@@ -78,7 +81,12 @@ class RoleOption:
 
 @dataclass(frozen=True, slots=True)
 class RoleCategory:
-    """A named group of roles and the cardinality it permits."""
+    """A named group of roles and the cardinality it permits.
+
+    Holds 1-25 roles, the size of one Discord select. Raises `ValueError` for a `key` containing
+    `:` (it is spliced into route ids), a duplicate role id, or a cardinality the role count
+    cannot satisfy.
+    """
 
     key: str
     label: TextLike
@@ -137,18 +145,22 @@ class RolesUpdated:
 
     @property
     def current(self) -> frozenset[int]:
-        """The role ids held before the transition."""
+        """`before`, under the name every other `RoleTransitionResult` carries."""
         return self.before
 
     @property
     def candidate(self) -> frozenset[int]:
-        """The role ids requested by the transition."""
+        """`after`, under the name every other `RoleTransitionResult` carries."""
         return self.after
 
 
 @dataclass(frozen=True, slots=True)
 class RolesUnchanged:
-    """A request that already matches the member's current category roles."""
+    """A request that already matches the member's current category roles.
+
+    `before`, `after`, `current` and `candidate` all return `roles`, so a handler can read this
+    with the same attribute names as `RolesUpdated` and the failure results.
+    """
 
     category: str
     roles: frozenset[int]
@@ -158,28 +170,28 @@ class RolesUnchanged:
 
     @property
     def before(self) -> frozenset[int]:
-        """The role ids held before the request."""
         return self.roles
 
     @property
     def after(self) -> frozenset[int]:
-        """The role ids requested by the request."""
         return self.roles
 
     @property
     def current(self) -> frozenset[int]:
-        """The role ids held by the member."""
         return self.roles
 
     @property
     def candidate(self) -> frozenset[int]:
-        """The role ids requested by the request."""
         return self.roles
 
 
 @dataclass(frozen=True, slots=True)
 class RoleSelectionInvalid:
-    """A request that cannot produce a valid category selection."""
+    """A request that cannot produce a valid category selection.
+
+    `requested` holds the ids parsed before validation stopped, so it may be a prefix of what
+    the member picked. Nothing is changed on Discord.
+    """
 
     category: str
     current: frozenset[int]
@@ -192,13 +204,17 @@ class RoleSelectionInvalid:
 
     @property
     def candidate(self) -> frozenset[int]:
-        """The candidate role ids considered by validation."""
+        """`requested`, under the name every other `RoleTransitionResult` carries."""
         return self.requested
 
 
 @dataclass(frozen=True, slots=True)
 class RoleConfigurationUnavailable:
-    """The panel cannot resolve its configured roles in the interaction guild."""
+    """The panel cannot resolve its configured roles in the interaction guild.
+
+    Also the result outside a guild or when the member cannot be fetched; `missing_role_ids` is
+    empty in those cases.
+    """
 
     category: str
     current: frozenset[int]
@@ -212,12 +228,17 @@ class RoleConfigurationUnavailable:
 
 @dataclass(frozen=True, slots=True)
 class RoleMutationForbidden:
-    """Discord or the bot's role hierarchy forbids a requested mutation."""
+    """Discord or the bot's role hierarchy forbids a requested mutation.
+
+    Nothing is changed on Discord: the edit is one call, so one uneditable role blocks the
+    whole request.
+    """
 
     category: str
     current: frozenset[int]
     candidate: frozenset[int]
     role_ids: frozenset[int]
+    """The changed roles the bot cannot edit (managed, @everyone, or at or above its top role)."""
     reason: str
 
     def __post_init__(self) -> None:
@@ -228,7 +249,7 @@ class RoleMutationForbidden:
 
 @dataclass(frozen=True, slots=True)
 class RoleMutationFailed:
-    """Discord failed a complete role mutation for an otherwise valid request."""
+    """Discord answered the member fetch or the single role edit with an HTTP error, for an otherwise valid request."""
 
     category: str
     current: frozenset[int]
@@ -294,15 +315,23 @@ class RoleLike(Protocol):
     """
 
     @property
-    def id(self) -> int: ...
+    def id(self) -> int:
+        """The role snowflake; matched against `RoleOption.role_id`."""
+        ...
 
     @property
-    def position(self) -> int: ...
+    def position(self) -> int:
+        """Hierarchy position; the bot may edit a role only strictly below its own top role."""
+        ...
 
     @property
-    def managed(self) -> bool: ...
+    def managed(self) -> bool:
+        """Owned by an integration (bot, booster, Twitch); never editable."""
+        ...
 
-    def is_default(self) -> bool: ...
+    def is_default(self) -> bool:
+        """Whether this is the guild's @everyone role, which is never counted as held or editable."""
+        ...
 
 
 def _role_is_default(role: RoleLike) -> bool:
@@ -355,7 +384,19 @@ async def _send_default_notice(interaction: discord.Interaction[Any], result: Ro
 
 
 class RolePanel(Component[DiscordTarget]):
-    """A stateless, persistent panel for managing member self-roles."""
+    """A stateless, persistent panel for managing member self-roles.
+
+    Every control is a routed identity under `routes`, so the panel survives restarts without
+    a mount. One transition per (guild, member) runs at a time; each fetches the member fresh
+    and applies at most one `member.edit`. `notice` receives every `RoleTransitionResult` after
+    the interaction is deferred; the default sends a short ephemeral message.
+
+    Raises:
+        TypeError: `routes` is not a `RouteGroup`, or a category is not a `RoleCategory`.
+        ValueError: Duplicate category keys, one role id in two categories, or a `routes`
+            group that already has routes (the panel needs it empty).
+        RuntimeError: `routes` is already frozen.
+    """
 
     def __init__(
         self,

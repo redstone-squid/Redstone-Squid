@@ -20,7 +20,7 @@ _LIVE: weakref.WeakValueDictionary[str, AnyMessageRoot] = weakref.WeakValueDicti
 
 
 def track(message_root: AnyMessageRoot) -> None:
-    """Record `message root` as live until it finishes.
+    """Record `message_root` as live until it finishes.
 
     Idempotent, and meant to be called on every commit: the first call registers the
     deregistration hook, every later one is a dict lookup.

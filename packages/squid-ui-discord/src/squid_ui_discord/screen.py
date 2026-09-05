@@ -17,6 +17,11 @@ from squid_ui_discord.session_specs import SessionSpec
 class Screen[OwnerT = Any](Component[ComponentsV2Target]):
     """A component whose class compiles immutable presentation policy once.
 
+    The class attributes below become the class's `__response_spec__` at definition time, the
+    layer the facade reads between the scope's defaults and a call's overrides. Defining a
+    subclass raises `TypeError` when `audience` is not `"public"`, `"personal"` or a `Private`,
+    or when `access` is neither an access policy, `invoker_only` nor `None`.
+
     `Screen[Cog]` types `opening.owner`; the bare form leaves it `Any`.
     """
 
@@ -36,7 +41,11 @@ class Screen[OwnerT = Any](Component[ComponentsV2Target]):
 
     @property
     def opening(self) -> Request[OwnerT]:
-        """The request assigned before this instance's first load and render."""
+        """The request the facade assigned before this instance's first load and render.
+
+        Raises `RuntimeError` on an instance the facade has not presented, such as one built
+        directly in a test.
+        """
         try:
             opening = self.__dict__["_screen_opening"]
         except KeyError:

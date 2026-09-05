@@ -23,7 +23,10 @@ from squid_ui.target_types import (
 from squid_ui_discord.adapter import DISCORD_ITEM, DISCORD_PY_27_ADAPTER, ItemFactory
 
 V2_CAPABILITIES = DISCORD_PY_27_ADAPTER.combine_capabilities(V2_PROTOCOL_CAPABILITIES)
+"""`DISCORD_V2_DPY27.capabilities`: the V2 protocol plus the shipped adapter's behaviors and extensions."""
+
 CLASSIC_CAPABILITIES = CLASSIC_PROTOCOL_CAPABILITIES
+"""The classic protocol's capabilities alone; `DISCORD_V1_DPY27.capabilities` adds the adapter's on top."""
 
 
 @overload
@@ -63,7 +66,11 @@ def classic(
 def NativeItem[FallbackT](
     factory: ItemFactory, *, fallback: Renderable[FallbackT]
 ) -> Extension[ItemFactory, ComponentsV2Target | FallbackT]:
-    """Create a measured Discord item with a required portable fallback."""
+    """Embed one discord.py item behind a required portable fallback.
+
+    `factory` runs during planning so the item can be measured; a target without the
+    `DISCORD_ITEM` extension draws `fallback` instead.
+    """
     return cast(
         Extension[ItemFactory, ComponentsV2Target | FallbackT],
         Extension(kind=DISCORD_ITEM, version=1, payload=factory, fallback=cast(Node, fallback)),

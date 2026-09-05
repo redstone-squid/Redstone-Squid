@@ -17,9 +17,10 @@ class Allowed:
 
 @dataclass(frozen=True, slots=True)
 class Denied:
-    """An access policy refused the interaction, optionally with host-supplied wording."""
+    """An access policy refused the interaction."""
 
     reason: TextLike | None = None
+    """Sent to the user ephemerally; `None` falls back to the mount's `Chrome.not_yours`."""
 
 
 type AccessDecision = Allowed | Denied
@@ -28,7 +29,13 @@ type AccessDecision = Allowed | Denied
 class AccessPolicy(Protocol):
     """Asynchronously decide whether an interaction may enter a mount's dispatch funnel."""
 
-    async def check(self, interaction: discord.Interaction) -> AccessDecision: ...
+    async def check(self, interaction: discord.Interaction) -> AccessDecision:
+        """Decide for one interaction, before any handler runs.
+
+        Runs on every click, so it should not call Discord. A raise goes to the mount's error
+        hook and refuses the interaction.
+        """
+        ...
 
 
 @dataclass(frozen=True, slots=True)

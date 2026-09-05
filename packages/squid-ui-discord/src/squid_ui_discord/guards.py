@@ -3,8 +3,8 @@
 Roles are a Discord fact, so `requires_role` cannot live in the portable core the way
 `cooldown` or `until` can. It is `sl.guards.permission` with the lookup written once.
 
-Its relation to an access policy: `squid_ui_discord.Check` gates the whole mount, this gates one
-action on an otherwise reachable panel.
+Its relation to an access policy: `squid_ui_discord.access.Check` gates the whole mount, this
+gates one action on an otherwise reachable panel.
 """
 
 from collections.abc import Awaitable, Callable

@@ -32,6 +32,8 @@ drawn as the `discord.ui.Item` that factory returns.
 
 
 class _DiscordItemExtension:
+    """The `ExtensionAdapter` for `DISCORD_ITEM`; `prepare` raises `LayoutInvariantError` for a bad factory."""
+
     def prepare(self, payload: ItemFactory) -> PreparedExtension[discord.ui.Item[Any]]:
         # Still checked, though `ExtensionKind` now states it: a scene can be authored from
         # untyped code, and "not a factory" is a better report than "the factory failed".
@@ -50,6 +52,7 @@ class _DiscordItemExtension:
 
 
 DISCORD_PY_BEHAVIOR_CAPABILITIES = frozenset(AdapterCapability)
+"""Every `AdapterCapability`: discord.py 2.7 is verified for all of them."""
 
 DISCORD_PY_27_ADAPTER = AdapterProfile(
     DiscordPy27Adapter,
@@ -58,6 +61,7 @@ DISCORD_PY_27_ADAPTER = AdapterProfile(
     DISCORD_PY_BEHAVIOR_CAPABILITIES,
     {DISCORD_ITEM.name: _DiscordItemExtension()},
 )
+"""The shipped profile: discord.py 2.7.x with every behavior capability and the `DISCORD_ITEM` extension."""
 
 
 @cache
@@ -77,7 +81,11 @@ def discord_py_adapter_profile(
     capabilities: frozenset[AdapterCapability] = DISCORD_PY_BEHAVIOR_CAPABILITIES,
     extensions: Mapping[str, ExtensionAdapter[Any, Any]] | None = None,
 ) -> AdapterProfile[DiscordPyAdapter]:
-    """Declare an application-verified discord.py adapter profile."""
+    """Declare a discord.py adapter profile the application has verified itself.
+
+    For a discord.py version outside `DISCORD_PY_27_ADAPTER`'s range: `version_expression` is a
+    PEP 440 specifier, checked against the installed package at every adapter boundary.
+    """
     return AdapterProfile(
         DiscordPyAdapter,
         name,
@@ -90,7 +98,12 @@ def discord_py_adapter_profile(
 def require_discord_py_capability(
     profile: AdapterProfile[DiscordPyAdapter], capability: AdapterCapability, operation: str
 ) -> None:
-    """Verify the selected profile and installed discord.py at an adapter boundary."""
+    """Verify the selected profile and installed discord.py at an adapter boundary.
+
+    Raises `LayoutInvariantError` when `profile` lacks `capability`, when discord.py is not
+    installed or its version falls outside `profile.version_expression`, or when that
+    expression is not a valid specifier. `operation` names the caller's action in the message.
+    """
     if capability not in profile.capabilities:
         message = f"adapter profile {profile.name!r} cannot {operation}; it lacks {capability!r}"
         raise LayoutInvariantError(message)
@@ -111,7 +124,11 @@ def require_discord_py_capability(
 def require_discord_py_target(
     target: AnyTarget, capability: AdapterCapability, operation: str
 ) -> AdapterProfile[DiscordPyAdapter]:
-    """Extract and verify the discord.py profile bound to a target."""
+    """Extract and verify the discord.py profile bound to a target.
+
+    Raises `LayoutInvariantError` when the target has no adapter or one outside the
+    `DiscordPyAdapter` family, plus everything `require_discord_py_capability` raises.
+    """
     profile = target.adapter
     if profile is None or not issubclass(profile.family, DiscordPyAdapter):
         message = f"target {target.id!r} cannot {operation}; it is not bound to a discord.py adapter profile"
