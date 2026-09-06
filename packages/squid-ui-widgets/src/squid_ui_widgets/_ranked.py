@@ -9,7 +9,11 @@ from squid_ui_widgets._content import display_text
 
 @dataclass(frozen=True, slots=True)
 class RankedEntry:
-    """An already-ranked row for callers that do not need projection callbacks."""
+    """An already-ranked row for callers that do not need projection callbacks.
+
+    An empty `key` makes the row's identity `repr(entry)`, which is stable only while `label`
+    and `value` are.
+    """
 
     label: TextLike
     value: object
@@ -17,9 +21,17 @@ class RankedEntry:
 
 
 type Projector[EntryT] = str | Callable[[EntryT], object]
+"""How to read one field from an entry: an attribute name, a mapping key, or a callable."""
 
 
 class RankedRows[EntryT]:
+    """Label, value and identity resolution shared by `RankedList` and `SourceRankedList`.
+
+    Entries are `RankedEntry`s, `(label, value)` pairs, or anything the projectors can read.
+    `values` raises `TypeError` when projectors are given for a `RankedEntry` or missing for
+    a non-pair entry; `project` raises `ValueError` for a name the entry lacks.
+    """
+
     def __init__(
         self,
         label: Projector[EntryT] | None,
@@ -67,6 +79,7 @@ class RankedRows[EntryT]:
         return repr(entry)
 
     def lines(self, entries: tuple[RankedEntry | EntryT, ...], offset: int) -> tuple[str, ...]:
+        """One `"<rank>. **label** — value"` line per entry, ranks starting at `offset + 1`."""
         return tuple(
             f"{rank}. **{display_text(label)}** — {display_text(value)}"
             for rank, entry in enumerate(entries, offset + 1)

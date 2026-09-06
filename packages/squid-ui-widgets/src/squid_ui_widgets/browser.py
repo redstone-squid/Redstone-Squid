@@ -49,14 +49,24 @@ from squid_ui_widgets._window import (
 )
 
 type BrowserDetail[ItemT, RenderTargetT: DiscordTarget = DiscordTarget] = Callable[[ItemT], ContentLike[RenderTargetT]]
+"""Builds the detail view for one item; called once per open and kept until the reader goes back."""
 type BrowserOpenHandler[ItemT] = Callable[[ActionEvent, ItemT], Awaitable[None]]
+"""Called after each open, including Previous/Next moves inside the detail view."""
 type BrowserOverview[ItemT, RenderTargetT: DiscordTarget = DiscordTarget] = Callable[
     [LoadedWindow[ItemT]], ContentLike[RenderTargetT]
 ]
+"""Extra content shown above the listing, rebuilt from the loaded window on every render."""
 
 
 class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[RenderTargetT]):
-    """Browse a remote window, open one item, and act within its detail."""
+    """Page a `WindowSource`, open one item into its `detail`, and step between neighbours there.
+
+    The overview lists the current page with a single-select picker to open an item. The
+    detail view stays up across reloads while the item is still in the loaded page and drops
+    back to the overview when it is not. Nothing here is persisted.
+
+    Raises `ValueError` for an empty `key` or a `page_size` outside `1..25`.
+    """
 
     _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
     opened: ItemT | None = state(None, persist=False, opaque=True)
@@ -99,6 +109,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
 
     @resource
     async def window(self) -> LoadedWindow[ItemT]:
+        """The visible page; see `squid_ui_widgets._window.load_window` for what it raises."""
         return await load_window(
             self.loader,
             self._request,
@@ -171,9 +182,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         await self._adjacent(event, 1)
 
     def render(self) -> DocumentLike[RenderTargetT]:
-        # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
-        # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
-        # checker saw a path with no return on a shape that cannot occur.
+        # Arm shape as in `source_ranked.py`: the `previous` split stays inside each arm.
         match self.window.status:
             case Ready(value=loaded):
                 return self._render_loaded(loaded)

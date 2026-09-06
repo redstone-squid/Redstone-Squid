@@ -14,7 +14,11 @@ from squid_ui_widgets.drivers import ComponentDriver, MachineControls, Transitio
 
 @dataclass(frozen=True, slots=True, init=False)
 class Tab[RenderTargetT: RenderTarget = RenderTarget]:
-    """One tab and the content shown while it is selected."""
+    """One tab; text `content` becomes a paragraph, nodes and components pass through.
+
+    Raises `ValueError` for an empty `key` and `TypeError` for content that is not a node,
+    text, `Component`, or iterable of those.
+    """
 
     key: str
     label: TextLike
@@ -29,13 +33,20 @@ class Tab[RenderTargetT: RenderTarget = RenderTarget]:
 
 @dataclass(frozen=True, slots=True)
 class TabsState:
-    """Serializable selection state for :class:`Tabs`."""
+    """`selected` is a tab key; a value that matches no tab renders the first one."""
 
     selected: str
 
 
 class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
-    """A pure keyed tab machine with generic component and router shells."""
+    """A pure keyed tab machine.
+
+    Actions: `select:<key>` from buttons (up to five tabs) or `select` with the key in
+    `values` from a picker (beyond five). An unknown key leaves the state unchanged.
+
+    Raises `ValueError` for an empty `key`, no tabs, a duplicate tab key, or an `initial`
+    that is not a tab key.
+    """
 
     def __init__(
         self,
@@ -70,7 +81,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
         initial: TabsState | None = None,
         on_change: TransitionHandler[TabsState] | None = None,
     ) -> ComponentDriver[TabsState, RenderTargetT]:
-        """Build the in-memory shell for this tab set."""
+        """A `ComponentDriver` over this machine with no wiring beyond `on_change`."""
         if initial is None:
             return ComponentDriver(self, on_change=on_change)
         return ComponentDriver(self, initial=initial, on_change=on_change)

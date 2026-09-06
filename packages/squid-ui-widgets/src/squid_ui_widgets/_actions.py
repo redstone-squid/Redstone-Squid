@@ -6,7 +6,10 @@ from typing import Self
 
 
 class MachineKeySegment(str):
-    """A non-empty machine key that cannot consume another colon-delimited action field."""
+    """A machine key safe to embed in a colon-delimited action name.
+
+    Raises `ValueError` when `value` is empty or contains `:`, `TypeError` when it is not a `str`.
+    """
 
     def __new__(cls, value: str, *, name: str = "MachineKeySegment") -> Self:
         if not isinstance(value, str):
@@ -29,12 +32,13 @@ class PageDirection(StrEnum):
 
     @property
     def delta(self) -> int:
+        """`-1` for `PREVIOUS`, `+1` for `NEXT`."""
         return -1 if self is PageDirection.PREVIOUS else 1
 
 
 @dataclass(frozen=True, slots=True)
 class PageAction:
-    """One strictly parsed ``page:<key>:<direction>`` action."""
+    """One ``page:<key>:<direction>`` action; `parse` answers `None` for any other shape."""
 
     key: MachineKeySegment
     direction: PageDirection
@@ -55,12 +59,12 @@ class PageAction:
 
 
 def keyed_action(verb: str, key: MachineKeySegment) -> str:
-    """Encode an action with one validated key field."""
+    """Encode ``<verb>:<key>``; raises `ValueError` when `verb` is empty or contains `:`."""
     return f"{MachineKeySegment(verb, name='action verb')}:{key}"
 
 
 def match_keyed_action(action: str, verb: str) -> MachineKeySegment | None:
-    """Return one exact key field, rejecting trailing or embedded action fields."""
+    """The key of an exact ``<verb>:<key>`` action, or `None` for any extra, missing or empty field."""
     expected = MachineKeySegment(verb, name="action verb")
     match action.split(":"):
         case [name, raw_key] if name == expected:
@@ -74,7 +78,10 @@ def match_keyed_action(action: str, verb: str) -> MachineKeySegment | None:
 
 @dataclass(frozen=True, slots=True)
 class NestedAction:
-    """An action namespaced under one validated machine key."""
+    """A child-machine action carried as ``section:<key>:<action>``; the nested action keeps its own colons.
+
+    Raises `ValueError` when `action` is empty; `parse` answers `None` for any other shape.
+    """
 
     key: MachineKeySegment
     action: str

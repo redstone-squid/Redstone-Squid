@@ -23,7 +23,12 @@ from squid_ui_widgets.drivers import ComponentDriver, MachineControls, Transitio
 
 @dataclass(frozen=True, slots=True)
 class MultiChoiceGroup:
-    """One labelled option group and the groups it excludes."""
+    """One labelled option group and the groups it excludes.
+
+    Exclusivity is symmetric once inside a `MultiChoice`: naming a rival here excludes this
+    group from the rival too. Raises `ValueError` for no choices, a duplicate choice key, or
+    a key containing `:`.
+    """
 
     key: MachineKeySegment
     label: TextLike
@@ -59,7 +64,12 @@ class MultiChoiceGroup:
 
 @dataclass(frozen=True, slots=True)
 class MultiChoiceState:
-    """Staged and committed selections plus a zero-based page per group."""
+    """Staged and committed selections plus a zero-based page per group.
+
+    `staged` changes on every pick; `committed` catches up on `apply` (`EXPLICIT`) or after
+    any pick that leaves `errors` empty (`IMMEDIATE`). Both are in declaration order. A group
+    absent from `pages` is on page 0.
+    """
 
     staged: tuple[str, ...] = ()
     committed: tuple[str, ...] = ()
@@ -67,10 +77,21 @@ class MultiChoiceState:
 
 
 type MultiChoiceCommitHandler = Callable[[TransitionEvent[MultiChoiceState], tuple[str, ...]], Awaitable[None]]
+"""Called with the newly committed keys whenever `committed` changes."""
 
 
 class MultiChoice:
-    """A pure cross-page picker with one explicit Apply boundary."""
+    """A pure picker over several groups of options, each paged, with one commit boundary.
+
+    Actions: `select:<group>` with the page's picks in `values`, `page:<group>:previous|next`,
+    `apply`, and `modal`, a single form over every option that renders as a fallback when
+    there are at most 25 options in total. Picking in a group drops staged picks from its
+    exclusive rivals.
+
+    Raises `ValueError` for no groups, a duplicate group or choice key, an `exclusive_with`
+    naming an unknown group, a `committed` key that is not an option, `minimum < 0`,
+    `maximum < minimum`, or a `window_size` outside `1..25`.
+    """
 
     def __init__(
         self,
@@ -137,7 +158,7 @@ class MultiChoice:
         initial: MultiChoiceState | None = None,
         on_commit: MultiChoiceCommitHandler | None = None,
     ) -> ComponentDriver[MultiChoiceState]:
-        """Build an in-memory panel shell and dispatch each new commit once."""
+        """Build an in-memory shell; `on_commit` fires only when a transition changes `committed`."""
 
         async def changed(event: TransitionEvent[MultiChoiceState]) -> None:
             if on_commit is not None and event.state.committed != event.previous.committed:
@@ -176,7 +197,7 @@ class MultiChoice:
         return frozenset((*direct, *inverse))
 
     def errors(self, state: MultiChoiceState) -> tuple[str, ...]:
-        """Return every commit-blocking violation for the staged set."""
+        """Commit-blocking violations of the staged set: bounds, unknown keys, and at most one exclusivity clash."""
         errors: list[str] = []
         count = len(state.staged)
         if count < self.minimum:
@@ -255,7 +276,7 @@ class MultiChoice:
         return f"{len(selected)} selected" + (f": {', '.join(labels)}" if labels else "")
 
     def form_for(self, state: MultiChoiceState, action: str) -> FormSpec | None:
-        """Resolve the routed modal action to its small-panel form schema."""
+        """The all-options form for `modal`, prefilled from `staged`; `None` for other actions or above 25 options."""
         if action != "modal" or len(self._choice_order) > 25:
             return None
         return FormSpec(

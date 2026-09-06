@@ -44,18 +44,25 @@ class TransitionRoute[StateT]:
 
 @dataclass(frozen=True, slots=True)
 class TransitionEvent[StateT]:
-    """A shell interaction after the machine transition has been applied."""
+    """A shell interaction after the machine transition has been applied.
+
+    `state` may equal `previous` when the machine ignored the action. `source` is the
+    frontend event, still open for `acknowledge`/`finish`.
+    """
 
     source: ActionEvent
     action: str
     previous: StateT
     state: StateT
     values: tuple[str, ...] = ()
+    """Selected keys when the interaction came from a picker."""
     submitted: Mapping[str, object] | None = None
+    """Parsed field values when the interaction came from a form."""
 
 
 type TransitionHandler[StateT] = Callable[[TransitionEvent[StateT]], Awaitable[None]]
 type RouteEncoder[StateT] = Callable[[TransitionRoute[StateT]], str]
+"""Host-owned: turns a route into the custom id it can decode back into `TransitionRoute.state`."""
 
 
 class _MissingInitialState:
@@ -66,14 +73,20 @@ _MISSING_INITIAL_STATE = _MissingInitialState()
 
 
 class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol):
-    """A pure state machine that describes a tree through injected controls."""
+    """A pure state machine that describes a tree through injected controls.
+
+    `StateT` must be immutable and equality-comparable: the shells compare states to detect
+    change, and `RouteDriver` encodes them into custom ids. Neither shell calls anything else.
+    """
 
     @property
-    def initial_state(self) -> StateT: ...
+    def initial_state(self) -> StateT:
+        """The state a shell starts from when the caller supplies none."""
+        ...
 
-    def render(
-        self, state: StateT, controls: MachineControls[StateT, RenderTargetT]
-    ) -> DocumentLike[RenderTargetT]: ...
+    def render(self, state: StateT, controls: MachineControls[StateT, RenderTargetT]) -> DocumentLike[RenderTargetT]:
+        """Describe `state`; every interactive node comes from `controls`, never from the factories directly."""
+        ...
 
     def transition(
         self,
@@ -82,7 +95,13 @@ class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol)
         *,
         values: tuple[str, ...] = (),
         submitted: Mapping[str, object] | None = None,
-    ) -> StateT: ...
+    ) -> StateT:
+        """The state after `action`; return `state` itself for an unknown or currently invalid action.
+
+        `values` carries a picker's selection, `submitted` a form's parsed fields. `RouteDriver`
+        calls this eagerly for every button while rendering, so it must be side-effect free.
+        """
+        ...
 
 
 @runtime_checkable
@@ -95,18 +114,32 @@ class FormPresentingMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](
     on `StateMachine`. `Editor` resolves nested sections through it.
     """
 
-    def form_for(self, state: StateT, action: str) -> FormSpec | None: ...
+    def form_for(self, state: StateT, action: str) -> FormSpec | None:
+        """The form a route host presents for `action` in `state`; `None` when that action opens no form."""
+        ...
 
 
 class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol):
-    """Control and content construction injected into a pure machine render."""
+    """Control and content construction injected into a pure machine render.
+
+    `action_name` on every member is the machine action the interaction dispatches; `key` is
+    the semantic key the frontend addresses the node by. Which concrete node comes back
+    depends on the shell: closure-backed in `ComponentDriver`, route-backed in `RouteDriver`.
+    """
 
     @property
-    def chrome(self) -> Chrome: ...
+    def chrome(self) -> Chrome:
+        """Wording for the shell's own controls, from the mount's context or `DEFAULT_CHROME`."""
+        ...
 
     def content(
         self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
-    ) -> tuple[LayoutNode[RenderTargetT], ...]: ...
+    ) -> tuple[LayoutNode[RenderTargetT], ...]:
+        """Embed a normalized content slot, keying each child `Component` as `<prefix>-<index>`.
+
+        Raises `TypeError` in the route shell when `content` holds a `Component`.
+        """
+        ...
 
     def action_control(
         self,
@@ -117,7 +150,9 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget](Protoc
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
-    ) -> ActionControl | RoutedActionControl: ...
+    ) -> ActionControl | RoutedActionControl:
+        """A button dispatching `action_name` with no payload."""
+        ...
 
     def choices(
         self,
@@ -130,7 +165,13 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget](Protoc
         maximum: int,
         placeholder: TextLike | None = None,
         available: bool = True,
-    ) -> Choices | RoutedChoices: ...
+    ) -> Choices | RoutedChoices:
+        """A picker dispatching `action_name` with the chosen keys as `values`.
+
+        `selected` marks the current selection in the component shell only; the route shell
+        cannot preselect. `placeholder` is honoured by the route shell only.
+        """
+        ...
 
     def form(
         self,
@@ -141,11 +182,21 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget](Protoc
         label: TextLike,
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
-    ) -> FormTrigger | RoutedActionControl: ...
+    ) -> FormTrigger | RoutedActionControl:
+        """A trigger opening `spec` and dispatching `action_name` with the parsed fields as `submitted`.
+
+        The route shell ignores `spec`: the host resolves it later through `FormPresentingMachine.form_for`.
+        """
+        ...
 
 
 class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Component[RenderTargetT]):
-    """Store machine state in ``sl.state`` and inject closure-backed controls."""
+    """Host a machine as a `Component`, keeping its state in memory and dispatching through closures.
+
+    On each interaction: transition, then `on_change`, then the `handlers` entry for that
+    action, then `event.finish()` if the action is in `finish_actions`. `machine_state` is
+    never persisted; `RouteDriver` is the shell for state that must survive a restart.
+    """
 
     # RouteDriver is the restart boundary; a generic state dataclass has no honest JSON
     # decoder for durable component restoration.
@@ -290,13 +341,15 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
     """Inject route-backed controls into a stateless machine render.
 
     A host route decodes ``TransitionRoute.state``, calls :meth:`transition` when the
-    interaction carries input, and replaces the whole message with a fresh render.
+    interaction carries input, and replaces the whole message with a fresh render. Content
+    slots cannot hold `Component`s in this shell: `render` raises `TypeError` for one.
     """
 
     route: RouteEncoder[StateT]
     chrome: Chrome = DEFAULT_CHROME
 
     def render(self, machine: StateMachine[StateT, RenderTargetT], state: StateT) -> DocumentLike[RenderTargetT]:
+        """Render `state`, computing and encoding every button's next state now."""
         return machine.render(state, _RoutedControls(machine, state, self.route, self.chrome))
 
     def transition(

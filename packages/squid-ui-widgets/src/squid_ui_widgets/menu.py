@@ -21,7 +21,13 @@ _MISSING = _Missing()
 
 @dataclass(frozen=True, slots=True, init=False)
 class MenuEntry[RenderTargetT: RenderTarget = RenderTarget]:
-    """One menu destination, optionally containing a nested submenu."""
+    """One menu destination, optionally containing a nested submenu.
+
+    Two spellings: `MenuEntry(key, label, content)`, or `MenuEntry(label, content)` with the
+    key slugged from the label (override with `key=`). Raises `TypeError` for `key=` in the
+    three-argument form, a non-text label, or a non-`MenuEntry` child; `ValueError` for an
+    empty key.
+    """
 
     key: str
     label: TextLike
@@ -64,13 +70,21 @@ class MenuEntry[RenderTargetT: RenderTarget = RenderTarget]:
 
 @dataclass(frozen=True, slots=True)
 class MenuState:
-    """Serializable drill-down path for :class:`Menu`."""
+    """Entry keys from the root to the open entry; empty at the top level."""
 
     path: tuple[str, ...] = ()
 
 
 class Menu[RenderTargetT: RenderTarget = RenderTarget]:
-    """A pure keyed drill-down menu."""
+    """A pure keyed drill-down menu.
+
+    Actions: `open:<key>` (buttons, up to five entries) or `open` with the key in `values`
+    (a picker beyond five), `back`, `home`, and `close`, which leaves the state alone and is
+    what `build_component` finishes the mount on.
+
+    Raises `ValueError` for duplicate keys at any level or an `initial` path that names an
+    unknown entry.
+    """
 
     def __init__(
         self,

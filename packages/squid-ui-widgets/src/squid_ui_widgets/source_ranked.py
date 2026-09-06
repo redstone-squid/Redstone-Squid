@@ -41,10 +41,19 @@ from squid_ui_widgets._window import (
 type SourceContentHook[RenderTargetT: DiscordTarget = DiscordTarget] = (
     ContentLike[RenderTargetT] | Callable[[int | None], ContentLike[RenderTargetT]]
 )
+"""Content, or a callable given the source's total: `None` when its `CountPrecision` is `NONE`."""
 
 
 class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Component[RenderTargetT]):
-    """Render a ranking whose visible async resource is backed by a window source."""
+    """Page a ranking straight from a `WindowSource`, one loaded page at a time.
+
+    Navigation comes from the mount's `NAV_FACTORY_CONTEXT` and includes page seeking only
+    when the source is jumpable with an exact count. Entries and projectors follow
+    `RankedList`; `identity` is required because the loader anchors on it. Nothing is
+    persisted.
+
+    Raises `ValueError` for an empty `key` or `page_size` below 1.
+    """
 
     _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
 
@@ -81,6 +90,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
 
     @resource
     async def loaded(self) -> LoadedWindow[RankedEntry | EntryT]:
+        """The visible page; see `squid_ui_widgets._window.load_window` for what it raises."""
         return await load_window(
             self.loader,
             self._request,

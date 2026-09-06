@@ -1,4 +1,4 @@
-"""Reusable, frontend-neutral state-machine machines."""
+"""Frontend-neutral widgets: pure state machines plus the component and route shells that host them."""
 
 from squid_ui_widgets import guards
 from squid_ui_widgets._actions import MachineKeySegment, PageDirection

@@ -11,7 +11,7 @@ from squid_ui.sources import Position
 
 @dataclass(frozen=True, slots=True)
 class PagePosition:
-    """A zero-based page index for a fully materialized collection."""
+    """A zero-based page index for a fully materialized collection; raises `ValueError` when negative."""
 
     index: int = 0
 
@@ -33,7 +33,7 @@ def window[T](
     chrome: Chrome,
     identity: Callable[[T], str],
 ) -> tuple[tuple[T, ...], PagePosition, int]:
-    """Slice at an explicit position using the materialized cursor policy."""
+    """`(visible slice, clamped position, page count)`; a position past the end lands on the last page."""
     pages = max(1, (len(values) + per_page - 1) // per_page)
     request = MaterializedCursorRequest(key, pages, content_fingerprint([identity(value) for value in values]))
     coordinator = CursorCoordinator(PresentationState(), chrome, overrides={key: Position(offset=position.index)})

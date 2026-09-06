@@ -37,12 +37,12 @@ class WizardReview[RenderTargetT: RenderTarget = RenderTarget]:
 
 @dataclass(frozen=True, slots=True)
 class WizardState:
-    """Current step plus every retained answer, including hidden branch orphans.
+    """Current step plus every retained answer, including those on branches no longer live.
 
-    Where the reader *is* and where the reader *returns to* are two facts, so they are two
-    fields: `current` holds `REVIEW_STEP` while the review screen is up, and `reviewing`
-    says review is home -- it stays set while a jumped edit is in progress, which is what
-    makes that edit come back rather than resuming the march.
+    `current` is `REVIEW_STEP` while the review screen is up. `reviewing` stays set while an
+    edit reached from review is in progress, so that edit returns to review instead of
+    resuming the step order. `complete` is set by `finish`, or by the last step's submit
+    when there is no review screen.
     """
 
     current: str
@@ -53,7 +53,11 @@ class WizardState:
 
 @dataclass(frozen=True, slots=True, init=False)
 class WizardStep[RenderTargetT: RenderTarget = RenderTarget]:
-    """One keyed form or plain-content step."""
+    """One step: a `Form`/`FormSpec` submitted as `submit:<key>`, or content advanced with Next.
+
+    Raises `ValueError` for an empty `key` and `TypeError` for content that is not a node,
+    text, `Component`, or iterable of those.
+    """
 
     key: str
     label: TextLike
@@ -78,14 +82,27 @@ class WizardStep[RenderTargetT: RenderTarget = RenderTarget]:
 
 
 type WizardAnswers = Mapping[str, Mapping[str, object]]
+"""Step key to that step's submitted field values."""
 type StepSource[RenderTargetT: RenderTarget = RenderTarget] = (
     Iterable[WizardStep[RenderTargetT]] | Callable[[WizardAnswers], Iterable[WizardStep[RenderTargetT]]]
 )
+"""A fixed step list, or a callable given the live answers and re-run after every submit."""
 type WizardFinishHandler = Callable[[TransitionEvent[WizardState], WizardAnswers], Awaitable[None]]
+"""Called once, with the live answers, on the transition that first sets `complete`."""
 
 
 class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
-    """A pure branching wizard whose step list is recomputed after every answer."""
+    """A pure branching wizard whose step list is recomputed after every answer.
+
+    Actions: `submit:<key>` with the form's fields, `back`, `next`, `finish`, and with a
+    review screen `review` and `goto:<key>`. Answers to steps that leave the branch are kept
+    and reappear if the branch returns. Without a review screen the last step's submit
+    completes; with one, `finish` completes only once every live form step is answered.
+
+    Raises `ValueError` for an empty `key`; and, at construction and on every recompute,
+    `ValueError` for an empty branch, a duplicate step key, or a step keyed `REVIEW_STEP`,
+    and `TypeError` for a non-`WizardStep` in the list.
+    """
 
     def __init__(
         self,
@@ -115,7 +132,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         initial: WizardState | None = None,
         on_finish: WizardFinishHandler | None = None,
     ) -> ComponentDriver[WizardState, RenderTargetT]:
-        """Build an in-memory wizard shell and dispatch Finish once."""
+        """A `ComponentDriver` whose `on_finish` fires once, when `complete` first becomes set."""
 
         async def changed(event: TransitionEvent[WizardState]) -> None:
             if on_finish is not None and event.state.complete and not event.previous.complete:
@@ -148,11 +165,11 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         return resolved
 
     def live_steps(self, state: WizardState) -> tuple[WizardStep[RenderTargetT], ...]:
-        """Return the branch visible for all answers currently retained."""
+        """The branch computed from every retained answer; see `Wizard` for what it raises."""
         return self._steps(state.answers)
 
     def live_answers(self, state: WizardState) -> WizardAnswers:
-        """Return only answers belonging to the current computed branch."""
+        """Answers for steps on the live branch only; those retained from abandoned branches are omitted."""
         retained = self._answer_map(state.answers)
         return MappingProxyType(
             {step.key: retained[step.key] for step in self.live_steps(state) if step.key in retained}
@@ -240,7 +257,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         return step.form if attempted is None else step.form.with_prefill(attempted)
 
     def form_for(self, state: WizardState, action: str) -> FormSpec | None:
-        """Resolve a routed form action to the schema its handler should present."""
+        """The prefilled form for `submit:<key>` when `key` is a live form step; otherwise `None`."""
         if not action.startswith("submit:"):
             return None
         key = action.removeprefix("submit:")

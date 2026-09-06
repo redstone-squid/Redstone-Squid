@@ -1,15 +1,8 @@
 """The one guard whose refusal is a rendered question.
 
-`squid_ui.guards` is the admission vocabulary and stays portable: it decides whether a
-press is allowed and has no opinion about what a denial looks like. `confirm` is the single
-member that does have one -- its challenge is a `Decision` shell -- so it lives here, beside
-the shells, rather than making the vocabulary import its own rendering.
-
-That inversion is why this module exists. The engine used to reach forward into `machines`
-through a function-local import, with a comment explaining that the vocabulary could not
-depend on the rendering at import time. Moving the guard up removes the edge instead of
-working around it, and `all_of`/`any_of` compose with it exactly as before because they accept
-any `Guard`.
+`squid_ui.guards` decides whether a press is allowed and never renders. `confirm` answers
+with a `Decision` shell, so it lives here beside the shells: `squid_ui` does not import this
+package. It composes with `all_of`/`any_of` like any other `Guard`.
 """
 
 from dataclasses import dataclass
@@ -77,13 +70,13 @@ def confirm(
 ) -> Guard:
     """Admit once the actor reaffirms this press, and ask them when they have not.
 
-    The two-press "are you sure" state machine, declared where the control is rather than
-    hand-rolled in component state: no armed flag, no early return, no relabelling. The
-    first press opens a private confirmation and executes nothing; approving it re-runs the
-    whole funnel, so access lost or a cooldown started while the dialog was open still
-    refuse the press the actor confirmed.
+    The first press opens a private Confirm/Cancel dialog and executes nothing. Approving
+    counts one approval for that actor and re-runs the whole guard chain, so access lost or a
+    cooldown started while the dialog was open still refuses the press. `deadline` is the
+    seconds the dialog stays answerable (`None`: until the mount ends); `on_decline` is
+    private wording shown on Cancel.
 
     Put it last in an `all_of`: a chain should not ask a question it is about to deny, and
-    an earlier guard's record is discarded by the pass that ends in the question.
+    an earlier guard's ledger writes are discarded by the pass that ends in the question.
     """
     return _Confirm(prompt, danger, deadline, on_decline)

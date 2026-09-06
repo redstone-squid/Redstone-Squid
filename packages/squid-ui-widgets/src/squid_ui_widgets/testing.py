@@ -1,18 +1,12 @@
 """Drive a machine's two shells with no frontend attached.
 
-A machine owns its state and the tree it describes; a frontend only carries presses back to
-it. `mounted` supplies the component shell and drives it by the same semantic key a Discord
-custom id would carry, and `routed` renders the stateless shell and reports every route it
-asked for. Between them, everything a widget itself owns is reachable without a transport --
-which is what lets these tests live beside the machines rather than beside the adapter.
+`mounted` and `driving` wrap the component shell in a `MachineHarness` driven by semantic key,
+the same key a Discord custom id carries; `routed` renders the stateless shell and records every
+route it asked for. Whether a tree fits a target's limits, or a key survives planning into a
+dispatchable id, is a frontend fact asserted in `squid_ui_discord`'s suite, not here.
 
-What is deliberately out of reach: whether the rendered tree fits a target's limits, and
-whether a key survives planning to become a dispatchable id. Both are facts about a frontend,
-and `squid_ui_discord`'s suite is where they are asserted.
-
-This module is public and versioned like the rest of the package. It is imported by tests
-rather than by a running application, so it is reachable as `squid_ui_widgets.testing.X` and
-promotes no names to `squid_ui_widgets` itself.
+Public and versioned with the package, but not re-exported from `squid_ui_widgets`: import
+`squid_ui_widgets.testing` directly.
 """
 
 from collections.abc import Collection, Mapping
@@ -64,7 +58,7 @@ class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget]:
         return engine.keys(self.nodes)
 
     def control(self, key: str) -> ActionControl:
-        """The single control keyed `key` in the current render."""
+        """The single control keyed `key` in the current render; a missing or duplicated key fails the test."""
         return engine.control(self.nodes, key)
 
     async def press(self, key: str, *, actor: str = "1") -> None:
@@ -81,10 +75,12 @@ class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget]:
 
     @property
     def notices(self) -> tuple[str, ...]:
+        """Every notice text the presses so far produced, in order, visibility dropped."""
         return tuple(text for text, _visibility in self.responder.notices)
 
     @property
     def finished(self) -> bool:
+        """Whether any interaction so far called `finish()` on its event."""
         return self.responder.finished
 
 
@@ -182,7 +178,7 @@ class RoutedRender[StateT, RenderTargetT: RenderTarget = RenderTarget]:
 
 @dataclass
 class _RouteRecorder[StateT]:
-    """The encoder every routed test used to hand-roll as a list plus a closure."""
+    """A `RouteEncoder` that records each route and returns `route:<index>:<action>`."""
 
     routes: list[TransitionRoute[StateT]] = field(default_factory=list)
 

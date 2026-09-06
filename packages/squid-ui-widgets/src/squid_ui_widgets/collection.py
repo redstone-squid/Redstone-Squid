@@ -16,12 +16,21 @@ from squid_ui_widgets.drivers import ComponentDriver, MachineControls, Transitio
 
 @dataclass(frozen=True, slots=True)
 class CollectionEntry:
+    """One entry's form values as ordered pairs, so the state stays hashable and route-encodable."""
+
     key: str
     values: tuple[tuple[str, object], ...]
 
 
 @dataclass(frozen=True, slots=True)
 class CollectionState:
+    """Ordered entries, the key the picker holds, and the zero-based page shown.
+
+    `selected` is `None` until the picker chooses an entry; `add` selects the new entry and
+    `remove` clears it. `page` follows a reordered entry and is clamped when a removal
+    empties the last page.
+    """
+
     entries: tuple[CollectionEntry, ...] = ()
     selected: str | None = None
     page: int = 0
@@ -30,6 +39,7 @@ class CollectionState:
 type CollectionChangeHandler = Callable[
     [TransitionEvent[CollectionState], tuple[Mapping[str, object], ...]], Awaitable[None]
 ]
+"""Called with the projected entries after a transition that changed them; selection and paging do not fire it."""
 
 
 class _Action(StrEnum):
@@ -44,7 +54,16 @@ class _Action(StrEnum):
 
 
 class CollectionEditor:
-    """A pure add/edit/remove/reorder machine whose payloads are form values."""
+    """A pure add/edit/remove/reorder machine whose payloads are form values.
+
+    Actions: `select`, `add` and `edit` (form submissions), `remove`, `up`, `down`,
+    `page:previous`, `page:next`. Without `identity`, keys are minted as the lowest unused
+    ordinal; with it, an entry whose key is empty or already present is dropped silently.
+    Without `edit`, editing reopens `create` prefilled.
+
+    Raises `ValueError` for an empty `key`, bounds that break `0 <= minimum <= maximum`, or a
+    `window_size` outside `1..25`.
+    """
 
     def __init__(
         self,
@@ -89,6 +108,7 @@ class CollectionEditor:
         return MappingProxyType(dict(entry.values))
 
     def initial_from(self, entries: Iterable[Mapping[str, object]]) -> CollectionState:
+        """State holding `entries`; raises `ValueError` when `identity` yields an empty or duplicate key."""
         collected: list[CollectionEntry] = []
         keys: set[str] = set()
         for index, values in enumerate(entries, start=1):
@@ -121,6 +141,7 @@ class CollectionEditor:
         return tuple(self._mapping(entry) for entry in state.entries)
 
     def errors(self, state: CollectionState) -> tuple[str, ...]:
+        """Entry-count bound violations, rendered as danger status lines."""
         errors: list[str] = []
         if len(state.entries) < self.minimum:
             errors.append(f"Add at least {self.minimum} entries.")
@@ -147,6 +168,7 @@ class CollectionEditor:
         values: tuple[str, ...] = (),
         submitted: Mapping[str, object] | None = None,
     ) -> CollectionState:
+        """`add` at `maximum`, `remove` at `minimum`, and moves off either end return `state` unchanged."""
         if action == _Action.SELECT:
             selected = values[0] if len(values) == 1 and values[0] in {entry.key for entry in state.entries} else None
             return CollectionState(state.entries, selected, state.page)
@@ -183,6 +205,7 @@ class CollectionEditor:
         return state
 
     def form_for(self, state: CollectionState, action: str) -> FormSpec | None:
+        """`None` for `add` at `maximum`, `edit` with nothing selected, or any other action."""
         if action == _Action.ADD:
             if self.maximum is not None and len(state.entries) >= self.maximum:
                 return None

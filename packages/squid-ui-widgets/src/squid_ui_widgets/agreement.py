@@ -18,7 +18,7 @@ from squid_ui_widgets._content import ContentLike, normalize_content, render_con
 
 @dataclass(frozen=True, slots=True)
 class AgreementParticipant:
-    """One actor eligible to approve an agreement."""
+    """One actor allowed to approve; `actor_id` is matched against `PressEvent.actor.id` and must be non-empty."""
 
     actor_id: str
     display: TextLike
@@ -30,10 +30,19 @@ class AgreementParticipant:
 
 
 type AgreementResolveHandler = Callable[[PressEvent, tuple[str, ...]], Awaitable[None]]
+"""Called once, with the resolving press and the approving actor ids in participant order."""
 
 
 class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTargetT]):
-    """Collect actor-keyed approvals to a declared threshold."""
+    """Collect one approval per participant until `require` of them agree, then freeze.
+
+    Presses from non-participants, repeat approvals and presses after resolution are
+    acknowledged and ignored. Actions need a `PressEvent` (they read the actor), so a
+    frontend that dispatches plain `ActionEvent`s gets a `TypeError`. State is not persisted.
+
+    Raises `ValueError` for no participants, a duplicate `actor_id`, or a `require` outside
+    `1..len(participants)`.
+    """
 
     approved: tuple[str, ...] = state((), persist=False)
     resolved: bool = state(default=False, persist=False)

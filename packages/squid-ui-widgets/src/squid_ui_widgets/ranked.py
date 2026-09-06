@@ -17,7 +17,7 @@ from squid_ui_widgets.drivers import ComponentDriver, MachineControls
 
 @dataclass(frozen=True, slots=True)
 class RankedListState:
-    """Serializable page position for :class:`RankedList`."""
+    """The page shown; `previous`/`next` clamp it to the page count, and it is ignored without `page_size`."""
 
     page: PagePosition = FIRST_PAGE
 
@@ -25,10 +25,18 @@ class RankedListState:
 type ContentHook[RenderTargetT: DiscordTarget = DiscordTarget] = (
     ContentLike[RenderTargetT] | Callable[[int], ContentLike[RenderTargetT]]
 )
+"""Content, or a callable given the number of entries displayed after `top_n`."""
 
 
 class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
-    """Render a fully materialized ranking through either machine shell."""
+    """Render a fully materialized ranking through either machine shell.
+
+    Entries are `RankedEntry`s, `(label, value)` pairs, or anything `label`/`value` can
+    project (see `squid_ui_widgets._ranked.RankedRows` for what a mismatch raises at render).
+    `top_n` truncates before paging; `page_size=None` shows everything on one page.
+
+    Raises `ValueError` for an empty `key`, or `page_size` or `top_n` below 1.
+    """
 
     def __init__(
         self,

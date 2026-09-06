@@ -24,7 +24,11 @@ content slot, its widget, and the component shell V2-only instead of disappearin
 def normalize_content[RenderTargetT: RenderTarget](
     value: ContentLike[RenderTargetT], *, name: str
 ) -> tuple[ContentItem[RenderTargetT], ...]:
-    """Normalize one machine content slot into renderable nodes and child components."""
+    """Text becomes a paragraph; nodes and components pass through; an iterable is flattened one level.
+
+    Raises `TypeError` for a mapping (almost always an unpacked-by-mistake kwargs dict) or any
+    other value that is not a node, text, `Component`, or iterable of those.
+    """
     if isinstance(value, Component):
         return (value,)
     if isinstance(value, str | ResolvedText | Message):
@@ -65,7 +69,7 @@ def render_content[RenderTargetT: RenderTarget](
 
 
 def require_key(value: str, *, name: str) -> str:
-    """Validate a key used to identify a machine or one of its destinations."""
+    """Return `value`; raises `ValueError` naming `name` when it is empty."""
     if not value:
         message = f"{name} must not be empty"
         raise ValueError(message)
@@ -73,7 +77,7 @@ def require_key(value: str, *, name: str) -> str:
 
 
 def slug(value: TextLike) -> str:
-    """Derive a readable fallback key for the short ``MenuEntry(label, content)`` form."""
+    """Casefolded text with non-alphanumeric runs collapsed to `-`; `"entry"` when nothing survives."""
     if isinstance(value, str):
         source = value
     elif isinstance(value, ResolvedText):
@@ -85,7 +89,7 @@ def slug(value: TextLike) -> str:
 
 
 def display_text(value: object) -> str:
-    """Turn a projected ranking value into display text without exposing dataclass reprs."""
+    """Text values unwrap to their content (a `Message` to its raw template); anything else is `str()`."""
     if isinstance(value, str):
         return value
     if isinstance(value, ResolvedText):

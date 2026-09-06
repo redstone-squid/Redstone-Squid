@@ -20,6 +20,7 @@ class WindowRequest:
 
     operation: Literal["refresh", "previous", "next", "seek"] = "refresh"
     position: Position | None = None
+    """Target of a `seek`; the other operations ignore it."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,12 +55,15 @@ async def load_window[ItemT](
 ) -> LoadedWindow[ItemT]:
     """Move one window the way `request` asks, anchored on the page currently shown.
 
-    Stepping needs a page to step from, so a `previous` or `next` without one falls back to
-    loading at the anchor rather than guessing a position.
+    A `previous` or `next` with no `previous` page reloads at the anchor rather than guessing
+    a position. `subject` names the widget in the error message.
 
     Raises:
-        LayoutInvariantError: A newer request replaced this one before it finished. The
-            resource will run again for the newer one, so there is no window to return.
+        LayoutInvariantError: The loader returned no window: a newer request superseded this
+            one (the resource runs again for it), or a `previous`/`next` step had no page on
+            that side.
+        ValueError: The fetched window contradicts the source's `capabilities`; see
+            `squid_ui.sources.WindowLoader.load`.
     """
     match request:
         case WindowRequest("previous") if previous is not None:

@@ -1,4 +1,4 @@
-"""Pure allocation for host-owned roster ledgers."""
+"""Re-exports `squid_ui.rosters`: `place_roster` and the value types it takes and returns."""
 
 from squid_ui.rosters import (
     RosterEntry,

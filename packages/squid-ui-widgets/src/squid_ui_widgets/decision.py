@@ -14,6 +14,8 @@ from squid_ui_widgets.drivers import ComponentDriver, MachineControls, Transitio
 
 @dataclass(frozen=True, slots=True)
 class DecisionOption:
+    """One button, dispatched as `choose:<key>`; `tone` also colours the decided status line."""
+
     key: str
     label: TextLike
     tone: Tone = Tone.NEUTRAL
@@ -22,14 +24,21 @@ class DecisionOption:
 
 @dataclass(frozen=True, slots=True)
 class DecisionState:
+    """`decided` is `None` until the first valid `choose:<key>` and never changes afterwards."""
+
     decided: str | None = None
 
 
 type DecisionHandler = Callable[[TransitionEvent[DecisionState], str], Awaitable[None]]
+"""Called once with the chosen option key."""
 
 
 class Decision[RenderTargetT: RenderTarget = RenderTarget]:
-    """A pending prompt that becomes immutable after one valid choice."""
+    """A pending prompt that becomes immutable after one valid choice.
+
+    Every option is disabled once decided; later `choose:` actions and unknown keys return
+    the state unchanged. Raises `ValueError` for no options or an empty or duplicate key.
+    """
 
     def __init__(
         self,
@@ -54,6 +63,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
         return DecisionState()
 
     def finish_actions(self) -> frozenset[str]:
+        """Every `choose:<key>` action, for a `ComponentDriver` that should finish on any choice."""
         return frozenset(f"choose:{option.key}" for option in self.options)
 
     def build_component(
@@ -62,6 +72,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
         on_decide: DecisionHandler | None = None,
         finish_on: Collection[str] = (),
     ) -> ComponentDriver[DecisionState, RenderTargetT]:
+        """`finish_on` takes option keys or full `choose:<key>` names; names that match no option are ignored."""
         handlers = {}
         if on_decide is not None:
             handlers = {f"choose:{option.key}": self._handler(on_decide, option.key) for option in self.options}
@@ -163,7 +174,11 @@ def confirm[RenderTargetT: RenderTarget](
     cancel_label: TextLike | None = None,
     tone: Tone = Tone.DANGER,
 ) -> ComponentDriver[DecisionState, RenderTargetT]:
-    """Build a ready two-option decision shell."""
+    """A mounted `confirm`/`cancel` decision; labels default to the injected chrome's wording.
+
+    Neither handler finishes the mount: call `event.source.finish()` inside one if the
+    message should go away, as `squid_ui_widgets.guards.confirm` does.
+    """
     machine = _Confirmation(
         prompt,
         key=key,

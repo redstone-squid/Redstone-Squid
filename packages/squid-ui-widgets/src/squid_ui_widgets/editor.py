@@ -34,7 +34,9 @@ from squid_ui_widgets.drivers import (
 )
 
 type EditorValues = Mapping[str, object]
+"""Section key to that section's dumped value."""
 type EditorCommitHandler = Callable[[TransitionEvent[EditorState], EditorValues, frozenset[str]], Awaitable[None]]
+"""Called with every section's committed value and the keys whose commit snapshot changed."""
 
 StateT = TypeVar("StateT")
 ValueT = TypeVar("ValueT")
@@ -43,7 +45,13 @@ RenderTargetT = TypeVar("RenderTargetT", bound=RenderTarget, contravariant=True,
 
 @dataclass(frozen=True, slots=True)
 class EditorSectionState:
-    """One section's interaction state and last committed projected value."""
+    """One section's interaction state and last committed projected value.
+
+    `state` is the section's `StateT` (a nested machine's state, or field pairs for a form
+    section); `committed` is its `ValueT` as of the last commit. Both are typed `object`
+    because `EditorState` holds sections of differing types; `EditorSection.value` recovers
+    the typed value.
+    """
 
     key: MachineKeySegment
     state: object
@@ -52,7 +60,11 @@ class EditorSectionState:
 
 @dataclass(frozen=True, slots=True)
 class EditorState:
-    """Every section state plus the nested workspace currently open."""
+    """Every section state plus the nested workspace currently open.
+
+    `editing` is the key of the nested-machine section shown full-screen; `None` shows the
+    overview. Only `edit:<key>` sets it and only `back` clears it; form sections never do.
+    """
 
     sections: tuple[EditorSectionState, ...]
     editing: MachineKeySegment | None = None
@@ -65,7 +77,13 @@ def _formatted(value: object) -> str:
 
 
 class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
-    """A typed adapter between one editor value and its interactive section state."""
+    """A typed adapter between one editor value and its interactive section state.
+
+    `load`/`dump` convert between the public `ValueT` and the `StateT` the section is edited
+    as. A section edits through exactly one of `form` (a modal, submitted as `submit:<key>`)
+    or `machine` (a nested workspace opened by `edit:<key>`); `from_form` and `from_pattern`
+    build each. Raises `ValueError` when `key` is empty or contains `:`.
+    """
 
     def __init__(
         self,
@@ -99,7 +117,11 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
         *,
         summary: Callable[[Mapping[str, object]], TextLike] | None = None,
     ) -> EditorSection[tuple[tuple[str, object], ...], Mapping[str, object], RenderTarget]:
-        """Adapt one form schema into an editor section."""
+        """A section whose value is the form's field mapping and whose summary is `label: value` per field.
+
+        Loading a value later (`Editor.initial_from`) raises `TypeError` for a non-mapping and
+        `ValueError` for keys the form does not declare.
+        """
         spec = form.spec() if isinstance(form, Form) else form
         initial_values = {
             field.key: spec.prefill.get(field.key, field.default)
@@ -152,7 +174,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
         summary: Callable[[ValueT], TextLike],
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
     ) -> EditorSection[StateT, ValueT, RenderTargetT]:
-        """Adapt a nested pure machine into an editor section."""
+        """A section edited in a nested workspace; `machine.initial_state` is the section's initial state."""
         section: EditorSection[StateT, ValueT, RenderTargetT] = EditorSection(
             key,
             label,
@@ -166,7 +188,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
         return section
 
     def value(self, state: EditorState) -> ValueT:
-        """Return this section's precisely typed current value."""
+        """This section's current (not committed) value; raises `KeyError` when `state` has no slot for it."""
         slot = next((candidate for candidate in state.sections if candidate.key == self.key), None)
         if slot is None:
             message = f"Editor state does not contain section {self.key!r}"
@@ -174,7 +196,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
         return self.dump(cast(StateT, slot.state))
 
     def form_prefill(self, state: StateT) -> Mapping[str, object]:
-        """Project a form section to string-keyed values, rejecting a mismatched adapter."""
+        """`dump(state)` as form prefill; raises `TypeError` when it is not a mapping with `str` keys."""
         value = self.dump(state)
         if not isinstance(value, Mapping):
             message = f"Editor section {self.key!r} with a form must dump a mapping"
@@ -189,7 +211,15 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
 
 
 class Editor[RenderTargetT: RenderTarget = RenderTarget]:
-    """A pure editor whose form and nested-machine sections share one commit boundary."""
+    """A pure editor whose form and nested-machine sections share one commit boundary.
+
+    Actions: `submit:<key>` (form section), `edit:<key>` and `back` (nested workspace),
+    `section:<key>:<action>` (forwarded to the nested machine), and `save`. With
+    `CommitMode.EXPLICIT` a Save control renders while any section is dirty and commits only
+    when `issues` is empty; with `IMMEDIATE` every issue-free transition commits.
+
+    Raises `ValueError` for no sections or a duplicate section key.
+    """
 
     def __init__(
         self,
@@ -224,7 +254,10 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         return self._initial_state
 
     def initial_from(self, values: EditorValues) -> EditorState:
-        """Build initial section states from keyed public values."""
+        """Load `values` by section key, leaving unnamed sections at their initial state.
+
+        Raises `ValueError` for a key that is not a section, plus whatever the section's `load` raises.
+        """
         unknown = set(values) - set(self._sections)
         if unknown:
             message = f"Editor initial values contain unknown sections: {sorted(unknown)!r}"
@@ -244,7 +277,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         initial: EditorValues | EditorState | None = None,
         on_commit: EditorCommitHandler | None = None,
     ) -> ComponentDriver[EditorState, RenderTargetT]:
-        """Build an in-memory editor and dispatch each committed value change once."""
+        """Build an in-memory editor; `on_commit` fires only for transitions that move a commit snapshot."""
         state = self.initial_from(initial) if isinstance(initial, Mapping) else initial
 
         async def changed(event: TransitionEvent[EditorState]) -> None:
@@ -276,7 +309,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         )
 
     def issues(self, state: EditorState) -> tuple[FormIssue, ...]:
-        """Return nested-section and aggregate commit violations."""
+        """Per-section `issues` then `validate` over all current values; any issue blocks commit."""
         issues: list[FormIssue] = []
         for slot in state.sections:
             section = self._sections[slot.key]
@@ -362,7 +395,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         return self._commit_valid(changed)
 
     def form_for(self, state: EditorState, action: str) -> FormSpec | None:
-        """Resolve direct and nested routed form actions."""
+        """The prefilled form for `submit:<key>`, or a nested `FormPresentingMachine`'s answer; else `None`."""
         if (key := match_keyed_action(action, "submit")) is not None:
             section = self._sections.get(key)
             slot = self._slot(state, key)

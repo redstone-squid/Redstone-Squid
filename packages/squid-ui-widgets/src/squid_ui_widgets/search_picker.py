@@ -32,11 +32,15 @@ from squid_ui_widgets._content import require_key
 from squid_ui_widgets._window import LoadingCopy
 
 type SearchProvider[ItemT] = Callable[[str], WindowSource[ItemT]]
+"""Builds a source for one stripped query; called once per submitted query, not per page."""
 type SearchPickHandler[ItemT] = Callable[[ActionEvent, tuple[ItemT, ...]], Awaitable[None]]
+"""Called with the full picked tuple after every pick and every removal."""
 
 
 @dataclass(frozen=True, slots=True)
 class _LookupRequest:
+    """`generation` makes a repeated identical request a fresh state value, so retry re-runs the resource."""
+
     operation: Literal["refresh", "previous", "next"] = "refresh"
     generation: int = 0
 
@@ -54,7 +58,16 @@ SEARCH_LOADING_COPY = LoadingCopy(failed="Could not load results.")
 
 
 class SearchPicker[ItemT](Component):
-    """Search a windowed domain source and retain the resolved items a reader picks."""
+    """Search a windowed domain source and retain the resolved items a reader picks.
+
+    A query form sits above the results; picking a result adds it (or replaces the pick when
+    `maximum == 1`), and each picked item renders with a Remove control that is disabled at
+    `minimum`. `query` persists across restarts; `picked` does not.
+
+    Raises `ValueError` for an empty `key`, bounds outside `0 <= minimum <= maximum` with
+    `maximum >= 1`, a `page_size` outside `1..25`, or an initial `picked` that exceeds
+    `maximum` or repeats an identity.
+    """
 
     query: str | None = state(None)
     picked: tuple[ItemT, ...] = state((), persist=False, opaque=True)
@@ -103,6 +116,11 @@ class SearchPicker[ItemT](Component):
 
     @resource
     async def results(self) -> _LookupWindow[ItemT]:
+        """The current query's page; a new query starts a fresh loader, the same one steps the previous page.
+
+        Raises `LayoutInvariantError` when read before a query exists or when a newer request
+        supersedes this load.
+        """
         query = self.query
         if query is None:
             message = "SearchPicker.results was observed before a query was submitted"
@@ -224,9 +242,7 @@ class SearchPicker[ItemT](Component):
         if self.query is None:
             return stack(heading(chrome.search), *self._picked_nodes(), search_control)
 
-        # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
-        # Splitting on `previous` in the pattern instead left the match unprovably exhaustive,
-        # so `body` read as possibly unbound on a path that cannot happen.
+        # Arm shape as in `source_ranked.py`: the `previous` split stays inside each arm.
         match self.results.status:
             case Ready(value=current):
                 body = self._loaded_nodes(current)
