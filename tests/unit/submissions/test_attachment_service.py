@@ -102,6 +102,9 @@ class FakeJobs:
     async def list_for_draft(self, draft_id: UUID) -> tuple[MediaJobSnapshot, ...]:
         return tuple(snapshot for snapshot in self.snapshots.values() if snapshot.upload.draft_id == draft_id)
 
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID) -> bool:
+        raise NotImplementedError
+
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
         self.discarded.append((draft_id, upload_id))
         return upload_id in self.snapshots and self.snapshots[upload_id].upload.draft_id == draft_id
