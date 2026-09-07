@@ -126,12 +126,13 @@ class BuildService:
         if existing is not None:
             _require_matching_source_submission(existing, build, submitter_account_id, source_submission_draft_id)
             return existing
-        build.submitter_account_id = submitter_account_id
-        build.source_submission_draft_id = source_submission_draft_id
-        build.display_name = display_name.strip() if display_name is not None and display_name.strip() else None
-        build.ai_generated = ai_generated
-        build.submission_status = Status.PENDING
-        await self._prepare_for_persistence(build)
+        await self.prepare_for_account(
+            build,
+            submitter_account_id=submitter_account_id,
+            source_submission_draft_id=source_submission_draft_id,
+            display_name=display_name,
+            ai_generated=ai_generated,
+        )
         outcome = await self._repository.save_for_source_submission(build)
         _require_matching_source_submission(
             outcome.build,
@@ -142,6 +143,24 @@ class BuildService:
         if outcome.created:
             await self._embeddings.index(outcome.build)
         return outcome.build
+
+    async def prepare_for_account(
+        self,
+        build: Build,
+        *,
+        submitter_account_id: int,
+        source_submission_draft_id: UUID,
+        display_name: str | None,
+        ai_generated: bool,
+    ) -> Build:
+        """Resolve submission metadata and derived values before the caller's transaction."""
+        build.submitter_account_id = submitter_account_id
+        build.source_submission_draft_id = source_submission_draft_id
+        build.display_name = display_name.strip() if display_name is not None and display_name.strip() else None
+        build.ai_generated = ai_generated
+        build.submission_status = Status.PENDING
+        await self._prepare_for_persistence(build)
+        return build
 
     def edit(
         self,
