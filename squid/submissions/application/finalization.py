@@ -1,52 +1,34 @@
 """Durable submission finalization, driven the same way by the bot and the API."""
 
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Protocol
 from uuid import UUID
 
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue
 from squid.core.i18n import tr
-from squid.sponsors import PublicSponsor
 from squid.submissions.application.drafts import (
     DEFAULT_DRAFT_RETENTION_DAYS,
     StoredDraft,
     SubmissionDraftService,
-    ValidatedDraft,
 )
-from squid.submissions.domain import DraftStatus, SubmissionOrigin
+from squid.submissions.application.preparation import PreparationRejected, SubmissionPreparation
+from squid.submissions.domain import DraftStatus
 from squid.submissions.domain.finalization import (
     BuildSubmissionRejected,
     BuildSubmissionResult,
-    DoorOrientation,
-    DoorSubmissionDetails,
-    DoorTiming,
-    ExtenderOrientation,
-    ExtenderSubmissionDetails,
-    ExtenderTiming,
     FinalizationJobStatus,
     FinalizedBuild,
-    GeneralSubmissionDetails,
     NormalizedSubmission,
-    SchematicArtifactState,
-    SchematicRightsPolicy,
-    SubmissionArtifactReadiness,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
-    SubmissionCategory,
-    SubmissionDimensions,
-    SubmissionSchematicLicense,
-    SubmissionSchematicVisibility,
-    SubmissionTaxonomy,
 )
 from squid.submissions.errors import DraftSchemaUnsupportedError, DraftValidationError
 
 MAX_FINALIZATION_JOB_CLAIM = 32
 DEFAULT_FINALIZATION_ATTEMPTS = 3
-_STABLE_KEY = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,89 +75,6 @@ class FinalizationFailureOutcome:
 
     applied: bool
     dead: bool
-
-
-@dataclass(frozen=True, slots=True)
-class PreparedSubmission:
-    """A validated submission ready for durable finalization."""
-
-    value: NormalizedSubmission
-
-
-@dataclass(frozen=True, slots=True)
-class PreparationRejected:
-    """Owner-repair issues found while preparing a validated draft."""
-
-    issues: tuple[SubmissionAttentionIssue, ...]
-
-    def __post_init__(self) -> None:
-        if not self.issues:
-            msg = tr(t"rejected submission preparation requires at least one issue")
-            raise InvalidStateError(msg)
-
-
-type PreparationResult = PreparedSubmission | PreparationRejected
-
-
-class DraftArtifactReadiness(Protocol):
-    """Read backend-owned artifact state for one draft.
-
-    Implementations must inspect every associated upload. They may expose media UUIDs
-    only after normalization and a schematic UUID only after sanitization; pending or
-    rejected uploads must be represented by stable attention issues.
-    """
-
-    async def assess(self, draft_id: UUID) -> SubmissionArtifactReadiness: ...
-
-
-class SubmissionSponsorResolver(Protocol):
-    """Resolve only an installation's currently authorized public sponsor projection."""
-
-    async def resolve(self, installation_id: UUID) -> PublicSponsor | None: ...
-
-
-class SubmissionPreparation:
-    """Combine validated answers with authoritative sponsor and attachment facts."""
-
-    def __init__(
-        self,
-        artifacts: DraftArtifactReadiness,
-        sponsors: SubmissionSponsorResolver | None = None,
-    ) -> None:
-        self._artifacts = artifacts
-        self._sponsors = sponsors
-
-    async def prepare(self, validated: ValidatedDraft) -> PreparationResult:
-        """Return a normalized submission or deterministic owner-repair issues."""
-        draft = validated.draft
-        answers = validated.normalized_answers
-        sponsor, sponsor_issues = await self._resolve_sponsor(draft, answers)
-        assessment = await self._artifacts.assess(draft.snapshot.id)
-        issues = _unique_issues(
-            (
-                *_artifact_issues(draft.origin, assessment),
-                *_taxonomy_issues(answers, draft.snapshot.category),
-                *sponsor_issues,
-            )
-        )
-        if issues:
-            return PreparationRejected(issues)
-        return PreparedSubmission(_normalize(draft, answers, assessment, sponsor))
-
-    async def _resolve_sponsor(
-        self,
-        draft: StoredDraft,
-        answers: Mapping[str, JSONValue],
-    ) -> tuple[PublicSponsor | None, tuple[SubmissionAttentionIssue, ...]]:
-        requested = draft.origin is SubmissionOrigin.PAPER and _required_bool(answers, "sponsor_attribution")
-        if not requested:
-            return None, ()
-        if draft.source_installation_id is None or self._sponsors is None:
-            return None, (_sponsor_unavailable(),)
-        sponsor = await self._sponsors.resolve(draft.source_installation_id)
-        if sponsor is None or sponsor.installation_id != draft.source_installation_id:
-            return None, (_sponsor_unavailable(),)
-        return sponsor, ()
 
 
 class BuildSubmissionWriter(Protocol):
@@ -396,190 +295,6 @@ def _manifest_issues(context: Mapping[str, JSONValue]) -> tuple[SubmissionAttent
         except ValueError:
             issues.append(SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED))
     return tuple(issues) or (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
-
-
-def _artifact_issues(
-    origin: SubmissionOrigin,
-    readiness: SubmissionArtifactReadiness,
-) -> tuple[SubmissionAttentionIssue, ...]:
-    issues = list(readiness.issues)
-    match readiness.schematic_state:
-        case SchematicArtifactState.ABSENT:
-            if origin in {SubmissionOrigin.PAPER, SubmissionOrigin.FABRIC}:
-                issues.append(SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_REQUIRED))
-        case SchematicArtifactState.PROCESSING:
-            issues.append(SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING))
-        case SchematicArtifactState.REJECTED:
-            issues.append(SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_REJECTED))
-        case SchematicArtifactState.SANITIZED:
-            pass
-    return _unique_issues(issues)
-
-
-def _taxonomy_issues(
-    answers: Mapping[str, JSONValue],
-    category: str,
-) -> tuple[SubmissionAttentionIssue, ...]:
-    fields = ["restrictions", "showcase_tags"]
-    if category in {SubmissionCategory.DOOR.value, SubmissionCategory.EXTENDER.value}:
-        fields.append("patterns")
-    issues: list[SubmissionAttentionIssue] = []
-    for field_id in fields:
-        value = answers.get(field_id, ())
-        if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-            values = [item for item in value if isinstance(item, str)]
-            if len(values) != len(set(values)) or any(_STABLE_KEY.fullmatch(item) is None for item in values):
-                issues.append(SubmissionAttentionIssue(field_id, SubmissionAttentionReason.UNKNOWN_OPTION))
-    return tuple(issues)
-
-
-def _normalize(
-    draft: StoredDraft,
-    answers: Mapping[str, JSONValue],
-    readiness: SubmissionArtifactReadiness,
-    sponsor: PublicSponsor | None,
-) -> NormalizedSubmission:
-    category = SubmissionCategory(draft.snapshot.category)
-    visibility = SubmissionSchematicVisibility(_required_str(answers, "schematic_visibility"))
-    public = visibility is SubmissionSchematicVisibility.PUBLIC_DOWNLOAD
-    license_value = _optional_str(answers, "schematic_license") if public else None
-    policy = SchematicRightsPolicy(
-        visibility=visibility,
-        license=SubmissionSchematicLicense(license_value) if license_value is not None else None,
-        rights_attested=_required_bool(answers, "rights_attestation") if public else False,
-        include_inventories=_required_bool(answers, "include_inventories"),
-        include_free_text=_required_bool(answers, "include_free_text"),
-    )
-    details: DoorSubmissionDetails | ExtenderSubmissionDetails | GeneralSubmissionDetails
-    if category is SubmissionCategory.DOOR:
-        details = DoorSubmissionDetails(
-            opening=SubmissionDimensions(
-                _required_int(answers, "opening_width"),
-                _required_int(answers, "opening_height"),
-                _required_int(answers, "opening_depth"),
-            ),
-            orientation=DoorOrientation(_required_str(answers, "door_orientation")),
-            pattern_keys=_string_tuple(answers, "patterns"),
-            pattern_proposals=_string_tuple(answers, "pattern_proposals"),
-            timing=DoorTiming(
-                _optional_int(answers, "opening_time"),
-                _optional_int(answers, "visible_opening_time"),
-                _optional_int(answers, "closing_time"),
-                _optional_int(answers, "visible_closing_time"),
-            ),
-        )
-    elif category is SubmissionCategory.EXTENDER:
-        details = ExtenderSubmissionDetails(
-            orientation=ExtenderOrientation(_required_str(answers, "movement_orientation")),
-            extension_length=_required_int(answers, "extension_length"),
-            pattern_keys=_string_tuple(answers, "patterns"),
-            pattern_proposals=_string_tuple(answers, "pattern_proposals"),
-            timing=ExtenderTiming(
-                _optional_int(answers, "extension_time"),
-                _optional_int(answers, "retraction_time"),
-            ),
-        )
-    else:
-        details = GeneralSubmissionDetails()
-    return NormalizedSubmission(
-        source_draft_id=draft.snapshot.id,
-        owner_account_id=draft.snapshot.owner_account_id,
-        origin=draft.origin,
-        schema_id=draft.snapshot.schema_id,
-        schema_revision=draft.snapshot.schema_revision,
-        category=category,
-        display_name=_optional_nonblank_str(answers, "display_name"),
-        description=_optional_str(answers, "description"),
-        creators=_string_tuple(answers, "creators"),
-        capture_dimensions=SubmissionDimensions(
-            _required_int(answers, "capture_width"),
-            _required_int(answers, "capture_height"),
-            _required_int(answers, "capture_depth"),
-        ),
-        source_version=_required_str(answers, "source_version"),
-        version_compatibility=_optional_str(answers, "version_compatibility"),
-        taxonomy=SubmissionTaxonomy(
-            restriction_keys=_string_tuple(answers, "restrictions"),
-            restriction_proposals=_string_tuple(answers, "restriction_proposals"),
-            showcase_tag_keys=_string_tuple(answers, "showcase_tags"),
-        ),
-        schematic_policy=policy,
-        completion=_optional_str(answers, "completion"),
-        ai_generated=_required_bool(answers, "ai_generated"),
-        sponsor_attribution=(
-            _required_bool(answers, "sponsor_attribution") if draft.origin is SubmissionOrigin.PAPER else False
-        ),
-        artifacts=readiness.artifacts,
-        details=details,
-        source_installation_id=draft.source_installation_id,
-        sponsor=sponsor,
-    )
-
-
-def _sponsor_unavailable() -> SubmissionAttentionIssue:
-    return SubmissionAttentionIssue("sponsor_attribution", SubmissionAttentionReason.SPONSOR_UNAVAILABLE)
-
-
-def _required_str(answers: Mapping[str, JSONValue], field_id: str) -> str:
-    value = answers.get(field_id)
-    if not isinstance(value, str):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a string"))
-    return value
-
-
-def _optional_str(answers: Mapping[str, JSONValue], field_id: str) -> str | None:
-    value = answers.get(field_id)
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a string"))
-    return value
-
-
-def _optional_nonblank_str(answers: Mapping[str, JSONValue], field_id: str) -> str | None:
-    value = _optional_str(answers, field_id)
-    if value is None:
-        return None
-    normalized = value.strip()
-    return normalized or None
-
-
-def _required_int(answers: Mapping[str, JSONValue], field_id: str) -> int:
-    value = answers.get(field_id)
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise InvalidStateError(tr(t"validated field {field_id} is not an integer"))
-    return value
-
-
-def _optional_int(answers: Mapping[str, JSONValue], field_id: str) -> int | None:
-    value = answers.get(field_id)
-    if value is None:
-        return None
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise InvalidStateError(tr(t"validated field {field_id} is not an integer"))
-    return value
-
-
-def _required_bool(answers: Mapping[str, JSONValue], field_id: str) -> bool:
-    value = answers.get(field_id)
-    if not isinstance(value, bool):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a boolean"))
-    return value
-
-
-def _string_tuple(answers: Mapping[str, JSONValue], field_id: str) -> tuple[str, ...]:
-    value = answers.get(field_id, ())
-    if (
-        not isinstance(value, Sequence)
-        or isinstance(value, str | bytes)
-        or not all(isinstance(item, str) for item in value)
-    ):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a string list"))
-    return tuple(cast(Sequence[str], value))
-
-
-def _unique_issues(issues: Sequence[SubmissionAttentionIssue]) -> tuple[SubmissionAttentionIssue, ...]:
-    return tuple(dict.fromkeys(issues))
 
 
 def _retry_delay(attempts: int) -> int:
