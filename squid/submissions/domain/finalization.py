@@ -85,6 +85,7 @@ class SubmissionAttentionReason(StrEnum):
     SCHEMATIC_REQUIRED = "schematic_required"
     SCHEMATIC_PROCESSING = "schematic_processing"
     SCHEMATIC_REJECTED = "schematic_rejected"
+    SCHEMATIC_PRIMARY_REQUIRED = "schematic_primary_required"
     MEDIA_PROCESSING = "media_processing"
     MEDIA_REJECTED = "media_rejected"
     SPONSOR_UNAVAILABLE = "sponsor_unavailable"

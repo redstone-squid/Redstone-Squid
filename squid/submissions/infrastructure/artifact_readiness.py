@@ -90,6 +90,7 @@ class DraftSchematicSnapshot:
 
     state: SchematicArtifactState
     sanitized: SanitizerIssuedSchematic | None = None
+    issues: tuple[SubmissionAttentionIssue, ...] = ()
 
     def __post_init__(self) -> None:
         if (self.state is SchematicArtifactState.SANITIZED) != (self.sanitized is not None):
@@ -161,7 +162,7 @@ class AuthoritativeDraftArtifactReadiness:
             schematic_state=schematic.state,
             sanitized_schematic_id=(schematic.sanitized.artifact_id if schematic.sanitized is not None else None),
             normalized_media_upload_ids=media_ids,
-            issues=issues,
+            issues=(*issues, *schematic.issues),
         )
 
 

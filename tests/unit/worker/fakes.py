@@ -75,6 +75,9 @@ class MaintenanceRecorder:
         self.purge_calls += 1
         return self.purge_result
 
+    async def cleanup_submission_schematics(self) -> None:
+        pass
+
     async def expire_submission_drafts(self) -> int:
         self.expiry_calls += 1
         return self.expiry_result
@@ -151,5 +154,6 @@ def worker_services(
         refresh_search_index=cast(Any, object()),
         record_queue_health=maintenance.record_queue_health,
         purge_idempotency=maintenance.purge_idempotency,
+        cleanup_submission_schematics=maintenance.cleanup_submission_schematics,
         expire_submission_drafts=maintenance.expire_submission_drafts,
     )

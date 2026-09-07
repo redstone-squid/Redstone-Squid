@@ -128,6 +128,8 @@ _SUBMISSION_REFERENCES = (
     _AccountReference("submission_drafts", "owner_account_id"),
     _AccountReference("submission_drafts", "submission_actor_account_id"),
     _AccountReference("submission_finalization_jobs", "requested_by_account_id"),
+    _AccountReference("submission_schematic_sources", "owner_account_id"),
+    _AccountReference("submission_schematic_sources", "uploaded_by_account_id"),
     _AccountReference("submission_draft_access", "account_id"),
     _AccountReference("submission_draft_changes", "actor_account_id"),
     _AccountReference("build_schematics", "rights_attested_by_account_id"),

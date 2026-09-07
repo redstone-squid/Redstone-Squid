@@ -108,14 +108,15 @@ from squid.submissions.application import (
     SubmissionFormService,
     SubmissionPreparation,
 )
+from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.infrastructure.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
-    FailClosedDraftSchematicReader,
 )
 from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
 from squid.suggestions.application import SuggestionService
@@ -434,6 +435,14 @@ class _ServiceGraph:
         )
 
     @cached_property
+    def submission_schematic_repository(self) -> PostgresDraftSchematics:
+        return PostgresDraftSchematics(self.db.async_session)
+
+    @cached_property
+    def submission_schematics(self) -> DraftSchematicService:
+        return DraftSchematicService(self.submission_drafts, self.submission_schematic_repository, self.artifacts)
+
+    @cached_property
     def submission_finalization_jobs(self) -> PostgresFinalizationJobRepository:
         return PostgresFinalizationJobRepository(self.db.async_session)
 
@@ -441,7 +450,7 @@ class _ServiceGraph:
     def submission_finalization(self) -> SubmissionFinalizationService:
         readiness = AuthoritativeDraftArtifactReadiness(
             self.media_repository,
-            FailClosedDraftSchematicReader(),
+            self.submission_schematic_repository,
             media_limits=MediaLimits(),
         )
         sponsors = (
@@ -678,6 +687,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_forms=graph.submission_forms,
         submission_drafts=graph.submission_drafts,
         submission_finalization=graph.submission_finalization,
+        submission_schematics=graph.submission_schematics,
         suggestions=graph.suggestions,
         media_jobs=graph.media_jobs,
         minecraft_installations=graph.minecraft_installations,
@@ -760,6 +770,7 @@ def create_worker_services(
         record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,
         purge_idempotency=idempotency.purge_expired,
         expire_submission_drafts=graph.submission_drafts.expire_due,
+        cleanup_submission_schematics=graph.submission_schematics.cleanup,
     )
 
 
