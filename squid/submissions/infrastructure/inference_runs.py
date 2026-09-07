@@ -18,6 +18,7 @@ from squid.persistence.types import InstantUTC
 from squid.submissions.application.inference_runs import (
     InferenceCandidate,
     InferenceClaim,
+    InferenceStatus,
     candidate_id,
     decode_facts,
     encode_facts,
@@ -126,6 +127,42 @@ class PostgresInferenceRuns:
             if row is None:
                 return None
             return row.owner_account_id, _candidates(row)
+
+    async def public_status(self, run_id: UUID) -> InferenceStatus | None:
+        from squid.builds.application.inference import BuildInferenceInput
+        from squid.builds.infrastructure.models import Build as SQLBuild
+        from squid.submissions.infrastructure.models import SubmissionDraft
+
+        async with self._sessions() as session:
+            row = await session.get(SubmissionInferenceRun, run_id)
+            if row is None or row.inputs.get("purpose") != "submission" or row.expires_at <= Instant.now():
+                return None
+            bundle = TypeAdapter(BuildInferenceInput).validate_python(row.inputs["bundle"])
+            drafts = {
+                item.id: item
+                for item in await session.scalars(
+                    select(SubmissionDraft).where(SubmissionDraft.inference_run_id == run_id)
+                )
+            }
+            saved = {
+                draft_id: build_id
+                for draft_id, build_id in await session.execute(
+                    select(SQLBuild.source_submission_draft_id, SQLBuild.id).where(
+                        SQLBuild.source_submission_draft_id.in_(drafts)
+                    )
+                )
+            }
+            states = tuple(
+                f"saved as build #{saved[candidate.id]}"
+                if candidate.id in saved
+                else drafts[candidate.id].status.value.replace("_", " ")
+                if candidate.id in drafts
+                else "needs category"
+                if candidate.facts.category is None
+                else "awaiting draft admission"
+                for candidate in _candidates(row)
+            )
+            return InferenceStatus(bundle.channel_id, bundle.server_id, bundle.primary[0].message_id, row.state, states)
 
     async def list_active(self, owner: int | None) -> tuple[UUID, ...]:
         async with self._sessions() as session:

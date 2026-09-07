@@ -33,7 +33,7 @@ class DiscordSyncQueueItem(Base, kw_only=True):
     __tablename__ = "discord_sync_queue"
     __table_args__ = (
         CheckConstraint(
-            "resource_kind IN ('build', 'vote_session', 'starboard_entry')",
+            "resource_kind IN ('build', 'vote_session', 'starboard_entry', 'inference_run', 'submission_draft')",
             name="discord_sync_queue_resource_kind_check",
         ),
         CheckConstraint("action IN ('refresh', 'delete')", name="discord_sync_queue_action_check"),

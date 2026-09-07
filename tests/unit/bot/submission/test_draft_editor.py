@@ -76,6 +76,7 @@ async def test_reopening_reads_saved_answers_and_pinned_manifest() -> None:
     assert reopened is not first
     assert reopened.draft.snapshot.answers["display_name"] == "Saved name"
     assert reopened.manifest.revision == reopened.draft.snapshot.schema_revision
+    await reopened.projection.reload()
     assert "Submit for review" in labels(reopened.render())
 
 
@@ -117,3 +118,15 @@ async def test_manifest_pages_fit_discord_component_limits() -> None:
     commit_render(root)
     editor.selected = "creators"
     commit_render(root)
+
+
+async def test_live_projection_refreshes_saved_state() -> None:
+    from squid.submissions.domain import DraftStatus
+
+    services, drafts = setup()
+    editor = await draft_editor(services, 7, drafts.current.snapshot.id)
+    await editor.projection.reload()
+    drafts.current = replace(drafts.current, snapshot=replace(drafts.current.snapshot, status=DraftStatus.SUBMITTED))
+    await editor.projection.reload()
+    assert editor.draft.snapshot.status is DraftStatus.SUBMITTED
+    assert "Submit for review" not in labels(editor.render())
