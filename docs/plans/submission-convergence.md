@@ -76,3 +76,48 @@ Reported the latest-release measurements in [issue #39](https://github.com/Schem
 Do not upgrade the production pin or enable schematic cutover on this evidence. A passing release
 must also satisfy the cross-format and content-policy checks in `nucleation-sanitization.md`.
 Independent milestones remain authorized while this gate is closed.
+
+### Completed foundations, 2026-09-07
+
+- `9e34ebd8`: removed `POST /v1/builds`, its input types and service method, and the obsolete
+  mapping tests. Regenerated OpenAPI; reads and edits retain their existing contracts.
+- `fe2cc83b`: added the standalone sanitizer release gate and reported the released-version
+  failure upstream.
+- `0cc87c0e`: separated preparation from finalization execution and moved normalization to a
+  pure domain function. Consumers use the existing public application exports.
+- `549daafc`: resubmission appends numbered jobs instead of overwriting prior payloads and
+  failures. Draft locking and a partial unique index permit one active attempt. Latest-status
+  reads select the newest attempt. Repeated identical preparation issues reuse their row.
+  Migration `c6e0a3b8d1f4` preserves existing IDs and assigns attempt number 1; downgrade refuses
+  to discard multiple attempts. Expiry clears all uncompleted attempts.
+
+Stop old API/bot/worker writers before applying the attempt-history migration and restart them
+with the matching code. Old writers assume one job per draft. Existing account-merge behavior
+still canonicalizes owners and payload digests across retained jobs and fences active claims;
+this is not yet a separately immutable attempt-input model.
+
+Validation: 43 focused API/build-service tests passed; 75 preparation/finalization/target and
+architecture tests passed. The final PostgreSQL attempt/expiry run passed all 16 tests. The
+historical migration/rollback test and the focused account-merge claim-fencing tests passed.
+Project-wide Pyrefly reports zero errors; changed-file Ruff and whitespace checks pass. Alembic
+has one head, `c6e0a3b8d1f4`. `just` is unavailable, so Pyrefly ran through the exact configured
+`uv run --locked ... pyrefly check --config pyproject.toml` command with the existing environment.
+
+Additional checks exposed failures outside these changes:
+
+- The localization architecture check reports five missing catalog entries in unchanged bot code.
+- Full Alembic drift checking reports the existing idempotency `method`/`state` column types and
+  `principal` comment; it reports no attempt-schema drift.
+- The submission/account ownership integration test fails while inserting its existing schematic
+  fixture against `build_schematics_sanitization_complete`, before performing the account merge.
+
+### Remaining work
+
+These commits are foundations, not completion of the approved workflow. The existing HTTP
+`/submission` contract and job-shaped application interfaces remain. Still implement explicit
+attempt create/list/read APIs, draft issue storage, separate immutable inputs and receipts,
+transactional build/attachment/event commit, access/actor policy, durable attachment operations,
+Discord manifest rendering and restart recovery, and inference intake/correction/revision proposals.
+Do not mark the milestone checkboxes complete until their full acceptance criteria pass. The
+sanitizer gate blocks the schematic and Discord cutover; it does not itself block independent
+API, persistence, and policy work.
