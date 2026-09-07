@@ -69,7 +69,11 @@ check expressions as named triple-quoted constants so state branches are reviewa
 would make any future migration harder. A small timestamp mixin is
 acceptable only if at least three current models share identical semantics and Alembic emits no accidental changes.
 
-### Legacy build entry points cannot simply be deleted yet
+### Legacy build entry points (superseded 2026-09-07)
+
+The submission convergence plan now authorizes the coordinated API break. `POST /v1/builds`,
+`DoorSubmissionInput`, and `BuildService.submit_door` have been removed together. The notes below
+describe the earlier compatibility decision; Discord still requires a separate migration.
 
 `DoorSubmissionInput` is still used by the synchronous `POST /builds` route, which returns `201 BuildDetail` and
 accepts legacy remote attachment URLs that the artifact pipeline cannot map losslessly. `BuildDraft` remains the
