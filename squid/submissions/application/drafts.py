@@ -18,6 +18,7 @@ from squid.submissions.domain import (
     FormManifest,
     SubmissionOrigin,
 )
+from squid.submissions.domain.finalization import SubmissionAttentionIssue
 from squid.submissions.errors import (
     DraftAccessDeniedError,
     DraftCapacityExceededError,
@@ -41,6 +42,8 @@ class StoredDraft:
     updated_at: Instant
     expires_at: Instant
     source_installation_id: UUID | None = None
+    preparation_issues: tuple[SubmissionAttentionIssue, ...] = ()
+    preparation_retry_at: Instant | None = None
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
