@@ -36,6 +36,11 @@ class Forms:
         return build_submission_manifest(revision=revision)
 
 
+class Intake:
+    async def list(self, draft_id: object, actor: int) -> tuple[()]:
+        return ()
+
+
 class Finalization:
     async def status(self, draft_id: object, actor: int) -> None:
         return None
@@ -53,7 +58,12 @@ def setup() -> tuple[BotServices, Drafts]:
     drafts = Drafts(draft)
     services = cast(
         BotServices,
-        SimpleNamespace(submission_drafts=drafts, submission_forms=Forms(), submission_finalization=Finalization()),
+        SimpleNamespace(
+            submission_drafts=drafts,
+            submission_forms=Forms(),
+            submission_finalization=Finalization(),
+            submission_intake=Intake(),
+        ),
     )
     return services, drafts
 

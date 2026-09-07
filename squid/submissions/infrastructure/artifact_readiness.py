@@ -139,6 +139,12 @@ class FailClosedDraftSchematicReader:
         return DraftSchematicSnapshot(SchematicArtifactState.ABSENT)
 
 
+class DraftIntakeReader(Protocol):
+    """Read unresolved supplied-file requirements before accepting artifact absence."""
+
+    async def issues_for_draft(self, draft_id: UUID) -> tuple[SubmissionAttentionIssue, ...]: ...
+
+
 class AuthoritativeDraftArtifactReadiness:
     """Assess only worker-owned media jobs and sanitizer-owned schematic state."""
 
@@ -148,7 +154,9 @@ class AuthoritativeDraftArtifactReadiness:
         schematics: DraftSchematicReader,
         *,
         media_limits: MediaLimits | None = None,
+        intake: DraftIntakeReader | None = None,
     ) -> None:
+        self._intake = intake
         self._media = media
         self._schematics = schematics
         self._media_limits = media_limits or MediaLimits()
@@ -158,11 +166,12 @@ class AuthoritativeDraftArtifactReadiness:
         jobs = await self._media.list_for_draft(draft_id)
         schematic = await self._schematics.read_for_draft(draft_id)
         media_ids, issues = _assess_media(draft_id, jobs, self._media_limits)
+        intake_issues = await self._intake.issues_for_draft(draft_id) if self._intake is not None else ()
         return SubmissionArtifactReadiness(
             schematic_state=schematic.state,
             sanitized_schematic_id=(schematic.sanitized.artifact_id if schematic.sanitized is not None else None),
             normalized_media_upload_ids=media_ids,
-            issues=(*issues, *schematic.issues),
+            issues=(*issues, *schematic.issues, *intake_issues),
         )
 
 
