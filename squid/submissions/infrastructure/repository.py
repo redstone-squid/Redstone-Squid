@@ -4,10 +4,12 @@ from collections.abc import Mapping, Sequence
 from typing import cast, override
 from uuid import UUID
 
+from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.builds.domain import SourceMessage
 from squid.core.errors import JSONValue
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
@@ -28,6 +30,7 @@ from squid.submissions.domain import (
     FieldOperation,
     FieldOperationKind,
 )
+from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import (
     DraftAccessDeniedError,
     DraftCapacityExceededError,
@@ -216,6 +219,11 @@ class PostgresDraftRepository(DraftRepository):
             model.status = candidate.status
             model.preparation_issues = []
             model.preparation_retry_at = None
+            model.source_issues = [
+                issue
+                for issue in model.source_issues
+                if issue not in {operation.field_id for operation in change.operations}
+            ]
             model.answers = _json_object(candidate.answers)
             model.updated_at = updated_at
             model.expires_at = expires_at
@@ -415,6 +423,9 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
         submission_actor_account_id=draft.submission_actor_account_id,
         origin=draft.origin,
         source_installation_id=draft.source_installation_id,
+        source_messages=TypeAdapter(tuple[SourceMessage, ...]).dump_python(draft.source_messages, mode="json"),
+        source_files=TypeAdapter(tuple[SubmissionSourceFile, ...]).dump_python(draft.source_files, mode="json"),
+        source_issues=list(draft.source_issues),
         created_at=draft.created_at,
         updated_at=draft.updated_at,
         expires_at=draft.expires_at,
@@ -438,6 +449,9 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
         updated_at=model.updated_at,
         expires_at=model.expires_at,
         source_installation_id=model.source_installation_id,
+        source_messages=TypeAdapter(tuple[SourceMessage, ...]).validate_python(model.source_messages),
+        source_files=TypeAdapter(tuple[SubmissionSourceFile, ...]).validate_python(model.source_files),
+        source_issues=tuple(model.source_issues),
         preparation_issues=decode_issues(model.preparation_issues),
         preparation_retry_at=model.preparation_retry_at,
         inferred=model.inferred,

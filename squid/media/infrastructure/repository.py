@@ -236,7 +236,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
         """Share one normalization job, preserving per-draft capacity and discard authority."""
         async with self._session_factory.begin() as session:
             for draft_id in sorted({source_id, target_id}):
-                await _lock_mutable_submission_draft(session, draft_id)
+                await _lock_mutable_submission_draft(session, draft_id, require_editable=draft_id == target_id)
             owners = tuple(
                 await session.scalars(
                     select(SubmissionDraft.owner_account_id).where(SubmissionDraft.id.in_((source_id, target_id)))

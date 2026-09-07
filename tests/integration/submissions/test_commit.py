@@ -258,3 +258,26 @@ async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
     assert draft is not None
     assert draft.snapshot.owner_account_id == claim.payload.owner_account_id
     assert draft.submission_actor_account_id == survivor.id
+
+
+async def test_source_messages_commit_with_build_and_survive_run_retention(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from pydantic import TypeAdapter
+
+    from squid.builds.domain import SourceMessage
+    from squid.submissions.infrastructure.models import SubmissionDraft
+
+    sessions = migrated_session_factory
+    claim = await claimed_submission(sessions)
+    source = SourceMessage(123456, channel_id=456, author_id=789, content="Original inferred facts")
+    async with sessions.begin() as session:
+        draft = await session.get(SubmissionDraft, claim.draft_id)
+        assert draft is not None
+        draft.source_messages = TypeAdapter(tuple[SourceMessage, ...]).dump_python((source,), mode="json")
+    builds = BuildRepository(sessions)
+    result = await PostgresSubmissionExecutor(sessions, builds, PreparedBuilds()).execute(claim, now=Instant.now())
+    assert isinstance(result, FinalizedBuild)
+    saved = await builds.get_by_id(result.build_id)
+    assert saved is not None
+    assert saved.source_messages == (source,)

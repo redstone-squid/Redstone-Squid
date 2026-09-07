@@ -2,7 +2,7 @@
 
 import hashlib
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID, uuid5
 
 import anyio
@@ -11,7 +11,11 @@ from pydantic import TypeAdapter
 from squid.artifacts.application import ArtifactStore
 from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService
 from squid.builds.domain import BuildDraft
-from squid.core.errors import ConflictError, JSONValue
+from squid.core.errors import AuthorizationError, ConflictError, JSONValue, NotFoundError
+from squid.permissions.application import PermissionService
+from squid.permissions.domain import Subject
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.submissions.domain.source_files import SubmissionSourceFile
 
 _INPUT = TypeAdapter(BuildInferenceInput)
 _DRAFT = TypeAdapter(BuildDraft)
@@ -25,6 +29,7 @@ class InferenceCandidate:
     run_id: UUID
     owner_account_id: int
     facts: BuildDraft
+    source_files: tuple[SubmissionSourceFile, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +50,8 @@ class InferenceRunRepository(Protocol):
         self, run_id: UUID, token: UUID, drafts: tuple[BuildDraft, ...]
     ) -> tuple[InferenceCandidate, ...]: ...
     async def fail(self, run_id: UUID, token: UUID) -> None: ...
+    async def get(self, run_id: UUID) -> tuple[int, tuple[InferenceCandidate, ...]] | None: ...
+    async def list_active(self, owner: int | None) -> tuple[UUID, ...]: ...
     async def expired(self) -> tuple[tuple[UUID, int], ...]: ...
     async def delete_expired(self, run_id: UUID) -> None: ...
 
@@ -59,11 +66,13 @@ class SubmissionInferenceRuns:
         artifacts: ArtifactStore,
         *,
         capacity: int = 1_000,
+        permissions: PermissionService | None = None,
     ) -> None:
         self._repository = repository
         self._inference = inference
         self._artifacts = artifacts
         self._capacity = capacity
+        self._permissions = permissions
 
     async def infer(
         self,
@@ -73,10 +82,14 @@ class SubmissionInferenceRuns:
         *,
         model: str,
         reasoning_effort: str | None = None,
+        source_files: tuple[SubmissionSourceFile, ...] = (),
+        purpose: Literal["submission", "recalculation"] = "submission",
     ) -> tuple[InferenceCandidate, ...]:
         """Replay completed work; leave interrupted invocations reclaimable after their lease."""
         inputs: dict[str, JSONValue] = {
             "schema_revision": 1,
+            "purpose": purpose,
+            "source_files": TypeAdapter(tuple[SubmissionSourceFile, ...]).dump_python(source_files, mode="json"),
             "bundle": _INPUT.dump_python(replace(bundle, images=()), mode="json"),
             "model": model,
             "reasoning_effort": reasoning_effort,
@@ -105,6 +118,27 @@ class SubmissionInferenceRuns:
         except Exception:
             await self._repository.fail(run_id, claim.token)
             raise
+
+    async def get(self, run_id: UUID, actor: Subject) -> tuple[InferenceCandidate, ...]:
+        """Reopen retained candidates under the current owner or staff authority."""
+        result = await self._repository.get(run_id)
+        if result is None:
+            raise NotFoundError
+        owner, candidates = result
+        if actor.account_id != owner and not (
+            self._permissions is not None and await self._permissions.allows(actor, BUILD_SUBMISSION_EDIT)
+        ):
+            raise AuthorizationError
+        return candidates
+
+    async def list_active(self, actor: Subject, *, inbox: bool = False) -> tuple[UUID, ...]:
+        if actor.account_id is None:
+            raise AuthorizationError
+        if inbox and not (
+            self._permissions is not None and await self._permissions.allows(actor, BUILD_SUBMISSION_EDIT)
+        ):
+            raise AuthorizationError
+        return await self._repository.list_active(None if inbox else actor.account_id)
 
     async def cleanup(self) -> None:
         """Delete expired private images before releasing their retained database inventory."""
