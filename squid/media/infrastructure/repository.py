@@ -1,6 +1,7 @@
 """PostgreSQL metadata and claim-token queue for media normalization."""
 
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 from typing import Any, cast, override
 from uuid import UUID, uuid4
 
@@ -33,7 +34,13 @@ from squid.media.errors import (
     MediaLimitExceededError,
 )
 from squid.media.infrastructure.artifact_publication import PostgresArtifactPublicationRepository
-from squid.media.infrastructure.models import MediaArtifactRecord, MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.infrastructure.models import (
+    MediaArtifactRecord,
+    MediaDraftReference,
+    MediaNormalizationJobRecord,
+    MediaUploadRecord,
+)
+from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
 from squid.persistence.advisory_locks import (
     SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE,
     AdvisoryLockNamespace,
@@ -64,7 +71,12 @@ class PostgresMediaJobRepository(MediaJobRepository):
         """Reserve aggregate draft capacity, or accept an identical retry."""
         async with self._session_factory.begin() as session:
             await lock_uuid(session, upload.id, namespace=_MEDIA_UPLOAD_LOCK_NAMESPACE)
-            await _lock_mutable_submission_draft(session, upload.draft_id, authorization=authorization)
+            draft_status = await _lock_mutable_submission_draft(
+                session,
+                upload.draft_id,
+                authorization=authorization,
+                require_editable=False,
+            )
             existing = await session.get(MediaUploadRecord, upload.id)
             if existing is not None:
                 existing_job = await session.get(MediaNormalizationJobRecord, upload.id)
@@ -80,6 +92,8 @@ class PostgresMediaJobRepository(MediaJobRepository):
                     )
                 return MediaEnqueueOutcome(created=False, status=existing_status)
 
+            if draft_status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+                raise MediaDraftStateConflictError(draft_status)
             totals = await _active_totals(session, upload.draft_id)
             candidate = MediaBatchTotals(
                 image_count=totals.image_count + int(upload.kind is MediaKind.IMAGE),
@@ -103,6 +117,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             )
             await session.flush()
             session.add(MediaNormalizationJobRecord(upload_id=upload.id))
+            session.add(MediaDraftReference(draft_id=upload.draft_id, upload_id=upload.id))
             return MediaEnqueueOutcome(created=True, status=MediaJobStatus.PENDING)
 
     @override
@@ -136,7 +151,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
                     await session.execute(
                         select(MediaNormalizationJobRecord, MediaUploadRecord)
                         .join(MediaUploadRecord, MediaUploadRecord.id == MediaNormalizationJobRecord.upload_id)
-                        .where(MediaUploadRecord.draft_id == draft_id)
+                        .where(media_for_draft(draft_id, include_discarded=True))
                         .order_by(MediaUploadRecord.created_at, MediaUploadRecord.id)
                     )
                 ).all()
@@ -155,10 +170,26 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 if upload_ids
                 else ()
             )
+            discarded = set(
+                await session.scalars(
+                    select(MediaDraftReference.upload_id).where(
+                        MediaDraftReference.draft_id == draft_id,
+                        MediaDraftReference.discarded.is_(True),
+                    )
+                )
+            )
         by_upload: dict[UUID, list[MediaArtifactRecord]] = {}
         for artifact in artifacts:
             by_upload.setdefault(artifact.upload_id, []).append(artifact)
-        return tuple(_snapshot(job, upload, by_upload.get(upload.id, ())) for job, upload in rows)
+        return tuple(
+            replace(
+                snapshot,
+                upload=replace(snapshot.upload, draft_id=draft_id),
+                status=MediaJobStatus.DISCARDED if upload.id in discarded else snapshot.status,
+            )
+            for job, upload in rows
+            for snapshot in (_snapshot(job, upload, by_upload.get(upload.id, ())),)
+        )
 
     @override
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
@@ -173,8 +204,22 @@ class PostgresMediaJobRepository(MediaJobRepository):
                     .with_for_update(of=MediaNormalizationJobRecord)
                 )
             ).one_or_none()
-            if row is None or row[1].draft_id != draft_id:
+            if row is None or not await session.scalar(
+                select(MediaUploadRecord.id).where(
+                    MediaUploadRecord.id == upload_id, media_for_draft(draft_id, include_discarded=True)
+                )
+            ):
                 return False
+            reference = await session.get(MediaDraftReference, (draft_id, upload_id))
+            if reference is None:
+                reference = MediaDraftReference(draft_id=draft_id, upload_id=upload_id)
+                session.add(reference)
+            reference.discarded = True
+            await session.flush()
+            if await session.scalar(
+                select(MediaUploadRecord.id).where(MediaUploadRecord.id == upload_id, retained_elsewhere(draft_id))
+            ):
+                return True
             job = row[0]
             if job.status is MediaJobStatus.DISCARDED:
                 return True
@@ -186,6 +231,66 @@ class PostgresMediaJobRepository(MediaJobRepository):
             job.discarded_at = Instant.now()
             job.last_error = None
         return True
+
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, limits: MediaLimits) -> bool:
+        """Share one normalization job, preserving per-draft capacity and discard authority."""
+        async with self._session_factory.begin() as session:
+            for draft_id in sorted({source_id, target_id}):
+                await _lock_mutable_submission_draft(session, draft_id)
+            owners = tuple(
+                await session.scalars(
+                    select(SubmissionDraft.owner_account_id).where(SubmissionDraft.id.in_((source_id, target_id)))
+                )
+            )
+            if len(set(owners)) != 1:
+                raise MediaDraftNotFoundError(target_id)
+            upload = await session.scalar(
+                select(MediaUploadRecord)
+                .where(MediaUploadRecord.id == upload_id, media_for_draft(source_id))
+                .with_for_update()
+            )
+            if upload is None:
+                return False
+            job = await session.get(MediaNormalizationJobRecord, upload_id)
+            if job is None or job.status is MediaJobStatus.DISCARDED:
+                return False
+            if await session.get(MediaDraftReference, (source_id, upload_id)) is None:
+                session.add(MediaDraftReference(draft_id=source_id, upload_id=upload_id))
+                await session.flush()
+            reference = await session.get(MediaDraftReference, (target_id, upload_id))
+            if reference is not None and not reference.discarded:
+                return True
+            totals = await _active_totals(session, target_id)
+            outputs = await session.scalar(
+                select(func.coalesce(func.sum(MediaArtifactRecord.byte_size), 0)).where(
+                    MediaArtifactRecord.upload_id == upload_id,
+                    MediaArtifactRecord.role != MediaArtifactRole.REPORT,
+                )
+            )
+            candidate = MediaBatchTotals(
+                image_count=totals.image_count + int(upload.kind is MediaKind.IMAGE),
+                video_count=totals.video_count + int(upload.kind is MediaKind.VIDEO),
+                source_bytes=totals.source_bytes + upload.source_byte_size,
+                output_bytes=totals.output_bytes + int(outputs or 0),
+            )
+            if violations := limits.batch_violations(candidate):
+                raise MediaLimitExceededError(violations)
+            if reference is None:
+                session.add(MediaDraftReference(draft_id=target_id, upload_id=upload_id))
+            else:
+                reference.discarded = False
+            await session.execute(
+                update(SubmissionDraft)
+                .where(SubmissionDraft.id == target_id)
+                .values(
+                    revision=SubmissionDraft.revision + 1,
+                    status=DraftStatus.EDITING,
+                    preparation_issues=[],
+                    preparation_retry_at=None,
+                    updated_at=func.now(),
+                )
+            )
+            return True
 
     @override
     async def claim(self, *, limit: int) -> Sequence[ClaimedMediaJob]:
@@ -474,7 +579,8 @@ async def _lock_mutable_submission_draft(
     draft_id: UUID,
     *,
     authorization: MediaDraftUploadAuthorization | None = None,
-) -> None:
+    require_editable: bool = True,
+) -> DraftStatus:
     await lock_uuid(session, draft_id, namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE)
     row = (
         await session.execute(
@@ -492,8 +598,9 @@ async def _lock_mutable_submission_draft(
             raise MediaDraftNotFoundError(draft_id)
         if revision != authorization.draft_revision:
             raise MediaDraftRevisionConflictError(expected=authorization.draft_revision, actual=revision)
-    if DraftStatus(status) not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+    if require_editable and DraftStatus(status) not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
         raise MediaDraftStateConflictError(status)
+    return DraftStatus(status)
 
 
 async def _active_totals(session: AsyncSession, draft_id: UUID) -> MediaBatchTotals:
@@ -514,12 +621,23 @@ async def _active_totals(session: AsyncSession, draft_id: UUID) -> MediaBatchTot
                 MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id,
             )
             .where(
-                MediaUploadRecord.draft_id == draft_id,
+                media_for_draft(draft_id),
                 MediaNormalizationJobRecord.status.in_(active),
             )
         )
     ).one()
+    output_bytes = await session.scalar(
+        select(func.coalesce(func.sum(MediaArtifactRecord.byte_size), 0))
+        .join(MediaUploadRecord, MediaUploadRecord.id == MediaArtifactRecord.upload_id)
+        .join(MediaNormalizationJobRecord, MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id)
+        .where(
+            media_for_draft(draft_id),
+            MediaNormalizationJobRecord.status == MediaJobStatus.COMPLETED,
+            MediaArtifactRecord.role != MediaArtifactRole.REPORT,
+        )
+    )
     return MediaBatchTotals(
+        output_bytes=int(output_bytes or 0),
         image_count=int(row[0]),
         video_count=int(row[1]),
         source_bytes=int(row[2]),

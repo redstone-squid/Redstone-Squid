@@ -28,6 +28,7 @@ from squid.media.infrastructure.models import (
     MediaArtifactObjectRecord,
     MediaArtifactPublicationRecord,
     MediaArtifactRecord,
+    MediaDraftReference,
     MediaNormalizationJobRecord,
     MediaUploadRecord,
 )
@@ -48,6 +49,7 @@ _TABLES: tuple[Table, ...] = (
     cast(Table, SubmissionDraft.__table__),
     cast(Table, MediaUploadRecord.__table__),
     cast(Table, MediaNormalizationJobRecord.__table__),
+    cast(Table, MediaDraftReference.__table__),
     cast(Table, MediaArtifactRecord.__table__),
     cast(Table, MediaArtifactObjectRecord.__table__),
     cast(Table, MediaArtifactPublicationRecord.__table__),

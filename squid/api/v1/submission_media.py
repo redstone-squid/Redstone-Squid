@@ -312,3 +312,24 @@ def _require_non_nil(identifier: UUID, *, reason: str) -> None:
 def _prevent_storage(response: Response, limits: MediaLimits) -> None:
     response.headers["Cache-Control"] = _NO_STORE
     response.headers[_MAX_UPLOAD_HEADER] = str(limits.max_source_bytes)
+
+
+@router.post(
+    "/{upload_id}/attach",
+    response_model=DraftMediaResponse,
+    dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="submission_media_attach",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE, MINECRAFT],
+        cli=cli_command("media.attach", features=("submission-media",), interaction="direct"),
+    ),
+)
+async def attach_draft_media(
+    draft_id: UUID,
+    upload_id: UUID,
+    source_draft_id: UUID,
+    attachments: DraftAttachments,
+    account_id: AccountId,
+) -> DraftMediaResponse:
+    """Reference a file supplied to another owned draft without duplicating its processing."""
+    return DraftMediaResponse.from_snapshot(await attachments.attach(source_draft_id, draft_id, account_id, upload_id))

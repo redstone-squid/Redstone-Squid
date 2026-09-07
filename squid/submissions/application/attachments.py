@@ -41,6 +41,8 @@ class DraftAttachmentJobs(Protocol):
 
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool: ...
 
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID) -> bool: ...
+
 
 class DraftAttachmentOwnership(Protocol):
     """Resolve account-owned draft snapshots for attachment commands."""
@@ -162,11 +164,19 @@ class DraftAttachmentService:
         if not await self._jobs.discard(draft_id, upload_id):
             raise DraftMediaNotFoundError(upload_id)
 
-    async def _owned_snapshot(self, draft_id: UUID, upload_id: UUID) -> MediaJobSnapshot:
-        snapshot = await self._jobs.get(upload_id)
-        if snapshot is None or snapshot.upload.draft_id != draft_id:
+    async def attach(self, source_id: UUID, target_id: UUID, account_id: int, upload_id: UUID) -> MediaJobSnapshot:
+        """Assign one previously supplied file to another owned draft without normalizing it again."""
+        await self._drafts.get_owned(source_id, account_id)
+        await self._drafts.get_owned(target_id, account_id)
+        if not await self._jobs.attach(source_id, target_id, upload_id):
             raise DraftMediaNotFoundError(upload_id)
-        return snapshot
+        return await self._owned_snapshot(target_id, upload_id)
+
+    async def _owned_snapshot(self, draft_id: UUID, upload_id: UUID) -> MediaJobSnapshot:
+        for snapshot in await self._jobs.list_for_draft(draft_id):
+            if snapshot.upload.id == upload_id and snapshot.upload.draft_id == draft_id:
+                return snapshot
+        raise DraftMediaNotFoundError(upload_id)
 
 
 def draft_attachment_service(
