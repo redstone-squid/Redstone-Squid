@@ -304,8 +304,8 @@ class FakeWriter:
         self.result = result
         self.payloads: list[NormalizedSubmission] = []
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> BuildSubmissionResult:
-        self.payloads.append(submission)
+    async def execute(self, job: ClaimedFinalizationJob, *, now: Instant) -> BuildSubmissionResult:
+        self.payloads.append(job.payload)
         if isinstance(self.result, Exception):
             raise self.result
         return self.result
@@ -719,11 +719,13 @@ async def test_worker_completes_after_retry_safe_build_creation() -> None:
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload),)
     target_result = FinalizedBuild(41)
-    worker = SubmissionFinalizationWorker(jobs, FakeWriter(target_result))
+    executor = FakeWriter(target_result)
+    worker = SubmissionFinalizationWorker(jobs, executor)
 
     await worker.process_batch(now=NOW)
 
-    assert jobs.completed == target_result
+    assert executor.payloads == [payload]
+    assert jobs.completed is None
 
 
 @pytest.mark.asyncio
