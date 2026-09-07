@@ -87,8 +87,11 @@ class RecordingSubmitCommands(BuildSubmitCommands[Any]):
     def __init__(self) -> None:
         self.inferred: list[discord.Message] = []
 
-    async def infer_build_from_message(self, message: discord.Message) -> None:
+    async def propose_recalculation(self, request: Any, message: discord.Message, *, owner_account_id: int) -> Any:
+        from squid.bot.ui import text_node
+
         self.inferred.append(message)
+        return text_node("Review the recalculation proposal.")
 
 
 @dataclass(frozen=True)
@@ -206,3 +209,41 @@ async def test_recalc_refuses_when_author_is_unconsented() -> None:
     assert cast(Any, interaction).edit_original_response.await_count == 1
     assert isinstance(cog.consent_sticky, ConsentStickyRecorder)
     assert cog.consent_sticky.calls == [message.channel]
+
+
+async def test_production_recalculation_retains_candidates_without_submitting(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from uuid import uuid4
+
+    from squid.builds.domain import BuildCategory, BuildDraft
+
+    candidate = BuildDraft(category=BuildCategory.DOOR, width=9)
+    inference = SimpleNamespace(infer=AsyncMock(return_value=[candidate]))
+    proposals = SimpleNamespace(create=AsyncMock(return_value=SimpleNamespace(id=uuid4())))
+    cog = cast(
+        Any,
+        SimpleNamespace(
+            bot=SimpleNamespace(
+                services=SimpleNamespace(build_inference=inference, submission_revisions=proposals),
+                inference_model="test-model",
+                inference_reasoning_effort=None,
+            )
+        ),
+    )
+    monkeypatch.setattr(
+        "squid.bot.submission.message_context.assemble_bundle", AsyncMock(return_value="retained-input")
+    )
+    monkeypatch.setattr(
+        "squid.bot.utils.permissions.subject_for_interaction", AsyncMock(return_value=Subject(account_id=7))
+    )
+    result = await BuildSubmitCommands.propose_recalculation(
+        cog,
+        cast(Any, SimpleNamespace(interaction=SimpleNamespace(id=55))),
+        cast(Any, SimpleNamespace(id=123)),
+        owner_account_id=1,
+    )
+    assert result is not None
+    assert proposals.create.await_args.kwargs["candidate"] is candidate
+    assert proposals.create.await_args.kwargs["owner_account_id"] == 1
+    assert proposals.create.await_args.kwargs["source_message_id"] == 123
