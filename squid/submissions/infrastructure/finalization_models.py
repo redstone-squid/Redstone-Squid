@@ -178,3 +178,24 @@ class SubmissionFinalizationResult(Base, kw_only=True):
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+
+
+class SubmissionReceiptMedia(Base, kw_only=True):
+    """Normalized uploads retained by a committed submission receipt."""
+
+    __tablename__ = "submission_receipt_media"
+    __table_args__ = (Index("submission_receipt_media_upload_idx", "upload_id"),)
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submission_finalization_results.job_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    upload_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("media_uploads.id", ondelete="RESTRICT"),
+        primary_key=True,
+    )
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )

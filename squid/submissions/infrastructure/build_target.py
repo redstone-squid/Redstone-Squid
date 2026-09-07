@@ -55,6 +55,16 @@ class SubmissionBuildCommands(Protocol):
 
     async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None: ...
 
+    async def prepare_for_account(
+        self,
+        build: Build,
+        *,
+        submitter_account_id: int,
+        source_submission_draft_id: UUID,
+        display_name: str | None,
+        ai_generated: bool,
+    ) -> Build: ...
+
     async def submit_for_account(
         self,
         build: Build,
@@ -119,6 +129,30 @@ class CanonicalBuildSubmissionWriter:
         if persisted.submitter_account_id != submission.owner_account_id or persisted.sponsor != submission.sponsor:
             return _target_rejected()
         return _target_result(persisted)
+
+    async def prepare(self, submission: NormalizedSubmission) -> Build | BuildSubmissionRejected:
+        """Resolve a candidate without committing, or recover a pre-cutover source build."""
+        existing = await self._builds.get_by_source_submission_draft_id(submission.source_draft_id)
+        if existing is not None:
+            if existing.submitter_account_id != submission.owner_account_id or existing.sponsor != submission.sponsor:
+                return _target_rejected()
+            return existing
+        rejection = await self._validate_source_version(submission.source_version)
+        if rejection is not None:
+            return rejection
+        definitions = await self._resolve_tags(submission)
+        if isinstance(definitions, BuildSubmissionRejected):
+            return definitions
+        try:
+            return await self._builds.prepare_for_account(
+                _to_build(submission, definitions),
+                submitter_account_id=submission.owner_account_id,
+                source_submission_draft_id=submission.source_draft_id,
+                display_name=submission.display_name,
+                ai_generated=submission.ai_generated,
+            )
+        except InvalidBuildError, InvalidStateError:
+            return _target_rejected()
 
     async def _validate_source_version(self, source_version: str) -> BuildSubmissionRejected | None:
         canonical_versions = {str(version) for version in await self._versions.list_all()}

@@ -393,12 +393,16 @@ class BuildRepository:
     async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:
         """Load the build already created from a synchronized submission draft."""
         async with self._session_factory() as session:
-            sql_build = await session.scalar(
-                select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id).options(*_mapper_load_options())
-            )
-            if sql_build is None:
-                return None
-            return await self._mapper.to_domain(session, sql_build)
+            return await self.source_in_session(session, draft_id)
+
+    async def source_in_session(self, session: AsyncSession, draft_id: uuid.UUID) -> Build | None:
+        """Read a source-draft build within a submission transaction."""
+        sql_build = await session.scalar(
+            select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id).options(*_mapper_load_options())
+        )
+        if sql_build is None:
+            return None
+        return await self._mapper.to_domain(session, sql_build)
 
     async def list_page(
         self,
@@ -491,21 +495,29 @@ class BuildRepository:
 
         if build.id is None:
             async with self._session_factory() as session:
-                submitter_account_id = await self._resolve_submitter_account_id(session, build)
-                sql_build = self._new_model(build, submitter_account_id)
-                session.add(sql_build)
-                # Mirror _update_existing: taxonomy and version lookups issue SELECTs, and
-                # letting them autoflush while tag assignments are wired to a not-yet-added
-                # build row raises SAWarning through TagDefinition.assignments.
-                with session.no_autoflush:
-                    await self._setup_relationships(build, session, sql_build)
-                await session.flush()
-                build.id = sql_build.id
-                await self._sync_source_messages(build, session)
+                await self.insert_in_session(session, build)
                 await session.commit()
-                build.revision = sql_build.revision
         else:
             await self._update_existing(build)
+
+    async def insert_in_session(self, session: AsyncSession, build: Build) -> None:
+        """Insert a prepared build within the caller's transaction, including its database events."""
+        if build.id is not None:
+            message = "Transactional insertion requires a new build."
+            raise InvalidStateError(message)
+        build.edited_time = now()
+        submitter_account_id = await self._resolve_submitter_account_id(session, build)
+        sql_build = self._new_model(build, submitter_account_id)
+        session.add(sql_build)
+        # Mirror _update_existing: taxonomy and version lookups issue SELECTs, and
+        # letting them autoflush while tag assignments are wired to a not-yet-added
+        # build row raises SAWarning through TagDefinition.assignments.
+        with session.no_autoflush:
+            await self._setup_relationships(build, session, sql_build)
+        await session.flush()
+        build.id = sql_build.id
+        await self._sync_source_messages(build, session)
+        build.revision = sql_build.revision
 
     async def save_for_source_submission(self, build: Build) -> SourceSubmissionBuildWrite:
         """Insert once by source draft, or return the transaction winner after a collision."""

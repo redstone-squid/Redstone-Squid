@@ -294,39 +294,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
     ) -> bool:
         """Retain the target result and submit the draft if this claim still owns it."""
         async with self._session_factory.begin() as session:
-            draft = await _locked_draft(session, job.draft_id)
-            model = await _claimed_job(session, job)
-            if model is None:
-                return False
-            if draft.status is not DraftStatus.PROCESSING:
-                msg = "claimed finalization job does not own a processing draft"
-                raise InvalidStateError(msg)
-            existing = await session.get(SubmissionFinalizationResult, model.id)
-            if existing is not None:
-                if _result(existing) != result:
-                    msg = "submission target returned conflicting results for one source draft"
-                    raise DataIntegrityError(msg)
-            else:
-                session.add(
-                    SubmissionFinalizationResult(
-                        job_id=model.id,
-                        build_id=result.build_id,
-                        _legacy_target_key=_LEGACY_BUILD_TARGET_KEY,
-                        _legacy_provenance=_legacy_result_provenance(job.payload),
-                        created_at=now,
-                    )
-                )
-            model.status = FinalizationJobStatus.COMPLETED
-            model.completed_at = now
-            model.attention_at = None
-            model.dead_at = None
-            model.last_error = None
-            model.attention_issues = []
-            _clear_claim(model)
-            model.updated_at = now
-            draft.status = DraftStatus.SUBMITTED
-            draft.updated_at = now
-        return True
+            return await complete_in_session(session, job, result, now=now)
 
     @override
     async def needs_attention(
@@ -537,3 +505,46 @@ def _legacy_result_provenance(submission: NormalizedSubmission) -> dict[str, obj
 
 def _unique_issues(issues: Sequence[SubmissionAttentionIssue]) -> tuple[SubmissionAttentionIssue, ...]:
     return tuple(dict.fromkeys(issues))
+
+
+async def complete_in_session(
+    session: AsyncSession,
+    job: ClaimedFinalizationJob,
+    result: FinalizedBuild,
+    *,
+    now: Instant,
+) -> bool:
+    """Fence and finish a receipt within the transaction that creates its build."""
+    draft = await _locked_draft(session, job.draft_id)
+    model = await _claimed_job(session, job)
+    if model is None:
+        return False
+    if draft.status is not DraftStatus.PROCESSING:
+        msg = "claimed finalization job does not own a processing draft"
+        raise InvalidStateError(msg)
+    existing = await session.get(SubmissionFinalizationResult, model.id)
+    if existing is not None:
+        if _result(existing) != result:
+            msg = "submission target returned conflicting results for one source draft"
+            raise DataIntegrityError(msg)
+    else:
+        session.add(
+            SubmissionFinalizationResult(
+                job_id=model.id,
+                build_id=result.build_id,
+                _legacy_target_key=_LEGACY_BUILD_TARGET_KEY,
+                _legacy_provenance=_legacy_result_provenance(job.payload),
+                created_at=now,
+            )
+        )
+    model.status = FinalizationJobStatus.COMPLETED
+    model.completed_at = now
+    model.attention_at = None
+    model.dead_at = None
+    model.last_error = None
+    model.attention_issues = []
+    _clear_claim(model)
+    model.updated_at = now
+    draft.status = DraftStatus.SUBMITTED
+    draft.updated_at = now
+    return True

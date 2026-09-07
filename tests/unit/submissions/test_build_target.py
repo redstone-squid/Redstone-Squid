@@ -56,6 +56,21 @@ class FakeBuilds:
     async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
         return self.created.get(draft_id)
 
+    async def prepare_for_account(
+        self,
+        build: Build,
+        *,
+        submitter_account_id: int,
+        source_submission_draft_id: UUID,
+        display_name: str | None,
+        ai_generated: bool,
+    ) -> Build:
+        build.submitter_account_id = submitter_account_id
+        build.source_submission_draft_id = source_submission_draft_id
+        build.display_name = display_name
+        build.ai_generated = ai_generated
+        return build
+
     async def submit_for_account(self, build: Build, **kwargs: object) -> Build:
         self.calls.append((build, kwargs))
         if self.error is not None:
