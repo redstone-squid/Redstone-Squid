@@ -2,6 +2,7 @@
 
 from uuid import UUID, uuid4
 
+from pydantic import TypeAdapter
 from sqlalchemy import CheckConstraint, ForeignKey, Integer, Text, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as SQLUUID
@@ -22,6 +23,7 @@ from squid.submissions.application.inference_runs import (
     encode_facts,
     inference_busy,
 )
+from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import DraftCapacityExceededError
 
 
@@ -112,6 +114,29 @@ class PostgresInferenceRuns:
                 row.claim_token = None
                 row.claim_expires_at = None
 
+    async def get(self, run_id: UUID) -> tuple[int, tuple[InferenceCandidate, ...]] | None:
+        async with self._sessions() as session:
+            row = await session.scalar(
+                select(SubmissionInferenceRun).where(
+                    SubmissionInferenceRun.id == run_id,
+                    SubmissionInferenceRun.expires_at > func.now(),
+                    SubmissionInferenceRun.inputs["purpose"].astext == "submission",
+                )
+            )
+            if row is None:
+                return None
+            return row.owner_account_id, _candidates(row)
+
+    async def list_active(self, owner: int | None) -> tuple[UUID, ...]:
+        async with self._sessions() as session:
+            query = select(SubmissionInferenceRun.id).where(
+                SubmissionInferenceRun.expires_at > func.now(),
+                SubmissionInferenceRun.inputs["purpose"].astext == "submission",
+            )
+            if owner is not None:
+                query = query.where(SubmissionInferenceRun.owner_account_id == owner)
+            return tuple(await session.scalars(query.order_by(SubmissionInferenceRun.expires_at.desc()).limit(10)))
+
     async def expired(self) -> tuple[tuple[UUID, int], ...]:
         async with self._sessions() as session:
             rows = await session.scalars(
@@ -152,6 +177,12 @@ class PostgresInferenceRuns:
 
 def _candidates(row: SubmissionInferenceRun) -> tuple[InferenceCandidate, ...]:
     return tuple(
-        InferenceCandidate(candidate_id(row.id, index), row.id, row.owner_account_id, decode_facts(facts))
+        InferenceCandidate(
+            candidate_id(row.id, index),
+            row.id,
+            row.owner_account_id,
+            decode_facts(facts),
+            TypeAdapter(tuple[SubmissionSourceFile, ...]).validate_python(row.inputs.get("source_files", [])),
+        )
         for index, facts in enumerate(row.candidates)
     )

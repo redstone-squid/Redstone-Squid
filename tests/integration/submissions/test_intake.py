@@ -50,3 +50,27 @@ async def test_registration_resolves_intake_and_late_failure_does_not_downgrade_
     assert (await reload(sessions, draft)).snapshot.revision == current.snapshot.revision
     with pytest.raises(ConflictError):
         await intake.reserve(current, SuppliedAttachment(source.id, "different.png", "image", IntakeStatus.PENDING))
+
+
+async def test_source_manifest_blocks_even_if_process_dies_before_reserving_downloads(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from dataclasses import replace
+
+    from squid.submissions.domain.source_files import SubmissionSourceFile
+    from squid.submissions.infrastructure.repository import PostgresDraftRepository
+
+    sessions = migrated_session_factory
+    owner = await seed_account_and_version(sessions)
+    initial = await create_draft(sessions, owner)
+    source = SubmissionSourceFile(uuid4(), "image.png", "image/png", "https://cdn.discordapp.com/source.png", 4)
+    draft = replace(initial, snapshot=replace(initial.snapshot, id=uuid4()), source_files=(source,))
+    await PostgresDraftRepository(sessions).create(draft)
+    intake = PostgresAttachmentIntake(sessions)
+    assert await intake.issues_for_draft(draft.snapshot.id)
+    pending = (await intake.list(draft.snapshot.id))[0]
+    assert pending.status is IntakeStatus.PENDING
+    assert pending.source == source
+    await intake.reserve(draft, pending)
+    await intake.set_status(draft.snapshot.id, source.id, IntakeStatus.DISCARDED)
+    assert await intake.issues_for_draft(draft.snapshot.id) == ()

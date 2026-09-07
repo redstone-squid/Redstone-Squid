@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from pydantic import TypeAdapter
 from sqlalchemy import CheckConstraint, ForeignKey, Text, select
 from sqlalchemy.dialects.postgresql import UUID as SQLUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -11,8 +12,10 @@ from squid.core.errors import ConflictError, NotFoundError, ValidationError
 from squid.persistence.base import Base
 from squid.persistence.types import StrEnumText
 from squid.submissions.application.drafts import StoredDraft
-from squid.submissions.application.intake import IntakeStatus, SuppliedAttachment
+from squid.submissions.application.intake import IntakeStatus, SuppliedAttachment, classify_supplied_file
 from squid.submissions.domain import SubmissionAttentionIssue, SubmissionAttentionReason
+from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.infrastructure.schematics import _changed, _editable
 
 
@@ -87,7 +90,21 @@ class PostgresAttachmentIntake:
                 .where(SubmissionSuppliedAttachment.draft_id == draft_id)
                 .order_by(SubmissionSuppliedAttachment.source_id)
             )
-            return tuple(SuppliedAttachment(row.source_id, row.filename, row.kind, row.status) for row in rows)
+            retained = {
+                row.source_id: SuppliedAttachment(row.source_id, row.filename, row.kind, row.status) for row in rows
+            }
+            draft = await session.get(SubmissionDraft, draft_id)
+            if draft is not None:
+                for source in TypeAdapter(tuple[SubmissionSourceFile, ...]).validate_python(draft.source_files):
+                    actual = retained.get(source.id)
+                    retained[source.id] = SuppliedAttachment(
+                        source.id,
+                        source.filename,
+                        classify_supplied_file(source.filename, source.content_type),
+                        actual.status if actual is not None else IntakeStatus.PENDING,
+                        source,
+                    )
+            return tuple(retained.values())
 
     async def set_status(self, draft_id: UUID, source_id: UUID, status: IntakeStatus) -> None:
         async with self._sessions.begin() as session:
@@ -111,6 +128,16 @@ class PostgresAttachmentIntake:
         unresolved = [
             item for item in await self.list(draft_id) if item.status in {IntakeStatus.PENDING, IntakeStatus.FAILED}
         ]
-        return (
+        async with self._sessions() as session:
+            draft = await session.get(SubmissionDraft, draft_id)
+            issues = (
+                tuple(
+                    SubmissionAttentionIssue(field, SubmissionAttentionReason.WRONG_TYPE)
+                    for field in draft.source_issues
+                )
+                if draft is not None
+                else ()
+            )
+        return issues + (
             (SubmissionAttentionIssue("attachments", SubmissionAttentionReason.MEDIA_REJECTED),) if unresolved else ()
         )

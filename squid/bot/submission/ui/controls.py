@@ -74,3 +74,23 @@ async def reopen_revision(interaction: Interaction[RedstoneSquid], proposal_id: 
     request = await sd.request(interaction)
     screen = await proposal_screen(interaction.client.services, UUID(proposal_id), request)
     await request.respond(screen, audience="personal")
+
+
+inference_reopen = _feature_route(builds, "inference:{run_id}:reopen")
+
+
+@builds.route(inference_reopen)
+async def reopen_inference(interaction: Interaction[RedstoneSquid], run_id: str) -> None:
+    """Recover candidates under current consent and owner or staff authority."""
+    from squid.bot.consent import ensure_consented_account
+    from squid.bot.submission.ui.inference import InferenceCandidatesScreen
+    from squid.bot.utils.permissions import subject_for_interaction
+
+    request = await sd.request(interaction)
+    if await ensure_consented_account(request, interaction.client.services.accounts) is None:
+        return
+    actor = await subject_for_interaction(request)
+    candidates = await interaction.client.services.submission_inference.get(UUID(run_id), actor)
+    await request.respond(
+        InferenceCandidatesScreen(interaction.client.services, UUID(run_id), candidates), audience="personal"
+    )

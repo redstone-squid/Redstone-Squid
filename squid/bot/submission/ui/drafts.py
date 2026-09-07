@@ -155,6 +155,16 @@ class DraftEditorScreen(sd.Screen):
             if self.selected_attachment is not None:
                 nodes.append(
                     sl.action_controls(
+                        *(
+                            [sl.action_control("Use supplied file", self._use_attachment, key="use_attachment")]
+                            if any(
+                                str(item.id) == self.selected_attachment
+                                and item.source is not None
+                                and item.status is IntakeStatus.PENDING
+                                for item in files
+                            )
+                            else []
+                        ),
                         sl.action_control("Retry with file", self._retry_attachment, key="retry_attachment"),
                         sl.action_control("Discard file", self._discard_attachment, key="discard_attachment"),
                         *(
@@ -278,6 +288,20 @@ class DraftEditorScreen(sd.Screen):
             )
             self.selected_attachment = None
             await self._reload()
+
+    async def _use_attachment(self, event: sl.PressEvent) -> None:
+        from squid.bot.submission.draft_intake import receive_retained_file
+
+        if self.selected_attachment is None:
+            return
+        await event.acknowledge()
+        try:
+            await receive_retained_file(
+                self.services, self.draft.snapshot.id, self.actor_id, UUID(self.selected_attachment)
+            )
+        except Exception:
+            self.notice = "The supplied file could not be downloaded. Upload a replacement or discard it."
+        await self._reload()
 
     async def _primary_attachment(self, event: sl.PressEvent) -> None:
         if self.selected_attachment is not None:

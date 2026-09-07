@@ -447,6 +447,7 @@ class _ServiceGraph:
             self.build_inference,
             self.artifacts,
             capacity=self.config.submissions.inferred_draft_capacity,
+            permissions=self.permissions,
         )
 
     @cached_property

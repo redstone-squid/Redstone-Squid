@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
+from squid.builds.domain import SourceMessage
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
 from squid.permissions.domain import PermissionNode, Subject
@@ -21,6 +22,7 @@ from squid.submissions.domain import (
     SubmissionOrigin,
 )
 from squid.submissions.domain.finalization import SubmissionAttentionIssue
+from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import (
     DraftAccessDeniedError,
     DraftNotFoundError,
@@ -64,6 +66,9 @@ class StoredDraft:
     preparation_retry_at: Instant | None = None
     inferred: bool = False
     submission_actor_account_id: int | None = None
+    source_messages: tuple[SourceMessage, ...] = ()
+    source_files: tuple[SubmissionSourceFile, ...] = ()
+    source_issues: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
@@ -260,6 +265,9 @@ class SubmissionDraftService:
         now: Instant | None = None,
         draft_id: UUID | None = None,
         inferred: bool = False,
+        source_messages: tuple[SourceMessage, ...] = (),
+        source_files: tuple[SubmissionSourceFile, ...] = (),
+        source_issues: tuple[str, ...] = (),
     ) -> StoredDraft:
         """Create an empty draft pinned to the current schema revision."""
         if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
@@ -289,6 +297,9 @@ class SubmissionDraftService:
             expires_at=created_at.add(days=self._retention_days, days_assumed_24h_ok=True),
             source_installation_id=source_installation_id,
             inferred=inferred,
+            source_messages=source_messages,
+            source_files=source_files,
+            source_issues=source_issues,
         )
         return await self._repository.create(stored, capacity=limit)
 

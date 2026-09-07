@@ -17,6 +17,7 @@ from squid.media.domain import MediaKind
 from squid.schematics.domain.formats import SCHEMATIC_EXTENSIONS
 from squid.submissions.application.drafts import DraftActor, StoredDraft, SubmissionDraftService
 from squid.submissions.application.schematics import DraftSchematicService
+from squid.submissions.domain.source_files import SubmissionSourceFile
 
 
 class IntakeStatus(StrEnum):
@@ -36,6 +37,7 @@ class SuppliedAttachment:
     filename: str
     kind: str
     status: IntakeStatus
+    source: SubmissionSourceFile | None = None
 
 
 class AttachmentIntakeRepository(Protocol):
@@ -68,17 +70,7 @@ class SubmissionAttachmentIntake:
         if source_id.int == 0 or not filename.strip() or len(filename) > 255:
             message = "A supplied attachment needs a valid identifier and filename."
             raise ValidationError(message)
-        suffix = Path(filename.lower()).suffix
-        mime = content_type or mimetypes.guess_type(filename)[0] or ""
-        kind = (
-            "schematic"
-            if suffix in SCHEMATIC_EXTENSIONS
-            else "image"
-            if mime.startswith("image/")
-            else "video"
-            if mime.startswith("video/")
-            else "unknown"
-        )
+        kind = classify_supplied_file(filename, content_type)
         attachment = SuppliedAttachment(source_id, filename, kind, IntakeStatus.PENDING)
         await self._repository.reserve(await self._drafts.get_accessible(draft_id, actor), attachment)
         return attachment
@@ -117,6 +109,12 @@ class SubmissionAttachmentIntake:
                 draft.snapshot.id, actor, filename=attachment.filename, data=path.read_bytes(), upload_id=attachment.id
             )
         elif attachment.kind in {"image", "video"} and self._media is not None:
+            existing = await self._media.get(attachment.id)
+            if existing is not None and existing.upload.draft_id != draft.snapshot.id:
+                if not await self._media.attach(existing.upload.draft_id, draft.snapshot.id, attachment.id):
+                    message = "This shared file is no longer available; upload a replacement."
+                    raise ConflictError(message)
+                return
             await self._media.submit_staged(
                 StagedMediaUploadSubmission(
                     draft_id=draft.snapshot.id,
@@ -150,9 +148,28 @@ class SubmissionAttachmentIntake:
         attachment = next((item for item in await self.list(draft_id, actor) if item.id == source_id), None)
         if attachment is None:
             raise NotFoundError
+        if attachment.status is IntakeStatus.DISCARDED:
+            return
+        if attachment.source is not None:
+            await self.reserve(draft_id, actor, source_id, attachment.filename, attachment.source.content_type)
         if attachment.kind == "schematic":
             if any(item.id == source_id for item in await self._schematics.list(draft_id, actor)):
                 await self._schematics.discard(draft_id, actor, source_id)
         elif attachment.kind in {"image", "video"} and self._media is not None:
             await self._media.discard(draft_id, source_id)
         await self._repository.set_status(draft_id, source_id, IntakeStatus.DISCARDED)
+
+
+def classify_supplied_file(filename: str, content_type: str | None) -> str:
+    """Classify supplied-file intent without treating the filename as verified content."""
+    suffix = Path(filename.lower()).suffix
+    mime = content_type or mimetypes.guess_type(filename)[0] or ""
+    return (
+        "schematic"
+        if suffix in SCHEMATIC_EXTENSIONS
+        else "image"
+        if mime.startswith("image/")
+        else "video"
+        if mime.startswith("video/")
+        else "unknown"
+    )
