@@ -56,6 +56,11 @@ class SubmissionDraft(Base, kw_only=True):
         CheckConstraint("expires_at > created_at", name="submission_drafts_expiry_after_creation"),
         Index("submission_drafts_owner_updated_idx", "owner_account_id", "updated_at"),
         Index(
+            "submission_drafts_actor_idx",
+            "submission_actor_account_id",
+            postgresql_where=text("submission_actor_account_id IS NOT NULL"),
+        ),
+        Index(
             "submission_drafts_expiry_idx",
             "expires_at",
             postgresql_where=text("status IN ('editing', 'processing', 'needs_attention')"),
@@ -88,6 +93,11 @@ class SubmissionDraft(Base, kw_only=True):
         JSONB, nullable=False, default_factory=list, server_default=text("'[]'::jsonb")
     )
     preparation_retry_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    submission_actor_account_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", ondelete="RESTRICT"),
+        default=None,
+    )
     origin: Mapped[SubmissionOrigin] = mapped_column(StrEnumText(SubmissionOrigin), nullable=False)
     inferred: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     source_installation_id: Mapped[uuid.UUID | None] = mapped_column(

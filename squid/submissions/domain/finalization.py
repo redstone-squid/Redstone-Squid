@@ -90,6 +90,7 @@ class SubmissionAttentionReason(StrEnum):
     SPONSOR_UNAVAILABLE = "sponsor_unavailable"
     TARGET_REJECTED = "target_rejected"
     RETRY_EXHAUSTED = "retry_exhausted"
+    PERMISSION_REVOKED = "permission_revoked"
 
 
 class FinalizationJobStatus(StrEnum):
