@@ -1117,5 +1117,17 @@ def test_finalization_attempt_migration_preserves_history_and_refuses_lossy_down
             command.downgrade(config, "b5d9f2a7c0e3")
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT count(*) FROM submission_finalization_jobs")) == 2
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE submission_drafts SET status = 'needs_attention'"))
+        command.upgrade(config, "d7f1b4c9e2a5")
+        with engine.connect() as connection:
+            issues = connection.scalar(text("SELECT preparation_issues FROM submission_drafts"))
+            assert issues == [{"field_id": "schematic", "reason": "schematic_required"}]
+            assert connection.scalar(text("SELECT count(*) FROM submission_finalization_jobs")) == 2
+        with pytest.raises(RuntimeError, match="Cannot downgrade while draft preparation state is retained"):
+            command.downgrade(config, "c6e0a3b8d1f4")
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE submission_drafts SET preparation_issues = '[]'::jsonb"))
+        command.downgrade(config, "c6e0a3b8d1f4")
     finally:
         engine.dispose()

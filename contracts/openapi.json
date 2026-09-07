@@ -13384,7 +13384,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SubmissionAttemptResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SubmissionAttemptResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DraftPreparationResponse"
+                    }
+                  ],
+                  "title": "Response Submission Finalization Start"
                 }
               }
             },
@@ -13824,7 +13832,7 @@
         }
       }
     },
-    "/v1/submissions/drafts/{draft_id}/attempts/latest": {
+    "/v1/submissions/drafts/{draft_id}/status": {
       "get": {
         "tags": [
           "submissions"
@@ -13882,7 +13890,15 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SubmissionAttemptResponse"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SubmissionAttemptResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DraftPreparationResponse"
+                    }
+                  ],
+                  "title": "Response Submission Finalization Get"
                 }
               }
             },
@@ -18626,6 +18642,44 @@
         "title": "DraftMediaStatus",
         "description": "Stable client states that do not expose worker claim details."
       },
+      "DraftPreparationResponse": {
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Draft Id"
+          },
+          "draft_revision": {
+            "type": "integer",
+            "title": "Draft Revision"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "waiting_for_artifacts",
+              "needs_attention"
+            ],
+            "title": "Status"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionAttentionIssueResponse"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft_id",
+          "draft_revision",
+          "status",
+          "issues"
+        ],
+        "title": "DraftPreparationResponse",
+        "description": "A retained draft request that has not produced an executable attempt."
+      },
       "DraftStatus": {
         "type": "string",
         "enum": [
@@ -21732,6 +21786,18 @@
               }
             ],
             "title": "Source Installation Id"
+          },
+          "preparation_issues": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionAttentionIssueResponse"
+            },
+            "type": "array",
+            "title": "Preparation Issues"
+          },
+          "waiting_for_artifacts": {
+            "type": "boolean",
+            "title": "Waiting For Artifacts",
+            "default": false
           }
         },
         "additionalProperties": false,

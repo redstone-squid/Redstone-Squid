@@ -253,7 +253,6 @@ class DraftLifecycleScenario:
         _expect_field(body, "draft_id", self._draft_id())
         _expect_field(body, "draft_revision", self.state.revision)
         _expect_field(body, "status", "needs_attention")
-        _expect_field(body, "build_id", None)
         issues = body.get("issues")
         if not isinstance(issues, list) or not issues:
             msg = "Expected incomplete draft submission to return at least one attention issue."
@@ -488,7 +487,7 @@ def get_finalization_request(auth: DraftWebAuth, draft_id: str) -> DraftRequest:
     return DraftRequest(
         operation_id="submission_finalization_get",
         method="GET",
-        path=f"/v1/submissions/drafts/{draft_id}/attempts/latest",
+        path=f"/v1/submissions/drafts/{draft_id}/status",
         cookies=auth.cookies,
     )
 

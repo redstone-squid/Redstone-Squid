@@ -17,10 +17,14 @@ from squid.media.application.jobs import MediaJobStatus
 from squid.media.domain import MediaKind
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.base import Base
-from squid.submissions.application import StoredDraft
+from squid.submissions.application import DraftPreparationSnapshot, StoredDraft
 from squid.submissions.domain import (
+    DraftChange,
+    DraftChangeKey,
     DraftSnapshot,
     DraftStatus,
+    FieldOperation,
+    FieldOperationKind,
     FinalizationJobStatus,
     FinalizedBuild,
     GeneralSubmissionDetails,
@@ -384,21 +388,15 @@ async def test_preparation_attention_can_be_repaired_without_changing_revision(
         expires_at=expires_at.add(seconds=1),
     )
 
-    assert attention.status is FinalizationJobStatus.NEEDS_ATTENTION
+    assert isinstance(attention, DraftPreparationSnapshot)
     assert attention.issues == (issue,)
-    assert pending.job_id != attention.job_id
     assert pending.status is FinalizationJobStatus.PENDING
     assert pending.issues == ()
-    async with async_session_factory() as session:
-        original = await session.get(SubmissionFinalizationJob, attention.job_id)
-        assert original is not None
-        assert original.attempt_number == 1
-        assert original.status is FinalizationJobStatus.NEEDS_ATTENTION
-        assert original.payload is None
-        assert original.attention_issues == [{"field_id": issue.field_id, "reason": issue.reason.value}]
-        latest = await session.get(SubmissionFinalizationJob, pending.job_id)
-        assert latest is not None
-        assert latest.attempt_number == 2
+    assert pending.attempt_number == 1
+    current = await PostgresDraftRepository(async_session_factory).get(DRAFT_ID)
+    assert current is not None
+    assert current.preparation_issues == ()
+    assert current.preparation_retry_at is None
 
 
 async def test_retry_retains_failed_payload_and_rejects_its_stale_completion(
@@ -452,7 +450,8 @@ async def test_repeated_preparation_issue_does_not_append_history(
     first = await repository.record_preparation_attention(stored_draft, issues, now=NOW, expires_at=expiry)
     second = await repository.record_preparation_attention(stored_draft, issues, now=NOW, expires_at=expiry)
 
-    assert first.job_id == second.job_id
+    assert first == second
+    assert await repository.list_attempts(DRAFT_ID, before=None, limit=10) == ()
 
 
 async def test_status_translates_malformed_attention_entries_to_data_integrity_error(
@@ -468,13 +467,11 @@ async def test_status_translates_malformed_attention_entries_to_data_integrity_e
     )
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(SubmissionFinalizationJob)
-            .where(SubmissionFinalizationJob.draft_id == DRAFT_ID)
-            .values(attention_issues=[42])
+            update(SubmissionDraft).where(SubmissionDraft.id == DRAFT_ID).values(preparation_issues=[42])
         )
 
     with pytest.raises(DataIntegrityError, match="attention issues"):
-        await repository.get(DRAFT_ID)
+        await PostgresDraftRepository(async_session_factory).get(DRAFT_ID)
 
 
 async def test_unexpected_failures_dead_letter_without_deleting_draft(
@@ -515,3 +512,42 @@ async def test_unexpected_failures_dead_letter_without_deleting_draft(
         draft = await session.get(SubmissionDraft, DRAFT_ID)
     assert draft is not None
     assert draft.status is DraftStatus.NEEDS_ATTENTION
+
+
+async def test_attachment_wait_reservation_recovers_and_never_creates_an_attempt(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    jobs = PostgresFinalizationJobRepository(async_session_factory)
+    await jobs.record_preparation_attention(
+        stored_draft,
+        (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
+        now=NOW,
+        expires_at=stored_draft.expires_at,
+        waiting_for_artifacts=True,
+    )
+    assert await jobs.reserve_preparations(now=NOW, limit=1) == ()
+    (reserved,) = await jobs.reserve_preparations(now=NOW.add(seconds=30), limit=1)
+    assert reserved.snapshot.id == DRAFT_ID
+    assert reserved.preparation_retry_at == NOW.add(seconds=60)
+    assert reserved.expires_at == stored_draft.expires_at
+    assert await jobs.reserve_preparations(now=NOW.add(seconds=30), limit=1) == ()
+    recovered = await jobs.reserve_preparations(now=NOW.add(seconds=60), limit=1)
+    assert len(recovered) == 1
+    assert await jobs.list_attempts(DRAFT_ID, before=None, limit=10) == ()
+    changed = await PostgresDraftRepository(async_session_factory).apply_change(
+        DRAFT_ID,
+        stored_draft.snapshot.owner_account_id,
+        DraftChange(
+            base_revision=0,
+            client_instance_id="test",
+            idempotency_key=DraftChangeKey("edit-waiting-draft"),
+            operations=(FieldOperation(UUID(int=10), "source_version", FieldOperationKind.SET, "26.1.2"),),
+        ),
+        updated_at=NOW.add(seconds=61),
+        expires_at=stored_draft.expires_at,
+    )
+    assert changed.draft.preparation_retry_at is None
+    assert changed.draft.preparation_issues == ()
+    assert await jobs.reserve_preparations(now=NOW.add(seconds=90), limit=1) == ()
+    assert await jobs.reserve_preparations(now=stored_draft.expires_at, limit=1) == ()

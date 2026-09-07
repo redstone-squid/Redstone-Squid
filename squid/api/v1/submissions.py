@@ -22,6 +22,7 @@ from squid.api.v1.schemas.submissions import (
     DraftListResponse,
     DraftManifestUpgradeRequest,
     DraftManifestUpgradeResponse,
+    DraftPreparationResponse,
     FormManifestResponse,
     FormOptionSetResponse,
     StoredDraftResponse,
@@ -31,9 +32,11 @@ from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundE
 from squid.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
+    DraftPreparationSnapshot,
     FinalizationJobSnapshot,
     FormOptionSet,
     StoredDraft,
+    SubmissionRequestResult,
 )
 from squid.submissions.domain import DraftChange, FormManifest, SubmissionOrigin
 
@@ -103,9 +106,9 @@ class SubmissionFinalizationCommands(Protocol):
         account_id: int,
         *,
         locale: str | None,
-    ) -> FinalizationJobSnapshot: ...
+    ) -> SubmissionRequestResult: ...
 
-    async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None: ...
+    async def status(self, draft_id: UUID, account_id: int) -> SubmissionRequestResult | None: ...
 
     async def attempt(self, draft_id: UUID, account_id: int, attempt_id: UUID) -> FinalizationJobSnapshot | None: ...
 
@@ -450,7 +453,7 @@ async def upgrade_draft_manifest(
 
 @router.post(
     "/drafts/{draft_id}/attempts",
-    response_model=SubmissionAttemptResponse,
+    response_model=SubmissionAttemptResponse | DraftPreparationResponse,
     status_code=status.HTTP_202_ACCEPTED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_finalization_start",
@@ -465,19 +468,21 @@ async def submit_draft(
     request: Request,
     finalization: Finalization,
     account_id: AccountId,
-) -> SubmissionAttemptResponse:
+) -> SubmissionAttemptResponse | DraftPreparationResponse:
     """Validate an owned draft and start retry-safe durable finalization."""
     snapshot = await finalization.submit(
         draft_id,
         account_id,
         locale=locale_for_request(request),
     )
+    if isinstance(snapshot, DraftPreparationSnapshot):
+        return DraftPreparationResponse.from_domain(snapshot)
     return SubmissionAttemptResponse.from_domain(snapshot)
 
 
 @router.get(
-    "/drafts/{draft_id}/attempts/latest",
-    response_model=SubmissionAttemptResponse,
+    "/drafts/{draft_id}/status",
+    response_model=SubmissionAttemptResponse | DraftPreparationResponse,
     responses=responses(401, 403, 404, 422, 503),
     operation_id="submission_finalization_get",
     openapi_extra=contract(
@@ -489,11 +494,13 @@ async def get_draft_submission(
     draft_id: UUID,
     finalization: Finalization,
     account_id: AccountId,
-) -> SubmissionAttemptResponse:
+) -> SubmissionAttemptResponse | DraftPreparationResponse:
     """Return retained finalization state after rechecking draft ownership."""
     snapshot = await finalization.status(draft_id, account_id)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
+    if isinstance(snapshot, DraftPreparationSnapshot):
+        return DraftPreparationResponse.from_domain(snapshot)
     return SubmissionAttemptResponse.from_domain(snapshot)
 
 

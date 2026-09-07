@@ -338,10 +338,10 @@ async def test_fail_closed_reader_reports_absent_without_backend_presence() -> N
     assert presence.requested == [DRAFT_ID]
 
 
-async def test_fail_closed_reader_rejects_supplied_bytes_without_a_sanitizer() -> None:
+async def test_fail_closed_reader_keeps_supplied_bytes_pending_without_a_sanitizer() -> None:
     snapshot = await FailClosedDraftSchematicReader(FakePresence(supplied=True)).read_for_draft(DRAFT_ID)
 
-    assert snapshot == DraftSchematicSnapshot(SchematicArtifactState.REJECTED)
+    assert snapshot == DraftSchematicSnapshot(SchematicArtifactState.PROCESSING)
     assert snapshot.sanitized is None
 
 

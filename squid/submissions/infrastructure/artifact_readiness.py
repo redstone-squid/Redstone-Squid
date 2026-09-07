@@ -109,7 +109,7 @@ class DraftSchematicReader(Protocol):
     filenames, extensions, object keys, hashes, serialization, or format conversion.
 
     The Nucleation-backed implementation should implement this exact port once
-    Schem-at/Nucleation#10 ships a released format-aware sanitizer.
+    Schem-at/Nucleation#39 ships a deterministic and idempotent sanitizer release.
     """
 
     async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot: ...
@@ -122,11 +122,11 @@ class DraftSchematicPresenceReader(Protocol):
 
 
 class FailClosedDraftSchematicReader:
-    """Reject quarantined schematics while Nucleation#10 is unavailable.
+    """Keep quarantined schematics pending while Nucleation#39 remains unresolved.
 
     With no quarantine reader, the only truthful result is ``ABSENT``. If backend
-    quarantine reports that bytes were supplied, they are ``REJECTED`` because this
-    implementation has no sanitizer and deliberately has no ``SANITIZED`` path.
+    quarantine reports that bytes were supplied, they remain ``PROCESSING`` until a
+    working sanitizer is available. This implementation has no ``SANITIZED`` path.
     """
 
     def __init__(self, presence: DraftSchematicPresenceReader | None = None) -> None:
@@ -134,7 +134,7 @@ class FailClosedDraftSchematicReader:
 
     async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot:
         if self._presence is not None and await self._presence.has_supplied_schematic(draft_id):
-            return DraftSchematicSnapshot(SchematicArtifactState.REJECTED)
+            return DraftSchematicSnapshot(SchematicArtifactState.PROCESSING)
         return DraftSchematicSnapshot(SchematicArtifactState.ABSENT)
 
 

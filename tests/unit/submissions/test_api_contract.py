@@ -407,7 +407,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         list_response = await client.get("/submissions/drafts")
         get_response = await client.get(f"/submissions/drafts/{draft_id}")
         submit_response = await client.post(f"/submissions/drafts/{draft_id}/attempts")
-        submission_response = await client.get(f"/submissions/drafts/{draft_id}/attempts/latest")
+        submission_response = await client.get(f"/submissions/drafts/{draft_id}/status")
         history_response = await client.get(f"/submissions/drafts/{draft_id}/attempts")
         detail_response = await client.get(f"/submissions/drafts/{draft_id}/attempts/{finalization.snapshot.job_id}")
         empty_history = await client.get(f"/submissions/drafts/{draft_id}/attempts?before=1")
