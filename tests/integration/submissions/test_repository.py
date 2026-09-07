@@ -297,20 +297,22 @@ async def test_expiry_fences_finalization_and_discards_media(
     await repository.create(stored)
     upload_id = UUID("00000000-0000-4000-8000-000000000205")
     async with async_session_factory.begin() as session:
-        session.add(
-            SubmissionFinalizationJob(
-                draft_id=DRAFT_ID,
-                draft_revision=0,
-                payload=None,
-                payload_sha256=None,
-                status=FinalizationJobStatus.NEEDS_ATTENTION,
-                available_at=NOW,
-                attention_at=NOW,
-                attention_issues=[{"field_id": "schematic", "reason": "schematic_required"}],
-                created_at=NOW,
-                updated_at=NOW,
+        for attempt_number in (1, 2):
+            session.add(
+                SubmissionFinalizationJob(
+                    draft_id=DRAFT_ID,
+                    attempt_number=attempt_number,
+                    draft_revision=0,
+                    payload=None,
+                    payload_sha256=None,
+                    status=FinalizationJobStatus.NEEDS_ATTENTION,
+                    available_at=NOW,
+                    attention_at=NOW,
+                    attention_issues=[{"field_id": "schematic", "reason": "schematic_required"}],
+                    created_at=NOW,
+                    updated_at=NOW,
+                )
             )
-        )
         session.add(
             MediaUploadRecord(
                 id=upload_id,
