@@ -5,10 +5,10 @@ from typing import Literal
 
 from whenever import Instant
 
-ResourceKind = Literal["build", "vote_session", "starboard_entry"]
+ResourceKind = Literal["build", "vote_session", "starboard_entry", "inference_run", "submission_draft"]
 """What a post renders. One kind per renderer registered with the reconciler."""
 
-Surface = Literal["build_card", "build_review", "vote_card", "starboard_entry"]
+Surface = Literal["build_card", "build_review", "vote_card", "starboard_entry", "submission_status"]
 """Which presentation a post uses. Several surfaces can render the same resource kind.
 
 `build_review` and `vote_card` are both vote sessions: a review embeds the build being

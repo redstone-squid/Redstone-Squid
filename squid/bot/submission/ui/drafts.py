@@ -20,6 +20,7 @@ from squid.submissions.domain import (
     FormManifest,
     ValueKind,
 )
+from squid.topics import resource_topic
 
 
 class DraftEditorScreen(sd.Screen):
@@ -31,16 +32,18 @@ class DraftEditorScreen(sd.Screen):
     selected: str | None = sl.state(None)
     option_page: int = sl.state(0)
     notice: str = sl.state("")
-    draft: StoredDraft = sl.state(opaque=True)
     options: tuple[ChoiceOption, ...] = sl.state((), opaque=True)
-    result: FinalizationJobSnapshot | None = sl.state(None, opaque=True)
-    attachments: tuple[SuppliedAttachment, ...] = sl.state((), opaque=True)
     selected_attachment: str | None = sl.state(None)
 
     def __init__(self, services: BotServices, actor_id: int, draft: StoredDraft, manifest: FormManifest) -> None:
         self.services = services
         self.actor_id = actor_id
-        self.draft = draft
+        self._draft_id = draft.snapshot.id
+        self._seed: tuple[StoredDraft, tuple[SuppliedAttachment, ...], FinalizationJobSnapshot | None] | None = (
+            draft,
+            (),
+            None,
+        )
         self.manifest = manifest
 
     @property
@@ -59,6 +62,9 @@ class DraftEditorScreen(sd.Screen):
         return next((field for field in self.fields if field.id == self.selected), None)
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+        state = self.projection.status
+        if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
+            return (sl.status("Loading submission draft."),)
         draft = self.draft.snapshot
         status = draft.status.value.replace("_", " ")
         if self.result is not None and self.result.result is not None:
@@ -342,16 +348,53 @@ class DraftEditorScreen(sd.Screen):
             on_submit=supplied,
         )
 
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
+    async def projection(self) -> tuple[StoredDraft, tuple[SuppliedAttachment, ...], FinalizationJobSnapshot | None]:
+        """Refresh the private editor when durable submission reconciliation publishes a change."""
+        sl.runtime.watch(resource_topic("submission_draft", str(self._draft_id)))
+        seed, self._seed = self._seed, None
+        return seed if seed is not None else await self._read()
+
+    def _current(self) -> tuple[StoredDraft, tuple[SuppliedAttachment, ...], FinalizationJobSnapshot | None]:
+        if self._seed is not None:
+            return self._seed
+        state = self.projection.status
+        if isinstance(state, sl.resources.Ready):
+            return state.value
+        if state.previous is not None:
+            return state.previous.value
+        message = "This draft has not loaded yet."
+        raise sl.resources.ResourceNotReadyError(message)
+
+    @property
+    def draft(self) -> StoredDraft:
+        return self._current()[0]
+
+    @property
+    def attachments(self) -> tuple[SuppliedAttachment, ...]:
+        return self._current()[1]
+
+    @property
+    def result(self) -> FinalizationJobSnapshot | None:
+        return self._current()[2]
+
+    async def _read(self) -> tuple[StoredDraft, tuple[SuppliedAttachment, ...], FinalizationJobSnapshot | None]:
+        draft = await self.services.submission_drafts.get_accessible(self._draft_id, self.actor_id)
+        attachments = await self.services.submission_intake.list(self._draft_id, self.actor_id)
+        result = await self.services.submission_finalization.status(self._draft_id, self.actor_id)
+        return draft, attachments, result if isinstance(result, FinalizationJobSnapshot) else None
+
     async def _reload(self) -> None:
-        self.draft = await self.services.submission_drafts.get_accessible(self.draft.snapshot.id, self.actor_id)
-        self.attachments = await self.services.submission_intake.list(self.draft.snapshot.id, self.actor_id)
+        current = await self._read()
+        if self._seed is not None:
+            self._seed = current
+        else:
+            self.projection.replace(current)
         if not any(
             str(item.id) == self.selected_attachment and item.status is not IntakeStatus.DISCARDED
             for item in self.attachments
         ):
             self.selected_attachment = None
-        result = await self.services.submission_finalization.status(self.draft.snapshot.id, self.actor_id)
-        self.result = result if isinstance(result, FinalizationJobSnapshot) else None
 
     async def _refresh(self, event: sl.PressEvent) -> None:
         await self._reload()
