@@ -1061,3 +1061,61 @@ def test_taxonomy_cutover_refuses_unimported_legacy_rows(
 
     with pytest.raises(DBAPIError, match="restriction definitions are not fully imported"):
         command.upgrade(config, "head")
+
+
+def test_finalization_attempt_migration_preserves_history_and_refuses_lossy_downgrade(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retained jobs keep their identity and payload when the one-job bound is removed."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "b5d9f2a7c0e3")
+    engine = create_engine(migration_database_url)
+    draft_id = "88888888-8888-4888-8888-888888888888"
+    job_id = "99999999-9999-4999-8999-999999999999"
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts (id, owner_account_id, schema_id, schema_revision, category, "
+                    "answers, origin, expires_at) VALUES "
+                    "(:draft_id, :account_id, 'test', 1, 'other', '{}'::jsonb, 'web', now() + interval '1 day')"
+                ),
+                {"draft_id": draft_id, "account_id": account_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs "
+                    "(id, draft_id, draft_revision, payload, status, attention_at, attention_issues) "
+                    'VALUES (:job_id, :draft_id, 0, \'{"description": "retained"}\'::jsonb, '
+                    '\'needs_attention\', now(), \'[{"field_id": "schematic", '
+                    '"reason": "schematic_required"}]\'::jsonb)'
+                ),
+                {"job_id": job_id, "draft_id": draft_id},
+            )
+        command.upgrade(config, "c6e0a3b8d1f4")
+        with engine.begin() as connection:
+            retained = connection.execute(
+                text("SELECT id::text, attempt_number, payload FROM submission_finalization_jobs")
+            ).one()
+            assert retained == (job_id, 1, {"description": "retained"})
+        command.downgrade(config, "b5d9f2a7c0e3")
+        command.upgrade(config, "c6e0a3b8d1f4")
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs "
+                    "(id, draft_id, draft_revision, attempt_number, status, attention_at, attention_issues) "
+                    "SELECT gen_random_uuid(), draft_id, draft_revision, 2, status, attention_at, attention_issues "
+                    "FROM submission_finalization_jobs WHERE id = :job_id"
+                ),
+                {"job_id": job_id},
+            )
+        with pytest.raises(RuntimeError, match="Cannot downgrade while multiple finalization attempts exist"):
+            command.downgrade(config, "b5d9f2a7c0e3")
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM submission_finalization_jobs")) == 2
+    finally:
+        engine.dispose()

@@ -195,7 +195,7 @@ async def test_build_only_reader_accepts_a_legacy_writer_result(
 
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(SubmissionFinalizationResult)
+            update(cast(Table, SubmissionFinalizationResult.__table__))
             .where(SubmissionFinalizationResult.job_id == pending.job_id)
             .values(
                 target_key="legacy_postgres_builds",
@@ -386,9 +386,65 @@ async def test_preparation_attention_can_be_repaired_without_changing_revision(
 
     assert attention.status is FinalizationJobStatus.NEEDS_ATTENTION
     assert attention.issues == (issue,)
-    assert pending.job_id == attention.job_id
+    assert pending.job_id != attention.job_id
     assert pending.status is FinalizationJobStatus.PENDING
     assert pending.issues == ()
+    async with async_session_factory() as session:
+        original = await session.get(SubmissionFinalizationJob, attention.job_id)
+        assert original is not None
+        assert original.attempt_number == 1
+        assert original.status is FinalizationJobStatus.NEEDS_ATTENTION
+        assert original.payload is None
+        assert original.attention_issues == [{"field_id": issue.field_id, "reason": issue.reason.value}]
+        latest = await session.get(SubmissionFinalizationJob, pending.job_id)
+        assert latest is not None
+        assert latest.attempt_number == 2
+
+
+async def test_retry_retains_failed_payload_and_rejects_its_stale_completion(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresFinalizationJobRepository(async_session_factory)
+    expiry = NOW.add(days=7, days_assumed_24h_ok=True)
+    payload = _payload(stored_draft)
+    first = await repository.enqueue(stored_draft, payload, now=NOW, expires_at=expiry)
+    (claim,) = await repository.claim(now=NOW, limit=1)
+    issue = SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION)
+    await repository.needs_attention(claim, (issue,), now=NOW, expires_at=expiry)
+
+    repaired = replace(stored_draft, snapshot=replace(stored_draft.snapshot, status=DraftStatus.NEEDS_ATTENTION))
+    second = await repository.enqueue(repaired, replace(payload, description="corrected"), now=NOW, expires_at=expiry)
+
+    assert second.job_id != first.job_id
+    assert await repository.complete(claim, FinalizedBuild(41), now=NOW) is False
+    latest = await repository.get(DRAFT_ID)
+    assert latest is not None
+    assert latest.job_id == second.job_id
+    async with async_session_factory() as session:
+        previous = await session.get(SubmissionFinalizationJob, first.job_id)
+        current = await session.get(SubmissionFinalizationJob, second.job_id)
+        assert previous is not None
+        assert current is not None
+        assert previous.status is FinalizationJobStatus.NEEDS_ATTENTION
+        assert previous.payload is not None
+        assert current.payload is not None
+        assert previous.payload["description"] == payload.description
+        assert current.payload["description"] == "corrected"
+        assert (previous.attempt_number, current.attempt_number) == (1, 2)
+
+
+async def test_repeated_preparation_issue_does_not_append_history(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresFinalizationJobRepository(async_session_factory)
+    expiry = NOW.add(days=7, days_assumed_24h_ok=True)
+    issues = (SubmissionAttentionIssue("creators", SubmissionAttentionReason.REQUIRED),)
+    first = await repository.record_preparation_attention(stored_draft, issues, now=NOW, expires_at=expiry)
+    second = await repository.record_preparation_attention(stored_draft, issues, now=NOW, expires_at=expiry)
+
+    assert first.job_id == second.job_id
 
 
 async def test_status_translates_malformed_attention_entries_to_data_integrity_error(
