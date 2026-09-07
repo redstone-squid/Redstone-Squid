@@ -12,7 +12,6 @@ from squid.bot.consent import ensure_consented_account
 from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.input import optional_text, split_values
-from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.ui import error_node, text_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
@@ -190,15 +189,27 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if inbox
             else await self.bot.services.submission_drafts.list_active(actor)
         )
-        if not drafts:
-            return text_node("No active drafts.")
-        return tuple(
+        from squid.bot.submission.ui.controls import inference_reopen
+        from squid.bot.utils.permissions import subject_for_interaction
+
+        runs = await self.bot.services.submission_inference.list_active(
+            await subject_for_interaction(request), inbox=inbox
+        )
+        nodes = [
             sl.primitives.Section(
                 (sl.primitives.Text(f"{draft.snapshot.category}: {draft.snapshot.status.value.replace('_', ' ')}"),),
                 sl.primitives.RoutedButton("Open draft", draft_reopen.id(draft_id=str(draft.snapshot.id))),
             )
             for draft in drafts
+        ]
+        nodes.extend(
+            sl.primitives.Section(
+                (sl.primitives.Text("Retained inference candidates"),),
+                sl.primitives.RoutedButton("Review candidates", inference_reopen.id(run_id=str(run_id))),
+            )
+            for run_id in runs
         )
+        return tuple(nodes) if nodes else text_node("No active drafts or inference runs.")
 
     def _is_build_log_message(self, message: Message) -> bool:
         """Whether inference has anything to read this message for.
@@ -235,16 +246,32 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             self.consent_sticky.record_activity(message.channel.id)
         preceding = [item async for item in message.channel.history(before=message, limit=3)]
         preceding.reverse()
-        builds = await ingest_message_bundle(
+        run_id = await ingest_message_bundle(
             [message],
             preceding,
             self.bot.services,
             model=self.bot.inference_model,
             reasoning_effort=self.bot.inference_reasoning_effort,
-            mirror=CatboxMirror(self.bot.catbox),
         )
-        for build in builds:
-            await self.bot.for_build(build).post_for_voting(type="add")
+        import squid_ui as sl
+        from squid.bot.submission.ui.controls import inference_reopen
+        from squid.bot.ui import render_payload
+        from squid_ui_discord import send_to
+
+        await send_to(message.channel)(
+            render_payload(
+                [
+                    sl.primitives.Section(
+                        (
+                            sl.primitives.Text(
+                                "Submission candidates retained. Open privately to review progress or correct missing information."
+                            ),
+                        ),
+                        sl.primitives.RoutedButton("Review candidates", inference_reopen.id(run_id=str(run_id))),
+                    )
+                ]
+            )
+        )
 
     @sd.context_menu(name="Recalculate Build", defer="private")
     async def recalc_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
@@ -305,6 +332,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             run_id,
             owner_account_id,
             bundle,
+            purpose="recalculation",
             model=self.bot.inference_model,
             reasoning_effort=self.bot.inference_reasoning_effort,
         )

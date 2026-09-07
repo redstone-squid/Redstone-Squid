@@ -1,11 +1,13 @@
 """Atomic build, artifact-reference, receipt, and database-event submission writes."""
 
+from dataclasses import replace
 from typing import Protocol
 
+from pydantic import TypeAdapter
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.builds.domain import Build
+from squid.builds.domain import Build, SourceMessage
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.core.errors import InvalidStateError
 from squid.submissions.application.drafts import SubmissionDraftService
@@ -85,6 +87,9 @@ class PostgresSubmissionExecutor:
             ):
                 message = "Submission claim no longer matches its source draft."
                 raise InvalidStateError(message)
+            candidate = replace(
+                candidate, source_messages=TypeAdapter(tuple[SourceMessage, ...]).validate_python(draft.source_messages)
+            )
             await _require_current_media(session, job.draft_id, job.payload.artifacts.normalized_media_upload_ids)
             existing = await self._builds.source_in_session(session, job.draft_id)
             if existing is not None:

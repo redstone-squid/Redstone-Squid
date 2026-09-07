@@ -28,6 +28,13 @@ class SubmissionDraft(Base, kw_only=True):
     """The compact current state of an account-owned submission draft."""
 
     __tablename__ = "submission_drafts"
+    source_messages: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, default_factory=list, server_default=text("'[]'::jsonb")
+    )
+    source_files: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, default_factory=list, server_default=text("'[]'::jsonb")
+    )
+    source_issues: Mapped[list[str]] = mapped_column(JSONB, default_factory=list, server_default=text("'[]'::jsonb"))
     __table_args__ = (
         CheckConstraint("schema_revision > 0", name="submission_drafts_schema_revision_positive"),
         CheckConstraint("revision >= 0", name="submission_drafts_revision_nonnegative"),
