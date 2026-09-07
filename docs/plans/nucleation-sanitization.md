@@ -61,6 +61,16 @@ serialized output. **Do not use that field as evidence the contract holds** — 
 Separately, litematic embeds wall-clock `TimeCreated`/`TimeModified` in its metadata, so litematic bytes are never
 reproducible by construction. Content-address the Sponge artifact or a fingerprint, never `to_litematic_b64()`.
 
+### Rechecked 2026-09-07
+
+The standalone `scripts/check_sanitizer_gate.py` reproduces #39 on both 0.10.14 and released
+0.10.23 (isolated Linux x86_64 wheel, CPython 3.14). For each release, blocks-only output is
+stable and idempotent, while entity and block-entity fixtures each produce 8 distinct outputs
+from 8 identical inputs and fail sanitize-twice byte equality. Both checks exit 1. Current
+upstream transformation-policy documentation still promises deterministic output; measurements
+were added to [#39](https://github.com/Schem-at/Nucleation/issues/39#issuecomment-5565152080).
+The production pin remains unchanged and the gate remains closed.
+
 ## Release gate
 
 - Keep arbitrary imported bytes in private, short-lived quarantine and delete them after processing succeeds or fails.
