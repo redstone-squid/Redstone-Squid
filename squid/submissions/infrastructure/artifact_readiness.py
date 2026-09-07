@@ -35,6 +35,7 @@ class DraftSchematicSnapshot:
 
     state: SchematicArtifactState
     artifact_id: UUID | None = None
+    issues: tuple[SubmissionAttentionIssue, ...] = ()
 
     def __post_init__(self) -> None:
         if (self.state is SchematicArtifactState.READY) != (self.artifact_id is not None):
@@ -85,7 +86,7 @@ class AuthoritativeDraftArtifactReadiness:
             schematic_state=schematic.state,
             schematic_id=schematic.artifact_id,
             normalized_media_upload_ids=media_ids,
-            issues=issues,
+            issues=(*issues, *schematic.issues),
         )
 
 

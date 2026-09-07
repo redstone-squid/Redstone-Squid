@@ -123,8 +123,8 @@ attempt create/list/read APIs, draft issue storage, separate immutable inputs an
 transactional build/attachment/event commit, access/actor policy, durable attachment operations,
 Discord manifest rendering and restart recovery, and inference intake/correction/revision proposals.
 Do not mark the milestone checkboxes complete until their full acceptance criteria pass. The
-sanitizer gate blocks the schematic and Discord cutover; it does not itself block independent
-API, persistence, and policy work.
+sanitizer gate blocks sanitized artifact production only; Discord and other orchestration work
+continue using private pending sources.
 
 ### Orchestration implementation continued, 2026-09-07
 
@@ -154,3 +154,18 @@ Next: durable shared attachment intake around the sanitizer boundary, persisted 
 candidate conversion, Discord manifest editing/recovery, revision proposals, and removal of the
 superseded transport orchestration. The earlier remaining-work paragraph is a historical checkpoint;
 use this execution record when determining what is still outstanding.
+
+### Private schematic intake, 2026-09-07
+
+Durable private source records precede upload/download side effects. Stable upload IDs support
+retry; draft references support sharing, explicit primary selection, and discard. Failed sources
+block preparation until resolved. The API streams bounded bytes into quarantine and exposes only
+metadata. Preparation reads retained sources and never issues a sanitizer certificate. Cleanup
+locks references before sources and rechecks after waiting, retaining sources shared by active or
+submitted drafts. Account merging includes source ownership and uploader attribution. Migration
+`b1d5f8a3c6e9` refuses to orphan retained private objects on downgrade.
+
+Validation: 64 focused API, PostgreSQL, and worker tests passed; the final cleanup concurrency
+change passed all three schematic integration tests. Pyrefly reports zero errors. Ruff and
+whitespace checks pass; Alembic has one head. Architecture naming checks additionally reported
+four failures in unchanged squid-ui-discord code (`Group`, `Scope`, `outcome`, `Decorator`).
