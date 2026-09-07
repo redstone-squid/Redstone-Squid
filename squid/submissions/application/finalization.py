@@ -11,8 +11,10 @@ from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue
 from squid.core.i18n import tr
 from squid.submissions.application.drafts import (
     DEFAULT_DRAFT_RETENTION_DAYS,
+    DraftActor,
     StoredDraft,
     SubmissionDraftService,
+    draft_actor_id,
 )
 from squid.submissions.application.preparation import PreparationRejected, PreparationWaiting, SubmissionPreparation
 from squid.submissions.domain import DraftRevisionConflictError, DraftStatus
@@ -48,6 +50,7 @@ class ClaimedFinalizationJob:
     attempts: int
     claimed_at: Instant
     claim_token: UUID
+    requested_by_account_id: int | None = None
 
     def __post_init__(self) -> None:
         if self.job_id.int == 0 or self.claim_token.int == 0 or self.attempts < 1:
@@ -130,6 +133,7 @@ class FinalizationJobRepository(Protocol):
         *,
         now: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> FinalizationJobSnapshot: ...
 
     async def record_preparation_attention(
@@ -140,6 +144,7 @@ class FinalizationJobRepository(Protocol):
         now: Instant,
         expires_at: Instant,
         waiting_for_artifacts: bool = False,
+        actor_account_id: int | None = None,
     ) -> SubmissionRequestResult: ...
 
     async def reserve_preparations(self, *, now: Instant, limit: int) -> tuple[StoredDraft, ...]: ...
@@ -197,17 +202,17 @@ class SubmissionFinalizationService:
     async def submit(
         self,
         draft_id: UUID,
-        account_id: int,
+        account_id: DraftActor,
         *,
         locale: str | None,
         now: Instant | None = None,
     ) -> SubmissionRequestResult:
         """Start idempotent processing or persist actionable preparation issues."""
-        current = await self._drafts.get_owned(draft_id, account_id)
+        current = await self._drafts.get_accessible(draft_id, account_id)
         return await self._submit(current, account_id, locale=locale, now=now or Instant.now(), refresh_retention=True)
 
     async def _submit(
-        self, current: StoredDraft, account_id: int, *, locale: str | None, now: Instant, refresh_retention: bool
+        self, current: StoredDraft, account_id: DraftActor, *, locale: str | None, now: Instant, refresh_retention: bool
     ) -> SubmissionRequestResult:
         draft_id = current.snapshot.id
         if current.snapshot.status is DraftStatus.PROCESSING:
@@ -245,6 +250,7 @@ class SubmissionFinalizationService:
                 issues,
                 now=touched_at,
                 expires_at=expires_at,
+                actor_account_id=draft_actor_id(account_id),
             )
         except DraftSchemaUnsupportedError:
             return await self._jobs.record_preparation_attention(
@@ -252,6 +258,7 @@ class SubmissionFinalizationService:
                 (SubmissionAttentionIssue("submission", SubmissionAttentionReason.SCHEMA_UNSUPPORTED),),
                 now=touched_at,
                 expires_at=expires_at,
+                actor_account_id=draft_actor_id(account_id),
             )
 
         preparation = await self._preparation.prepare(validated)
@@ -262,12 +269,14 @@ class SubmissionFinalizationService:
                 now=touched_at,
                 expires_at=expires_at,
                 waiting_for_artifacts=isinstance(preparation, PreparationWaiting),
+                actor_account_id=draft_actor_id(account_id),
             )
         return await self._jobs.enqueue(
             validated.draft,
             preparation.value,
             now=touched_at,
             expires_at=expires_at,
+            actor_account_id=draft_actor_id(account_id),
         )
 
     async def resume_waiting(self, *, now: Instant, limit: int = 8) -> None:
@@ -275,34 +284,46 @@ class SubmissionFinalizationService:
         for draft in await self._jobs.reserve_preparations(now=now, limit=limit):
             try:
                 await self._submit(
-                    draft, draft.snapshot.owner_account_id, locale=None, now=now, refresh_retention=False
+                    draft,
+                    draft.submission_actor_account_id or draft.snapshot.owner_account_id,
+                    locale=None,
+                    now=now,
+                    refresh_retention=False,
                 )
-            except DraftRevisionConflictError, DraftAccessDeniedError, DraftNotFoundError, DraftStateConflictError:
+            except DraftAccessDeniedError:
+                await self._jobs.record_preparation_attention(
+                    draft,
+                    (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),),
+                    now=now,
+                    expires_at=draft.expires_at,
+                    actor_account_id=draft.submission_actor_account_id,
+                )
+            except DraftRevisionConflictError, DraftNotFoundError, DraftStateConflictError:
                 # Edits, deletion, expiry, or account merges invalidate this reservation.
                 continue
 
-    async def status(self, draft_id: UUID, account_id: int) -> SubmissionRequestResult | None:
+    async def status(self, draft_id: UUID, account_id: DraftActor) -> SubmissionRequestResult | None:
         """Return retained finalization state after rechecking draft ownership."""
-        draft = await self._drafts.get_owned(draft_id, account_id)
+        draft = await self._drafts.get_accessible(draft_id, account_id)
         if draft.preparation_issues:
             return DraftPreparationSnapshot(
                 draft_id, draft.snapshot.revision, draft.preparation_issues, draft.preparation_retry_at is not None
             )
         return await self._jobs.get(draft_id)
 
-    async def attempt(self, draft_id: UUID, account_id: int, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+    async def attempt(self, draft_id: UUID, account_id: DraftActor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
         """Read a retained attempt only within its accessible parent draft."""
-        await self._drafts.get_owned(draft_id, account_id)
+        await self._drafts.get_accessible(draft_id, account_id)
         return await self._jobs.get_attempt(draft_id, attempt_id)
 
     async def attempts(
-        self, draft_id: UUID, account_id: int, *, before: int | None = None, limit: int = 20
+        self, draft_id: UUID, account_id: DraftActor, *, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]:
         """Read newest-first history with a stable exclusive attempt-number cursor."""
         if not 1 <= limit <= 100 or (before is not None and before < 1):
             message = "Invalid attempt history cursor or limit."
             raise InvalidStateError(message)
-        await self._drafts.get_owned(draft_id, account_id)
+        await self._drafts.get_accessible(draft_id, account_id)
         return await self._jobs.list_attempts(draft_id, before=before, limit=limit)
 
 

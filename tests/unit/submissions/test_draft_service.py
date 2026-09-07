@@ -72,7 +72,11 @@ class FakeManifestRegistry:
 class FakeDraftRepository:
     def __init__(self) -> None:
         self.drafts: dict[UUID, StoredDraft] = {}
+        self.actors: list[int | None] = []
         self.replays: dict[tuple[UUID, str], AppliedDraftChange] = {}
+
+    async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
+        return ()
 
     async def count_active_for_account(self, account_id: int) -> int:
         return sum(
@@ -139,7 +143,9 @@ class FakeDraftRepository:
         *,
         updated_at: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> AppliedDraftChange:
+        self.actors.append(actor_account_id)
         current = self.drafts[draft_id]
         if current.snapshot.owner_account_id != account_id:
             raise DraftAccessDeniedError
@@ -694,3 +700,38 @@ async def test_manifest_upgrade_rejects_an_unretained_source_without_touching_th
         )
 
     assert repository.drafts[DRAFT_ID] == before
+
+
+async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> None:
+    from squid.permissions.domain import PermissionNode, Subject
+
+    class Permissions:
+        allowed = True
+
+        async def allows(self, subject: Subject, node: PermissionNode) -> bool:
+            return subject.account_id == 8 and self.allowed
+
+    permissions = Permissions()
+    repository = FakeDraftRepository()
+    service = SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: NOW, permissions=permissions)
+    await service.create(
+        owner_account_id=7,
+        category="other",
+        origin=SubmissionOrigin.DISCORD,
+        client_capabilities=frozenset({"repeatable_text"}),
+        locale="en",
+        draft_id=DRAFT_ID,
+    )
+    corrected = await service.apply_change(DRAFT_ID, Subject(account_id=8), _change(), locale="en")
+    assert corrected.draft.snapshot.owner_account_id == 7
+    assert repository.actors == [8]
+    with pytest.raises(DraftAccessDeniedError):
+        await service.get_owned(DRAFT_ID, 8)
+    permissions.allowed = False
+    with pytest.raises(DraftAccessDeniedError):
+        await service.get_accessible(DRAFT_ID, Subject(account_id=8))
+    with pytest.raises(DraftAccessDeniedError):
+        await service.apply_change(DRAFT_ID, Subject(account_id=8), _change(base_revision=1), locale="en")
+    with pytest.raises(DraftAccessDeniedError):
+        await service.attention_inbox(Subject(account_id=8))
+    assert repository.actors == [8]

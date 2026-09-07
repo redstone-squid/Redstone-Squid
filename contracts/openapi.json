@@ -11561,6 +11561,199 @@
         }
       }
     },
+    "/v1/submissions/inbox": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "List Correction Inbox",
+        "description": "List drafts needing staff correction, excluding attachment processing waits.",
+        "operationId": "submission_correction_inbox",
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftInboxResponse"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/submissions/drafts": {
       "get": {
         "tags": [
@@ -18423,6 +18616,25 @@
         "title": "DraftCreateRequest",
         "description": "Request an empty account-owned draft pinned to the current form revision."
       },
+      "DraftInboxResponse": {
+        "properties": {
+          "drafts": {
+            "items": {
+              "$ref": "#/components/schemas/DraftSummaryResponse"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Drafts"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "drafts"
+        ],
+        "title": "DraftInboxResponse",
+        "description": "Bounded staff correction work; the last draft ID is the next exclusive cursor."
+      },
       "DraftListResponse": {
         "properties": {
           "drafts": {
@@ -18699,6 +18911,14 @@
             "format": "uuid",
             "title": "Id"
           },
+          "owner_account_id": {
+            "type": "integer",
+            "title": "Owner Account Id"
+          },
+          "inferred": {
+            "type": "boolean",
+            "title": "Inferred"
+          },
           "schema_id": {
             "type": "string",
             "title": "Schema Id"
@@ -18753,6 +18973,8 @@
         "type": "object",
         "required": [
           "id",
+          "owner_account_id",
+          "inferred",
           "schema_id",
           "schema_revision",
           "category",
@@ -21916,7 +22138,8 @@
           "media_rejected",
           "sponsor_unavailable",
           "target_rejected",
-          "retry_exhausted"
+          "retry_exhausted",
+          "permission_revoked"
         ],
         "title": "SubmissionAttentionReason",
         "description": "Stable repair reasons shared by every submission transport."

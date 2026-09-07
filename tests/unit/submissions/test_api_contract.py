@@ -146,13 +146,23 @@ class FakeDrafts(SubmissionDraftCommands):
         return self.current
 
     @override
+    async def attention_inbox(
+        self,
+        actor: int,
+        *,
+        after: UUID | None = None,
+        limit: int = 20,
+    ) -> tuple[StoredDraft, ...]:
+        return ()
+
+    @override
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
         assert account_id == ACCOUNT_ID
         assert limit == 10
         return (self.current,)
 
     @override
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
         assert account_id == ACCOUNT_ID
         return self.current
@@ -448,6 +458,8 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         "drafts": [
             {
                 "id": draft_id,
+                "owner_account_id": ACCOUNT_ID,
+                "inferred": False,
                 "schema_id": "build_submission.v1",
                 "schema_revision": 2,
                 "category": "door",

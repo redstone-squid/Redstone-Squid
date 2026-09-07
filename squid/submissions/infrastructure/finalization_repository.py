@@ -105,6 +105,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         *,
         now: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> FinalizationJobSnapshot:
         """Append a pending attempt and transition its draft in one transaction."""
         if (
@@ -152,6 +153,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             job = SubmissionFinalizationJob(
                 draft_id=draft.snapshot.id,
                 attempt_number=1 if job is None else job.attempt_number + 1,
+                requested_by_account_id=actor_account_id or draft.snapshot.owner_account_id,
                 draft_revision=draft.snapshot.revision,
                 payload=encoded,
                 payload_sha256=digest,
@@ -172,6 +174,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         now: Instant,
         expires_at: Instant,
         waiting_for_artifacts: bool = False,
+        actor_account_id: int | None = None,
     ) -> SubmissionRequestResult:
         """Retain manifest/artifact issues and keep the source draft editable."""
         normalized_issues = _unique_issues(issues)
@@ -198,6 +201,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             draft_model.expires_at = expires_at
             draft_model.preparation_issues = encode_issues(normalized_issues)
             draft_model.preparation_retry_at = now.add(seconds=30) if waiting_for_artifacts else None
+            draft_model.submission_actor_account_id = actor_account_id or draft.snapshot.owner_account_id
         return DraftPreparationSnapshot(
             draft.snapshot.id, draft.snapshot.revision, normalized_issues, waiting_for_artifacts
         )
@@ -279,6 +283,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                         attempts=job.attempts,
                         claimed_at=now,
                         claim_token=token,
+                        requested_by_account_id=job.requested_by_account_id,
                     )
                 )
             await session.commit()
@@ -432,6 +437,7 @@ async def _claimed_job(
             SubmissionFinalizationJob.draft_id == claim.draft_id,
             SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED,
             SubmissionFinalizationJob.claim_token == claim.claim_token,
+            SubmissionFinalizationJob.requested_by_account_id == claim.requested_by_account_id,
         )
         .with_for_update()
     )
