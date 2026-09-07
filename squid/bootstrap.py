@@ -108,6 +108,7 @@ from squid.submissions.application import (
     SubmissionFormService,
     SubmissionPreparation,
 )
+from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.application.schematics import DraftSchematicService
@@ -117,6 +118,7 @@ from squid.submissions.infrastructure.artifact_readiness import (
 from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
 from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
@@ -439,6 +441,15 @@ class _ServiceGraph:
         )
 
     @cached_property
+    def submission_inference(self) -> SubmissionInferenceRuns:
+        return SubmissionInferenceRuns(
+            PostgresInferenceRuns(self.db.async_session),
+            self.build_inference,
+            self.artifacts,
+            capacity=self.config.submissions.inferred_draft_capacity,
+        )
+
+    @cached_property
     def submission_intake_repository(self) -> PostgresAttachmentIntake:
         return PostgresAttachmentIntake(self.db.async_session)
 
@@ -713,6 +724,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_schematics=graph.submission_schematics,
         submission_revisions=graph.submission_revisions,
         submission_intake=graph.submission_intake,
+        submission_inference=graph.submission_inference,
         suggestions=graph.suggestions,
         media_jobs=graph.media_jobs,
         minecraft_installations=graph.minecraft_installations,
@@ -737,6 +749,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_schematics=graph.submission_schematics,
         submission_revisions=graph.submission_revisions,
         submission_intake=graph.submission_intake,
+        submission_inference=graph.submission_inference,
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
         messages=MessageService(MessageRepository(db.async_session)),
@@ -802,6 +815,7 @@ def create_worker_services(
         purge_idempotency=idempotency.purge_expired,
         expire_submission_drafts=graph.submission_drafts.expire_due,
         cleanup_submission_schematics=graph.submission_schematics.cleanup,
+        cleanup_submission_inference=graph.submission_inference.cleanup,
     )
 
 

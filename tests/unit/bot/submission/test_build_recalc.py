@@ -219,13 +219,13 @@ async def test_production_recalculation_retains_candidates_without_submitting(mo
     from squid.builds.domain import BuildCategory, BuildDraft
 
     candidate = BuildDraft(category=BuildCategory.DOOR, width=9)
-    inference = SimpleNamespace(infer=AsyncMock(return_value=[candidate]))
+    inference = SimpleNamespace(infer=AsyncMock(return_value=[SimpleNamespace(facts=candidate)]))
     proposals = SimpleNamespace(create=AsyncMock(return_value=SimpleNamespace(id=uuid4())))
     cog = cast(
         Any,
         SimpleNamespace(
             bot=SimpleNamespace(
-                services=SimpleNamespace(build_inference=inference, submission_revisions=proposals),
+                services=SimpleNamespace(submission_inference=inference, submission_revisions=proposals),
                 inference_model="test-model",
                 inference_reasoning_effort=None,
             )

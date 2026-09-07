@@ -301,7 +301,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             else uuid4()
         )
         bundle = await assemble_bundle([message], preceding=(), include_images=True)
-        candidates = await self.bot.services.build_inference.infer(
+        candidates = await self.bot.services.submission_inference.infer(
+            run_id,
+            owner_account_id,
             bundle,
             model=self.bot.inference_model,
             reasoning_effort=self.bot.inference_reasoning_effort,
@@ -313,7 +315,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 owner_account_id=owner_account_id,
                 actor=actor,
                 source_message_id=message.id,
-                candidate=candidate,
+                candidate=candidate.facts,
             )
             for index, candidate in enumerate(candidates)
         ]

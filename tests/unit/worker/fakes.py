@@ -78,6 +78,9 @@ class MaintenanceRecorder:
     async def cleanup_submission_schematics(self) -> None:
         pass
 
+    async def cleanup_submission_inference(self) -> None:
+        pass
+
     async def expire_submission_drafts(self) -> int:
         self.expiry_calls += 1
         return self.expiry_result
@@ -155,5 +158,6 @@ def worker_services(
         record_queue_health=maintenance.record_queue_health,
         purge_idempotency=maintenance.purge_idempotency,
         cleanup_submission_schematics=maintenance.cleanup_submission_schematics,
+        cleanup_submission_inference=maintenance.cleanup_submission_inference,
         expire_submission_drafts=maintenance.expire_submission_drafts,
     )

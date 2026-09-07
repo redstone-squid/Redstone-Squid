@@ -50,6 +50,7 @@ __all__ = [
     "setting_models",
     "starboard_models",
     "submission_finalization_models",
+    "submission_inference_models",
     "submission_intake_models",
     "submission_models",
     "submission_revision_models",
@@ -59,3 +60,5 @@ __all__ = [
     "version_models",
     "voting_models",
 ]
+
+from squid.submissions.infrastructure import inference_runs as submission_inference_models
