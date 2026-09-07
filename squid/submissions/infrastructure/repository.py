@@ -11,6 +11,7 @@ from whenever import Instant
 from squid.core.errors import JSONValue
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
 from squid.persistence.advisory_locks import (
     SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE,
     AdvisoryLockNamespace,
@@ -308,7 +309,7 @@ class PostgresDraftRepository(DraftRepository):
                 update(MediaNormalizationJobRecord)
                 .where(
                     MediaNormalizationJobRecord.upload_id.in_(
-                        select(MediaUploadRecord.id).where(MediaUploadRecord.draft_id == draft_id)
+                        select(MediaUploadRecord.id).where(media_for_draft(draft_id), ~retained_elsewhere(draft_id))
                     ),
                     MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
                 )
@@ -367,7 +368,7 @@ class PostgresDraftRepository(DraftRepository):
                     update(MediaNormalizationJobRecord)
                     .where(
                         MediaNormalizationJobRecord.upload_id.in_(
-                            select(MediaUploadRecord.id).where(MediaUploadRecord.draft_id == draft_id)
+                            select(MediaUploadRecord.id).where(media_for_draft(draft_id), ~retained_elsewhere(draft_id))
                         ),
                         MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
                     )

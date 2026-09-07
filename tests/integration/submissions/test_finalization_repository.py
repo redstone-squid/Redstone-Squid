@@ -15,7 +15,7 @@ from squid.accounts.infrastructure.models import Account
 from squid.core.errors import DataIntegrityError
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.domain import MediaKind
-from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.infrastructure.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.base import Base
 from squid.submissions.application import DraftPreparationSnapshot, StoredDraft
 from squid.submissions.domain import (
@@ -63,6 +63,7 @@ _TABLES: tuple[Table, ...] = (
     cast(Table, SubmissionDraftChange.__table__),
     cast(Table, MediaUploadRecord.__table__),
     cast(Table, MediaNormalizationJobRecord.__table__),
+    cast(Table, MediaDraftReference.__table__),
     cast(Table, SubmissionFinalizationJob.__table__),
     cast(Table, SubmissionFinalizationResult.__table__),
 )
