@@ -179,6 +179,7 @@ def service_graph(
         submission_drafts=unused,
         submission_finalization=unused,
         submission_schematics=unused,
+        submission_revisions=unused,
         restrictions=unused,
         build_queries=unused,
         messages=unused,

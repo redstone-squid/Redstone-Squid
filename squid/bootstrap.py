@@ -108,6 +108,7 @@ from squid.submissions.application import (
     SubmissionFormService,
     SubmissionPreparation,
 )
+from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.infrastructure.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
@@ -116,6 +117,7 @@ from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissi
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
 from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
@@ -435,6 +437,14 @@ class _ServiceGraph:
         )
 
     @cached_property
+    def submission_revisions(self) -> RevisionProposalService:
+        return RevisionProposalService(
+            PostgresRevisionProposals(self.db.async_session, self.build_repository, self.builds),
+            self.builds,
+            self.permissions,
+        )
+
+    @cached_property
     def submission_schematic_repository(self) -> PostgresDraftSchematics:
         return PostgresDraftSchematics(self.db.async_session)
 
@@ -688,6 +698,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_drafts=graph.submission_drafts,
         submission_finalization=graph.submission_finalization,
         submission_schematics=graph.submission_schematics,
+        submission_revisions=graph.submission_revisions,
         suggestions=graph.suggestions,
         media_jobs=graph.media_jobs,
         minecraft_installations=graph.minecraft_installations,
@@ -710,6 +721,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_drafts=graph.submission_drafts,
         submission_finalization=graph.submission_finalization,
         submission_schematics=graph.submission_schematics,
+        submission_revisions=graph.submission_revisions,
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
         messages=MessageService(MessageRepository(db.async_session)),
