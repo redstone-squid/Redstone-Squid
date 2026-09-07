@@ -67,7 +67,7 @@ def test_build_creation_requires_the_durable_submission_workflow() -> None:
 
     assert "post" not in document["paths"]["/v1/builds"]
     assert "DoorSubmission" not in document["components"]["schemas"]
-    assert "202" in document["paths"]["/v1/submissions/drafts/{draft_id}/submission"]["post"]["responses"]
+    assert "202" in document["paths"]["/v1/submissions/drafts/{draft_id}/attempts"]["post"]["responses"]
 
 
 def test_every_mutating_operation_accepts_an_idempotency_key() -> None:

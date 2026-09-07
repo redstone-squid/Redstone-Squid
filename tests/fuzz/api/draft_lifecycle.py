@@ -477,7 +477,7 @@ def submit_draft_request(auth: DraftWebAuth, draft_id: str) -> DraftRequest:
     return DraftRequest(
         operation_id="submission_finalization_start",
         method="POST",
-        path=f"/v1/submissions/drafts/{draft_id}/submission",
+        path=f"/v1/submissions/drafts/{draft_id}/attempts",
         headers=auth.write_headers,
         cookies=auth.cookies,
     )
@@ -488,7 +488,7 @@ def get_finalization_request(auth: DraftWebAuth, draft_id: str) -> DraftRequest:
     return DraftRequest(
         operation_id="submission_finalization_get",
         method="GET",
-        path=f"/v1/submissions/drafts/{draft_id}/submission",
+        path=f"/v1/submissions/drafts/{draft_id}/attempts/latest",
         cookies=auth.cookies,
     )
 
