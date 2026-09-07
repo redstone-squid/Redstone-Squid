@@ -126,6 +126,8 @@ _IDENTITY_PROFILE_REFERENCES = (
 _SUBMISSION_REFERENCES = (
     _AccountReference("builds", "submitter_account_id"),
     _AccountReference("submission_drafts", "owner_account_id"),
+    _AccountReference("submission_drafts", "submission_actor_account_id"),
+    _AccountReference("submission_finalization_jobs", "requested_by_account_id"),
     _AccountReference("submission_draft_access", "account_id"),
     _AccountReference("submission_draft_changes", "actor_account_id"),
     _AccountReference("build_schematics", "rights_attested_by_account_id"),
@@ -1470,17 +1472,43 @@ class AccountRepository:
 
 async def _merge_submissions(session: AsyncSession, context: _AccountMergeContext) -> None:
     """Move builds, drafts, artifact attestations, and retained finalization owners."""
-    draft_ids = tuple(
+    affected_drafts = tuple(
         (
             await session.scalars(
-                select(SubmissionDraft.id)
-                .where(SubmissionDraft.owner_account_id == context.absorbed)
+                select(SubmissionDraft)
+                .where(
+                    or_(
+                        SubmissionDraft.owner_account_id == context.absorbed,
+                        SubmissionDraft.submission_actor_account_id == context.absorbed,
+                        SubmissionDraft.id.in_(
+                            select(SubmissionFinalizationJob.draft_id).where(
+                                SubmissionFinalizationJob.requested_by_account_id == context.absorbed,
+                            )
+                        ),
+                    )
+                )
                 .order_by(SubmissionDraft.id)
                 .with_for_update()
             )
         ).all()
     )
+    draft_ids = tuple(draft.id for draft in affected_drafts if draft.owner_account_id == context.absorbed)
     await _canonicalize_finalization_job_owners(session, draft_ids, context.survivor, context.absorbed)
+    await session.execute(
+        update(SubmissionFinalizationJob)
+        .where(
+            SubmissionFinalizationJob.requested_by_account_id == context.absorbed,
+            SubmissionFinalizationJob.status == FinalizationJobStatus.CLAIMED,
+        )
+        .values(
+            status=FinalizationJobStatus.PENDING,
+            claimed_at=None,
+            claim_token=None,
+            claim_expires_at=None,
+            available_at=func.now(),
+            updated_at=func.now(),
+        )
+    )
     await _execute_merge_sql(session, _COLLAPSE_DRAFT_ACCESS, context)
     await _move_account_references(session, _SUBMISSION_REFERENCES, context)
 

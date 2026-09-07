@@ -87,6 +87,9 @@ class FakeDraftRepository:
     def __init__(self, draft: StoredDraft) -> None:
         self.draft = draft
 
+    async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
+        return ()
+
     async def count_active_for_account(self, account_id: int) -> int:
         del account_id
         return 1
@@ -125,6 +128,7 @@ class FakeDraftRepository:
         *,
         updated_at: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> AppliedDraftChange:
         del draft_id, account_id, change, updated_at, expires_at
         raise NotImplementedError
@@ -226,6 +230,7 @@ class FakeFinalizationJobs:
         *,
         now: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> FinalizationJobSnapshot:
         assert draft.snapshot.id == DRAFT_ID
         assert expires_at > now
@@ -241,6 +246,7 @@ class FakeFinalizationJobs:
         *,
         now: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
         waiting_for_artifacts: bool = False,
     ) -> DraftPreparationSnapshot:
         assert draft.snapshot.id == DRAFT_ID

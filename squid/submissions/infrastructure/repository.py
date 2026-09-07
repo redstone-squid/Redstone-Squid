@@ -51,6 +51,23 @@ class PostgresDraftRepository(DraftRepository):
         self._session_factory = session_factory
 
     @override
+    async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
+        statement = (
+            select(SubmissionDraft)
+            .where(
+                SubmissionDraft.status == DraftStatus.NEEDS_ATTENTION,
+                SubmissionDraft.preparation_retry_at.is_(None),
+                SubmissionDraft.expires_at > now,
+            )
+            .order_by(SubmissionDraft.id)
+            .limit(limit)
+        )
+        if after is not None:
+            statement = statement.where(SubmissionDraft.id > after)
+        async with self._session_factory() as session:
+            return tuple(_to_stored(model) for model in await session.scalars(statement))
+
+    @override
     async def count_active_for_account(self, account_id: int) -> int:
         async with self._session_factory() as session:
             count = await session.scalar(
@@ -179,6 +196,7 @@ class PostgresDraftRepository(DraftRepository):
         *,
         updated_at: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> AppliedDraftChange:
         async with self._session_factory.begin() as session:
             model = await self._locked(session, draft_id)
@@ -203,7 +221,7 @@ class PostgresDraftRepository(DraftRepository):
             session.add(
                 SubmissionDraftChange(
                     draft_id=draft_id,
-                    actor_account_id=account_id,
+                    actor_account_id=account_id if actor_account_id is None else actor_account_id,
                     base_revision=change.base_revision,
                     resulting_revision=candidate.revision,
                     client_instance_id=change.client_instance_id,
@@ -393,6 +411,7 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
         preparation_issues=encode_issues(draft.preparation_issues),
         preparation_retry_at=draft.preparation_retry_at,
         inferred=draft.inferred,
+        submission_actor_account_id=draft.submission_actor_account_id,
         origin=draft.origin,
         source_installation_id=draft.source_installation_id,
         created_at=draft.created_at,
@@ -421,6 +440,7 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
         preparation_issues=decode_issues(model.preparation_issues),
         preparation_retry_at=model.preparation_retry_at,
         inferred=model.inferred,
+        submission_actor_account_id=model.submission_actor_account_id,
     )
 
 

@@ -155,3 +155,106 @@ async def test_reclaimed_worker_cannot_create_a_build(
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(SQLBuild)) == 0
     assert isinstance(await executor.execute(replacement, now=Instant.now()), FinalizedBuild)
+
+
+async def test_staff_permission_is_rechecked_after_build_preparation(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from sqlalchemy import update
+
+    from squid.accounts.infrastructure.models import Account
+    from squid.permissions.domain import PermissionNode, Subject
+    from squid.submissions.application import CheckedInFormManifestRegistry, SubmissionDraftService
+    from squid.submissions.domain import BuildSubmissionRejected, SubmissionAttentionReason
+    from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
+
+    original = await claimed_submission(migrated_session_factory)
+    async with migrated_session_factory.begin() as session:
+        staff = Account()
+        session.add(staff)
+        await session.flush()
+        await session.execute(
+            update(SubmissionFinalizationJob)
+            .where(
+                SubmissionFinalizationJob.id == original.job_id,
+            )
+            .values(requested_by_account_id=staff.id)
+        )
+    (claim,) = await PostgresFinalizationJobRepository(migrated_session_factory).claim(
+        now=original.claimed_at.add(minutes=6),
+        limit=1,
+    )
+
+    class Permissions:
+        allowed = True
+
+        async def allows(self, subject: Subject, node: PermissionNode) -> bool:
+            return self.allowed
+
+    permissions = Permissions()
+
+    class RevokingPreparation(PreparedBuilds):
+        async def prepare(self, submission: NormalizedSubmission) -> Build:
+            permissions.allowed = False
+            return await super().prepare(submission)
+
+    drafts = SubmissionDraftService(
+        PostgresDraftRepository(migrated_session_factory),
+        CheckedInFormManifestRegistry(),
+        permissions=permissions,
+    )
+    executor = PostgresSubmissionExecutor(
+        migrated_session_factory,
+        BuildRepository(migrated_session_factory),
+        RevokingPreparation(),
+        drafts=drafts,
+    )
+    result = await executor.execute(claim, now=Instant.now())
+    assert isinstance(result, BuildSubmissionRejected)
+    assert result.issues[0].reason is SubmissionAttentionReason.PERMISSION_REVOKED
+    async with migrated_session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(SQLBuild)) == 0
+
+
+async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from sqlalchemy import update
+
+    from squid.accounts.infrastructure.repository import AccountRepository
+    from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
+    from squid.submissions.infrastructure.models import SubmissionDraft
+
+    claim = await claimed_submission(migrated_session_factory)
+    accounts = AccountRepository(migrated_session_factory, "test-pepper")
+    staff = await accounts.create()
+    survivor = await accounts.create()
+    assert staff.id is not None
+    assert survivor.id is not None
+    async with migrated_session_factory.begin() as session:
+        await session.execute(
+            update(SubmissionFinalizationJob)
+            .where(
+                SubmissionFinalizationJob.id == claim.job_id,
+            )
+            .values(requested_by_account_id=staff.id)
+        )
+        await session.execute(
+            update(SubmissionDraft)
+            .where(
+                SubmissionDraft.id == claim.draft_id,
+            )
+            .values(submission_actor_account_id=staff.id)
+        )
+    claim = replace(claim, requested_by_account_id=staff.id)
+    await accounts.merge(survivor.id, staff.id)
+    jobs = PostgresFinalizationJobRepository(migrated_session_factory)
+    assert await jobs.complete(claim, FinalizedBuild(99), now=Instant.now()) is False
+    (replacement,) = await jobs.claim(now=Instant.now(), limit=1)
+    assert replacement.requested_by_account_id == survivor.id
+    assert replacement.payload.owner_account_id == claim.payload.owner_account_id
+    assert replacement.claim_token != claim.claim_token
+    draft = await PostgresDraftRepository(migrated_session_factory).get(claim.draft_id)
+    assert draft is not None
+    assert draft.snapshot.owner_account_id == claim.payload.owner_account_id
+    assert draft.submission_actor_account_id == survivor.id

@@ -449,3 +449,33 @@ async def test_inferred_capacity_is_global_and_expiry_releases_it(
         await repository.create(second, capacity=1)
     await repository.expire_due(now=first.expires_at)
     assert (await repository.create(second, capacity=1)).snapshot.owner_account_id == other_id
+
+
+async def test_staff_edit_retains_owner_and_records_actual_actor(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with async_session_factory.begin() as session:
+        staff = Account()
+        session.add(staff)
+        await session.flush()
+        staff_id = staff.id
+    drafts = PostgresDraftRepository(async_session_factory)
+    stored = replace(
+        _stored(account_id), snapshot=replace(_stored(account_id).snapshot, status=DraftStatus.NEEDS_ATTENTION)
+    )
+    await drafts.create(stored)
+    assert [draft.snapshot.id for draft in await drafts.list_attention(after=None, limit=1, now=NOW)] == [DRAFT_ID]
+    assert await drafts.list_attention(after=DRAFT_ID, limit=1, now=NOW) == ()
+    changed = await drafts.apply_change(
+        DRAFT_ID,
+        account_id,
+        _change(key="staff-correction", operation_id="00000000-0000-4000-8000-000000000299"),
+        updated_at=NOW,
+        expires_at=stored.expires_at,
+        actor_account_id=staff_id,
+    )
+    assert changed.draft.snapshot.owner_account_id == account_id
+    async with async_session_factory() as session:
+        assert await session.scalar(select(SubmissionDraftChange.actor_account_id)) == staff_id
+    assert await drafts.list_attention(after=None, limit=1, now=NOW) == ()

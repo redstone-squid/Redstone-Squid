@@ -19,6 +19,7 @@ from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
     DraftChangeResponse,
     DraftCreateRequest,
+    DraftInboxResponse,
     DraftListResponse,
     DraftManifestUpgradeRequest,
     DraftManifestUpgradeResponse,
@@ -73,7 +74,15 @@ class SubmissionDraftCommands(Protocol):
 
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]: ...
 
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
+    async def attention_inbox(
+        self,
+        actor: int,
+        *,
+        after: UUID | None = None,
+        limit: int = 20,
+    ) -> tuple[StoredDraft, ...]: ...
+
+    async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
 
     async def apply_change(
         self,
@@ -283,6 +292,23 @@ _DRAFT_DELETE_LINKS = {
 
 
 @router.get(
+    "/inbox",
+    response_model=DraftInboxResponse,
+    responses=responses(401, 403, 422, 503),
+    operation_id="submission_correction_inbox",
+    openapi_extra=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+)
+async def list_correction_inbox(
+    drafts: Drafts,
+    account_id: AccountId,
+    after: UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> DraftInboxResponse:
+    """List drafts needing staff correction, excluding attachment processing waits."""
+    return DraftInboxResponse.from_domain(await drafts.attention_inbox(account_id, after=after, limit=limit))
+
+
+@router.get(
     "/drafts",
     response_model=DraftListResponse,
     responses=responses(401, 403, 503),
@@ -392,7 +418,7 @@ async def create_draft(
 )
 async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> StoredDraftResponse:
     """Return one draft after enforcing caller ownership."""
-    return StoredDraftResponse.from_domain(await drafts.get_owned(draft_id, account_id))
+    return StoredDraftResponse.from_domain(await drafts.get_accessible(draft_id, account_id))
 
 
 @router.post(
