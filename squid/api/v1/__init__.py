@@ -20,6 +20,7 @@ from squid.api.v1.records import router as records_router
 from squid.api.v1.schematics import router as schematics_router
 from squid.api.v1.search import router as search_router
 from squid.api.v1.submission_media import router as submission_media_router
+from squid.api.v1.submission_schematics import router as submission_schematics_router
 from squid.api.v1.submissions import router as submissions_router
 from squid.api.v1.suggest import router as suggest_router
 from squid.api.v1.tags import router as tags_router
@@ -46,6 +47,7 @@ router.include_router(schematics_router)
 router.include_router(search_router)
 router.include_router(submissions_router)
 router.include_router(submission_media_router)
+router.include_router(submission_schematics_router)
 router.include_router(suggest_router)
 router.include_router(tags_router)
 router.include_router(creator_aliases_router)
