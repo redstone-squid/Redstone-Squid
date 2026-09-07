@@ -915,6 +915,12 @@ class BuildConfig(_FrozenModel):
         return self
 
 
+class SubmissionConfig(_FrozenModel):
+    """Capacity for durable inferred submission intake."""
+
+    inferred_draft_capacity: int = Field(default=1_000, ge=1)
+
+
 class NotificationConfig(_FrozenModel):
     """User notification links and retention policy."""
 
@@ -944,6 +950,7 @@ class RuntimeConfig(_FrozenModel):
     schematics: SchematicConfig
     object_storage: ObjectStorageConfig
     media: MediaConfig = MediaConfig()
+    submissions: SubmissionConfig = SubmissionConfig()
     minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
     cli_auth: CliAuthConfig = CliAuthConfig()
     community: CommunityConfig
@@ -1049,6 +1056,7 @@ class _ProcessSettings(BaseSettings):
     embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
     storage: ObjectStorageConfig = ObjectStorageConfig()
     media: MediaConfig = MediaConfig()
+    submissions: SubmissionConfig = SubmissionConfig()
     minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
     cli_auth: CliAuthConfig = CliAuthConfig()
     schematic: SchematicConfig = SchematicConfig()
@@ -1095,6 +1103,7 @@ class _ProcessSettings(BaseSettings):
             schematics=self.schematic,
             object_storage=self.storage,
             media=self.media,
+            submissions=self.submissions,
             minecraft_auth=self.minecraft_auth,
             cli_auth=self.cli_auth,
             community=self.community,
