@@ -81,7 +81,14 @@ class SubmissionFinalizationJob(Base, kw_only=True):
 
     __tablename__ = "submission_finalization_jobs"
     __table_args__ = (
-        UniqueConstraint("draft_id", name="submission_finalization_jobs_draft_id_key"),
+        UniqueConstraint("draft_id", "attempt_number", name="submission_finalization_jobs_draft_attempt_key"),
+        CheckConstraint("attempt_number > 0", name="submission_finalization_jobs_attempt_number_positive"),
+        Index(
+            "submission_finalization_jobs_one_active_attempt",
+            "draft_id",
+            unique=True,
+            postgresql_where=text("status IN ('pending', 'claimed')"),
+        ),
         CheckConstraint("draft_revision >= 0", name="submission_finalization_jobs_revision_nonnegative"),
         CheckConstraint("attempts >= 0", name="submission_finalization_jobs_attempts_nonnegative"),
         CheckConstraint(
@@ -118,6 +125,7 @@ class SubmissionFinalizationJob(Base, kw_only=True):
         ForeignKey("submission_drafts.id", name="submission_finalization_jobs_draft_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
     draft_revision: Mapped[int] = mapped_column(Integer, nullable=False)
     payload: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
     payload_sha256: Mapped[str | None] = mapped_column(Text, default=None)

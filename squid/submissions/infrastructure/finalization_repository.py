@@ -51,7 +51,10 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
     async def get(self, draft_id: UUID) -> FinalizationJobSnapshot | None:
         async with self._session_factory() as session:
             job = await session.scalar(
-                select(SubmissionFinalizationJob).where(SubmissionFinalizationJob.draft_id == draft_id)
+                select(SubmissionFinalizationJob)
+                .where(SubmissionFinalizationJob.draft_id == draft_id)
+                .order_by(SubmissionFinalizationJob.attempt_number.desc())
+                .limit(1)
             )
             if job is None:
                 return None
@@ -67,7 +70,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         now: Instant,
         expires_at: Instant,
     ) -> FinalizationJobSnapshot:
-        """Transition a draft and upsert its immutable pending payload in one transaction."""
+        """Append a pending attempt and transition its draft in one transaction."""
         if (
             payload.source_draft_id != draft.snapshot.id
             or payload.owner_account_id != draft.snapshot.owner_account_id
@@ -108,20 +111,18 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             draft_model.status = DraftStatus.PROCESSING
             draft_model.updated_at = now
             draft_model.expires_at = expires_at
-            if job is None:
-                job = SubmissionFinalizationJob(
-                    draft_id=draft.snapshot.id,
-                    draft_revision=draft.snapshot.revision,
-                    payload=encoded,
-                    payload_sha256=digest,
-                    status=FinalizationJobStatus.PENDING,
-                    available_at=now,
-                    created_at=now,
-                    updated_at=now,
-                )
-                session.add(job)
-            else:
-                _reset_pending(job, draft.snapshot.revision, encoded, digest, now)
+            job = SubmissionFinalizationJob(
+                draft_id=draft.snapshot.id,
+                attempt_number=1 if job is None else job.attempt_number + 1,
+                draft_revision=draft.snapshot.revision,
+                payload=encoded,
+                payload_sha256=digest,
+                status=FinalizationJobStatus.PENDING,
+                available_at=now,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(job)
         return _snapshot(job, None)
 
     @override
@@ -156,22 +157,29 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             draft_model.status = DraftStatus.NEEDS_ATTENTION
             draft_model.updated_at = now
             draft_model.expires_at = expires_at
-            if job is None:
-                job = SubmissionFinalizationJob(
-                    draft_id=draft.snapshot.id,
-                    draft_revision=draft.snapshot.revision,
-                    payload=None,
-                    payload_sha256=None,
-                    status=FinalizationJobStatus.NEEDS_ATTENTION,
-                    available_at=now,
-                    attention_at=now,
-                    attention_issues=_encode_issues(normalized_issues),
-                    created_at=now,
-                    updated_at=now,
-                )
-                session.add(job)
-            else:
-                _reset_attention(job, draft.snapshot.revision, normalized_issues, now)
+            encoded_issues = _encode_issues(normalized_issues)
+            if (
+                job is not None
+                and job.status is FinalizationJobStatus.NEEDS_ATTENTION
+                and job.payload is None
+                and job.draft_revision == draft.snapshot.revision
+                and job.attention_issues == encoded_issues
+            ):
+                return _snapshot(job, None)
+            job = SubmissionFinalizationJob(
+                draft_id=draft.snapshot.id,
+                attempt_number=1 if job is None else job.attempt_number + 1,
+                draft_revision=draft.snapshot.revision,
+                payload=None,
+                payload_sha256=None,
+                status=FinalizationJobStatus.NEEDS_ATTENTION,
+                available_at=now,
+                attention_at=now,
+                attention_issues=encoded_issues,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(job)
         return _snapshot(job, None)
 
     @override
@@ -389,7 +397,11 @@ async def _require_current_media(
 
 async def _locked_job(session: AsyncSession, draft_id: UUID) -> SubmissionFinalizationJob | None:
     return await session.scalar(
-        select(SubmissionFinalizationJob).where(SubmissionFinalizationJob.draft_id == draft_id).with_for_update()
+        select(SubmissionFinalizationJob)
+        .where(SubmissionFinalizationJob.draft_id == draft_id)
+        .order_by(SubmissionFinalizationJob.attempt_number.desc())
+        .limit(1)
+        .with_for_update()
     )
 
 
@@ -417,48 +429,6 @@ def _require_expected_draft(model: SubmissionDraft, expected: StoredDraft) -> No
     if model.origin is not expected.origin or model.source_installation_id != expected.source_installation_id:
         msg = "submission draft installation provenance changed during finalization"
         raise InvalidStateError(msg)
-
-
-def _reset_pending(
-    job: SubmissionFinalizationJob,
-    revision: int,
-    payload: dict[str, object],
-    digest: str,
-    now: Instant,
-) -> None:
-    job.draft_revision = revision
-    job.payload = payload
-    job.payload_sha256 = digest
-    job.status = FinalizationJobStatus.PENDING
-    job.attempts = 0
-    job.available_at = now
-    job.completed_at = None
-    job.attention_at = None
-    job.dead_at = None
-    job.last_error = None
-    job.attention_issues = []
-    _clear_claim(job)
-    job.updated_at = now
-
-
-def _reset_attention(
-    job: SubmissionFinalizationJob,
-    revision: int,
-    issues: tuple[SubmissionAttentionIssue, ...],
-    now: Instant,
-) -> None:
-    job.draft_revision = revision
-    job.payload = None
-    job.payload_sha256 = None
-    job.status = FinalizationJobStatus.NEEDS_ATTENTION
-    job.attempts = 0
-    job.completed_at = None
-    job.attention_at = now
-    job.dead_at = None
-    job.last_error = "preparation"
-    job.attention_issues = _encode_issues(issues)
-    _clear_claim(job)
-    job.updated_at = now
 
 
 def _clear_claim(job: SubmissionFinalizationJob) -> None:
