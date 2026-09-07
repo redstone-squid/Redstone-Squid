@@ -201,18 +201,29 @@ class BuildService:
         check before the load would race an approval that flips the build out of
         `PENDING` between the two.
         """
+        async with self.edit(build_id, patch, blocking=False, expected_revision=expected_revision) as lease:
+            await self.authorize_edit(actor, lease.build)
+            return await lease.commit()
+
+    async def authorize_edit(self, actor: BuildEditor, build: Build) -> None:
+        """Apply the shared live edit policy to the caller's current build snapshot."""
         if self._permissions is None:
             msg = "Authorized editing requires a permission service."
             raise InvalidStateError(msg)
-        async with self.edit(build_id, patch, blocking=False, expected_revision=expected_revision) as lease:
-            owns = (
-                lease.build.submission_status is Status.PENDING
-                and actor.subject.account_id is not None
-                and lease.build.submitter_account_id == actor.subject.account_id
-            )
-            if not owns and not await self._permissions.allows(actor.subject, BUILD_SUBMISSION_EDIT):
-                raise AuthorizationError
-            return await lease.commit()
+        owns = (
+            build.submission_status is Status.PENDING
+            and actor.subject.account_id is not None
+            and build.submitter_account_id == actor.subject.account_id
+        )
+        if not owns and not await self._permissions.allows(actor.subject, BUILD_SUBMISSION_EDIT):
+            raise AuthorizationError
+
+    async def prepare_edit(self, actor: BuildEditor, build: Build, patch: BuildEditPatch) -> Build:
+        """Resolve an authorized edit before its caller's revision-fenced transaction."""
+        await self.authorize_edit(actor, build)
+        patch.apply(build)
+        await self._prepare_for_persistence(build)
+        return build
 
     async def confirm(self, build_id: int) -> Build:
         async with self._locks.locked(build_id):
