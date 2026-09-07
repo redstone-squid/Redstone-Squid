@@ -8,6 +8,7 @@ import squid_ui_discord as sd
 from squid.core.errors import JSONValue, SquidError
 from squid.runtime import BotServices
 from squid.submissions.application import FinalizationJobSnapshot, StoredDraft
+from squid.submissions.application.intake import IntakeStatus, SuppliedAttachment
 from squid.submissions.domain import (
     ChoiceOption,
     DraftChange,
@@ -33,6 +34,8 @@ class DraftEditorScreen(sd.Screen):
     draft: StoredDraft = sl.state(opaque=True)
     options: tuple[ChoiceOption, ...] = sl.state((), opaque=True)
     result: FinalizationJobSnapshot | None = sl.state(None, opaque=True)
+    attachments: tuple[SuppliedAttachment, ...] = sl.state((), opaque=True)
+    selected_attachment: str | None = sl.state(None)
 
     def __init__(self, services: BotServices, actor_id: int, draft: StoredDraft, manifest: FormManifest) -> None:
         self.services = services
@@ -131,6 +134,43 @@ class DraftEditorScreen(sd.Screen):
                     key="draft_actions",
                 )
             )
+        files = tuple(item for item in self.attachments if item.status is not IntakeStatus.DISCARDED)
+        if editable and files:
+            nodes.append(
+                sl.section(
+                    sl.heading("Supplied files"),
+                    sl.paragraph("\n".join(f"{item.filename}: {item.status.value}" for item in files)),
+                )
+            )
+            nodes.append(
+                sl.choices(
+                    *(sl.choice(item.filename[:100], key=str(item.id)) for item in files),
+                    key="attachment",
+                    selection=sl.controlled(
+                        (self.selected_attachment,) if self.selected_attachment is not None else (),
+                        self._select_attachment,
+                    ),
+                )
+            )
+            if self.selected_attachment is not None:
+                nodes.append(
+                    sl.action_controls(
+                        sl.action_control("Retry with file", self._retry_attachment, key="retry_attachment"),
+                        sl.action_control("Discard file", self._discard_attachment, key="discard_attachment"),
+                        *(
+                            [
+                                sl.action_control(
+                                    "Make primary schematic", self._primary_attachment, key="primary_attachment"
+                                )
+                            ]
+                            if any(
+                                str(item.id) == self.selected_attachment and item.kind == "schematic" for item in files
+                            )
+                            else []
+                        ),
+                        key="attachment_actions",
+                    )
+                )
         nodes.append(
             sl.action_controls(sl.action_control("Refresh status", self._refresh, key="refresh"), key="status")
         )
@@ -228,8 +268,64 @@ class DraftEditorScreen(sd.Screen):
             self.notice = "Saved."
         await self._reload()
 
+    async def _select_attachment(self, event: sl.ChoiceEvent) -> None:
+        self.selected_attachment = event.selected[0]
+
+    async def _discard_attachment(self, event: sl.PressEvent) -> None:
+        if self.selected_attachment is not None:
+            await self.services.submission_intake.discard(
+                self.draft.snapshot.id, self.actor_id, UUID(self.selected_attachment)
+            )
+            self.selected_attachment = None
+            await self._reload()
+
+    async def _primary_attachment(self, event: sl.PressEvent) -> None:
+        if self.selected_attachment is not None:
+            await self.services.submission_schematics.select_primary(
+                self.draft.snapshot.id, self.actor_id, UUID(self.selected_attachment)
+            )
+            await self._reload()
+
+    async def _retry_attachment(self, event: sl.PressEvent) -> None:
+        from squid_ui_discord.modal import FileField
+
+        if self.selected_attachment is None:
+            return
+        original_id = UUID(self.selected_attachment)
+
+        async def supplied(event: sl.SubmitEvent) -> None:
+            from squid.bot.submission.draft_intake import retry_uploaded_file
+
+            source = event.values.get("file")
+            if not isinstance(source, sl.forms.UploadedFile):
+                return
+            try:
+                new_id = await retry_uploaded_file(
+                    self.services, self.draft.snapshot.id, self.actor_id, original_id, source
+                )
+            except Exception:
+                self.notice = "The replacement file could not be registered. Retry or discard it."
+            else:
+                self.selected_attachment = str(new_id)
+                self.notice = "Replacement file registered."
+            await self._reload()
+
+        await event.present_form(
+            sl.forms.FormSpec(
+                "Retry attachment", (FileField(key="file", label="Replacement file", minimum=1, maximum=1),)
+            ),
+            key="retry-file",
+            on_submit=supplied,
+        )
+
     async def _reload(self) -> None:
         self.draft = await self.services.submission_drafts.get_accessible(self.draft.snapshot.id, self.actor_id)
+        self.attachments = await self.services.submission_intake.list(self.draft.snapshot.id, self.actor_id)
+        if not any(
+            str(item.id) == self.selected_attachment and item.status is not IntakeStatus.DISCARDED
+            for item in self.attachments
+        ):
+            self.selected_attachment = None
         result = await self.services.submission_finalization.status(self.draft.snapshot.id, self.actor_id)
         self.result = result if isinstance(result, FinalizationJobSnapshot) else None
 
