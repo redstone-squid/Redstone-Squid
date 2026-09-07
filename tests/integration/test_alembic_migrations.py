@@ -1131,3 +1131,34 @@ def test_finalization_attempt_migration_preserves_history_and_refuses_lossy_down
         command.downgrade(config, "c6e0a3b8d1f4")
     finally:
         engine.dispose()
+
+
+def test_inferred_capacity_migration_preserves_provenance(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "e8a2c5d0f3b6")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts (id, owner_account_id, schema_id, schema_revision, category, "
+                    "answers, origin, expires_at) VALUES "
+                    "(gen_random_uuid(), :owner, 'test', 1, 'other', '{}'::jsonb, 'discord', now() + interval '7 days')"
+                ),
+                {"owner": account_id},
+            )
+            assert connection.scalar(text("SELECT inferred FROM submission_drafts")) is False
+            connection.execute(text("UPDATE submission_drafts SET inferred = true"))
+        with pytest.raises(RuntimeError, match="Cannot downgrade while inferred drafts are retained"):
+            command.downgrade(config, "d7f1b4c9e2a5")
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE submission_drafts SET inferred = false"))
+        command.downgrade(config, "d7f1b4c9e2a5")
+        command.upgrade(config, "e8a2c5d0f3b6")
+    finally:
+        engine.dispose()

@@ -103,7 +103,17 @@ class FakeDraftRepository:
             )[:limit]
         )
 
-    async def create(self, draft: StoredDraft) -> StoredDraft:
+    async def create(self, draft: StoredDraft, *, capacity: int = 10) -> StoredDraft:
+        if draft.snapshot.id in self.drafts:
+            return self.drafts[draft.snapshot.id]
+        count = sum(
+            existing.inferred == draft.inferred
+            and (draft.inferred or existing.snapshot.owner_account_id == draft.snapshot.owner_account_id)
+            and existing.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
+            for existing in self.drafts.values()
+        )
+        if count >= capacity:
+            raise DraftCapacityExceededError(capacity)
         self.drafts[draft.snapshot.id] = draft
         return draft
 

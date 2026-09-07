@@ -380,3 +380,72 @@ async def test_delete_owned_accepts_needs_attention(
 
     assert await repository.delete_owned(DRAFT_ID, account_id) is True
     assert await repository.get(DRAFT_ID) is None
+
+
+@pytest.mark.parametrize("inferred", [False, True])
+async def test_concurrent_creation_respects_capacity_and_replays_stable_sources(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    inferred: bool,
+) -> None:
+    from anyio import create_task_group
+
+    from squid.submissions.errors import DraftCapacityExceededError
+
+    repository = PostgresDraftRepository(async_session_factory)
+    now = Instant.now()
+    template = replace(
+        _stored(account_id, origin=SubmissionOrigin.DISCORD),
+        inferred=inferred,
+        created_at=now,
+        updated_at=now,
+        expires_at=now.add(days=7, days_assumed_24h_ok=True),
+    )
+    accepted: list[StoredDraft] = []
+    rejected: list[DraftCapacityExceededError] = []
+
+    async def create(identifier: int) -> None:
+        draft = replace(template, snapshot=replace(template.snapshot, id=UUID(int=identifier)))
+        try:
+            accepted.append(await repository.create(draft, capacity=1))
+        except DraftCapacityExceededError as error:
+            rejected.append(error)
+
+    async with create_task_group() as tasks:
+        tasks.start_soon(create, 800)
+        tasks.start_soon(create, 801)
+    assert len(accepted) == 1
+    assert len(rejected) == 1
+    replayed = await repository.create(accepted[0], capacity=1)
+    assert replayed.snapshot.id == accepted[0].snapshot.id
+
+    other_pool = replace(template, inferred=not inferred, snapshot=replace(template.snapshot, id=UUID(int=802)))
+    assert (await repository.create(other_pool, capacity=1)).inferred is not inferred
+
+
+async def test_inferred_capacity_is_global_and_expiry_releases_it(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from squid.submissions.errors import DraftCapacityExceededError
+
+    repository = PostgresDraftRepository(async_session_factory)
+    async with async_session_factory.begin() as session:
+        other = Account()
+        session.add(other)
+        await session.flush()
+        other_id = other.id
+    now = Instant.now()
+    first = replace(
+        _stored(account_id, origin=SubmissionOrigin.DISCORD),
+        inferred=True,
+        created_at=now,
+        updated_at=now,
+        expires_at=now.add(days=7, days_assumed_24h_ok=True),
+    )
+    await repository.create(first, capacity=1)
+    second = replace(first, snapshot=replace(first.snapshot, id=UUID(int=803), owner_account_id=other_id))
+    with pytest.raises(DraftCapacityExceededError):
+        await repository.create(second, capacity=1)
+    await repository.expire_due(now=first.expires_at)
+    assert (await repository.create(second, capacity=1)).snapshot.owner_account_id == other_id

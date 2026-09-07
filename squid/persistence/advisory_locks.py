@@ -12,6 +12,7 @@ class AdvisoryLockNamespace(StrEnum):
     """Closed namespaces whose existing values are stable lock-wire contracts."""
 
     SUBMISSION_DRAFT_LIFECYCLE = "submission-draft-lifecycle-v1"
+    SUBMISSION_DRAFT_CAPACITY = "submission-draft-capacity-v1"
     MEDIA_UPLOAD_REGISTRATION = "media-upload-registration-v1"
     MINECRAFT_ACTIVE_CHALLENGE = "minecraft-active-challenge-v1"
 
