@@ -185,3 +185,19 @@ complete those milestones. Automatic status delivery and attachment controls rem
 
 Validation: shared prefill, editor recovery, staff attribution, stale modal, component rendering,
 route registration, and command taxonomy tests pass. Project-wide Pyrefly reports zero errors.
+
+### Recalculation proposals, 2026-09-07
+
+Recalculation now retains candidates and returns durable private review controls instead of
+calling submission. Reviewers explicitly match a candidate to a source-linked build of the same
+owner; category conflicts are rejected. Matching retains the diff and expected revision, and
+renewing a stale review creates a new proposal identity. Approval reuses the live owner-pending /
+staff edit policy and commits the build edit, database events, and approval receipt together.
+A changed build or changed resolved facts requires renewed review. Candidate reads and approval
+are available through the API; account merges include owner, requester, and approver references.
+Migration `c2e6a9b4d7f0` preserves proposals and refuses a destructive downgrade.
+
+Validation: 41 focused unit tests and 44 PostgreSQL/build/API contract tests passed. These cover
+missing inferred values, protected build metadata, stale approvals, permission revocation,
+receipt rollback, retry, and the recalculation transport's separation from submission. Pyrefly
+reports zero errors. `e140bb5b` contains the independently tested transaction/policy extraction.

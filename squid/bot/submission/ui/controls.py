@@ -18,6 +18,7 @@ builds, _builds_created = _feature_group("builds")
 build_edit = _feature_route(builds, "{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
 build_edit_recovery = _feature_route(builds, "{build_id:int}:edit:recover")
 draft_reopen = _feature_route(builds, "draft:{draft_id}:reopen")
+revision_reopen = _feature_route(builds, "revision:{proposal_id}:reopen")
 
 
 @builds.route(build_edit)
@@ -63,3 +64,13 @@ async def reopen_draft(interaction: Interaction[RedstoneSquid], draft_id: str) -
     await request.respond(
         screen, audience="personal", session_key=sd.SessionKey.custom("draft", (interaction.user.id, draft_id))
     )
+
+
+@builds.route(revision_reopen)
+async def reopen_revision(interaction: Interaction[RedstoneSquid], proposal_id: str) -> None:
+    """Reopen a retained diff under the caller's current edit authority."""
+    from squid.bot.submission.ui.revisions import proposal_screen
+
+    request = await sd.request(interaction)
+    screen = await proposal_screen(interaction.client.services, UUID(proposal_id), request)
+    await request.respond(screen, audience="personal")
