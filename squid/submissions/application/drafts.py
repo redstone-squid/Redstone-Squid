@@ -21,7 +21,6 @@ from squid.submissions.domain import (
 from squid.submissions.domain.finalization import SubmissionAttentionIssue
 from squid.submissions.errors import (
     DraftAccessDeniedError,
-    DraftCapacityExceededError,
     DraftNotFoundError,
     DraftSchemaUnsupportedError,
     DraftStateConflictError,
@@ -30,6 +29,7 @@ from squid.submissions.errors import (
 
 DEFAULT_DRAFT_RETENTION_DAYS = 7
 DEFAULT_ACCOUNT_DRAFT_CAPACITY = 10
+DEFAULT_INFERRED_DRAFT_CAPACITY = 1_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +44,7 @@ class StoredDraft:
     source_installation_id: UUID | None = None
     preparation_issues: tuple[SubmissionAttentionIssue, ...] = ()
     preparation_retry_at: Instant | None = None
+    inferred: bool = False
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
@@ -88,7 +89,7 @@ class DraftRepository(Protocol):
         limit: int,
     ) -> tuple[StoredDraft, ...]: ...
 
-    async def create(self, draft: StoredDraft) -> StoredDraft: ...
+    async def create(self, draft: StoredDraft, *, capacity: int = DEFAULT_ACCOUNT_DRAFT_CAPACITY) -> StoredDraft: ...
 
     async def get(self, draft_id: UUID) -> StoredDraft | None: ...
 
@@ -210,8 +211,9 @@ class SubmissionDraftService:
         *,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
         now: Callable[[], Instant] = Instant.now,
+        inferred_capacity: int = DEFAULT_INFERRED_DRAFT_CAPACITY,
     ) -> None:
-        if retention_days < 1:
+        if retention_days < 1 or inferred_capacity < 1:
             msg = tr(t"draft retention must be positive")
             raise InvalidStateError(msg)
         self._repository = repository
@@ -220,6 +222,7 @@ class SubmissionDraftService:
         self._revision_migration = revision_migration or CheckedInFormRevisionMigration()
         self._retention_days = retention_days
         self._now = now
+        self._inferred_capacity = inferred_capacity
 
     async def create(
         self,
@@ -232,14 +235,16 @@ class SubmissionDraftService:
         source_installation_id: UUID | None = None,
         now: Instant | None = None,
         draft_id: UUID | None = None,
+        inferred: bool = False,
     ) -> StoredDraft:
         """Create an empty draft pinned to the current schema revision."""
         if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
             msg = tr(t"Paper drafts require server-derived installation provenance.")
             raise ValidationError(msg)
-        limit = await self._capacity.limit_for(owner_account_id)
-        if await self._repository.count_active_for_account(owner_account_id) >= limit:
-            raise DraftCapacityExceededError(limit)
+        if inferred and origin is not SubmissionOrigin.DISCORD:
+            message = "Inferred drafts require Discord source provenance."
+            raise ValidationError(message)
+        limit = self._inferred_capacity if inferred else await self._capacity.limit_for(owner_account_id)
         manifest = await self._manifests.current(locale=locale)
         manifest.category(category)
         missing = manifest.unsupported_required_capabilities(category, client_capabilities, origin)
@@ -259,8 +264,9 @@ class SubmissionDraftService:
             updated_at=created_at,
             expires_at=created_at.add(days=self._retention_days, days_assumed_24h_ok=True),
             source_installation_id=source_installation_id,
+            inferred=inferred,
         )
-        return await self._repository.create(stored)
+        return await self._repository.create(stored, capacity=limit)
 
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
         """List a bounded newest-first view of one account's unexpired active drafts."""
