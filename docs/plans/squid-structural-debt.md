@@ -1,7 +1,11 @@
 # Structural debt in squid and its tests
 
-Status: proposed; implementation has not started.
+Status: submission foundations implemented; workflow convergence remains in progress.
 Reviewed: 2026-09-07.
+
+The approved submission design and implementation record are in
+[`submission-convergence.md`](submission-convergence.md). Its decisions supersede section 1
+where the original review recommended preserving the deprecated endpoint.
 
 ## Objective
 
@@ -18,7 +22,8 @@ its assumptions against the current code and existing completed plans.
 - `squid/bot/submission/ingestion.py` separately prepares attachments, checks duplicates, persists builds,
   and records enrichment. Its failure-evidence persistence path documents possible operator recovery.
 - `squid/submissions/application/finalization.py` provides durable finalization for synchronized drafts.
-- `squid/api/v1/builds.py` retains a deprecated direct door-submission endpoint.
+- At review time, `squid/api/v1/builds.py` retained a deprecated direct door-submission endpoint;
+  it has now been removed with explicit approval.
 
 These paths share build persistence but distribute preparation and recovery policy. New categories,
 attachment types, and validation rules can multiply implementations and failure cases.
@@ -33,16 +38,15 @@ attachment types, and validation rules can multiply implementations and failure 
   work. Inspect their current ownership before introducing any additional job type.
 - Migrate Discord forms and inferred message bundles incrementally. Preserve inference's multi-build
   behavior and intentional differences in attachment selection and partial-failure handling.
-- Keep the deprecated HTTP endpoint's `201` response and remote-URL behavior until its documented
-  next-version removal. Its URLs cannot be mapped losslessly to uploaded artifacts; do not force that
-  conversion as part of convergence. Share compatible policy beneath this adapter.
+- Remove the deprecated HTTP submission endpoint and coordinate draft/attempt contracts with consumers,
+  as authorized during detailed planning.
 
 ### Acceptance
 
 - Equivalent normalized inputs follow the same shared validation and persistence policy across callers.
 - Tests cover failure and retry between creation, analysis attachment, and publication, including process
   interruption wherever durable recovery is promised. Retries do not create duplicate builds or posts.
-- Existing Discord recovery behavior and legacy HTTP response contracts remain covered.
+- Existing Discord recovery behavior remains covered; OpenAPI verifies the deprecated endpoint is absent.
 - Shared submission policy no longer requires matching edits in the form and inference transports.
 
 ## 2. Establish ownership for cross-feature persistence
