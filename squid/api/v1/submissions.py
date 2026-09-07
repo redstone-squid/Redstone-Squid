@@ -25,7 +25,7 @@ from squid.api.v1.schemas.submissions import (
     FormManifestResponse,
     FormOptionSetResponse,
     StoredDraftResponse,
-    SubmissionFinalizationResponse,
+    SubmissionAttemptResponse,
 )
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
 from squid.submissions.application import (
@@ -106,6 +106,12 @@ class SubmissionFinalizationCommands(Protocol):
     ) -> FinalizationJobSnapshot: ...
 
     async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None: ...
+
+    async def attempt(self, draft_id: UUID, account_id: int, attempt_id: UUID) -> FinalizationJobSnapshot | None: ...
+
+    async def attempts(
+        self, draft_id: UUID, account_id: int, *, before: int | None = None, limit: int = 20
+    ) -> tuple[FinalizationJobSnapshot, ...]: ...
 
 
 class SubmissionApiServices(Protocol):
@@ -443,8 +449,8 @@ async def upgrade_draft_manifest(
 
 
 @router.post(
-    "/drafts/{draft_id}/submission",
-    response_model=SubmissionFinalizationResponse,
+    "/drafts/{draft_id}/attempts",
+    response_model=SubmissionAttemptResponse,
     status_code=status.HTTP_202_ACCEPTED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_finalization_start",
@@ -459,19 +465,19 @@ async def submit_draft(
     request: Request,
     finalization: Finalization,
     account_id: AccountId,
-) -> SubmissionFinalizationResponse:
+) -> SubmissionAttemptResponse:
     """Validate an owned draft and start retry-safe durable finalization."""
     snapshot = await finalization.submit(
         draft_id,
         account_id,
         locale=locale_for_request(request),
     )
-    return SubmissionFinalizationResponse.from_domain(snapshot)
+    return SubmissionAttemptResponse.from_domain(snapshot)
 
 
 @router.get(
-    "/drafts/{draft_id}/submission",
-    response_model=SubmissionFinalizationResponse,
+    "/drafts/{draft_id}/attempts/latest",
+    response_model=SubmissionAttemptResponse,
     responses=responses(401, 403, 404, 422, 503),
     operation_id="submission_finalization_get",
     openapi_extra=contract(
@@ -483,12 +489,51 @@ async def get_draft_submission(
     draft_id: UUID,
     finalization: Finalization,
     account_id: AccountId,
-) -> SubmissionFinalizationResponse:
+) -> SubmissionAttemptResponse:
     """Return retained finalization state after rechecking draft ownership."""
     snapshot = await finalization.status(draft_id, account_id)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
-    return SubmissionFinalizationResponse.from_domain(snapshot)
+    return SubmissionAttemptResponse.from_domain(snapshot)
+
+
+@router.get(
+    "/drafts/{draft_id}/attempts",
+    response_model=list[SubmissionAttemptResponse],
+    responses=responses(401, 403, 404, 409, 422, 503),
+    operation_id="submission_attempts_list",
+    openapi_extra=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+)
+async def list_draft_attempts(
+    draft_id: UUID,
+    finalization: Finalization,
+    account_id: AccountId,
+    before: Annotated[int | None, Query(ge=1)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> list[SubmissionAttemptResponse]:
+    """List retained attempts newest first; use the last attempt number as the next cursor."""
+    snapshots = await finalization.attempts(draft_id, account_id, before=before, limit=limit)
+    return [SubmissionAttemptResponse.from_domain(snapshot) for snapshot in snapshots]
+
+
+@router.get(
+    "/drafts/{draft_id}/attempts/{attempt_id}",
+    response_model=SubmissionAttemptResponse,
+    responses=responses(401, 403, 404, 409, 422, 503),
+    operation_id="submission_attempt_get",
+    openapi_extra=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+)
+async def get_draft_attempt(
+    draft_id: UUID,
+    attempt_id: UUID,
+    finalization: Finalization,
+    account_id: AccountId,
+) -> SubmissionAttemptResponse:
+    """Read one attempt without exposing execution credentials or its private payload."""
+    snapshot = await finalization.attempt(draft_id, account_id, attempt_id)
+    if snapshot is None:
+        raise SubmissionFinalizationNotFoundError
+    return SubmissionAttemptResponse.from_domain(snapshot)
 
 
 @router.delete(

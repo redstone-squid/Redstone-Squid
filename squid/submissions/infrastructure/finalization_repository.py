@@ -62,6 +62,38 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         return _snapshot(job, result)
 
     @override
+    async def get_attempt(self, draft_id: UUID, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+        async with self._session_factory() as session:
+            job = await session.scalar(
+                select(SubmissionFinalizationJob).where(
+                    SubmissionFinalizationJob.draft_id == draft_id,
+                    SubmissionFinalizationJob.id == attempt_id,
+                )
+            )
+            if job is None:
+                return None
+            result = await session.get(SubmissionFinalizationResult, job.id)
+            return _snapshot(job, result)
+
+    @override
+    async def list_attempts(
+        self, draft_id: UUID, *, before: int | None, limit: int
+    ) -> tuple[FinalizationJobSnapshot, ...]:
+        statement = (
+            select(SubmissionFinalizationJob, SubmissionFinalizationResult)
+            .outerjoin(
+                SubmissionFinalizationResult, SubmissionFinalizationResult.job_id == SubmissionFinalizationJob.id
+            )
+            .where(SubmissionFinalizationJob.draft_id == draft_id)
+            .order_by(SubmissionFinalizationJob.attempt_number.desc())
+            .limit(limit)
+        )
+        if before is not None:
+            statement = statement.where(SubmissionFinalizationJob.attempt_number < before)
+        async with self._session_factory() as session:
+            return tuple(_snapshot(job, result) for job, result in await session.execute(statement))
+
+    @override
     async def enqueue(
         self,
         draft: StoredDraft,
@@ -456,6 +488,7 @@ def _snapshot(
         last_error=job.last_error,
         issues=_decode_issues(job.attention_issues),
         result=_result(result) if result is not None else None,
+        attempt_number=job.attempt_number,
     )
 
 

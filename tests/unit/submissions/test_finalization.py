@@ -203,6 +203,18 @@ class FakeFinalizationJobs:
         assert draft_id == DRAFT_ID
         return self.snapshot
 
+    async def get_attempt(self, draft_id: UUID, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+        snapshot = await self.get(draft_id)
+        return snapshot if snapshot is not None and snapshot.job_id == attempt_id else None
+
+    async def list_attempts(
+        self, draft_id: UUID, *, before: int | None, limit: int
+    ) -> tuple[FinalizationJobSnapshot, ...]:
+        snapshot = await self.get(draft_id)
+        if snapshot is None or (before is not None and snapshot.attempt_number >= before):
+            return ()
+        return (snapshot,)[:limit]
+
     async def enqueue(
         self,
         draft: StoredDraft,
@@ -603,6 +615,12 @@ async def test_status_rechecks_draft_ownership_before_returning_job() -> None:
 
     with pytest.raises(DraftAccessDeniedError):
         await service.status(DRAFT_ID, 8)
+    with pytest.raises(DraftAccessDeniedError):
+        await service.attempt(DRAFT_ID, 8, JOB_ID)
+    with pytest.raises(DraftAccessDeniedError):
+        await service.attempts(DRAFT_ID, 8)
+    assert await service.attempt(DRAFT_ID, 7, JOB_ID) == jobs.snapshot
+    assert await service.attempts(DRAFT_ID, 7) == (jobs.snapshot,)
 
 
 async def _payload() -> NormalizedSubmission:

@@ -13325,7 +13325,7 @@
         }
       }
     },
-    "/v1/submissions/drafts/{draft_id}/submission": {
+    "/v1/submissions/drafts/{draft_id}/attempts": {
       "post": {
         "tags": [
           "submissions"
@@ -13384,7 +13384,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SubmissionFinalizationResponse"
+                  "$ref": "#/components/schemas/SubmissionAttemptResponse"
                 }
               }
             },
@@ -13582,6 +13582,253 @@
         "tags": [
           "submissions"
         ],
+        "summary": "List Draft Attempts",
+        "description": "List retained attempts newest first; use the last attempt number as the next cursor.",
+        "operationId": "submission_attempts_list",
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SubmissionAttemptResponse"
+                  },
+                  "title": "Response Submission Attempts List"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/attempts/latest": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
         "summary": "Get Draft Submission",
         "description": "Return retained finalization state after rechecking draft ownership.",
         "operationId": "submission_finalization_get",
@@ -13635,7 +13882,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SubmissionFinalizationResponse"
+                  "$ref": "#/components/schemas/SubmissionAttemptResponse"
                 }
               }
             },
@@ -13773,6 +14020,230 @@
             "submission-finalization"
           ],
           "interaction": "direct"
+        }
+      }
+    },
+    "/v1/submissions/drafts/{draft_id}/attempts/{attempt_id}": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "Get Draft Attempt",
+        "description": "Read one attempt without exposing execution credentials or its private payload.",
+        "operationId": "submission_attempt_get",
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Attempt Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 255,
+                  "pattern": "^[\\x21-\\x7e]+$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+              "title": "Idempotency-Key"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionAttemptResponse"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Too Many Requests",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unauthorized",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Forbidden",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Not Found",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Conflict",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Unprocessable Content",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description": "Service Unavailable",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "x-squid-cli": {
+          "classification": "transport-only"
         }
       }
     },
@@ -21281,6 +21752,62 @@
         "title": "StoredDraftResponse",
         "description": "The compacted current state of one caller-owned draft."
       },
+      "SubmissionAttemptResponse": {
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Draft Id"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Attempt Id"
+          },
+          "attempt_number": {
+            "type": "integer",
+            "title": "Attempt Number"
+          },
+          "draft_revision": {
+            "type": "integer",
+            "title": "Draft Revision"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FinalizationJobStatus"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionAttentionIssueResponse"
+            },
+            "type": "array",
+            "title": "Issues"
+          },
+          "build_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "draft_id",
+          "attempt_id",
+          "attempt_number",
+          "draft_revision",
+          "status",
+          "issues",
+          "build_id"
+        ],
+        "title": "SubmissionAttemptResponse",
+        "description": "Owner-visible state of durable draft finalization."
+      },
       "SubmissionAttentionIssueResponse": {
         "properties": {
           "field_id": {
@@ -21327,51 +21854,6 @@
         ],
         "title": "SubmissionAttentionReason",
         "description": "Stable repair reasons shared by every submission transport."
-      },
-      "SubmissionFinalizationResponse": {
-        "properties": {
-          "draft_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Draft Id"
-          },
-          "draft_revision": {
-            "type": "integer",
-            "title": "Draft Revision"
-          },
-          "status": {
-            "$ref": "#/components/schemas/FinalizationJobStatus"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/SubmissionAttentionIssueResponse"
-            },
-            "type": "array",
-            "title": "Issues"
-          },
-          "build_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Build Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "draft_id",
-          "draft_revision",
-          "status",
-          "issues",
-          "build_id"
-        ],
-        "title": "SubmissionFinalizationResponse",
-        "description": "Owner-visible state of durable draft finalization."
       },
       "SubmissionOrigin": {
         "type": "string",

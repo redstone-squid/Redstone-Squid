@@ -67,6 +67,7 @@ class FinalizationJobSnapshot:
     last_error: str | None = None
     issues: tuple[SubmissionAttentionIssue, ...] = ()
     result: FinalizedBuild | None = None
+    attempt_number: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +92,12 @@ class FinalizationJobRepository(Protocol):
     """Atomic draft transitions and durable claim-token-fenced queue operations."""
 
     async def get(self, draft_id: UUID) -> FinalizationJobSnapshot | None: ...
+
+    async def get_attempt(self, draft_id: UUID, attempt_id: UUID) -> FinalizationJobSnapshot | None: ...
+
+    async def list_attempts(
+        self, draft_id: UUID, *, before: int | None, limit: int
+    ) -> tuple[FinalizationJobSnapshot, ...]: ...
 
     async def enqueue(
         self,
@@ -225,6 +232,21 @@ class SubmissionFinalizationService:
         """Return retained finalization state after rechecking draft ownership."""
         await self._drafts.get_owned(draft_id, account_id)
         return await self._jobs.get(draft_id)
+
+    async def attempt(self, draft_id: UUID, account_id: int, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+        """Read a retained attempt only within its accessible parent draft."""
+        await self._drafts.get_owned(draft_id, account_id)
+        return await self._jobs.get_attempt(draft_id, attempt_id)
+
+    async def attempts(
+        self, draft_id: UUID, account_id: int, *, before: int | None = None, limit: int = 20
+    ) -> tuple[FinalizationJobSnapshot, ...]:
+        """Read newest-first history with a stable exclusive attempt-number cursor."""
+        if not 1 <= limit <= 100 or (before is not None and before < 1):
+            message = "Invalid attempt history cursor or limit."
+            raise InvalidStateError(message)
+        await self._drafts.get_owned(draft_id, account_id)
+        return await self._jobs.list_attempts(draft_id, before=before, limit=limit)
 
 
 class SubmissionFinalizationWorker:

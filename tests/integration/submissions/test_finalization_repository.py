@@ -421,6 +421,14 @@ async def test_retry_retains_failed_payload_and_rejects_its_stale_completion(
     latest = await repository.get(DRAFT_ID)
     assert latest is not None
     assert latest.job_id == second.job_id
+    history = await repository.list_attempts(DRAFT_ID, before=None, limit=1)
+    assert [item.job_id for item in history] == [second.job_id]
+    older = await repository.list_attempts(DRAFT_ID, before=history[-1].attempt_number, limit=1)
+    assert [item.job_id for item in older] == [first.job_id]
+    retained = await repository.get_attempt(DRAFT_ID, first.job_id)
+    assert retained is not None
+    assert retained.issues == (issue,)
+    assert await repository.get_attempt(UUID(int=1), first.job_id) is None
     async with async_session_factory() as session:
         previous = await session.get(SubmissionFinalizationJob, first.job_id)
         current = await session.get(SubmissionFinalizationJob, second.job_id)
