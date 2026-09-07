@@ -2,6 +2,10 @@
 
 Status: implementation in progress. Approved 2026-09-07.
 
+Execution clarification: the sanitizer is an unavailable attachment processor, not a reason to
+defer orchestration or Discord integration. Supplied schematics remain private and pending;
+continue the rest of this plan around that boundary.
+
 ## Accepted design
 
 All submission entry points will use persisted drafts. Discord renders the shared manifest,
@@ -121,3 +125,32 @@ Discord manifest rendering and restart recovery, and inference intake/correction
 Do not mark the milestone checkboxes complete until their full acceptance criteria pass. The
 sanitizer gate blocks the schematic and Discord cutover; it does not itself block independent
 API, persistence, and policy work.
+
+### Orchestration implementation continued, 2026-09-07
+
+- `d9960211`: added explicit attempt creation, bounded history, and attempt-ID reads; updated
+  OpenAPI and lifecycle consumers. Current draft status is now read at `/drafts/{id}/status`.
+- `a65aa4c7`: preparation issues live on drafts; incomplete preparation no longer creates an
+  execution attempt. Attachment waits resume from durable reservations, without extending expiry;
+  edits cancel automatic submission. Supplied schematics remain pending behind issue #39.
+- `5730dfc7`: atomic quota admission separates manual account capacity from the configurable
+  global inferred pool (`SQUID_SUBMISSIONS_INFERRED_DRAFT_CAPACITY`, default 1,000). Stable source-ID
+  replays do not consume capacity. Migration and concurrent-intake tests pass.
+- `793554fb`: the worker commits builds, normalized-media references, receipts, and database events
+  in one claim-fenced transaction. PostgreSQL tests cover rollback after receipt failure, stale
+  workers, replay, and receipt media references.
+- `d30308f1`: shared live staff authorization, a paged correction inbox, actual editor/requester
+  attribution, execution-time permission rechecks, and account-merge fencing for staff requesters.
+  Ownership stays with the original submitter. Role-only Discord context is not treated as durable
+  authority: background execution requires a currently resolvable account grant.
+
+The active migration head is `a0c4e7f2b5d8`. Focused tests and project-wide Pyrefly pass for these
+milestones. The broader submission run exposed an outdated test assuming manifest revision 2 did
+not exist; that test now checks the supported revision and an actually unsupported revision.
+Broader configuration checks also exposed an existing process-projection failure in the schematic
+background-color validator; the new submission configuration projection passes its focused test.
+
+Next: durable shared attachment intake around the sanitizer boundary, persisted inference and
+candidate conversion, Discord manifest editing/recovery, revision proposals, and removal of the
+superseded transport orchestration. The earlier remaining-work paragraph is a historical checkpoint;
+use this execution record when determining what is still outstanding.
