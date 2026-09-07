@@ -54,6 +54,7 @@ from squid.submissions.application import (
     SubmissionFinalizationWorker,
     SubmissionFormService,
 )
+from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.suggestions.application import SuggestionService
@@ -93,6 +94,7 @@ class ApiServices:
     submission_finalization: SubmissionFinalizationService
     submission_schematics: DraftSchematicService
     submission_revisions: RevisionProposalService
+    submission_intake: SubmissionAttachmentIntake
     suggestions: SuggestionService
     media_jobs: MediaNormalizationJobService | None
     minecraft_installations: InstallationCredentialService | None
@@ -115,6 +117,7 @@ class BotServices:
     submission_finalization: SubmissionFinalizationService
     submission_schematics: DraftSchematicService
     submission_revisions: RevisionProposalService
+    submission_intake: SubmissionAttachmentIntake
     restrictions: RestrictionService
     build_queries: BuildQueryService
     messages: MessageService

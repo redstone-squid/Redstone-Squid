@@ -108,6 +108,7 @@ from squid.submissions.application import (
     SubmissionFormService,
     SubmissionPreparation,
 )
+from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.infrastructure.artifact_readiness import (
@@ -116,6 +117,7 @@ from squid.submissions.infrastructure.artifact_readiness import (
 from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
 from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
@@ -437,6 +439,16 @@ class _ServiceGraph:
         )
 
     @cached_property
+    def submission_intake_repository(self) -> PostgresAttachmentIntake:
+        return PostgresAttachmentIntake(self.db.async_session)
+
+    @cached_property
+    def submission_intake(self) -> SubmissionAttachmentIntake:
+        return SubmissionAttachmentIntake(
+            self.submission_drafts, self.submission_intake_repository, self.submission_schematics, self.media_jobs
+        )
+
+    @cached_property
     def submission_revisions(self) -> RevisionProposalService:
         return RevisionProposalService(
             PostgresRevisionProposals(self.db.async_session, self.build_repository, self.builds),
@@ -461,6 +473,7 @@ class _ServiceGraph:
         readiness = AuthoritativeDraftArtifactReadiness(
             self.media_repository,
             self.submission_schematic_repository,
+            intake=self.submission_intake_repository,
             media_limits=MediaLimits(),
         )
         sponsors = (
@@ -699,6 +712,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_finalization=graph.submission_finalization,
         submission_schematics=graph.submission_schematics,
         submission_revisions=graph.submission_revisions,
+        submission_intake=graph.submission_intake,
         suggestions=graph.suggestions,
         media_jobs=graph.media_jobs,
         minecraft_installations=graph.minecraft_installations,
@@ -722,6 +736,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_finalization=graph.submission_finalization,
         submission_schematics=graph.submission_schematics,
         submission_revisions=graph.submission_revisions,
+        submission_intake=graph.submission_intake,
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
         messages=MessageService(MessageRepository(db.async_session)),
