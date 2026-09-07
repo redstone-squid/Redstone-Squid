@@ -54,6 +54,7 @@ from squid.submissions.application import (
     SubmissionFinalizationWorker,
     SubmissionFormService,
 )
+from squid.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.submissions.application.intake import SubmissionAttachmentIntake
 from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.application.schematics import DraftSchematicService
@@ -95,6 +96,7 @@ class ApiServices:
     submission_schematics: DraftSchematicService
     submission_revisions: RevisionProposalService
     submission_intake: SubmissionAttachmentIntake
+    submission_inference: SubmissionInferenceRuns
     suggestions: SuggestionService
     media_jobs: MediaNormalizationJobService | None
     minecraft_installations: InstallationCredentialService | None
@@ -118,6 +120,7 @@ class BotServices:
     submission_schematics: DraftSchematicService
     submission_revisions: RevisionProposalService
     submission_intake: SubmissionAttachmentIntake
+    submission_inference: SubmissionInferenceRuns
     restrictions: RestrictionService
     build_queries: BuildQueryService
     messages: MessageService
@@ -167,6 +170,7 @@ class WorkerServices:
     purge_idempotency: Callable[[], Awaitable[int]]
     expire_submission_drafts: Callable[[], Awaitable[int]]
     cleanup_submission_schematics: Callable[[], Awaitable[None]]
+    cleanup_submission_inference: Callable[[], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)

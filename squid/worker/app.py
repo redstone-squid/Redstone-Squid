@@ -310,6 +310,7 @@ class DatabaseWorker:
         with trace_span("squid.worker.submission_draft_expiry", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             expired = await self._services.expire_submission_drafts()
             await self._services.cleanup_submission_schematics()
+            await self._services.cleanup_submission_inference()
         if expired:
             logger.info(
                 "Expired inactive submission drafts",
