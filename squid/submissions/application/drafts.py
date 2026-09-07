@@ -69,6 +69,7 @@ class StoredDraft:
     source_messages: tuple[SourceMessage, ...] = ()
     source_files: tuple[SubmissionSourceFile, ...] = ()
     source_issues: tuple[str, ...] = ()
+    inference_run_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
@@ -268,6 +269,7 @@ class SubmissionDraftService:
         source_messages: tuple[SourceMessage, ...] = (),
         source_files: tuple[SubmissionSourceFile, ...] = (),
         source_issues: tuple[str, ...] = (),
+        inference_run_id: UUID | None = None,
     ) -> StoredDraft:
         """Create an empty draft pinned to the current schema revision."""
         if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
@@ -300,6 +302,7 @@ class SubmissionDraftService:
             source_messages=source_messages,
             source_files=source_files,
             source_issues=source_issues,
+            inference_run_id=inference_run_id,
         )
         return await self._repository.create(stored, capacity=limit)
 

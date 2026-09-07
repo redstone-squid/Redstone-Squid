@@ -40,6 +40,17 @@ class InferenceClaim:
     candidates: tuple[InferenceCandidate, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class InferenceStatus:
+    """Minimal public progress for one source-message bundle."""
+
+    channel_id: int
+    guild_id: int | None
+    source_message_id: int
+    state: str
+    candidates: tuple[str, ...]
+
+
 class InferenceRunRepository(Protocol):
     """Retain inputs before invocation and fence candidate writes by the active claim."""
 
@@ -51,6 +62,7 @@ class InferenceRunRepository(Protocol):
     ) -> tuple[InferenceCandidate, ...]: ...
     async def fail(self, run_id: UUID, token: UUID) -> None: ...
     async def get(self, run_id: UUID) -> tuple[int, tuple[InferenceCandidate, ...]] | None: ...
+    async def public_status(self, run_id: UUID) -> InferenceStatus | None: ...
     async def list_active(self, owner: int | None) -> tuple[UUID, ...]: ...
     async def expired(self) -> tuple[tuple[UUID, int], ...]: ...
     async def delete_expired(self, run_id: UUID) -> None: ...
@@ -139,6 +151,10 @@ class SubmissionInferenceRuns:
         ):
             raise AuthorizationError
         return await self._repository.list_active(None if inbox else actor.account_id)
+
+    async def public_status(self, run_id: UUID) -> InferenceStatus | None:
+        """Read minimal status for the source-channel reconciler without exposing inferred facts."""
+        return await self._repository.public_status(run_id)
 
     async def cleanup(self) -> None:
         """Delete expired private images before releasing their retained database inventory."""

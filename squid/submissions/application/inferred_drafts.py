@@ -41,6 +41,7 @@ async def materialize_candidate(
         source_messages=source.source_messages,
         source_files=candidate.source_files,
         source_issues=prefill.unresolved,
+        inference_run_id=candidate.run_id,
         client_capabilities=frozenset(
             field.required_capability
             for field in manifest.fields_for(prefill.category)

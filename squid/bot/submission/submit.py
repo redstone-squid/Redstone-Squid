@@ -253,25 +253,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             model=self.bot.inference_model,
             reasoning_effort=self.bot.inference_reasoning_effort,
         )
-        import squid_ui as sl
-        from squid.bot.submission.ui.controls import inference_reopen
-        from squid.bot.ui import render_payload
-        from squid_ui_discord import send_to
-
-        await send_to(message.channel)(
-            render_payload(
-                [
-                    sl.primitives.Section(
-                        (
-                            sl.primitives.Text(
-                                "Submission candidates retained. Open privately to review progress or correct missing information."
-                            ),
-                        ),
-                        sl.primitives.RoutedButton("Review candidates", inference_reopen.id(run_id=str(run_id))),
-                    )
-                ]
-            )
-        )
+        await self.bot.refresh_posts("inference_run", str(run_id))
 
     @sd.context_menu(name="Recalculate Build", defer="private")
     async def recalc_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
