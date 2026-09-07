@@ -430,6 +430,7 @@ class _ServiceGraph:
             PostgresDraftRepository(self.db.async_session),
             self.submission_manifests,
             inferred_capacity=self.config.submissions.inferred_draft_capacity,
+            permissions=self.permissions,
         )
 
     @cached_property
@@ -462,6 +463,7 @@ class _ServiceGraph:
                 self.db.async_session,
                 self.build_repository,
                 CanonicalBuildSubmissionWriter(self.builds, self.tags, self.version_service),
+                drafts=self.submission_drafts,
             ),
             preparation=self.submission_finalization,
         )

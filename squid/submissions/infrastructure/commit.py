@@ -8,8 +8,17 @@ from whenever import Instant
 from squid.builds.domain import Build
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.core.errors import InvalidStateError
+from squid.submissions.application.drafts import SubmissionDraftService
 from squid.submissions.application.finalization import ClaimedFinalizationJob
-from squid.submissions.domain import BuildSubmissionRejected, DraftStatus, FinalizedBuild, NormalizedSubmission
+from squid.submissions.domain import (
+    BuildSubmissionRejected,
+    DraftStatus,
+    FinalizedBuild,
+    NormalizedSubmission,
+    SubmissionAttentionIssue,
+    SubmissionAttentionReason,
+)
+from squid.submissions.errors import DraftAccessDeniedError
 from squid.submissions.infrastructure.finalization_models import SubmissionReceiptMedia
 from squid.submissions.infrastructure.finalization_repository import (
     _claimed_job,
@@ -33,10 +42,12 @@ class PostgresSubmissionExecutor:
         sessions: async_sessionmaker[AsyncSession],
         builds: BuildRepository,
         preparation: SubmissionBuildPreparer,
+        drafts: SubmissionDraftService | None = None,
     ) -> None:
         self._sessions = sessions
         self._builds = builds
         self._preparation = preparation
+        self._drafts = drafts
 
     async def execute(
         self,
@@ -45,6 +56,10 @@ class PostgresSubmissionExecutor:
         now: Instant,
     ) -> FinalizedBuild | BuildSubmissionRejected | None:
         """Return no result for lost authority; a success includes the committed receipt."""
+        if not await self._authorized(job):
+            return BuildSubmissionRejected(
+                (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),)
+            )
         candidate = await self._preparation.prepare(job.payload)
         if isinstance(candidate, BuildSubmissionRejected):
             return candidate
@@ -59,6 +74,10 @@ class PostgresSubmissionExecutor:
             draft = await _locked_draft(session, job.draft_id)
             if await _claimed_job(session, job) is None:
                 return None
+            if not await self._authorized(job):
+                return BuildSubmissionRejected(
+                    (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),)
+                )
             if (
                 draft.status is not DraftStatus.PROCESSING
                 or draft.owner_account_id != job.payload.owner_account_id
@@ -89,3 +108,13 @@ class PostgresSubmissionExecutor:
                 for upload_id in job.payload.artifacts.normalized_media_upload_ids
             )
         return result
+
+    async def _authorized(self, job: ClaimedFinalizationJob) -> bool:
+        actor = job.requested_by_account_id or job.payload.owner_account_id
+        if self._drafts is None:
+            return actor == job.payload.owner_account_id
+        try:
+            await self._drafts.get_accessible(job.draft_id, actor)
+        except DraftAccessDeniedError:
+            return False
+        return True
