@@ -6,7 +6,6 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.builds.application.commands import DoorSubmissionInput
 from squid.builds.application.editing import BuildEditLease, BuildEditPatch
 from squid.builds.application.ports import (
     BuildEmbeddingCoordinator,
@@ -19,8 +18,6 @@ from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build
 from squid.builds.domain import (
     Build,
     BuildDraft,
-    BuildLink,
-    DoorBuild,
     RestrictionTypeLiteral,
     Status,
     sort_restrictions,
@@ -76,48 +73,6 @@ class BuildService:
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
         """Return every build inferred from one Discord message, newest bundle included."""
         return await self._repository.list_ids_for_source_message(message_id)
-
-    async def submit_door(self, submission: DoorSubmissionInput) -> DoorBuild:
-        build = DoorBuild(
-            submitter_account_id=submission.submitter_account_id,
-            ai_generated=submission.ai_generated,
-            submission_status=Status.PENDING,
-            version_spec=submission.works_in,
-            width=submission.build_size[0],
-            height=submission.build_size[1],
-            depth=submission.build_size[2],
-            door_width=submission.door_size[0] if submission.door_size[0] is not None else 1,
-            door_height=submission.door_size[1] if submission.door_size[1] is not None else 2,
-            door_depth=submission.door_size[2],
-            patterns=list(submission.pattern),
-            orientation=submission.door_type,
-            normal_closing_time=submission.normal_closing_time,
-            normal_opening_time=submission.normal_opening_time,
-            creators_ign=list(submission.creators),
-            links=[
-                BuildLink(url=url, media_type=media_type)
-                for media_type, urls in (
-                    ("image", submission.image_urls),
-                    ("video", submission.video_urls),
-                    ("world-download", submission.world_download_urls),
-                    ("schematic", submission.schematic_urls),
-                )
-                for url in urls
-            ],
-            completion_time=submission.date_of_creation,
-        )
-        await self._set_restrictions(build, submission.restrictions)
-        for value, empty_value in (
-            (submission.locationality, "Not locational"),
-            (submission.directionality, "Not directional"),
-        ):
-            if value is not None and value != empty_value:
-                build.miscellaneous_restrictions.append(value)
-        if submission.information_about_build is not None:
-            build.extra_info["user"] = submission.information_about_build
-            build.description = submission.information_about_build
-        await self._persist(build)
-        return build
 
     async def save(self, build: Build) -> Build:
         await self._persist(build)
@@ -280,13 +235,6 @@ class BuildService:
         # verbatim and unresolvable names are recorded before anything is saved.
         await apply_build_taxonomy(build, self._taxonomy)
         await self._embeddings.prepare(build)
-
-    async def _set_restrictions(self, build: Build, restrictions: Sequence[str]) -> None:
-        known_restrictions = await self._restrictions.fetch_all_restrictions()
-        build.classify_restrictions(
-            restrictions,
-            {restriction.name: restriction.type for restriction in known_restrictions},
-        )
 
 
 def _require_matching_source_submission(

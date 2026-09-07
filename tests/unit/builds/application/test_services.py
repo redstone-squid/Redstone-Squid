@@ -9,7 +9,7 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.builds.application import BuildEditPatch, DoorSubmissionInput, RestrictionDefinition
+from squid.builds.application import BuildEditPatch, RestrictionDefinition
 from squid.builds.application.ports import SourceSubmissionBuildWrite
 from squid.builds.application.services import (
     BuildEditor,
@@ -386,32 +386,6 @@ async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorB
     assert len(locks.acquisitions) == 2
     assert locks.releases == [42, 42]
     assert locks.cleanups == [cutoff]
-
-
-async def test_submit_door_maps_input_and_saves() -> None:
-    repository = FakeBuildRepository()
-    service = build_service(repository)
-    submission = DoorSubmissionInput(
-        submitter_account_id=123,
-        door_size=(2, 3, None),
-        build_size=(8, 9, 10),
-        restrictions=("Seamless",),
-        locationality="Locational",
-        directionality="Not directional",
-        information_about_build="notes",
-    )
-
-    build = await service.submit_door(submission)
-
-    assert build.category is BuildCategory.DOOR
-    assert build.submission_status is Status.PENDING
-    assert build.submitter_account_id == 123
-    assert build.door_dimensions == (2, 3, None)
-    assert build.dimensions == (8, 9, 10)
-    assert build.wiring_placement_restrictions == ["Seamless"]
-    assert build.miscellaneous_restrictions == ["Locational"]
-    assert build.extra_info.get("user") == "notes"
-    assert repository.saved == [build]
 
 
 async def test_classify_restrictions_replaces_existing_values_without_persisting() -> None:
