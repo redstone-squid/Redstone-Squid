@@ -4,6 +4,7 @@ import uuid
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     ForeignKey,
     Identity,
@@ -30,6 +31,8 @@ class SubmissionDraft(Base, kw_only=True):
     __table_args__ = (
         CheckConstraint("schema_revision > 0", name="submission_drafts_schema_revision_positive"),
         CheckConstraint("revision >= 0", name="submission_drafts_revision_nonnegative"),
+        CheckConstraint("NOT inferred OR origin = 'discord'", name="submission_drafts_inference_origin_check"),
+        Index("submission_drafts_inferred_expiry_idx", "expires_at", postgresql_where=text("inferred")),
         CheckConstraint(
             "jsonb_typeof(preparation_issues) = 'array'", name="submission_drafts_preparation_issues_array"
         ),
@@ -86,6 +89,7 @@ class SubmissionDraft(Base, kw_only=True):
     )
     preparation_retry_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     origin: Mapped[SubmissionOrigin] = mapped_column(StrEnumText(SubmissionOrigin), nullable=False)
+    inferred: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     source_installation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         default=None,

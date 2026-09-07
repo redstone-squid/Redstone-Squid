@@ -428,6 +428,7 @@ class _ServiceGraph:
         return SubmissionDraftService(
             PostgresDraftRepository(self.db.async_session),
             self.submission_manifests,
+            inferred_capacity=self.config.submissions.inferred_draft_capacity,
         )
 
     @cached_property

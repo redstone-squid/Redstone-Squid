@@ -101,7 +101,7 @@ class FakeDraftRepository:
         del now, limit
         return (self.draft,) if self.draft.snapshot.owner_account_id == account_id else ()
 
-    async def create(self, draft: StoredDraft) -> StoredDraft:
+    async def create(self, draft: StoredDraft, *, capacity: int = 10) -> StoredDraft:
         self.draft = draft
         return draft
 

@@ -11,7 +11,12 @@ from whenever import Instant
 from squid.core.errors import JSONValue
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
-from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
+from squid.persistence.advisory_locks import (
+    SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE,
+    AdvisoryLockNamespace,
+    lock_key,
+    lock_uuid,
+)
 from squid.submissions.application import AppliedDraftChange, AppliedDraftUpgrade, DraftRepository, StoredDraft
 from squid.submissions.domain import (
     DraftChange,
@@ -22,7 +27,12 @@ from squid.submissions.domain import (
     FieldOperation,
     FieldOperationKind,
 )
-from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError, DraftStateConflictError
+from squid.submissions.errors import (
+    DraftAccessDeniedError,
+    DraftCapacityExceededError,
+    DraftNotFoundError,
+    DraftStateConflictError,
+)
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.issues import decode_issues, encode_issues
 from squid.submissions.infrastructure.models import (
@@ -48,6 +58,7 @@ class PostgresDraftRepository(DraftRepository):
                 .select_from(SubmissionDraft)
                 .where(
                     SubmissionDraft.owner_account_id == account_id,
+                    SubmissionDraft.inferred.is_(False),
                     SubmissionDraft.status.in_(_ACTIVE_STATUSES),
                     SubmissionDraft.expires_at > func.now(),
                 )
@@ -83,9 +94,43 @@ class PostgresDraftRepository(DraftRepository):
         return tuple(_to_stored(model) for model in models)
 
     @override
-    async def create(self, draft: StoredDraft) -> StoredDraft:
+    async def create(self, draft: StoredDraft, *, capacity: int = 10) -> StoredDraft:
+        """Serialize quota checks and creation; stable source IDs replay before consuming capacity."""
+        if capacity < 1:
+            message = "Draft capacity must be positive."
+            raise ValueError(message)
         model = _to_model(draft)
         async with self._session_factory.begin() as session:
+            await lock_key(
+                session,
+                "inferred" if draft.inferred else f"account:{draft.snapshot.owner_account_id}",
+                namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_CAPACITY,
+            )
+            existing = await session.get(SubmissionDraft, model.id)
+            if existing is not None:
+                if existing.owner_account_id != model.owner_account_id:
+                    raise DraftAccessDeniedError
+                if (existing.origin, existing.inferred, existing.category, existing.source_installation_id) != (
+                    model.origin,
+                    model.inferred,
+                    model.category,
+                    model.source_installation_id,
+                ):
+                    raise DraftStateConflictError(existing.status.value, operation="create")
+                return _to_stored(existing)
+            count_query = (
+                select(func.count())
+                .select_from(SubmissionDraft)
+                .where(
+                    SubmissionDraft.status.in_(_ACTIVE_STATUSES),
+                    SubmissionDraft.expires_at > func.now(),
+                    SubmissionDraft.inferred.is_(draft.inferred),
+                )
+            )
+            if not draft.inferred:
+                count_query = count_query.where(SubmissionDraft.owner_account_id == draft.snapshot.owner_account_id)
+            if (await session.scalar(count_query) or 0) >= capacity:
+                raise DraftCapacityExceededError(capacity)
             session.add(model)
             session.add(
                 SubmissionDraftAccess(
@@ -347,6 +392,7 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
         answers=_json_object(snapshot.answers),
         preparation_issues=encode_issues(draft.preparation_issues),
         preparation_retry_at=draft.preparation_retry_at,
+        inferred=draft.inferred,
         origin=draft.origin,
         source_installation_id=draft.source_installation_id,
         created_at=draft.created_at,
@@ -374,6 +420,7 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
         source_installation_id=model.source_installation_id,
         preparation_issues=decode_issues(model.preparation_issues),
         preparation_retry_at=model.preparation_retry_at,
+        inferred=model.inferred,
     )
 
 
