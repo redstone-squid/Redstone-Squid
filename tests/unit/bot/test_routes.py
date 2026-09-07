@@ -76,10 +76,11 @@ def test_production_route_table_has_one_feature_owned_registration_per_identity(
         "r:builds:{build_id:int}:edit",
         "r:builds:{build_id:int}:edit:recover",
         "r:builds:draft:{draft_id}:reopen",
+        "r:builds:revision:{proposal_id}:reopen",
         "r:build-log-consents:new",
         "r:redstoner-roles:self:remove",
     }
-    assert len(descriptions) == 7
+    assert len(descriptions) == 8
     assert all(route.middleware[0].endswith(".TraceRoutes") for route in descriptions)
     redstoner = next(route for route in descriptions if route.group_prefix == "r:redstoner-roles")
     assert redstoner.middleware[1].endswith(".OwnerGuildOnly")

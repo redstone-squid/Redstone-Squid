@@ -490,5 +490,52 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
                 ),
             )
 
-        await self.infer_build_from_message(message)
-        return text_node(tr(t"Build recalculated."))
+        return await self.propose_recalculation(request, message, owner_account_id=account.id)
+
+    async def propose_recalculation(
+        self,
+        request: sd.Request[Self],
+        message: discord.Message,
+        *,
+        owner_account_id: int,
+    ) -> sd.CommandResult:
+        """Retain inferred candidates and return review controls without submitting builds."""
+        from uuid import NAMESPACE_URL, uuid4, uuid5
+
+        import squid_ui as sl
+        from squid.bot.submission.message_context import assemble_bundle
+        from squid.bot.submission.ui.controls import revision_reopen
+        from squid.bot.utils.permissions import subject_for_interaction
+
+        actor = await subject_for_interaction(request)
+        run_id = (
+            uuid5(NAMESPACE_URL, f"discord-recalculation:{request.interaction.id}")
+            if request.interaction is not None
+            else uuid4()
+        )
+        bundle = await assemble_bundle([message], preceding=(), include_images=True)
+        candidates = await self.bot.services.build_inference.infer(
+            bundle,
+            model=self.bot.inference_model,
+            reasoning_effort=self.bot.inference_reasoning_effort,
+        )
+        proposals = [
+            await self.bot.services.submission_revisions.create(
+                run_id=run_id,
+                index=index,
+                owner_account_id=owner_account_id,
+                actor=actor,
+                source_message_id=message.id,
+                candidate=candidate,
+            )
+            for index, candidate in enumerate(candidates)
+        ]
+        if not proposals:
+            return text_node("No build candidates were inferred. Existing builds were preserved.")
+        return tuple(
+            sl.primitives.Section(
+                (sl.primitives.Text(f"Recalculation candidate {index + 1}: review and choose its target build."),),
+                sl.primitives.RoutedButton("Review changes", revision_reopen.id(proposal_id=str(proposal.id))),
+            )
+            for index, proposal in enumerate(proposals)
+        )
