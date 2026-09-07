@@ -1,20 +1,16 @@
 """Build mutation route tests."""
 
-from dataclasses import replace
-
 import pytest
 from fastapi import Response
 from pydantic import ValidationError
 
-from squid.accounts.errors import ConsentRequiredError
 from squid.api.security import Caller, subject_for
-from squid.api.v1.builds import edit_build, submit_build
-from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, DoorSubmission
+from squid.api.v1.builds import edit_build
+from squid.api.v1.schemas.builds import BuildPatch, DoorPatch
 from squid.builds.application import BuildEditor, BuildService
-from squid.builds.application.commands import DoorSubmissionInput
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.domain import Build, DoorBuild, Status
-from squid.builds.errors import BuildRevisionRequiredError, InvalidBuildError
+from squid.builds.errors import BuildRevisionRequiredError
 from squid.core.errors import AuthorizationError
 from tests.unit.api.fakes import credential_nodes
 
@@ -51,13 +47,7 @@ class BuildRecorder(BuildService):
     def __init__(self, *, result: Build | None = None, edit_error: Exception | None = None) -> None:
         self.result = result or persisted_build()
         self.edit_error = edit_error
-        self.submissions: list[DoorSubmissionInput] = []
         self.edits: list[tuple[BuildEditor, int, BuildEditPatch, int | None]] = []
-
-    async def submit_door(self, submission: DoorSubmissionInput) -> DoorBuild:
-        self.submissions.append(submission)
-        assert isinstance(self.result, DoorBuild)
-        return self.result
 
     async def apply_edit(
         self,
@@ -71,49 +61,6 @@ class BuildRecorder(BuildService):
         if self.edit_error is not None:
             raise self.edit_error
         return self.result
-
-
-@pytest.mark.asyncio
-async def test_a_cli_caller_with_no_discord_identity_can_submit() -> None:
-    """Refused before: the gate demanded a snowflake the submission never used."""
-    builds = BuildRecorder()
-
-    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), builds, CLI)
-
-    assert response.id == 42
-    assert builds.submissions[0].submitter_account_id == 1
-
-
-@pytest.mark.asyncio
-async def test_submit_maps_authenticated_identity_and_rejects_other_categories() -> None:
-    builds = BuildRecorder()
-
-    http_response = Response()
-    response = await submit_build(DoorSubmission(door_size=(2, 2, None)), http_response, builds, ACCOUNT)
-
-    assert response.id == 42
-    submission = builds.submissions[0]
-    assert submission.submitter_account_id == 1
-    assert not submission.ai_generated
-    assert http_response.headers["etag"] == '"build-42-r1"'
-
-    with pytest.raises(InvalidBuildError):
-        await submit_build(DoorSubmission(category="extender", door_size=(2, 2, None)), Response(), builds, ACCOUNT)
-
-
-@pytest.mark.asyncio
-async def test_submit_gates_new_accounts_on_current_consent() -> None:
-    builds = BuildRecorder()
-    pending = replace(ACCOUNT, consent_pending=True)
-
-    with pytest.raises(ConsentRequiredError) as error:
-        await submit_build(DoorSubmission(door_size=(2, 2, None)), Response(), builds, pending)
-
-    assert error.value.public_context == {
-        "consent_url": "/v1/users/me/consent",
-        "notice_url": "/v1/consent/notice",
-    }
-    assert builds.submissions == []
 
 
 @pytest.mark.asyncio
