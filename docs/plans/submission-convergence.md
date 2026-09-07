@@ -169,3 +169,19 @@ Validation: 64 focused API, PostgreSQL, and worker tests passed; the final clean
 change passed all three schematic integration tests. Pyrefly reports zero errors. Ruff and
 whitespace checks pass; Alembic has one head. Architecture naming checks additionally reported
 four failures in unchanged squid-ui-discord code (`Group`, `Scope`, `outcome`, `Decorator`).
+
+### Shared prefill and persisted Discord editor, 2026-09-07
+
+`7e99012f` projects inferred or transport facts into manifest answers. Approved labels resolve to
+stable keys; unknown taxonomy stays proposed. Missing categories and dimensions are not fabricated,
+and a compatibility range is not promoted to an exact source version. Invalid values are identified
+for correction. Private schematic defaults do not imply a distribution attestation.
+
+The private Discord editor reads the pinned manifest, saves optimistic field changes, and reloads
+current status. Modal callbacks retain their original revision. `/build drafts` lists owned drafts
+or the authorized correction inbox, using durable reopen controls that reauthorize after restart.
+The existing submission and inference intake paths still require cutover; adding recovery does not
+complete those milestones. Automatic status delivery and attachment controls remain outstanding.
+
+Validation: shared prefill, editor recovery, staff attribution, stale modal, component rendering,
+route registration, and command taxonomy tests pass. Project-wide Pyrefly reports zero errors.

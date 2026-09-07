@@ -152,6 +152,30 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             on_submit=persist_draft,
         )
 
+    @BuildCommandGroup.build_group.command(name="drafts", defer="private")
+    async def saved_drafts(self, request: sd.Request[Self], *, inbox: bool = False) -> sd.CommandResult:
+        """Reopen saved drafts, or browse the staff correction inbox."""
+        import squid_ui as sl
+        from squid.bot.submission.ui.controls import draft_reopen
+
+        actor = await ensure_consented_account(request, self.bot.services.accounts)
+        if actor is None:
+            return None
+        drafts = (
+            await self.bot.services.submission_drafts.attention_inbox(actor, limit=10)
+            if inbox
+            else await self.bot.services.submission_drafts.list_active(actor)
+        )
+        if not drafts:
+            return text_node("No active drafts.")
+        return tuple(
+            sl.primitives.Section(
+                (sl.primitives.Text(f"{draft.snapshot.category}: {draft.snapshot.status.value.replace('_', ' ')}"),),
+                sl.primitives.RoutedButton("Open draft", draft_reopen.id(draft_id=str(draft.snapshot.id))),
+            )
+            for draft in drafts
+        )
+
     async def _persist_draft(
         self,
         draft: BuildDraft,
