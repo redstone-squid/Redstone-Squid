@@ -108,6 +108,10 @@ class BotServices:
     builds: BuildService
     error_reports: ErrorReportService
     build_inference: BuildInferenceService
+    submission_forms: SubmissionFormService
+    submission_drafts: SubmissionDraftService
+    submission_finalization: SubmissionFinalizationService
+    submission_schematics: DraftSchematicService
     restrictions: RestrictionService
     build_queries: BuildQueryService
     messages: MessageService
