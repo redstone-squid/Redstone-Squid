@@ -408,19 +408,23 @@ class SubmissionAttentionIssueResponse(StrictSchema):
     reason: SubmissionAttentionReason
 
 
-class SubmissionFinalizationResponse(StrictSchema):
+class SubmissionAttemptResponse(StrictSchema):
     """Owner-visible state of durable draft finalization."""
 
     draft_id: UUID
+    attempt_id: UUID
+    attempt_number: int
     draft_revision: int
     status: FinalizationJobStatus
     issues: list[SubmissionAttentionIssueResponse]
     build_id: int | None
 
     @classmethod
-    def from_domain(cls, snapshot: FinalizationJobSnapshot) -> SubmissionFinalizationResponse:
+    def from_domain(cls, snapshot: FinalizationJobSnapshot) -> SubmissionAttemptResponse:
         return cls(
             draft_id=snapshot.draft_id,
+            attempt_id=snapshot.job_id,
+            attempt_number=snapshot.attempt_number,
             draft_revision=snapshot.draft_revision,
             status=snapshot.status,
             issues=[
