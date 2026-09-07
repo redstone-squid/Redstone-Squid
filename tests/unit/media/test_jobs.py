@@ -208,6 +208,9 @@ class MemoryMediaJobs:
             snapshot for snapshot in snapshots if snapshot is not None and snapshot.upload.draft_id == draft_id
         )
 
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, limits: MediaLimits) -> bool:
+        raise NotImplementedError
+
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
         state = self.states.get(upload_id)
         if state is None or state.upload.draft_id != draft_id:

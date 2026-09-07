@@ -11,6 +11,7 @@ from whenever import Instant
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.infrastructure.references import media_for_draft
 from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
 from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.application.finalization import (
@@ -404,7 +405,7 @@ async def _require_current_media(
                     MediaNormalizationJobRecord,
                     MediaNormalizationJobRecord.upload_id == MediaUploadRecord.id,
                 )
-                .where(MediaUploadRecord.draft_id == draft_id)
+                .where(media_for_draft(draft_id))
                 .with_for_update(of=MediaUploadRecord)
             )
         ).all()

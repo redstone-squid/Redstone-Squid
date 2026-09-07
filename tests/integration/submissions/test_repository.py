@@ -14,7 +14,7 @@ from whenever import Instant
 from squid.accounts.infrastructure.models import Account
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.domain import MediaKind
-from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.infrastructure.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
     DraftChange,
@@ -46,6 +46,7 @@ _TABLES = (
     cast(Table, SubmissionFinalizationJob.__table__),
     cast(Table, MediaUploadRecord.__table__),
     cast(Table, MediaNormalizationJobRecord.__table__),
+    cast(Table, MediaDraftReference.__table__),
 )
 
 
