@@ -31,6 +31,14 @@ class SubmissionDraft(Base, kw_only=True):
         CheckConstraint("schema_revision > 0", name="submission_drafts_schema_revision_positive"),
         CheckConstraint("revision >= 0", name="submission_drafts_revision_nonnegative"),
         CheckConstraint(
+            "jsonb_typeof(preparation_issues) = 'array'", name="submission_drafts_preparation_issues_array"
+        ),
+        Index(
+            "submission_drafts_preparation_ready_idx",
+            "preparation_retry_at",
+            postgresql_where=text("preparation_retry_at IS NOT NULL"),
+        ),
+        CheckConstraint(
             "origin IN ('discord', 'web', 'cli', 'paper', 'fabric')",
             name="submission_drafts_origin_check",
         ),
@@ -73,6 +81,10 @@ class SubmissionDraft(Base, kw_only=True):
         default=DraftStatus.EDITING,
     )
     answers: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
+    preparation_issues: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, default_factory=list, server_default=text("'[]'::jsonb")
+    )
+    preparation_retry_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     origin: Mapped[SubmissionOrigin] = mapped_column(StrEnumText(SubmissionOrigin), nullable=False)
     source_installation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

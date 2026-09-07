@@ -1,6 +1,6 @@
 """PostgreSQL persistence for durable submission finalization."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import override
 from uuid import UUID, uuid4
 
@@ -16,9 +16,11 @@ from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.application.finalization import (
     MAX_FINALIZATION_JOB_CLAIM,
     ClaimedFinalizationJob,
+    DraftPreparationSnapshot,
     FinalizationFailureOutcome,
     FinalizationJobRepository,
     FinalizationJobSnapshot,
+    SubmissionRequestResult,
 )
 from squid.submissions.domain import DraftRevisionConflictError, DraftStatus
 from squid.submissions.domain.finalization import (
@@ -34,7 +36,9 @@ from squid.submissions.infrastructure.finalization_models import (
     SubmissionFinalizationResult,
 )
 from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
+from squid.submissions.infrastructure.issues import decode_issues, encode_issues
 from squid.submissions.infrastructure.models import SubmissionDraft
+from squid.submissions.infrastructure.repository import _to_stored
 from squid.submissions.payload_integrity import submission_payload_digest
 
 _CLAIM_MINUTES = 5
@@ -140,6 +144,8 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 msg = f"drafts in {status.value} state cannot be finalized"
                 raise ValidationError(msg, resource="submission_draft")
 
+            draft_model.preparation_issues = []
+            draft_model.preparation_retry_at = None
             draft_model.status = DraftStatus.PROCESSING
             draft_model.updated_at = now
             draft_model.expires_at = expires_at
@@ -165,7 +171,8 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         *,
         now: Instant,
         expires_at: Instant,
-    ) -> FinalizationJobSnapshot:
+        waiting_for_artifacts: bool = False,
+    ) -> SubmissionRequestResult:
         """Retain manifest/artifact issues and keep the source draft editable."""
         normalized_issues = _unique_issues(issues)
         if not normalized_issues:
@@ -189,30 +196,35 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             draft_model.status = DraftStatus.NEEDS_ATTENTION
             draft_model.updated_at = now
             draft_model.expires_at = expires_at
-            encoded_issues = _encode_issues(normalized_issues)
-            if (
-                job is not None
-                and job.status is FinalizationJobStatus.NEEDS_ATTENTION
-                and job.payload is None
-                and job.draft_revision == draft.snapshot.revision
-                and job.attention_issues == encoded_issues
-            ):
-                return _snapshot(job, None)
-            job = SubmissionFinalizationJob(
-                draft_id=draft.snapshot.id,
-                attempt_number=1 if job is None else job.attempt_number + 1,
-                draft_revision=draft.snapshot.revision,
-                payload=None,
-                payload_sha256=None,
-                status=FinalizationJobStatus.NEEDS_ATTENTION,
-                available_at=now,
-                attention_at=now,
-                attention_issues=encoded_issues,
-                created_at=now,
-                updated_at=now,
+            draft_model.preparation_issues = encode_issues(normalized_issues)
+            draft_model.preparation_retry_at = now.add(seconds=30) if waiting_for_artifacts else None
+        return DraftPreparationSnapshot(
+            draft.snapshot.id, draft.snapshot.revision, normalized_issues, waiting_for_artifacts
+        )
+
+    @override
+    async def reserve_preparations(self, *, now: Instant, limit: int) -> tuple[StoredDraft, ...]:
+        """Reserve bounded attachment rechecks; abandoned reservations become due again."""
+        if not 1 <= limit <= MAX_FINALIZATION_JOB_CLAIM:
+            message = "Invalid preparation batch limit."
+            raise ValueError(message)
+        async with self._session_factory.begin() as session:
+            drafts = tuple(
+                await session.scalars(
+                    select(SubmissionDraft)
+                    .where(
+                        SubmissionDraft.preparation_retry_at <= now,
+                        SubmissionDraft.expires_at > now,
+                        SubmissionDraft.status == DraftStatus.NEEDS_ATTENTION,
+                    )
+                    .order_by(SubmissionDraft.preparation_retry_at, SubmissionDraft.id)
+                    .limit(limit)
+                    .with_for_update(skip_locked=True)
+                )
             )
-            session.add(job)
-        return _snapshot(job, None)
+            for draft in drafts:
+                draft.preparation_retry_at = now.add(seconds=30)
+            return tuple(_to_stored(draft) for draft in drafts)
 
     @override
     async def claim(self, *, now: Instant, limit: int) -> Sequence[ClaimedFinalizationJob]:
@@ -343,9 +355,11 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
             model.dead_at = None
             model.completed_at = None
             model.last_error = "actionable"
-            model.attention_issues = _encode_issues(normalized_issues)
+            model.attention_issues = encode_issues(normalized_issues)
             _clear_claim(model)
             model.updated_at = now
+            draft.preparation_issues = model.attention_issues
+            draft.preparation_retry_at = None
             draft.status = DraftStatus.NEEDS_ATTENTION
             draft.updated_at = now
             draft.expires_at = expires_at
@@ -381,7 +395,9 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 model.status = FinalizationJobStatus.DEAD
                 model.dead_at = now
                 model.attention_at = None
-                model.attention_issues = _encode_issues((issue,))
+                model.attention_issues = encode_issues((issue,))
+                draft.preparation_issues = model.attention_issues
+                draft.preparation_retry_at = None
                 draft.status = DraftStatus.NEEDS_ATTENTION
                 draft.updated_at = now
                 draft.expires_at = expires_at
@@ -486,7 +502,7 @@ def _snapshot(
         attention_at=job.attention_at,
         dead_at=job.dead_at,
         last_error=job.last_error,
-        issues=_decode_issues(job.attention_issues),
+        issues=decode_issues(job.attention_issues),
         result=_result(result) if result is not None else None,
         attempt_number=job.attempt_number,
     )
@@ -517,32 +533,6 @@ def _legacy_result_provenance(submission: NormalizedSubmission) -> dict[str, obj
             else None
         ),
     }
-
-
-def _encode_issues(issues: Sequence[SubmissionAttentionIssue]) -> list[dict[str, object]]:
-    return [{"field_id": issue.field_id, "reason": issue.reason.value} for issue in issues]
-
-
-def _decode_issues(values: object) -> tuple[SubmissionAttentionIssue, ...]:
-    msg = "persisted submission attention issues are invalid"
-    if not isinstance(values, list):
-        raise DataIntegrityError(msg)
-    issues: list[SubmissionAttentionIssue] = []
-    for value in values:
-        if not isinstance(value, Mapping):
-            raise DataIntegrityError(msg)
-        try:
-            field_id = value["field_id"]
-            reason = value["reason"]
-        except KeyError as error:
-            raise DataIntegrityError(msg) from error
-        if not isinstance(field_id, str) or not isinstance(reason, str):
-            raise DataIntegrityError(msg)
-        try:
-            issues.append(SubmissionAttentionIssue(field_id, SubmissionAttentionReason(reason)))
-        except ValueError as error:
-            raise DataIntegrityError(msg) from error
-    return tuple(issues)
 
 
 def _unique_issues(issues: Sequence[SubmissionAttentionIssue]) -> tuple[SubmissionAttentionIssue, ...]:

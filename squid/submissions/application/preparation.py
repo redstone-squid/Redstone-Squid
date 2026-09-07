@@ -46,7 +46,14 @@ class PreparationRejected:
             raise InvalidStateError(msg)
 
 
-type PreparationResult = PreparedSubmission | PreparationRejected
+@dataclass(frozen=True, slots=True)
+class PreparationWaiting:
+    """Artifacts are unfinished; the stored submission request may resume automatically."""
+
+    issues: tuple[SubmissionAttentionIssue, ...]
+
+
+type PreparationResult = PreparedSubmission | PreparationRejected | PreparationWaiting
 
 
 class DraftArtifactReadiness(Protocol):
@@ -91,6 +98,12 @@ class SubmissionPreparation:
             )
         )
         if issues:
+            if all(
+                issue.reason
+                in {SubmissionAttentionReason.MEDIA_PROCESSING, SubmissionAttentionReason.SCHEMATIC_PROCESSING}
+                for issue in issues
+            ):
+                return PreparationWaiting(issues)
             return PreparationRejected(issues)
         return PreparedSubmission(
             normalize_submission(

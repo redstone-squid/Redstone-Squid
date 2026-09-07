@@ -24,6 +24,7 @@ from squid.submissions.domain import (
 )
 from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError, DraftStateConflictError
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
+from squid.submissions.infrastructure.issues import decode_issues, encode_issues
 from squid.submissions.infrastructure.models import (
     SubmissionDraft,
     SubmissionDraftAccess,
@@ -149,6 +150,8 @@ class PostgresDraftRepository(DraftRepository):
             candidate = _to_stored(model).snapshot.apply(change)
             model.revision = candidate.revision
             model.status = candidate.status
+            model.preparation_issues = []
+            model.preparation_retry_at = None
             model.answers = _json_object(candidate.answers)
             model.updated_at = updated_at
             model.expires_at = expires_at
@@ -215,6 +218,8 @@ class PostgresDraftRepository(DraftRepository):
                 raise ValueError(msg)
             model.schema_revision = target_schema_revision
             model.revision += 1
+            model.preparation_issues = []
+            model.preparation_retry_at = None
             model.answers = _json_object(answers)
             model.updated_at = updated_at
             model.expires_at = expires_at
@@ -293,7 +298,7 @@ class PostgresDraftRepository(DraftRepository):
                 await session.execute(
                     update(SubmissionDraft)
                     .where(SubmissionDraft.id == draft_id)
-                    .values(status=DraftStatus.EXPIRED, updated_at=now)
+                    .values(status=DraftStatus.EXPIRED, updated_at=now, preparation_retry_at=None)
                 )
                 await session.execute(
                     update(MediaNormalizationJobRecord)
@@ -340,6 +345,8 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
         revision=snapshot.revision,
         status=snapshot.status,
         answers=_json_object(snapshot.answers),
+        preparation_issues=encode_issues(draft.preparation_issues),
+        preparation_retry_at=draft.preparation_retry_at,
         origin=draft.origin,
         source_installation_id=draft.source_installation_id,
         created_at=draft.created_at,
@@ -365,6 +372,8 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
         updated_at=model.updated_at,
         expires_at=model.expires_at,
         source_installation_id=model.source_installation_id,
+        preparation_issues=decode_issues(model.preparation_issues),
+        preparation_retry_at=model.preparation_retry_at,
     )
 
 

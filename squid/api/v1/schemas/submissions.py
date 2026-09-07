@@ -5,7 +5,7 @@ decision.
 """
 
 from datetime import datetime
-from typing import Annotated, Self
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
 from pydantic import (
@@ -21,7 +21,13 @@ from pydantic import (
 
 from squid.core.errors import JSONValue
 from squid.core.errors import ValidationError as DomainValidationError
-from squid.submissions.application import AppliedDraftUpgrade, FinalizationJobSnapshot, FormOptionSet, StoredDraft
+from squid.submissions.application import (
+    AppliedDraftUpgrade,
+    DraftPreparationSnapshot,
+    FinalizationJobSnapshot,
+    FormOptionSet,
+    StoredDraft,
+)
 from squid.submissions.domain import (
     DRAFT_CHANGE_KEY_MAX_LENGTH,
     DRAFT_CHANGE_KEY_MIN_LENGTH,
@@ -314,6 +320,8 @@ class StoredDraftResponse(StrictSchema):
     updated_at: datetime
     expires_at: datetime
     source_installation_id: UUID | None = None
+    preparation_issues: list[SubmissionAttentionIssueResponse] = Field(default_factory=list)
+    waiting_for_artifacts: bool = False
 
     @classmethod
     def from_domain(cls, draft: StoredDraft) -> StoredDraftResponse:
@@ -330,6 +338,11 @@ class StoredDraftResponse(StrictSchema):
             updated_at=draft.updated_at.to_stdlib(),
             expires_at=draft.expires_at.to_stdlib(),
             source_installation_id=draft.source_installation_id,
+            preparation_issues=[
+                SubmissionAttentionIssueResponse(field_id=issue.field_id, reason=issue.reason)
+                for issue in draft.preparation_issues
+            ],
+            waiting_for_artifacts=draft.preparation_retry_at is not None,
         )
 
 
@@ -432,6 +445,27 @@ class SubmissionAttemptResponse(StrictSchema):
                 for issue in snapshot.issues
             ],
             build_id=snapshot.result.build_id if snapshot.result is not None else None,
+        )
+
+
+class DraftPreparationResponse(StrictSchema):
+    """A retained draft request that has not produced an executable attempt."""
+
+    draft_id: UUID
+    draft_revision: int
+    status: Literal["waiting_for_artifacts", "needs_attention"]
+    issues: list[SubmissionAttentionIssueResponse]
+
+    @classmethod
+    def from_domain(cls, snapshot: DraftPreparationSnapshot) -> DraftPreparationResponse:
+        return cls(
+            draft_id=snapshot.draft_id,
+            draft_revision=snapshot.draft_revision,
+            status="waiting_for_artifacts" if snapshot.waiting_for_artifacts else "needs_attention",
+            issues=[
+                SubmissionAttentionIssueResponse(field_id=issue.field_id, reason=issue.reason)
+                for issue in snapshot.issues
+            ],
         )
 
 

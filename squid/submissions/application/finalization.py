@@ -14,8 +14,8 @@ from squid.submissions.application.drafts import (
     StoredDraft,
     SubmissionDraftService,
 )
-from squid.submissions.application.preparation import PreparationRejected, SubmissionPreparation
-from squid.submissions.domain import DraftStatus
+from squid.submissions.application.preparation import PreparationRejected, PreparationWaiting, SubmissionPreparation
+from squid.submissions.domain import DraftRevisionConflictError, DraftStatus
 from squid.submissions.domain.finalization import (
     BuildSubmissionRejected,
     BuildSubmissionResult,
@@ -25,7 +25,13 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
 )
-from squid.submissions.errors import DraftSchemaUnsupportedError, DraftValidationError
+from squid.submissions.errors import (
+    DraftAccessDeniedError,
+    DraftNotFoundError,
+    DraftSchemaUnsupportedError,
+    DraftStateConflictError,
+    DraftValidationError,
+)
 
 MAX_FINALIZATION_JOB_CLAIM = 32
 DEFAULT_FINALIZATION_ATTEMPTS = 3
@@ -78,6 +84,23 @@ class FinalizationFailureOutcome:
     dead: bool
 
 
+@dataclass(frozen=True, slots=True)
+class DraftPreparationSnapshot:
+    """Draft issues recorded before an executable attempt exists."""
+
+    draft_id: UUID
+    draft_revision: int
+    issues: tuple[SubmissionAttentionIssue, ...]
+    waiting_for_artifacts: bool = False
+
+    @property
+    def status(self) -> DraftStatus:
+        return DraftStatus.NEEDS_ATTENTION
+
+
+type SubmissionRequestResult = FinalizationJobSnapshot | DraftPreparationSnapshot
+
+
 class BuildSubmissionWriter(Protocol):
     """Create or find a build using the source draft UUID as its idempotency key.
 
@@ -115,7 +138,10 @@ class FinalizationJobRepository(Protocol):
         *,
         now: Instant,
         expires_at: Instant,
-    ) -> FinalizationJobSnapshot: ...
+        waiting_for_artifacts: bool = False,
+    ) -> SubmissionRequestResult: ...
+
+    async def reserve_preparations(self, *, now: Instant, limit: int) -> tuple[StoredDraft, ...]: ...
 
     async def claim(self, *, now: Instant, limit: int) -> Sequence[ClaimedFinalizationJob]: ...
 
@@ -174,9 +200,15 @@ class SubmissionFinalizationService:
         *,
         locale: str | None,
         now: Instant | None = None,
-    ) -> FinalizationJobSnapshot:
+    ) -> SubmissionRequestResult:
         """Start idempotent processing or persist actionable preparation issues."""
         current = await self._drafts.get_owned(draft_id, account_id)
+        return await self._submit(current, account_id, locale=locale, now=now or Instant.now(), refresh_retention=True)
+
+    async def _submit(
+        self, current: StoredDraft, account_id: int, *, locale: str | None, now: Instant, refresh_retention: bool
+    ) -> SubmissionRequestResult:
+        draft_id = current.snapshot.id
         if current.snapshot.status is DraftStatus.PROCESSING:
             existing = await self._jobs.get(draft_id)
             if existing is not None and existing.status in {
@@ -193,10 +225,18 @@ class SubmissionFinalizationService:
                 raise InvalidStateError(msg)
             return existing
 
-        touched_at = now or Instant.now()
-        expires_at = touched_at.add(days=self._retention_days, days_assumed_24h_ok=True)
+        touched_at = now
+        expires_at = (
+            touched_at.add(days=self._retention_days, days_assumed_24h_ok=True)
+            if refresh_retention
+            else current.expires_at
+        )
         try:
             validated = await self._drafts.validate_for_finalization(draft_id, account_id, locale=locale)
+            if validated.draft.snapshot.revision != current.snapshot.revision:
+                raise DraftRevisionConflictError(
+                    expected=current.snapshot.revision, actual=validated.draft.snapshot.revision
+                )
         except DraftValidationError as error:
             issues = _manifest_issues(error.public_context)
             return await self._jobs.record_preparation_attention(
@@ -214,12 +254,13 @@ class SubmissionFinalizationService:
             )
 
         preparation = await self._preparation.prepare(validated)
-        if isinstance(preparation, PreparationRejected):
+        if isinstance(preparation, PreparationRejected | PreparationWaiting):
             return await self._jobs.record_preparation_attention(
                 validated.draft,
                 preparation.issues,
                 now=touched_at,
                 expires_at=expires_at,
+                waiting_for_artifacts=isinstance(preparation, PreparationWaiting),
             )
         return await self._jobs.enqueue(
             validated.draft,
@@ -228,9 +269,24 @@ class SubmissionFinalizationService:
             expires_at=expires_at,
         )
 
-    async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None:
+    async def resume_waiting(self, *, now: Instant, limit: int = 8) -> None:
+        """Recheck reserved attachment waits without renewing their retention period."""
+        for draft in await self._jobs.reserve_preparations(now=now, limit=limit):
+            try:
+                await self._submit(
+                    draft, draft.snapshot.owner_account_id, locale=None, now=now, refresh_retention=False
+                )
+            except DraftRevisionConflictError, DraftAccessDeniedError, DraftNotFoundError, DraftStateConflictError:
+                # Edits, deletion, expiry, or account merges invalidate this reservation.
+                continue
+
+    async def status(self, draft_id: UUID, account_id: int) -> SubmissionRequestResult | None:
         """Return retained finalization state after rechecking draft ownership."""
-        await self._drafts.get_owned(draft_id, account_id)
+        draft = await self._drafts.get_owned(draft_id, account_id)
+        if draft.preparation_issues:
+            return DraftPreparationSnapshot(
+                draft_id, draft.snapshot.revision, draft.preparation_issues, draft.preparation_retry_at is not None
+            )
         return await self._jobs.get(draft_id)
 
     async def attempt(self, draft_id: UUID, account_id: int, attempt_id: UUID) -> FinalizationJobSnapshot | None:
@@ -259,6 +315,7 @@ class SubmissionFinalizationWorker:
         *,
         max_attempts: int = DEFAULT_FINALIZATION_ATTEMPTS,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
+        preparation: SubmissionFinalizationService | None = None,
     ) -> None:
         if max_attempts < 1 or retention_days < 1:
             msg = tr(t"finalization retry and retention limits must be positive")
@@ -267,6 +324,7 @@ class SubmissionFinalizationWorker:
         self._writer = writer
         self._max_attempts = max_attempts
         self._retention_days = retention_days
+        self._preparation = preparation
 
     async def process_batch(self, *, limit: int = 8, now: Instant | None = None) -> None:
         """Claim and process at most ``limit`` jobs sequentially."""
@@ -274,6 +332,8 @@ class SubmissionFinalizationWorker:
             maximum = MAX_FINALIZATION_JOB_CLAIM
             raise InvalidStateError(tr(t"finalization claim limit must be between 1 and {maximum}"))
         claimed_at = now or Instant.now()
+        if self._preparation is not None:
+            await self._preparation.resume_waiting(now=claimed_at, limit=limit)
         for job in await self._jobs.claim(now=claimed_at, limit=limit):
             await self._process(job, now=claimed_at)
 

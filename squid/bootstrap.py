@@ -457,6 +457,7 @@ class _ServiceGraph:
         return SubmissionFinalizationWorker(
             self.submission_finalization_jobs,
             CanonicalBuildSubmissionWriter(self.builds, self.tags, self.version_service),
+            preparation=self.submission_finalization,
         )
 
     @cached_property
