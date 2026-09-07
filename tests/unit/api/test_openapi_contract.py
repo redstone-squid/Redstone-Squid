@@ -62,15 +62,12 @@ def test_catalogue_extensions_are_registered_in_openapi() -> None:
     assert "500" in document["paths"]["/v1/records/{record_id}"]["get"]["responses"]
 
 
-def test_legacy_build_creation_is_deprecated_in_favor_of_durable_finalization() -> None:
+def test_build_creation_requires_the_durable_submission_workflow() -> None:
     document = _app.openapi()
-    legacy = document["paths"]["/v1/builds"]["post"]
-    replacement = document["paths"]["/v1/submissions/drafts/{draft_id}/submission"]["post"]
 
-    assert legacy["deprecated"] is True
-    assert "remote attachment URLs cannot be mapped losslessly" in legacy["description"]
-    assert "201" in legacy["responses"]
-    assert "202" in replacement["responses"]
+    assert "post" not in document["paths"]["/v1/builds"]
+    assert "DoorSubmission" not in document["components"]["schemas"]
+    assert "202" in document["paths"]["/v1/submissions/drafts/{draft_id}/submission"]["post"]["responses"]
 
 
 def test_every_mutating_operation_accepts_an_idempotency_key() -> None:

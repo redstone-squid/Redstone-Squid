@@ -21,7 +21,7 @@ from squid.api.pagination import (
     resolve_selector,
 )
 from squid.api.security import Caller, caller_allows, require_consented_account, requires, subject_for
-from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary, DoorSubmission
+from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter, BuildSummary
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
 from squid.builds.application import (
     BUILD_SORT_FIELDS,
@@ -29,13 +29,11 @@ from squid.builds.application import (
     BuildEditPatch,
     BuildListSort,
     BuildSortField,
-    DoorSubmissionInput,
 )
 from squid.builds.domain import Build
 from squid.builds.errors import (
     BuildRevisionMismatchError,
     BuildRevisionRequiredError,
-    InvalidBuildError,
 )
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.permissions.application import PermissionService
@@ -45,61 +43,6 @@ from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSo
 router = APIRouter(prefix="/builds", tags=["builds"])
 UserWriter = Annotated[Caller, Depends(requires(BUILD_SUBMISSION_CREATE))]
 _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')
-
-
-@router.post(
-    "",
-    response_model=BuildDetail,
-    status_code=201,
-    deprecated=True,
-    responses=responses(400, 401, 403, 409, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
-    operation_id="builds_create",
-    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
-)
-async def submit_build(
-    submission: DoorSubmission,
-    response: Response,
-    builds: BuildCommands,
-    caller: UserWriter,
-) -> BuildDetail:
-    """Submit a door build for Discord moderation.
-
-    Deprecated: create a revisioned submission draft, apply changes, then start
-    `POST /v1/submissions/drafts/{draft_id}/submission`. That replacement returns
-    `202` and exposes durable finalization status at the same submission URL.
-    Legacy remote attachment URLs cannot be mapped losslessly to uploaded artifacts,
-    so this route retains its existing `201` behavior until the next API version.
-    """
-    account_id = require_consented_account(caller)
-    if submission.category.casefold() != "door":
-        msg = "Only door submissions are supported."
-        raise InvalidBuildError(msg, public_context={"category": submission.category})
-    build = await builds.submit_door(
-        DoorSubmissionInput(
-            submitter_account_id=account_id,
-            door_size=submission.door_size,
-            pattern=tuple(submission.pattern),
-            door_type=submission.door_type,
-            build_size=submission.build_size,
-            works_in=submission.works_in,
-            restrictions=tuple(submission.restrictions),
-            information_about_build=submission.information_about_build,
-            normal_closing_time=submission.normal_closing_time,
-            normal_opening_time=submission.normal_opening_time,
-            date_of_creation=submission.date_of_creation,
-            creators=tuple(submission.creators),
-            locationality=submission.locationality,
-            directionality=submission.directionality,
-            image_urls=tuple(submission.image_urls),
-            video_urls=tuple(submission.video_urls),
-            world_download_urls=tuple(submission.world_download_urls),
-            schematic_urls=tuple(submission.schematic_urls),
-            ai_generated=False,
-        )
-    )
-    _set_build_etag(response, build)
-    return BuildDetail.from_domain(build)
 
 
 @router.patch(
