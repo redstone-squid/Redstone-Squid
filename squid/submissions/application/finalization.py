@@ -101,14 +101,15 @@ class DraftPreparationSnapshot:
 type SubmissionRequestResult = FinalizationJobSnapshot | DraftPreparationSnapshot
 
 
-class BuildSubmissionWriter(Protocol):
-    """Create or find a build using the source draft UUID as its idempotency key.
+class SubmissionExecutor(Protocol):
+    """Commit build, artifacts, and receipt under the claim fence before returning success."""
 
-    Implementations must return the previously-created result when called again for the
-    same ``source_draft_id``, including after the first call committed and the worker crashed.
-    """
-
-    async def create_or_get(self, submission: NormalizedSubmission) -> BuildSubmissionResult: ...
+    async def execute(
+        self,
+        job: ClaimedFinalizationJob,
+        *,
+        now: Instant,
+    ) -> BuildSubmissionResult | None: ...
 
 
 class FinalizationJobRepository(Protocol):
@@ -311,7 +312,7 @@ class SubmissionFinalizationWorker:
     def __init__(
         self,
         jobs: FinalizationJobRepository,
-        writer: BuildSubmissionWriter,
+        executor: SubmissionExecutor,
         *,
         max_attempts: int = DEFAULT_FINALIZATION_ATTEMPTS,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
@@ -321,7 +322,7 @@ class SubmissionFinalizationWorker:
             msg = tr(t"finalization retry and retention limits must be positive")
             raise InvalidStateError(msg)
         self._jobs = jobs
-        self._writer = writer
+        self._executor = executor
         self._max_attempts = max_attempts
         self._retention_days = retention_days
         self._preparation = preparation
@@ -340,7 +341,7 @@ class SubmissionFinalizationWorker:
     async def _process(self, job: ClaimedFinalizationJob, *, now: Instant) -> None:
         expires_at = now.add(days=self._retention_days, days_assumed_24h_ok=True)
         try:
-            result = await self._writer.create_or_get(job.payload)
+            result = await self._executor.execute(job, now=now)
         except Exception as error:
             retry_at = now.add(seconds=_retry_delay(job.attempts))
             await self._jobs.fail(
@@ -361,7 +362,6 @@ class SubmissionFinalizationWorker:
                 expires_at=expires_at,
             )
             return
-        await self._jobs.complete(job, result, now=now)
 
 
 def _manifest_issues(context: Mapping[str, JSONValue]) -> tuple[SubmissionAttentionIssue, ...]:
