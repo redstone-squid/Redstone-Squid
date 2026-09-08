@@ -9,7 +9,7 @@ double whose method drifts from production. `build_app` then constructs a real
 import uuid
 from collections.abc import Sequence
 from pathlib import Path
-from typing import cast
+from typing import cast, override
 from uuid import UUID
 
 from fastapi import FastAPI
@@ -72,7 +72,7 @@ from squid.notifications.domain import (
     SubscriptionKind,
 )
 from squid.permissions.application import PermissionService, SubjectRecords
-from squid.permissions.application.epoch import PermissionEpochWatcher
+from squid.permissions.application.epoch import PermissionEpochWatcher, WakeListener
 from squid.permissions.domain import Pattern
 from squid.permissions.domain.resolution import Subject
 from squid.records.application import PublicRecordQueryService, RecordService
@@ -151,21 +151,27 @@ class MockAccountManager(AccountService):
     def __init__(self) -> None:
         """Answer from nothing; no repository is attached."""
 
+    @override
     async def get_creator_alias(self, name: str) -> CreatorAlias | None:
         return None
 
+    @override
     async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
         return None
 
+    @override
     async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
         return None
 
+    @override
     async def get_profile(self, account_id: int) -> AccountProfile:
         return AccountProfile.empty(account_id)
 
+    @override
     async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
         return ()
 
+    @override
     async def generate_verification_code(self, minecraft_uuid: UUID) -> int:
         if minecraft_uuid == TEST_UUID:
             return TEST_VERIFICATION_CODE
@@ -191,35 +197,45 @@ class MockCliAuthorization(CliAuthorizationService):
     def __init__(self) -> None:
         """Enroll nothing; no repository or clock is attached."""
 
+    @override
     async def authenticate(self, token: str) -> CliIdentity:
         raise InvalidCliEnrollmentError
 
+    @override
     async def start_enrollment(self, *, public_key: bytes, client_instance_id: UUID, label: str) -> IssuedCliEnrollment:
         raise InvalidCliEnrollmentError
 
+    @override
     async def exchange_enrollment(self, *, device_code: str, signature: bytes) -> IssuedCliSession:
         raise InvalidCliEnrollmentError
 
+    @override
     async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
         raise InvalidCliEnrollmentError
 
+    @override
     async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment:
         raise InvalidCliEnrollmentError
 
+    @override
     async def start_session_challenge(self, device_id: UUID) -> IssuedCliSessionChallenge:
         raise InvalidCliEnrollmentError
 
+    @override
     async def exchange_session_challenge(
         self, *, device_id: UUID, challenge_id: UUID, nonce: str, signature: bytes
     ) -> IssuedCliSession:
         raise InvalidCliEnrollmentError
 
+    @override
     async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
         raise InvalidCliEnrollmentError
 
+    @override
     async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
         raise InvalidCliEnrollmentError
 
+    @override
     async def revoke_current_session(self, identity: CliIdentity) -> bool:
         raise InvalidCliEnrollmentError
 
@@ -238,6 +254,7 @@ class MockBuilds(BuildService):
     def __init__(self) -> None:
         """Hold no repository; `apply_edit` never reaches one."""
 
+    @override
     async def apply_edit(
         self,
         actor: BuildEditor,
@@ -253,15 +270,19 @@ class MockBuildQueries(BuildQueryService):
     def __init__(self) -> None:
         """Answer every read as a miss; no repository is attached."""
 
+    @override
     async def get(self, build_id: int) -> Build | None:
         return None
 
+    @override
     async def get_public(self, build_id: int) -> Build:
         raise BuildNotFoundError(build_id)
 
+    @override
     async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
         return []
 
+    @override
     async def list_page(
         self,
         *,
@@ -278,12 +299,15 @@ class MockSearch(SearchService):
     def __init__(self) -> None:
         """Index nothing, so every query is an empty page."""
 
+    @override
     async def search(self, request: SearchRequest) -> SearchPage:
         return SearchPage(hits=(), total=0, next=None, prev=None)
 
+    @override
     async def suggest(self, query: str | SearchQuery, *, limit: int = 5) -> tuple[str, ...]:
         return ()
 
+    @override
     async def fields(self):
         return DEFAULT_FIELD_REGISTRY
 
@@ -292,9 +316,11 @@ class MockTags(TagService):
     def __init__(self) -> None:
         """Publish no tags."""
 
+    @override
     async def public_definitions(self) -> tuple[TagDefinition, ...]:
         return ()
 
+    @override
     async def public_definition(self, tag_id: int) -> TagDefinition | None:
         return None
 
@@ -303,6 +329,7 @@ class MockVersions(VersionService):
     def __init__(self) -> None:
         """Know no game versions."""
 
+    @override
     async def list_all(self):
         return []
 
@@ -313,6 +340,7 @@ class MockErrorReports(ErrorReportService):
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
 
+    @override
     async def record(self, error: BaseException, **kwargs: object) -> None:
         self.calls.append({"error": error, **kwargs})
 
@@ -323,17 +351,21 @@ class MockSchematics(SchematicService):
     def __init__(self) -> None:
         """Attach no analyzer or repository; nothing here reaches one."""
 
+    @override
     async def list_public_page(
         self, build_id: int, *, selector: PageSelector = FIRST_PAGE, page_size: int = 50
     ) -> Page[StoredSchematic]:
         return cast(Page[StoredSchematic], _EMPTY_PAGE)
 
+    @override
     async def public_download(self, build_id: int, schematic_id: int) -> PublicSchematicDownload:
         raise SchematicNotFoundError
 
+    @override
     async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
         raise SchematicNotFoundError
 
+    @override
     async def render_content(self, recipe_hash: str, *, max_bytes: int = 8 * 1024 * 1024) -> bytes:
         raise SchematicNotFoundError
 
@@ -344,27 +376,33 @@ class MockMinecraftInstallations(InstallationCredentialService):
     def __init__(self) -> None:
         """Register no installations; no repository or pepper is attached."""
 
+    @override
     async def authenticate_headers(
         self, installation_id: str | None, installation_secret: str | None
     ) -> AuthenticatedPaperInstallation:
         raise InvalidInstallationCredentialError
 
+    @override
     async def register(
         self, *, owner_account_id: int, label: str, profile: PublicServerProfile | None = None
     ) -> IssuedInstallationCredential:
         raise InvalidInstallationCredentialError
 
+    @override
     async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
         raise InvalidInstallationCredentialError
 
+    @override
     async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
         raise InvalidInstallationCredentialError
 
+    @override
     async def update_profile(
         self, *, installation_id: UUID, owner_account_id: int, profile: PublicServerProfile
     ) -> PaperInstallation:
         raise InvalidInstallationCredentialError
 
+    @override
     async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation:
         raise InvalidInstallationCredentialError
 
@@ -375,33 +413,41 @@ class MockMinecraftPlayerAuthorization(PlayerAuthorizationService):
     def __init__(self) -> None:
         """Issue no challenges; no repository or clock is attached."""
 
+    @override
     async def authenticate_fabric_player(self, token: str) -> MinecraftPlayerContext:
         raise InvalidChallengeError
 
+    @override
     async def authenticate_paper_player(
         self, token: str, installation: AuthenticatedPaperInstallation
     ) -> MinecraftPlayerContext:
         raise InvalidChallengeError
 
+    @override
     async def start_paper_challenge(
         self, *, installation: AuthenticatedPaperInstallation, java_uuid: UUID
     ) -> IssuedPlayerChallenge:
         raise InvalidChallengeError
 
+    @override
     async def exchange_paper(
         self, *, device_code: str, installation: AuthenticatedPaperInstallation
     ) -> IssuedPlayerGrant:
         raise InvalidChallengeError
 
+    @override
     async def start_fabric_challenge(self, *, java_uuid: UUID, pkce_s256_challenge: str) -> IssuedPlayerChallenge:
         raise InvalidChallengeError
 
+    @override
     async def exchange_fabric(self, *, device_code: str, pkce_verifier: str) -> IssuedPlayerGrant:
         raise InvalidChallengeError
 
+    @override
     async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge:
         raise InvalidChallengeError
 
+    @override
     async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool:
         raise InvalidChallengeError
 
@@ -409,11 +455,15 @@ class MockMinecraftPlayerAuthorization(PlayerAuthorizationService):
 class MockMediaJobs(MediaNormalizationJobService):
     """An empty media store: every lookup misses, which the routes report as a 404."""
 
-    limits = MediaLimits()
-
     def __init__(self) -> None:
         """Hold no queue; `submit_staged` answers without enqueuing anything."""
 
+    @property
+    @override
+    def limits(self) -> MediaLimits:
+        return MediaLimits()
+
+    @override
     async def submit_staged(
         self,
         submission: StagedMediaUploadSubmission,
@@ -422,12 +472,15 @@ class MockMediaJobs(MediaNormalizationJobService):
     ) -> UUID:
         return submission.upload_id or uuid.uuid4()
 
+    @override
     async def get(self, upload_id: UUID) -> MediaJobSnapshot | None:
         return None
 
+    @override
     async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]:
         return ()
 
+    @override
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
         return False
 
@@ -436,6 +489,7 @@ class MockVotes(VoteService):
     def __init__(self) -> None:
         """Hold no vote sessions."""
 
+    @override
     async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         return None
 
@@ -444,9 +498,11 @@ class MockRecords(RecordService):
     def __init__(self) -> None:
         """Publish no records."""
 
+    @override
     async def get(self, result_id: int) -> PublishedRecord | None:
         return None
 
+    @override
     async def list_page(
         self,
         *,
@@ -461,6 +517,7 @@ class MockPublicRecords(PublicRecordQueryService):
     def __init__(self) -> None:
         """Publish no records."""
 
+    @override
     async def get(self, standing_id: int) -> PublicRecordDetail | None:
         return None
 
@@ -469,15 +526,18 @@ class MockSubmissionForms(SubmissionFormService):
     def __init__(self) -> None:
         """Serve the built-in manifest without a taxonomy repository."""
 
+    @override
     async def manifest(self, *, locale: str | None):
         return build_submission_manifest(locale)
 
+    @override
     async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None):
         manifest = build_submission_manifest(locale)
         if manifest.schema_id == schema_id and manifest.revision == revision:
             return manifest
         return None
 
+    @override
     async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
         del locale
         return FormOptionSet(source, category, 1, ())
@@ -489,6 +549,7 @@ class MockIdempotency(IdempotencyService):
     def __init__(self) -> None:
         """Hold no store; reservations are invented per call."""
 
+    @override
     async def reserve(
         self,
         *,
@@ -500,6 +561,7 @@ class MockIdempotency(IdempotencyService):
     ) -> PendingRequest | StoredResponse:
         return PendingRequest(uuid.uuid4())
 
+    @override
     async def complete(self, request: PendingRequest, response: StoredResponse) -> None:
         return None
 
@@ -508,9 +570,11 @@ class MockNotifications(NotificationService):
     def __init__(self) -> None:
         """Hold no repository; preferences are computed per call."""
 
+    @override
     async def preferences(self, account_id: int) -> NotificationPreferences:
         return NotificationPreferences(account_id=account_id, consent_pending=True)
 
+    @override
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
         return NotificationPreferences(
             account_id=account_id,
@@ -519,9 +583,11 @@ class MockNotifications(NotificationService):
             dm_enabled=dm_enabled,
         )
 
+    @override
     async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
         return ()
 
+    @override
     async def subscribe(
         self,
         account_id: int,
@@ -532,9 +598,11 @@ class MockNotifications(NotificationService):
     ) -> NotificationSubscription:
         raise AssertionError("service callers cannot create notification subscriptions")
 
+    @override
     async def unsubscribe(self, account_id: int, subscription_id: int) -> None:
         return None
 
+    @override
     async def inbox(
         self,
         account_id: int,
@@ -545,6 +613,7 @@ class MockNotifications(NotificationService):
     ) -> Page[InboxNotification]:
         return cast(Page[InboxNotification], _EMPTY_PAGE)
 
+    @override
     async def mark_read(
         self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
     ) -> None:
@@ -564,11 +633,15 @@ class EmptyPermissionStore:
 class MockPermissionEpoch(PermissionEpochWatcher):
     """A watcher with nothing to watch, so the lifespan's job is a no-op."""
 
-    listener = None
-
     def __init__(self) -> None:
         """Watch no store and no cache."""
 
+    @property
+    @override
+    def listener(self) -> WakeListener | None:
+        return None
+
+    @override
     async def refresh(self) -> None:
         return None
 
@@ -579,17 +652,21 @@ class MockSubmissionDrafts(SubmissionDraftService):
     def __init__(self) -> None:
         """Hold no repository; nothing here reaches one."""
 
+    @override
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
         return ()
 
+    @override
     async def attention_inbox(
         self, actor: DraftActor, *, after: UUID | None = None, limit: int = 20
     ) -> tuple[StoredDraft, ...]:
         return ()
 
+    @override
     async def get_accessible(self, draft_id: UUID, actor: DraftActor) -> StoredDraft:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def delete(self, draft_id: UUID, account_id: int) -> None:
         raise DraftNotFoundError(draft_id)
 
@@ -600,12 +677,15 @@ class MockSubmissionFinalization(SubmissionFinalizationService):
     def __init__(self) -> None:
         """Hold no queue; nothing here enqueues an attempt."""
 
+    @override
     async def status(self, draft_id: UUID, account_id: DraftActor) -> SubmissionRequestResult | None:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def attempt(self, draft_id: UUID, account_id: DraftActor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def attempts(
         self, draft_id: UUID, account_id: DraftActor, *, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]:
@@ -618,12 +698,15 @@ class MockSubmissionSchematics(DraftSchematicService):
     def __init__(self) -> None:
         self.max_bytes = SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
+    @override
     async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[DraftSchematic, ...]:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def reserve(self, draft_id: UUID, actor: DraftActor, *, filename: str, upload_id: UUID) -> DraftSchematic:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def upload(
         self,
         draft_id: UUID,
@@ -635,15 +718,19 @@ class MockSubmissionSchematics(DraftSchematicService):
     ) -> DraftSchematic:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def fail(self, draft_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def select_primary(self, draft_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def discard(self, draft_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def attach(self, source_id: UUID, destination_id: UUID, actor: DraftActor, upload_id: UUID) -> None:
         raise DraftNotFoundError(destination_id)
 
@@ -654,15 +741,19 @@ class MockSubmissionRevisions(RevisionProposalService):
     def __init__(self) -> None:
         """Hold no repository; nothing here reaches one."""
 
+    @override
     async def list_for_source(self, source_message_id: int, actor: Subject) -> tuple[RevisionProposal, ...]:
         return ()
 
+    @override
     async def get(self, proposal_id: UUID, actor: Subject) -> RevisionProposal:
         raise NotFoundError
 
+    @override
     async def match(self, proposal_id: UUID, build_id: int, actor: Subject, *, renew: bool = False) -> RevisionProposal:
         raise NotFoundError
 
+    @override
     async def approve(self, proposal_id: UUID, actor: Subject) -> RevisionProposal:
         raise NotFoundError
 
@@ -673,9 +764,11 @@ class MockSubmissionIntake(SubmissionAttachmentIntake):
     def __init__(self) -> None:
         """Hold no repository; nothing here reaches one."""
 
+    @override
     async def list(self, draft_id: UUID, actor: DraftActor) -> tuple[SuppliedAttachment, ...]:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def reserve(
         self,
         draft_id: UUID,
@@ -686,6 +779,7 @@ class MockSubmissionIntake(SubmissionAttachmentIntake):
     ) -> SuppliedAttachment:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def register_file(
         self,
         draft_id: UUID,
@@ -696,9 +790,11 @@ class MockSubmissionIntake(SubmissionAttachmentIntake):
     ) -> None:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def discard(self, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
         raise DraftNotFoundError(draft_id)
 
+    @override
     async def fail(self, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
         raise DraftNotFoundError(draft_id)
 
