@@ -1,5 +1,6 @@
 """Integration coverage for the portable Alembic migration chain."""
 
+import json
 from collections.abc import Iterator
 from io import StringIO
 
@@ -14,6 +15,7 @@ from testcontainers.postgres import PostgresContainer
 from alembic import command
 from squid.persistence.alembic_entities import alembic_util_entities
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.submissions.payload_integrity import submission_payload_digest
 from squid.worker.queue_health import QUEUE_HEALTH_STATEMENT
 
 MIGRATION_DATABASE = "redstone_squid_migrations"
@@ -28,6 +30,7 @@ SCHEMATIC_RENDER_PROJECTION_REVISION = "e1f2a3b4c5d6"
 SCHEMATIC_PUBLICATION_REVISION = "f8b9c0d1e2f3"
 NOTIFICATION_DELIVERY_OWNER_REVISION = "b5d9f2a7c0e3"
 NOTIFICATION_DELIVERY_OWNER_PARENT_REVISION = "a4c8e1f6b9d2"
+IMMUTABLE_FINALIZATION_INPUT_REVISION = "c8e2a5b0d3f6"
 
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
@@ -817,6 +820,86 @@ def test_finalization_result_metadata_migration_expands_and_downgrades(
                 )
             }
             assert downgraded == before
+    finally:
+        engine.dispose()
+
+
+def test_finalization_input_migration_backfills_and_rejects_updates(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Existing job inputs survive the split and the retained copy cannot be edited."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{IMMUTABLE_FINALIZATION_INPUT_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    draft_id = "44444444-4444-4444-8444-444444444444"
+    job_id = "55555555-5555-4555-8555-555555555555"
+    payload: dict[str, object] = {"payload_schema": 2, "target": "door"}
+    payload_sha256 = submission_payload_digest(payload)
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts ("
+                    "id, owner_account_id, schema_id, schema_revision, category, answers, origin, expires_at"
+                    ") VALUES ("
+                    ":draft_id, :account_id, 'test', 1, 'door', '{}'::jsonb, 'web', now() + interval '1 day'"
+                    ")"
+                ),
+                {"draft_id": draft_id, "account_id": account_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs ("
+                    "id, draft_id, draft_revision, payload, payload_sha256, status, attention_issues"
+                    ") VALUES ("
+                    ":job_id, :draft_id, 0, CAST(:payload AS jsonb), :payload_sha256, 'pending', '[]'::jsonb"
+                    ")"
+                ),
+                {
+                    "job_id": job_id,
+                    "draft_id": draft_id,
+                    "payload": json.dumps(payload),
+                    "payload_sha256": payload_sha256,
+                },
+            )
+
+        command.upgrade(config, IMMUTABLE_FINALIZATION_INPUT_REVISION)
+        with engine.connect() as connection:
+            retained = connection.execute(
+                text("SELECT payload, payload_sha256 FROM submission_finalization_inputs WHERE job_id = :job_id"),
+                {"job_id": job_id},
+            ).one()
+            assert retained.payload == payload
+            assert retained.payload_sha256 == payload_sha256
+
+        with (
+            pytest.raises(DBAPIError, match="submission finalization inputs are immutable"),
+            engine.begin() as connection,
+        ):
+            connection.execute(
+                text(
+                    "UPDATE submission_finalization_inputs "
+                    "SET payload = '{\"payload_schema\": 3}'::jsonb WHERE job_id = :job_id"
+                ),
+                {"job_id": job_id},
+            )
+
+        command.downgrade(config, f"{IMMUTABLE_FINALIZATION_INPUT_REVISION}-1")
+        with engine.connect() as connection:
+            assert (
+                connection.execute(
+                    text("SELECT payload FROM submission_finalization_jobs WHERE id = :job_id"),
+                    {"job_id": job_id},
+                ).scalar_one()
+                == payload
+            )
+            assert (
+                connection.execute(text("SELECT to_regclass('public.submission_finalization_inputs')")).scalar_one()
+                is None
+            )
     finally:
         engine.dispose()
 
