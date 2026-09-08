@@ -12,10 +12,9 @@ from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 
 EMBEDDING_CALL_TIMEOUT_SECONDS = 300.0
-"""Backstop for one embedding call, sized above the OpenAI adapter's own budget.
+"""Backstop for one embedding call, looser than OPENAI_REQUEST_TIMEOUT_SECONDS and its retries.
 
-Deliberately looser than OPENAI_REQUEST_TIMEOUT_SECONDS and its retries, so a
-well-behaved adapter reports its own failure rather than being pre-empted here.
+A well-behaved adapter therefore reports its own failure rather than being pre-empted here.
 """
 
 
@@ -23,9 +22,13 @@ class SearchEmbeddingModel(Protocol):
     """Generate versioned vectors for searchable text."""
 
     @property
-    def model_name(self) -> str: ...
+    def model_name(self) -> str:
+        """The name stored beside every vector, so a query only matches vectors from the same model."""
+        ...
 
-    async def embed(self, text: str) -> list[float] | None: ...
+    async def embed(self, text: str) -> list[float] | None:
+        """Return the vector for `text`, or None when the provider is unconfigured or fails."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,15 +46,24 @@ class SearchEmbeddingJob:
 class SearchEmbeddingQueue(Protocol):
     """Claim-fenced persistence for embedding work."""
 
-    async def claim(self, *, limit: int) -> Sequence[SearchEmbeddingJob]: ...
+    async def claim(self, *, limit: int) -> Sequence[SearchEmbeddingJob]:
+        """Lease at most `limit` documents; each lease ends at `complete`, `fail`, or its timeout."""
+        ...
 
-    async def complete(self, job: SearchEmbeddingJob, embedding: list[float], model: str) -> bool: ...
+    async def complete(self, job: SearchEmbeddingJob, embedding: list[float], model: str) -> bool:
+        """Store the vector and acknowledge the job, returning whether the fence still held."""
+        ...
 
-    async def fail(self, job: SearchEmbeddingJob, error: str, *, max_attempts: int) -> bool: ...
+    async def fail(self, job: SearchEmbeddingJob, error: str, *, max_attempts: int) -> bool:
+        """Release the job for retry, returning whether this failure dead-lettered it instead."""
+        ...
 
 
 class SearchEmbeddingService:
-    """Drain changed search documents into pgvector."""
+    """Drain changed search documents into pgvector.
+
+    Raises `InvalidStateError` when constructed with a non-positive `max_attempts`.
+    """
 
     def __init__(self, model: SearchEmbeddingModel, queue: SearchEmbeddingQueue, *, max_attempts: int = 5) -> None:
         if max_attempts < 1:
@@ -62,18 +74,22 @@ class SearchEmbeddingService:
         self._max_attempts = max_attempts
 
     async def process_batch(self, *, limit: int = 8) -> tuple[int, int]:
-        """Embed a bounded batch, retaining exhausted documents as dead letters."""
+        """Embed at most `limit` claimed documents and return the succeeded and failed counts.
+
+        A job that raises is released for retry, and dead-lettered once it has used `max_attempts`.
+
+        Raises:
+            InvalidStateError: If `limit` is outside 1-32.
+        """
         if not 1 <= limit <= 32:
             msg = tr(t"Embedding claim limit must be between 1 and 32.")
             raise InvalidStateError(msg)
         succeeded = failed = 0
         for job in await self._queue.claim(limit=limit):
             try:
-                # The model port is a Protocol, so the adapter's own timeout is not
-                # something this loop can rely on. Without a bound here a hung
-                # provider stalls the periodic job that awaits process_batch to
-                # completion, staling its heartbeat and failing worker readiness.
-                # TimeoutError lands in the handler below and retries the job.
+                # The model port is a Protocol, so no adapter timeout can be relied on here. A hung
+                # provider would stall the periodic job awaiting process_batch, stale its heartbeat
+                # and fail worker readiness. TimeoutError lands in the handler below and retries.
                 with anyio.fail_after(EMBEDDING_CALL_TIMEOUT_SECONDS):
                     embedding = await self._model.embed(job.text)
                 embedding = _require_embedding(embedding)

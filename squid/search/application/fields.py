@@ -36,7 +36,10 @@ class FieldDefinition:
 
 
 class FieldRegistry:
-    """Resolve field names and coerce values without exposing persistence identifiers."""
+    """Resolve field names and coerce values without exposing persistence identifiers.
+
+    Raises `InvalidStateError` when two definitions claim the same name or alias.
+    """
 
     def __init__(self, fields: Iterable[FieldDefinition]) -> None:
         self._fields: dict[str, FieldDefinition] = {}
@@ -48,7 +51,7 @@ class FieldRegistry:
                 self._fields[key] = field
 
     def resolve(self, name: str) -> FieldDefinition | None:
-        """Resolve a public field name or alias."""
+        """Resolve a public field name or alias, case-insensitively."""
         return self._fields.get(name.casefold())
 
     def suggestions(self, name: str, *, limit: int = 3) -> tuple[str, ...]:
@@ -58,7 +61,14 @@ class FieldRegistry:
 
     @staticmethod
     def coerce(field: FieldDefinition, raw: str) -> ScalarValue:
-        """Coerce a parsed literal according to an allowlisted field type."""
+        """Coerce a parsed literal according to an allowlisted field type.
+
+        Numbers accept the field's unit suffixes; timestamps are returned as ISO-8601 text.
+
+        Raises:
+            ValidationError: If the literal does not fit the field's type, is not finite, or does
+                not align to the field's numeric step.
+        """
         if field.value_type is FieldType.TEXT:
             return raw
         if field.value_type is FieldType.NUMBER:

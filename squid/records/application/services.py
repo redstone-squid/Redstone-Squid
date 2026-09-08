@@ -70,7 +70,11 @@ class RecordComputationService:
         current_version_id: int | None = None,
         kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
     ) -> RebuildSummary:
-        """Recompute and atomically activate every requested kind/scope."""
+        """Recompute and atomically activate every requested kind and scope.
+
+        Raises:
+            InvalidStateError: If a requested kind holds no records.
+        """
         ruleset_id = await self._runs.active_ruleset_id()
         run_ids: list[int] = []
         records: list[ComputedRecord] = []
@@ -161,7 +165,10 @@ class RecordComputationService:
         current_version_id: int | None = None,
         limit: int = 20,
     ) -> QueueProcessSummary:
-        """Claim queued scopes, rebuild them, and acknowledge only on success."""
+        """Claim at most `limit` queued scopes and rebuild them, acknowledging only on success.
+
+        A failing rebuild releases the lease for retry and propagates the error.
+        """
         lease = await self._runs.claim_recompute_kinds(limit=limit)
         if not lease:
             return QueueProcessSummary(kinds=(), rebuild=None)
@@ -308,7 +315,13 @@ class RecordService:
         kind: BuildKind | None = None,
         version_id: int | None = None,
     ) -> RebuildSummary:
-        """Re-materialize the exact category an existing definition identifies."""
+        """Re-materialize the exact category an existing definition identifies.
+
+        Raises:
+            RecordDefinitionNotFoundError: If no definition has `definition_id`.
+            ValidationError: If `kind` is not the definition's own build kind.
+            NoMatchingRecordCategoryError: If no confirmed build still qualifies for the category.
+        """
         identity = await self._runs.get_definition_identity(definition_id)
         if identity is None:
             raise RecordDefinitionNotFoundError(definition_id)
@@ -327,7 +340,11 @@ class RecordService:
         )
 
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
-        """Persist a valid exact category and refresh its build kind."""
+        """Persist a valid exact category and rebuild its build kind.
+
+        Raises:
+            NoMatchingRecordCategoryError: If no confirmed build qualifies for the category.
+        """
         source = tuple(await self._candidates.list_confirmed(request.kind))
         scoped = tuple(
             candidate

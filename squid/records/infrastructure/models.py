@@ -45,6 +45,7 @@ class RecordRuleset(Base, kw_only=True):
     calculator_version: Mapped[str] = mapped_column(Text, nullable=False)
     formatter_version: Mapped[str] = mapped_column(Text, nullable=False)
     activated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When this ruleset became the active one; NULL on every superseded ruleset."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -101,12 +102,19 @@ class RecordDefinition(Base, kw_only=True):
         default=None,
     )
     category_key: Mapped[str] = mapped_column(Text, nullable=False)
+    """Serialized identity of the competing category: build kind, base shape, and its restrictions."""
     title: Mapped[str] = mapped_column(Text, nullable=False)
     subtitle: Mapped[str | None] = mapped_column(Text, default=None)
     title_diagnostics: Mapped[list[dict[str, str | list[str]]]] = mapped_column(
         JSONB, nullable=False, server_default=text("'[]'::jsonb"), default_factory=list
     )
+    """Formatter complaints about unknown or contradictory taxonomy in the title; empty when clean."""
     materialization_source: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'eager'"))
+    """Why the definition exists.
+
+    'eager' for a generated category, 'seeded' for a fixture, and 'public_lookup' for an exact
+    category a user asked for, which later rebuilds keep materializing.
+    """
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -212,7 +220,9 @@ class RecordComputationRun(Base, kw_only=True):
         default=None,
     )
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'running'"))
+    """'running' while the run is being written, then 'completed' or 'failed'."""
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    """Whether this run is the published one; at most one run per build kind and version is."""
     started_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -246,15 +256,23 @@ class RecordResult(Base, kw_only=True):
         nullable=False,
     )
     status: Mapped[str] = mapped_column(Text, nullable=False)
+    """The outcome for this definition.
+
+    'resolved' has holders, 'unresolved' means a tie needs facts nobody supplied, and
+    'no_candidate' means no build supplies the fact this record compares.
+    """
     gap_reasons: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
+    """The facts whose absence blocked resolution, as `{"missing": [{"build_id", "field"}]}`."""
     provisional_build_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("builds.id", name="record_results_provisional_build_id_fkey", ondelete="SET NULL"),
         default=None,
     )
+    """One of the builds that would hold an unresolved record once its gaps are filled."""
     history_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
+    """False when a candidate has no completion date, so the reconstructed chronology may skip periods."""
     computed_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -280,8 +298,17 @@ class RecordResultHolder(Base, kw_only=True):
         primary_key=True,
     )
     rank: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"))
+    """Display order among co-holders; tied holders share a rank."""
     metric_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    """The measurements this record compared, as computed.
+
+    Volume, timing values in game ticks, or completion date, depending on the record class.
+    """
     title: Mapped[str] = mapped_column(Text, nullable=False)
+    """The rendered record title.
+
+    A holder that is absent from the pinned current version gets a ` [BROKEN]` suffix.
+    """
     subtitle: Mapped[str | None] = mapped_column(Text, default=None)
     completion_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
@@ -331,9 +358,12 @@ class RecordHolderHistory(Base, kw_only=True):
         ),
         default=None,
     )
+    """The interval this one superseded, chaining a definition's chronology; NULL for the first."""
     held_from: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     held_until: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the next holder took the record; NULL while this interval is still open."""
     metric_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    """The measurements that won this interval, in the same shape as a holder's snapshot."""
 
 
 class RecordRecomputeQueueItem(Base, kw_only=True):
@@ -348,6 +378,7 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     scope_key: Mapped[str] = mapped_column(Text, nullable=False)
+    """Unique `kind:build_id` (or `kind:*`) scope; re-requesting a scope re-arms this row."""
     build_kind: Mapped[str] = mapped_column(Text, nullable=False)
     build_id: Mapped[int | None] = mapped_column(
         BigInteger,
@@ -365,18 +396,24 @@ class RecordRecomputeQueueItem(Base, kw_only=True):
     )
     """When this row next becomes claimable, and the only column backoff writes."""
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    """Failed rebuilds so far; this queue never dead-letters, it only backs off further."""
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When a worker leased this scope; cleared on release and by a fresh request for the scope."""
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """The database-minted fencing token handed to the worker that leased this scope.
 
-    Scopes are leased in batches and acknowledged as a set, so the token is what
-    tells a finishing worker's acknowledgement from work enqueued during its run.
+    Scopes are leased in batches and acknowledged as a set, so the token is what tells a finishing
+    worker's acknowledgement from work enqueued during its run.
     """
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 class DoorTimingVariant(Base, kw_only=True):
-    """A measured door timing variant used for lexicographic fastest records."""
+    """A measured door timing variant used for lexicographic fastest records.
+
+    Times are in game ticks; NULL means the method was never measured. One row per build and
+    label, where the label names the behaviour being timed.
+    """
 
     __tablename__ = "door_timing_variants"
     __table_args__ = (UniqueConstraint("build_id", "label", name="door_timing_variants_build_label_key"),)
@@ -397,7 +434,11 @@ class DoorTimingVariant(Base, kw_only=True):
 
 
 class ExtenderTimingVariant(Base, kw_only=True):
-    """A measured piston-extender timing variant used for fastest records."""
+    """A measured piston-extender timing variant used for fastest records.
+
+    Times are in game ticks; NULL means the method was never measured. One row per build and
+    label, where the label names the behaviour being timed.
+    """
 
     __tablename__ = "extender_timing_variants"
     __table_args__ = (UniqueConstraint("build_id", "label", name="extender_timing_variants_build_label_key"),)

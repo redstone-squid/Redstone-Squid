@@ -1,5 +1,3 @@
-"""Persistence models for cross-resource search."""
-
 """PostgreSQL search adapters."""
 
 from squid.search.infrastructure.compiler import PostgresSearchQueryCompiler

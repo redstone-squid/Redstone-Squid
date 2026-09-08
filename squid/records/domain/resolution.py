@@ -1,4 +1,9 @@
-"""Progressive record comparison algorithms."""
+"""Progressive record comparison algorithms.
+
+Every resolver returns `NO_CANDIDATE` when no build supplies the fact it compares, and
+`UNRESOLVED` with provisional holders and gaps when a tie needs a fact nobody supplies. Holders
+are only ever returned for `RESOLVED`.
+"""
 
 from collections.abc import Iterable, Sequence
 

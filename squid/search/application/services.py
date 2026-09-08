@@ -13,7 +13,9 @@ from squid.search.domain import SearchPage, SearchQuery, SearchRequest
 class SearchFieldRegistryProvider(Protocol):
     """Load the current public search-field catalog."""
 
-    async def registry(self) -> FieldRegistry: ...
+    async def registry(self) -> FieldRegistry:
+        """Return the registry in force now, including fields added since process start."""
+        ...
 
 
 class SearchService:
@@ -30,7 +32,12 @@ class SearchService:
         self._fields = fields
 
     async def search(self, request: SearchRequest) -> SearchPage:
-        """Execute a search and address the pages adjacent to it."""
+        """Execute a search and address the pages adjacent to it.
+
+        Raises:
+            QuerySyntaxError: If the request's query does not parse.
+            ValidationError: If the request sorts by a field the backend cannot sort by.
+        """
         query = await self._parse(request.query)
         result = await self._backend.search(request, query, offset=request.offset)
         offset = request.offset
@@ -44,7 +51,12 @@ class SearchService:
         )
 
     async def suggest(self, query: str | SearchQuery, *, limit: int = 5) -> tuple[str, ...]:
-        """Suggest indexed terms for a valid query."""
+        """Suggest indexed terms for a valid query.
+
+        Raises:
+            ValidationError: If `limit` is outside 1-25.
+            QuerySyntaxError: If a string query does not parse.
+        """
         if not 1 <= limit <= 25:
             msg = "suggestion limit must be between 1 and 25"
             raise ValidationError(msg, public_context={"field": "limit", "minimum": 1, "maximum": 25})

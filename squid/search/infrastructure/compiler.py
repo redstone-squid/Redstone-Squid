@@ -38,7 +38,11 @@ class PostgresSearchQueryCompiler(SearchQueryCompiler[ColumnElement[bool]]):
 
     @override
     def compile(self, query: SearchQuery) -> ColumnElement[bool]:
-        """Compile a complete Boolean predicate."""
+        """Compile a complete Boolean predicate; an empty query compiles to `true()`.
+
+        A field the registry no longer publishes compiles to `false()`, so a stale saved query
+        matches nothing instead of failing.
+        """
         if query.expression is None:
             return true()
         return self._compile_expression(query.expression)

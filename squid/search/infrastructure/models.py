@@ -32,7 +32,11 @@ from squid.persistence.types import InstantUTC, now
 
 
 class SearchDocument(Base, kw_only=True):
-    """An indexed projection of a searchable application resource."""
+    """An indexed projection of a searchable application resource.
+
+    One row per `(resource_kind, source_key)`; every column is derived, so the row is rewritten
+    wholesale whenever the source changes.
+    """
 
     __tablename__ = "search_documents"
     __table_args__ = (
@@ -59,32 +63,46 @@ class SearchDocument(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     resource_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    """'build', 'record', or 'metadata' for anything else that is searchable."""
     source_key: Mapped[str] = mapped_column(Text, nullable=False)
+    """Identity of the projected resource within its kind, such as a build id or `tag:12`."""
     title: Mapped[str] = mapped_column(Text, nullable=False)
     subtitle: Mapped[str | None] = mapped_column(Text, default=None)
     description: Mapped[str | None] = mapped_column(Text, default=None)
     status: Mapped[str | None] = mapped_column(Text, default=None)
+    """The source's submission status, which gates build visibility; NULL for kinds without one."""
     normalized_title: Mapped[str] = mapped_column(Text, nullable=False)
+    """Case-folded, whitespace-collapsed, unaccented title used for exact matching and ordering."""
     fuzzy_text: Mapped[str] = mapped_column(Text, nullable=False)
+    """Normalized title, subtitle and tags joined for trigram similarity."""
     tags: Mapped[list[str]] = mapped_column(
         ARRAY(Text), nullable=False, server_default=text("'{}'::text[]"), default_factory=list
     )
     title_vector: Mapped[str | None] = mapped_column(TSVECTOR, default=None)
     description_vector: Mapped[str | None] = mapped_column(TSVECTOR, default=None)
     combined_vector: Mapped[str | None] = mapped_column(TSVECTOR, default=None)
+    """Title and tags weighted A, subtitle B, description C, for ranked full-text search."""
     document_data: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
+    """Kind-specific payload rendered into search hits; never queried as a filter."""
     source_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    """Hash of the projected content; a change clears the embedding and re-enqueues embedding work."""
     embedding: Mapped[list[float] | None] = mapped_column(VECTOR(EMBEDDING_DIMENSION), default=None)
+    """NULL until the embedding queue fills it, and again whenever the source hash changes."""
     embedding_model: Mapped[str | None] = mapped_column(Text, default=None)
+    """The model that produced `embedding`; semantic queries only match vectors from their own model."""
     refreshed_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
 class SearchDocumentFacet(Base, kw_only=True):
-    """A typed, indexed field value belonging to a search document."""
+    """A typed, indexed field value belonging to a search document.
+
+    Exactly one of the four value columns is non-NULL, and its type decides which comparisons the
+    field supports.
+    """
 
     __tablename__ = "search_document_facets"
     __table_args__ = (
@@ -145,7 +163,9 @@ class SearchDocumentFacet(Base, kw_only=True):
         nullable=False,
     )
     field_name: Mapped[str] = mapped_column(Text, nullable=False)
+    """The public search field this value answers, or `tag:<id>` for a data-tag field."""
     ordinal: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
+    """Position among a document's values for the same field, so multi-valued fields stay distinct."""
     text_value: Mapped[str | None] = mapped_column(Text, default=None)
     numeric_value: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
     timestamp_value: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
@@ -172,7 +192,9 @@ class SearchProjectionQueueItem(Base, kw_only=True):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     resource_kind: Mapped[str] = mapped_column(Text, nullable=False)
     source_key: Mapped[str] = mapped_column(Text, nullable=False)
+    """With `resource_kind`, the resource to refresh; one pending row per resource."""
     action: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'upsert'"))
+    """'upsert' to reproject the resource, 'delete' to drop its document."""
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -185,11 +207,15 @@ class SearchProjectionQueueItem(Base, kw_only=True):
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """The database-minted fencing token handed to the worker that claimed this row."""
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the item exhausted its attempts; a dead row is retained and never claimed again."""
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
 
 
 class SearchEmbeddingQueueItem(Base, kw_only=True):
-    """A durable request to embed a search document whose source hash changed."""
+    """A durable request to embed a search document whose source hash changed.
+
+    One row per document, re-armed whenever the document's content hash changes.
+    """
 
     __tablename__ = "search_embedding_queue"
     __table_args__ = (
@@ -206,6 +232,7 @@ class SearchEmbeddingQueueItem(Base, kw_only=True):
         primary_key=True,
     )
     source_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    """The document content this job embeds; the vector write is rejected if the hash moved on."""
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -218,4 +245,5 @@ class SearchEmbeddingQueueItem(Base, kw_only=True):
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """The database-minted fencing token handed to the worker that claimed this row."""
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the job exhausted its attempts; a dead row is retained and never claimed again."""
     last_error: Mapped[str | None] = mapped_column(Text, default=None)

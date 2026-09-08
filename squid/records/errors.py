@@ -7,9 +7,8 @@ from squid.core.i18n import tr
 class RecordNotFoundError(NotFoundError):
     """No published result exists for the requested identifier.
 
-    A result whose computation run is no longer the published one is not found
-    either: records are addressed by result id, and a superseded run's results
-    are not part of the catalogue.
+    Records are addressed by result id, so a result belonging to a superseded run is not found
+    either.
     """
 
     default_message = tr(t"Record not found.")

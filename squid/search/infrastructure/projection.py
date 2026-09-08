@@ -135,16 +135,17 @@ class SearchProjectionStore:
         self._queue = ClaimedRowQueue(SEARCH_PROJECTION_QUEUE_SPEC)
 
     async def claim(self, *, limit: int = 50) -> tuple[SearchProjectionQueueItem, ...]:
-        """Lock and mark the oldest available queue items for this worker."""
+        """Lease the oldest available queue items for this worker.
+
+        A lease ends at `complete`, at `retry`, or when the visibility timeout reclaims the row.
+        """
         return await self._queue.claim(limit=limit, session=self._session)
 
     async def complete(self, item_id: int, claim_token: uuid.UUID) -> bool:
-        """Remove a processed queue item, if this worker still owns it.
+        """Remove a processed queue item if this worker still owns it, returning whether it did.
 
-        This used to be a bare `session.delete(item)` with no fence at all. It
-        relied on holding the row lock for the whole unit of work, but the reclaim
-        predicate hands the row to a second worker after the visibility timeout
-        regardless, and then both of them delete it.
+        The delete is fenced on `claim_token`: past the visibility timeout the row may already
+        belong to a second worker, whose work the fence protects.
         """
         outcome = await self._queue.complete(
             (SearchProjectionQueueItem.id == item_id,),
@@ -162,10 +163,12 @@ class SearchProjectionStore:
         *,
         max_attempts: int = PROJECTION_MAX_ATTEMPTS,
     ) -> bool:
-        """Release failed work or retain it as a dead letter after exhaustion.
+        """Release failed work with backoff, or retain it as a dead letter once attempts run out.
 
-        The shared backoff comes with the shared fence. Without it a permanently
-        failing projection re-ran on every poll until it exhausted its attempts.
+        Returns whether this failure dead-lettered the item.
+
+        Raises:
+            ValueError: If `max_attempts` is not positive.
         """
         if max_attempts < 1:
             msg = "Projection max_attempts must be positive."
@@ -194,7 +197,11 @@ class SearchProjectionStore:
         )
 
     async def replace(self, projection: SearchProjection) -> int:
-        """Upsert a document and replace all typed facets in the same transaction."""
+        """Upsert a document and replace all typed facets in the same transaction.
+
+        A changed source hash drops the stored embedding and re-enqueues build and record
+        documents for embedding; an unchanged one leaves both alone.
+        """
         normalized_title = normalize_search_text(projection.title)
         tags = sorted({normalize_search_text(tag) for tag in projection.tags if tag.strip()})
         fuzzy_text = " ".join(
@@ -312,7 +319,7 @@ class SearchProjectionLoader:
         self._build_mapper = BuildMapper()
 
     async def load(self, resource_kind: str, source_key: str) -> SearchProjection | None:
-        """Load the requested resource, returning None when its source was deleted."""
+        """Project the requested resource, or None when the key is malformed or its source is gone."""
         parsed = parse_projection_key(resource_kind, source_key)
         if parsed is None:
             return None
@@ -566,7 +573,11 @@ class SearchProjectionWorker:
         self._loader = SearchProjectionLoader(session)
 
     async def process_batch(self, *, limit: int = 50) -> tuple[int, int]:
-        """Process queue items and return successful and failed counts."""
+        """Process at most `limit` queue items and return the succeeded and failed counts.
+
+        Each item runs in its own savepoint, so one failure neither rolls back its neighbours nor
+        the caller's transaction, which owns the commit.
+        """
         succeeded = 0
         failed = 0
         for item in await self._store.claim(limit=limit):
@@ -616,7 +627,7 @@ async def run_projection_batch(
 
 
 def parse_projection_key(resource_kind: str, source_key: str) -> tuple[str, int] | None:
-    """Parse one durable projection key without touching persistence."""
+    """Parse a durable projection key into its subtype and numeric id, or None when malformed."""
     if resource_kind == "build" and source_key.isdecimal():
         return "build", int(source_key)
     if resource_kind == "record":
@@ -669,7 +680,7 @@ def build_record_projection(
 
 
 def build_tag_projection(source: TagProjectionSource) -> SearchProjection | None:
-    """Compile one approved taxonomy-tag search document from loaded application data."""
+    """Compile one taxonomy-tag search document, or None when the tag is not approved."""
     if source.moderation_status != "approved":
         return None
     # The semantic kind makes `kind:pattern` and `kind:restriction` answerable;
@@ -747,6 +758,7 @@ def normalize_search_text(value: str) -> str:
 
 
 def projection_source_hash(projection: SearchProjection) -> str:
+    """Hash the projected content, which decides whether a document must be embedded again."""
     serialized = json.dumps(
         {
             "title": projection.title,

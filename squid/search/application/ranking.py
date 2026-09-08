@@ -53,7 +53,14 @@ def reciprocal_rank_fusion(
     k: int = 60,
     branch_limit: int = 200,
 ) -> tuple[RankedCandidate, ...]:
-    """Fuse ranked candidate branches with deterministic tie-breaking."""
+    """Fuse ranked branches by weighted reciprocal rank, breaking ties by title, kind, then id.
+
+    Only the first `branch_limit` candidates of a branch score, and a document repeated within one
+    branch is ranked at its first position.
+
+    Raises:
+        ValidationError: If `k` or `branch_limit` is not positive, or a weight is negative.
+    """
     if k <= 0:
         raise ValidationError(tr(t"k must be positive"))
     if branch_limit <= 0:
@@ -88,7 +95,7 @@ def reciprocal_rank_fusion(
 
 
 def sort_filter_only(documents: Iterable[SearchDocumentOrder]) -> tuple[SearchDocumentOrder, ...]:
-    """Sort filter-only matches independently of database return order."""
+    """Order filter-only matches by case-folded title, kind, then id, whatever the database returns."""
     return tuple(
         sorted(
             documents,

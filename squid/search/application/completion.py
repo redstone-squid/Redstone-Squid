@@ -1,13 +1,11 @@
-"""Cursor-aware analysis of a partially typed search query.
+"""Cursor-aware analysis of a partially typed search query, which never raises.
 
-`SearchQueryParser` cannot help here. It calls `_fail()` on the first token it cannot complete,
-and a query being typed is *always* in that state — `restriction:` is a syntax error right up to
-the moment it stops needing completion. So this re-reads the same token shapes without ever
-raising, and reports what the caret is sitting in.
+`SearchQueryParser` cannot serve this: it fails on the first token it cannot complete, and a query
+being typed is always in that state — `restriction:` is a syntax error right up to the moment it
+stops needing completion.
 
-It deliberately looks only at the token under the caret rather than parsing the whole query. What
-may be suggested at a position depends on that token and, at most, the field name in front of it;
-whether the rest of the query is well-formed is not this module's problem.
+Only the token under the caret and, at most, the field name in front of it decide what may be
+suggested; whether the rest of the query is well-formed is not this module's problem.
 """
 
 from dataclasses import dataclass

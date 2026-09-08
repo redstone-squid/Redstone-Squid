@@ -90,7 +90,12 @@ class SearchQueryParser:
         self._index = 0
 
     def parse(self, source: str) -> SearchQuery:
-        """Parse source into a syntax tree that mentions no table or column."""
+        """Parse source into a syntax tree that mentions no table or column.
+
+        Raises:
+            QuerySyntaxError: If the source exceeds the configured length, token or nesting bounds,
+                or is not a well-formed expression over registered fields.
+        """
         if len(source) > self._max_length:
             _fail(f"query exceeds {self._max_length} characters", self._max_length)
         self._tokens = self._tokenize(source)

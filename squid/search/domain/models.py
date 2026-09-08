@@ -41,11 +41,10 @@ class SearchSort:
 
     @classmethod
     def parse(cls, value: str | None) -> SearchSort | None:
-        """Parse a `-field` or `field` sort expression, or `None` for the default.
+        """Parse a `-field` or `field` sort expression, or `None` for the default order.
 
-        The syntax belongs to the domain, not to one transport: the HTTP routes
-        and the bot's search command have to agree on what `-submission_time`
-        means, and they can only do that by parsing it in one place.
+        Raises:
+            ValidationError: If the expression names no field.
         """
         if value is None:
             return None
@@ -59,7 +58,10 @@ class SearchSort:
 
 @dataclass(frozen=True, slots=True)
 class SearchRequest:
-    """A normalized search request passed to an application service."""
+    """A normalized search request passed to an application service.
+
+    Raises `ValidationError` for a page size outside 1-50 or an offset past `MAX_PAGE_OFFSET`.
+    """
 
     query: str
     scope: SearchScope = SearchScope.RECORDS
@@ -82,7 +84,7 @@ class SearchRequest:
 
 @dataclass(frozen=True, slots=True)
 class RecordSearchHit:
-    """A computed record search result."""
+    """A computed record search result, titled after its top-ranked holder."""
 
     source_id: str
     title: str
@@ -99,8 +101,6 @@ class RecordSearchHit:
 
 @dataclass(frozen=True, slots=True)
 class BuildSearchHit:
-    """A build search result."""
-
     source_id: str
     title: str
     status: str
@@ -130,8 +130,7 @@ type SearchHit = RecordSearchHit | BuildSearchHit | MetadataSearchHit
 class SearchPage:
     """One offset-addressed page of search results.
 
-    Relevance has no identifier sequence to anchor to, so both neighbours are always addressed by
-    offset; the shared anchor type is used so that every page in the system reads the same way.
+    Relevance has no identifier sequence to anchor to, so both neighbours are addressed by offset.
     """
 
     hits: tuple[SearchHit, ...]

@@ -1,4 +1,4 @@
-"""Compatibility imports for the shared catalogue title grammar."""
+"""The record title formatter contract, over the re-exported catalogue title grammar."""
 
 from typing import Protocol
 
@@ -9,16 +9,16 @@ __all__ = ["CategoryText", "DoorCategory", "ExtenderCategory", "RulesTitleFormat
 
 
 class TitleFormatter(Protocol):
-    """A ruleset-specific formatter used when snapshotting record results."""
+    """A ruleset-specific formatter used when snapshotting record results.
 
-    def format_door(self, category: DoorCategory) -> CategoryText:
-        """Format a piston-door category."""
-        ...
+    A term the ruleset does not recognize is reported in the returned text's diagnostics rather
+    than raised, so a title is always produced.
+    """
 
-    def format_extender(self, category: ExtenderCategory) -> CategoryText:
-        """Format a piston-extender category."""
-        ...
+    def format_door(self, category: DoorCategory) -> CategoryText: ...
+
+    def format_extender(self, category: ExtenderCategory) -> CategoryText: ...
 
     def format_record(self, record_class: RecordClass, category: CategoryText) -> CategoryText:
-        """Prefix a category with its record class."""
+        """Prefix the category title with the record class, keeping its subtitle and diagnostics."""
         ...

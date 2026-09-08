@@ -58,14 +58,15 @@ class FieldExpression:
 
 @dataclass(frozen=True, slots=True)
 class NotExpression:
-    """Negation of an expression."""
-
     operand: QueryExpression
 
 
 @dataclass(frozen=True, slots=True)
 class BooleanExpression:
-    """A flattened Boolean combination."""
+    """A Boolean combination of at least two operands, flattened across equal operators.
+
+    Raises `ValidationError` when constructed with fewer than two operands.
+    """
 
     operator: BooleanOperator
     operands: tuple[QueryExpression, ...]
@@ -81,7 +82,10 @@ type QueryExpression = TextExpression | FieldExpression | NotExpression | Boolea
 
 @dataclass(frozen=True, slots=True)
 class SearchQuery:
-    """Parsed query and its normalized representation."""
+    """Parsed query and its normalized representation.
+
+    A `None` expression is an empty query, which matches every document.
+    """
 
     expression: QueryExpression | None
     normalized: str

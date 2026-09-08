@@ -41,7 +41,7 @@ class CandidateFacet:
 
     @property
     def category_name(self) -> str:
-        """Render the category threshold represented by this facet."""
+        """Render the facet through its template, falling back to the plain name when it has no value."""
         value = self.category_value if self.category_value is not None else self.assigned_value
         if value is None:
             return self.name
@@ -74,6 +74,7 @@ class CategoryIdentity:
 
     @property
     def key(self) -> str:
+        """The identity persisted as `record_definitions.category_key`, parsed back by `parse_category_key`."""
         restriction_key = ",".join(str(facet_id) for facet_id in self.restriction_ids)
         value_key = ",".join(f"{tag_id}:{operator}:{value}" for tag_id, operator, value in self.restriction_values)
         return f"{self.kind.value}:{self.base_key}:r[{restriction_key}]:p[{value_key}]"
@@ -150,14 +151,8 @@ class TitleDiagnosticGap:
 class PublishedRecord:
     """Public read model for one result of the currently published computation run.
 
-    It used to be `ActiveRecord`, which borrows Rails' name for "a domain object
-    that persists itself" to mean something entirely different. It persists
-    nothing and knows nothing about its own storage.
-
-    `record_computation_runs.is_active` keeps the word and is right to: it
-    describes a *run*, and exactly one run per kind and version is the active
-    one. What this type names is a result belonging to that run, which is a
-    different fact about a different thing.
+    Exactly one run per build kind and version is published, so a result stops being reachable as
+    soon as a newer run for its scope is activated.
     """
 
     id: int

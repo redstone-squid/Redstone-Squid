@@ -16,7 +16,10 @@ class SearchQueryCompiler[CompiledQueryT](Protocol):
 
 @dataclass(frozen=True, slots=True)
 class SearchSlice:
-    """One offset-addressed window of backend results and the size of the full result set."""
+    """One offset-addressed window of backend results and the size of the full result set.
+
+    A ranked query may report the size of its capped candidate list rather than of the corpus.
+    """
 
     hits: tuple[SearchHit, ...]
     total: int
@@ -32,6 +35,14 @@ class SearchBackend(Protocol):
         query: SearchQuery,
         *,
         offset: int,
-    ) -> SearchSlice: ...
+    ) -> SearchSlice:
+        """Return the window of matching hits starting at `offset`.
 
-    async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]: ...
+        Raises:
+            ValidationError: If `request.sort` names a field this backend cannot sort by.
+        """
+        ...
+
+    async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]:
+        """Return at most `limit` indexed terms close to the query's positive text."""
+        ...

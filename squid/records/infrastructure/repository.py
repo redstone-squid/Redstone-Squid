@@ -87,7 +87,7 @@ class PostgresRecordRepository:
         self._recompute_queue = ClaimedRowQueue(RECORD_RECOMPUTE_QUEUE_SPEC, session_factory)
 
     async def list_confirmed(self, kind: BuildKind) -> Sequence[RecordSourceCandidate]:
-        """Load confirmed fixed candidates of one supported kind."""
+        """Load confirmed candidates of one kind; kinds other than doors and extenders yield nothing."""
         async with self._session_factory() as session:
             if kind is BuildKind.DOOR:
                 return await self._list_doors(session)
@@ -96,7 +96,11 @@ class PostgresRecordRepository:
             return ()
 
     async def active_ruleset_id(self) -> int:
-        """Return the running ruleset, activating and queuing it when needed."""
+        """Return the active ruleset id for the calculator and formatter versions this module implements.
+
+        When those versions are not the stored active ruleset they are activated and a full
+        recompute of every kind is enqueued, under an advisory lock so concurrent callers agree.
+        """
         async with self._session_factory() as session, session.begin():
             await _advisory_lock(session, "record-ruleset-activation")
             active_id = (
@@ -174,7 +178,11 @@ class PostgresRecordRepository:
             return (await session.execute(statement)).scalar_one_or_none()
 
     async def activate(self, batch: ComputationBatch) -> int:
-        """Persist and activate a complete run in one transaction."""
+        """Persist and activate a complete run in one transaction.
+
+        The previous active run for the same kind and version is deactivated and a
+        `record_run.activated` domain event is published before the transaction commits.
+        """
         async with self._session_factory() as session, session.begin():
             await _advisory_lock(
                 session,
@@ -352,8 +360,8 @@ class PostgresRecordRepository:
     ) -> Sequence[PublishedRecord]:
         """List one page of published results in display order.
 
-        ID anchors page relative to the display order; a `before_id` page is fetched in reversed
-        order and restored in memory, leaving its overfetched row at the front for the caller.
+        Anchors are read relative to the display order: a `before_id` page is fetched in reversed
+        order and restored in memory, which leaves its overfetched row at the front.
         """
         return await self._active_records(
             result_id=None,
@@ -442,7 +450,7 @@ class PostgresRecordRepository:
             )
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
-        """Return exact categories previously accepted through public lookup."""
+        """Return the exact categories materialized through public lookup, skipping unparseable keys."""
         async with self._session_factory() as session:
             keys = (
                 await session.execute(
@@ -462,7 +470,11 @@ class PostgresRecordRepository:
             return tuple(identities)
 
     async def get_definition_identity(self, definition_id: int) -> CategoryIdentity | None:
-        """Return the parsed category identity of one stored definition."""
+        """Return the parsed category identity of one stored definition.
+
+        Raises:
+            DataIntegrityError: If the definition exists but its stored category key does not parse.
+        """
         async with self._session_factory() as session:
             key = await session.scalar(
                 select(RecordDefinition.category_key).where(RecordDefinition.id == definition_id)
@@ -555,12 +567,10 @@ class PostgresRecordRepository:
             await session.execute(statement)
 
     async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
-        """Lease queued scopes without holding locks during computation.
+        """Lease queued scopes without holding a row lock during computation.
 
-        A crashed worker used to hold its lease forever: the claim filtered
-        `locked_at IS NULL` with no visibility timeout at all, so a row locked by a
-        killed process was never reclaimed and reported as in-flight indefinitely.
-        The shared readiness predicate brings the timeout with it.
+        The lease ends at `complete_recompute` or `fail_recompute`, or when the queue's visibility
+        timeout hands the rows to another worker.
         """
         rows = await self._recompute_queue.claim(limit=limit)
         return RecomputeLease(
@@ -571,11 +581,8 @@ class PostgresRecordRepository:
     async def complete_recompute(self, lease: RecomputeLease) -> None:
         """Acknowledge the leased scopes this worker still owns.
 
-        Acknowledging by kind destroyed work: `enqueue` upserts on `scope_key` and
-        clears the lock, so new work arriving for a kind mid-run was claimed by a
-        second worker and then deleted by the first one's `WHERE build_kind IN (...)
-        AND locked_at IS NOT NULL`. Fencing on the tokens this worker was handed
-        leaves the other worker's row alone.
+        The acknowledgement is fenced on the lease's claim tokens, so a row that `enqueue` re-armed
+        mid-run, clearing its lock and token, survives this worker's acknowledgement.
         """
         await self._recompute_queue.complete_batch(lease.claim_tokens)
 
@@ -992,6 +999,7 @@ def _gap_from_row(definition: RecordDefinition, result: RecordResult) -> RecordG
 
 
 def parse_category_key(key: str) -> CategoryIdentity | None:
+    """Parse a stored `category_key` back into its identity, or None when it is malformed."""
     try:
         kind_value, remainder = key.split(":", maxsplit=1)
         base_key, restriction_part = remainder.rsplit(":r[", maxsplit=1)

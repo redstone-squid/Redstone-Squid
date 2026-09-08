@@ -43,7 +43,11 @@ class ResolutionStatus(StrEnum):
 
 
 class TimingMethod(StrEnum):
-    """Timing methods ordered by each build kind's rules."""
+    """A measured timing method.
+
+    The comparison order for a build kind is `DOOR_TIMING_METHODS` or `EXTENDER_TIMING_METHODS`,
+    not this enum's declaration order.
+    """
 
     OPENING = "opening"
     OPENING_VISIBLE = "opening_visible"
@@ -76,7 +80,10 @@ EXTENDER_TIMING_METHODS: tuple[TimingMethod, ...] = (
 
 @dataclass(frozen=True, slots=True)
 class TimingVariant:
-    """One possible timing behavior, represented in game ticks."""
+    """One possible timing behavior, in game ticks, ordered by the build kind's timing methods.
+
+    A `None` value is an unmeasured method. Raises `ValidationError` when constructed empty.
+    """
 
     values: tuple[int | None, ...]
 
@@ -88,7 +95,7 @@ class TimingVariant:
 
 @dataclass(frozen=True, slots=True)
 class CandidateGap:
-    """A fact missing precisely where it prevents a result."""
+    """A field whose absence on one build is what blocks a resolution."""
 
     build_id: int
     field: str
@@ -96,7 +103,11 @@ class CandidateGap:
 
 @dataclass(frozen=True, slots=True)
 class RecordCandidate:
-    """The fixed-volume and timing facts for one competing build."""
+    """The fixed-volume and timing facts for one competing build.
+
+    A `None` fixed volume excludes the build from volume records. Raises `ValidationError` when
+    the fixed volume is not positive.
+    """
 
     build_id: int
     completion_at: datetime | None = None
@@ -111,7 +122,11 @@ class RecordCandidate:
 
 @dataclass(frozen=True, slots=True)
 class TimingReduction:
-    """A build's lexicographically slowest known timing behavior."""
+    """A build's lexicographically slowest known timing behavior.
+
+    `timing` is `None` when no variant measured the primary method; `missing_index` is the first
+    position whose value is unknown, and `None` when the reduction is complete.
+    """
 
     timing: TimingVariant | None
     missing_index: int | None = None
@@ -119,7 +134,10 @@ class TimingReduction:
 
 @dataclass(frozen=True, slots=True)
 class RecordResolution:
-    """The official holders or the decisive gaps for a competition."""
+    """The official holders or the decisive gaps for a competition.
+
+    Raises `ValidationError` unless holders are present exactly when the status is resolved.
+    """
 
     status: ResolutionStatus
     holder_ids: tuple[int, ...] = ()

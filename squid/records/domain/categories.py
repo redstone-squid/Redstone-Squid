@@ -39,7 +39,11 @@ def generate_category_subsets(
     *,
     max_size: int = 8,
 ) -> Iterator[frozenset[str]]:
-    """Stream every unique valid subset without constructing a power-set mask."""
+    """Stream the valid subsets of the facet closure, smallest first, up to `max_size` facets.
+
+    Raises:
+        ValidationError: If `max_size` is negative.
+    """
     if max_size < 0:
         msg = tr(t"Maximum category size cannot be negative.")
         raise ValidationError(msg)

@@ -52,13 +52,22 @@ class SemanticCandidate:
 
 
 class SemanticCandidateProvider(Protocol):
-    """Optional vector-query provider."""
+    """Optional vector-query provider, consulted only for `SearchMode.SEMANTIC`.
 
-    async def candidates(self, query: str, *, limit: int) -> Sequence[SemanticCandidate]: ...
+    When it is absent or raises, the search degrades to lexical ranking and warns.
+    """
+
+    async def candidates(self, query: str, *, limit: int) -> Sequence[SemanticCandidate]:
+        """Return at most `limit` document identities, most relevant first."""
+        ...
 
 
 class PostgresSearchBackend(SearchBackend):
-    """Execute filtered lexical search against indexed projection documents."""
+    """Execute filtered search against indexed projection documents.
+
+    Ranking fuses exact, full-text and trigram branches, plus a semantic branch when a provider is
+    configured and the request asks for one.
+    """
 
     def __init__(
         self,
@@ -81,7 +90,11 @@ class PostgresSearchBackend(SearchBackend):
         *,
         offset: int,
     ) -> SearchSlice:
-        """Search indexed documents and return the window starting at `offset`."""
+        """Search indexed documents and return the window starting at `offset`.
+
+        Raises:
+            ValidationError: If `request.sort` names an unknown or unsortable field.
+        """
         registry = DEFAULT_FIELD_REGISTRY if self._fields is None else await self._fields.registry()
         compiler = self._compiler if self._fields is None else PostgresSearchQueryCompiler(registry)
         predicate = self.compile_predicate(request, query, compiler=compiler)
@@ -108,7 +121,11 @@ class PostgresSearchBackend(SearchBackend):
         *,
         compiler: PostgresSearchQueryCompiler | None = None,
     ) -> ColumnElement[bool]:
-        """Compile scope, visibility policy, and the complete user predicate."""
+        """Compile scope, visibility policy, and the complete user predicate.
+
+        Build documents are restricted to confirmed submissions unless the request states which
+        statuses the caller may see.
+        """
         predicate = self._scope_predicate(request.scope) & (compiler or self._compiler).compile(query)
         visible_statuses = request.visible_statuses
         if visible_statuses is None and request.scope in {SearchScope.BUILDS, SearchScope.ALL}:
@@ -130,12 +147,11 @@ class PostgresSearchBackend(SearchBackend):
     ) -> SearchSlice:
         """Page documents by one scalar facet field, with no depth limit.
 
-        A document may hold several values for the same field -- facets are unique per
-        `(document_id, field_name, ordinal)` -- so joining the facet table directly would repeat
-        the document once per value and put OFFSET arithmetic out by however many duplicates fell
-        before the window. Aggregating to one row per document first makes the offset exact, and
-        picks the value a caller would expect to sort on: the smallest ascending, the largest
-        descending.
+        A document may hold several values for the same field, so the facets are aggregated to one
+        row per document before the join: joining directly would repeat the document per value and
+        put the OFFSET out by the duplicates falling before the window. The aggregate also picks
+        the value a caller expects to sort on, the smallest ascending and the largest descending.
+        Documents without a value for the field sort last.
         """
         ascending = request.sort is None or request.sort.direction is SortDirection.ASCENDING
         value_source = {
@@ -201,8 +217,7 @@ class PostgresSearchBackend(SearchBackend):
 
         `total` is the size of the fused candidate list, not of the corpus: ranking materializes at
         most `_CANDIDATE_LIMIT` candidates per branch, so a query matching more documents than that
-        reports the capped figure and runs out of pages there. Deep relevance pages are not useful
-        enough to justify ranking the whole corpus, and an honest end beats a silently empty page.
+        reports the capped figure and runs out of pages there.
         """
         terms = _ranking_text(query)
         branches: dict[RankingBranch, Sequence[RankedCandidate]] = {
@@ -259,8 +274,8 @@ class PostgresSearchBackend(SearchBackend):
     async def _count(session: AsyncSession, predicate: ColumnElement[bool]) -> int:
         """Count matching documents.
 
-        The compiled predicate stands alone -- it never reaches through a join -- so a total needs
-        no facet join even when the page it accompanies was ordered through one.
+        The compiled predicate stands alone and never reaches through a join, so a total needs no
+        facet join even when the page it accompanies was ordered through one.
         """
         return await session.scalar(select(func.count()).select_from(SearchDocument).where(predicate)) or 0
 

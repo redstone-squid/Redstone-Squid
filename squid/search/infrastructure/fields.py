@@ -21,6 +21,7 @@ class PostgresFieldRegistryProvider:
         self._session_factory = session_factory
 
     async def registry(self) -> FieldRegistry:
+        """Return the built-in fields plus one field per approved, queryable tag definition."""
         async with self._session_factory() as session:
             definitions = tuple(
                 (
