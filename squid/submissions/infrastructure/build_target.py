@@ -17,11 +17,9 @@ from squid.builds.errors import InvalidBuildError
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.submissions.domain.finalization import (
     BuildSubmissionRejected,
-    BuildSubmissionResult,
     DoorSubmissionDetails,
     ExtenderOrientation,
     ExtenderSubmissionDetails,
-    FinalizedBuild,
     NormalizedSubmission,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
@@ -65,16 +63,6 @@ class SubmissionBuildCommands(Protocol):
         ai_generated: bool,
     ) -> Build: ...
 
-    async def submit_for_account(
-        self,
-        build: Build,
-        *,
-        submitter_account_id: int,
-        source_submission_draft_id: UUID,
-        display_name: str | None,
-        ai_generated: bool,
-    ) -> Build: ...
-
 
 class ApprovedSubmissionTags(Protocol):
     """Read the currently approved definitions behind stable form option keys."""
@@ -88,7 +76,7 @@ class CanonicalSubmissionVersions(Protocol):
     async def list_all(self) -> Sequence[MinecraftVersion]: ...
 
 
-class CanonicalBuildSubmissionWriter:
+class SubmissionBuildPreparation:
     """Create or retrieve one build using its source draft as the retry key."""
 
     def __init__(
@@ -100,35 +88,6 @@ class CanonicalBuildSubmissionWriter:
         self._builds = builds
         self._tags = tags
         self._versions = versions
-
-    async def create_or_get(self, submission: NormalizedSubmission) -> BuildSubmissionResult:
-        """Translate a normalized payload and delegate retry-safe creation to builds."""
-        existing = await self._builds.get_by_source_submission_draft_id(submission.source_draft_id)
-        if existing is not None:
-            if existing.submitter_account_id != submission.owner_account_id or existing.sponsor != submission.sponsor:
-                return _target_rejected()
-            return _target_result(existing)
-
-        version_rejection = await self._validate_source_version(submission.source_version)
-        if version_rejection is not None:
-            return version_rejection
-        definitions = await self._resolve_tags(submission)
-        if isinstance(definitions, BuildSubmissionRejected):
-            return definitions
-        build = _to_build(submission, definitions)
-        try:
-            persisted = await self._builds.submit_for_account(
-                build,
-                submitter_account_id=submission.owner_account_id,
-                source_submission_draft_id=submission.source_draft_id,
-                display_name=submission.display_name,
-                ai_generated=submission.ai_generated,
-            )
-        except InvalidBuildError, InvalidStateError:
-            return _target_rejected()
-        if persisted.submitter_account_id != submission.owner_account_id or persisted.sponsor != submission.sponsor:
-            return _target_rejected()
-        return _target_result(persisted)
 
     async def prepare(self, submission: NormalizedSubmission) -> Build | BuildSubmissionRejected:
         """Resolve a candidate without committing, or recover a pre-cutover source build."""
@@ -273,13 +232,6 @@ def _to_build(submission: NormalizedSubmission, definitions: Mapping[str, TagDef
             extender_type=pattern_names[0] if pattern_names else None,
         )
     return BUILD_CLASS_BY_CATEGORY[_CATEGORY_MAP[submission.category]](**common)
-
-
-def _target_result(build: Build) -> FinalizedBuild:
-    if build.id is None:
-        msg = "Build persistence returned an aggregate without an identifier."
-        raise RuntimeError(msg)
-    return FinalizedBuild(build.id)
 
 
 def _target_rejected() -> BuildSubmissionRejected:

@@ -115,7 +115,7 @@ from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.infrastructure.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
 )
-from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
+from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
@@ -506,7 +506,7 @@ class _ServiceGraph:
             PostgresSubmissionExecutor(
                 self.db.async_session,
                 self.build_repository,
-                CanonicalBuildSubmissionWriter(self.builds, self.tags, self.version_service),
+                SubmissionBuildPreparation(self.builds, self.tags, self.version_service),
                 drafts=self.submission_drafts,
             ),
             preparation=self.submission_finalization,
