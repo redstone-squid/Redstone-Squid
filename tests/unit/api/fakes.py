@@ -28,6 +28,14 @@ from squid.builds.domain import Build
 from squid.builds.domain.models import Status
 from squid.builds.errors import BuildNotFoundError
 from squid.cli_auth.application import CliAuthorizationService
+from squid.cli_auth.domain import (
+    CliDevice,
+    CliDeviceEnrollment,
+    CliIdentity,
+    IssuedCliEnrollment,
+    IssuedCliSession,
+    IssuedCliSessionChallenge,
+)
 from squid.cli_auth.errors import InvalidCliEnrollmentError
 from squid.config import ApiProcessConfig
 from squid.core.errors import NotFoundError
@@ -43,6 +51,16 @@ from squid.media.application.jobs import (
 )
 from squid.media.domain import MediaLimits
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
+from squid.minecraft_auth.domain.models import (
+    AuthenticatedPaperInstallation,
+    IssuedInstallationCredential,
+    IssuedPlayerChallenge,
+    IssuedPlayerGrant,
+    MinecraftPlayerContext,
+    PaperInstallation,
+    PlayerAuthorizationChallenge,
+    PublicServerProfile,
+)
 from squid.minecraft_auth.errors import InvalidChallengeError, InvalidInstallationCredentialError
 from squid.notifications import NotificationPreferences, NotificationService
 from squid.notifications.domain import (
@@ -162,14 +180,48 @@ class MockDatabaseManager:
         self.closed = True
 
 
-class MockCliAuthorization:
-    """Fail closed with a client-safe error for generated contract requests."""
+class MockCliAuthorization(CliAuthorizationService):
+    """Fail closed with a client-safe error for generated contract requests.
 
-    def __getattr__(self, _name: str):
-        async def unavailable(*_args: object, **_kwargs: object):
-            raise InvalidCliEnrollmentError
+    Every operation the API can reach is named here rather than answered by a
+    `__getattr__` catch-all, so a route reaching a method this does not implement is a
+    type error instead of a stub that silently absorbs it.
+    """
 
-        return unavailable
+    def __init__(self) -> None:
+        """Enroll nothing; no repository or clock is attached."""
+
+    async def authenticate(self, token: str) -> CliIdentity:
+        raise InvalidCliEnrollmentError
+
+    async def start_enrollment(self, *, public_key: bytes, client_instance_id: UUID, label: str) -> IssuedCliEnrollment:
+        raise InvalidCliEnrollmentError
+
+    async def exchange_enrollment(self, *, device_code: str, signature: bytes) -> IssuedCliSession:
+        raise InvalidCliEnrollmentError
+
+    async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
+        raise InvalidCliEnrollmentError
+
+    async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment:
+        raise InvalidCliEnrollmentError
+
+    async def start_session_challenge(self, device_id: UUID) -> IssuedCliSessionChallenge:
+        raise InvalidCliEnrollmentError
+
+    async def exchange_session_challenge(
+        self, *, device_id: UUID, challenge_id: UUID, nonce: str, signature: bytes
+    ) -> IssuedCliSession:
+        raise InvalidCliEnrollmentError
+
+    async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
+        raise InvalidCliEnrollmentError
+
+    async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
+        raise InvalidCliEnrollmentError
+
+    async def revoke_current_session(self, identity: CliIdentity) -> bool:
+        raise InvalidCliEnrollmentError
 
 
 _EMPTY_PAGE: Page[object] = Page(items=(), total=0, next=None, prev=None)
@@ -286,24 +338,72 @@ class MockSchematics(SchematicService):
         raise SchematicNotFoundError
 
 
-class MockMinecraftInstallations:
+class MockMinecraftInstallations(InstallationCredentialService):
     """Fail closed with a client-safe error for generated contract requests."""
 
-    def __getattr__(self, _name: str):
-        async def unauthenticated(*_args: object, **_kwargs: object):
-            raise InvalidInstallationCredentialError
+    def __init__(self) -> None:
+        """Register no installations; no repository or pepper is attached."""
 
-        return unauthenticated
+    async def authenticate_headers(
+        self, installation_id: str | None, installation_secret: str | None
+    ) -> AuthenticatedPaperInstallation:
+        raise InvalidInstallationCredentialError
+
+    async def register(
+        self, *, owner_account_id: int, label: str, profile: PublicServerProfile | None = None
+    ) -> IssuedInstallationCredential:
+        raise InvalidInstallationCredentialError
+
+    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+        raise InvalidInstallationCredentialError
+
+    async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
+        raise InvalidInstallationCredentialError
+
+    async def update_profile(
+        self, *, installation_id: UUID, owner_account_id: int, profile: PublicServerProfile
+    ) -> PaperInstallation:
+        raise InvalidInstallationCredentialError
+
+    async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation:
+        raise InvalidInstallationCredentialError
 
 
-class MockMinecraftPlayerAuthorization:
+class MockMinecraftPlayerAuthorization(PlayerAuthorizationService):
     """Fail closed with a client-safe error for generated contract requests."""
 
-    def __getattr__(self, _name: str):
-        async def invalid(*_args: object, **_kwargs: object):
-            raise InvalidChallengeError
+    def __init__(self) -> None:
+        """Issue no challenges; no repository or clock is attached."""
 
-        return invalid
+    async def authenticate_fabric_player(self, token: str) -> MinecraftPlayerContext:
+        raise InvalidChallengeError
+
+    async def authenticate_paper_player(
+        self, token: str, installation: AuthenticatedPaperInstallation
+    ) -> MinecraftPlayerContext:
+        raise InvalidChallengeError
+
+    async def start_paper_challenge(
+        self, *, installation: AuthenticatedPaperInstallation, java_uuid: UUID
+    ) -> IssuedPlayerChallenge:
+        raise InvalidChallengeError
+
+    async def exchange_paper(
+        self, *, device_code: str, installation: AuthenticatedPaperInstallation
+    ) -> IssuedPlayerGrant:
+        raise InvalidChallengeError
+
+    async def start_fabric_challenge(self, *, java_uuid: UUID, pkce_s256_challenge: str) -> IssuedPlayerChallenge:
+        raise InvalidChallengeError
+
+    async def exchange_fabric(self, *, device_code: str, pkce_verifier: str) -> IssuedPlayerGrant:
+        raise InvalidChallengeError
+
+    async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge:
+        raise InvalidChallengeError
+
+    async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool:
+        raise InvalidChallengeError
 
 
 class MockMediaJobs(MediaNormalizationJobService):
@@ -617,7 +717,7 @@ async def keep_database_active() -> None:
 def build_services(
     *,
     web_auth: WebSessionService | None = None,
-    cli_authorization: object | None = None,
+    cli_authorization: CliAuthorizationService | None = None,
     idempotency: IdempotencyService | None = None,
     accounts: AccountService | None = None,
     error_reports: ErrorReportService | None = None,
@@ -631,12 +731,9 @@ def build_services(
     return ApiServices(
         api_keys=None,
         web_auth=web_auth,
-        # These three answer through `__getattr__` rather than named methods, so they
-        # cannot subclass the service they stand in for: a subclass would resolve the
-        # real method and never reach the fail-closed branch.
-        cli_authorization=cast(CliAuthorizationService, cli_authorization or MockCliAuthorization()),
-        minecraft_installations=cast(InstallationCredentialService, MockMinecraftInstallations()),
-        minecraft_player_authorization=cast(PlayerAuthorizationService, MockMinecraftPlayerAuthorization()),
+        cli_authorization=cli_authorization or MockCliAuthorization(),
+        minecraft_installations=MockMinecraftInstallations(),
+        minecraft_player_authorization=MockMinecraftPlayerAuthorization(),
         idempotency=idempotency or MockIdempotency(),
         notifications=MockNotifications(),
         builds=MockBuilds(),
@@ -672,7 +769,7 @@ def build_services(
 def build_app(
     *,
     web_auth: WebSessionService | None = None,
-    cli_authorization: object | None = None,
+    cli_authorization: CliAuthorizationService | None = None,
     idempotency: IdempotencyService | None = None,
     accounts: AccountService | None = None,
     error_reports: ErrorReportService | None = None,
