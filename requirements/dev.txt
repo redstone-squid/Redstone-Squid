@@ -187,9 +187,9 @@ httpcore2==2.7.0 \
     --hash=sha256:1452f589fe23f55b44546cd884294c41a29330af902bc0b71a761fd52d18f92b \
     --hash=sha256:6dc0fedf329a52a990930a5579edfebaea81118ea700ea0dd7de2b5e5be49efc
     # via httpx2
-httpx2==2.12.0 \
-    --hash=sha256:7631fe9887a8a2275f4a2540e053aa670fcc50742864a9ae7c66e609fdcf12cf \
-    --hash=sha256:cc8b6eecb8661c146b8f89a60e97456ee086e91a784ed31ac450c3a9e613dd36
+httpx2==2.7.0 \
+    --hash=sha256:8b30709aed5c8465b0dd3b95c09ce301c8f79e7e7a2d00ab0af551e0d0375b07 \
+    --hash=sha256:ed2a2719c696789e09493bd8e2bec3d8bd925cc6e26b68389ec25ade132f7bf4
     # via bump-my-version
 hypothesis==6.158.1 \
     --hash=sha256:0fc55d015e9ce0e4e58cb900adb7095bc88f43851f64d91d2b4b826d0ce81dca \
