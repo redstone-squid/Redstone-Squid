@@ -19,7 +19,10 @@ logger = logging.getLogger(__name__)
 
 
 class PostgresWakeListener:
-    """Own one direct PostgreSQL connection used only for wake hints on a channel."""
+    """Own one direct PostgreSQL connection used only for wake hints on a channel.
+
+    `run` holds that connection, reconnecting as needed, until it is cancelled.
+    """
 
     def __init__(self, url: SecretStr, *, channel: str, reconnect_seconds: float = 5) -> None:
         self._url = asyncpg_dsn(url)
@@ -28,11 +31,14 @@ class PostgresWakeListener:
 
     @property
     def channel(self) -> str:
-        """The PostgreSQL channel this listener subscribes to."""
         return self._channel
 
     async def run(self, on_wake: Callable[[], Awaitable[None]]) -> None:
-        """Reconnect forever and invoke `on_wake` after each notification."""
+        """Invoke `on_wake` once per connection and after each notification, reconnecting forever.
+
+        Returns only by cancellation: every other failure is logged and retried after
+        `reconnect_seconds`, because the callers also poll.
+        """
         while True:
             connection: asyncpg.Connection | None = None
             wake = asyncio.Event()

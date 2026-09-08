@@ -18,14 +18,8 @@ class ApiKey:
     scopes: frozenset[Pattern]
     """Permission patterns bounding what this credential may do.
 
-    Parsed, not raw text: a pattern is validated once at the boundary that
-    accepts it, so nothing downstream re-parses per request or discovers a typo
-    by silently matching nothing.
-
-    Stored as `ARRAY(Text)` rather than an enum column because the catalogue is
-    open by construction -- a pattern granted today selects a node registered
-    tomorrow (`squid.permissions.domain.matching`), so an enum would need a
-    migration every time a node is added.
+    Parsed, not raw text: a pattern is validated once at the boundary that accepts it, so a typo
+    fails there rather than silently matching nothing per request.
     """
     owner_account_id: int | None
     created_by_account_id: int | None
@@ -36,7 +30,7 @@ class ApiKey:
     last_used_ip: str | None = None
 
     def is_active_at(self, instant: Instant) -> bool:
-        """Return whether this credential may authenticate at *instant*."""
+        """Return whether this credential is unrevoked and unexpired at *instant*."""
         return self.revoked_at is None and (self.expires_at is None or self.expires_at > instant)
 
 

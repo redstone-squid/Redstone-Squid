@@ -49,16 +49,13 @@ class PostgresApiKeyRepository:
         created_by_account_id: int | None,
         expires_at: Instant | None,
     ) -> ApiKey:
-        """Insert and return an API credential."""
         async with self._session_factory() as session:
             model = ApiKeyModel(
                 key_id=key_id,
                 secret_hash=secret_hash,
                 label=label,
-                # A set has no order, and the column is an array: normalize on write
-                # so key diffs, audit output, and fixture comparisons are stable.
-                # `frozenset[Pattern]` has already de-duplicated by parsed value, so
-                # `build.**` given twice, or once with whitespace, stores once.
+                # A set has no order and the column is an array: sort on write so diffs, audit
+                # output and fixture comparisons are stable.
                 scopes=sorted(pattern.raw for pattern in scopes),
                 owner_account_id=owner_account_id,
                 created_by_account_id=created_by_account_id,
@@ -70,7 +67,10 @@ class PostgresApiKeyRepository:
             return _to_domain(model)
 
     async def get_by_key_id(self, key_id: str) -> ApiKey | None:
-        """Return the credential matching its indexed public ID."""
+        """Return the credential with this public key ID, revoked or expired ones included.
+
+        Raises `DataIntegrityError` if the stored scopes do not parse as permission patterns.
+        """
         async with self._session_factory() as session:
             model = await session.scalar(select(ApiKeyModel).where(ApiKeyModel.key_id == key_id))
             return None if model is None else _to_domain(model)

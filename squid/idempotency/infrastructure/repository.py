@@ -77,6 +77,11 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
 
     @override
     async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> None:
+        """Encrypt the body and attach it to the reservation, under a row lock.
+
+        Raises `RuntimeError` if the reservation is gone or already completed, and
+        `IdempotencyEncryptionUnavailableError` if no cipher was wired in.
+        """
         headers = dict(response.headers)
         async with self._session_factory.begin() as session:
             existing = await session.scalar(
@@ -99,7 +104,10 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
 
     @override
     async def purge_expired(self, *, now: Instant) -> int:
-        """Delete expired reservations independently of incoming API traffic."""
+        """Delete expired reservations independently of incoming API traffic.
+
+        `reserve` also sweeps them, so this only bounds the table when the API is idle.
+        """
         async with self._session_factory.begin() as session:
             result = cast(
                 CursorResult[Any],

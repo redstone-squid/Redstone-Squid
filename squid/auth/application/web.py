@@ -18,10 +18,8 @@ from squid.core.errors import AuthenticationError, NotFoundError, ValidationErro
 def hash_web_session_token(pepper: bytes, token: str) -> bytes:
     """Return the digest stored for an opaque web-session token.
 
-    Exported so test fixtures seeding `web_sessions` reuse the construction
-    instead of re-deriving it. `docs/credential-hashing.md` records why a keyed
-    SHA-256 is right for a `token_urlsafe(32)` secret and why a password KDF is
-    not.
+    A keyed SHA-256, not a password KDF: the token is a `token_urlsafe(32)` secret with no
+    low-entropy input space for a work factor to protect. See `docs/credential-hashing.md`.
     """
     # codeql[py/weak-sensitive-data-hashing]
     return hmac.digest(pepper, token.encode(), hashlib.sha256)  # 256-bit random session token
@@ -53,7 +51,11 @@ class WebSessionService:
         return bool(self._providers)
 
     async def authorize_url(self, slug: str, redirect_to: str | None) -> str:
-        """Persist one-time PKCE state and return the provider's authorize URL."""
+        """Persist one-time PKCE state, good for ten minutes, and return the provider's authorize URL.
+
+        Raises `ValidationError` when no provider is configured and `NotFoundError` for an unknown
+        *slug*.
+        """
         provider = self._provider(slug)
         state = secrets.token_urlsafe(24)
         verifier = secrets.token_urlsafe(48)
@@ -64,16 +66,26 @@ class WebSessionService:
         return provider.authorize_url(state=state, code_challenge=challenge)
 
     async def callback(self, slug: str, code: str, state: str, *, user_agent: str | None) -> tuple[str, str | None]:
-        """Consume state, exchange the code, and issue an opaque session token."""
+        """Consume state, exchange the code, and return an opaque session token and its redirect.
+
+        The token is returned once and only its digest is stored; the session expires after the
+        configured TTL or when `logout` revokes it.
+
+        Raises:
+            AuthenticationError: If *state* is unknown, expired, already spent, or was minted for
+                another provider.
+            ServiceUnavailableError: If the provider's token or profile exchange fails.
+            ValidationError: If no provider is configured.
+            NotFoundError: If *slug* names no configured provider.
+        """
         provider = self._provider(slug)
         saved = await self._repository.consume_state(state, now=self._now())
         if saved is None:
             msg = "OAuth state is invalid or expired."
             raise AuthenticationError(msg)
         if saved.provider is not provider.provider:
-            # A state minted for provider A must not be redeemable at provider B's
-            # callback: that is the IdP mix-up class, and the state is already spent by
-            # the time we get here, so the only thing left to do is refuse.
+            # IdP mix-up: a state minted for provider A must not be redeemable at provider B's
+            # callback. The state is already spent by now, so refusing is all that is left.
             msg = "OAuth state was issued for a different provider."
             raise AuthenticationError(msg)
         identity = await provider.fetch_identity(code=code, code_verifier=saved.code_verifier)
@@ -98,10 +110,11 @@ class WebSessionService:
         return hash_web_session_token(self._pepper, token)
 
     def _provider(self, slug: str) -> OAuthProvider:
-        """Resolve a URL segment, or say the login does not exist here.
+        """Resolve a URL segment to a provider.
 
-        A 404 rather than a credential failure: "this deployment has no GitHub login" is
-        a fact about the resource, not about who is asking.
+        Raises `ValidationError` when nothing is configured, and `NotFoundError` for an unknown
+        slug -- "this deployment has no GitHub login" is a fact about the resource, not about who
+        is asking, so it is a 404 rather than a credential failure.
         """
         if not self._providers:
             msg = "Browser login is not configured."

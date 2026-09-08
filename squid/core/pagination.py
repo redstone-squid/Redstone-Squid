@@ -1,11 +1,10 @@
 """Pagination: how a page is addressed, and how one is assembled.
 
-Pagination is transparent: every value a caller needs to reach an adjacent page is a plain
-identifier or offset it could also have supplied by hand. A page addresses its neighbours in the
-mode the request used -- an offset-addressed request gets an offset back, and a request in an
-identifier order gets `after_id` / `before_id`, including the parameterless first page. That
-distinction is not cosmetic: identifier anchors walk a collection of any size, so a full crawl
-never runs into `MAX_PAGE_OFFSET`.
+Every value a caller needs to reach an adjacent page is a plain identifier or offset it could also
+have supplied by hand. A page addresses its neighbours in the mode the request used: an
+offset-addressed request gets an offset back, and a request in an identifier order gets `after_id`
+/ `before_id`, the parameterless first page included. Identifier anchors walk a collection of any
+size, so a full crawl never runs into `MAX_PAGE_OFFSET`.
 
 Application services own page assembly for the collections they query, because the overfetch and
 the total are theirs. Transports map the result onto their own wire format.

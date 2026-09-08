@@ -31,29 +31,37 @@ class IdempotencyRequest(Base, kw_only=True):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default_factory=uuid.uuid4)
     principal: Mapped[str] = mapped_column(Text, nullable=False)
-    """The caller namespace a key is reserved in.
+    """The caller namespace a key is reserved in; keys of different callers never collide.
 
-    The application layer calls this the *caller*; the column keeps the older
-    word because renaming it needs a migration, a rewrite of the unique index it
-    anchors, and a redeploy window, for a name no client ever sees. The same
-    trade applies to the `principal` partition in `RateLimit-Policy` and to
-    `SQUID_API_RATE_LIMIT_PRINCIPAL_REQUESTS`, both of which deployments and
-    clients can observe. If the ban is meant repo-wide, that is its own commit.
+    The application layer calls this the *caller*, as do the `RateLimit-Policy` partition and
+    `SQUID_API_RATE_LIMIT_PRINCIPAL_REQUESTS`.
     """
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    """The key the caller sent, unique within its principal."""
     request_fingerprint: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    """Digest of the request this key was reserved for; a replay that differs is a conflict."""
     method: Mapped[str] = mapped_column(Text, nullable=False)
+    """HTTP method of the reserved request, kept for diagnostics and response authentication."""
     route: Mapped[str] = mapped_column(Text, nullable=False)
+    """Route template of the reserved request, kept for diagnostics and response authentication."""
     state: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'in_progress'"), default="in_progress"
     )
+    """Either ``in_progress`` or ``completed``; a check constraint ties the response columns to it."""
     response_status: Mapped[int | None] = mapped_column(SmallInteger, default=None)
+    """Status of the retained response; null until the request completes."""
     response_headers: Mapped[dict[str, str] | None] = mapped_column(JSONB, default=None)
+    """Headers replayed with the retained response, and authenticated as part of its ciphertext."""
     response_body_ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, default=None)
+    """AES-256-GCM body, bound to this row's identity so it cannot be replayed under another key."""
     response_body_key_id: Mapped[str | None] = mapped_column(Text, default=None)
+    """Which keyring entry sealed the body; a rotated-out key makes the row unreadable."""
     response_body_nonce: Mapped[bytes | None] = mapped_column(LargeBinary, default=None)
+    """The 12-byte AES-GCM nonce, generated per response."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the response was stored; null while the request is still in progress."""
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
+    """When the reservation stops replaying and becomes eligible for deletion."""

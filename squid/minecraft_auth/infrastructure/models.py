@@ -23,7 +23,7 @@ from squid.persistence.types import InstantUTC, now
 
 
 class PaperInstallationRecord(Base, kw_only=True):
-    """An account-owned Paper installation with a non-recoverable credential."""
+    """An account-owned Paper server, authenticating until its owner rotates or revokes it."""
 
     __tablename__ = "minecraft_paper_installations"
     __table_args__ = (
@@ -64,26 +64,38 @@ class PaperInstallationRecord(Base, kw_only=True):
         ForeignKey("accounts.id", name="minecraft_paper_installations_owner_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
+    """Owner; deleting the account deletes the installation and everything derived from it."""
     label: Mapped[str] = mapped_column(Text, nullable=False)
+    """Server name its owner sees when listing installations."""
     secret_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    """Keyed digest of the installation credential, which is disclosed once and never stored."""
     credential_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    """Bumped by every rotation; challenges and grants naming an older version stop authenticating."""
     public_profile_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("false"), default=False
     )
+    """Whether the owner published this server; the public columns below are shown only when true."""
     public_display_name: Mapped[str | None] = mapped_column(Text, default=None)
+    """Published server name."""
     public_address: Mapped[str | None] = mapped_column(Text, default=None)
+    """Published connection address."""
     public_description: Mapped[str | None] = mapped_column(Text, default=None)
+    """Published free-text description."""
     public_website_url: Mapped[str | None] = mapped_column(Text, default=None)
+    """Published website link."""
     sponsor_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    """Whether the owner opted into sponsorship, which requires a published profile."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     rotated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """Most recent secret rotation; null while the original credential is still in use."""
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the owner revoked the installation; null while it may authenticate."""
 
 
 class PlayerChallengeRecord(Base, kw_only=True):
-    """A short-lived device flow storing only hashes of both bearer codes."""
+    """One player authorization request, spent by the exchange that turns it into a grant."""
 
     __tablename__ = "minecraft_player_challenges"
     __table_args__ = (
@@ -125,9 +137,13 @@ class PlayerChallengeRecord(Base, kw_only=True):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     device_code_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    """Keyed digest of the code the client polls with; the code is disclosed once and never stored."""
     user_code_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    """Keyed digest of the normalized code a player types into the browser."""
     origin: Mapped[str] = mapped_column(Text, nullable=False)
+    """Either ``paper`` or ``fabric``; it decides which of the columns below must be set."""
     java_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    """The Java account being authorized; only an account holding it verified may approve."""
     installation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -137,22 +153,30 @@ class PlayerChallengeRecord(Base, kw_only=True):
         ),
         default=None,
     )
+    """Paper server that started this; set exactly when origin is ``paper``."""
     installation_credential_version: Mapped[int | None] = mapped_column(Integer, default=None)
+    """Credential generation of that server; a rotation makes this challenge unexchangeable."""
     pkce_s256_challenge: Mapped[str | None] = mapped_column(Text, default=None)
+    """RFC 7636 S256 challenge the exchange must prove; set exactly when origin is ``fabric``."""
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
+    """When the challenge stops being approvable or exchangeable."""
     approved_by_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="minecraft_player_challenges_approved_account_id_fkey", ondelete="CASCADE"),
         default=None,
     )
+    """Account that approved in the browser; null exactly while approved_at is."""
     approved_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the browser approved; null exactly while approved_by_account_id is."""
     exchanged_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the challenge was spent for a grant; it may only be spent once."""
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the challenge was revoked, which rotating or revoking its installation also does."""
 
 
 class PlayerGrantRecord(Base, kw_only=True):
-    """A short-lived origin- and identity-bound player bearer grant."""
+    """A short-lived player bearer grant, ended by its expiry or by revoking it or its installation."""
 
     __tablename__ = "minecraft_player_grants"
     __table_args__ = (
@@ -185,14 +209,19 @@ class PlayerGrantRecord(Base, kw_only=True):
         ),
         nullable=False,
     )
+    """The challenge this grant was exchanged from; one grant per challenge."""
     token_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
+    """Keyed digest of the player token, which is disclosed once and never stored."""
     account_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="minecraft_player_grants_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
+    """Account the token authenticates as, taken from whoever approved the challenge."""
     java_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    """The Java account the token speaks for; authentication rechecks the account still holds it."""
     origin: Mapped[str] = mapped_column(Text, nullable=False)
+    """Either ``paper`` or ``fabric``; a token is refused on the other transport."""
     installation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -202,7 +231,11 @@ class PlayerGrantRecord(Base, kw_only=True):
         ),
         default=None,
     )
+    """Paper server this token is bound to; set exactly when origin is ``paper``."""
     installation_credential_version: Mapped[int | None] = mapped_column(Integer, default=None)
+    """Credential generation the grant is fenced to; a rotation stops it authenticating."""
     issued_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
+    """When the token stops authenticating; shorter-lived than the challenge that produced it."""
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the grant was revoked, directly or with its installation; null while it is usable."""

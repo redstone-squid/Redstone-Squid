@@ -9,11 +9,11 @@ from squid.accounts.domain import IdentityProvider
 
 @dataclass(frozen=True, slots=True)
 class OAuthState:
-    """One-time PKCE authorization state.
+    """One-time PKCE authorization state, spent by the first callback that consumes it.
 
     Carries the provider it was minted for so a callback can refuse a state issued for a
-    different one. Without that, a state minted at provider A is redeemable at provider
-    B's callback, which is the IdP mix-up class.
+    different one; otherwise a state minted at provider A is redeemable at provider B's
+    callback, which is the IdP mix-up class.
     """
 
     state: str

@@ -23,12 +23,9 @@ LAST_USED_WRITE_INTERVAL_SECONDS = 60
 def hash_api_key_secret(pepper: bytes, secret: str) -> bytes:
     """Return the digest stored for an API-key secret.
 
-    Exported so nothing re-derives the construction by hand; test fixtures that
-    seed `api_keys` rows call this rather than repeating the `hmac.digest` line.
-    See `docs/credential-hashing.md` for why a keyed SHA-256 rather than a
-    password KDF: the secret is 32 CSPRNG bytes, so there is no low-entropy
-    input space for a work factor to protect, and a KDF here would be reachable
-    per-request by anyone who has seen a key ID.
+    A keyed SHA-256 rather than a password KDF: the secret is 32 CSPRNG bytes, so a work factor
+    protects no low-entropy input space and would be reachable per request by anyone holding a key
+    ID. See `docs/credential-hashing.md`.
     """
     # codeql[py/weak-sensitive-data-hashing]
     return hmac.digest(pepper, secret.encode(), hashlib.sha256)  # 256-bit random secret, not a password
@@ -46,6 +43,7 @@ class ApiKeyService:
         now: Callable[[], Instant] = Instant.now,
         token_bytes: Callable[[int], bytes] = secrets.token_bytes,
     ) -> None:
+        """Raises `InvalidStateError` when *pepper* is empty."""
         self._repository = repository
         self._permissions = permissions
         self._pepper = pepper.encode() if isinstance(pepper, str) else pepper
@@ -66,15 +64,14 @@ class ApiKeyService:
     ) -> IssuedApiKey:
         """Create a credential, returning its plaintext token exactly once.
 
-        A key may never carry authority its owner does not hold: that is AWS's
-        permissions-boundary rule, and enforcing it here as well as at request
-        time means an over-broad key cannot be *created* and then quietly wait
-        for its owner to be promoted.
+        A key may never carry authority its owner does not hold, so an over-broad key cannot be
+        created and then wait for its owner to be promoted. Patterns are parsed before that
+        boundary check, which the CLI bootstrap path skips, so a malformed pattern still fails
+        there.
 
-        Raises `InvalidPatternError` for a malformed pattern. Parsing happens
-        before the boundary check rather than inside it, because the boundary
-        check is skipped on the CLI bootstrap path -- which is how
-        `buildsubmission.raed` used to reach the database and match nothing.
+        Raises:
+            InvalidPatternError: If a requested scope is not a well-formed pattern.
+            AuthorizationError: If a requested scope reaches a node the owner does not hold.
         """
         requested = frozenset(pattern if isinstance(pattern, Pattern) else Pattern.parse(pattern) for pattern in scopes)
         await self._reject_beyond_owner_authority(requested, owner_account_id)
@@ -92,12 +89,10 @@ class ApiKeyService:
         return IssuedApiKey(key=key, token=f"{API_KEY_PREFIX}_{key_id}_{secret}")
 
     async def _reject_beyond_owner_authority(self, patterns: frozenset[Pattern], owner_account_id: int | None) -> None:
-        """Refuse patterns reaching nodes the owner does not hold.
+        """Raise `AuthorizationError` for a pattern reaching a node the owner does not hold.
 
-        Skipped when no permission service is wired in, which is the CLI
-        bootstrap path that runs before any owner exists; and an ownerless key is
-        bounded only by its own patterns, since there is nobody to intersect
-        with.
+        A no-op without a permission service (the CLI bootstrap path, which runs before any owner
+        exists) or without an owner, since an ownerless key has nobody to intersect with.
         """
         if self._permissions is None or owner_account_id is None:
             return
@@ -135,7 +130,6 @@ class ApiKeyService:
         return key
 
     def hash_secret(self, secret: str) -> bytes:
-        """Return the keyed digest stored for a credential secret."""
         return hash_api_key_secret(self._pepper, secret)
 
     def _urlsafe_token(self, size: int) -> str:

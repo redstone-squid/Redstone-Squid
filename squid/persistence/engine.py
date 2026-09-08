@@ -15,7 +15,11 @@ from squid.persistence.inspection import is_sane_database
 
 
 class DatabaseEngine:
-    """Owns the process-wide SQLAlchemy engines and session factories."""
+    """Owns the process-wide SQLAlchemy engines and session factories until `close` disposes them.
+
+    One database URL drives both an asyncpg engine for request work and a psycopg2 one, which
+    exists because `validate_database_consistency` inspects the schema synchronously.
+    """
 
     def __init__(
         self,
@@ -23,12 +27,6 @@ class DatabaseEngine:
         *,
         debug: bool = False,
     ) -> None:
-        """Initializes the engines and session factories.
-
-        Args:
-            config: Database connection URL and drivers.
-            debug: Whether to echo SQL statements, for debugging.
-        """
         base = make_url(config.url.get_secret_value())
         self.async_engine: AsyncEngine = create_async_engine(base.set(drivername="postgresql+asyncpg"), echo=debug)
         self.async_session: async_sessionmaker[AsyncSession] = async_sessionmaker(
@@ -48,7 +46,11 @@ class DatabaseEngine:
             await session.execute(select(1))
 
     async def check_readiness(self) -> None:
-        """Verify connectivity and that the deployed schema is at this release's head."""
+        """Verify connectivity and that the deployed schema is at this release's head.
+
+        Raises `DataIntegrityError` when the database's Alembic revisions differ from the ones
+        shipped here, which means the release migration job has not run.
+        """
         async with self.async_session() as session:
             versions = frozenset((await session.scalars(text("SELECT version_num FROM alembic_version"))).all())
         expected = expected_migration_heads()
@@ -61,7 +63,11 @@ class DatabaseEngine:
             )
 
     def validate_database_consistency(self, base_cls: type[DeclarativeBase]) -> None:
-        """Validates that the database schema is consistent with the expected schema."""
+        """Raise `DataIntegrityError` unless the live schema carries every table and column *base_cls* maps.
+
+        Synchronous: it inspects through the psycopg2 engine, so call it during startup rather than
+        from a request path.
+        """
         if not is_sane_database(base_cls, self.sync_engine):
             msg = "The database schema is not consistent with the expected schema."
             raise DataIntegrityError(msg)
@@ -74,9 +80,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 def migration_heads(root: Path = PROJECT_ROOT) -> frozenset[str]:
     """Heads of the migration scripts under `root`.
 
-    `root` is a parameter because `check_readiness` compares the deployed revision against this
-    set: a test can otherwise only assert the mismatch branch, never a passing readiness check
-    against a known head.
+    `root` is a parameter so a test can point `check_readiness`'s comparison at a fixture tree with
+    a known head, rather than only ever exercising the mismatch branch.
     """
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))

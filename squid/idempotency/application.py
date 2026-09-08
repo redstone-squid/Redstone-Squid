@@ -30,11 +30,21 @@ class IdempotencyRepository(Protocol):
         route: str,
         expires_at: Instant,
         now: Instant,
-    ) -> Reservation: ...
+    ) -> Reservation:
+        """Claim `(caller, key)` atomically, returning what is already there if the claim is taken.
 
-    async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> None: ...
+        A `PendingRequest` means this call won the key; an `ExistingRequest` carries the fingerprint
+        and, once available, the response of whoever won it first.
+        """
+        ...
 
-    async def purge_expired(self, *, now: Instant) -> int: ...
+    async def complete(self, request: PendingRequest, response: StoredResponse, *, now: Instant) -> None:
+        """Attach the response to a reservation this caller still holds."""
+        ...
+
+    async def purge_expired(self, *, now: Instant) -> int:
+        """Delete reservations past their expiry and return how many went."""
+        ...
 
 
 class IdempotencyService:
@@ -47,6 +57,7 @@ class IdempotencyService:
         ttl_hours: int = 24,
         now: Callable[[], Instant] = Instant.now,
     ) -> None:
+        """Raises `InvalidStateError` when *ttl_hours* is below one hour."""
         if ttl_hours < 1:
             msg = tr(t"Idempotency retention must be at least one hour.")
             raise InvalidStateError(msg)
@@ -63,7 +74,15 @@ class IdempotencyService:
         method: str,
         route: str,
     ) -> PendingRequest | StoredResponse:
-        """Reserve a new key or return its completed response for replay."""
+        """Reserve a new key or return its completed response for replay.
+
+        Keys are scoped to *caller*, so two callers may use the same key, and a reservation lives
+        for the configured TTL.
+
+        Raises:
+            IdempotencyConflictError: If the key was reserved for a different request fingerprint.
+            IdempotencyInProgressError: If the earlier equivalent request has not completed yet.
+        """
         now = self._now()
         reservation = await self._repository.reserve(
             caller=caller,

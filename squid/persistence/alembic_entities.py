@@ -18,12 +18,10 @@ EXPECTED_TRIGGERS = 38
 def parse_entities(sql: str) -> list[ReplaceableEntity]:
     """Split `sql` into the functions and triggers Alembic owns.
 
-    Takes the SQL rather than reading it so the counts below, and the statement patterns they
-    guard, can be exercised against inputs the shipped file is never allowed to contain.
-
-    The counts are asserted rather than trusted: a statement the patterns fail to match is
-    dropped silently, and a short list would let a migration believe it had replaced an entity
-    that is in fact still running its previous definition.
+    Raises `RuntimeError` unless the parse yields exactly `EXPECTED_FUNCTIONS` and
+    `EXPECTED_TRIGGERS`: a statement the patterns fail to match is dropped silently, and a short
+    list lets a migration believe it replaced an entity that is still running its old definition.
+    Adding an entity to `postgres_entities.sql` means bumping the count here.
     """
     functions = re.findall(r"^CREATE FUNCTION .*?\$\$;", sql, flags=re.MULTILINE | re.DOTALL)
     triggers = re.findall(r"^CREATE TRIGGER .*?;$", sql, flags=re.MULTILINE)

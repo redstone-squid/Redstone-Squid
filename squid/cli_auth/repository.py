@@ -124,7 +124,6 @@ class PostgresCliAuthorizationRepository:
             return _enrollment(record)
 
     async def get_enrollment_by_user_code_hash(self, code_hash: bytes) -> CliDeviceEnrollment | None:
-        """Resolve a keyed human-code digest."""
         async with self._session_factory() as session:
             record = await session.scalar(
                 select(CliDeviceEnrollmentRecord).where(CliDeviceEnrollmentRecord.user_code_hash == code_hash)
@@ -132,7 +131,6 @@ class PostgresCliAuthorizationRepository:
             return None if record is None else _enrollment(record)
 
     async def get_enrollment_by_device_code_hash(self, code_hash: bytes) -> CliDeviceEnrollment | None:
-        """Resolve a keyed device-code digest."""
         async with self._session_factory() as session:
             record = await session.scalar(
                 select(CliDeviceEnrollmentRecord).where(CliDeviceEnrollmentRecord.device_code_hash == code_hash)
@@ -264,7 +262,6 @@ class PostgresCliAuthorizationRepository:
             return _challenge(record)
 
     async def get_device(self, device_id: UUID) -> CliDevice | None:
-        """Return one device without sessions or private account data."""
         async with self._session_factory() as session:
             record = await session.get(CliDeviceRecord, device_id)
             return None if record is None else _device(record)
@@ -309,7 +306,6 @@ class PostgresCliAuthorizationRepository:
             return _device(device), _session(record)
 
     async def get_session_with_device(self, session_id: UUID) -> tuple[CliSession, CliDevice] | None:
-        """Load one session and its active-state authority source."""
         async with self._session_factory() as session:
             row = (
                 await session.execute(
@@ -323,7 +319,6 @@ class PostgresCliAuthorizationRepository:
             return _session(row[0]), _device(row[1])
 
     async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
-        """List all active and revoked devices for account self-service."""
         async with self._session_factory() as session:
             records = (
                 await session.scalars(

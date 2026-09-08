@@ -24,7 +24,7 @@ class CliDeviceEnrollment:
     revoked_at: Instant | None = None
 
     def is_expired_at(self, instant: Instant) -> bool:
-        """Return whether this enrollment can no longer be used."""
+        """Return whether the approval window has closed; revocation and exchange are separate."""
         return self.expires_at <= instant
 
 

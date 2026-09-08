@@ -153,12 +153,10 @@ class SquidError(Exception):
         developer_action: str | None = None,
         end_user_action: str | Message | None = None,
     ) -> Self:
-        """Enrich this exception in place while preserving its traceback.
+        """Enrich this exception in place, preserving its traceback, and return it.
 
-        `message` is here because enrichment that cannot restate the message is only half a helper:
-        a layer that resolves *what* the conflict was usually wants to say so, and assigning
-        `self.message` by hand skips the `args` refresh at the bottom. Pass deferred text as a
-        constructor would.
+        Given fields are merged over the existing ones, never cleared. Going through here rather
+        than assigning the attributes refreshes `args`, so the logged detail matches.
         """
         if context:
             self.context = {**self.context, **context}

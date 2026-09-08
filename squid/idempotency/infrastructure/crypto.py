@@ -51,6 +51,11 @@ class IdempotencyResponseCipher:
     """Encrypt with the active key and decrypt with any retained rotation key."""
 
     def __init__(self, *, active_key_id: str, keys: Mapping[str, bytes]) -> None:
+        """Bind a keyring whose *active_key_id* names the key new bodies are sealed with.
+
+        Raises `IdempotencyEncryptionUnavailableError` unless that key is present and every key is
+        exactly 32 bytes, as AES-256-GCM requires.
+        """
         if active_key_id not in keys:
             msg = tr(t"The active idempotency encryption key is absent from the keyring.")
             raise IdempotencyEncryptionUnavailableError(msg)
@@ -72,7 +77,11 @@ class IdempotencyResponseCipher:
         encrypted: EncryptedResponseBody,
         metadata: ResponseEncryptionMetadata,
     ) -> bytes:
-        """Authenticate and open one body, failing closed on unknown or altered data."""
+        """Authenticate and open one body, raising `IdempotencyCiphertextError` on anything else.
+
+        That covers a key ID no longer in the keyring, a malformed nonce, and metadata that does
+        not match what was sealed.
+        """
         key = self._keys.get(encrypted.key_id)
         if key is None:
             msg = "The idempotency response uses an unavailable encryption key."

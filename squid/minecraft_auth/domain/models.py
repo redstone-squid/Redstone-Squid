@@ -29,6 +29,7 @@ class PublicServerProfile:
     sponsor_opt_in: bool = False
 
     def __post_init__(self) -> None:
+        """Raises `ValidationError` for a blank or over-long field, or sponsor opt-in while disabled."""
         values = (
             ("display name", self.display_name, 80),
             ("address", self.address, 255),
@@ -70,6 +71,7 @@ class PublishedPaperServer:
     created_at: Instant
 
     def __post_init__(self) -> None:
+        """Raises `ValidationError` unless the installation's public profile is enabled."""
         if not self.profile.enabled:
             raise ValidationError(tr(t"A published Paper server must have its public profile enabled."))
 

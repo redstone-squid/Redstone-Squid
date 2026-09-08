@@ -40,6 +40,7 @@ class MinecraftSecretCodec:
         *,
         token_bytes: Callable[[int], bytes] = secrets.token_bytes,
     ) -> None:
+        """Raises `InvalidStateError` when *pepper* is empty."""
         self._pepper = pepper.encode() if isinstance(pepper, str) else pepper
         if not self._pepper:
             msg = tr(t"Minecraft authorization pepper must not be empty.")
@@ -58,9 +59,9 @@ class MinecraftSecretCodec:
     def digest(self, purpose: SecretPurpose, value: str) -> bytes:
         """Return a keyed digest suitable for persistence and comparison.
 
-        See `docs/credential-hashing.md`: every value reaching here is CSPRNG
-        output (256-bit secrets, an 80-bit user code), so keyed SHA-256 is the
-        right primitive and a password KDF defends entropy that is not at risk.
+        *purpose* is bound into the input, so a digest minted for one kind of value never matches a
+        lookup for another. Keyed SHA-256 rather than a password KDF: every value reaching here is
+        CSPRNG output, 256-bit secrets or an 80-bit user code. See `docs/credential-hashing.md`.
         """
         payload = purpose.value.encode() + b"\0" + value.encode()
         # codeql[py/weak-sensitive-data-hashing]
@@ -86,12 +87,12 @@ class MinecraftSecretCodec:
 
     @staticmethod
     def normalize_user_code(code: str) -> str:
-        """Return the canonical approval-code representation."""
+        """Return the canonical approval-code representation, without checking that it is one."""
         return code.strip().replace("-", "").upper()
 
     @staticmethod
     def validate_s256_challenge(challenge: str) -> str:
-        """Validate and return an RFC 7636 S256 code challenge."""
+        """Return an RFC 7636 S256 code challenge, raising `InvalidPkceError` if it is malformed."""
         if _PKCE_CHALLENGE.fullmatch(challenge) is None:
             raise InvalidPkceError
         return challenge

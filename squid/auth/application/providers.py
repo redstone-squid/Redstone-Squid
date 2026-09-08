@@ -1,7 +1,6 @@
 """Authorization-code adapters, one per external identity source.
 
-A module rather than a package: there is one real adapter and one test fake, and three
-files would hold what fits on a screen. Add a second real provider here.
+A new provider is one class here plus one entry in `PROVIDER_FACTORIES`.
 """
 
 from collections.abc import Callable, Mapping
@@ -25,18 +24,16 @@ class OAuthProvider(Protocol):
     """The identity namespace a successful exchange lands in."""
 
     def authorize_url(self, *, state: str, code_challenge: str) -> str:
-        """The URL to send the browser to, carrying this provider's own scopes."""
+        """Return the URL to send the browser to, carrying this provider's own scopes."""
         ...
 
     async def fetch_identity(self, *, code: str, code_verifier: str) -> ExternalIdentity:
         """Redeem one authorization code and return the subject it proves.
 
-        The token exchange is deliberately swallowed rather than exposed as a separate
-        step. The access token has exactly one use -- reading the profile endpoint -- and
-        no caller outside the adapter should ever hold it; splitting the two would force
-        it through `WebSessionService`, which would then have to decide whether to log,
-        store, or drop it, and the answer is always "drop it". An OIDC provider whose
-        token response already carries an `id_token` makes no second request here.
+        The token exchange stays inside the adapter: the access token's one use is reading the
+        profile endpoint, and no caller outside should ever hold it.
+
+        Raises `ServiceUnavailableError` if either leg of the exchange fails.
         """
         ...
 
@@ -111,9 +108,7 @@ def _unavailable() -> ServiceUnavailableError:
 PROVIDER_FACTORIES: Mapping[IdentityProvider, Callable[..., OAuthProvider]] = {
     IdentityProvider.DISCORD: DiscordOAuthProvider,
 }
-"""Every identity namespace this deployment can log in through.
+"""Every identity namespace a deployment can log in through.
 
-Bootstrap intersects this with the providers `OAuthConfig.clients()` has complete
-credentials for, so adding a real provider is one entry here, one adapter class above,
-and three flat config fields.
+Bootstrap intersects this with the providers `OAuthConfig.clients()` has complete credentials for.
 """

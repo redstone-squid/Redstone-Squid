@@ -1,25 +1,18 @@
 """The claim protocol shared by the durable work tables.
 
-Seven tables in this codebase are work queues, and they all do the same three
-things: claim a bounded batch of ready rows without two workers taking the same
-row, hold that claim long enough to survive a process death, then acknowledge,
-retry with backoff, or dead-letter.
+Seven tables here are work queues doing the same three things: claim a bounded batch of ready rows
+without two workers taking the same row, hold that claim long enough to survive a process death,
+then acknowledge, retry with backoff, or dead-letter.
 
-What is shared here is the **claim** half -- the readiness predicate, the
-database-minted fencing token, the backoff and the dead-letter policy. The
-**acknowledgement** half is allowed to vary, because it genuinely does: some
-queues delete the acknowledged row, `schematic_jobs` retains it with terminal
-values, and `record_recompute_queue` leases whole scopes and acknowledges a set
-of them at once. Splitting it there is what lets all seven use this; the previous
-split, which shared acknowledgement and left every caller to hand-write the
-select, was small enough that two adapters re-implemented the fence anyway.
+Only the **claim** half is shared -- the readiness predicate, the database-minted fencing token,
+the backoff and the dead-letter policy. Acknowledgement varies: some queues delete the row,
+`schematic_jobs` retains it with terminal values, and `record_recompute_queue` leases whole scopes
+and acknowledges a set at once.
 
-Both clocks and the token come from PostgreSQL, never from the worker. A claim
-stamps `now()` and `gen_random_uuid()` in the same statement that locks the rows,
-so there is no window in which a row is selected but unstamped, no dependence on
-worker clock skew against the database's, and -- because `gen_random_uuid()` is
-volatile and therefore evaluated per row -- no chance of two rows in one batch
-sharing a token.
+Both clocks and the token come from PostgreSQL, never from the worker. A claim stamps `now()` and
+`gen_random_uuid()` in the statement that locks the rows, so no row is selected but unstamped, no
+worker clock skew matters, and -- `gen_random_uuid()` being volatile, hence per row -- no two rows
+in a batch share a token.
 """
 
 import logging
@@ -88,10 +81,9 @@ def retry_delay(attempts: int) -> timedelta:
 def retry_delay_sql(attempts: SQLColumnExpression[int]) -> ColumnElement[timedelta]:
     """Express `retry_delay` against an attempts column.
 
-    Releasing a leased set covers rows with different attempt counts in one
-    statement, so the policy has to exist as an expression as well as a function.
-    `tests/integration/persistence/test_claimed_row_queue.py` pins the two
-    encodings equal, which is the only thing keeping them from drifting apart.
+    Releasing a leased set covers rows with different attempt counts in one statement, so the
+    policy exists as an expression as well as a function.
+    `tests/integration/persistence/test_claimed_row_queue.py` pins the two encodings equal.
     """
     doublings = func.least(attempts - 1, _MAX_DOUBLING)
     delay = _ONE_SECOND * (BASE_RETRY_DELAY.total_seconds() * func.power(2, doublings))
@@ -117,16 +109,14 @@ class QueueHealthShape:
 class QueueSpec[ModelT]:
     """One durable work table, described once for every caller that touches it.
 
-    Column identity travels as `InstrumentedAttribute` rather than as a name,
-    because these tables disagree on their spelling -- three call the claim column
-    `locked_at` and three call it `claimed_at` -- and a name reaches the database
-    before anything notices it is wrong. That typing is the whole point, which is
-    why this is a plain class rather than a dataclass: a dataclass field holding a
-    descriptor is read back through `__get__`, so a type checker sees `Instant`
-    where the column belongs and stops catching the mistake.
+    Column identity travels as `InstrumentedAttribute`, not as a name: these tables disagree on
+    their spelling -- three call the claim column `locked_at` and three `claimed_at` -- and a wrong
+    name reaches the database before anything notices. A plain class rather than a dataclass for
+    the same reason: a dataclass field holding a descriptor is read back through `__get__`, so a
+    type checker sees `Instant` where the column belongs and stops catching the mistake.
 
-    Instances are module-level constants and are never mutated; `__slots__` keeps
-    a typo from quietly adding a field that nothing reads.
+    Instances are module-level constants and are never mutated; `__slots__` keeps a typo from
+    quietly adding a field that nothing reads.
     """
 
     __slots__ = (
@@ -162,7 +152,7 @@ class QueueSpec[ModelT]:
         pending: ColumnElement[bool] | None = None,
         health: QueueHealthShape | None = None,
     ) -> None:
-        """Describe one queue table.
+        """Describe one queue table, raising `ValueError` if *key* is empty.
 
         Args:
             name: The label this queue reports under in metrics and logs.
@@ -201,10 +191,9 @@ class QueueSpec[ModelT]:
 class FenceOutcome:
     """What an acknowledgement actually did.
 
-    `applied=False` means the claim was lost -- reclaimed after the visibility
-    timeout, or re-enqueued underneath a slow worker. That is never nothing: it
-    means the queue has begun doing this row's work twice, so callers log and count
-    it rather than discarding it.
+    `applied=False` means the claim was lost -- reclaimed after the visibility timeout, or
+    re-enqueued underneath a slow worker -- so the queue is doing this row's work twice. Callers
+    log and count that rather than discarding it.
     """
 
     applied: bool
@@ -214,12 +203,11 @@ class FenceOutcome:
 class ClaimedRowQueue[ModelT]:
     """Claim and acknowledge rows of one work table.
 
-    Constructed without a `session_factory`, every method requires an explicit
-    `session=` and joins the caller's transaction instead of committing. That is
-    what lets an adapter which hands live ORM rows to its caller -- the search
-    projector -- share this protocol; the previous version committed a session it
-    did not own, which both dropped the caller's row locks and excluded the one
-    caller that had a transaction worth joining.
+    Constructed without a `session_factory`, every method requires an explicit `session=` and joins
+    the caller's transaction instead of committing, which is what lets an adapter that hands live
+    ORM rows to its caller -- the search projector -- keep its row locks. Passing a factory instead
+    lets each call own and commit its own transaction; passing neither raises `RuntimeError` on the
+    first call that would need one.
     """
 
     def __init__(
@@ -302,9 +290,9 @@ class ClaimedRowQueue[ModelT]:
     def token_of(self, row: ModelT) -> uuid.UUID:
         """Read the fence off a row `claim` just returned.
 
-        The column is nullable only for the deploy window in which code from the
-        previous release can still stamp a claim without one; a row this process
-        claimed always has it.
+        The column is nullable only for the deploy window in which a previous release can still
+        stamp a claim without a token; a row this process claimed always has one, so a missing
+        token raises `RuntimeError`.
         """
         token = cast(uuid.UUID | None, getattr(row, self._spec.claim_token.key))
         if token is None:
@@ -368,8 +356,8 @@ class ClaimedRowQueue[ModelT]:
         statement = update(self._spec.model).where(*identity, self.held_by(token)).values(**released)
         applied = bool(await self._rowcount(statement, session))
         if not applied:
-            # The attempts increment and the error text are lost with the claim.
-            # Silence here is what made a queue doing its work twice look healthy.
+            # The attempts increment and the error text are lost with the claim, and a queue doing
+            # its work twice looks healthy unless this is reported.
             self._report_lost_fence("fail", token, error=error)
         return FenceOutcome(applied=applied, dead_lettered=dead and applied)
 
@@ -415,10 +403,10 @@ class ClaimedRowQueue[ModelT]:
         return await self._rowcount(statement, session)
 
     def _report_lost_fence(self, operation: str, token: uuid.UUID, *, error: str | None = None) -> None:
-        """Make a claim lost underneath a worker visible.
+        """Count and log a claim lost underneath a worker.
 
-        A queue whose acknowledgements stop matching has begun doing some row's
-        work twice, and it looks exactly like a healthy one from the outside.
+        A queue whose acknowledgements stop matching is doing some row's work twice, and looks
+        exactly like a healthy one from the outside.
         """
         add_counter("squid.queue.lost_fences", attributes={"squid.queue.name": self._spec.name})
         logger.warning(

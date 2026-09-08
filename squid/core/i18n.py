@@ -50,7 +50,16 @@ def tr(message: str, /, **params: object) -> str: ...
 
 
 def tr(message: str | Template | Message, /, **params: object) -> str | Message:
-    """Create deferred template text or resolve text through the ambient localization."""
+    """Create deferred template text, or resolve text through the ambient localization.
+
+    A `Template` becomes a `Message` carrying its interpolations for later resolution; a `Message`
+    or `str` resolves now, against `current_localization()`.
+
+    Raises:
+        TypeError: If keyword parameters accompany a template or a `Message`, if *plural* is not a
+            template string, or if a plural template has no integer ``count`` interpolation.
+        ValueError: If the singular and plural templates use different placeholders.
+    """
     if isinstance(message, Template):
         plural = params.pop("plural", None)
         if params:
@@ -83,8 +92,8 @@ def tr(message: str | Template | Message, /, **params: object) -> str | Message:
 def locales_dir() -> Path:
     """Directory holding the compiled gettext catalogs shipped with this source tree.
 
-    Resolved on demand rather than at import, so a test can point `_catalog` at a fixture
-    tree without reloading the module, and so importing `squid.core.i18n` touches no disk.
+    Resolved on call, not at import, so importing this module touches no disk and a test can point
+    `_catalog` at a fixture tree without reloading it.
     """
     return Path(__file__).resolve().parent.parent.parent / "locales"
 
@@ -157,10 +166,8 @@ def negotiate_locale(requested: str | None) -> str:
 def negotiate_locale_candidates(requested: Sequence[str]) -> str:
     """Resolve the best of several locale tags, in preference order.
 
-    Exact matches outrank language-only fallback matches regardless of
-    position, so an exact match later in `requested` isn't shadowed by a
-    looser match earlier in the list; within each tier, earlier (higher
-    priority) tags win.
+    Exact matches outrank language-only matches regardless of position, so a later exact match is
+    not shadowed by an earlier loose one; within a tier, the earlier tag wins.
     """
     for tag in requested:
         match = _exact_match(tag)

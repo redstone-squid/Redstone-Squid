@@ -15,13 +15,10 @@ __all__ = ["InstantUTC", "IntEnumSmallInt", "StrEnumText", "now"]
 def now() -> Instant:
     """The current instant at the precision `InstantUTC` can actually store.
 
-    `Instant.now()` is nanosecond-resolution and PostgreSQL `timestamptz` is microsecond, so a
-    row written from an unrounded instant comes back slightly earlier than the object that wrote
-    it. Nothing raises; the two simply stop comparing equal, which surfaces as an ORM instance
-    disagreeing with a re-read of the row it just created.
-
-    Minting at storage precision fixes it at the source, so every persisted default is exact
-    across a round trip. Use `Instant.now()` for anything that is only ever compared in memory.
+    `Instant.now()` is nanosecond-resolution and PostgreSQL `timestamptz` is microsecond, so a row
+    written from an unrounded instant reads back slightly earlier and silently stops comparing
+    equal to the object that wrote it. Use this for anything persisted, `Instant.now()` for
+    anything only ever compared in memory.
     """
     return Instant.now().round("microsecond", mode="floor")
 
@@ -93,11 +90,10 @@ class StrEnumText[EnumT: StrEnum](TypeDecorator[EnumT]):
 class IntEnumSmallInt[EnumT: IntEnum](TypeDecorator[EnumT]):
     """Store an `IntEnum` as a small integer while exposing the member to the ORM.
 
-    A bare `SmallInteger` column annotated `Mapped[SomeIntEnum]` reads back as a plain
-    `int`: the explicit column type wins over the annotation, and nothing coerces. With
-    an `IntEnum` that failure is close to silent, because every comparison against a
-    member still comes out right; only member-only attributes like `.name` blow up, and
-    only in whichever caller happens to want one. This type makes the annotation true.
+    A bare `SmallInteger` column annotated `Mapped[SomeIntEnum]` reads back as a plain `int`: the
+    column type wins over the annotation and nothing coerces. That failure is near-silent, since
+    comparisons against a member still come out right and only member attributes like `.name`
+    break. This type makes the annotation true.
     """
 
     impl = SmallInteger

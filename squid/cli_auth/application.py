@@ -61,6 +61,7 @@ class CliSecretCodec:
     """Generate, parse, and hash one-time CLI authorization secrets."""
 
     def __init__(self, pepper: bytes) -> None:
+        """Raises `InvalidStateError` when *pepper* is shorter than 32 bytes."""
         if len(pepper) < 32:
             msg = tr(t"CLI authorization pepper must contain at least 32 bytes.")
             raise InvalidStateError(msg)
@@ -79,16 +80,20 @@ class CliSecretCodec:
 
     @staticmethod
     def normalize_user_code(value: str) -> str:
-        """Normalize display punctuation and case from a human-entered code."""
+        """Strip display punctuation and case from a human-entered code.
+
+        Returns the empty string unless the result is exactly eight alphanumerics.
+        """
         normalized = "".join(character for character in value.upper() if character.isalnum())
         return normalized if len(normalized) == 8 else ""
 
     def digest(self, purpose: CliSecretPurpose, secret: str) -> bytes:
         """Return a purpose-separated keyed SHA-256 digest.
 
-        See `docs/credential-hashing.md`: the inputs are `token_urlsafe(32)`
-        secrets, so keyed SHA-256 is the right primitive and a password KDF
-        would only add per-request work an unauthenticated caller can trigger.
+        The purpose is bound into the input, so a digest minted for one kind of secret never
+        matches a lookup for another. Keyed SHA-256 rather than a password KDF: the inputs are
+        `token_urlsafe(32)` secrets, and a KDF here is per-request work an unauthenticated caller
+        can trigger. See `docs/credential-hashing.md`.
         """
         # codeql[py/weak-sensitive-data-hashing]
         return hmac.digest(self._pepper, f"cli:{purpose.value}\0{secret}".encode(), "sha256")  # 256-bit random secret
@@ -123,6 +128,7 @@ class CliAuthorizationService:
         session_lifetime_seconds: int = SESSION_LIFETIME_SECONDS,
         max_active_authorizations: int = MAX_ACTIVE_AUTHORIZATIONS,
     ) -> None:
+        """Raises `InvalidStateError` when any lifetime or limit is not positive."""
         if (
             min(
                 enrollment_lifetime_seconds,
@@ -151,7 +157,17 @@ class CliAuthorizationService:
         client_instance_id: UUID,
         label: str,
     ) -> IssuedCliEnrollment:
-        """Start a browser-approved enrollment for one Ed25519 public key."""
+        """Start a browser-approved enrollment for one Ed25519 public key.
+
+        The returned device and user codes are disclosed once and expire after
+        `enrollment_lifetime_seconds`.
+
+        Raises:
+            InvalidCliDeviceProofError: If *public_key* is not a 32-byte Ed25519 key.
+            ValidationError: If *label* is empty or over 80 characters.
+            TooManyActiveCliAuthorizationsError: If this client instance already has
+                `max_active_authorizations` enrollments outstanding.
+        """
         normalized_label = _device_label(label)
         _validate_public_key(public_key)
         now = self._now()
@@ -176,13 +192,22 @@ class CliAuthorizationService:
         return IssuedCliEnrollment(enrollment, device_code, user_code, POLLING_INTERVAL_SECONDS)
 
     async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
-        """Return safe device metadata for an authenticated approval screen."""
+        """Return safe device metadata for an authenticated approval screen.
+
+        Raises `InvalidCliEnrollmentError` for an unknown, malformed or revoked code,
+        `CliEnrollmentExpiredError` past its lifetime, and `CliEnrollmentAlreadyExchangedError`
+        once it has been spent.
+        """
         enrollment = await self._enrollment_for_user_code(user_code)
         self._ensure_approvable(enrollment, self._now())
         return enrollment
 
     async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment:
-        """Bind one still-live enrollment to the approving browser account."""
+        """Bind one still-live enrollment to the approving browser account.
+
+        Idempotent for the account that already approved it. Raises what `preview_enrollment`
+        does, plus `CliEnrollmentApprovalDeniedError` when another account approved it first.
+        """
         enrollment = await self._enrollment_for_user_code(user_code)
         self._ensure_approvable(enrollment, self._now(), account_id=account_id)
         return await self._repository.approve_enrollment(
@@ -192,7 +217,20 @@ class CliAuthorizationService:
         )
 
     async def exchange_enrollment(self, *, device_code: str, signature: bytes) -> IssuedCliSession:
-        """Prove the enrolled private key and exchange browser approval for a session."""
+        """Prove the enrolled private key and exchange browser approval for a session.
+
+        The bearer token comes back once and lives for `session_lifetime_seconds`; the enrollment
+        is spent, so a second exchange fails.
+
+        Raises:
+            InvalidCliEnrollmentError: If the device code is unknown, malformed or revoked.
+            CliEnrollmentExpiredError: If the enrollment expired.
+            CliEnrollmentAlreadyExchangedError: If it was already exchanged.
+            CliAuthorizationPendingError: If no browser has approved it yet.
+            InvalidCliDeviceProofError: If the signature does not verify against the enrolled key.
+            CliDeviceUnavailableError: If the key belongs to another account or a revoked device.
+            DataIntegrityError: If the persisted session does not belong to its device.
+        """
         enrollment = await self._enrollment_for_device_code(device_code)
         now = self._now()
         self._ensure_exchangeable(enrollment, now)
@@ -227,7 +265,12 @@ class CliAuthorizationService:
         return IssuedCliSession(persisted_device, persisted_session, token)
 
     async def start_session_challenge(self, device_id: UUID) -> IssuedCliSessionChallenge:
-        """Issue a one-time nonce for an enrolled device to sign."""
+        """Issue a one-time nonce for an enrolled device to sign.
+
+        The nonce is disclosed once and expires after `session_challenge_lifetime_seconds`. Raises
+        `CliDeviceUnavailableError` for an unknown or revoked device, and
+        `TooManyActiveCliAuthorizationsError` past the outstanding-challenge limit.
+        """
         now = self._now()
         nonce = self._codec.random_secret()
         challenge = await self._repository.add_session_challenge(
@@ -250,7 +293,17 @@ class CliAuthorizationService:
         nonce: str,
         signature: bytes,
     ) -> IssuedCliSession:
-        """Verify a device proof and consume its nonce into a short-lived session."""
+        """Verify a device proof and consume its nonce into a short-lived session.
+
+        The nonce is spent, so a replay of the same proof fails.
+
+        Raises:
+            InvalidCliSessionChallengeError: If *nonce* is empty, or the challenge is unknown,
+                already consumed, or does not match this device and nonce.
+            CliSessionChallengeExpiredError: If the challenge expired.
+            CliDeviceUnavailableError: If the device is unknown or revoked.
+            InvalidCliDeviceProofError: If the signature does not verify against the device key.
+        """
         if not nonce:
             raise InvalidCliSessionChallengeError
         device = await self._repository.get_device(device_id)
@@ -269,7 +322,11 @@ class CliAuthorizationService:
         return IssuedCliSession(persisted_device, persisted_session, token)
 
     async def authenticate(self, token: str) -> CliIdentity:
-        """Authenticate a short-lived CLI bearer token and active device."""
+        """Authenticate a short-lived CLI bearer token and active device.
+
+        Every failure -- malformed token, unknown session, expiry, revocation, wrong secret -- is
+        one `InvalidCliSessionError`, so a caller cannot tell them apart.
+        """
         parsed = self._codec.parse_session_token(token)
         if parsed is None:
             raise InvalidCliSessionError
@@ -301,11 +358,11 @@ class CliAuthorizationService:
         return await self._repository.list_devices(account_id)
 
     async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
-        """Revoke an account-owned device and all sessions beneath it."""
+        """Revoke an account-owned device and all sessions beneath it, returning whether it exists."""
         return await self._repository.revoke_device(device_id=device_id, account_id=account_id, revoked_at=self._now())
 
     async def revoke_current_session(self, identity: CliIdentity) -> bool:
-        """Revoke the exact session represented by a CLI caller."""
+        """Revoke the exact session represented by a CLI caller, leaving its device enrolled."""
         return await self._repository.revoke_session(
             session_id=identity.session_id,
             device_id=identity.device_id,
@@ -384,14 +441,21 @@ def session_proof_message(device_id: UUID, challenge_id: UUID, nonce: str) -> by
 
 
 def public_key_fingerprint(public_key: bytes) -> str:
-    """Return a short, stable fingerprint suitable for browser confirmation."""
+    """Return a short, stable fingerprint suitable for browser confirmation.
+
+    Raises `InvalidCliDeviceProofError` if *public_key* is not a 32-byte Ed25519 key.
+    """
     _validate_public_key(public_key)
     value = hashlib.sha256(public_key).hexdigest()[:20].upper()
     return "-".join(value[index : index + 4] for index in range(0, len(value), 4))
 
 
 def decode_urlsafe_bytes(value: str, *, expected_length: int) -> bytes:
-    """Decode unpadded URL-safe base64 with an exact decoded length."""
+    """Decode unpadded URL-safe base64 with an exact decoded length.
+
+    Raises `InvalidCliDeviceProofError` for input over 256 characters, outside the URL-safe
+    alphabet, or decoding to any length but *expected_length*.
+    """
     if not value or len(value) > 256 or not re.fullmatch(r"[A-Za-z0-9_-]+", value):
         raise InvalidCliDeviceProofError
     try:

@@ -67,7 +67,11 @@ class InstallationCredentialService:
         label: str,
         profile: PublicServerProfile | None = None,
     ) -> IssuedInstallationCredential:
-        """Create an installation and disclose its high-entropy credential once."""
+        """Create an installation and disclose its high-entropy credential once.
+
+        Raises `AccountConsentRequiredError` when the owner has not accepted the current privacy
+        notice, and `ValidationError` for a label outside 1 to 80 characters.
+        """
         if not await self._accounts.has_current_consent(owner_account_id):
             raise AccountConsentRequiredError
         normalized_label = _installation_label(label)
@@ -90,7 +94,11 @@ class InstallationCredentialService:
         )
 
     async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
-        """Fence all old credentials and grants, then disclose one replacement secret."""
+        """Fence all old credentials and grants, then disclose one replacement secret.
+
+        Raises `InstallationUnavailableError` when the installation is unknown, owned by another
+        account, or already revoked.
+        """
         secret = self._codec.random_secret()
         installation = await self._repository.rotate_installation(
             installation_id=installation_id,
@@ -106,7 +114,11 @@ class InstallationCredentialService:
         )
 
     async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation:
-        """Revoke an installation and every challenge or grant bound to it."""
+        """Revoke an installation and every challenge or grant bound to it.
+
+        Idempotent; raises `InstallationUnavailableError` when the installation is unknown or owned
+        by another account.
+        """
         installation = await self._repository.revoke_installation(
             installation_id=installation_id,
             owner_account_id=owner_account_id,
@@ -117,7 +129,7 @@ class InstallationCredentialService:
         return installation
 
     async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
-        """List an account's installations without exposing credential digests."""
+        """List an account's installations, revoked ones included, oldest first."""
         return await self._repository.list_installations(owner_account_id)
 
     async def update_profile(
@@ -127,7 +139,11 @@ class InstallationCredentialService:
         owner_account_id: int,
         profile: PublicServerProfile,
     ) -> PaperInstallation:
-        """Replace explicit public-profile and sponsor preferences without rotating credentials."""
+        """Replace explicit public-profile and sponsor preferences, leaving the credential alone.
+
+        Raises `InstallationUnavailableError` when the installation is unknown, owned by another
+        account, or revoked.
+        """
         installation = await self._repository.update_installation_profile(
             installation_id=installation_id,
             owner_account_id=owner_account_id,
@@ -138,7 +154,12 @@ class InstallationCredentialService:
         return installation
 
     async def authenticate(self, token: str) -> AuthenticatedPaperInstallation:
-        """Authenticate a Paper server without granting any player authority."""
+        """Authenticate a Paper server without granting any player authority.
+
+        Every failure -- malformed token, unknown installation, revocation, wrong secret -- is one
+        `InvalidInstallationCredentialError`. The returned credential version is what later player
+        grants are fenced against, so a rotation invalidates them.
+        """
         parsed = self._codec.parse_installation_token(token)
         if parsed is None:
             raise InvalidInstallationCredentialError
@@ -161,11 +182,11 @@ class InstallationCredentialService:
         )
 
     async def public_servers(self) -> tuple[PublishedPaperServer, ...]:
-        """Return only safe projections for installations that explicitly opted into listing."""
+        """List installations whose owner enabled a public profile, as safe projections."""
         return await self._repository.list_public_servers()
 
     async def get_public_server(self, installation_id: UUID) -> PublishedPaperServer | None:
-        """Return one active, public, sponsor-enabled installation without scanning unrelated profiles."""
+        """Return one listed installation, and only if its owner also opted into sponsorship."""
         return await self._repository.get_public_server(installation_id)
 
 
@@ -184,6 +205,7 @@ class PlayerAuthorizationService:
         grant_lifetime_seconds: int = PLAYER_GRANT_LIFETIME_SECONDS,
         max_active_challenges: int = MAX_ACTIVE_CHALLENGES,
     ) -> None:
+        """Raises `InvalidStateError` when any lifetime or limit is not positive."""
         if min(challenge_lifetime_seconds, grant_lifetime_seconds, max_active_challenges) <= 0:
             msg = tr(t"Minecraft authorization limits must be positive.")
             raise InvalidStateError(msg)
@@ -202,7 +224,12 @@ class PlayerAuthorizationService:
         installation: AuthenticatedPaperInstallation,
         java_uuid: UUID,
     ) -> IssuedPlayerChallenge:
-        """Start a challenge bound to an authenticated Paper credential generation."""
+        """Start a challenge bound to an authenticated Paper credential generation.
+
+        The codes are disclosed once and expire after `challenge_lifetime_seconds`. Raises
+        `InvalidInstallationCredentialError` if the installation was revoked or rotated since it
+        authenticated, and `TooManyActiveChallengesError` past the per-identity active bound.
+        """
         return await self._start_challenge(
             origin=MinecraftClientOrigin.PAPER,
             java_uuid=java_uuid,
@@ -216,7 +243,12 @@ class PlayerAuthorizationService:
         java_uuid: UUID,
         pkce_s256_challenge: str,
     ) -> IssuedPlayerChallenge:
-        """Start a Fabric challenge whose exchange requires an RFC 7636 S256 verifier."""
+        """Start a Fabric challenge whose exchange requires an RFC 7636 S256 verifier.
+
+        The codes are disclosed once and expire after `challenge_lifetime_seconds`. Raises
+        `InvalidPkceError` for a malformed challenge, and `TooManyActiveChallengesError` past the
+        per-identity active bound.
+        """
         challenge = self._codec.validate_s256_challenge(pkce_s256_challenge)
         return await self._start_challenge(
             origin=MinecraftClientOrigin.FABRIC,
@@ -226,7 +258,16 @@ class PlayerAuthorizationService:
         )
 
     async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge:
-        """Approve only when the exact verified Java UUID belongs to a currently consenting account."""
+        """Approve only when the exact verified Java UUID belongs to a currently consenting account.
+
+        Idempotent for the account that already approved it.
+
+        Raises:
+            InvalidChallengeError: If the code is malformed, unknown, revoked, or already exchanged.
+            ChallengeExpiredError: If the challenge expired.
+            ChallengeApprovalDeniedError: If the account does not hold that verified Java identity,
+                or another account approved first.
+        """
         normalized_code = self._codec.normalize_user_code(user_code)
         if not normalized_code:
             raise InvalidChallengeError
@@ -250,7 +291,18 @@ class PlayerAuthorizationService:
         device_code: str,
         installation: AuthenticatedPaperInstallation,
     ) -> IssuedPlayerGrant:
-        """Exchange an approved Paper challenge on the same authenticated installation generation."""
+        """Exchange an approved Paper challenge on the same authenticated installation generation.
+
+        The grant token is disclosed once and lives for `grant_lifetime_seconds`; the challenge is
+        spent, so a second exchange fails.
+
+        Raises:
+            InvalidChallengeError: If the device code is unknown or revoked, or the challenge
+                belongs to another origin, installation or credential version.
+            ChallengeExpiredError: If the challenge expired.
+            ChallengeAlreadyExchangedError: If it was already exchanged.
+            AuthorizationPendingError: If no account has approved it yet.
+        """
         challenge = await self._challenge_for_exchange(device_code)
         if (
             challenge.origin is not MinecraftClientOrigin.PAPER
@@ -261,7 +313,11 @@ class PlayerAuthorizationService:
         return await self._exchange(challenge, device_code)
 
     async def exchange_fabric(self, *, device_code: str, pkce_verifier: str) -> IssuedPlayerGrant:
-        """Exchange an approved Fabric challenge after proving the S256 verifier."""
+        """Exchange an approved Fabric challenge after proving the S256 verifier.
+
+        Raises what `exchange_paper` does, plus `InvalidPkceError` when the verifier does not hash
+        to the stored challenge.
+        """
         challenge = await self._challenge_for_exchange(device_code)
         if (
             challenge.origin is not MinecraftClientOrigin.FABRIC
@@ -276,7 +332,11 @@ class PlayerAuthorizationService:
         token: str,
         installation: AuthenticatedPaperInstallation,
     ) -> MinecraftPlayerContext:
-        """Authenticate a Paper player token only on its bound server credential generation."""
+        """Authenticate a Paper player token only on its bound server credential generation.
+
+        Raises `InvalidPlayerTokenError` for every failure, a rotated or revoked installation
+        included, so a caller cannot tell them apart.
+        """
         context, grant = await self._authenticate(token)
         if (
             grant.origin is not MinecraftClientOrigin.PAPER
@@ -294,14 +354,18 @@ class PlayerAuthorizationService:
         return context
 
     async def authenticate_fabric_player(self, token: str) -> MinecraftPlayerContext:
-        """Authenticate a player token only when it was issued through the Fabric flow."""
+        """Authenticate a player token only when it was issued through the Fabric flow.
+
+        Raises `InvalidPlayerTokenError` for every failure, including a Paper-issued token and an
+        account that has since lost consent or the Java identity.
+        """
         context, grant = await self._authenticate(token)
         if grant.origin is not MinecraftClientOrigin.FABRIC:
             raise InvalidPlayerTokenError
         return context
 
     async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool:
-        """Revoke one player grant if it belongs to the signed-in account."""
+        """Revoke one player grant if it belongs to the signed-in account, returning whether it exists."""
         return await self._repository.revoke_grant(
             grant_id=grant_id,
             account_id=account_id,

@@ -101,7 +101,6 @@ class PostgresMinecraftAuthorizationRepository:
         self._session_factory = session_factory
 
     async def add_installation(self, installation: PaperInstallation) -> PaperInstallation:
-        """Insert one account-owned Paper installation."""
         async with self._session_factory.begin() as session:
             record = PaperInstallationRecord(
                 id=installation.id,
@@ -124,13 +123,11 @@ class PostgresMinecraftAuthorizationRepository:
             return _installation(record)
 
     async def get_installation(self, installation_id: UUID) -> PaperInstallation | None:
-        """Return one installation without exposing any plaintext credential."""
         async with self._session_factory() as session:
             record = await session.get(PaperInstallationRecord, installation_id)
             return None if record is None else _installation(record)
 
     async def list_installations(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
-        """List one account's installations, including revoked entries for audit."""
         async with self._session_factory() as session:
             records = (
                 await session.scalars(
@@ -142,7 +139,6 @@ class PostgresMinecraftAuthorizationRepository:
         return tuple(_installation(record) for record in records)
 
     async def list_public_servers(self) -> tuple[PublishedPaperServer, ...]:
-        """Return explicit, active public profiles without credential or owner internals."""
         async with self._session_factory() as session:
             records = (
                 await session.scalars(
@@ -160,7 +156,6 @@ class PostgresMinecraftAuthorizationRepository:
             )
 
     async def get_public_server(self, installation_id: UUID) -> PublishedPaperServer | None:
-        """Return one sponsor-enabled active public profile without loading the public directory."""
         async with self._session_factory() as session:
             record = await session.scalar(
                 select(PaperInstallationRecord).where(
@@ -182,7 +177,6 @@ class PostgresMinecraftAuthorizationRepository:
         secret_hash: bytes,
         rotated_at: Instant,
     ) -> PaperInstallation | None:
-        """Replace a secret and revoke every artifact tied to the prior generation."""
         async with self._session_factory.begin() as session:
             record = await self._owned_installation(session, installation_id, owner_account_id)
             if record is None or record.revoked_at is not None:
@@ -201,7 +195,6 @@ class PostgresMinecraftAuthorizationRepository:
         owner_account_id: int,
         revoked_at: Instant,
     ) -> PaperInstallation | None:
-        """Revoke an owned installation and all authorization derived from it."""
         async with self._session_factory.begin() as session:
             record = await self._owned_installation(session, installation_id, owner_account_id)
             if record is None:
@@ -219,7 +212,6 @@ class PostgresMinecraftAuthorizationRepository:
         owner_account_id: int,
         profile: PublicServerProfile,
     ) -> PaperInstallation | None:
-        """Replace an active installation's opt-in public metadata."""
         async with self._session_factory.begin() as session:
             record = await self._owned_installation(session, installation_id, owner_account_id)
             if record is None or record.revoked_at is not None:
@@ -239,7 +231,7 @@ class PostgresMinecraftAuthorizationRepository:
         *,
         max_active: int,
     ) -> PlayerAuthorizationChallenge:
-        """Insert under a per-identity lock after enforcing the active bound."""
+        """Serialize on the origin, Java identity and installation before counting the active bound."""
         async with self._session_factory.begin() as session:
             await session.scalar(select(func.pg_advisory_xact_lock(_challenge_lock_key(challenge))))
             if challenge.origin is MinecraftClientOrigin.PAPER:
@@ -293,7 +285,6 @@ class PostgresMinecraftAuthorizationRepository:
             return _challenge(record)
 
     async def get_challenge_by_user_code_hash(self, code_hash: bytes) -> PlayerAuthorizationChallenge | None:
-        """Resolve a keyed user-code digest."""
         async with self._session_factory() as session:
             record = await session.scalar(
                 select(PlayerChallengeRecord).where(PlayerChallengeRecord.user_code_hash == code_hash)
@@ -301,7 +292,6 @@ class PostgresMinecraftAuthorizationRepository:
             return None if record is None else _challenge(record)
 
     async def get_challenge_by_device_code_hash(self, code_hash: bytes) -> PlayerAuthorizationChallenge | None:
-        """Resolve a keyed device-code digest."""
         async with self._session_factory() as session:
             record = await session.scalar(
                 select(PlayerChallengeRecord).where(PlayerChallengeRecord.device_code_hash == code_hash)
@@ -315,7 +305,6 @@ class PostgresMinecraftAuthorizationRepository:
         account_id: int,
         approved_at: Instant,
     ) -> PlayerAuthorizationChallenge:
-        """Approve one still-live challenge, idempotently for the same account."""
         async with self._session_factory.begin() as session:
             record = await session.get(PlayerChallengeRecord, challenge_id, with_for_update=True)
             if record is None or record.revoked_at is not None:
@@ -344,7 +333,6 @@ class PostgresMinecraftAuthorizationRepository:
         grant: PlayerGrant,
         exchanged_at: Instant,
     ) -> PlayerGrant:
-        """Consume one approval and insert its hash-only grant in the same transaction."""
         async with self._session_factory.begin() as session:
             record = await session.get(PlayerChallengeRecord, challenge_id, with_for_update=True)
             if (
@@ -392,13 +380,11 @@ class PostgresMinecraftAuthorizationRepository:
             return _grant(grant_record)
 
     async def get_grant(self, grant_id: UUID) -> PlayerGrant | None:
-        """Return a player grant without its plaintext bearer secret."""
         async with self._session_factory() as session:
             record = await session.get(PlayerGrantRecord, grant_id)
             return None if record is None else _grant(record)
 
     async def revoke_grant(self, *, grant_id: UUID, account_id: int, revoked_at: Instant) -> bool:
-        """Revoke one account-owned grant, idempotently."""
         async with self._session_factory.begin() as session:
             record = await session.scalar(
                 select(PlayerGrantRecord)
@@ -413,7 +399,6 @@ class PostgresMinecraftAuthorizationRepository:
             return True
 
     async def revoke_account_grants(self, *, account_id: int, revoked_at: Instant) -> int:
-        """Revoke all active player grants for one account."""
         async with self._session_factory.begin() as session:
             result = cast(
                 CursorResult[Any],
