@@ -190,6 +190,33 @@ class SubmissionFinalizationResult(Base, kw_only=True):
     )
 
 
+class SubmissionFinalizationInput(Base, kw_only=True):
+    """Original normalized input retained independently of mutable execution state."""
+
+    __tablename__ = "submission_finalization_inputs"
+    __table_args__ = (
+        CheckConstraint(
+            "payload_sha256 ~ '^[0-9a-f]{64}$'",
+            name="submission_finalization_inputs_payload_sha256_check",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(payload) = 'object'",
+            name="submission_finalization_inputs_payload_object_check",
+        ),
+    )
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submission_finalization_jobs.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    payload_sha256: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )
+
+
 class SubmissionReceiptMedia(Base, kw_only=True):
     """Normalized uploads retained by a committed submission receipt."""
 
