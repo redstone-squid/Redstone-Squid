@@ -71,9 +71,8 @@ class PermissionRole(Base, kw_only=True):
     builtin_key: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     """Identifies a role whose patterns are defined in code rather than here."""
     rank: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    """Management hierarchy only: who may edit whom. Deliberately absent from
-    permission resolution, so reordering roles can never change an authorization
-    outcome. Enforced by property P10."""
+    """Management hierarchy only: who may edit whom. Never consulted during permission
+    resolution (property P10), so reordering roles cannot change an authorization outcome."""
     protected: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     """Refuses structural edits from anyone but the bot owner."""
     created_by_account_id: Mapped[int | None] = mapped_column(
@@ -90,10 +89,8 @@ class PermissionRole(Base, kw_only=True):
 class PermissionRolePattern(Base, kw_only=True):
     """One pattern a role includes or subtracts.
 
-    Subtraction is not a deny: it withholds the pattern from *this* role's
-    contribution, and any other role including it still confers it. That is
-    Azure's `NotActions` semantics, and it is why a role can be written as "this
-    namespace, minus its destructive members" without poisoning other grants.
+    Subtraction is not a deny: it withholds the pattern from this role's contribution only, and
+    any other role including it still confers it. These are Azure's `NotActions` semantics.
     """
 
     __tablename__ = "permission_role_patterns"

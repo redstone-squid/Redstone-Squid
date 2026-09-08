@@ -17,8 +17,6 @@ from squid_ui.text import Message
 
 
 class InvalidAccountError(ValidationError):
-    """Account data is invalid."""
-
     default_message = tr(t"The account data is invalid.")
     default_code = ErrorCode.INVALID_ACCOUNT
     default_resource = "account"
@@ -29,11 +27,7 @@ def _identity_context(
     provider: IdentityProvider | None,
     subject: str | None,
 ) -> dict[str, JSONValue]:
-    """Describe whichever identity the caller was known by.
-
-    Every namespace is named explicitly, so an error raised for a CLI device or a
-    Minecraft player says which one it means rather than implying Discord by omission.
-    """
+    """Describe whichever identity the caller was known by, naming the provider explicitly."""
     context: dict[str, JSONValue] = {}
     if account_id is not None:
         context["account_id"] = account_id
@@ -44,8 +38,6 @@ def _identity_context(
 
 
 class AccountNotFoundError(NotFoundError):
-    """An application account could not be found."""
-
     default_message = tr(t"Account not found.")
     default_code = ErrorCode.ACCOUNT_NOT_FOUND
     default_resource = "account"
@@ -66,8 +58,8 @@ class AccountNotFoundError(NotFoundError):
 class AccountIdentityNotFoundError(NotFoundError):
     """The account has no identity with the requested internal id.
 
-    Identities are addressed by id rather than by provider because an account can legitimately
-    hold two of the same provider — a merge moves every identity row across.
+    Identities are addressed by id rather than provider: a merge moves every identity row across, so
+    one account can hold two identities from the same provider.
     """
 
     default_message = tr(t"That linked identity does not belong to your account.")
@@ -88,9 +80,8 @@ class AccountIdentityNotFoundError(NotFoundError):
 class LastIdentityError(ConflictError):
     """Unlinking the account's only identity would leave nobody able to sign in.
 
-    Nothing else can re-attach an identity to an orphaned account: every sign-in path starts from
-    a provider subject and looks the account up by it. Deleting the account is a different
-    operation with different consequences for build credit, so this refuses rather than guessing.
+    Every sign-in path starts from a provider subject, so an orphaned account can never regain one.
+    Deleting the account is a separate operation with different consequences for build credit.
     """
 
     default_message = tr(t"You cannot unlink your only remaining identity.")
@@ -105,8 +96,6 @@ class LastIdentityError(ConflictError):
 
 
 class InvalidProfileError(ValidationError):
-    """Profile content failed validation."""
-
     default_message = tr(t"The profile data is invalid.")
     default_title = tr(t"Invalid profile")
     default_code = ErrorCode.INVALID_PROFILE
@@ -133,8 +122,6 @@ class InvalidMergeProofError(ValidationError):
 
 
 class InvalidVerificationCodeError(ValidationError):
-    """A verification code is invalid or expired."""
-
     default_message = tr(t"The verification code is invalid or expired.")
     default_title = tr(t"Invalid verification code")
     default_code = ErrorCode.INVALID_VERIFICATION_CODE
@@ -145,8 +132,8 @@ class InvalidVerificationCodeError(ValidationError):
 class LinkReservationExpiredError(ValidationError):
     """A held verification code lapsed before its consent prompt was answered.
 
-    Distinct from `InvalidVerificationCodeError` on purpose: the code was correct, and telling
-    someone their good code was invalid sends them to fetch a new one for the wrong reason.
+    Distinct from `InvalidVerificationCodeError`: the code itself was correct, so the user needs the
+    prompt again rather than a new code.
     """
 
     default_message = tr(t"The linking prompt expired before you answered it.")
@@ -159,11 +146,8 @@ class LinkReservationExpiredError(ValidationError):
 class VerificationAttemptsExhaustedError(RateLimitedError):
     """Too many consecutive verification codes were refused for one identity.
 
-    A `RateLimitedError`, so the API answers 429 with `Retry-After` and the bot renders the wait
-    without any transport-specific handling. The lockout exists because a correct guess links
-    somebody else's Minecraft account to the guesser, which is identity takeover rather than a
-    nuisance: the code is the whole binding, and the redemption never mentions the UUID it was
-    issued for.
+    A `RateLimitedError`, so the API answers 429 with `Retry-After`. The code is the whole binding
+    between a caller and a Minecraft UUID, so a successful guess is identity takeover.
     """
 
     default_message = tr(t"Too many incorrect verification codes.")
@@ -220,8 +204,8 @@ class ConsentRequiredError(ValidationError):
 class StaleConsentNoticeError(ConflictError):
     """A client offered acceptance of a notice version that is no longer published.
 
-    Recorded consent is only meaningful if the text the user read is the text the receipt names.
-    A client holding a cached notice would otherwise record agreement to wording nobody saw.
+    A receipt is only meaningful if the text the user read is the text it names, so a client holding
+    a cached notice must re-read the current one.
     """
 
     default_message = tr(t"The privacy notice has changed since this one was shown.")
@@ -271,10 +255,8 @@ class CreatorNotFoundError(NotFoundError):
 class AliasAlreadyClaimedError(ConflictError):
     """A creator name is already credited to an account.
 
-    Carries *which* creator holds it, not just that somebody does. A creator profile is public data —
-    `GET /v1/creators/{creator_id}` serves it unauthenticated — so naming the holder discloses
-    nothing that was private, and without it the error tells the affected user nothing they can act
-    on. The internal account ID stays in `context`, which is log-only.
+    `public_context` names which creator holds it, which discloses nothing private: creator profiles
+    are served unauthenticated. The internal account ID stays in `context`, which is log-only.
     """
 
     default_message = tr(t"That creator name is already claimed by another account.")
@@ -303,10 +285,10 @@ class AliasAlreadyClaimedError(ConflictError):
         self.holder_account_id = holder_account_id
 
     def with_holder_name(self, holder_name: str) -> AliasAlreadyClaimedError:
-        """Name the holder in the user-facing message once something has resolved it.
+        """Return a copy naming the holder in the user-facing message.
 
-        Resolving a public creator profile costs a query, so it happens in the service on the error
-        path rather than in the repository on every raise.
+        Resolving the holder's profile costs a query, so the service does it on the error path rather
+        than the repository doing it on every raise.
         """
         name = self.name
         return self.with_context(

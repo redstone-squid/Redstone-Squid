@@ -9,13 +9,11 @@ different attacks:
   or deleting each other's roles, which the boundary alone permits because
   neither gains anything by it.
 
-They are separate because they fail for different reasons, and a single
-"insufficient permissions" for both is what makes a permission system
-infuriating. Every refusal below says which gate refused and why.
+They raise different exceptions, so every refusal below says which gate refused
+and why.
 
-`rank` never enters resolution (property P10). That is what makes having both
-gates safe: reordering roles for management reasons cannot silently change an
-authorization outcome.
+`rank` never enters resolution (property P10), so reordering roles for management
+reasons cannot silently change an authorization outcome.
 """
 
 from collections.abc import Iterable, Sequence
@@ -92,9 +90,8 @@ class Actor:
 class PermissionAdministrationService:
     """Grant, revoke, and shape roles, with the delegation rules enforced here.
 
-    Deliberately not in the cog: the API and the recovery CLI reach the same
-    rules through this class, and a guard that lives in one transport is a guard
-    the other transports do not have.
+    Every transport — the cog, the API, the recovery CLI — goes through this class, so a guard
+    added here applies to all of them.
     """
 
     def __init__(
@@ -121,10 +118,9 @@ class PermissionAdministrationService:
             subject_account_id=subject.account_id,
             guild_id=subject.guild_id,
         )
-        # The same two tests the resolver applies to a rule: an assignment that
-        # confers nothing any more must not confer rank either. The store's
-        # guild filter admits every account assignment whatever its scope, so
-        # the scope test happens here rather than in SQL.
+        # The same two tests the resolver applies to a rule: an expired or out-of-scope
+        # assignment confers no rank either. The store's guild filter admits every account
+        # assignment whatever its scope, so the scope test happens here rather than in SQL.
         now = Instant.now()
         held_ranks = [
             roles[assignment.role_id].rank
@@ -147,8 +143,9 @@ class PermissionAdministrationService:
     def _require_authority(self, actor: Actor, patterns: Iterable[str]) -> None:
         """Refuse patterns reaching any node the actor does not hold.
 
-        Self-maintaining: it tracks real authority rather than a hand-kept
-        integer that drifts as the catalogue grows.
+        Raises:
+            PermissionAuthorityError: naming the first node the actor lacks.
+            ValidationError: a pattern reaches no catalogue node.
         """
         if actor.is_owner:
             return
@@ -159,7 +156,7 @@ class PermissionAdministrationService:
                 raise PermissionAuthorityError(msg, public_context={"node": missing[0], "pattern": pattern})
 
     def _require_rank(self, actor: Actor, role: RoleRecord) -> None:
-        """Refuse managing a role at or above the actor's own highest rank."""
+        """Refuse managing a role at or above the actor's own highest rank, with `PermissionRankError`."""
         if actor.is_owner:
             return
         if role.rank >= actor.highest_rank:
@@ -170,12 +167,10 @@ class PermissionAdministrationService:
             raise PermissionRankError(msg, public_context={"role": role.slug, "rank": role.rank})
 
     def _require_unprotected(self, actor: Actor, role: RoleRecord) -> None:
-        """Keep the built-ins whole against anyone but the owner.
+        """Keep the built-ins whole against anyone but the owner, with `ProtectedRoleError`.
 
-        Without this, someone who happens to hold everything in `global-admin`
-        could hollow it out for everybody else, and both other gates would let
-        them: the boundary is satisfied, and the rank check passes for anyone
-        ranked above it.
+        The other two gates permit hollowing out `global-admin` for everyone else: the boundary is
+        satisfied by anyone holding its nodes, and the rank check by anyone ranked above it.
         """
         if role.protected and not actor.is_owner:
             msg = f"{role.slug} is a built-in role; only the bot owner can restructure it."
@@ -184,9 +179,8 @@ class PermissionAdministrationService:
     def _require_scope(self, actor: Actor, pattern: str, scope_guild_id: int | None) -> None:
         """Enforce the guild-delegation rule: guild-scoped rules, guild-only nodes.
 
-        Checked here as well as by the resolver and a database CHECK. Three
-        layers because this is the escalation that matters: a guild
-        administrator must never be able to reach global state.
+        Raises `PermissionAuthorityError`. Checked here as well as by the resolver and a database
+        CHECK, because a guild administrator reaching global state is the escalation that matters.
         """
         if actor.is_owner or PERM_GRANT_GLOBAL.name in actor.held:
             return
@@ -203,9 +197,8 @@ class PermissionAdministrationService:
     def _require_assignment_scope(self, actor: Actor, leaves: Iterable[str], scope_guild_id: int | None) -> None:
         """Apply the delegation rule to a role's leaves as well as to raw patterns.
 
-        An assignment carries its own scope into resolution and the role's own
-        `guild_id` is not consulted there, so a guild delegate assigning a guild
-        role at global scope would otherwise hold its nodes in every guild.
+        Resolution reads an assignment's own scope and never the role's `guild_id`, so a guild
+        delegate assigning a guild role at global scope would otherwise hold its nodes everywhere.
         """
         for pattern in leaves:
             self._require_scope(actor, pattern, scope_guild_id)
@@ -243,7 +236,16 @@ class PermissionAdministrationService:
         expires_at: Instant | None = None,
         reason: str | None = None,
     ) -> None:
-        """Write one allow, deny or forbid rule."""
+        """Write one allow, deny or forbid rule, replacing any rule with the same subject and scope.
+
+        Raises:
+            InvalidPatternError: *pattern* is malformed.
+            ValidationError: the pattern reaches no node, the subject is not exactly one of an
+                account or a Discord role, a Discord role is named without its guild, or a forbid
+                carries no reason.
+            PermissionAuthorityError: the actor may not grant this pattern at this scope, or is not
+                the owner and asked for `FORBID`.
+        """
         Pattern.parse(pattern)
         self._reached(pattern)
         if effect is Effect.FORBID:
@@ -298,7 +300,15 @@ class PermissionAdministrationService:
         discord_role_id: int | None = None,
         scope_guild_id: int | None = None,
     ) -> bool:
-        """Remove a rule. Distinct from denying it: absence falls through to the default."""
+        """Remove a rule, returning whether one existed.
+
+        Distinct from denying it: absence falls through to the node's catalogue default.
+
+        Raises:
+            PermissionAuthorityError: the actor may not touch this pattern at this scope.
+            ValidationError: the pattern reaches no node.
+            ConflictError: this would remove the last account able to grant `perm.grant.global`.
+        """
         self._require_scope(actor, pattern, scope_guild_id)
         self._require_authority(actor, (pattern,))
         if PERM_GRANT_GLOBAL.name in self._reached(pattern):
@@ -319,11 +329,10 @@ class PermissionAdministrationService:
         )
 
     async def _refuse_last_global_granter(self, account_id: int | None, pattern: str) -> None:
-        """Never leave the deployment with nobody who can grant anything.
+        """Raise `ConflictError` rather than leave nobody able to grant `perm.grant.global`.
 
-        The owner escape hatch exists, but a deployment whose `owner_id` is
-        misconfigured would otherwise be locked out entirely, and discovering
-        that costs a database session.
+        The owner escape hatch exists, but a deployment with a misconfigured `owner_id` would
+        otherwise be locked out entirely.
         """
         holders = await self._global_granter_count()
         if holders <= 1:
@@ -383,6 +392,7 @@ class PermissionAdministrationService:
         return tuple(sorted(roles, key=lambda role: (-role.rank, role.slug)))
 
     async def role(self, slug: str, *, guild_id: int | None = None) -> RoleRecord:
+        """Resolve a slug, preferring the guild's own role, or raise `NotFoundError`."""
         found = await self._store.get_role(slug, guild_id=guild_id)
         if found is None:
             msg = f"No permission role named {slug!r}."
@@ -403,7 +413,14 @@ class PermissionAdministrationService:
         guild_id: int | None = None,
         rank: int = 0,
     ) -> RoleRecord:
-        """Create an empty role. Patterns are added separately, each gated."""
+        """Create an empty role. Patterns are added separately, each gated.
+
+        Raises:
+            ValidationError: *rank* is outside 0..`MAX_ROLE_RANK`.
+            PermissionAuthorityError: the actor lacks the role-management node for this scope.
+            PermissionRankError: *rank* is at or above the actor's own highest.
+            ConflictError: a role with that slug already exists here.
+        """
         if not 0 <= rank <= MAX_ROLE_RANK:
             msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
             raise ValidationError(msg, public_context={"field": "rank"})
@@ -434,6 +451,10 @@ class PermissionAdministrationService:
         )
 
     async def delete_role(self, actor: Actor, role: RoleRecord) -> bool:
+        """Delete a role with its patterns and assignments, returning whether it existed.
+
+        Raises `PermissionAuthorityError`, `ProtectedRoleError` or `PermissionRankError`.
+        """
         self._require_role_management(actor, role)
         return await self._store.delete_role(
             role.id,
@@ -447,6 +468,13 @@ class PermissionAdministrationService:
         )
 
     async def set_rank(self, actor: Actor, role: RoleRecord, rank: int) -> None:
+        """Move a role's management rank, which never affects resolution.
+
+        Raises:
+            ValidationError: *rank* is outside 0..`MAX_ROLE_RANK`.
+            PermissionAuthorityError, ProtectedRoleError: the role is not the actor's to manage.
+            PermissionRankError: the role, or *rank*, is at or above the actor's own highest.
+        """
         if not 0 <= rank <= MAX_ROLE_RANK:
             msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
             raise ValidationError(msg, public_context={"field": "rank"})
@@ -466,12 +494,15 @@ class PermissionAdministrationService:
         )
 
     async def add_pattern(self, actor: Actor, role: RoleRecord, pattern: str, *, mode: int = INCLUDE_MODE) -> None:
-        """Include or subtract one pattern in a role.
+        """Include or subtract one pattern in a role, replacing the pattern's existing mode.
 
-        An *exclusion* is not gated by the authority boundary: subtracting from a
-        role can only ever narrow what it confers, so requiring the node would
-        stop an administrator from removing a capability they cannot themselves
-        hold — which is backwards.
+        An exclusion is not gated by the authority boundary, since subtracting can only narrow
+        what a role confers.
+
+        Raises:
+            InvalidPatternError, ValidationError: *pattern* is malformed or reaches no node.
+            PermissionAuthorityError, ProtectedRoleError, PermissionRankError: the role is not the
+                actor's to manage, or an include reaches beyond their authority or the guild.
         """
         Pattern.parse(pattern)
         self._reached(pattern)
@@ -496,6 +527,10 @@ class PermissionAdministrationService:
         )
 
     async def remove_pattern(self, actor: Actor, role: RoleRecord, pattern: str) -> bool:
+        """Drop a pattern from a role in whichever mode it held, returning whether it was there.
+
+        Raises `PermissionAuthorityError`, `ProtectedRoleError` or `PermissionRankError`.
+        """
         self._require_role_management(actor, role)
         return await self._store.remove_role_pattern(
             role.id,
@@ -510,7 +545,14 @@ class PermissionAdministrationService:
         )
 
     async def add_include(self, actor: Actor, role: RoleRecord, included: RoleRecord) -> None:
-        """Compose one role into another, refusing cycles at write time."""
+        """Compose one role into another, refusing cycles at write time.
+
+        Raises:
+            ValidationError: a role was asked to include itself.
+            ConflictError: the edge would close a cycle.
+            PermissionAuthorityError, ProtectedRoleError, PermissionRankError: the role is not the
+                actor's to manage, or the composed leaves exceed their authority.
+        """
         self._require_role_management(actor, role)
         if role.id == included.id:
             msg = "A role cannot include itself."
@@ -550,6 +592,10 @@ class PermissionAdministrationService:
         return False
 
     async def remove_include(self, actor: Actor, role: RoleRecord, included: RoleRecord) -> bool:
+        """Drop a composition edge, returning whether it existed.
+
+        Raises `PermissionAuthorityError`, `ProtectedRoleError` or `PermissionRankError`.
+        """
         self._require_role_management(actor, role)
         return await self._store.remove_role_include(
             role.id,
@@ -574,7 +620,14 @@ class PermissionAdministrationService:
         expires_at: Instant | None = None,
         reason: str | None = None,
     ) -> None:
-        """Give a role to an account or to everyone holding a Discord role."""
+        """Give a role to an account or to everyone holding a Discord role.
+
+        Raises:
+            ValidationError: the subject is not exactly one of an account or a Discord role, or a
+                Discord role is named without its guild.
+            PermissionRankError: the role is at or above the actor's own highest.
+            PermissionAuthorityError: the role's leaves exceed the actor's authority or scope.
+        """
         if (account_id is None) == (discord_role_id is None):
             msg = "A role is assigned to exactly one subject: an account or a Discord role."
             raise ValidationError(msg)
@@ -618,6 +671,13 @@ class PermissionAdministrationService:
         discord_role_id: int | None = None,
         scope_guild_id: int | None = None,
     ) -> bool:
+        """Take a role away from a subject, returning whether an assignment existed.
+
+        Raises:
+            PermissionRankError: the role is at or above the actor's own highest.
+            ConflictError: the owner role can never be unassigned.
+            PermissionAuthorityError: the role's leaves are outside the actor's scope.
+        """
         self._require_rank(actor, role)
         if role.builtin_key == BuiltinRoleKeys.OWNER:
             msg = "The owner role cannot be unassigned."
@@ -643,8 +703,7 @@ class PermissionAdministrationService:
     def unmanageable_patterns(self, actor: Actor, role: RoleRecord, roles: Sequence[RoleRecord]) -> tuple[str, ...]:
         """Which of a role's leaves the actor could not grant themselves.
 
-        `/role show` surfaces this so the two gates disagreeing is visible up
-        front, rather than discovered one rejected edit at a time.
+        `/role show` surfaces this so the gates disagreeing is visible before an edit is rejected.
         """
         if actor.is_owner:
             return ()
@@ -662,5 +721,5 @@ def scope_label(scope_guild_id: int | None) -> str:
 
 
 def effect_label(effect: int) -> str:
-    """Discord's own vocabulary: allow / deny, plus the loud third one."""
+    """Render a stored effect as `allow`, `deny`, `forbid`, or `?` for an unrecognised value."""
     return {int(Effect.ALLOW): "allow", int(Effect.DENY): "deny", int(Effect.FORBID): "forbid"}.get(effect, "?")

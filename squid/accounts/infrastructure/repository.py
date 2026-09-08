@@ -62,19 +62,13 @@ from squid.submissions.payload_integrity import submission_payload_digest
 _BUILD_CREDITS = table("build_creators", column("alias_id"))
 """A lightweight handle on the one column of `build_creators` this module reads.
 
-Deliberately not `squid.builds.infrastructure.models.BuildCreator`: importing that mapper pulls the
-whole `Build` relationship graph into the accounts context, which both couples the two contexts and
-makes importing this module depend on the builds taxonomy being imported first. All that is wanted
-here is a count.
+Not `squid.builds.infrastructure.models.BuildCreator`: importing that mapper would pull the whole
+`Build` relationship graph into the accounts context, and only a count is wanted here.
 """
 
 
 _now = now
-"""This module's long-standing local name for the shared storage-precision clock.
-
-It was the first place the nanosecond/microsecond mismatch was found; the definition now lives
-in `squid.persistence.types` so every persisted default gets the same treatment.
-"""
+"""Local name for `squid.persistence.types.now`, which floors to the precision `timestamptz` keeps."""
 
 
 def _to_identity(model: AccountIdentityModel) -> AccountIdentity:
@@ -172,14 +166,12 @@ class AccountRepository:
             session.add(AccountProfileModel(account_id=account.id))
             rows = [self._identity_model(account.id, identity) for identity in identities]
             session.add_all(rows)
-            # The flush populates `id` from RETURNING, and every other column `_to_identity`
-            # reads was set here, so the per-row refresh this used to do bought one round trip
-            # each for values already in hand.
+            # The flush populates `id` from RETURNING and every other column `_to_identity` reads
+            # was set here, so no per-row refresh is needed.
             await session.flush()
             return _to_account(account, sorted(rows, key=lambda row: (row.provider, row.id)))
 
     async def get_by_id(self, account_id: int) -> Account | None:
-        """Return an account by internal identifier."""
         async with self._session_factory() as session:
             model = await session.get(AccountModel, account_id)
             return None if model is None else await self._load_account(session, model)
@@ -187,8 +179,7 @@ class AccountRepository:
     async def get_many(self, account_ids: Sequence[int]) -> dict[int, Account]:
         """Return several accounts, with their identities, in two queries regardless of count.
 
-        Anything presenting a list of accounts — the staff claim queue, for one — needs this
-        rather than a `get_by_id` per row.
+        Ids with no account are absent from the mapping.
         """
         if not account_ids:
             return {}
@@ -215,9 +206,8 @@ class AccountRepository:
     ) -> Account:
         """Resolve one external identity, atomically creating its account when absent.
 
-        `consent` is written only on the row this call creates. An account that already exists is
-        returned untouched, because a receipt is evidence that somebody was asked, and this method
-        cannot tell whether the caller asked or merely arrived holding a subject.
+        *consent* is written only on a row this call creates; an existing account is returned
+        untouched, since a receipt is evidence that somebody was asked and this cannot tell.
         """
         identity = AccountIdentity.for_provider(provider, subject)
         async with self._session_factory.begin() as session:
@@ -254,7 +244,11 @@ class AccountRepository:
             return await self._load_account(session, candidate)
 
     async def update_consent(self, account_id: int, consent: AccountConsent) -> Account:
-        """Replace an account's privacy-notice receipt."""
+        """Replace an account's privacy-notice receipt.
+
+        Raises:
+            AccountNotFoundError: no account has that id.
+        """
         async with self._session_factory.begin() as session:
             model = await session.get(AccountModel, account_id, with_for_update=True)
             if model is None:
@@ -267,9 +261,8 @@ class AccountRepository:
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None:
         """Remove one identity by internal id, returning it, or `None` when it is not this account's.
 
-        Addressed by id rather than by provider because an account can hold two identities from the
-        same provider: a merge moves every row across, and picking "the Discord one" would then be
-        a coin flip.
+        Addressed by id rather than provider because a merge moves every row across, so one account
+        can hold two identities from the same provider.
         """
         async with self._session_factory.begin() as session:
             removed = await session.scalar(
@@ -285,7 +278,6 @@ class AccountRepository:
             return None if removed is None else _to_identity(removed)
 
     async def count_identities(self, account_id: int) -> int:
-        """Return how many identities an account currently holds."""
         async with self._session_factory() as session:
             return (
                 await session.scalar(
@@ -297,7 +289,11 @@ class AccountRepository:
             )
 
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
-        """Publish or withhold one identity on the account's public profile."""
+        """Publish or withhold one identity on the account's public profile.
+
+        Raises:
+            AccountIdentityNotFoundError: the account holds no identity with that id.
+        """
         async with self._session_factory.begin() as session:
             updated = await session.scalar(
                 update(AccountIdentityModel)
@@ -315,8 +311,8 @@ class AccountRepository:
     async def set_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
         """Record the provider rendering key an avatar URL needs.
 
-        Separate from the profile write because it is not a user edit: the bot refreshes it
-        opportunistically whenever it happens to hold a fresh `discord.User`.
+        Does nothing when the identity is not this account's. Separate from the profile write
+        because it is not a user edit: the bot refreshes it whenever it holds a fresh `discord.User`.
         """
         async with self._session_factory.begin() as session:
             await session.execute(
@@ -329,7 +325,10 @@ class AccountRepository:
             )
 
     async def get_profile(self, account_id: int) -> AccountProfile | None:
-        """Return an account's own profile, visibility flags and all."""
+        """Return an account's own profile, visibility flags and all, or `None` if no such account.
+
+        An existing account whose profile row is missing reads as an empty profile.
+        """
         async with self._session_factory() as session:
             model = await session.get(AccountProfileModel, account_id)
             # Every account is given a profile row, but a read that predates its creation must
@@ -340,7 +339,12 @@ class AccountRepository:
             return _to_profile(model)
 
     async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile:
-        """Apply a validated partial edit, creating the profile row if it is somehow missing."""
+        """Apply a validated partial edit, creating the profile row if it is missing.
+
+        Raises:
+            AccountNotFoundError: no account has that id.
+            AccountIdentityNotFoundError: the requested avatar identity is not this account's.
+        """
         async with self._session_factory.begin() as session:
             account = await session.get(AccountModel, account_id)
             if account is None:
@@ -373,10 +377,12 @@ class AccountRepository:
             return _to_profile(model)
 
     async def clear_profile(self, account_id: int) -> AccountProfile:
-        """Reset a profile to the state a new account starts with.
+        """Reset a profile to the state a new account starts with, `hidden` included.
 
-        Staff moderation. Clearing leaves the profile *visible*: `hidden` is the owner's control,
-        and a takedown that also hid the page would silently take that decision away from them.
+        A cleared profile is therefore public again, whatever its owner had chosen.
+
+        Raises:
+            AccountNotFoundError: no account has that id.
         """
         async with self._session_factory.begin() as session:
             model = await session.get(AccountProfileModel, account_id, with_for_update=True)
@@ -399,8 +405,10 @@ class AccountRepository:
     async def replace_merge_ticket(self, account_id: int, code: str, ttl_seconds: int) -> MergeTicket:
         """Mint the account's merge ticket, replacing any live one.
 
-        Replace rather than insert: one live ticket per account is what keeps a short code safe,
-        and minting a second would double a guesser's target surface for no user-visible gain.
+        One live ticket per account is what keeps a short code safe.
+
+        Raises:
+            AccountNotFoundError: no account has that id.
         """
         now = _now()
         expires_at = now.add(seconds=ttl_seconds)
@@ -448,7 +456,13 @@ class AccountRepository:
             return None if row is None else _to_merge_ticket(row)
 
     async def merge(self, surviving_account_id: int, absorbed_account_id: int) -> AccountMerge:
-        """Move resources to one account and preserve the absorbed public ID as a redirect."""
+        """Move resources to one account and preserve the absorbed public ID as a redirect.
+
+        The absorbed account row is deleted; the redirect is permanent.
+
+        Raises:
+            AccountNotFoundError: either id names no account.
+        """
         first, second = sorted((surviving_account_id, absorbed_account_id))
         async with self._session_factory.begin() as session:
             locked = (
@@ -525,8 +539,8 @@ class AccountRepository:
     async def get_creator_profile_record(self, public_id: uuid.UUID) -> CreatorProfileRecord | None:
         """Return everything known about one creator, before visibility is applied.
 
-        Deliberately unfiltered: `present_public_profile` decides what a stranger sees, and it can
-        only be the one authority on that if persistence hands it the whole truth.
+        Unfiltered on purpose: `present_public_profile` is the one authority on what a stranger
+        sees, which requires it to be handed the whole truth. Follows merge redirects.
         """
         async with self._session_factory() as session:
             account = await session.scalar(select(AccountModel).where(AccountModel.public_creator_id == public_id))
@@ -593,7 +607,12 @@ class AccountRepository:
             return None if alias is None else _to_alias(alias, public_id)
 
     async def request_claim(self, *, name: str, account_id: int) -> AliasClaim:
-        """Open a pending alias claim, reusing an existing matching request."""
+        """Open a pending alias claim, reusing an existing matching request.
+
+        Raises:
+            CreatorAliasNotFoundError: no build credits a creator under that name.
+            AliasAlreadyClaimedError: the alias is already credited to an account.
+        """
         async with self._session_factory.begin() as session:
             alias = await session.scalar(
                 select(CreatorAliasModel).where(CreatorAliasModel.normalized_name == fold_creator_name(name))
@@ -621,7 +640,6 @@ class AccountRepository:
             return _to_claim(claim, alias.name)
 
     async def get_claim(self, claim_id: int) -> AliasClaim | None:
-        """Return one claim by identifier."""
         async with self._session_factory() as session:
             row = (
                 await session.execute(
@@ -635,9 +653,7 @@ class AccountRepository:
     async def pending_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
         """List claims awaiting staff review, oldest first.
 
-        *with_claimants* loads every claimant's account in the same two extra queries no
-        matter how long the queue is, which is what presenting a claimant as anything better
-        than an internal account ID needs.
+        *with_claimants* fills `AliasClaim.claimant` in two extra queries however long the queue is.
         """
         async with self._session_factory() as session:
             rows = (
@@ -668,12 +684,14 @@ class AccountRepository:
         resolved_by_account_id: int,
         reassign: bool = False,
     ) -> AliasClaim:
-        """Approve or reject a pending claim.
+        """Approve or reject a pending claim, returning it with its claimant loaded.
 
-        Approving a name that is already credited to someone else is refused unless *reassign*
-        is set. A rename into a contested name opens exactly such a claim, so staff need a way
-        to move the credit — but moving it is a deliberate act, never a side effect of routine
-        approval.
+        Approving a name already credited to someone else is refused unless *reassign* is set, so
+        moving credit is always a deliberate act.
+
+        Raises:
+            ClaimNotFoundError: no claim has that id, it is no longer pending, or its alias is gone.
+            AliasAlreadyClaimedError: the name is held and *reassign* is false.
         """
         async with self._session_factory.begin() as session:
             claim = await session.get(CreatorAliasClaimModel, claim_id, with_for_update=True)
@@ -710,14 +728,9 @@ class AccountRepository:
     def hash_verification_code(self, code: str) -> str:
         """Return the digest stored for a short-lived verification code.
 
-        Keyed, not prefixed. The pepper is a key, and `sha256(pepper || code)` is the weaker
-        construction for no saving. Unlike every other credential in this codebase the input here is
-        human-sized, so see `docs/credential-hashing.md` for why the answer is still a keyed digest
-        rather than a KDF: the code is short-lived and attempt-capped, which is what buys the safety
-        margin a work factor would otherwise have to.
-
-        No dual-read path and no backfill. Codes expire in ten minutes, so a deploy invalidates at
-        most one window and the in-game `/link` reissues.
+        Keyed HMAC rather than `sha256(pepper || code)`, and a digest rather than a KDF because the
+        code is short-lived and attempt-capped; see `docs/credential-hashing.md`. Changing the
+        pepper invalidates at most one ten-minute window, so there is no dual-read path.
         """
         # codeql[py/weak-sensitive-data-hashing]
         return hmac.digest(self._verification_code_pepper.encode(), code.encode(), hashlib.sha256).hex()
@@ -901,16 +914,16 @@ class AccountRepository:
     ) -> VerificationLinkResult:
         """Consume one code and attach its Java identity to *account_id* atomically.
 
-        The account must already exist. Redeeming a code is evidence of a *Java* subject and
-        of nothing else, so this path no longer mints an identity in any other namespace;
-        whoever holds evidence of the caller's own provider creates the account before
-        calling. That is what lets a Minecraft-only or CLI-only caller link at all.
+        The account must already exist: redeeming a code is evidence of a Java subject and nothing
+        else, so this mints no identity in another namespace.
 
         *reservation_token* commits a hold taken by `reserve_verification_code`. The hold is checked
-        after the code is found rather than as part of finding it, so a lapsed prompt can be reported
-        as itself instead of as an invalid code. Everything else is still re-checked under the lock:
-        the reservation freezes the code, not the world, so the creator credit a preview described
-        may have been claimed in the meantime.
+        after the code is found rather than as part of finding it, so a lapsed prompt reports as
+        `reservation_expired` instead of as an invalid code. A reservation freezes the code, not the
+        world, so everything else is re-checked under the lock.
+
+        Raises:
+            AccountNotFoundError: no account has that id.
         """
         async with self._session_factory.begin() as session:
             verification_code = await session.scalar(
@@ -992,8 +1005,12 @@ class AccountRepository:
     ) -> IdentityRefresh:
         """Record a freshly observed Java name and reconcile the creator credit that follows it.
 
-        Runs the same reconciliation the link path does, so a rename is handled identically
-        whether it is noticed during linking or by an explicit refresh.
+        Runs the same reconciliation as the link path, so a rename is handled identically either
+        way.
+
+        Raises:
+            AccountNotFoundError: no account has that id.
+            MinecraftAccountNotFoundError: the account has no Java identity for that UUID.
         """
         async with self._session_factory.begin() as session:
             account = await session.get(AccountModel, account_id, with_for_update=True)
@@ -1032,12 +1049,10 @@ class AccountRepository:
     ) -> IdentityRefresh:
         """Attach the verified name's creator credit, without ever taking one from someone else.
 
-        The four cases are exhaustive by design, so a rename can never fall through into
-        "nothing happened": the name is unknown, free, already ours, or someone else's. Only
-        the last needs a human, and it gets a pending claim rather than a silent no-op.
-
-        Aliases claimed under previous names are deliberately left attached. A rename does not
-        retract the credit for work published under the old name.
+        The four cases are exhaustive, so a rename never falls through into "nothing happened": the
+        name is unknown, free, already ours, or someone else's, and only the last opens a pending
+        claim. Aliases claimed under previous names stay attached, because a rename does not retract
+        credit for work published under the old name.
         """
         folded = fold_creator_name(username)
         claimed: CreatorAlias | None = None
@@ -1174,12 +1189,7 @@ class AccountRepository:
 
     @staticmethod
     async def _load_accounts(session: AsyncSession, accounts: Sequence[AccountModel]) -> dict[int, Account]:
-        """Load identities for several accounts in one query.
-
-        The mapping stays explicit — the domain objects are frozen dataclasses and must not
-        learn about SQLAlchemy — but the *fetch* does not have to be per row, which is what
-        made any multi-account read an N+1.
-        """
+        """Load identities for several accounts in one query, keyed by account id."""
         if not accounts:
             return {}
         account_ids = [account.id for account in accounts]
@@ -1247,8 +1257,8 @@ class AccountRepository:
             "WHERE absorbed_vote.account_id = :absorbed AND survivor_vote.account_id = :survivor "
             "AND absorbed_vote.vote_session_id = survivor_vote.vote_session_id",
             "UPDATE votes SET account_id = :survivor WHERE account_id = :absorbed",
-            # Only switches move now: the notice receipt this used to fold lives on `accounts`,
-            # where the survivor's own row already carries the answer.
+            # Only the switches move: the notice receipt lives on `accounts`, where the survivor's
+            # own row already carries the answer.
             "INSERT INTO notification_profiles "
             "(account_id, web_enabled, dm_enabled, dm_suspended_at, created_at, updated_at) "
             "SELECT :survivor, web_enabled, dm_enabled, dm_suspended_at, created_at, updated_at "
@@ -1314,7 +1324,12 @@ async def _canonicalize_finalization_job_owners(
     survivor: int,
     absorbed: int,
 ) -> None:
-    """Rewrite retained payload owners and fence claims that escaped before the merge lock."""
+    """Rewrite retained payload owners and fence claims that escaped before the merge lock.
+
+    Raises:
+        DataIntegrityError: a retained payload is not an object, fails its digest, or names an
+            owner that is neither account.
+    """
     if not draft_ids:
         return
     jobs = tuple(

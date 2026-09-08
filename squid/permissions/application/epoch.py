@@ -1,11 +1,9 @@
 """Keeping one process's permission cache in step with the others.
 
 Three processes hold three caches, and a grant issued in the API has to become
-visible in the bot. Both routes to that are here: a `LISTEN` connection that
-wakes on the trigger's `NOTIFY`, and a poll that runs regardless. The poll is the
-durable one — the same division of labour the domain-event poller already uses,
-for the same reason: a notification delivered while a process was restarting is
-simply gone.
+visible in the bot. Both routes are here: a `LISTEN` connection woken by the
+trigger's `NOTIFY`, and a poll that runs regardless. The poll is the durable one,
+because a notification delivered while a process was restarting is simply gone.
 """
 
 import logging
@@ -24,9 +22,17 @@ POLL_INTERVAL_SECONDS = 5.0
 
 
 class WakeListener(Protocol):
-    """A source of wake hints, satisfied by `PostgresWakeListener`."""
+    """A source of wake hints, satisfied by `PostgresWakeListener`.
 
-    async def run(self, on_wake: Callable[[], Awaitable[None]]) -> None: ...
+    `run` returns only when the task awaiting it is cancelled.
+    """
+
+    async def run(self, on_wake: Callable[[], Awaitable[None]]) -> None:
+        """Await *on_wake* on every hint until cancelled, retrying rather than propagating errors.
+
+        Callers also poll, so a lost hint costs latency and not correctness.
+        """
+        ...
 
 
 class PermissionEpochWatcher:
@@ -54,7 +60,11 @@ class PermissionEpochWatcher:
             logger.debug("Permission epoch advanced to %d; rule cache cleared", self._cache.epoch)
 
     async def listen(self) -> None:
-        """Follow the notification channel, refreshing on every hint."""
+        """Follow the notification channel, refreshing on every hint, until cancelled.
+
+        Raises:
+            InvalidStateError: this watcher was built without a listener.
+        """
         if self._listener is None:
             msg = tr(t"This watcher was built without a wake listener.")
             raise InvalidStateError(msg)

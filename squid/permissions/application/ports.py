@@ -82,9 +82,8 @@ class PermissionStore(Protocol):
 class ActorCapabilityResolver(Protocol):
     """Resolves an actor's node names for contexts that must not depend on us.
 
-    The voting and reactions contexts hold their authorization as a set of
-    already-resolved capability names, so they never import the permissions
-    application package and stay framework-independent.
+    The voting and reactions contexts hold their authorization as already-resolved capability
+    names, so they never import this package.
     """
 
     async def capabilities_for(
@@ -189,7 +188,9 @@ class PermissionAdminStore(Protocol):
         granted_by_account_id: int | None,
         reason: str | None,
         audit: AuditEntry,
-    ) -> None: ...
+    ) -> None:
+        """Create or overwrite the one grant for this pattern, subject and scope."""
+        ...
 
     async def delete_grant(
         self,
@@ -199,7 +200,9 @@ class PermissionAdminStore(Protocol):
         subject_role_id: int | None,
         scope_guild_id: int | None,
         audit: AuditEntry,
-    ) -> bool: ...
+    ) -> bool:
+        """Remove that grant, returning whether one existed; *audit* is appended only if so."""
+        ...
 
     async def list_rules(
         self,
@@ -207,7 +210,12 @@ class PermissionAdminStore(Protocol):
         subject_account_id: int | None = None,
         subject_role_id: int | None = None,
         guild_id: int | None = None,
-    ) -> tuple[RuleRow, ...]: ...
+    ) -> tuple[RuleRow, ...]:
+        """Direct grants matching every filter given, in insertion order.
+
+        *guild_id* matches a grant held by that guild's roles or scoped to it.
+        """
+        ...
 
     async def list_assignments(
         self,
@@ -215,11 +223,17 @@ class PermissionAdminStore(Protocol):
         subject_account_id: int | None = None,
         subject_role_id: int | None = None,
         guild_id: int | None = None,
-    ) -> tuple[AssignmentRow, ...]: ...
+    ) -> tuple[AssignmentRow, ...]:
+        """Role assignments matching every filter given, with each role's slug resolved."""
+        ...
 
-    async def list_roles(self, *, guild_id: int | None = None) -> tuple[RoleRecord, ...]: ...
+    async def list_roles(self, *, guild_id: int | None = None) -> tuple[RoleRecord, ...]:
+        """Every global role, plus that guild's own roles when *guild_id* is given."""
+        ...
 
-    async def get_role(self, slug: str, *, guild_id: int | None = None) -> RoleRecord | None: ...
+    async def get_role(self, slug: str, *, guild_id: int | None = None) -> RoleRecord | None:
+        """Resolve a slug, preferring the guild's own role over a global one of the same name."""
+        ...
 
     async def create_role(
         self,
@@ -231,11 +245,17 @@ class PermissionAdminStore(Protocol):
         rank: int,
         created_by_account_id: int | None,
         audit: AuditEntry,
-    ) -> RoleRecord: ...
+    ) -> RoleRecord:
+        """Insert a role and return it with its assigned id, which *audit* also records."""
+        ...
 
-    async def delete_role(self, role_id: int, *, audit: AuditEntry) -> bool: ...
+    async def delete_role(self, role_id: int, *, audit: AuditEntry) -> bool:
+        """Delete a role with its patterns, edges and assignments, returning whether it existed."""
+        ...
 
-    async def set_role_rank(self, role_id: int, rank: int, *, audit: AuditEntry) -> None: ...
+    async def set_role_rank(self, role_id: int, rank: int, *, audit: AuditEntry) -> None:
+        """Set the rank that decides who may edit this role."""
+        ...
 
     async def set_role_pattern(
         self,
@@ -245,9 +265,17 @@ class PermissionAdminStore(Protocol):
         *,
         added_by_account_id: int | None,
         audit: AuditEntry,
-    ) -> None: ...
+    ) -> None:
+        """Add *pattern* to the role as an include or an exclude, per *mode*.
 
-    async def remove_role_pattern(self, role_id: int, pattern: str, *, audit: AuditEntry) -> bool: ...
+        One mode per pattern per role, so re-adding with the other mode replaces rather than
+        stacking and a role can never contradict itself.
+        """
+        ...
+
+    async def remove_role_pattern(self, role_id: int, pattern: str, *, audit: AuditEntry) -> bool:
+        """Drop *pattern* from the role in whichever mode it held, returning whether it was there."""
+        ...
 
     async def add_role_include(
         self,
@@ -256,9 +284,13 @@ class PermissionAdminStore(Protocol):
         *,
         added_by_account_id: int | None,
         audit: AuditEntry,
-    ) -> None: ...
+    ) -> None:
+        """Make one role include another. Idempotent; cycles are tolerated by the resolver."""
+        ...
 
-    async def remove_role_include(self, role_id: int, included_role_id: int, *, audit: AuditEntry) -> bool: ...
+    async def remove_role_include(self, role_id: int, included_role_id: int, *, audit: AuditEntry) -> bool:
+        """Drop the composition edge, returning whether it existed."""
+        ...
 
     async def assign_role(
         self,
@@ -272,7 +304,9 @@ class PermissionAdminStore(Protocol):
         granted_by_account_id: int | None,
         reason: str | None,
         audit: AuditEntry,
-    ) -> None: ...
+    ) -> None:
+        """Assign the role to a subject, refreshing expiry and provenance if it already is."""
+        ...
 
     async def unassign_role(
         self,
@@ -282,6 +316,10 @@ class PermissionAdminStore(Protocol):
         subject_role_id: int | None,
         scope_guild_id: int | None,
         audit: AuditEntry,
-    ) -> bool: ...
+    ) -> bool:
+        """Remove the assignment, returning whether one existed; *audit* is appended only if so."""
+        ...
 
-    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[AuditRow, ...]: ...
+    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[AuditRow, ...]:
+        """The most recent *limit* audit rows, newest first, narrowed to one guild if given."""
+        ...

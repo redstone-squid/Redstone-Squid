@@ -7,6 +7,8 @@ from whenever import Instant
 from squid.core.i18n import tr
 
 CURRENT_CONSENT_VERSION = "2026-08-18"
+"""Bumping this asks every account to accept the notice again, so only move it when the facts the
+receipt covers change."""
 
 CONSENT_CUTOFF = "2026-08-04T00:00:00+00:00"
 """Accounts created before this instant predate consent receipts and are grandfathered."""
@@ -35,21 +37,11 @@ PRIVACY_NOTICE = tr(
 )
 """The full notice, served over HTTP and shown behind a button in Discord.
 
-One message rather than several so the version recorded in a consent receipt refers to a single
-piece of text. It lives in the domain beside the version that names it, because splitting the two
-is how they drift; every transport renders this same msgid in the caller's locale.
-
-It names no command. The notice is served over HTTP as well as in Discord, and the one command
-name it used to carry outlived the command (`/account visibility`, folded into the `/account`
-panel in phase 7). Dropping it changed no fact the receipt covers, so `CURRENT_CONSENT_VERSION`
-did not move -- a bump asks every user to re-accept, and spending that on a cross-reference is
-how the version stops meaning anything.
-
-It describes submission as well as storage because it now fronts many actions rather than one.
-The submission paragraph deliberately *defers* on licensing rather than stating terms: schematics
-already carry a per-submission licence choice (`SubmissionSchematicLicense`), and build text and
-media carry none anywhere in the codebase, so claiming terms for them here would be inventing
-them. What it does say is what actually happens.
+One message rather than several, so the version in a receipt names a single piece of text; it sits
+beside `CURRENT_CONSENT_VERSION` so the two cannot drift. Every transport renders this msgid in the
+caller's locale, so it names no command. The submission paragraph defers on licensing rather than
+stating terms: schematics carry a per-submission licence choice (`SubmissionSchematicLicense`) and
+build text and media carry none, so terms stated here would be invented.
 """
 
 
@@ -69,14 +61,13 @@ class AccountConsent:
 def consent_refresh_required(created_at: Instant | None, consent_version: str | None) -> bool:
     """Whether the current notice must be accepted before more data about this account is stored.
 
-    The one Python spelling of the gate, taking raw columns because the browser-session reader
-    holds those rather than an assembled `Account`. `squid.accounts.infrastructure.consent`
-    carries the SQL spelling, and a test pins that the two agree.
+    Takes raw columns because the browser-session reader holds those rather than an assembled
+    `Account`. `squid.accounts.infrastructure.consent` carries the SQL spelling of the same gate,
+    and a test pins that the two agree.
 
-    Grandfathering is deliberately narrow. `CONSENT_CUTOFF` means "predates receipts existing at
-    all", not "opted out permanently", so an account that has *ever* consented rejoins the version
-    treadmill even if it predates the cutoff. An unpersisted account has no creation instant to
-    judge and is never grandfathered.
+    Grandfathering is narrow: an account that has ever consented is judged on its version even if it
+    predates `CONSENT_CUTOFF`, and an unpersisted account (`created_at is None`) is never
+    grandfathered.
     """
     if consent_version == CURRENT_CONSENT_VERSION:
         return False

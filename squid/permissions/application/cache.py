@@ -7,10 +7,9 @@ round trip per command and one per check.
 
 Invalidation is by epoch rather than by time. Any permission write anywhere bumps
 a single counter; a watcher notices and clears the whole cache. Clearing
-everything is deliberate: a role edit changes the answer for every holder, and a
-role *composition* edit changes it for every transitive holder, so per-subject
-invalidation would have to know a graph that the writing process does not have in
-front of it. `clear()` is O(1) and always correct.
+everything is deliberate: a role composition edit changes the answer for every
+transitive holder, so per-subject invalidation would need a graph the writing
+process does not have. `clear()` is O(1) and always correct.
 
 The wall-clock backstop bounds what a dead watcher can cost. Entries older than
 `max_age_seconds` are refetched, so the failure mode is a 30-second stale grant
@@ -37,11 +36,9 @@ type CacheKey = tuple[int | None, frozenset[int], int | None, bool]
 def cache_key(subject: Subject) -> CacheKey:
     """The identity of everything about `subject` that changes its rule set.
 
-    `discord_guild_admin` is part of the key even though the plan's key was
-    account, roles and guild alone: the Manage-Server bridge contributes rules to
-    the assembled set, so a subject holding it and a subject not holding it do not
-    share an answer. `is_bot_owner` is absent because the owner short-circuits
-    before any rule is read, so no owner entry is ever stored.
+    `discord_guild_admin` is part of the key because the Manage-Server bridge contributes
+    rules. `is_bot_owner` is not, because the owner short-circuits before any rule is read,
+    so no owner entry is ever stored.
     """
     return (subject.account_id, subject.discord_role_ids, subject.guild_id, subject.discord_guild_admin)
 
@@ -98,10 +95,8 @@ class SubjectRuleCache:
     def put(self, key: CacheKey, rules: tuple[Rule, ...], *, epoch: int, now: Instant | None = None) -> None:
         """Store the rules assembled for `key`, stamped with the epoch they were read at.
 
-        A load that returns a newer epoch than this process knew about advances the
-        cache itself, so entries read before that write are discarded on their next
-        read without waiting for the watcher. The watcher is a latency hint here
-        too, not the only route to correctness.
+        An epoch newer than this process knew about advances the cache itself, so entries
+        read before that write are discarded on their next read without the watcher.
         """
         if epoch > self._epoch:
             self._epoch = epoch

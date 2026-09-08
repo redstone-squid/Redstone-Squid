@@ -1,11 +1,8 @@
 """Public creator profiles: what an account chooses to show, and what it hides.
 
-A profile is presentation, deliberately separate from `CreatorAlias`, which is build credit.
-Renaming yourself here moves no credit and needs no staff review; the public page shows both, so
-attribution never depends on what somebody calls themself this week.
-
-Visibility lives here rather than in the API layer because three transports read it. The one
-authority is `present_public_profile`: everything else stores flags.
+A profile is presentation, separate from `CreatorAlias`, which is build credit: renaming yourself
+here moves no credit and needs no staff review. `present_public_profile` is the single authority on
+what a stranger sees; everything else only stores flags.
 """
 
 import unicodedata
@@ -175,9 +172,8 @@ class ProfileUpdate:
     def validated(self) -> ProfileUpdate:
         """Return this update with every present field normalized, or raise `ValidationError`.
 
-        Normalization is the domain's job for the same reason `fold_creator_name` is: the API, the
-        bot, and any future importer must agree on what "the same display name" means, and three
-        transports normalizing independently is three chances to disagree.
+        Normalization belongs to the domain so that the API, the bot and any importer agree on what
+        "the same display name" means.
         """
         changes: dict[str, object] = {}
         if not isinstance(self.display_name, _Unset):
@@ -226,8 +222,7 @@ class CreditedAlias:
 class PublicIdentity:
     """The public projection of a linked identity.
 
-    Carries no `verified_at` and no internal id: when it was verified is nobody else's business,
-    and the id is the handle used to *change* the identity.
+    Carries no `verified_at` and no internal id: the id is the handle used to change the identity.
     """
 
     provider: IdentityProvider
@@ -239,8 +234,8 @@ class PublicIdentity:
 class CreatorProfileRecord:
     """Everything persistence knows about one creator, before visibility is applied.
 
-    Deliberately unfiltered: `present_public_profile` is the single place that decides what a
-    stranger sees, and it can only be the single place if it is handed the whole truth.
+    Unfiltered on purpose: `present_public_profile` can only be the single visibility decision if it
+    is handed the whole truth.
     """
 
     public_id: UUID
@@ -290,9 +285,8 @@ def avatar_url_for(identity: AccountIdentity) -> str | None:
 def present_public_profile(record: CreatorProfileRecord) -> PublicCreatorProfile:
     """Apply visibility to *record*, producing what an anonymous reader may see.
 
-    Hiding a profile degrades it to aliases and credits rather than removing it. Build credit is a
-    fact about a build, and a creator page that vanished would strand every build crediting it;
-    what hiding withholds is the person behind the name, not the name.
+    Hiding degrades a profile to aliases and credits rather than removing it: build credit is a fact
+    about a build, and a page that vanished would strand every build crediting it.
     """
     aliases = record.aliases
     if record.profile.hidden:

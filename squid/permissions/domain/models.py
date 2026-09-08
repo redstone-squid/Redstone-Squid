@@ -31,9 +31,8 @@ class Default(StrEnum):
 class Tag(StrEnum):
     """A semantic classification used to select nodes across the tree.
 
-    Tags exist so a role can be defined as "this namespace, minus the dangerous
-    parts" and stay correct as the catalogue grows: a leaf added later inherits
-    the exclusion from its tag rather than needing every role to be edited.
+    A role defined as "this namespace, minus the dangerous parts" stays correct as the
+    catalogue grows: a leaf added later inherits the exclusion from its tag.
     """
 
     DESTRUCTIVE = "destructive"
@@ -80,7 +79,7 @@ class PermissionNode:
 
 
 class InvalidPatternError(ValidationError):
-    """A permission pattern is not well-formed."""
+    """Raised by `Pattern.parse` for an empty, over-deep, or malformed pattern."""
 
     default_message = tr(t"That is not a valid permission pattern.")
     default_title = tr(t"Invalid permission pattern")
@@ -89,8 +88,8 @@ class InvalidPatternError(ValidationError):
 class UnknownPermissionNodeError(InvalidStateError):
     """A node name was resolved that the catalogue does not define.
 
-    Raised rather than denied on purpose: a missing node is a programming error,
-    and silently denying it would hide the bug behind a plausible-looking refusal.
+    Raised rather than denied: a missing node is a programming error, and denying it would
+    hide the bug behind a plausible-looking refusal.
     """
 
     @classmethod

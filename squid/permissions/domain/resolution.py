@@ -15,16 +15,11 @@ Precedence, highest first:
    `(specificity, scope, subject, origin, deny-first)`.
 3. With no matching rule, the node's catalogue default applies.
 
-Specificity outranks deny on purpose, which is LuckPerms' rule and what Minecraft
-admins already expect: `settings.**` allowed with `settings.server.edit` denied
-reads as "the namespace minus one hole". Deny only breaks a complete tie.
-
-That tie-break inverts Discord's. Discord unions every role's denies, then every
-role's allows, and applies denies first, so allow wins and role position never
-enters into it. Here a deny is always something a person deliberately typed —
-absence already denies, so nobody writes a deny just to structure things — and
-honouring it is the safer reading. Role rank deliberately plays no part at all;
-it governs who may edit which role, and nothing else.
+Specificity outranks deny, as in LuckPerms: `settings.**` allowed with
+`settings.server.edit` denied reads as "the namespace minus one hole". Deny only
+breaks a complete tie, which inverts Discord's allow-wins union — here absence
+already denies, so a deny is always something a person deliberately typed. Role
+rank plays no part at all; it governs who may edit which role and nothing else.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
@@ -274,12 +269,9 @@ def _applicable(
 def _ordering(rule: Rule) -> tuple[object, ...]:
     """Sort key placing the winner first, and breaking remaining ties stably.
 
-    Rank alone leaves genuine ties, and Python's sort would then hand the verdict
-    to whichever rule the database happened to return first. Two rules that tie on
-    rank always agree on the verdict — deny-first is part of the rank, so an allow
-    and a deny can never tie — but the *trace* would still shuffle between runs,
-    and `/perm can` is a user-facing explanation that ought to read the same
-    way twice.
+    Rank alone leaves genuine ties, which would otherwise be settled by database row
+    order. Tied rules always agree on the verdict, since deny-first is part of the rank,
+    but the trace `/perm can` renders would shuffle between runs.
     """
     negated_rank = tuple(-component for component in rule.rank()[1:])
     negated_specificity = tuple(-component for component in rule.rank()[0])
@@ -290,10 +282,9 @@ def _lost_on(winner: Rank, loser: Rank) -> str:
     for name, won, lost in zip(RANK_COMPONENTS, winner, loser, strict=True):
         if won != lost:
             return name
-    # Ranks are equal, so the stable tiebreaker in `_ordering` picked between
-    # them. Deny-first is part of the rank, so equally-ranked rules always agree
-    # on the verdict: this rule lost nothing that would have changed the answer,
-    # and `/perm can` should say so rather than leave a blank.
+    # Equal ranks: `_ordering`'s stable tiebreaker picked between them. Equally-ranked
+    # rules always agree on the verdict, so this one lost nothing that would have changed
+    # the answer, and `/perm can` says so rather than leaving a blank.
     return TIE
 
 
@@ -305,7 +296,11 @@ def resolve(
     catalogue: Catalogue = CATALOGUE,
     now: Instant | None = None,
 ) -> Decision:
-    """Decide whether `subject` holds `node`, and record why."""
+    """Decide whether `subject` holds `node`, and record why.
+
+    Raises:
+        UnknownPermissionNodeError: *node* is a name the catalogue does not define.
+    """
     resolved = catalogue[node] if isinstance(node, str) else node
     instant = now if now is not None else Instant.now()
 
@@ -352,8 +347,10 @@ def resolve_many(
 ) -> frozenset[str]:
     """The names of the nodes in `nodes` that `subject` holds.
 
-    One call answers a whole command's checks, or a vote actor's capability set,
-    from a single already-loaded rule sequence.
+    One call answers a whole command's checks from a single already-loaded rule sequence.
+
+    Raises:
+        UnknownPermissionNodeError: a name in *nodes* is not in the catalogue.
     """
     instant = now if now is not None else Instant.now()
     return frozenset(

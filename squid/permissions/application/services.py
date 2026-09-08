@@ -35,15 +35,10 @@ from squid.permissions.domain import (
 def _role_specs(roles: Iterable[RoleRecord]) -> dict[str, RoleSpec]:
     """Key stored roles by id, folding code-defined built-in patterns in.
 
-    A built-in's pattern list lives in `squid.permissions.domain.catalogue`, and
-    any rows stored against it are additive overrides on top. That is what stops
-    the seeded list from freezing the catalogue as it looked on migration day.
-
-    Stored includes cannot punch through a built-in's code-level excludes, since
-    exclusions are applied after the union. That is deliberate: those excludes are
-    the boundary keeping `global-admin` clear of `bot.**` and `@destructive`, so
-    write access to `permission_role_patterns` must not be a route to the
-    owner-only surface. Widening past the boundary needs a deploy or a new role.
+    A built-in's pattern list lives in `squid.permissions.domain.catalogue`; rows stored against
+    it are additive overrides. Exclusions apply after the union, so stored includes cannot punch
+    through a built-in's code-level excludes: write access to `permission_role_patterns` is not a
+    route past the boundary keeping `global-admin` clear of `bot.**` and `@destructive`.
     """
     specs: dict[str, RoleSpec] = {}
     for role in roles:
@@ -100,7 +95,11 @@ class PermissionService:
         return self._cache
 
     async def rules_for(self, subject: Subject) -> tuple[Rule, ...]:
-        """Every rule that could bear on `subject`, role composition already applied."""
+        """Every rule that could bear on `subject`, role composition already applied.
+
+        Empty for the bot owner, who short-circuits before any rule is read. Served from the cache
+        when one is configured and its entry is neither stale by epoch nor by age.
+        """
         if subject.is_bot_owner:
             # The owner short-circuits before any rule is read, so loading them
             # would be pure cost.
@@ -121,7 +120,7 @@ class PermissionService:
         return rules
 
     def assemble(self, records: SubjectRecords, subject: Subject) -> tuple[Rule, ...]:
-        """Turn stored rows into resolver rules. Pure, so it is cheap to test."""
+        """Turn stored rows into resolver rules. Pure: no store or cache access."""
         specs = _role_specs(records.roles)
         rules = [_grant_rule(grant) for grant in records.grants]
         rules.extend(self._assignment_rules(records, specs))
@@ -192,9 +191,8 @@ class PermissionService:
     ) -> tuple[Decision, ...]:
         """Decide several nodes from one load, keeping each one's reason.
 
-        A command that declares two nodes needs to know *why* it was refused —
-        a `forbid` reads differently to a missing grant — which the capability
-        set alone cannot say.
+        `capabilities` is cheaper when only the allowed subset matters; this keeps why a node was
+        refused, which a `forbid` and a missing grant answer differently.
         """
         rules = await self.rules_for(subject)
         return tuple(resolve(node, subject, rules, catalogue=self._catalogue) for node in nodes)
@@ -217,11 +215,7 @@ class PermissionService:
         discord_guild_admin: bool = False,
         nodes: Iterable[str] = (),
     ) -> frozenset[str]:
-        """Satisfy `ActorCapabilityResolver` for contexts that must not import us.
-
-        The voting and reactions contexts carry authorization as resolved node
-        names, so they depend on this protocol rather than on this class.
-        """
+        """Satisfy `ActorCapabilityResolver` for contexts that hold only resolved node names."""
         subject = Subject(
             account_id=account_id,
             discord_role_ids=frozenset(discord_role_ids),
@@ -234,9 +228,8 @@ class PermissionService:
     def role_leaves(self, role: RoleRecord, roles: Iterable[RoleRecord]) -> tuple[str, ...]:
         """The node names one role actually confers, sorted.
 
-        Expansion is a read-time convenience for rendering and for the authority
-        gate; nothing stores it, so a node added tomorrow appears here without a
-        migration.
+        Computed against the live catalogue and never stored, so a node added later appears here
+        without a migration. *roles* must contain every role, since composition follows ids.
         """
         specs = _role_specs(roles)
         expansion = expand_role(str(role.id), specs, catalogue=self._catalogue)
@@ -248,10 +241,8 @@ class PermissionService:
     def is_delegable_by_guild_admin(self, pattern: str) -> bool:
         """Whether a guild administrator may issue `pattern` inside their guild.
 
-        True only when every catalogue leaf the pattern reaches is guild-scoped.
-        A pattern reaching nothing is refused as well: it is either a typo or a
-        bet on a node that does not exist yet, and both deserve an error rather
-        than a grant that silently starts applying later.
+        True only when every catalogue leaf the pattern reaches is guild-scoped. A pattern that is
+        malformed, or that reaches no leaf at all, is refused rather than granted.
         """
         try:
             scopes = self._catalogue.scopes_reached(pattern)

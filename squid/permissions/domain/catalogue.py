@@ -37,6 +37,7 @@ class Catalogue:
         self._nodes = {node.name: node for node in nodes}
 
     def __getitem__(self, name: str) -> PermissionNode:
+        """Return the node called *name*, raising `UnknownPermissionNodeError` if undefined."""
         try:
             return self._nodes[name]
         except KeyError:
@@ -92,7 +93,12 @@ class CatalogueBuilder:
         default: Default = Default.DENY,
         tags: Sequence[Tag] = (),
     ) -> PermissionNode:
-        """Declare a node and return it, so the constant and the registration agree."""
+        """Declare a node and return it, so the constant and the registration agree.
+
+        Raises:
+            CatalogueError: the name is a duplicate, is a pattern, or has too few or too many
+                segments.
+        """
         if name in self._nodes:
             msg = f"Duplicate permission node: {name!r}."
             raise CatalogueError(msg)
@@ -114,7 +120,7 @@ class CatalogueBuilder:
         return created
 
     def build(self) -> Catalogue:
-        """Freeze the catalogue, rejecting structurally invalid node sets."""
+        """Freeze the catalogue, raising `CatalogueError` if a node is also a namespace prefix."""
         # A node that is also an interior namespace would make `foo.bar.**`
         # ambiguous: it could mean "the subtree" or "the subtree and its root".
         for name in self._nodes:
@@ -493,10 +499,8 @@ CATALOGUE = _b.build()
 class RoleDefinition:
     """A built-in role's identity and pattern lists.
 
-    Built-in pattern lists live in code rather than in the database on purpose. A
-    migration that seeded them would freeze the catalogue as it looked on the day
-    it ran, so every node added afterwards would silently fall outside
-    `global-admin`. Database rows for a built-in are additive overrides only.
+    The lists live in code, not in a seeded migration that would freeze the catalogue as it
+    looked the day it ran. Database rows for a built-in are additive overrides only.
     """
 
     key: str

@@ -52,11 +52,7 @@ from squid.core.errors import InvalidStateError
 logger = logging.getLogger(__name__)
 
 VERIFICATION_MAX_CONSECUTIVE_FAILURES = 5
-"""Wrong codes tolerated in a row before an identity has to wait.
-
-Generous enough that mistyping a ten-digit code is never the problem, and small enough that the
-guessing budget stays far below the code space even across many windows.
-"""
+"""Wrong codes tolerated in a row before an identity has to wait."""
 
 VERIFICATION_LOCKOUT_SECONDS = 15 * 60
 """Longer than a code lives, so a lockout always outlasts the codes it was protecting."""
@@ -66,21 +62,17 @@ VERIFICATION_CODE_DIGITS = 10
 LINK_RESERVATION_TTL_SECONDS = 180
 """How long a held code waits for its consent prompt to be answered.
 
-Comfortably longer than the prompt's own 120-second timeout, so the view always expires first and
-the user sees a disabled prompt rather than a hold that lapsed underneath a live one.
+Longer than the prompt's own 120-second timeout, so the view always expires first and the user sees
+a disabled prompt rather than a hold that lapsed underneath a live one.
 """
 
 
 def generate_verification_code() -> int:
     """Mint a ten-digit verification code, about 33 bits.
 
-    Six digits was about 19.8 bits, and the redemption looks a code up by code alone across every
-    outstanding code, so the chance per attempt was `outstanding / 900_000` rather than one in
-    900 000 — and a hit links the victim's Minecraft account to the guesser.
-
-    Stays numeric on purpose: `/verify` returns an `int` to the in-game plugin that shows the code
-    to the player, so base32 would be stronger and would also change that response type. Thirty-three
-    bits against a ten-minute window and a capped attempt budget is already decisive.
+    Redemption looks a code up by code alone across every outstanding code, so the chance per guess
+    is `outstanding / 9e9`, and a hit links the victim's Minecraft account to the guesser. Numeric
+    because `/verify` returns an `int` to the in-game plugin that shows the code to the player.
     """
     lower = 10 ** (VERIFICATION_CODE_DIGITS - 1)
     return secrets.randbelow(9 * lower) + lower
@@ -104,14 +96,12 @@ class AccountService:
         return await self._repository.get_by_identity(provider, subject)
 
     async def get_account_by_id(self, account_id: int) -> Account | None:
-        """Return an account by its internal identifier."""
         return await self._repository.get_by_id(account_id)
 
     async def get_accounts(self, account_ids: Sequence[int]) -> dict[int, Account]:
         """Return several accounts, with their identities, at a fixed query cost.
 
-        Anything rendering a list of account-keyed rows needs this rather than a
-        `get_account_by_id` per row.
+        Missing ids are absent from the mapping rather than mapped to `None`.
         """
         return await self._repository.get_many(account_ids)
 
@@ -120,18 +110,15 @@ class AccountService:
     ) -> Account:
         """Resolve the account established by a verified external identity, creating it if absent.
 
-        Every caller holds evidence of the *provider* subject it passes — an OAuth exchange, a
-        gateway event — which is what makes creating an account here legitimate. Nothing that
-        merely observes a subject may use this; see `AccountIdCache`'s never-create rule.
-
-        A caller that just asked for consent passes the receipt, so the row and its receipt are
-        one write. Creating the row first and recording consent second leaves a receipt-less
-        account behind whenever the second call fails.
+        Only for callers holding evidence of the *provider* subject they pass, such as an OAuth
+        exchange or a gateway event; anything that merely observes a subject must not create from
+        it (see `AccountIdCache`'s never-create rule). Pass *consent* so the row and its receipt are
+        one write, rather than leaving a receipt-less account behind when the second call fails.
         """
         return await self._repository.get_or_create_identity(provider, subject, consent=consent)
 
     async def grant_current_consent(self, account_id: int) -> Account:
-        """Record consent for any authenticated caller, however they proved their identity."""
+        """Record acceptance of `CURRENT_CONSENT_VERSION` for an already authenticated account."""
         return await self._repository.update_consent(account_id, AccountConsent.grant_current())
 
     async def merge_accounts(
@@ -141,7 +128,11 @@ class AccountService:
         *,
         now: Instant | None = None,
     ) -> AccountMerge:
-        """Merge two accounts only after recent, independent proof of both."""
+        """Merge two accounts only after recent, independent proof of both.
+
+        Raises:
+            InvalidMergeProofError: the proofs name one account, or either has aged out.
+        """
         checked_at = now or Instant.now()
         if (
             surviving_proof.account_id == absorbed_proof.account_id
@@ -154,11 +145,9 @@ class AccountService:
     async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
         """Mint a single-use code offering this account up to be absorbed.
 
-        Called on the account that is going *away*. That direction is deliberate: minting is an
-        act of consent by the side that loses its public creator id, and it is the side that must
-        prove it authenticated recently, since the surviving side proves that by redeeming.
-
-        The plaintext is returned once and never stored.
+        Called on the account that goes away: minting is the consent of the side that loses its
+        public creator id, and its recent authentication is what the ticket stands for. The
+        plaintext is returned once and never stored.
         """
         code = base64.b32encode(secrets.token_bytes(MERGE_CODE_BYTES)).decode("ascii").rstrip("=")
         # The pepper stays in infrastructure: the repository hashes, exactly as it does for a
@@ -169,8 +158,10 @@ class AccountService:
     async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
         """Describe what redeeming *code* would move, without spending it.
 
-        A merge cannot be undone -- the absorbed public creator id becomes a permanent redirect --
-        so both surfaces show this before the irreversible button.
+        A merge cannot be undone: the absorbed public creator id becomes a permanent redirect.
+
+        Raises:
+            InvalidMergeCodeError: *code* is unknown, expired, or names the surviving account.
         """
         ticket = await self._repository.peek_merge_ticket(code)
         if ticket is None or ticket.account_id == surviving_account_id:
@@ -190,12 +181,14 @@ class AccountService:
         )
 
     async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
-        """Absorb the account that minted *code* into the caller's.
+        """Absorb the account that minted *code* into the caller's, spending the ticket.
 
-        Consuming the ticket is what supplies the absorbed side's `RecentAccountProof`: the ticket
-        was minted by an authenticated session and lives exactly as long as such a proof is
-        accepted, so its creation timestamp is the proof timestamp. The caller authenticating now
-        is the surviving side's.
+        The ticket's creation timestamp is the absorbed side's `RecentAccountProof`; the caller
+        authenticating now is the surviving side's.
+
+        Raises:
+            InvalidMergeCodeError: *code* is unknown, expired, or already spent.
+            InvalidMergeProofError: the ticket names the surviving account or has aged out.
         """
         ticket = await self._repository.consume_merge_ticket(code)
         if ticket is None:
@@ -218,8 +211,10 @@ class AccountService:
     async def guard_verification_attempts(self, attempted_by: tuple[IdentityProvider, str]) -> None:
         """Refuse a redemption while *attempted_by* is in its cooling-off period.
 
-        Separate from the redemption itself so anything that tests a code — a redemption now, a
-        reservation later — passes through one cap instead of each surface growing its own.
+        Separate from redemption so every surface that tests a code shares one cap.
+
+        Raises:
+            VerificationAttemptsExhaustedError: the identity is locked out, carrying the wait.
         """
         provider, subject = attempted_by
         locked_until = await self._repository.verification_lockout(provider, subject)
@@ -243,9 +238,13 @@ class AccountService:
     ) -> LinkReservation:
         """Hold a code so a consent prompt can say what agreeing to it will do.
 
-        This is where a wrong code now fails — before the notice is read, rather than after it has
-        been agreed to. It is also where the guessing happens, so it is capped like a redemption:
-        without that, reserving would be an uncapped oracle sitting beside a capped one.
+        A wrong code fails here, before the notice is read, and is charged against the same attempt
+        cap as a redemption. Release the hold with `release_minecraft_link` or commit it by passing
+        it to `link_minecraft_account`; otherwise it lapses after *ttl_seconds*.
+
+        Raises:
+            VerificationAttemptsExhaustedError: the identity is in its cooling-off period.
+            InvalidVerificationCodeError: no live code matches, or another prompt holds it.
         """
         await self.guard_verification_attempts(attempted_by)
         reservation = await self._repository.reserve_verification_code(code, ttl_seconds=ttl_seconds)
@@ -257,8 +256,7 @@ class AccountService:
     async def release_minecraft_link(self, code: str, reservation: LinkReservation) -> None:
         """Give a held code back after a declined or abandoned prompt.
 
-        Best-effort by design: if this never runs, `reserved_until` lapses on its own, so a crash
-        costs one prompt's delay rather than a permanently stuck code.
+        Best-effort: a hold that is never released lapses on its own, costing one prompt's delay.
         """
         await self._repository.release_verification_code(code, reservation.token)
 
@@ -273,17 +271,20 @@ class AccountService:
     ) -> IdentityRefresh:
         """Attach a verified Java identity to an existing account using a valid one-time code.
 
-        *attempted_by* is the identity being rate-limited, which is not the same thing as
-        *account_id*: the cap has to survive a caller who has no account yet, and it is keyed on the
-        external identity doing the guessing.
+        *attempted_by* is the identity the attempt cap is keyed on, not *account_id*: the cap has to
+        survive a caller with no account yet. Passing the *reservation* taken before the consent
+        prompt commits that hold and skips the charge, which reservation already paid.
 
-        Passing the *reservation* taken before the consent prompt commits that hold. The guessing was
-        already charged and capped at reservation time, so this path does not charge again — the
-        caller has demonstrably held a valid code since then.
+        Returns the whole reconciliation rather than the claimed alias alone, so linking and refresh
+        describe their outcome in the same shape, including the contested case.
 
-        Returns the whole reconciliation rather than just the alias it claimed, so linking can describe
-        its outcome in the same words as a refresh — including the contested case, which the alias
-        alone cannot express.
+        Raises:
+            LinkReservationExpiredError: the hold lapsed or was taken over before this call.
+            InvalidVerificationCodeError: no live code matches; charged against the cap unless a
+                reservation was passed.
+            VerificationAttemptsExhaustedError: the identity is in its cooling-off period.
+            AccountAlreadyLinkedError: the account already holds a different Java identity.
+            InvalidStateError: the adapter consumed a code without returning a reconciliation.
         """
         if reservation is None:
             await self.guard_verification_attempts(attempted_by)
@@ -333,8 +334,10 @@ class AccountService:
     async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
         """Return every identity linked to an account, hidden ones included.
 
-        This is the self view, so visibility does not filter it: you can only unhide what you can
-        see listed.
+        The self view: visibility does not filter it, because you can only unhide what you can see.
+
+        Raises:
+            AccountNotFoundError: no account has that id.
         """
         account = await self._repository.get_by_id(account_id)
         if account is None:
@@ -344,9 +347,12 @@ class AccountService:
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
         """Remove one linked identity, refusing to strand the account without any.
 
-        Creator credit is deliberately untouched: aliases stay claimed, because a build's
-        attribution is a fact about the build and should not change when someone tidies up how
-        they sign in.
+        Creator credit is untouched: aliases stay claimed, because a build's attribution is a fact
+        about the build.
+
+        Raises:
+            LastIdentityError: this is the account's only identity.
+            AccountIdentityNotFoundError: the account holds no identity with that id.
         """
         if await self._repository.count_identities(account_id) <= 1:
             raise LastIdentityError(account_id=account_id)
@@ -364,7 +370,11 @@ class AccountService:
         await self._repository.set_identity_avatar_key(account_id, identity_id, avatar_key)
 
     async def get_profile(self, account_id: int) -> AccountProfile:
-        """Return an account's own profile, including anything it has chosen to hide."""
+        """Return an account's own profile, including anything it has chosen to hide.
+
+        Raises:
+            AccountNotFoundError: no account has that id.
+        """
         profile = await self._repository.get_profile(account_id)
         if profile is None:
             raise AccountNotFoundError(account_id)
@@ -373,8 +383,10 @@ class AccountService:
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
         """Apply a partial profile edit after validating it.
 
-        Consent-gated like every other write that publishes something about a person: a profile is
-        the most public thing an account owns.
+        Raises:
+            AccountNotFoundError: no account has that id.
+            ConsentRequiredError: the account has not accepted the current privacy notice.
+            ValidationError: a field in *update* is too long or malformed.
         """
         account = await self._repository.get_by_id(account_id)
         if account is None:
@@ -386,8 +398,7 @@ class AccountService:
     async def clear_profile(self, account_id: int) -> AccountProfile:
         """Reset a profile to its empty state, for staff handling abuse.
 
-        Deliberately does not hide the profile: `hidden` belongs to its owner, and a moderation
-        action that also flipped it would take that decision away from them.
+        Resets `hidden` too, so a cleared profile is public again.
         """
         return await self._repository.clear_profile(account_id)
 
@@ -399,11 +410,15 @@ class AccountService:
     async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
         """Re-read the linked Java name from Mojang and reconcile the creator credit.
 
-        Keyed on the account rather than a Discord ID: this is reachable from Discord, from an
-        API session, and from a CLI device, and only the first of those has a Discord ID.
+        Keyed on the account rather than a Discord ID, because Discord, an API session and a CLI
+        device all reach this.
 
-        Raises `MinecraftAccountNotFoundError` when no Java identity is linked or the UUID no
-        longer resolves, and `MinecraftServiceUnavailableError` when Mojang cannot be reached.
+        Raises:
+            AccountNotFoundError: no account has that id.
+            NoLinkedMinecraftAccountError: the account has no Java identity, or none matching
+                *java_uuid*.
+            MinecraftAccountNotFoundError: the linked UUID no longer resolves to a profile.
+            MinecraftServiceUnavailableError: Mojang could not be reached.
         """
         account = await self._repository.get_by_id(account_id)
         if account is None:
@@ -429,7 +444,14 @@ class AccountService:
         )
 
     async def request_alias_claim(self, account_id: int, name: str) -> AliasClaim:
-        """Open a staff-reviewed request to be credited under a creator name."""
+        """Open a staff-reviewed request to be credited under a creator name.
+
+        Raises:
+            AccountNotFoundError: no account has that id.
+            ConsentRequiredError: the account has not accepted the current privacy notice.
+            AliasAlreadyClaimedError: another creator holds the name, named in the message where
+                one could be resolved.
+        """
         account = await self._repository.get_by_id(account_id)
         if account is None or account.id is None:
             raise AccountNotFoundError(account_id)
@@ -441,12 +463,7 @@ class AccountService:
             raise await self._name_the_holder(conflict) from None
 
     async def _name_the_holder(self, conflict: AliasAlreadyClaimedError) -> AliasAlreadyClaimedError:
-        """Resolve a conflicting holder's public creator name, when there is one to resolve.
-
-        Enriched here rather than in the repository so the extra query happens only on the error
-        path, and only where a human is going to read the result. A profile with no aliases yet
-        leaves the message as it was rather than naming an empty string.
-        """
+        """Return *conflict* with the holder named, or unchanged when no name can be resolved."""
         if conflict.holder_public_creator_id is None:
             return conflict
         profile = await self._repository.get_creator_profile(conflict.holder_public_creator_id)
@@ -457,21 +474,27 @@ class AccountService:
     async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
         """List creator credit claims awaiting staff review.
 
-        *with_claimants* loads each claimant's account for presentation, at a fixed cost
-        rather than one query per claim.
+        *with_claimants* fills `AliasClaim.claimant` at a fixed cost rather than one query per claim.
         """
         return await self._repository.pending_claims(with_claimants=with_claimants)
 
     async def approve_alias_claim(self, claim_id: int, *, staff_account_id: int, reassign: bool = False) -> AliasClaim:
         """Credit the claimant with the alias and close the request.
 
-        *reassign* is required to take a name that is currently credited to someone else, which
-        is what a rename into a contested name produces.
+        *reassign* is required to take a name currently credited to someone else.
+
+        Raises:
+            ClaimNotFoundError: no claim has that id, or it is no longer pending.
+            AliasAlreadyClaimedError: another creator holds the name and *reassign* is false.
         """
         return await self._resolve_claim(claim_id, ClaimStatus.APPROVED, staff_account_id, reassign=reassign)
 
     async def reject_alias_claim(self, claim_id: int, *, staff_account_id: int) -> AliasClaim:
-        """Close the request without crediting the claimant."""
+        """Close the request without crediting the claimant.
+
+        Raises:
+            ClaimNotFoundError: no claim has that id, or it is no longer pending.
+        """
         return await self._resolve_claim(claim_id, ClaimStatus.REJECTED, staff_account_id)
 
     async def _resolve_claim(
@@ -492,7 +515,12 @@ class AccountService:
             raise await self._name_the_holder(conflict) from None
 
     async def generate_verification_code(self, minecraft_uuid: UUID) -> int:
-        """Generate a verification code after validating the Java account."""
+        """Generate a verification code after confirming the UUID resolves, replacing any live one.
+
+        Raises:
+            MinecraftAccountNotFoundError: the UUID resolves to no Mojang profile.
+            MinecraftServiceUnavailableError: Mojang could not be reached.
+        """
         minecraft_username = await self._minecraft_username_lookup(minecraft_uuid)
         if minecraft_username is None:
             raise MinecraftAccountNotFoundError(minecraft_uuid)

@@ -24,19 +24,15 @@ MERGE_PROOF_MAX_AGE_SECONDS = 10 * 60
 
 
 def fold_creator_name(name: str) -> str:
-    """Return the comparison form of a creator name.
+    """Return the comparison form of a creator name: NFKC, then strip, then casefold.
 
-    NFKC first, so compatibility forms unify and NBSP or ideographic space become U+0020
-    before trimming; then strip; then casefold, which is the Unicode operation for caseless
-    matching that ``str.lower()`` is not — ``lower`` leaves ``ΣΣ`` as ``σς`` while casefold
-    gives ``σσ``.
+    NFKC before stripping so NBSP and ideographic space become U+0020; casefold rather than
+    ``str.lower()``, which leaves ``ΣΣ`` as ``σς`` where casefold gives ``σσ``.
 
-    This is the only definition of the value, and it is deliberately not reproduced in SQL.
-    Postgres ``lower()`` depends on the database's glibc collation (see
-    ``pg_database.datcollversion``), and the two foldings disagree about *what collides* in
-    both directions: ``Straße``/``Strasse`` collide here but not in SQL, ``I``/``İ`` collide
-    in SQL but not here. A second SQL-side column would therefore be a second, conflicting
-    notion of creator identity rather than a hedge against this one.
+    The only definition of the value, deliberately not reproduced in SQL: Postgres ``lower()``
+    follows the database's glibc collation and disagrees in both directions (``Straße``/``Strasse``
+    collide here but not in SQL, ``I``/``İ`` in SQL but not here), so a SQL-side column would be a
+    second, conflicting notion of creator identity.
     """
     return unicodedata.normalize("NFKC", name).strip().casefold()
 
@@ -61,16 +57,15 @@ class AccountIdentity:
     is_public: bool = True
     """Whether this identity appears on the account's public creator profile.
 
-    Public by default: the point of a creator profile is being findable as the person who built
-    the thing. Hiding is per identity rather than all-or-nothing because the reasons differ —
-    plenty of people will publish an IGN and not a Discord account.
+    Per identity rather than all-or-nothing: publishing an IGN and hiding a Discord account is a
+    common combination.
     """
 
     avatar_key: str | None = None
-    """Provider-specific rendering key, needed only where the subject is not enough.
+    """Provider-specific rendering key, set only where the subject is not enough.
 
-    Discord avatar URLs need the hash, which only the gateway knows, so the bot refreshes it.
-    Java heads derive from the UUID, so this stays `None` there.
+    Discord avatar URLs need the hash, which only the gateway knows, so the bot refreshes it. Java
+    heads derive from the UUID, so this stays `None` there.
     """
 
     @classmethod
@@ -84,10 +79,12 @@ class AccountIdentity:
     ) -> AccountIdentity:
         """Build an identity in *provider*'s canonical subject form.
 
-        This is the only authority on subject format; the database carries no format
-        constraint. The `match` is exhaustive by construction, so adding a member to
-        `IdentityProvider` is a type error here until its subject format is stated — which
-        is the reason the enum stays closed.
+        The only authority on subject format; the database carries no format constraint. The `match`
+        is exhaustive, so adding an `IdentityProvider` member is a type error here until its subject
+        format is stated.
+
+        Raises:
+            ValidationError: *subject* is not in *provider*'s subject format.
         """
         match provider:
             case IdentityProvider.DISCORD:
@@ -111,7 +108,7 @@ class AccountIdentity:
 
     @classmethod
     def discord(cls, discord_id: int, *, verified_at: Instant | None = None) -> AccountIdentity:
-        """Create a canonical Discord identity."""
+        """Create a canonical Discord identity, raising `ValidationError` if the snowflake is out of range."""
         return cls.for_provider(IdentityProvider.DISCORD, str(discord_id), verified_at=verified_at)
 
     @classmethod
@@ -135,17 +132,17 @@ class AccountIdentity:
         gamertag: str | None = None,
         verified_at: Instant | None = None,
     ) -> AccountIdentity:
-        """Create a canonical Bedrock identity from an unsigned XUID."""
+        """Create a canonical Bedrock identity, raising `ValidationError` if the XUID is out of range."""
         return cls.for_provider(IdentityProvider.BEDROCK, str(xuid), display_name=gamertag, verified_at=verified_at)
 
     @property
     def discord_id(self) -> int | None:
-        """Return the Discord snowflake represented by this identity, if any."""
+        """The Discord snowflake, or `None` unless this is a Discord identity."""
         return int(self.subject) if self.provider is IdentityProvider.DISCORD else None
 
     @property
     def java_uuid(self) -> UUID | None:
-        """Return the Java UUID represented by this identity, if any."""
+        """The Java UUID, or `None` unless this is a Java identity."""
         return UUID(self.subject) if self.provider is IdentityProvider.JAVA else None
 
 
@@ -180,7 +177,7 @@ class RecentAccountProof:
     verified_at: Instant
 
     def is_recent_at(self, now: Instant, *, max_age_seconds: int = MERGE_PROOF_MAX_AGE_SECONDS) -> bool:
-        """Return whether this proof is inside the permitted merge window."""
+        """Return whether this proof is inside the merge window; one dated after *now* is not."""
         age = (now - self.verified_at).total("seconds")
         return 0 <= age <= max_age_seconds
 
@@ -224,7 +221,6 @@ class CreatorAlias:
 
     @property
     def is_claimed(self) -> bool:
-        """Whether an account has been credited with this name."""
         return self.account_id is not None
 
 
@@ -255,19 +251,14 @@ class AliasClaim:
     resolved_at: Instant | None = None
     resolved_by_account_id: int | None = None
     claimant: Account | None = None
-    """The claiming account, when the caller asked for it.
-
-    Present so a staff queue can name a claimant as something better than an internal ID,
-    without every claim read paying for the join.
-    """
+    """The claiming account, filled only when the caller asked for the join."""
 
 
 @dataclass(frozen=True, slots=True)
 class IdentityRefresh:
     """Outcome of reconciling a Java identity's display name with its creator credit.
 
-    Every field is filled on every refresh, including one that changed nothing, so callers
-    render one shape rather than inferring what happened from a bare `None`.
+    Every field is filled on every refresh, including one that changed nothing.
     """
 
     account_id: int
@@ -281,7 +272,7 @@ class IdentityRefresh:
 
     @property
     def renamed(self) -> bool:
-        """Whether the verified name differs from the one previously stored."""
+        """Whether the verified name differs from the stored one; false when none was stored."""
         return self.previous_name is not None and self.previous_name != self.current_name
 
     @property
@@ -292,7 +283,7 @@ class IdentityRefresh:
 
 @dataclass(frozen=True, slots=True)
 class VerificationCode:
-    """A valid verification code returned by persistence."""
+    """The Java account a redeemed verification code was issued for."""
 
     minecraft_uuid: UUID
     username: str
@@ -307,8 +298,8 @@ class CreditPreview:
     held_by_public_creator_id: UUID | None = None
     """`None` means unclaimed, so agreeing attributes the credit to the caller.
 
-    Set means another creator holds it, and agreeing moves nothing: the reconcile never transfers a
-    held name, it opens a staff claim. The prompt has to say so before the button is pressed.
+    Set means another creator holds it, and agreeing moves nothing: reconciliation never transfers a
+    held name, it opens a staff claim.
     """
 
     @property
@@ -321,9 +312,8 @@ class CreditPreview:
 class LinkPreview:
     """What redeeming a held code will do, knowable without spending it.
 
-    Everything here is a fact about the *code*, which is what lets the reservation stay anonymous.
-    "You already linked a different Minecraft account" is a fact about the caller instead, so it
-    stays a check at the entry point.
+    Every field is a fact about the code rather than the caller, which is what lets a reservation
+    stay anonymous; caller-specific refusals stay checks at the entry point.
     """
 
     java_uuid: UUID
@@ -338,12 +328,9 @@ class LinkPreview:
 class LinkReservation:
     """A held verification code, plus the one-time token that commits or releases it.
 
-    A reservation exists because the consent prompt has to show what it is asking about, and the
-    only way to learn that used to be to spend the code. Holding it means the previewed facts are
-    the facts that commit, and it gives the attempt cap a write to count rather than a free read.
-
-    The token is the whole authority: nothing here identifies the reserver, so cancelling still
-    stores nothing about them.
+    Holding the code means the previewed facts are the facts that commit, and gives the attempt cap
+    a write to count. The token is the whole authority: nothing here identifies the reserver, so
+    cancelling stores nothing about them.
     """
 
     token: str

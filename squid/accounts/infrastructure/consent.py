@@ -13,13 +13,12 @@ _CUTOFF = Instant.parse_iso(CONSENT_CUTOFF)
 def account_consent_current() -> ColumnElement[bool]:
     """Whether more data may be stored about the joined account.
 
-    The SQL counterpart of `squid.accounts.domain.consent_refresh_required`, negated: this
-    selects the accounts a write may proceed for. Both spellings exist because a session read
-    already holds the row in Python while the notification queries filter thousands of rows in
-    the database, and `tests/integration/accounts/test_consent_predicate.py` pins that they
+    The negation of `squid.accounts.domain.consent_refresh_required`, so it selects the accounts a
+    write may proceed for. Both spellings exist because the notification queries filter thousands of
+    rows in the database; `tests/integration/accounts/test_consent_predicate.py` pins that they
     agree.
 
-    Requires `Account` to be joined by the calling statement.
+    Requires the calling statement to join `Account`.
     """
     return or_(
         and_(

@@ -13,7 +13,11 @@ DEFAULT_PROFILE_URL = "https://sessionserver.mojang.com/session/minecraft/profil
 
 
 class MojangClient:
-    """Resolve current Minecraft names through one reusable HTTP session."""
+    """Resolve current Minecraft names through one reusable HTTP session.
+
+    `aclose` closes that session, but only when this client created it; a session passed in belongs
+    to the caller.
+    """
 
     def __init__(
         self,
@@ -26,7 +30,12 @@ class MojangClient:
         self._profile_url = profile_url.rstrip("/")
 
     async def get_username(self, minecraft_uuid: UUID) -> str | None:
-        """Return the current username for a Minecraft UUID."""
+        """Return the current username for a Minecraft UUID, or `None` if no profile has it.
+
+        Raises:
+            MinecraftServiceUnavailableError: the session server errored, timed out, returned an
+                oversized body, or returned something other than a profile document.
+        """
         session = self._session
         if session is None:
             session = aiohttp.ClientSession(
@@ -56,7 +65,10 @@ class MojangClient:
         return document["name"]
 
     async def aclose(self) -> None:
-        """Close the reusable HTTP session when this client owns it."""
+        """Close the reusable HTTP session when this client owns it, and drop the reference.
+
+        A later `get_username` opens a fresh owned session, so this is not a permanent shutdown.
+        """
         if self._owns_session and self._session is not None:
             await self._session.close()
         self._session = None

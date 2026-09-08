@@ -41,13 +41,9 @@ _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in IdentityProvi
 def _fold_from_name(context: DefaultExecutionContext) -> str:
     """Derive `normalized_name` from the `name` being inserted.
 
-    Attached to the column rather than left to callers so that no insert path can skip it:
-    this fires for ORM flushes, Core `insert()`, `pg_insert(...).on_conflict_do_nothing`,
-    and executemany alike.
-
-    Insert only. A column-level `onupdate` would fire for every UPDATE of the row, including
-    the claim updates that touch only `account_id`, where `name` is not among the parameters
-    at all. `_refold_on_name_change` handles the update side precisely instead.
+    On the column so no insert path can skip it: ORM flushes, Core `insert()`,
+    `on_conflict_do_nothing` and executemany alike. Insert only, because an `onupdate` would also
+    fire for claim updates that never pass `name`; `_refold_on_name_change` covers updates.
     """
     return fold_creator_name(context.get_current_parameters()["name"])
 
@@ -116,10 +112,9 @@ class AccountIdentity(Base):
 class AccountProfile(Base):
     """What an account chooses to publish about itself on its creator page.
 
-    A child of `accounts` rather than more columns on it. The account row is an identity anchor
-    that thirty-odd foreign keys point at and that link and merge paths lock `FOR UPDATE`;
-    profile text is user-edited prose with an entirely different write cadence, and widening the
-    anchor to carry it would make every identity read pay for a bio.
+    A child of `accounts` rather than more columns on it: the account row is the identity anchor
+    that link and merge paths lock `FOR UPDATE`, and every identity read would otherwise pay for a
+    bio.
     """
 
     __tablename__ = "account_profiles"
@@ -180,10 +175,9 @@ class AccountProfile(Base):
     )
     """The linked identity this profile's avatar is rendered from.
 
-    `SET NULL` so unlinking that identity clears the avatar rather than leaving a render pointing
-    at a subject we no longer hold. Ownership — that the identity belongs to this same account —
-    is checked in the repository, since the composite foreign key that would enforce it here
-    cannot coexist with `ON DELETE SET NULL`.
+    `SET NULL` so unlinking that identity clears the avatar. That the identity belongs to this same
+    account is checked in the repository: the composite foreign key enforcing it cannot coexist with
+    `ON DELETE SET NULL`.
     """
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
@@ -268,9 +262,8 @@ class CreatorAlias(Base):
 def _refold_on_name_change(_mapper: object, _connection: object, target: CreatorAlias) -> None:
     """Recompute the fold when, and only when, a display spelling is corrected.
 
-    The claim paths update `account_id` and friends without touching `name`, so this has to
-    be conditional on the attribute actually being dirty rather than a blanket column
-    `onupdate`.
+    Conditional on `name` being dirty, because claim updates touch `account_id` and leave the
+    spelling alone.
     """
     if get_history(target, "name").has_changes():
         target.normalized_name = fold_creator_name(target.name)
@@ -348,30 +341,24 @@ class VerificationCode(Base):
         default_factory=lambda: Instant.now().add(minutes=10),
     )
     reserved_token: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    """Digest of the token held by whoever is currently being shown this code's consent prompt.
+    """Digest of the token held by whoever is being shown this code's consent prompt.
 
-    A digest rather than the token, for the same reason `code` is one. Deliberately says nothing
-    about *who* reserved it: the prompt runs before an account exists, and the notice promises that
-    cancelling stores no account information, so a reservation identifies nobody.
+    Says nothing about who reserved it: the prompt runs before an account exists, and the notice
+    promises that cancelling stores no account information.
     """
 
     reserved_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     """When the hold lapses, freeing the code without anything having to reap it.
 
-    A crashed process therefore costs one prompt's worth of delay rather than a stuck code, and the
-    legitimate owner can always mint a fresh one from the game.
+    A crashed prompt therefore costs one hold's delay rather than a permanently stuck code.
     """
 
 
 class VerificationAttempt(Base):
     """Consecutive failed code redemptions for one external identity.
 
-    Keyed on `(provider, subject)` rather than on an account, because the guesser may not have an
-    account yet: a redemption is the first thing many callers ever do, and creating a row for
-    someone in order to rate-limit them would defeat the point. No foreign key for the same reason.
-
-    The counter is *consecutive*: a success clears it, so an honest user who mistypes twice and then
-    gets it right is never closer to a lockout than someone who never failed.
+    Keyed on `(provider, subject)` with no foreign key, because the guesser may not have an account
+    yet. The counter is consecutive: a success clears it.
     """
 
     __tablename__ = "verification_attempts"
@@ -392,13 +379,11 @@ class VerificationAttempt(Base):
 class AccountMergeTicket(Base):
     """A live, single-use claim that one account consents to being absorbed by another.
 
-    A merge needs recent proof of *both* accounts, and no one session can hold both. The ticket is
-    that second proof, carried through the only channel the two sides share: a person who can sign
-    into each. Minting one is the absorbed side authenticating; redeeming it is the surviving side
-    doing so, inside the ticket's lifetime.
+    A merge needs recent proof of both accounts and no session holds both, so the ticket carries the
+    absorbed side's: minting one is that side authenticating, redeeming it is the survivor's.
 
-    Keyed on the account rather than on the digest, so minting replaces. One account can only ever
-    have one live ticket, which is most of why an eight-character code is enough.
+    Keyed on the account rather than the digest, so minting replaces. One live ticket per account is
+    most of why an eight-character code is enough.
     """
 
     __tablename__ = "account_merge_tickets"
@@ -413,16 +398,15 @@ class AccountMergeTicket(Base):
         primary_key=True,
     )
     code_digest: Mapped[str] = mapped_column(Text, nullable=False)
-    """Digest, never the code. The plaintext is shown once at mint time and never stored, exactly
-    as a verification code is."""
+    """Digest, never the code: the plaintext is shown once at mint time and never stored."""
 
     expires_at: Mapped[Instant] = mapped_column(
         InstantUTC(),
         nullable=False,
         default_factory=lambda: Instant.now().add(seconds=MERGE_TICKET_TTL_SECONDS),
     )
-    """Doubles as the proof timestamp: a ticket is redeemable for exactly as long as
-    `RecentAccountProof` accepts the authentication that minted it."""
+    """The TTL equals `MERGE_PROOF_MAX_AGE_SECONDS`, so a ticket stays redeemable for exactly as long
+    as `RecentAccountProof` accepts the `created_at` it stands for."""
 
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
