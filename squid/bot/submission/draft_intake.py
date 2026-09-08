@@ -12,6 +12,7 @@ import discord
 from squid.core.errors import ValidationError
 from squid.runtime import BotServices
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.submissions.application.drafts import DraftActor
 from squid.submissions.application.intake import IntakeStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui.forms import UploadedFile
@@ -95,27 +96,25 @@ async def _register_uploaded_file(
         await services.submission_intake.register_file(draft_id, actor_id, source_id, path, source.media_type)
 
 
-async def receive_retained_file(services: BotServices, draft_id: UUID, actor_id: int, source_id: UUID) -> None:
+async def receive_retained_file(services: BotServices, draft_id: UUID, actor: DraftActor, source_id: UUID) -> None:
     """Resolve an explicit assignment using its retained Discord source or preserve failure."""
-    attachment = next(
-        item for item in await services.submission_intake.list(draft_id, actor_id) if item.id == source_id
-    )
+    attachment = next(item for item in await services.submission_intake.list(draft_id, actor) if item.id == source_id)
     source = attachment.source
     if source is None:
         message = "Upload a replacement for this file."
         raise ValidationError(message)
     if attachment.status in {IntakeStatus.READY, IntakeStatus.DISCARDED}:
         return
-    await services.submission_intake.reserve(draft_id, actor_id, source.id, source.filename, source.content_type)
+    await services.submission_intake.reserve(draft_id, actor, source.id, source.filename, source.content_type)
     try:
-        await _download_retained_file(services, draft_id, actor_id, source)
+        await _download_retained_file(services, draft_id, actor, source)
     except Exception:
-        await services.submission_intake.fail(draft_id, actor_id, source.id)
+        await services.submission_intake.fail(draft_id, actor, source.id)
         raise
 
 
 async def _download_retained_file(
-    services: BotServices, draft_id: UUID, actor_id: int, source: SubmissionSourceFile
+    services: BotServices, draft_id: UUID, actor: DraftActor, source: SubmissionSourceFile
 ) -> None:
     from urllib.parse import urlparse
 
@@ -141,4 +140,4 @@ async def _download_retained_file(
                             message = "Downloaded source exceeds the intake limit."
                             raise ValidationError(message)
                         output.write(chunk)
-        await services.submission_intake.register_file(draft_id, actor_id, source.id, path, source.content_type)
+        await services.submission_intake.register_file(draft_id, actor, source.id, path, source.content_type)
