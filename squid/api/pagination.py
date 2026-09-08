@@ -60,9 +60,9 @@ def resolve_selector(
 ) -> PageSelector:
     """Resolve the mutually exclusive pagination parameters into one selector.
 
-    `keyset_allowed` is false when the caller asked for an ordering that identifiers do not address
-    -- a relevance ranking, or a sort on another column. Honouring an anchor there would page
-    through a different sequence than the one the anchor was taken from.
+    Raises `ValidationError` (`INVALID_QUERY`) when more than one is given, or when an id anchor is given
+    with `keyset_allowed=False` (an ordering identifiers do not address, such as relevance or another
+    column, would page through a different sequence than the anchor was taken from).
     """
     provided = [
         name
@@ -81,8 +81,8 @@ def resolve_selector(
 def parse_page_sort(value: str | None, *, allowed: frozenset[str], default: str) -> tuple[str, bool]:
     """Parse a `field` or `-field` sort parameter into a field and its descending flag.
 
-    Only allowlisted fields are accepted, so a sort can never name an unindexed column and turn a
-    listing into a sequential scan.
+    Raises `ValidationError` (`INVALID_QUERY`) for a field outside `allowed`, so a sort can never name an
+    unindexed column and turn a listing into a sequential scan.
     """
     raw = default if value is None else value
     field = raw.removeprefix("-")
@@ -97,14 +97,12 @@ def parse_page_sort(value: str | None, *, allowed: frozenset[str], default: str)
 
 
 def anchor(value: ResultPageAnchor | None) -> PageAnchor | None:
-    """Serialize one adjacent-page address."""
     return (
         None if value is None else PageAnchor(offset=value.offset, after_id=value.after_id, before_id=value.before_id)
     )
 
 
 def render_page[ResultT, ItemT](page: ResultPage[ResultT], render: Callable[[ResultT], ItemT]) -> Page[ItemT]:
-    """Serialize an application page as its REST representation."""
     return Page[ItemT](
         items=[render(item) for item in page.items],
         total=page.total,

@@ -43,7 +43,11 @@ _NO_STORE = "no-store"
 
 
 class PaperInstallationHttpService(Protocol):
-    """Account and credential operations consumed by the HTTP transport."""
+    """Paper installation credential operations consumed by the HTTP transport.
+
+    Failures are `MinecraftAuthorizationError` subclasses from `squid.minecraft_auth.errors`; each also inherits
+    the core error that fixes its HTTP status.
+    """
 
     async def register(
         self,
@@ -51,13 +55,30 @@ class PaperInstallationHttpService(Protocol):
         owner_account_id: int,
         label: str,
         profile: PublicServerProfile | None = None,
-    ) -> IssuedInstallationCredential: ...
+    ) -> IssuedInstallationCredential:
+        """Create an installation; the returned token is the only disclosure of its secret.
 
-    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]: ...
+        Raises `AccountConsentRequiredError` without current consent and `ValidationError` for a blank label.
+        """
+        ...
 
-    async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential: ...
+    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+        """The account's installations, revoked ones included, without secret digests."""
+        ...
 
-    async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation: ...
+    async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
+        """Replace the secret and bump `credential_version`, invalidating every challenge and grant of the old one.
+
+        Raises `InstallationUnavailableError` when the installation is not the account's or is revoked.
+        """
+        ...
+
+    async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation:
+        """Revoke the installation and every challenge or grant bound to it; idempotent.
+
+        Raises `InstallationUnavailableError` when the installation is not the account's.
+        """
+        ...
 
     async def update_profile(
         self,
@@ -65,44 +86,89 @@ class PaperInstallationHttpService(Protocol):
         installation_id: UUID,
         owner_account_id: int,
         profile: PublicServerProfile,
-    ) -> PaperInstallation: ...
+    ) -> PaperInstallation:
+        """Replace the public-listing profile without rotating credentials.
 
-    async def authenticate(self, token: str) -> AuthenticatedPaperInstallation: ...
+        Raises `InstallationUnavailableError` when the installation is not the account's or is revoked.
+        """
+        ...
+
+    async def authenticate(self, token: str) -> AuthenticatedPaperInstallation:
+        """Resolve an installation token; raises `InvalidInstallationCredentialError` for any failure."""
+        ...
 
 
 class PlayerAuthorizationHttpService(Protocol):
-    """Challenge and grant operations consumed by the HTTP transport."""
+    """Player challenge and grant operations consumed by the HTTP transport.
+
+    Failures are `MinecraftAuthorizationError` subclasses from `squid.minecraft_auth.errors`; each also inherits
+    the core error that fixes its HTTP status.
+    """
 
     async def start_paper_challenge(
         self,
         *,
         installation: AuthenticatedPaperInstallation,
         java_uuid: UUID,
-    ) -> IssuedPlayerChallenge: ...
+    ) -> IssuedPlayerChallenge:
+        """Issue device and user codes bound to the installation's current `credential_version`.
+
+        Raises `InvalidInstallationCredentialError` when the installation is revoked or rotated since
+        authentication, and `TooManyActiveChallengesError` when the player already has `max_active` live
+        challenges on it.
+        """
+        ...
 
     async def start_fabric_challenge(
         self,
         *,
         java_uuid: UUID,
         pkce_s256_challenge: str,
-    ) -> IssuedPlayerChallenge: ...
+    ) -> IssuedPlayerChallenge:
+        """Issue device and user codes whose exchange needs the RFC 7636 S256 verifier.
 
-    async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge: ...
+        Raises `InvalidPkceError` for a malformed challenge and `TooManyActiveChallengesError` when the player
+        already has `max_active` live Fabric challenges.
+        """
+        ...
+
+    async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge:
+        """Bind the challenge to `account_id`.
+
+        Raises `InvalidChallengeError` (unknown, revoked or exchanged), `ChallengeExpiredError`, and
+        `ChallengeApprovalDeniedError` when the account does not hold the challenge's Java UUID.
+        """
+        ...
 
     async def exchange_paper(
         self,
         *,
         device_code: str,
         installation: AuthenticatedPaperInstallation,
-    ) -> IssuedPlayerGrant: ...
+    ) -> IssuedPlayerGrant:
+        """Consume an approved Paper challenge into a player grant; the token is disclosed only here.
 
-    async def exchange_fabric(self, *, device_code: str, pkce_verifier: str) -> IssuedPlayerGrant: ...
+        Raises `InvalidChallengeError` when the code is unknown, revoked, or bound to another installation or
+        credential version, `ChallengeExpiredError`, `ChallengeAlreadyExchangedError` or
+        `AuthorizationPendingError`.
+        """
+        ...
 
-    async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool: ...
+    async def exchange_fabric(self, *, device_code: str, pkce_verifier: str) -> IssuedPlayerGrant:
+        """Consume an approved Fabric challenge into a player grant; the token is disclosed only here.
+
+        Raises what `exchange_paper` raises, and `InvalidPkceError` when the verifier does not match or the
+        challenge is not a Fabric one.
+        """
+        ...
+
+    async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool:
+        """Revoke the grant; idempotent, False only when it is not `account_id`'s."""
+        ...
 
 
 class MinecraftAuthApiServices(Protocol):
-    """Narrow runtime bundle required when this router is integrated."""
+    """The slice of the runtime services these routes read; both are None when Minecraft auth is not configured."""
 
     minecraft_installations: PaperInstallationHttpService | None
     minecraft_player_authorization: PlayerAuthorizationHttpService | None
@@ -118,7 +184,7 @@ class _MinecraftAuthAppState(Protocol):
 
 
 def get_installation_service(request: Request) -> PaperInstallationHttpService:
-    """Resolve Paper installation operations without importing the global runtime."""
+    """Raises `ServiceUnavailableError` (503) when Minecraft auth is not configured."""
     state = cast(_MinecraftAuthAppState, request.app.state)
     service = state.runtime.services.minecraft_installations
     if service is None:
@@ -127,7 +193,7 @@ def get_installation_service(request: Request) -> PaperInstallationHttpService:
 
 
 def get_player_authorization_service(request: Request) -> PlayerAuthorizationHttpService:
-    """Resolve player authorization operations without importing the global runtime."""
+    """Raises `ServiceUnavailableError` (503) when Minecraft auth is not configured."""
     state = cast(_MinecraftAuthAppState, request.app.state)
     service = state.runtime.services.minecraft_player_authorization
     if service is None:
@@ -136,7 +202,7 @@ def get_player_authorization_service(request: Request) -> PlayerAuthorizationHtt
 
 
 def get_minecraft_verification_uri(request: Request) -> AnyHttpUrl:
-    """Return the explicitly configured public page that accepts a user code."""
+    """The browser page that accepts a user code; raises `ServiceUnavailableError` (503) when not configured."""
     config = getattr(request.app.state, "config", None)
     minecraft_auth = getattr(config, "minecraft_auth", None)
     verification_uri = getattr(minecraft_auth, "verification_uri", None)
@@ -146,7 +212,7 @@ def get_minecraft_verification_uri(request: Request) -> AnyHttpUrl:
 
 
 async def current_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
-    """Require a signed-in human account with current privacy consent."""
+    """Raises `AuthenticationError` unless the caller is a browser session; then applies `require_consented_account`."""
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
     return require_consented_account(caller)
@@ -165,7 +231,11 @@ async def authenticated_paper_installation(
     installation_id: InstallationIdHeader = None,
     installation_secret: InstallationSecretHeader = None,
 ) -> AuthenticatedPaperInstallation:
-    """Authenticate both Paper headers without treating the installation as a player."""
+    """Authenticate the `Squid-Installation-ID` and `Squid-Installation-Secret` headers as a Paper installation.
+
+    Raises `AuthenticationError` when either header is missing or malformed (the secret must be 32 to 512
+    characters), or `InvalidInstallationCredentialError` when the credential does not authenticate.
+    """
     if installation_id is None or installation_secret is None:
         raise AuthenticationError
     try:
@@ -186,7 +256,7 @@ async def enforce_paper_request_idempotency(
     installation: AuthenticatedPaper,
     idempotency_key: IdempotencyKey = None,
 ) -> None:
-    """Partition one-time Paper responses by an authenticated credential generation."""
+    """Idempotency namespaced by installation id and `credential_version`, so a rotation starts a fresh key space."""
     caller = f"minecraft-installation:{installation.id}:{installation.credential_version}"
     await enforce_request_idempotency_for(request, caller, idempotency_key)
 
@@ -195,7 +265,7 @@ async def enforce_fabric_request_idempotency(
     request: Request,
     idempotency_key: IdempotencyKey = None,
 ) -> None:
-    """Partition anonymous Fabric retries by the transport's observed network peer."""
+    """Idempotency for anonymous Fabric routes, namespaced by a SHA-256 of the peer address."""
     peer = request.client.host if request.client is not None else "unknown"
     peer_digest = hashlib.sha256(peer.encode()).hexdigest()
     await enforce_request_idempotency_for(request, f"minecraft-fabric:{peer_digest}", idempotency_key)
@@ -246,7 +316,7 @@ async def list_installations(
     installations: Installations,
     account_id: AccountId,
 ) -> InstallationListResponse:
-    """List only the signed-in account's Paper installations, without secrets or digests."""
+    """List the signed-in account's Paper installations, revoked ones included, without secrets."""
     owned = await _execute(installations.list_owned(account_id))
     _prevent_storage(response)
     return InstallationListResponse(
@@ -268,7 +338,7 @@ async def rotate_installation(
     installations: Installations,
     account_id: AccountId,
 ) -> IssuedInstallationResponse:
-    """Fence an owned installation's old credentials and return one replacement secret."""
+    """Replace an owned installation's secret and return it once; every challenge and grant of the old one is revoked."""
     issued = await _execute(installations.rotate(installation_id=installation_id, owner_account_id=account_id))
     _prevent_storage(response)
     return IssuedInstallationResponse.from_domain(issued)
@@ -289,7 +359,7 @@ async def update_installation_profile(
     installations: Installations,
     account_id: AccountId,
 ) -> InstallationResponse:
-    """Replace an owned server's explicit public-listing and sponsorship preferences."""
+    """Replace an owned server's public-listing and sponsorship profile; credentials are untouched."""
     installation = await _execute(
         installations.update_profile(
             installation_id=installation_id,
@@ -335,7 +405,7 @@ async def start_paper_challenge(
     installation: AuthenticatedPaper,
     verification_uri: VerificationUri,
 ) -> ChallengeCreateResponse:
-    """Start player authorization bound to the authenticated Paper credential generation."""
+    """Start player authorization bound to the installation's current credential; 429 past the per-player cap."""
     challenge = await _execute(players.start_paper_challenge(installation=installation, java_uuid=payload.java_uuid))
     _prevent_storage(response)
     return ChallengeCreateResponse.from_domain(challenge, verification_uri=verification_uri)
@@ -355,7 +425,7 @@ async def exchange_paper_challenge(
     players: PlayerAuthorization,
     installation: AuthenticatedPaper,
 ) -> IssuedPlayerGrantResponse:
-    """Exchange one approved Paper challenge on the same authenticated installation."""
+    """Exchange an approved Paper challenge for a player token; 409 while approval is pending or after a rotation."""
     issued = await _execute(players.exchange_paper(device_code=payload.device_code, installation=installation))
     _prevent_storage(response)
     return IssuedPlayerGrantResponse.from_domain(issued)

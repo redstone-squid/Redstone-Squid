@@ -38,7 +38,11 @@ from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavail
 
 
 class CliAuthorizationHttpService(Protocol):
-    """CLI authorization operations consumed by the HTTP transport."""
+    """CLI authorization operations consumed by the HTTP transport.
+
+    Every failure is a `CliAuthorizationError` subclass from `squid.cli_auth.errors`; each also inherits the
+    core error that fixes its HTTP status.
+    """
 
     async def start_enrollment(
         self,
@@ -46,15 +50,45 @@ class CliAuthorizationHttpService(Protocol):
         public_key: bytes,
         client_instance_id: UUID,
         label: str,
-    ) -> IssuedCliEnrollment: ...
+    ) -> IssuedCliEnrollment:
+        """Issue a device code and user code for browser approval of an Ed25519 public key.
 
-    async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment: ...
+        Raises `InvalidCliDeviceProofError` for a malformed key and `TooManyActiveCliAuthorizationsError` when
+        the client instance already has `max_active` live enrollments.
+        """
+        ...
 
-    async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment: ...
+    async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
+        """The enrollment behind `user_code`, for the approval screen.
 
-    async def exchange_enrollment(self, *, device_code: str, signature: bytes) -> IssuedCliSession: ...
+        Raises `InvalidCliEnrollmentError` (unknown or revoked), `CliEnrollmentExpiredError` or
+        `CliEnrollmentAlreadyExchangedError`.
+        """
+        ...
 
-    async def start_session_challenge(self, device_id: UUID) -> IssuedCliSessionChallenge: ...
+    async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment:
+        """Bind the enrollment to `account_id`.
+
+        Raises what `preview_enrollment` raises, plus `CliEnrollmentApprovalDeniedError` when another account
+        already approved it.
+        """
+        ...
+
+    async def exchange_enrollment(self, *, device_code: str, signature: bytes) -> IssuedCliSession:
+        """Verify the signature over the enrollment proof message and issue the device and its first session.
+
+        Raises what `preview_enrollment` raises, plus `CliAuthorizationPendingError` before browser approval
+        and `InvalidCliDeviceProofError` for a bad signature. Consumes the enrollment.
+        """
+        ...
+
+    async def start_session_challenge(self, device_id: UUID) -> IssuedCliSessionChallenge:
+        """Issue a one-time nonce for the device to sign.
+
+        Raises `CliDeviceUnavailableError` for an unknown or revoked device and
+        `TooManyActiveCliAuthorizationsError` when it already has `max_active` live challenges.
+        """
+        ...
 
     async def exchange_session_challenge(
         self,
@@ -63,17 +97,29 @@ class CliAuthorizationHttpService(Protocol):
         challenge_id: UUID,
         nonce: str,
         signature: bytes,
-    ) -> IssuedCliSession: ...
+    ) -> IssuedCliSession:
+        """Verify the signature over the session proof message, consume the challenge and issue a session.
 
-    async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]: ...
+        Raises `CliDeviceUnavailableError`, `InvalidCliSessionChallengeError` (empty, unknown, or already
+        consumed), `CliSessionChallengeExpiredError` or `InvalidCliDeviceProofError`.
+        """
+        ...
 
-    async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool: ...
+    async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
+        """Devices owned by `account_id`, revoked ones included."""
+        ...
 
-    async def revoke_current_session(self, identity: CliIdentity) -> bool: ...
+    async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
+        """Revoke the device and every session beneath it; idempotent, False only when it is not `account_id`'s."""
+        ...
+
+    async def revoke_current_session(self, identity: CliIdentity) -> bool:
+        """Revoke exactly `identity.session_id`; idempotent, False only when it is not on `identity.device_id`."""
+        ...
 
 
 class CliAuthApiServices(Protocol):
-    """Narrow runtime bundle required by CLI authorization routes."""
+    """The slice of the runtime services these routes read; `cli_authorization` is None when CLI auth is not configured."""
 
     cli_authorization: CliAuthorizationHttpService | None
 
@@ -88,7 +134,7 @@ class _CliAuthAppState(Protocol):
 
 
 def get_cli_authorization_service(request: Request) -> CliAuthorizationHttpService:
-    """Resolve CLI authorization without importing the global runtime bundle."""
+    """Raises `ServiceUnavailableError` (503) when CLI authorization is not configured."""
     state = cast(_CliAuthAppState, request.app.state)
     service = state.runtime.services.cli_authorization
     if service is None:
@@ -97,7 +143,7 @@ def get_cli_authorization_service(request: Request) -> CliAuthorizationHttpServi
 
 
 def get_cli_verification_uri(request: Request) -> AnyHttpUrl:
-    """Return the configured public browser page that accepts a user code."""
+    """The browser page that accepts a user code; raises `ServiceUnavailableError` (503) when not configured."""
     config = getattr(request.app.state, "config", None)
     cli_auth = getattr(config, "cli_auth", None)
     verification_uri = getattr(cli_auth, "verification_uri", None)
@@ -107,14 +153,14 @@ def get_cli_verification_uri(request: Request) -> AnyHttpUrl:
 
 
 async def current_browser_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
-    """Require a signed-in browser account with current privacy consent."""
+    """Raises `AuthenticationError` unless the caller is a browser session; then applies `require_consented_account`."""
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
     return require_consented_account(caller)
 
 
 async def current_cli_identity(caller: Annotated[Caller, Depends(current_caller)]) -> CliIdentity:
-    """Require an authenticated CLI session with its exact device provenance."""
+    """Raises `AuthenticationError` unless the caller is a CLI session carrying account, device and session ids."""
     if (
         caller.kind != "cli"
         or caller.account_id is None
@@ -134,7 +180,7 @@ async def enforce_anonymous_cli_idempotency(
     request: Request,
     idempotency_key: IdempotencyKey = None,
 ) -> None:
-    """Partition one-time anonymous responses by a digest of the observed peer."""
+    """Idempotency for anonymous routes, namespaced by a SHA-256 of the peer address instead of a caller subject."""
     peer = request.client.host if request.client is not None else "unknown"
     peer_digest = hashlib.sha256(peer.encode()).hexdigest()
     await enforce_request_idempotency_for(request, f"cli-anonymous:{peer_digest}", idempotency_key)
@@ -166,7 +212,7 @@ async def start_enrollment(
     cli: CliAuthorization,
     verification_uri: VerificationUri,
 ) -> CliEnrollmentResponse:
-    """Start browser approval for a client-held Ed25519 public key."""
+    """Start browser approval for a client-held Ed25519 public key; 429 when the client has too many live enrollments."""
     issued = await _execute(
         cli.start_enrollment(
             public_key=payload.public_key_bytes(),
@@ -191,7 +237,7 @@ async def exchange_enrollment(
     response: Response,
     cli: CliAuthorization,
 ) -> IssuedCliSessionResponse:
-    """Exchange browser approval after proving possession of the enrolled key."""
+    """Exchange an approved enrollment and key proof for a device and session; 409 while approval is still pending."""
     issued = await _execute(
         cli.exchange_enrollment(device_code=payload.device_code, signature=payload.signature_bytes())
     )
@@ -232,7 +278,7 @@ async def approve_enrollment(
     cli: CliAuthorization,
     account_id: BrowserAccountId,
 ) -> CliEnrollmentApprovalResponse:
-    """Approve the previewed CLI device as the signed-in browser account."""
+    """Approve the previewed CLI device as the signed-in browser account; 403 when another account already did."""
     enrollment = await _execute(cli.approve_enrollment(user_code=payload.user_code, account_id=account_id))
     _prevent_storage(response)
     return CliEnrollmentApprovalResponse.from_domain(enrollment)
@@ -252,7 +298,7 @@ async def start_session_challenge(
     response: Response,
     cli: CliAuthorization,
 ) -> CliSessionChallengeResponse:
-    """Issue a one-time nonce for an enrolled device to sign."""
+    """Issue a one-time nonce for an enrolled device to sign; 404 for an unknown or revoked device."""
     issued = await _execute(cli.start_session_challenge(payload.device_id))
     _prevent_storage(response)
     return CliSessionChallengeResponse(
@@ -320,7 +366,7 @@ async def revoke_device(
     cli: CliAuthorization,
     account_id: BrowserAccountId,
 ) -> Response:
-    """Revoke an account-owned device and every session issued beneath it."""
+    """Revoke an account-owned device and every session beneath it; 404 for a device owned by another account."""
     if not await _execute(cli.revoke_device(device_id=device_id, account_id=account_id)):
         raise NotFoundError
     return _empty_no_store()
@@ -341,7 +387,7 @@ async def revoke_current_session(
     cli: CliAuthorization,
     identity: CurrentCliIdentity,
 ) -> Response:
-    """Revoke the exact CLI bearer session authenticating this request."""
+    """Revoke the CLI bearer session authenticating this request; 401 when the session is not on the caller's device."""
     if not await _execute(cli.revoke_current_session(identity)):
         raise AuthenticationError
     return _empty_no_store()

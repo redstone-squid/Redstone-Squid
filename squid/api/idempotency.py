@@ -55,7 +55,12 @@ async def enforce_request_idempotency_for(
     caller: str,
     idempotency_key: str | None,
 ) -> None:
-    """Reserve a key in a server-derived caller namespace."""
+    """Reserve `idempotency_key` for `caller` on an unsafe request; a no-op for safe methods or no key.
+
+    Raises `IdempotencyReplay` when an equivalent request already completed, so the exception handler can
+    return its stored response. Otherwise stores the pending reservation on `request.state` for
+    `IdempotencyResponseMiddleware` to complete.
+    """
     if request.method not in _UNSAFE_METHODS or idempotency_key is None:
         return
     service = cast(IdempotencyService, request.app.state.runtime.services.idempotency)
@@ -85,7 +90,10 @@ async def replay_response(_request: Request, error: Exception) -> Response:
 
 
 class IdempotencyResponseMiddleware:
-    """Buffer and durably complete responses for newly reserved requests."""
+    """Buffer the response of a request holding a reservation, store it, then send it.
+
+    Only `_REPLAYED_HEADERS` are stored; a replay carries no other headers from the original response.
+    """
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app

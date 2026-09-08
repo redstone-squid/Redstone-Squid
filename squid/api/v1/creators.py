@@ -42,8 +42,7 @@ async def get_creator_alias(
 async def get_creator_profile(creator_id: UUID, accounts: Accounts) -> CreatorProfileDetail:
     """Return a creator's public page, following permanent merge redirects.
 
-    Visibility is applied in the domain, not here: `present_public_profile` is the one authority
-    on what a stranger sees, so this route cannot accidentally disagree with the bot about it.
+    Field visibility is decided by `present_public_profile` in the domain, so this route and the bot agree.
     """
     profile = await accounts.get_public_profile(creator_id)
     if profile is None:

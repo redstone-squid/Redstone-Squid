@@ -39,37 +39,31 @@ SERVICE_UNAVAILABLE_DETAIL = tr(t"A required service is temporarily unavailable.
 class ExceptionRegistrar(Protocol):
     """Minimal exception-registration surface implemented by FastAPI."""
 
-    def add_exception_handler(self, exc_class_or_status_code: Any, handler: Any) -> None: ...
+    def add_exception_handler(self, exc_class_or_status_code: Any, handler: Any) -> None:
+        """Route exceptions of that class (or responses with that status) to `handler`."""
+        ...
 
 
 def correlation_id() -> str:
-    """Load tracing support only when an error actually needs correlation."""
+    """The active correlation id; imports `squid.observability` lazily so only failing requests pay for it."""
     from squid.observability import correlation_id as active_correlation_id
 
     return active_correlation_id()
 
 
 def _route_template(request: Request) -> str | None:
-    """Name the matched route rather than the concrete URL.
-
-    The path template is low cardinality and groups every failure of one endpoint together;
-    `str(request.url)` would put an id, and sometimes a query string, into the stored origin.
-    """
+    """The matched route's path template, not the concrete URL: low cardinality and free of ids and query strings."""
     route = request.scope.get("route")
     path = getattr(route, "path", None)
     return path if isinstance(path, str) else None
 
 
 async def _capture(request: Request, error: Exception, request_id: str) -> None:
-    """Store the failure, if this process was wired with somewhere to store it.
+    """Store the failure when the process has an `ErrorReportService`; a no-op otherwise.
 
-    Reached through `app.state` rather than a dependency because an exception handler runs after
-    dependency resolution has already been unwound, and because the handler must still render a
-    response on a deployment (or a test app) that has no service graph attached.
-
-    Guarded even though `ErrorReportService.record` already swallows: the buffer drain and the
-    service lookup happen out here, and a handler that raises turns a rendered 500 into a bare
-    ASGI failure with no problem document at all.
+    Reached through `app.state`, not a dependency: exception handlers run after dependency resolution has
+    unwound, and test apps have no service graph. Never raises, since a handler that raises turns the
+    rendered 500 into a bare ASGI failure with no problem document.
     """
     from squid.observability import correlated_log_buffer, correlation_reference
 
@@ -108,21 +102,17 @@ class ProblemDetail(BaseModel):
 
 
 _PINNED_REASON_PHRASES = {
-    # Python 3.13 renamed 422 from "Unprocessable Entity" to "Unprocessable
-    # Content", so `HTTPStatus.phrase` makes the exported document depend on the
-    # interpreter that generated it. The unit suite runs on 3.12, 3.13 and 3.14,
-    # and the committed-document assertion only catches a forgotten regeneration
-    # if the document is the same on all three.
+    # `HTTPStatus.phrase` for 422 differs between Python 3.12 and 3.13+, and the committed OpenAPI
+    # document must generate identically on every interpreter the suite runs on.
     HTTPStatus.UNPROCESSABLE_ENTITY: "Unprocessable Content",
 }
 
 
 def responses(*statuses: int, describe: Mapping[int, str] | None = None) -> dict[int | str, dict[str, Any]]:
-    """Declare RFC 9457 responses for a route without duplicating OpenAPI metadata.
+    """Declare RFC 9457 problem responses for the given statuses.
 
-    `describe` replaces a status's reason phrase where the generic one hides
-    something a client has to know -- most often that a 404 also covers a
-    resource the caller may not see.
+    `describe` overrides a status's reason phrase, most often to say that a 404 also covers a resource the
+    caller may not see.
     """
     described = describe or {}
     return {
@@ -176,7 +166,11 @@ def _status_for_error(error: SquidError) -> int:
 
 
 async def handle_squid_error(request: Request, exc: Exception) -> Response:
-    """Render a structured application exception."""
+    """Render a `SquidError` as a problem document with the status `_status_for_error` assigns.
+
+    A `DomainError` publishes its code, resource and public context; any other `SquidError` is captured,
+    logged, and redacted to a generic 500 or 503 carrying only the Request-Id.
+    """
     if not isinstance(exc, SquidError):
         return await handle_unexpected_error(request, exc)
 

@@ -18,7 +18,7 @@ _PRAGMA = b"pragma"
 
 
 class PrivateResponseHeadersMiddleware:
-    """Prevent browsers and intermediaries from retaining private API responses."""
+    """Set `Cache-Control: no-store` and `Pragma: no-cache` under `path_prefixes`, overriding any the route set."""
 
     def __init__(self, app: ASGIApp, *, path_prefixes: Sequence[str] = PRIVATE_API_PATH_PREFIXES) -> None:
         self._app = app

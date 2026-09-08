@@ -1,4 +1,4 @@
-"""Simple FastAPI server to generate verification codes for users."""
+"""FastAPI application assembly, health probes and the uvicorn entrypoint."""
 
 from collections.abc import Callable
 from contextlib import asynccontextmanager
@@ -82,7 +82,7 @@ async def ready(request: Request, response: Response) -> dict[str, str]:
 
 
 class User(BaseModel):
-    """A user model."""
+    """Verification request body: the player's Java (Minecraft) account UUID."""
 
     uuid: UUID
 
@@ -117,7 +117,7 @@ async def get_verification_code(
     accounts: Accounts,
     _caller: Annotated[Caller, Depends(requires(ACCOUNT_VERIFY_RELAY))],
 ) -> int:
-    """Generate a verification code for a user."""
+    """Mint a ten-digit verification code for the Java account; 404 when Mojang does not know the UUID."""
     return await accounts.generate_verification_code(user.uuid)
 
 
@@ -211,7 +211,6 @@ app = create_api_app()
 
 
 def main(process_config: ApiProcessConfig | None = None) -> None:
-    """Run the FastAPI server."""
     import uvicorn
 
     resolved_config = process_config or load_or_exit(load_api_process_config)

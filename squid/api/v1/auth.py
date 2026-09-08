@@ -17,15 +17,12 @@ from squid.core.errors import AuthenticationError, ValidationError
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
 ProviderSlug = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_-]{0,31}$")]
-"""One provider's URL segment. An unknown or unconfigured one is a 404 about the
-resource, not a credential failure: "this deployment has no GitHub login" is a fact."""
+"""One provider's URL segment. An unknown or unconfigured provider is a 404, not a credential failure."""
 
 
-# `/csrf` and `/logout` are declared before the templated routes on purpose. FastAPI
-# matches in declaration order, so `GET /{provider}` would otherwise swallow
-# `GET /csrf` -- and swallow it silently, since the request would still succeed, just as
-# a 404 for a provider named "csrf". `/logout` is POST and does not actually collide,
-# but is hoisted with it for symmetry. `tests/unit/api/test_auth_routes.py` pins this.
+# Declared before the templated routes: FastAPI matches in declaration order, so `GET /{provider}` would
+# otherwise answer `GET /csrf` with a 404 for a provider named "csrf". `/logout` is hoisted with it for
+# symmetry. `tests/unit/api/test_auth_routes.py` pins the order.
 @router.get(
     "/csrf",
     response_model=CsrfTokenResponse,
@@ -34,7 +31,7 @@ resource, not a credential failure: "this deployment has no GitHub login" is a f
     openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def csrf_token(request: Request, response: Response, caller: CurrentCaller) -> CsrfTokenResponse:
-    """Return the session-bound write token to a credentialed CORS frontend."""
+    """Return the `squid_csrf` cookie value for a cross-origin frontend that cannot read it; 401 without an account session."""
     token = request.cookies.get("squid_csrf")
     if caller.kind != "account" or token is None or not 16 <= len(token) <= 128:
         raise AuthenticationError
@@ -76,7 +73,7 @@ async def browser_authorization_start(
     provider: ProviderSlug,
     redirect_to: Annotated[str | None, Query(max_length=2_048)] = None,
 ) -> RedirectResponse:
-    """Begin authorization with PKCE and durable one-time state."""
+    """Redirect to the provider with PKCE and one-time state; 400 unless `redirect_to` is local or an allowed CORS origin."""
     if web_auth is None:
         raise AuthenticationError
     _validate_redirect(request, redirect_to)
@@ -97,7 +94,7 @@ async def browser_authorization_callback(
     code: Annotated[str, Query(min_length=1, max_length=2_048)],
     state: Annotated[str, Query(min_length=1, max_length=512)],
 ) -> RedirectResponse:
-    """Exchange an authorization code and set a revocable opaque session cookie."""
+    """Exchange the authorization code, set the `__Host-squid_session` and `squid_csrf` cookies, and redirect."""
     if web_auth is None:
         raise AuthenticationError
     token, redirect_to = await web_auth.callback(

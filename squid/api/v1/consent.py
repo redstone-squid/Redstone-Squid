@@ -1,8 +1,4 @@
-"""The published privacy notice.
-
-Deliberately outside `/users/me`: a notice that can only be read once you are signed in cannot
-inform the decision to sign in, and the web and CLI both need to show it before an account exists.
-"""
+"""The published privacy notice, readable anonymously so it can be shown before an account exists."""
 
 from fastapi import APIRouter, Request, Response
 
@@ -25,14 +21,13 @@ router = APIRouter(prefix="/consent", tags=["users"])
     openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def get_notice(request: Request, response: Response) -> PrivacyNoticeDetail:
-    """Return the notice a client must display before recording consent to it.
+    """Return the notice a client must display before recording consent to it, in the negotiated locale.
 
-    One msgid shared with the Discord prompt, so the version a receipt names refers to a single
-    piece of text however the reader met it.
+    The text is the same msgid the Discord prompt shows, so a consent version names one text regardless of
+    where it was read.
     """
     locale = locale_for_request(request)
-    # The notice changes only when its version does, but it is negotiated per language, so the
-    # cache has to key on that too.
+    # Cacheable per version, but negotiated per language, so caches must key on Accept-Language too.
     response.headers["Vary"] = "Accept-Language"
     response.headers["Cache-Control"] = "public, max-age=300"
     with localization_scope(localization_for(locale)):

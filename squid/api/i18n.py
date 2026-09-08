@@ -9,7 +9,7 @@ from squid_ui.text import localization_scope
 
 
 def _parse_accept_language(header: str) -> list[str]:
-    """Parse an `Accept-Language` header into tags ordered by descending quality."""
+    """Tags from an `Accept-Language` header in descending quality; `*` is dropped and a malformed `q=` counts as 1.0."""
     weighted: list[tuple[float, str]] = []
     for part in header.split(","):
         part = part.strip()
@@ -34,7 +34,7 @@ def _parse_accept_language(header: str) -> list[str]:
 
 
 def locale_for_request(request: Request) -> str:
-    """Resolve the response locale for a FastAPI request from `Accept-Language`."""
+    """The negotiated locale from `Accept-Language`, or `DEFAULT_LOCALE` when the header is absent or has no usable tag."""
     header = request.headers.get("accept-language")
     if not header:
         return DEFAULT_LOCALE

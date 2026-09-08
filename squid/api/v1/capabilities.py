@@ -27,7 +27,7 @@ router = APIRouter(tags=["capabilities"])
     openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def capabilities() -> ApiCapabilities:
-    """Publish independently versioned client compatibility and safety limits."""
+    """Publish the API version, feature identifiers, protocol range, upload limits and renderer controls."""
     limits = MediaLimits()
     protocol = ProtocolInterval(
         minimum=CURRENT_SUBMISSION_PROTOCOL,

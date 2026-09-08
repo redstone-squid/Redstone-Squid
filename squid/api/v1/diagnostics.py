@@ -15,9 +15,8 @@ from squid.core.pagination import offset_page
 from squid.diagnostics.domain import MAX_REFERENCE_LENGTH
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 
-# No router-level dependency: clearing every report is a distinct, more dangerous capability
-# than reading one, so each route declares the permission it actually needs instead of the GET
-# routes' `diagnostics.error.read` leaking onto the DELETE route below.
+# No router-level permission: each route declares its own so `diagnostics.error.read` does not leak onto the
+# DELETE route, which needs the more dangerous `diagnostics.error.clear`.
 router = APIRouter(prefix="/diagnostics/errors", tags=["diagnostics"])
 
 WorkLostParam = Annotated[
@@ -52,11 +51,7 @@ async def list_error_reports(
     page_size: PageSizeParam = 20,
     work_lost: WorkLostParam = False,
 ) -> Page[ErrorReportSummary]:
-    """List the most recent unexpired error reports, newest first.
-
-    Most reports are failures something recovered from, because capture follows the logs. Set
-    `work_lost` to see only the ones that permanently abandoned work.
-    """
+    """List the most recent unexpired error reports, newest first; `work_lost` keeps only those that abandoned work."""
     reports = await error_reports.recent(limit=page_size, work_lost_only=work_lost)
     return render_page(offset_page(reports, offset=0, page_size=page_size), ErrorReportSummary.from_domain)
 
@@ -80,11 +75,7 @@ async def list_error_reports(
     ),
 )
 async def get_error_report(reference: ReferenceParam, error_reports: ErrorReports) -> ErrorReportDetail:
-    """Resolve a quoted reference to the failure behind it.
-
-    Accepts either width: the short form a Discord error card shows, and the full correlation ID
-    that appears in logs and in the `Request-Id` response header.
-    """
+    """Resolve a reference, either the short form a Discord error card shows or a full `Request-Id`, to its report."""
     report, matches = await error_reports.lookup(reference)
     return ErrorReportDetail.of(report, matches)
 
@@ -104,8 +95,8 @@ async def get_error_report(reference: ReferenceParam, error_reports: ErrorReport
 async def clear_error_reports(error_reports: ErrorReports) -> Response:
     """Delete every stored error report, expired or not.
 
-    Denied by default to everyone but the bot owner: `diagnostics.error.clear` is tagged
-    destructive, which both built-in admin roles explicitly exclude.
+    `diagnostics.error.clear` is tagged destructive and excluded from both built-in admin roles, so by default
+    only the bot owner holds it.
     """
     await error_reports.clear_all()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

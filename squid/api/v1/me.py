@@ -62,18 +62,13 @@ _ALL_STATUSES = frozenset(Status)
     openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def get_me(accounts: Accounts, caller: UserCaller) -> UserMe:
-    """Return the authenticated user's own linked account.
-
-    Keyed on `account_id`, not `discord_id`: a CLI device and a Minecraft player both carry a
-    perfectly good account and no Discord identity, and used to be refused their own account.
-    """
+    """Return the caller's own account; any credential kind with an `account_id` qualifies, Discord identity or not."""
     if caller.account_id is None:
         raise AuthenticationError
     return await _render_me(accounts, caller.account_id, consent_pending=caller.consent_pending)
 
 
 async def _render_me(accounts: AccountService, account_id: int, *, consent_pending: bool) -> UserMe:
-    """Compose the self view from the account and its profile."""
     account = await accounts.get_account_by_id(account_id)
     if account is None:
         raise AccountNotFoundError(account_id)
@@ -93,11 +88,7 @@ async def grant_consent(
     caller: UserCaller,
     body: ConsentGrantRequest | None = None,
 ) -> UserMe:
-    """Accept the current privacy notice for future writes.
-
-    A client that names the version it displayed is held to it: consent recorded against text the
-    user never saw is the failure that versioning the notice exists to prevent.
-    """
+    """Accept the current privacy notice; 409 when the body names a `version` other than the current one."""
     if caller.account_id is None:
         raise AuthenticationError
     if body is not None and body.version is not None and body.version != CURRENT_CONSENT_VERSION:
@@ -119,11 +110,7 @@ async def update_profile(
     accounts: Accounts,
     caller: ManageCaller,
 ) -> ProfileDetail:
-    """Edit the caller's own public profile.
-
-    Partial: an omitted field is left alone and an explicit `null` clears it, so a client that
-    only knows about some fields cannot wipe the ones it has never heard of.
-    """
+    """Edit the caller's own public profile; an omitted field is left alone and an explicit `null` clears it."""
     if caller.account_id is None:
         raise AuthenticationError
     profile = await accounts.update_profile(caller.account_id, body.to_domain())
@@ -138,10 +125,7 @@ async def update_profile(
     openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def list_identities(accounts: Accounts, caller: UserCaller) -> list[IdentityDetail]:
-    """List every identity linked to the caller's account, hidden ones included.
-
-    Unfiltered by visibility on purpose: you can only unhide what you can see listed.
-    """
+    """List every identity linked to the caller's account, hidden ones included."""
     if caller.account_id is None:
         raise AuthenticationError
     identities = await accounts.list_identities(caller.account_id)
@@ -181,11 +165,10 @@ async def set_identity_visibility(
     ),
 )
 async def unlink_identity(identity_id: int, accounts: Accounts, caller: ManageCaller) -> IdentityDetail:
-    """Unlink one identity from the caller's account.
+    """Unlink one identity from the caller's account; creator credit is untouched.
 
-    Refuses the last one with 409: every sign-in path resolves an account from a provider
-    subject, so an account with no identities is one nobody can reach again. Creator credit is
-    untouched — attribution is a fact about a build, not about how its author signs in.
+    409 for the last identity: every sign-in path resolves an account from a provider subject, so an account
+    with none is unreachable.
     """
     if caller.account_id is None:
         raise AuthenticationError
@@ -204,11 +187,10 @@ async def unlink_identity(identity_id: int, accounts: Accounts, caller: ManageCa
     ),
 )
 async def create_merge_code(accounts: Accounts, caller: ManageCaller) -> MergeCodeDetail:
-    """Offer this account up to be absorbed by another one you hold.
+    """Mint a code that lets another account of yours absorb this one.
 
-    Run this as the account you are giving up: it loses its public creator id to a permanent
-    redirect, so minting the code is that side's consent. Redeem it as the account you are
-    keeping. The code is shown once and replaces any previous one.
+    Call as the account you are giving up (its creator id becomes a permanent redirect) and redeem as the
+    account you keep. The code is shown once and replaces any previous one.
     """
     if caller.account_id is None:
         raise AuthenticationError
@@ -228,10 +210,7 @@ async def create_merge_code(accounts: Accounts, caller: ManageCaller) -> MergeCo
     ),
 )
 async def preview_merge(body: MergeRequest, accounts: Accounts, caller: ManageCaller) -> MergePreviewDetail:
-    """Describe what redeeming a merge code would move, without spending it.
-
-    A merge cannot be undone, so this exists to be shown before the irreversible call.
-    """
+    """Describe what redeeming a merge code would move, without spending it."""
     if caller.account_id is None:
         raise AuthenticationError
     return MergePreviewDetail.from_domain(await accounts.preview_merge(caller.account_id, body.code))
@@ -267,10 +246,7 @@ async def complete_merge(body: MergeRequest, accounts: Accounts, caller: ManageC
     openapi_extra=contract(security=[ANONYMOUS], cli=cli_command("account.refresh", interaction="direct")),
 )
 async def refresh_minecraft_identity(accounts: Accounts, caller: RefreshCaller) -> MinecraftIdentityRefresh:
-    """Re-read the caller's linked Minecraft name and reconcile the creator credit.
-
-    Rate limited and idempotency-gated because it reaches Mojang on every call.
-    """
+    """Re-read the caller's linked Minecraft name from Mojang and reconcile the creator credit."""
     if caller.account_id is None:
         raise AuthenticationError
     return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(caller.account_id))
@@ -305,11 +281,7 @@ async def refresh_minecraft_identity_for(account_id: int, accounts: Accounts) ->
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def clear_profile(account_id: int, accounts: Accounts) -> ProfileDetail:
-    """Reset another account's profile to empty, for staff handling abuse.
-
-    Deliberately leaves the profile visible: `hidden` belongs to its owner, and a takedown that
-    also flipped it would take that decision away from them.
-    """
+    """Reset another account's profile to empty, for staff handling abuse; `hidden` stays as the owner set it."""
     profile = await accounts.clear_profile(account_id)
     return ProfileDetail.from_domain(profile, await accounts.list_identities(account_id))
 
@@ -330,11 +302,7 @@ async def list_my_builds(
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[BuildSummary]:
-    """List the caller's own submissions, including the ones still awaiting review.
-
-    This is the authoritative counterpart to `GET /v1/builds`: submitters need to see their own
-    pending and denied builds, which the public search path deliberately cannot return.
-    """
+    """List the caller's own submissions in every status, including pending and denied ones `GET /v1/builds` hides."""
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)

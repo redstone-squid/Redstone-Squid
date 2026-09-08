@@ -136,7 +136,7 @@ class RateLimitDecision:
 
     @property
     def retry_after(self) -> int:
-        """Return when every policy that blocked the request has capacity."""
+        """Seconds until every blocking policy has capacity; at least 1."""
         return max((state.reset_after for state in self.states if state.blocked), default=1)
 
 
@@ -185,11 +185,13 @@ class ApiRateLimitPolicies:
 class RateLimiter(Protocol):
     """Atomic multi-policy limiter boundary."""
 
-    async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision: ...
+    async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision:
+        """Consume one unit from every policy, or from none when any policy is exhausted."""
+        ...
 
 
 class LocalSlidingWindowRateLimiter:
-    """Bounded process-local limiter used as a Redis shadow and fallback."""
+    """Process-local limiter capped at `max_keys` identities (least recently used evicted first)."""
 
     def __init__(
         self,
@@ -203,7 +205,6 @@ class LocalSlidingWindowRateLimiter:
         self._lock = asyncio.Lock()
 
     async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision:
-        """Check and record all policies without partially consuming a rejected request."""
         if not requests:
             return RateLimitDecision(allowed=True, states=())
         now = self._clock()
@@ -245,7 +246,11 @@ class LocalSlidingWindowRateLimiter:
 
 
 class RedisSlidingWindowRateLimiter:
-    """Exact cross-process limiter implemented by one atomic Redis script."""
+    """Cross-process limiter implemented by one atomic Redis script.
+
+    `check` raises `redis.exceptions.RedisError` (including `ResponseError` for a malformed script reply)
+    and `OSError` on transport failure; `DistributedRateLimiter` treats both as degradation.
+    """
 
     def __init__(self, client: Redis) -> None:
         self._client = client
@@ -278,7 +283,11 @@ class RedisSlidingWindowRateLimiter:
 
 
 class DistributedRateLimiter:
-    """Prefer Redis while maintaining a conservative process-local shadow."""
+    """Redis decision when available, local decision while degraded; `aclose` closes the Redis client it owns.
+
+    A request is denied when either backend denies it. After a Redis failure, Redis is retried once per
+    `retry_seconds` by a single probing request; the rest use the local shadow.
+    """
 
     def __init__(
         self,
@@ -299,7 +308,6 @@ class DistributedRateLimiter:
         self._probe_lock = asyncio.Lock()
 
     async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision:
-        """Return a Redis decision, or the local shadow decision while degraded."""
         if self._redis is None:
             return self._record(await self._local.check(requests), backend="local")
 
@@ -324,7 +332,6 @@ class DistributedRateLimiter:
         return self._record(redis_decision, backend="redis")
 
     async def aclose(self) -> None:
-        """Close the process-owned Redis connection pool."""
         if self._redis_client is not None:
             await self._redis_client.aclose()
 
@@ -360,7 +367,7 @@ class DistributedRateLimiter:
 
 
 def create_rate_limiter(config: RateLimitConfig) -> tuple[DistributedRateLimiter, ApiRateLimitPolicies]:
-    """Create one process-owned limiter and its immutable policy set."""
+    """Build the limiter and policies from config; without `redis_url` enforcement is process-local only."""
     local = LocalSlidingWindowRateLimiter(max_keys=config.local_max_keys)
     policies = ApiRateLimitPolicies.from_config(config)
     if config.redis_url is None:
@@ -388,7 +395,10 @@ def create_rate_limiter(config: RateLimitConfig) -> tuple[DistributedRateLimiter
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Enforce the pre-authentication IP ceiling and publish quota headers."""
+    """Enforce the per-IP ceiling before authentication and publish `RateLimit` headers.
+
+    Skips OPTIONS and the health probes. A rejection is rendered as a 429 problem document with Retry-After.
+    """
 
     @override
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -413,7 +423,10 @@ async def enforce_route_rate_limits(
     request: Request,
     caller: Annotated[Caller, Depends(current_caller)],
 ) -> None:
-    """Apply authenticated, mutation, and vote quotas to a matched API route."""
+    """Apply the caller, write, vote, suggest, render and Minecraft-challenge quotas to a matched route.
+
+    Raises `RateLimitedError` (429) when any applicable quota is exhausted.
+    """
     limiter, policies = _limiter_state(request)
     checks: list[RateLimitRequest] = []
     identity = caller.subject if caller.kind != "anonymous" else _client_identity(request)

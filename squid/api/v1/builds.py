@@ -62,7 +62,7 @@ async def submit_build(
     builds: BuildCommands,
     caller: UserWriter,
 ) -> BuildDetail:
-    """Submit a door build for Discord moderation."""
+    """Submit a door build for moderation; 400 for any `category` other than `door`."""
     account_id = require_consented_account(caller)
     if submission.category.casefold() != "door":
         msg = "Only door submissions are supported."
@@ -110,7 +110,10 @@ async def edit_build(
     caller: UserWriter,
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> BuildDetail:
-    """Edit an owned pending build, or any build with `build.submission.edit`."""
+    """Edit an owned pending build, or any build with `build.submission.edit`.
+
+    `If-Match` must carry the build's current ETag: 428 when absent, 412 when it names another build or revision.
+    """
     require_consented_account(caller)
     build = await builds.apply_edit(
         BuildEditor(subject=subject_for(caller)),
@@ -137,9 +140,8 @@ async def edit_build(
 async def get_build(build_id: int, response: Response, build_queries: BuildQueries) -> BuildDetail:
     """Return one confirmed public build.
 
-    A pending build answers 404, not 403: a submission's existence is private
-    until it is confirmed, so "not published" and "not there" have to be
-    indistinguishable to a caller without `build.submission.view_pending`.
+    A pending build answers 404, not 403: its existence is private until confirmed, so "not published" and
+    "not there" are indistinguishable without `build.submission.view_pending`.
     """
     build = await build_queries.get_public(build_id)
     _set_build_etag(response, build)
@@ -166,7 +168,11 @@ async def list_builds(
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[BuildSummary]:
-    """Search public builds, or list one authoritative moderation-status view."""
+    """Search public builds with `q`, or list one moderation-status view.
+
+    `q` and `status` are mutually exclusive (400). Ranked results page by `offset` only; a non-confirmed
+    `status` requires `build.submission.view_pending` (401 anonymous, 403 otherwise).
+    """
     if q is not None:
         if status is not None:
             msg = "status cannot be combined with q"
@@ -213,20 +219,16 @@ async def list_builds(
 
 
 async def _require_pending_view(permissions: PermissionService, caller: Caller) -> None:
-    """Gate non-public moderation views on the node, credential included.
+    """Raise `AuthenticationError` (anonymous) or `AuthorizationError` without `BUILD_SUBMISSION_VIEW_PENDING`.
 
-    "A service key never reads unreviewed submissions" used to be a hardcoded
-    branch on the caller kind. It is now an expressible policy: no key is
-    issued `build.submission.view_pending` by default, so a leaked key still
-    cannot read them -- and a key that should read them can be given one,
-    which the branch made impossible.
+    Gated on the node rather than the caller kind so a service key can be granted pending reads.
     """
     if not await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING):
         raise AuthenticationError if caller.kind == "anonymous" else AuthorizationError
 
 
 def build_etag(build: Build) -> str:
-    """Return the strong validator for one persisted build revision."""
+    """The strong ETag `"build-{id}-r{revision}"`; raises `ValueError` for an unpersisted build."""
     if build.id is None:
         msg = "Cannot create an ETag for an unpersisted build."
         raise ValueError(msg)

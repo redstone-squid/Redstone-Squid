@@ -16,18 +16,16 @@ _STREAMS_OWN_BODY = "__squid_streams_own_body__"
 
 
 def streams_own_body[EndpointT: Callable[..., object]](endpoint: EndpointT) -> EndpointT:
-    """Exempt one endpoint from buffering, because it bounds its own stream.
+    """Exempt an endpoint that bounds its own stream from `BoundedRequestBodyMiddleware`.
 
-    The exemption travels with the route rather than being described by a path
-    pattern here: a new media kind, or a move to another prefix, would otherwise
-    silently start 413-ing uploads from shared infrastructure.
+    Marked on the endpoint rather than by path pattern so a route that moves prefix keeps its exemption.
     """
     setattr(endpoint, _STREAMS_OWN_BODY, True)
     return endpoint
 
 
 class BoundedRequestBodyMiddleware:
-    """Reject oversized mutation bodies before downstream code can buffer them."""
+    """Buffer unsafe-method bodies up to `max_bytes` and answer 413 beyond it; `streams_own_body` routes are exempt."""
 
     def __init__(
         self,

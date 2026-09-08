@@ -19,7 +19,7 @@ _TRACEPARENT = re.compile(r"00-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}")
 
 
 def _traceparent_trace_id(value: str | None) -> str | None:
-    """Parse a W3C traceparent's trace id, used only when OpenTelemetry is inactive."""
+    """The trace id of a W3C `traceparent`, or None when it is malformed or all zeros."""
     if value is None:
         return None
     match = _TRACEPARENT.fullmatch(value.strip())
@@ -29,12 +29,10 @@ def _traceparent_trace_id(value: str | None) -> str | None:
 
 
 def resolve_request_id(headers: Headers) -> str:
-    """Resolve one correlation id for a request from untrusted inbound headers.
+    """One correlation id for the request, from untrusted inbound headers.
 
-    Priority: a valid inbound ``Request-Id`` (echoed verbatim), then the active trace id, then a
-    trace id parsed from ``traceparent`` (only reachable without the observability extra, since
-    OpenTelemetry's instrumentation already surfaces the same value through ``active_trace_id``),
-    then a freshly generated id. Accepted values are never truncated.
+    Priority: a `Request-Id` matching `_VALID_REQUEST_ID` (echoed verbatim, never truncated), the active
+    OpenTelemetry trace id, the trace id of a `traceparent` header, then a fresh UUID hex.
     """
     inbound = headers.get(REQUEST_ID_HEADER)
     if inbound is not None and _VALID_REQUEST_ID.fullmatch(inbound):

@@ -22,30 +22,18 @@ from squid.permissions.domain import CATALOGUE, Pattern, PermissionNode, Subject
 class Caller:
     """One authenticated or anonymous caller, whatever credential it arrived with.
 
-    HTTP API keys, the legacy bootstrap secret, browser sessions, CLI sessions,
-    and Minecraft player grants all reduce to this one type, so a route
-    authorizes once instead of branching on how the caller signed in.
-
-    `nodes` bounds what a *credential* may do; the permission engine decides what
-    its owner may do. A service key needs both, which is AWS's permissions-
-    boundary rule: revoking the owner's node instantly defangs every key they
-    issued, and a key can never exceed the human behind it.
+    API keys, the bootstrap secret, browser sessions, CLI sessions and Minecraft player grants all reduce
+    to this type. `nodes` bounds what the *credential* may do; the permission engine decides what its
+    owner may do, and a service key needs both, so revoking the owner's node defangs every key they issued.
     """
 
     kind: Literal["anonymous", "service", "account", "cli", "minecraft_player"]
     subject: str
     nodes: frozenset[Pattern] = field(default_factory=frozenset)
-    """Parsed patterns, so authorization matches rather than re-parses per check."""
+    """Pre-parsed so authorization matches rather than re-parses per check."""
     account_id: int | None = None
-    """There is deliberately no `discord_id` beside this.
-
-    `subject_for` hardcodes `guild_id=None`, so an HTTP caller can never act on a
-    Discord fact anyway -- a snowflake here would be an identifier with no legitimate
-    HTTP use. Keeping one "as an optional convenience" is exactly the affordance that
-    produced a `assert ... is not None` on a submission path already holding a perfectly
-    good account id. `UserMe.discord_id` in the *response* stays: it is read off the
-    account's identities, which is the correct pattern.
-    """
+    """Deliberately no `discord_id` beside this: `subject_for` fixes `guild_id=None`, so an HTTP caller never
+    acts on a Discord fact. Responses read `discord_id` off the account's identities instead."""
     consent_pending: bool = False
     minecraft_origin: Literal["paper", "fabric"] | None = None
     java_uuid: UUID | None = None
@@ -65,12 +53,10 @@ _authorization = APIKeyHeader(name="Authorization", scheme_name="ApiCredential",
 
 
 def requires(node: PermissionNode | str):
-    """Build a FastAPI dependency requiring one permission node.
+    """Build a FastAPI dependency that yields the `Caller` when `caller_allows` grants `node`.
 
-    Two questions, both of which must answer yes for a service key: does the
-    credential carry the node, and does the account behind it hold it? An
-    anonymous caller carries nothing, so it reaches only default-allow nodes --
-    which is what keeps public reads public without a special case.
+    Raises `AuthenticationError` (401) for a refused anonymous caller and `AuthorizationError` (403) for any
+    other refusal. Anonymous callers hold no account, so they reach only default-allow nodes.
     """
     required = CATALOGUE[node] if isinstance(node, str) else node
 
@@ -88,15 +74,10 @@ async def caller_allows(
     caller: Caller,
     node: PermissionNode,
 ) -> bool:
-    """Whether an HTTP caller may exercise `node`.
+    """Whether the credential carries `node` and the account behind it holds it.
 
-    Both halves of AWS's permissions-boundary rule: the credential must carry the
-    node, and the account behind it must hold it. Revoking someone's node
-    therefore defangs every key they issued, without touching the keys.
-
-    A credential with no owner falls back to its own nodes, since there is nobody
-    to intersect with -- that is the machine-to-machine case, and the alternative
-    would silently make such a credential inert.
+    A service credential with no owner is judged on its own nodes alone; intersecting with nobody would
+    make every machine-to-machine key inert.
     """
     if not credential_allows(caller, node):
         return False
@@ -111,11 +92,10 @@ def credential_allows(caller: Caller, node: PermissionNode) -> bool:
 
 
 def subject_for(caller: Caller) -> Subject:
-    """The permission subject behind an HTTP credential.
+    """The permission subject behind an HTTP credential, always with `guild_id=None`.
 
-    `guild_id` is always None, so only global-scoped rules can ever apply: a
-    grant made inside one Discord server must not authorize an HTTP call. The
-    asymmetry is deliberate and documented in the API reference.
+    Only global-scoped rules apply over HTTP; a grant made inside one Discord server must not authorize
+    an HTTP call.
     """
     return Subject(account_id=caller.account_id, guild_id=None)
 
@@ -124,7 +104,17 @@ async def current_caller(
     request: Request,
     authorization: Annotated[str | None, Security(_authorization)],
 ) -> Caller:
-    """Authenticate a legacy bootstrap secret or an indexed API key."""
+    """Resolve the request's credential to a `Caller`.
+
+    Without an `Authorization` header, a `__Host-squid_session` cookie yields an account caller and no
+    cookie yields `ANONYMOUS`. With one: the bootstrap secret yields a service caller bounded by
+    `api.secret_patterns`; a `Bearer` token is dispatched by prefix to a CLI session, a Minecraft player
+    grant (Paper when the `Squid-Installation-*` headers are present, Fabric otherwise), or an API key.
+
+    Raises `AuthenticationError` (401) for any credential that does not authenticate, including headers
+    over 4096 bytes, and `AuthorizationError` (403) for a session cookie on an unsafe method whose
+    `CSRF-Token` header does not match the `squid_csrf` cookie.
+    """
     if authorization is None:
         session_token = request.cookies.get("__Host-squid_session")
         web_auth = request.app.state.runtime.services.web_auth
@@ -149,9 +139,8 @@ async def current_caller(
         raise AuthenticationError
     config = request.app.state.config
     if hmac.compare_digest(authorization, config.api.secret.get_secret_value()):
-        # Demoted from "every capability, forever" to an explicit list. It also
-        # carries no account, so it is bounded by the anonymous subject's
-        # authority as well -- it can no longer act as a person.
+        # Bounded by an explicit pattern list and, carrying no account, by the anonymous subject's
+        # authority: the bootstrap secret cannot act as a person.
         return Caller(
             kind="service",
             subject="legacy-bootstrap",
@@ -223,15 +212,11 @@ async def current_caller(
 
 
 def require_consented_account(caller: Caller) -> int:
-    """The account id behind a caller that may be written about, or the reason it may not.
+    """The account id of a caller allowed to write; keyed on `account_id` alone, so CLI and Minecraft callers pass.
 
-    The single spelling of the write gate, after five routers had each grown their own copy and
-    started to disagree about which of `kind`, `account_id` and `discord_id` they tested. Keyed
-    on `account_id` alone: the `kind` test was redundant with it, and the `discord_id` test
-    refused a CLI device and a Minecraft player who each hold a perfectly good account.
-
-    Stays a plain function rather than only a dependency because three call sites need their own
-    checks around it and cannot express that as `Depends`.
+    Raises `AuthenticationError` (401) when the caller has no account and `ConsentRequiredError` (400, with
+    `consent_url` and `notice_url` in the context) when the account has not accepted the current privacy
+    notice. A plain function, not only a dependency, because some routes wrap their own checks around it.
     """
     if caller.account_id is None:
         raise AuthenticationError

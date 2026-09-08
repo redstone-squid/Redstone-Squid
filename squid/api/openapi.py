@@ -1,9 +1,6 @@
-"""Deterministic postprocessing for the public OpenAPI and CLI capability contract.
+"""Document-level OpenAPI postprocessing: security schemes, shared headers, and two document-wide passes.
 
-Per-operation metadata (security, CLI classification, required scopes, response links) is
-declared on each route via `squid.api.contract.contract()`. What is left here is the
-cross-cutting, table-free residue: document-level security scheme and header definitions, and
-two document-wide passes that would be pure repetition if every route did them itself.
+Per-operation metadata lives on each route via `squid.api.contract.contract()`.
 """
 
 from typing import Any, cast
@@ -17,7 +14,10 @@ _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
 
 def install_openapi_contract(app: FastAPI) -> None:
-    """Install deterministic schema generation with permanent operation metadata."""
+    """Replace `app.openapi` with a cached generator that runs `_postprocess` once.
+
+    Raises `ValueError` through `validate_contract` when any route lacks contract metadata.
+    """
     validate_contract(app)
 
     def custom_openapi() -> dict[str, Any]:
@@ -60,11 +60,9 @@ def _postprocess(document: dict[str, Any]) -> None:
 def _rename_security_placeholder(document: dict[str, Any]) -> None:
     """Rename each route's `x-squid-security` placeholder to `security`.
 
-    A dict comprehension rather than a pop-and-reinsert: the first occurrence of a key
-    decides its position in a rebuilt dict, so an operation that already carries a
-    FastAPI-generated `security` (from a `Security(...)` dependency) keeps that early
-    position with the placeholder's value, while one with no generated `security` gets it
-    appended wherever the placeholder itself landed.
+    Rebuilt as a dict comprehension rather than pop-and-reinsert so an operation that already carries a
+    FastAPI-generated `security` (from a `Security(...)` dependency) keeps that key's position with the
+    placeholder's value.
     """
     for path_item in document["paths"].values():
         for method, operation in path_item.items():

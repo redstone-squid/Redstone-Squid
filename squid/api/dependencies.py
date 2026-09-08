@@ -23,7 +23,6 @@ from squid.voting.application.ports import InteractiveVoteActorResolver
 
 
 async def get_services(request: Request) -> ApiServices:
-    """Return application services initialized during API startup."""
     runtime = cast(ApplicationRuntime[ApiServices], request.app.state.runtime)
     return runtime.services
 

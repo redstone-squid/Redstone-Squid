@@ -1,10 +1,8 @@
 """Per-route declarations for the public OpenAPI and CLI capability contract.
 
-Each route declares its own security, CLI classification, required scopes, and response
-links through `contract()` and its helpers, instead of a central table keyed by path and
-method. `validate_contract` replaces the old table's build-time uniqueness checks: it walks
-the assembled application and raises when a route ships without contract metadata, or when
-that metadata is internally inconsistent.
+Each route declares its security, CLI classification, required scopes, and response links through
+`contract()`; `validate_contract` fails app construction when a route ships without them or they are
+internally inconsistent.
 """
 
 from collections.abc import Mapping, Sequence
@@ -19,13 +17,11 @@ type SecurityRequirement = dict[str, list[str]]
 type CliClassification = Literal["command", "browser-only", "transport-only", "internal", "compatibility-alias"]
 
 SECURITY_PLACEHOLDER_KEY: Final = "x-squid-security"
-"""Deep-merged onto the operation by `openapi_extra`, then renamed to `security` by the
-generic postprocess pass in `squid/api/openapi.py`. Never published under this name.
+"""Merged onto the operation by `openapi_extra`, then renamed to `security` in `squid/api/openapi.py`.
 
-`security` itself cannot be used directly: 73 operations already carry a FastAPI-generated
-`security: [{"ApiCredential": []}]` from `Security(_authorization)` in `current_caller`, and
-`openapi_extra`'s deep merge concatenates lists instead of replacing them -- writing under
-`security` here would append to, not replace, that generated alternative.
+Not written as `security` directly: operations depending on `current_caller` already carry a
+FastAPI-generated `security: [{"ApiCredential": []}]`, and `openapi_extra`'s deep merge concatenates
+lists, so the declared requirements would be appended to that entry instead of replacing it.
 """
 
 _UNSAFE_METHODS: Final = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -45,7 +41,10 @@ def cli_command(
     features: Sequence[str] = (),
     interaction: Literal["direct", "browser-continuation"],
 ) -> dict[str, Any]:
-    """Declare a CLI-addressable command's `x-squid-cli` metadata."""
+    """Declare a CLI-addressable command's `x-squid-cli` metadata.
+
+    Raises `ValueError` when `features` names an identifier outside `API_FEATURES`.
+    """
     if not set(features) <= API_FEATURES:
         msg = f"Unknown API feature on CLI command {command!r}."
         raise ValueError(msg)
@@ -97,10 +96,10 @@ def contract(
 
 
 def validate_contract(app: FastAPI) -> None:
-    """Raise when route-declared contract metadata is missing or internally inconsistent.
+    """Raise `ValueError` when route-declared contract metadata is missing or internally inconsistent.
 
-    Runs on every app construction, so an unclassified route breaks the app rather than
-    silently missing from the published contract.
+    Runs on every app construction, so an unclassified route breaks startup instead of silently
+    missing from the published contract.
     """
     routes = [route for route in app.routes if isinstance(route, APIRoute) and route.include_in_schema]
 
