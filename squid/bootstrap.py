@@ -118,6 +118,7 @@ from squid.submissions.infrastructure.artifact_readiness import (
 from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
 from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
 from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
@@ -446,6 +447,7 @@ class _ServiceGraph:
             PostgresInferenceRuns(self.db.async_session),
             self.build_inference,
             self.artifacts,
+            PydanticInferenceRunCodec(),
             capacity=self.config.submissions.inferred_draft_capacity,
             permissions=self.permissions,
         )
