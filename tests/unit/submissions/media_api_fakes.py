@@ -87,7 +87,7 @@ class FakeDrafts:
         self.events = events
         self.deny = deny
 
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft:
         self.events.append("owner")
         assert draft_id == DRAFT_ID
         assert account_id == ACCOUNT_ID
