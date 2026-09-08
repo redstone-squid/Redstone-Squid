@@ -79,7 +79,11 @@ class VoteChoice(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class VoteOption:
-    """A stable selectable option and one guild's reaction alias for it."""
+    """A stable selectable option and one guild's reaction alias for it.
+
+    Raises `InvalidVoteConfigurationError` for a blank emoji or identifier, a multiplier that is not
+    finite and positive, or a generic option without a label.
+    """
 
     emoji: str
     choice: VoteChoice
@@ -107,14 +111,18 @@ class VoteOption:
 
     @property
     def id(self) -> str:
-        """The stable identifier, independent of Discord, which `__post_init__` always fills."""
+        """The Discord-independent identifier that `__post_init__` always fills."""
         assert self.identifier is not None
         return self.identifier
 
 
 @dataclass(frozen=True, slots=True)
 class VoteSelection:
-    """A voter's raw selection and its last successfully calculated weight."""
+    """A voter's raw selection and its last successfully calculated weight.
+
+    The weight is a positive magnitude; the option's choice supplies the sign. A weight that is not
+    finite and positive raises `InvalidVoteConfigurationError`.
+    """
 
     account_id: int
     guild_id: int
@@ -137,11 +145,10 @@ class VoteActor:
     guild_id: int = 0
     role_ids: frozenset[int] = frozenset()
     capabilities: frozenset[str] = frozenset()
-    """Permission node names this actor was resolved to hold.
+    """Permission node names this actor holds, resolved by the edge that built it.
 
-    Names rather than booleans, and already resolved rather than resolvable: the
-    domain stays free of the permission engine, and the edge that built this
-    actor is the only place that knows how to ask.
+    Names rather than booleans, already resolved rather than resolvable, so the domain stays free
+    of the permission engine.
     """
 
 
@@ -178,8 +185,8 @@ class VoteMessage:
 class GenericPoll:
     """Metadata owned by a generic poll session.
 
-    `guild_id` is optional so a poll can exist before any presentation message is
-    attached; it records the guild whose emoji aliases the poll was drafted against.
+    `guild_id` is the guild whose emoji aliases the poll was drafted against, and is optional so a
+    poll can exist before any presentation message is attached.
     """
 
     question: str
@@ -189,17 +196,16 @@ class GenericPoll:
     scope: PollScope = PollScope.GUILD
     """Whether the poll is carded in its own guild alone or in every vote channel.
 
-    A network poll is still owned by `guild_id`, which weighs its ballots wherever
-    they are cast.
+    A network poll is still owned by `guild_id`, which weighs its ballots wherever they are cast.
     """
 
 
 def validate_thresholds(kind: VoteKind, pass_threshold: int | None, fail_threshold: int | None) -> None:
     """Enforce the kind/threshold pairing the database also constrains.
 
-    Generic polls close on a deadline and never on a score, so a threshold on one is
-    not a harmless extra: it is a number nothing will ever read, which is exactly how
-    the `32767`/`-32768` sentinels this replaces came to be stored.
+    A threshold kind needs both thresholds, pass positive and fail negative. A generic poll closes
+    on its deadline and never on a score, so it must carry neither. Either violation raises
+    `InvalidVoteConfigurationError`.
     """
     if kind.is_threshold_vote:
         if pass_threshold is None or fail_threshold is None:
@@ -217,7 +223,11 @@ def validate_thresholds(kind: VoteKind, pass_threshold: int | None, fail_thresho
 
 @dataclass(frozen=True, slots=True)
 class VoteSessionSnapshot:
-    """Persisted state needed by application and presentation adapters."""
+    """Persisted state needed by application and presentation adapters.
+
+    `votes` holds signed weights per account; `selections` holds the same ballots unsigned. A
+    kind/threshold pairing `validate_thresholds` rejects raises `InvalidVoteConfigurationError`.
+    """
 
     id: int
     author_account_id: int
@@ -250,6 +260,7 @@ class VoteSessionSnapshot:
 
     @property
     def downvotes(self) -> float:
+        """The total weight cast against, as a positive number."""
         return -sum(weight for weight in self.votes.values() if weight < 0)
 
     @property
@@ -274,8 +285,7 @@ class VoteSessionSnapshot:
     def should_remove_reaction_on_cast(self) -> bool:
         """Whether the transport must strip a voter's reaction to keep the ballot secret.
 
-        A public live poll is the one case where the reaction *is* the disclosed
-        ballot, so removing it would erase the very thing the voter chose to show.
+        A live public poll is the one case where the reaction *is* the disclosed ballot.
         """
         return self.is_anonymous
 
@@ -285,9 +295,9 @@ class VoteSessionSnapshot:
             return VoteRejection.NOT_AUTHORIZED
         author = actor.account_id == self.author_account_id
         elsewhere = self.poll.guild_id is not None and actor.guild_id and self.poll.guild_id != actor.guild_id
-        # A network poll is carded in guilds its author may not belong to, so only
-        # they may close it from elsewhere. Anyone else must stand in the owning
-        # guild, which is where the capability admitting them was resolved.
+        # A network poll is carded in guilds its author may not belong to, so only they may close
+        # it from elsewhere. Anyone else must stand in the owning guild, where the capability
+        # admitting them was resolved.
         if elsewhere and not (author and self.poll.scope is PollScope.NETWORK):
             return VoteRejection.WRONG_GUILD
         if not author and VOTE_POLL_CLOSE_ANY.name not in actor.capabilities:
@@ -295,7 +305,7 @@ class VoteSessionSnapshot:
         return None
 
     def options_for_guild(self, guild_id: int) -> tuple[VoteOption, ...]:
-        """Return the snapshotted aliases applicable to a guild message."""
+        """Return this guild's snapshotted aliases, or the unscoped ones when it has none."""
         scoped = tuple(option for option in self.options if option.guild_id == guild_id)
         return scoped or tuple(option for option in self.options if option.guild_id is None)
 
@@ -372,7 +382,7 @@ class EmojiPreset:
 
 @dataclass(frozen=True, slots=True)
 class RoleWeight:
-    """A guild/session-scoped role multiplier."""
+    """A guild/session-scoped role multiplier, finite and positive or `InvalidVoteConfigurationError`."""
 
     guild_id: int
     kind: VoteKind
@@ -397,7 +407,12 @@ MAX_POLL_DURATION_SECONDS = 30 * 86400
 
 
 def normalize_vote_options(options: Sequence[VoteOption], *, kind: VoteKind = VoteKind.BUILD) -> tuple[VoteOption, ...]:
-    """Validate and freeze snapshotted options."""
+    """Validate and freeze snapshotted options.
+
+    Emojis are unique within a guild. A generic poll takes 2 to 10 uniquely identified generic
+    options; every other kind needs at least one approve and one deny option per guild. Anything
+    else raises `InvalidVoteConfigurationError`.
+    """
     normalized = tuple(options)
     if not normalized:
         msg = "Vote options cannot be empty."

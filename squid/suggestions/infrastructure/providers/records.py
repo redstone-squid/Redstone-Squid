@@ -11,13 +11,17 @@ from squid.suggestions.domain import MAX_SUGGESTIONS, SuggestionRequest
 class RecordDefinitionReader(Protocol):
     """Read record definitions by the title an admin recognizes them by."""
 
-    async def record_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]: ...
+    async def record_definitions(self, query: str, *, limit: int) -> Sequence[tuple[int, str, str]]:
+        """Return at most `limit` `(id, title, build_kind)` rows matching `query`."""
+        ...
 
 
 class CreatorReader(Protocol):
     """Read credited creator names."""
 
-    async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]: ...
+    async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]:
+        """Return at most `limit` `(name, claimed)` pairs whose name starts with `query`."""
+        ...
 
 
 class RecordDefinitionProvider:
@@ -43,20 +47,24 @@ class RecordDefinitionProvider:
 class CreatorProfileReader(Protocol):
     """Read public creator identifiers."""
 
-    async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]: ...
+    async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
+        """Return at most `limit` `(public_creator_id, name)` pairs for accounts holding an alias."""
+        ...
 
 
 class CompetitionReader(Protocol):
     """Read record competition identifiers."""
 
-    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]: ...
+    async def competitions(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]:
+        """Return at most `limit` `(public_id, title, subtitle)` rows matching `query`."""
+        ...
 
 
 class CreatorProfileProvider:
     """Suggest creators by name while submitting the public UUID a subscription stores.
 
-    `/notifications follow-creator` currently asks for a bare UUID, which is not discoverable from
-    anywhere in Discord.
+    `/notifications follow-creator` takes a bare UUID, which is discoverable nowhere else in
+    Discord.
     """
 
     def __init__(self, reader: CreatorProfileReader) -> None:
@@ -90,14 +98,16 @@ class CompetitionProvider:
 class PendingAliasClaims(Protocol):
     """Read creator credit claims awaiting staff review."""
 
-    async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]: ...
+    async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
+        """Return the claims still awaiting a decision; `with_claimants` loads each claimant's account."""
+        ...
 
 
 def _claimant_description(claim: AliasClaim) -> str:
     """Describe a claimant in the little room an autocomplete row has.
 
-    Not `present_claimant`: this surface cannot render a mention, so it reaches for the names a
-    reviewer can actually read and falls back to the internal ID only when there is nothing else.
+    Not `present_claimant`: this surface cannot render a mention, so it prefers a readable name and
+    falls back to the internal id only when there is nothing else.
     """
     claimant = claim.claimant
     if claimant is not None:

@@ -103,7 +103,8 @@ class PostgresSuggestionRepository:
         """Match projected resources by title, riding the existing trigram index.
 
         Filtering happens here rather than in the shared matcher because there are far more builds
-        than an autocomplete can hold in memory, let alone rank per keystroke.
+        than an autocomplete can hold in memory, let alone rank per keystroke. An empty query
+        returns the most recently refreshed rows.
         """
         statement = select(
             SearchDocument.source_key,
@@ -154,10 +155,10 @@ class PostgresSuggestionRepository:
             return [(row.id, row.title, row.build_kind) for row in (await session.execute(statement)).all()]
 
     async def version_ids(self) -> Sequence[tuple[int, str]]:
-        """Return each recognized version's database id with its display name.
+        """Return each recognized version's id and display name, by edition and newest release first.
 
         The domain `MinecraftVersion` carries no id, but the commands that pin a record to a
-        release take one, which is the whole reason those parameters read as raw numbers today.
+        release take one.
         """
         statement = select(
             Version.id,

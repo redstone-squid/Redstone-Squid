@@ -18,35 +18,36 @@ from squid.voting.errors import DiscordMemberServiceUnavailableError
 logger = logging.getLogger(__name__)
 DEFAULT_DISCORD_API_URL = Route.BASE
 MAX_RATE_LIMIT_WAIT_SECONDS = 60.0
+"""Ceiling on how long one lookup waits out a rate limit; discord.py raises `RateLimited` past it."""
 
 _UNREADABLE = object()
 """Marks a guild this token cannot read, as opposed to one holding no such member."""
-"""Ceiling on how long one lookup may wait out a rate limit.
 
-discord.py raises `RateLimited` rather than sleeping past this, which is the
-supported expression of the bound the hand-rolled limiter used to enforce with a
-0-60s clamp on the body's `retry_after`.
-"""
 type Clock = Callable[[], float]
 
 
 class VoterDiscordIdLookup(Protocol):
     """The account-to-snowflake read this adapter needs to reach Discord at all."""
 
-    async def discord_id_for(self, account_id: int) -> int | None: ...
+    async def discord_id_for(self, account_id: int) -> int | None:
+        """Return the account's Discord snowflake, or `None` when it has no Discord identity."""
+        ...
 
 
 class DiscordMemberClient(Protocol):
-    """The two operations this adapter needs from a Discord HTTP client.
+    """The two operations this adapter needs from a Discord HTTP client, one of them `close`.
 
-    Narrower than `HTTPClient`, which satisfies it structurally: the adapter
-    depends on the member lookup and on shutdown, not on the hundred other routes
-    discord.py exposes.
+    Narrower than `HTTPClient`, which satisfies it structurally: the adapter depends on the member
+    lookup and on shutdown, not on the hundred other routes discord.py exposes.
     """
 
-    async def get_member(self, guild_id: int, member_id: int) -> Any: ...
+    async def get_member(self, guild_id: int, member_id: int) -> Any:
+        """Return the raw member payload, raising `NotFound` when the guild holds no such member."""
+        ...
 
-    async def close(self) -> None: ...
+    async def close(self) -> None:
+        """End the underlying HTTP session; no route may be requested afterwards."""
+        ...
 
 
 def rebased_url(base: str, url: str) -> str:
@@ -57,11 +58,10 @@ def rebased_url(base: str, url: str) -> str:
 class _RebasedHTTPClient(HTTPClient):
     """`HTTPClient` pointed at a configured API base.
 
-    `Route` builds its URL from a class attribute, so a configured loopback
-    upstream cannot be expressed by construction. Rewriting the prefix on the way
-    through `request` reaches every route, including the one `static_login` uses,
-    and leaves rate limiting untouched: buckets are keyed by `route.key` and the
-    major parameters, neither of which mentions the host.
+    `Route` builds its URL from a class attribute, so a loopback upstream cannot be expressed by
+    construction. Rewriting the prefix inside `request` reaches every route, `static_login`
+    included, and leaves rate limiting untouched: buckets are keyed by `route.key` and the major
+    parameters, neither of which mentions the host.
     """
 
     def __init__(
@@ -81,20 +81,14 @@ class _RebasedHTTPClient(HTTPClient):
 
 
 class DiscordRestActorResolver:
-    """Resolve vote actors through discord.py's rate-limited HTTP client.
+    """Resolve vote actors through discord.py's rate-limited HTTP client; `aclose` ends it.
 
-    This used to hand-roll a limiter that understood exactly one 429: retry once,
-    sleep on the body's `retry_after`, raise on the second. It never read
-    `X-RateLimit-Remaining`/`Reset-After`, never told a global limit from a bucket
-    limit, and held no lock, so N concurrent votes in one guild fired N
-    independent requests into the same bucket. `discord.http.HTTPClient` already
-    does proactive per-bucket accounting keyed by route and major parameters,
-    holds a global lock, and raises typed errors -- and it is already a hard
-    dependency of this project.
+    `HTTPClient` does proactive per-bucket accounting keyed by route and major parameters and holds
+    a global lock, so concurrent votes in one guild share one bucket. No gateway connection and no
+    second `discord.Client`: `static_login` costs one `GET /users/@me`, and `get_member` returns the
+    payload's `roles`, which is all a vote actor needs.
 
-    No gateway connection and no second `discord.Client`: `static_login` costs one
-    `GET /users/@me`, and `get_member` returns the payload's `roles`, which is all
-    a vote actor needs.
+    Member facts are cached per `(guild_id, discord_id)` for `cache_ttl_seconds`.
     """
 
     def __init__(
@@ -121,10 +115,10 @@ class DiscordRestActorResolver:
         self._cache: dict[tuple[int, int], tuple[float, VoteActor | None, bool]] = {}
 
     async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
-        """Return current member facts, raising when Discord cannot answer reliably.
+        """Return current member facts, or `None` for an absent member or an unreadable guild.
 
-        Callers use this to gate access, so an unreadable guild denies just like an
-        absent member does.
+        Callers gate access on this, so an unreadable guild denies exactly as an absent member
+        does. A transport failure raises `DiscordMemberServiceUnavailableError` instead.
         """
         actor, _ = await self._member_with_certainty(account_id, guild_id, kind)
         return actor
@@ -155,11 +149,10 @@ class DiscordRestActorResolver:
         return actor, certain
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
-        """Resolve refresh facts, retaining cached vote weight on any failure.
+        """Resolve refresh facts, retaining the cached vote weight on any failure.
 
-        A member we can prove is absent resolves to an actor holding nothing, so the
-        refresh drops them to the default weight; a guild we could not read resolves
-        to `None`, which keeps whatever weight is already recorded.
+        A provably absent member resolves to an actor holding nothing, so the refresh drops them to
+        the default weight; an unreadable guild resolves to `None`, which keeps the recorded weight.
         """
         try:
             actor, certain = await self._member_with_certainty(account_id, guild_id, kind)
@@ -177,7 +170,7 @@ class DiscordRestActorResolver:
         return VoteActor(account_id, await self._discord_id(account_id) or 0, guild_id)
 
     async def aclose(self) -> None:
-        """Close the internally-owned HTTP client, once."""
+        """Close the HTTP client this resolver opened; a later lookup raises rather than logging in again."""
         self._closed = True
         if self._owns_http and self._http is not None:
             http, self._http = self._http, None
@@ -186,9 +179,8 @@ class DiscordRestActorResolver:
     async def _discord_id(self, account_id: int) -> int | None:
         """The snowflake behind a voting account.
 
-        Not covered by the `(guild_id, discord_id)` member cache, which is keyed on the
-        answer rather than the question, so a refresh costs one query per uncached actor.
-        Measured rather than pre-optimized: see the commit that introduced this.
+        The member cache is keyed on the answer rather than the question, so this lookup is not
+        covered by it and a refresh costs one query per actor.
         """
         if self._discord_ids is None:
             return None
@@ -197,9 +189,9 @@ class DiscordRestActorResolver:
     async def _client(self) -> DiscordMemberClient:
         """Return the logged-in client, opening the session on first use.
 
-        Login is lazy rather than done at construction because the service graph
-        builds synchronously; a deployment that never resolves a vote actor
-        therefore never opens a Discord session at all.
+        Login is lazy because the service graph builds synchronously, so a deployment that never
+        resolves a vote actor never opens a Discord session. Raises
+        `DiscordMemberServiceUnavailableError` once `aclose` has run.
         """
         if self._http is not None:
             return self._http
@@ -238,12 +230,10 @@ class DiscordRestActorResolver:
     async def _actor_from_payload(self, payload: object, account_id: int, discord_id: int, guild_id: int) -> VoteActor:
         """Build an actor from the member payload, capabilities included.
 
-        This used to hardcode both capability flags to False, so a `delete_log`
-        vote cast over REST was always rejected as ineligible. The node is
-        grantable to a Discord role, so the role ids already in this payload
-        answer it -- no extra guild-permission fetch, and the Manage-Server
-        bridge, which is the one source not represented here, is the
-        lowest-priority one anyway.
+        Voting nodes are grantable to Discord roles, so the role ids in this payload answer them
+        without a second guild-permission fetch. The Manage-Server bridge is the one capability
+        source not represented here, and is the lowest-priority one. A payload without a list of
+        integer role ids raises `DiscordMemberServiceUnavailableError`.
         """
         if not isinstance(payload, dict) or not isinstance(payload.get("roles"), list):
             raise self._malformed_member(guild_id)

@@ -30,20 +30,25 @@ from squid.suggestions.domain import (
 class SearchFields(Protocol):
     """Read the effective public field registry."""
 
-    async def fields(self) -> FieldRegistry: ...
+    async def fields(self) -> FieldRegistry:
+        """Return the fields callers may query and sort on."""
+        ...
 
 
 class FacetReader(Protocol):
     """Read indexed values of one projected facet."""
 
-    async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
+    async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
+        """Return at most `limit` distinct values of the field, case-folded prefix-matched and sorted."""
+        ...
 
 
 class SearchQueryProvider:
     """Complete the token under the caret in a search query.
 
     Composed rather than candidate-producing because the caret position changes both what may be
-    suggested and what a chosen value replaces, neither of which a flat candidate list can carry.
+    suggested and what a chosen value replaces. Inside a range, only the span comes back: there is
+    nothing to offer for a numeric bound.
     """
 
     def __init__(self, search: SearchFields, facets: FacetReader) -> None:

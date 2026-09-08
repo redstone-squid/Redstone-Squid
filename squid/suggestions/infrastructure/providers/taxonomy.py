@@ -23,17 +23,25 @@ class TaxonomyReader(Protocol):
         *,
         build_kind: str | None = None,
         authority: str | None = "official",
-    ) -> Sequence[TaxonomyEntry]: ...
+    ) -> Sequence[TaxonomyEntry]:
+        """Return approved definitions with their aliases.
+
+        `build_kind` narrows to definitions declared applicable to that kind of build; `authority`
+        of `None` accepts user-proposed definitions as well as official ones.
+        """
+        ...
 
 
 class PendingTagDefinitions(Protocol):
     """Read the tag definitions awaiting moderation."""
 
-    async def pending(self) -> Sequence[TagDefinition]: ...
+    async def pending(self) -> Sequence[TagDefinition]:
+        """Return the proposals still awaiting a decision, read fresh on every call."""
+        ...
 
 
 class TaxonomyProvider:
-    """Suggest approved taxonomy values of one semantic kind."""
+    """Suggest approved taxonomy values of one semantic kind, cached for the `TtlCache` interval."""
 
     def __init__(
         self,
@@ -74,9 +82,8 @@ class TaxonomyProvider:
 class TaxonomyIdProvider:
     """Suggest taxonomy values by name while submitting the numeric tag id.
 
-    Some commands persist restriction identifiers rather than names. Completing by name and
-    submitting the id keeps those commands working unchanged while removing the step where a user
-    had to look the number up somewhere else first.
+    Some commands persist restriction ids rather than names, so completing by name and submitting
+    the id spares the user looking the number up elsewhere.
     """
 
     def __init__(
@@ -138,9 +145,9 @@ class PendingTagProvider:
 def _ordered(entries: Sequence[TaxonomyEntry]) -> list[TaxonomyEntry]:
     """Sort in Python rather than trusting the database collation.
 
-    The order decides the content revision an enumerable source publishes, and a revision that
-    moves because a server's collation differs would look to clients like the option set changed.
-    This is the same key `ApprovedSubmissionOptionCatalog` uses, so both catalogues agree.
+    The order decides the content revision an enumerable source publishes, so a revision that moved
+    with a server's collation would look to clients like the option set changed. Same key as
+    `ApprovedSubmissionOptionCatalog`, so both catalogues agree.
     """
     return sorted(entries, key=lambda entry: (entry.display_name.casefold(), entry.stable_key))
 

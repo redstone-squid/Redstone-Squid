@@ -1,8 +1,7 @@
 """Suggestion providers over the permission node catalogue.
 
-The catalogue is a frozen in-memory structure, so these need no caching and no I/O — but they do
-belong in the registry rather than in a cog, because permission patterns are also written through
-the API and will eventually be written from an admin UI.
+The catalogue is a frozen in-memory structure, so these need no caching and no I/O. They live in
+the registry rather than in a cog because permission patterns are written through the API too.
 """
 
 from squid.permissions.domain.catalogue import CATALOGUE

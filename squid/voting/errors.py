@@ -21,7 +21,7 @@ class VoteSessionNotFoundError(NotFoundError):
 
 
 class InvalidVoteConfigurationError(ConfigurationError):
-    """Vote options violate voting policy."""
+    """Vote options, thresholds, weights, or poll duration violate voting policy."""
 
     default_message = tr(t"Vote configuration is invalid.")
     default_code = ErrorCode.INVALID_VOTE_CONFIGURATION

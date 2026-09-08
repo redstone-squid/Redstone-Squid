@@ -1,9 +1,8 @@
 """The suggestion application service.
 
-Every caller of this service is a keystroke, which drives two rules the rest of the application
-does not have. It never raises for a failure the user cannot act on — a broken provider shows an
-empty dropdown, not a red error under a half-typed word — and it is bounded in time, because a
-suggestion that arrives after the user has finished typing is worse than none.
+Every caller is a keystroke, which drives two rules the rest of the application does not have. A
+provider failure resolves to an empty dropdown rather than an error under a half-typed word, and
+every provider call is bounded in time, because a late suggestion is worse than none.
 """
 
 import hashlib
@@ -48,7 +47,6 @@ class SuggestionService:
 
     @property
     def registry(self) -> SuggestionRegistry:
-        """The registry this service resolves against."""
         return self._registry
 
     async def suggest(
@@ -60,7 +58,8 @@ class SuggestionService:
         """Return ranked completions for a partially typed value.
 
         Raises `UnknownSuggestionSourceError` for an unregistered source, because that is a caller
-        bug or a bad URL rather than a transient failure. Everything else resolves to empty.
+        bug rather than a transient failure. A provider that fails or times out, a caller the
+        authorizer refuses, and a request missing required context all resolve to an empty result.
         """
         source = self._registry.resolve(request.source)
         normalized = _normalize(request)
@@ -96,8 +95,9 @@ class SuggestionService:
     ) -> SuggestionResult:
         """Return an enumerable source's full candidate set with its content revision.
 
-        This is what serves form option sets and `ETag`-able reads, as opposed to `suggest`, which
-        answers one keystroke.
+        Serves form option sets and `ETag`-able reads, where `suggest` answers one keystroke.
+        Raises `ValidationError` for a source that is not enumerable and
+        `UnknownSuggestionSourceError` for one that is not registered.
         """
         source = self._registry.resolve(source_id)
         if source.kind is not SourceKind.ENUMERABLE:
@@ -151,8 +151,8 @@ class SuggestionService:
 def content_revision(items: Sequence[Suggestion]) -> int:
     """Derive a stable, content-addressed revision for a candidate set.
 
-    Deterministic across processes and restarts so two API replicas issue the same `ETag`, and so a
-    client can tell an unchanged option set from a re-fetched one.
+    Deterministic across processes and restarts, so two API replicas issue the same `ETag` for the
+    same values and order. Never 0, so a revision is never mistaken for an absent one.
     """
     payload = "\n".join(f"{item.value}\0{item.label}" for item in items).encode()
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "big") or 1

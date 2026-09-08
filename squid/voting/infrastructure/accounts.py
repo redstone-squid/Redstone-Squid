@@ -10,13 +10,9 @@ from squid.accounts.infrastructure.models import AccountIdentity
 class PostgresVoterDiscordIdLookup:
     """Read the Discord snowflake a voting account is reachable at, if any.
 
-    Modelled on `PostgresAccountIdentityAuthorizer`: the voting context stores an
-    `account_id` on every ballot, and only the Discord *transport* needs the snowflake,
-    so it reads one here rather than the ballot carrying a denormalized copy.
-
-    `None` for an account with no Discord identity is the right answer and not an error:
-    existing code already treats an unresolvable actor as "not a member", and a
-    non-Discord account genuinely has no guild role weight.
+    Ballots store an `account_id` and only the Discord transport needs the snowflake, so it is read
+    here rather than denormalized onto every ballot. `None` for an account with no Discord identity
+    is an answer, not an error: such an account is not a guild member and carries no role weight.
     """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:

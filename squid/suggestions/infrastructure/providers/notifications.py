@@ -11,14 +11,16 @@ from squid.suggestions.domain import SuggestionRequest
 class AccountSubscriptions(Protocol):
     """Read the subscriptions an account owns."""
 
-    async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]: ...
+    async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
+        """Return the subscriptions belonging to this account and no other."""
+        ...
 
 
 class SubscriptionProvider:
     """Suggest the caller's subscriptions so unfollowing does not require reading an id back.
 
-    Scoped to the viewer by construction: the account id comes from the resolved request rather
-    than from anything the caller typed, so one user cannot enumerate another's subscriptions.
+    The account id comes from the resolved request rather than from anything the caller typed, so
+    one user cannot enumerate another's subscriptions. An unauthenticated request answers empty.
     """
 
     def __init__(self, notifications: AccountSubscriptions) -> None:

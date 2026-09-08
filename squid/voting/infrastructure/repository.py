@@ -50,7 +50,7 @@ class _VoteSessionModelRepository(BaseAsyncRepository[VoteSession]):
 
 
 class VoteRepository:
-    """Store selections while serializing refresh, mutation, and closure per session."""
+    """Store ballots and close sessions, serializing refresh and mutation per session on a row lock."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self._session_factory = session_factory
@@ -65,7 +65,7 @@ class VoteRepository:
         changes: Sequence[VoteChange],
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
-        """Serialize initial-review creation and return the existing session on retry."""
+        """Return the build's existing review session, creating one under an advisory lock if none exists."""
         options = normalize_vote_options(options, kind=VoteKind.BUILD)
         async with self._session_factory.begin() as session:
             lock_key = f"build-submission-vote:{build_id}"

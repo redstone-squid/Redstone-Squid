@@ -38,14 +38,11 @@ THRESHOLD_CONSTRAINT = (
     " AND pass_threshold > 0 AND fail_threshold < 0"
     " END"
 )
-"""Thresholds belong to score-closing kinds only.
+"""Thresholds belong to score-closing kinds only; a generic poll closes on its deadline.
 
-Generic polls close on a deadline, so a threshold on one is unreadable state; this
-is the constraint that stopped the `32767`/`-32768` sentinels from coming back.
-
-The null checks are explicit because `NULL > 0` is NULL, not false, and a check
-constraint only rejects on false -- without them a build session with no thresholds
-at all satisfied the constraint and could never close.
+The null checks are explicit because `NULL > 0` is NULL rather than false, and a check constraint
+only rejects on false: without them a build session carrying no thresholds passes and can never
+close.
 """
 
 
@@ -63,17 +60,22 @@ class VoteSession(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     status: Mapped[VoteStatus] = mapped_column(StrEnumText(VoteStatus), nullable=False)
+    """Whether the session still accepts ballots: open or closed."""
     result: Mapped[VoteSessionResult] = mapped_column(
         StrEnumText(VoteSessionResult), nullable=False, server_default=text("'pending'::text")
     )
-    """The result of the vote session."""
+    """The decision reached: pending until the session closes, then approved, denied, or cancelled."""
     author_account_id: Mapped[int] = mapped_column(
         ForeignKey("accounts.id", name="vote_sessions_author_account_id_fkey", ondelete="RESTRICT"),
         nullable=False,
     )
+    """The account that opened the session; it may close its own poll without any permission node."""
     kind: Mapped[VoteKind] = mapped_column(StrEnumText(VoteKind), nullable=False)
+    """What the session decides, and therefore how it closes: build, delete_log, or generic."""
     pass_threshold: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    """Net signed vote weight at or above which the session closes as approved. NULL for generic polls."""
     fail_threshold: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    """Net signed vote weight at or below which the session closes as denied. NULL for generic polls."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -119,17 +121,25 @@ class VoteSessionOption(Base, kw_only=True):
         primary_key=True,
     )
     identifier: Mapped[str] = mapped_column(Text, nullable=False)
+    """Stable option id submitted by non-Discord surfaces, independent of the emoji."""
     guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, server_default=text("0"))
+    """The guild this emoji alias applies to; 0 for the alias every guild falls back to."""
     emoji: Mapped[str] = mapped_column(Text, primary_key=True)
     choice: Mapped[VoteChoice] = mapped_column(StrEnumText(VoteChoice), nullable=False)
+    """How the option scores: approve adds its weight, deny subtracts it, generic only tallies."""
     label: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
+    """Display text; required for generic poll options and unset for approve/deny ones."""
     multiplier: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("1.0"), default=1.0)
+    """Finite positive factor applied to a ballot's weight when this option is picked."""
     position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    """Display order within the session, unique per guild."""
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="options", lazy="raise_on_sql", repr=False)
 
 
 class BuildVoteSession(Base, kw_only=True):
+    """The build a vote session reviews, with the changes approving it would apply."""
+
     __tablename__ = "build_vote_sessions"
     __table_args__ = (Index("build_vote_sessions_build_idx", "build_id"),)
     vote_session_id: Mapped[int] = mapped_column(
@@ -153,9 +163,12 @@ class BuildVoteSession(Base, kw_only=True):
         primary_key=True,
     )
     changes: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
+    """Pending edits as `[field, old, new]` triples, applied to the build when the vote passes."""
 
 
 class DeleteLogVoteSession(Base, kw_only=True):
+    """The Discord message a vote session decides whether to delete."""
+
     __tablename__ = "delete_log_vote_sessions"
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
@@ -198,22 +211,24 @@ class GenericVoteSession(Base, kw_only=True):
     guild_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("server_settings.server_id", ondelete="RESTRICT"), nullable=True
     )
-    """The guild whose emoji palette the poll was drafted against.
+    """The guild that owns the poll and weighs its ballots.
 
-    Nullable so a poll can be created by a transport that has no guild -- the REST API
-    or a standalone draft -- and have its presentation messages attached afterwards.
+    Nullable so a transport with no guild -- the REST API, a standalone draft -- can create a poll
+    and attach its presentation messages afterwards. Required when scope is network.
     """
     question: Mapped[str] = mapped_column(Text, nullable=False)
     visibility: Mapped[VoteVisibility] = mapped_column(StrEnumText(VoteVisibility), nullable=False)
+    """How much is disclosed while open: anonymous_live, visible_live, or anonymous_hidden."""
     scope: Mapped[PollScope] = mapped_column(
         StrEnumText(PollScope), nullable=False, server_default=PollScope.GUILD.value
     )
     """Whether the poll is carded only in its own guild or in every vote channel."""
     deadline: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
+    """When the poll closes; the scheduler closes it on the first pass after this instant."""
 
 
 class Vote(Base):
-    """A vote cast in a vote session."""
+    """One account's current ballot in a vote session; withdrawing it deletes the row."""
 
     __tablename__ = "votes"
     __table_args__ = (
@@ -238,15 +253,18 @@ class Vote(Base):
         primary_key=True,
     )
     guild_id: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    """The guild the ballot was cast in, which selects the option alias it matched; 0 when unknown."""
     option_id: Mapped[str] = mapped_column(Text, nullable=False)
+    """The chosen option's `vote_session_options.identifier`."""
     emoji: Mapped[str] = mapped_column(Text, nullable=False)
     weight: Mapped[float] = mapped_column(Float, nullable=False)
+    """Finite positive magnitude; the chosen option's choice supplies the sign of the tally."""
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
 
 
 class GuildVoteEmoji(Base, kw_only=True):
-    """One ordered emoji in a guild/session-kind preset."""
+    """One ordered emoji in a guild's preset for a session kind, snapshotted into each new session."""
 
     __tablename__ = "guild_vote_emojis"
     __table_args__ = (
@@ -266,7 +284,11 @@ class GuildVoteEmoji(Base, kw_only=True):
 
 
 class GuildVoteRoleWeight(Base, kw_only=True):
-    """A role multiplier scoped to one guild and session kind."""
+    """A role multiplier scoped to one guild and session kind.
+
+    A voter holding several of these votes at the highest; one holding none votes at 1.0, or at 3.0
+    with the staff weight node.
+    """
 
     __tablename__ = "guild_vote_role_weights"
     __table_args__ = (
@@ -281,4 +303,6 @@ class GuildVoteRoleWeight(Base, kw_only=True):
     )
     kind: Mapped[VoteKind] = mapped_column(StrEnumText(VoteKind), primary_key=True)
     role_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    """The Discord role, which only means anything inside `guild_id`."""
     multiplier: Mapped[float] = mapped_column(Float, nullable=False)
+    """Finite positive weight a member of this role votes at."""

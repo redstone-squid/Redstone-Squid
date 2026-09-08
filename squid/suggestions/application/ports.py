@@ -11,24 +11,29 @@ class SuggestionProvider(Protocol):
     """Produce candidates for one source.
 
     A provider returns candidates rather than a finished result so the service applies one ranking
-    and one limit everywhere. Providers that select candidates themselves — anything backed by a
-    database query — should still return them in a sensible default order, because the shared
-    matcher preserves that order for an empty query.
+    and one limit everywhere.
     """
 
-    async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]: ...
+    async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
+        """Return candidates in a sensible default order, which the matcher keeps for an empty query.
+
+        May exceed `request.limit`; the service ranks and truncates. `request.limit == 0` asks for
+        the full set.
+        """
+        ...
 
 
 @runtime_checkable
 class ComposedSuggestionProvider(Protocol):
     """Produce a finished result for a source that ranks or splices for itself.
 
-    Query-language completion is the motivating case: it decides which token the caret sits in,
-    which changes both the candidate set and the span being replaced, so it cannot be expressed as
-    a flat candidate list.
+    Query-language completion is the motivating case: the token the caret sits in changes both the
+    candidate set and the span being replaced, which a flat candidate list cannot carry.
     """
 
-    async def suggest(self, request: SuggestionRequest) -> SuggestionResult: ...
+    async def suggest(self, request: SuggestionRequest) -> SuggestionResult:
+        """Return ranked items already truncated to `request.limit`; the service does not re-rank them."""
+        ...
 
 
 class SuggestionAuthorizer(Protocol):
@@ -38,4 +43,6 @@ class SuggestionAuthorizer(Protocol):
     differently: the bot from an interaction, the API from an authenticated caller.
     """
 
-    async def allows(self, node: str) -> bool: ...
+    async def allows(self, node: str) -> bool:
+        """Return whether the caller holds `node`. A raise here propagates out of `SuggestionService.suggest`."""
+        ...

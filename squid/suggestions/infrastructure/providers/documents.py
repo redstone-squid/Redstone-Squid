@@ -1,9 +1,9 @@
 """Suggestion providers over the search projection.
 
 Builds and computed records are far too numerous to enumerate, so these push matching into
-Postgres. They return a finished result rather than candidates: the database has already ranked by
-trigram similarity against the indexed fuzzy text, and re-ranking that with the in-memory matcher
-would only discard rows it cannot see a literal reason to keep.
+Postgres. They return a finished result rather than candidates because the database has already
+ranked by trigram similarity, and the in-memory matcher would only discard rows it sees no literal
+reason to keep.
 """
 
 from collections.abc import Collection, Sequence
@@ -23,11 +23,16 @@ class DocumentReader(Protocol):
         *,
         statuses: Collection[str] | None = None,
         limit: int,
-    ) -> Sequence[DocumentEntry]: ...
+    ) -> Sequence[DocumentEntry]:
+        """Return at most `limit` entries in the order they should be offered; `None` accepts any status."""
+        ...
 
 
 class DocumentProvider:
-    """Suggest projected resources of one kind, optionally restricted to some statuses."""
+    """Suggest projected resources of one kind, optionally restricted to some statuses.
+
+    `by_title` submits the title instead of the identifier, for a free-text search box.
+    """
 
     def __init__(
         self,

@@ -36,7 +36,11 @@ logger = logging.getLogger(__name__)
 
 
 class VoteService:
-    """Own voting authorization, policy evaluation, configuration, and closure."""
+    """Authorize, weight and close vote sessions, and own each guild's voting configuration.
+
+    `close` ends one poll's acceptance of ballots; `close_due` does the same for every poll past
+    its deadline.
+    """
 
     def __init__(
         self,
@@ -63,9 +67,8 @@ class VoteService:
     def _owner_guild_id(self, snapshot: VoteSessionSnapshot) -> int | None:
         """Return the guild whose role weights govern this session.
 
-        Role ids only mean anything inside one guild, so a session shared across
-        guilds has to pick one authority; otherwise any guild hosting a card could
-        set its own multipliers and decide the shared outcome.
+        Role ids mean nothing outside one guild, so a session shared across guilds picks a single
+        authority; otherwise any guild hosting a card could set multipliers and decide the outcome.
         """
         match snapshot.kind:
             case VoteKind.BUILD:
@@ -80,11 +83,10 @@ class VoteService:
     ) -> VoteActor | None:
         """Return `actor` as seen in the owner guild, or `None` if that is unknowable.
 
-        A non-member resolves to an actor with no roles or capabilities, which the
-        policy scores at the default weight; `None` means the lookup itself failed
-        and callers should keep whatever weight they already had. With no owner
-        guild the actor stands as-is, which decides eligibility only — the caller
-        drops the multiplier.
+        A non-member resolves to an actor with no roles or capabilities, which the policy scores at
+        the default weight; `None` means the lookup failed and callers keep the weight they had.
+        With no owner guild the actor stands as-is and decides eligibility only, the caller
+        dropping the multiplier.
         """
         if owner_guild_id is None or actor.guild_id == owner_guild_id:
             return actor
@@ -102,7 +104,7 @@ class VoteService:
         changes: Sequence[VoteChange],
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
-        """Create a build vote and its target atomically."""
+        """Create a build vote and its target atomically; bad options raise `InvalidVoteConfigurationError`."""
         options = normalize_vote_options(options, kind=VoteKind.BUILD)
         return await self._repository.create_build_session(
             author_account_id=author_account_id,
@@ -125,9 +127,9 @@ class VoteService:
     ) -> int:
         """Return the one initial review session for a submitted build.
 
-        Domain events are delivered at least once and the legacy Discord submit path
-        can race the event consumer. The repository serializes both callers by build
-        so they converge on one session.
+        Domain events are delivered at least once and the Discord submit path can race the event
+        consumer, so the repository serializes both callers by build onto one session. Bad options
+        raise `InvalidVoteConfigurationError`.
         """
         options = normalize_vote_options(options, kind=VoteKind.BUILD)
         return await self._repository.get_or_create_build_submission_session(
@@ -150,7 +152,7 @@ class VoteService:
         server_id: int,
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
     ) -> int:
-        """Create a message-deletion vote and its target atomically."""
+        """Create a message-deletion vote with its target; bad options raise `InvalidVoteConfigurationError`."""
         options = normalize_vote_options(options, kind=VoteKind.DELETE_LOG)
         return await self._repository.create_delete_log_session(
             author_account_id=author_account_id,
@@ -176,9 +178,11 @@ class VoteService:
     ) -> int:
         """Create a generic poll independently of where it will be shown.
 
-        Creation takes a duration rather than a deadline, and takes no channel at all:
-        the card is a `discord_posts` row that the reconciler adopts afterwards, so a
-        Discord outage after this returns loses a message, not a poll.
+        Creation takes a duration rather than a deadline and no channel at all: the card is a
+        `discord_posts` row the reconciler adopts afterwards, so a Discord outage after this
+        returns loses a message, not a poll. An empty question, a duration outside 1 minute to 30
+        days, or options that do not belong to the poll's guild raise
+        `InvalidVoteConfigurationError`.
         """
         if not question.strip():
             msg = "Poll question cannot be empty."
@@ -237,6 +241,11 @@ class VoteService:
         return await self.cast_vote(message.id, actor, option.emoji)
 
     async def cast_vote(self, message_id: int, actor: VoteActor, emoji: str) -> CastVoteResult:
+        """Weight and record one reaction ballot, closing the session if it crosses a threshold.
+
+        Refusals come back as a `VoteRejection` on the result rather than as an exception. A policy
+        that returns a non-positive or non-finite weight raises `InvalidVoteConfigurationError`.
+        """
         snapshot = await self._repository.get_by_message(message_id)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
@@ -253,9 +262,8 @@ class VoteService:
         owner_guild_id = self._owner_guild_id(snapshot)
         weight_actor = await self._weight_actor(actor, snapshot, owner_guild_id)
         if weight_actor is None:
-            # The owner guild is unreachable right now. Land the ballot at the
-            # default weight rather than letting a Discord blip veto the vote; the
-            # next refresh corrects it.
+            # Land the ballot at the default weight rather than letting a Discord blip veto the
+            # vote; the next refresh corrects it.
             logger.warning(
                 "Vote session %s could not resolve account %s in owner guild %s; weighting at 1.0",
                 snapshot.id,
@@ -329,7 +337,10 @@ class VoteService:
         )
 
     async def close(self, message_id: int, actor: VoteActor) -> CastVoteResult:
-        """Close a generic poll when requested by its creator or guild staff."""
+        """Close a generic poll on request from its creator or a holder of `vote.poll.close_any`.
+
+        Any other kind, or a request from the wrong guild, comes back as a `VoteRejection`.
+        """
         snapshot = await self._repository.get_by_message(message_id)
         if snapshot is None:
             return CastVoteResult(None, VoteRejection.NOT_FOUND)
@@ -343,7 +354,7 @@ class VoteService:
         return CastVoteResult(mutation.session, just_closed=mutation.just_closed)
 
     async def close_due(self, now: Instant | None = None) -> Sequence[VoteSessionSnapshot]:
-        """Close all expired generic polls; safe to call repeatedly after restarts."""
+        """Close every generic poll past its deadline, returning only the ones this call closed."""
         closed: list[VoteSessionSnapshot] = []
         for snapshot in await self._repository.list_due(now or Instant.now()):
             await self._refresh_snapshot(snapshot)
@@ -396,9 +407,8 @@ class VoteService:
     async def _refresh_kind(self, guild_id: int, kind: VoteKind) -> None:
         """Reweigh the open sessions this guild's table governs.
 
-        Only the sessions it owns: editing a multiplier used to rewrite cached
-        weights on every session merely carded here, including shared build
-        reviews this guild has no say over.
+        Only the ones it owns: a session merely carded here, such as a shared build review, is not
+        this guild's to reweigh.
         """
         for snapshot in await self.list_open(kind):
             if self._owner_guild_id(snapshot) == guild_id:
@@ -435,8 +445,8 @@ class VoteService:
     def _option_multiplier(snapshot: VoteSessionSnapshot, selection: VoteSelection) -> float:
         """Return the multiplier of the option this ballot picked.
 
-        Matched against the guild the ballot was cast in, which still aliases
-        options even though it no longer decides the voter's weight.
+        Matched against the guild the ballot was cast in, which aliases options even though the
+        owner guild is what decides the voter's weight.
         """
         option = next(
             (

@@ -1,8 +1,8 @@
 """Suggestion providers for values scoped to one Discord guild.
 
-These require a `guild_id` in the request context. The service refuses a request that omits it
-rather than answering from the wrong guild, so a caller that forgets the context resolver gets an
-empty dropdown instead of another server's starboards.
+These require a `guild_id` in the request context. The service answers empty rather than guessing
+when it is missing, so a caller that forgets the context resolver sees nothing instead of another
+server's starboards.
 """
 
 from collections.abc import Sequence
@@ -17,13 +17,17 @@ from squid.suggestions.domain import SuggestionRequest
 class GuildStarboards(Protocol):
     """Read a guild's configured starboards."""
 
-    async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]: ...
+    async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]:
+        """Return every starboard configured in the guild, disabled ones included."""
+        ...
 
 
 class PermissionRoles(Protocol):
     """Read the permission roles visible from a guild."""
 
-    async def roles(self, *, guild_id: int | None = None) -> Sequence[RoleRecord]: ...
+    async def roles(self, *, guild_id: int | None = None) -> Sequence[RoleRecord]:
+        """Return the guild's own roles and the global ones, highest rank first; `None` returns all."""
+        ...
 
 
 class StarboardNameProvider:

@@ -1,8 +1,7 @@
 """Suggestion providers over the public search grammar.
 
-The field registry is already the published contract for what may be queried
-(`GET /v1/search/fields`); these turn it into completions so the vocabulary does not have to be
-memorized from documentation.
+The field registry is the published contract for what may be queried (`GET /v1/search/fields`);
+these turn it into completions so the vocabulary need not be memorized from documentation.
 """
 
 from typing import Protocol
@@ -16,11 +15,13 @@ from squid.suggestions.infrastructure.cache import TtlCache
 class SearchFields(Protocol):
     """Read the effective public field registry."""
 
-    async def fields(self) -> FieldRegistry: ...
+    async def fields(self) -> FieldRegistry:
+        """Return the fields callers may query and sort on."""
+        ...
 
 
 class SearchFieldProvider:
-    """Suggest queryable field names."""
+    """Suggest queryable field names, matched on their aliases as well as their names."""
 
     def __init__(self, search: SearchFields) -> None:
         self._search = search

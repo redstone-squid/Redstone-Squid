@@ -1,10 +1,8 @@
 """Expiring in-process caching for enumerable suggestion sources.
 
 Taxonomy and version lists are small, read on every keystroke, and change rarely — but they do
-change, and the bot, API, and worker are separate processes. The existing `alru_cache` +
-`cache_clear()` pattern only invalidates the process that made the edit, so a restriction alias
-added over the API stays invisible to Discord autocomplete until the bot restarts. A short TTL
-converges everywhere without any invalidation protocol.
+change, and the bot, API, and worker are separate processes. A short TTL converges all of them
+without an invalidation protocol; the cost is that an edit takes up to `ttl_seconds` to show up.
 """
 
 import asyncio
@@ -15,7 +13,11 @@ DEFAULT_TTL_SECONDS = 60.0
 
 
 class TtlCache[KeyT, ValueT]:
-    """Cache one loader's results per key, refreshing them after `ttl_seconds`."""
+    """Cache one loader's results per key, reloading a key once its entry is `ttl_seconds` old.
+
+    A key's loader runs once at a time, so concurrent keystrokes on a cold cache issue one query.
+    Entries are never evicted by count, so the key space must be bounded.
+    """
 
     def __init__(
         self,
@@ -33,8 +35,8 @@ class TtlCache[KeyT, ValueT]:
         cached = self._fresh(key)
         if cached is not None:
             return cached[1]
-        # One lock per key so a cold cache under concurrent keystrokes issues a single query
-        # instead of one per in-flight autocomplete.
+        # One lock per key: a cold cache under concurrent keystrokes issues a single query rather
+        # than one per in-flight autocomplete.
         lock = self._locks.setdefault(key, asyncio.Lock())
         async with lock:
             cached = self._fresh(key)

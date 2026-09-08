@@ -29,7 +29,11 @@ class UnknownSuggestionSourceError(NotFoundError):
 
 @dataclass(frozen=True, slots=True)
 class SuggestionSource:
-    """What a source is, independent of how it fetches candidates."""
+    """What a source is, independent of how it fetches candidates.
+
+    Raises `InvalidStateError` for an id outside `SOURCE_ID_PATTERN`, or for a `required_node` set
+    without `REQUIRES_NODE` visibility or missing with it.
+    """
 
     id: str
     provider: SuggestionProvider | ComposedSuggestionProvider
@@ -66,7 +70,7 @@ class SuggestionRegistry:
 
     @classmethod
     def of(cls, sources: Iterable[SuggestionSource]) -> SuggestionRegistry:
-        """Build a registry, rejecting duplicate ids at construction so typos fail at startup."""
+        """Build a registry, raising `InvalidStateError` on a duplicate id so typos fail at startup."""
         registered: dict[str, SuggestionSource] = {}
         for source in sources:
             if source.id in registered:
@@ -76,7 +80,7 @@ class SuggestionRegistry:
         return cls(registered)
 
     def resolve(self, source_id: str) -> SuggestionSource:
-        """Return a registered source or raise."""
+        """Return a registered source, raising `UnknownSuggestionSourceError` when there is none."""
         try:
             return self._sources[source_id]
         except KeyError as error:

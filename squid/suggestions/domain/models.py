@@ -1,8 +1,8 @@
 """Suggestion requests and results, answered the same way for the bot and the API.
 
-A suggestion is one candidate completion offered while a user is still typing, on any surface:
-a Discord autocomplete choice, an HTTP typeahead entry, or a Brigadier completion. Every surface
-speaks these values so ranking, limits, and visibility are decided once.
+A suggestion is one candidate completion offered while a user is still typing: a Discord
+autocomplete choice, an HTTP typeahead entry, or a Brigadier completion. Every surface speaks these
+values, so ranking, limits, and visibility are decided once.
 """
 
 from collections.abc import Mapping
@@ -50,9 +50,8 @@ class ValueType(StrEnum):
 class SuggestionViewer:
     """The identity a suggestion request is answered for.
 
-    Carries only what a provider may filter on. Permission decisions are made through a
-    `SuggestionAuthorizer` rather than by inspecting this value, because each transport resolves
-    them differently.
+    Carries only what a provider may filter on. Permission decisions go through a
+    `SuggestionAuthorizer` instead, because each transport resolves a subject differently.
     """
 
     account_id: int | None = None
@@ -63,8 +62,8 @@ class SuggestionViewer:
 class ReplacementSpan:
     """The half-open range of the input a suggestion's value replaces.
 
-    Sources that complete part of a larger string (a query-language token, one entry in a
-    comma-separated list) report the span so a client splices instead of clobbering the whole
+    A source completing part of a larger string — a query-language token, one entry in a
+    comma-separated list — reports the span so a client splices rather than clobbering the whole
     input. `None` means the value replaces everything.
     """
 
@@ -96,6 +95,8 @@ class SuggestionRequest:
     source: str
     query: str = ""
     limit: int = MAX_SUGGESTIONS
+    """Most candidates to return, clamped to `MAX_SUGGESTIONS`; 0 asks for the source's whole set."""
+
     context: Mapping[str, str] = field(default_factory=dict)
     """Source-specific scoping, such as the build category an option set belongs to."""
 

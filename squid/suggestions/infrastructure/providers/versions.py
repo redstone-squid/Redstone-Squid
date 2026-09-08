@@ -12,7 +12,9 @@ from squid.versions.domain import MinecraftVersion
 class CanonicalMinecraftVersions(Protocol):
     """Read canonical versions recognized by build persistence."""
 
-    async def list_all(self) -> Sequence[MinecraftVersion]: ...
+    async def list_all(self) -> Sequence[MinecraftVersion]:
+        """Return every recognized version, in any order; the provider sorts them."""
+        ...
 
 
 class VersionProvider:
@@ -36,7 +38,9 @@ class VersionProvider:
 class VersionIdReader(Protocol):
     """Read version database ids with their display names."""
 
-    async def version_ids(self) -> Sequence[tuple[int, str]]: ...
+    async def version_ids(self) -> Sequence[tuple[int, str]]:
+        """Return `(id, display_name)` pairs in the order they should be offered."""
+        ...
 
 
 class VersionIdProvider:

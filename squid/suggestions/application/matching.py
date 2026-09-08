@@ -1,9 +1,7 @@
 """The one ranking implementation shared by every suggestion source and surface.
 
-Ranking is tiered rather than purely fuzzy because a typed prefix is a much stronger signal of
-intent than a high edit-distance score: someone typing `sea` wants `Seamless` first, not
-`Search-based` because it happens to score well. Fuzzy matching only decides the tail, where
-nothing matched literally.
+Ranking is tiered rather than purely fuzzy: a typed prefix is a stronger signal of intent than a
+high edit-distance score, so fuzzy matching only orders the tail, where nothing matched literally.
 """
 
 import re
@@ -64,7 +62,7 @@ def rank(query: str, candidates: Iterable[Candidate], *, limit: int) -> tuple[Su
     """Order candidates by how well they complete `query` and take the best `limit`.
 
     An empty query keeps the provider's own order, which is how a source offers a useful default
-    page (newest builds, alphabetical restrictions) before the user has typed anything.
+    page before the user has typed anything. A non-positive `limit` returns nothing.
     """
     if limit <= 0:
         return ()
@@ -79,7 +77,7 @@ def rank(query: str, candidates: Iterable[Candidate], *, limit: int) -> tuple[Su
             continue
         tier, score = best
         # Negated so a plain ascending sort puts the strongest match first, while the label
-        # tie-break stays ascending and keeps equal-scoring results in a stable, readable order.
+        # tie-break stays ascending and keeps equal-scoring results in a stable order.
         scored.append((-tier, -score, item.suggestion.label.casefold(), item.suggestion))
     scored.sort(key=lambda entry: entry[:3])
     return tuple(entry[3] for entry in scored[:limit])

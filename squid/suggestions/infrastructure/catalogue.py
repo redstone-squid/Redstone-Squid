@@ -69,19 +69,25 @@ PENDING_BUILD_STATUSES = ("pending",)
 class SearchFields(Protocol):
     """Read the effective public field registry."""
 
-    async def fields(self) -> FieldRegistry: ...
+    async def fields(self) -> FieldRegistry:
+        """Return the fields callers may query, as published by `GET /v1/search/fields`."""
+        ...
 
 
 class CanonicalMinecraftVersions(Protocol):
     """Read canonical versions recognized by build persistence."""
 
-    async def list_all(self) -> Sequence[MinecraftVersion]: ...
+    async def list_all(self) -> Sequence[MinecraftVersion]:
+        """Return every recognized version, in any order; the provider sorts them."""
+        ...
 
 
 class PendingTagDefinitions(Protocol):
     """Read the tag definitions awaiting moderation."""
 
-    async def pending(self) -> Sequence[TagDefinition]: ...
+    async def pending(self) -> Sequence[TagDefinition]:
+        """Return the proposals still awaiting a decision, read fresh on every call."""
+        ...
 
 
 def build_registry(
@@ -98,10 +104,11 @@ def build_registry(
 ) -> SuggestionRegistry:
     """Assemble every source this deployment can answer.
 
-    The optional dependencies are Discord-only capabilities; the API process has no starboards or
-    guild-scoped permission roles, so those sources are simply absent there rather than registered
-    against a service that does not exist. `repository` is an injection point for tests, which need
-    the real providers and revision arithmetic without a database behind them.
+    An omitted optional dependency leaves its sources unregistered rather than registered against a
+    service that does not exist: the API process has no starboards or guild-scoped permission
+    roles. `repository` is the injection point for tests, which need the real providers and revision
+    arithmetic without a database. Raises `ValueError` when given neither a session factory nor a
+    repository.
     """
     if repository is None:
         if session_factory is None:
