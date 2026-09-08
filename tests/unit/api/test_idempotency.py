@@ -81,6 +81,7 @@ class CountingAccounts(MockAccountManager):
     def __init__(self) -> None:
         self.calls = 0
 
+    @override
     async def generate_verification_code(self, minecraft_uuid: UUID) -> int:
         self.calls += 1
         return 100_000 + self.calls
