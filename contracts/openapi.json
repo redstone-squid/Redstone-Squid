@@ -23443,7 +23443,6 @@
             "title": "Description"
           }
         },
-        "additionalProperties": false,
         "type": "object",
         "title": "RevisionFacts",
         "description": "Retained inferred facts, before a reviewer chooses a target build."
