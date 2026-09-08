@@ -13,7 +13,6 @@ from typing import Any, cast
 from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import raiseload, selectinload
 from sqlalchemy.orm.exc import StaleDataError
@@ -21,7 +20,6 @@ from whenever import Instant
 
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.infrastructure.models import Account, CreatorAlias
-from squid.builds.application.ports import SourceSubmissionBuildWrite
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort, PublicBuildSummary, PublicBuildTag
 from squid.builds.domain import (
     BUILD_CLASS_BY_CATEGORY,
@@ -519,21 +517,6 @@ class BuildRepository:
         await self._sync_source_messages(build, session)
         build.revision = sql_build.revision
 
-    async def save_for_source_submission(self, build: Build) -> SourceSubmissionBuildWrite:
-        """Insert once by source draft, or return the transaction winner after a collision."""
-        draft_id = build.source_submission_draft_id
-        if build.id is not None or draft_id is None:
-            msg = "Source-submission creation requires a new build with a source draft ID."
-            raise InvalidStateError(msg)
-        try:
-            await self.save(build)
-        except IntegrityError:
-            existing = await self.get_by_source_submission_draft_id(draft_id)
-            if existing is None:
-                raise
-            return SourceSubmissionBuildWrite(existing, created=False)
-        return SourceSubmissionBuildWrite(build, created=True)
-
     async def _update_existing(self, build: Build) -> None:
         """Persist an existing build while its repository lease is held."""
         async with self._session_factory.begin() as session:
@@ -549,7 +532,12 @@ class BuildRepository:
             msg = "Submitter account ID must be set for existing builds."
             raise InvalidStateError(msg, context={"build_id": build.id})
 
-        statement = select(SQLBuild).where(SQLBuild.id == build.id).options(*_write_load_options()).with_for_update(of=SQLBuild.id)
+        statement = (
+            select(SQLBuild)
+            .where(SQLBuild.id == build.id)
+            .options(*_write_load_options())
+            .with_for_update(of=SQLBuild.id)
+        )
         sql_build = (await session.execute(statement)).scalar_one()
         if sql_build.revision != build.revision:
             raise BuildRevisionMismatchError(

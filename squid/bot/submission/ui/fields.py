@@ -1,21 +1,20 @@
 """Portable field specifications for build submission and editing."""
 
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from beartype.door import is_bearable
 
-import squid_ui as sl
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
 from squid.builds.application.editing import BuildEditPatch
-from squid.builds.domain import Build, BuildCategory, BuildDraft
+from squid.builds.domain import Build, BuildCategory
 from squid.core.i18n import tr
 
 if TYPE_CHECKING:
-    from squid.builds.application import BuildService
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -25,49 +24,6 @@ class FieldDisplay(StrEnum):
 
     TEXT = "text"
     PARAGRAPH = "paragraph"
-
-
-@dataclass(frozen=True, slots=True)
-class CreationFieldSpec[ValueT]:
-    """One typed creation input and its complete portable presentation metadata."""
-
-    key: str
-    label: str
-    placeholder: str
-    parser: Callable[[str], ValueT]
-    formatter: Callable[[ValueT], str]
-    draft_value: Callable[[BuildDraft], ValueT]
-    target: Callable[[BuildDraft, ValueT, BuildService], Awaitable[None]]
-    required: bool = False
-    minimum: int | None = None
-    maximum: int | None = None
-    display: FieldDisplay = FieldDisplay.TEXT
-
-    def parse(self, raw: object) -> ValueT:
-        """Parse the adapter value through this field's one declared parser."""
-        return self.parser(str(raw or ""))
-
-    def form_field(self, draft: BuildDraft) -> sl.forms.FormField[str]:
-        """Build the portable control from the same metadata that parses its value."""
-        field_type = sl.forms.TextAreaField if self.display is FieldDisplay.PARAGRAPH else sl.forms.TextField
-        return field_type(
-            key=self.key,
-            label=tr(self.label),
-            placeholder=tr(self.placeholder),
-            default=self.formatter(self.draft_value(draft)),
-            required=self.required,
-            minimum=self.minimum,
-            maximum=self.maximum,
-        )
-
-    def prepare(self, raw: object) -> Callable[[BuildDraft, BuildService], Awaitable[None]]:
-        """Parse one value into a type-safe target application without mutating the draft."""
-        value = self.parse(raw)
-
-        async def apply(draft: BuildDraft, builds: BuildService) -> None:
-            await self.target(draft, value, builds)
-
-        return apply
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,4 +161,4 @@ def field_spec[ValueT](
     )
 
 
-__all__ = ["BoundBuildField", "BuildFieldSpec", "CreationFieldSpec", "FieldDisplay", "field_spec"]
+__all__ = ["BoundBuildField", "BuildFieldSpec", "FieldDisplay", "field_spec"]
