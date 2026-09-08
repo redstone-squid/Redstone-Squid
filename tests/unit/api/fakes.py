@@ -328,6 +328,7 @@ class FakeApiServiceGraph:
     votes: object
     vote_members: object | None
     records: object
+    public_records: object
     submission_forms: object
     submission_drafts: object
     submission_finalization: object
@@ -375,6 +376,7 @@ def build_app(
             votes=MockVotes(),
             vote_members=None,
             records=MockRecords(),
+            public_records=MockRecords(),
             submission_forms=MockSubmissionForms(),
             submission_drafts=object(),
             submission_finalization=object(),
