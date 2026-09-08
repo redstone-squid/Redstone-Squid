@@ -165,9 +165,9 @@ class BuildSchematic(Base, kw_only=True):
     analysis_schema_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     """Which revision of *our* analysis produced this row, bumped when we change what we read."""
 
-    lattice: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    lattice: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
     """The highest-coverage repeating unit cell found, if the build has one."""
-    simulation_evidence: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    simulation_evidence: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
     """Staff-triggered tick-engine evidence. It never changes the build's declared timing."""
 
     visibility: Mapped[str] = mapped_column(

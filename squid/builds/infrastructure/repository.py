@@ -241,6 +241,7 @@ class BuildRepository:
         """
         if not build_ids:
             return ()
+        builds = SQLBuild.__table__
         door = SQLDoor.__table__
         extender = SQLExtender.__table__
         async with self._session_factory() as session:
@@ -248,20 +249,20 @@ class BuildRepository:
                 (
                     await session.execute(
                         select(
-                            SQLBuild.id.label("id"),
-                            SQLBuild.revision.label("revision"),
-                            SQLBuild.submission_status.label("submission_status"),
-                            SQLBuild.category.label("category"),
-                            SQLBuild.width.label("width"),
-                            SQLBuild.height.label("height"),
-                            SQLBuild.depth.label("depth"),
-                            SQLBuild.display_name.label("display_name"),
-                            SQLBuild.version_spec.label("version_spec"),
-                            SQLBuild.submission_time.label("submission_time"),
-                            SQLBuild.edited_time.label("edited_time"),
-                            SQLBuild.ai_generated.label("ai_generated"),
-                            SQLBuild.extra_info["unknown_restrictions"].label("unknown_restrictions"),
-                            SQLBuild.extra_info["unknown_patterns"].label("unknown_patterns"),
+                            builds.c.id.label("id"),
+                            builds.c.revision.label("revision"),
+                            builds.c.submission_status.label("submission_status"),
+                            builds.c.category.label("category"),
+                            builds.c.width.label("width"),
+                            builds.c.height.label("height"),
+                            builds.c.depth.label("depth"),
+                            builds.c.display_name.label("display_name"),
+                            builds.c.version_spec.label("version_spec"),
+                            builds.c.submission_time.label("submission_time"),
+                            builds.c.edited_time.label("edited_time"),
+                            builds.c.ai_generated.label("ai_generated"),
+                            builds.c.extra_info["unknown_restrictions"].label("unknown_restrictions"),
+                            builds.c.extra_info["unknown_patterns"].label("unknown_patterns"),
                             door.c.orientation.label("door_orientation"),
                             door.c.door_width.label("door_width"),
                             door.c.door_height.label("door_height"),
@@ -272,10 +273,10 @@ class BuildRepository:
                             extender.c.extension_length.label("extension_length"),
                             extender.c.extender_type.label("extender_type"),
                         )
-                        .select_from(SQLBuild)
-                        .outerjoin(door, door.c.build_id == SQLBuild.id)
-                        .outerjoin(extender, extender.c.build_id == SQLBuild.id)
-                        .where(SQLBuild.id.in_(build_ids), SQLBuild.submission_status == Status.CONFIRMED)
+                        .select_from(builds)
+                        .outerjoin(door, door.c.build_id == builds.c.id)
+                        .outerjoin(extender, extender.c.build_id == builds.c.id)
+                        .where(builds.c.id.in_(build_ids), builds.c.submission_status == Status.CONFIRMED)
                     )
                 )
                 .mappings()
