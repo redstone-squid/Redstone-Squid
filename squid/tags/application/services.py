@@ -26,15 +26,29 @@ class TagDefinitionRepository(Protocol):
         value_type: TagValueType,
         query_name: str | None,
         created_by_account_id: int,
-    ) -> TagDefinition: ...
+    ) -> TagDefinition:
+        """Insert a user showcase tag in the pending state, returning it with its assigned id.
 
-    async def pending(self) -> Sequence[TagDefinition]: ...
+        The caller normalizes the names; this only stores them. A duplicate `stable_key` or `query_name` violates a
+        unique constraint.
+        """
+        ...
 
-    async def get(self, tag_id: int) -> TagDefinition | None: ...
+    async def pending(self) -> Sequence[TagDefinition]:
+        """Definitions awaiting review, oldest first."""
+        ...
 
-    async def approved(self) -> Sequence[TagDefinition]: ...
+    async def get(self, tag_id: int) -> TagDefinition | None:
+        """Any definition by id whatever its moderation status, or `None`."""
+        ...
 
-    async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None: ...
+    async def approved(self) -> Sequence[TagDefinition]:
+        """Published definitions, in display order."""
+        ...
+
+    async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None:
+        """Move a definition to `status` and reproject it for search, or return `None` if no such tag exists."""
+        ...
 
     async def assign_showcase(
         self,
@@ -43,7 +57,13 @@ class TagDefinitionRepository(Protocol):
         tag_id: int,
         value: TagValue,
         actor_account_id: int,
-    ) -> bool: ...
+    ) -> bool:
+        """Attach the tag to a build owned by the actor, replacing any existing value.
+
+        Returns `False` when the build does not exist, is owned by somebody else, or the tag is gone. Raises
+        `ValueError` if `value` does not match the definition's value type.
+        """
+        ...
 
 
 class TagService:
@@ -60,6 +80,11 @@ class TagService:
         query_name: str | None,
         created_by_account_id: int,
     ) -> TagDefinition:
+        """Create a pending user showcase tag.
+
+        Raises `ValidationError` if the name is not 1-80 characters, or if `query_name` is not a lowercase
+        identifier of at most 64 characters.
+        """
         normalized_name = " ".join(display_name.casefold().split())
         if not 1 <= len(normalized_name) <= 80:
             msg = tr(t"Tag names must contain between 1 and 80 characters.")
@@ -71,9 +96,9 @@ class TagService:
             msg = tr(t"query names must start with a letter and contain only lowercase letters, digits, or underscores")
             raise ValidationError(msg)
         return await self._repository.create_showcase(
-            # No submitter identity in the key. It is never parsed -- the only literal
-            # comparison anywhere is against an official key -- so publishing a proposer
-            # in `BuildTag.key` bought nothing and leaked who proposed a tag.
+            # No submitter identity in the key: it is never parsed -- the only literal
+            # comparison anywhere is against an official key -- and embedding one would
+            # publish who proposed a tag through `BuildTag.key`.
             stable_key=f"user_{uuid4().hex}",
             display_name=" ".join(display_name.split()),
             normalized_name=normalized_name,
@@ -91,22 +116,22 @@ class TagService:
         return await self._repository.approved()
 
     async def public_definition(self, tag_id: int) -> TagDefinition | None:
-        """Return an approved public tag definition by identifier."""
+        """A definition by id, or `None` if it does not exist or is not approved."""
         definition = await self._repository.get(tag_id)
         if definition is None or definition.moderation_status is not TagModerationStatus.APPROVED:
             return None
         return definition
 
     async def approve(self, tag_id: int) -> TagDefinition:
-        """Publish a pending tag."""
+        """Publish a pending tag; raises `TagNotFoundError` if no tag has that id."""
         return await self._set_status(tag_id, TagModerationStatus.APPROVED)
 
     async def reject(self, tag_id: int) -> TagDefinition:
-        """Reject a proposed tag without deleting its audit trail."""
+        """Reject a proposed tag, keeping the row; raises `TagNotFoundError` if no tag has that id."""
         return await self._set_status(tag_id, TagModerationStatus.REJECTED)
 
     async def archive(self, tag_id: int) -> TagDefinition:
-        """Hide a published tag while retaining assignments and history."""
+        """Hide a published tag while keeping its assignments; raises `TagNotFoundError` if no tag has that id."""
         return await self._set_status(tag_id, TagModerationStatus.ARCHIVED)
 
     async def assign_showcase(
@@ -117,7 +142,11 @@ class TagService:
         *,
         actor_account_id: int,
     ) -> TagDefinition:
-        """Attach an approved showcase tag to a build submitted by the caller."""
+        """Attach an approved showcase tag to a build the caller submitted, returning the tag's definition.
+
+        Raises `ValidationError` if the tag is not an approved user showcase tag, if `raw_value` does not parse as
+        the tag's value type, or if the caller does not own the build.
+        """
         definition = await self._repository.get(tag_id)
         if (
             definition is None

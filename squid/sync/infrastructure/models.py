@@ -12,22 +12,11 @@ from squid.persistence.types import InstantUTC, now
 
 
 class DiscordSyncQueueItem(Base, kw_only=True):
-    """A coalesced request to refresh one Discord-rendered resource.
+    """A coalesced request to refresh one Discord-rendered resource; a row means its Discord posts are stale.
 
-    Not an event queue, despite the shape. Rows are coalesced on
-    `(resource_kind, source_key)` by the six `INSERT ... ON CONFLICT ... DO
-    UPDATE` triggers in `squid/persistence/postgres_entities.sql` — that is where
-    the coalescing actually happens — deleted on acknowledgement, and carry a
-    `generation` compared against a post's applied revision as a staleness token
-    rather than read as an ordering. An event log would be append-only and
-    replayable; this table is neither. A row means "this resource's Discord posts
-    are stale", and re-reading it tells you what the resource should look like
-    now, not what happened to it.
-
-    Discord-specific on purpose: every row exists to repair a Discord post, and
-    the only consumer renders them (`squid/bot/sync/reconciler.py`). The
-    application layer speaks of *reconciliation* rather than *sync* because a
-    sync names a transfer, and nothing here transfers anything.
+    Not an event log: at most one row exists per (resource_kind, source_key), written by the
+    `INSERT ... ON CONFLICT DO UPDATE` triggers in `squid/persistence/postgres_entities.sql` and deleted on
+    acknowledgement. Re-reading a row says what the resource should look like now, not what happened to it.
     """
 
     __tablename__ = "discord_sync_queue"
@@ -47,8 +36,11 @@ class DiscordSyncQueueItem(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     resource_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    """What source_key identifies: build, vote_session or starboard_entry."""
     source_key: Mapped[str] = mapped_column(Text, nullable=False)
+    """The resource's id as text; a starboard entry is '<starboard_id>:<origin_message_id>'."""
     action: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'refresh'"))
+    """'refresh' re-renders the resource's posts, 'delete' removes them."""
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -57,28 +49,30 @@ class DiscordSyncQueueItem(Base, kw_only=True):
     )
     """When this row next becomes claimable, and the only column backoff writes.
 
-    Kept separate from `enqueued_at` so a repeatedly failing row keeps its place in
-    FIFO order and still reports its true age to the queue-health gauges.
+    Separate from enqueued_at so a repeatedly failing row keeps its place in FIFO order and still reports its true
+    age to the queue-health gauges.
     """
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the current worker claimed the row; a claim older than the visibility timeout may be taken over."""
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    """The database-minted fencing token handed to the worker that claimed this row.
+    """Database-minted fence the claiming worker's acknowledgement must match.
 
-    Nullable for now so code from the previous release, which stamps only
-    `claimed_at`, can keep draining the queue across a deploy window.
+    Nullable so a worker from an older release, which stamps only claimed_at, can still drain the queue.
     """
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """Set when the row is abandoned after too many attempts; a dead row is never claimed again."""
     generation: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,
         server_default=text("nextval('discord_sync_generation_seq')"),
         default=None,
     )
-    """A globally monotonic staleness token, not a per-row counter.
+    """A globally monotonic staleness token from a sequence, compared against a post's applied revision.
 
-    Acknowledging a job deletes its queue row, so a counter restarted at 1 on the next
-    enqueue and could name a revision below one a post had already applied. Sequence
-    values survive that because they are never rolled back or reused.
+    Not a per-row counter: acknowledging deletes the row, so a counter would restart at 1 and could name a
+    revision a post had already applied.
     """
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    """Failed drains of this row; reaching the drainer's ceiling sets dead_at."""
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
+    """Truncated text of the most recent failure."""

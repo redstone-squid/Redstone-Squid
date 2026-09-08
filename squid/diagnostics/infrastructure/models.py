@@ -31,9 +31,8 @@ class ErrorReport(Base, kw_only=True):
     reference: Mapped[str] = mapped_column(Text, nullable=False)
     """The shortened form shown to the user, indexed because it is what they quote back.
 
-    Not unique: it is a 48-bit prefix of the correlation ID, so a collision is possible even
-    though it is vanishingly unlikely, and a unique constraint would turn that into a failure to
-    record the second error rather than an ambiguous lookup.
+    A 48-bit prefix of the correlation ID, so it is not unique: a unique constraint would turn a collision into a
+    failure to record the second error rather than an ambiguous lookup.
     """
     occurred_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     """When the failure was captured."""

@@ -14,7 +14,7 @@ class InvalidVersionError(ValidationError):
 
 
 class VersionCatalogUnavailableError(InfrastructureError, RuntimeError):
-    """The persisted version catalog is unexpectedly empty."""
+    """The catalog holds no version for the edition, so version-dependent work cannot proceed."""
 
     default_message = tr(t"The Minecraft version catalog is empty.")
     default_code = ErrorCode.VERSION_CATALOG_UNAVAILABLE

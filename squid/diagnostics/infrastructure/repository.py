@@ -91,19 +91,16 @@ class PostgresErrorReportRepository(ErrorReportRepository):
 def _matches(reference: str):
     """Match a quoted reference against either width it could have been read from.
 
-    A user reads the short form off a Discord card; an operator reads the full ID off a
-    `Request-Id` header or a log line. Both must resolve, and both are exact matches on an indexed
-    column rather than a prefix scan.
+    A user quotes the short form off a Discord card, an operator the full ID off a `Request-Id` header or a log
+    line. Both are exact matches on an indexed column rather than a prefix scan.
     """
     return or_(ErrorReportRow.reference == reference, ErrorReportRow.correlation_id == reference)
 
 
 def _error_code(stored: str | None) -> ErrorCode | None:
-    """Read back a stored code, tolerating one this build no longer defines.
+    """Read back a stored code, returning `None` for one this build does not define.
 
-    Reports outlive deployments. A code renamed or dropped since a report was written must not
-    make that report unreadable -- losing the classification is survivable, losing the traceback
-    to a ValueError is not.
+    Reports outlive deployments, and losing a renamed code's classification beats losing the traceback with it.
     """
     if stored is None:
         return None

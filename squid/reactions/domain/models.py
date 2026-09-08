@@ -20,7 +20,7 @@ class ReactionActor:
 
 @dataclass(frozen=True, slots=True)
 class WeightScope:
-    """The configuration bucket a weight lookup belongs to."""
+    """Which multiplier configuration a weight lookup reads; `kind` names the feature, `scope_id` the instance."""
 
     guild_id: int
     kind: str
@@ -29,7 +29,7 @@ class WeightScope:
 
 @dataclass(frozen=True, slots=True)
 class RoleMultiplier:
-    """A role multiplier configured for one reaction scope."""
+    """A role's weight in one reaction scope; raises `ValidationError` unless it is finite and positive."""
 
     scope: WeightScope
     role_id: int

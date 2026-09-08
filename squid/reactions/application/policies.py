@@ -13,7 +13,10 @@ type Eligibility = Callable[[ReactionActor, WeightScope], bool]
 
 
 class RoleWeightPolicy(WeightPolicy):
-    """Use the highest matching role multiplier with an optional staff fallback."""
+    """Use the highest matching role multiplier, falling back to a staff capability and then to 1.
+
+    Construction raises `InvalidStateError` unless `staff_multiplier` is finite and positive.
+    """
 
     def __init__(
         self,
@@ -35,6 +38,7 @@ class RoleWeightPolicy(WeightPolicy):
 
     @override
     async def calculate(self, actor: ReactionActor, scope: WeightScope) -> float | None:
+        """The actor's weight, or `None` when an eligibility check rejects them."""
         if self._eligibility is not None and not self._eligibility(actor, scope):
             return None
         multipliers = await self._provider(scope)

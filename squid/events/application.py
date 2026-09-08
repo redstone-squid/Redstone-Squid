@@ -13,7 +13,7 @@ from squid.core.i18n import tr
 
 @dataclass(frozen=True, slots=True)
 class DomainEvent:
-    """One recorded state transition."""
+    """One recorded state transition; `schema_version` tells a consumer how to read `payload`."""
 
     id: int
     event_type: str
@@ -26,7 +26,7 @@ class DomainEvent:
 
 @dataclass(frozen=True, slots=True)
 class DomainEventDelivery:
-    """One claimed delivery of an event to a single consumer."""
+    """One claimed delivery of an event to a single consumer; `claim_token` fences its acknowledgement."""
 
     event: DomainEvent
     consumer: str
@@ -37,27 +37,45 @@ class DomainEventDelivery:
 
 
 class DomainEventRepository(Protocol):
-    """Persistence required by the domain-event dispatcher."""
+    """Persistence required by the domain-event dispatcher.
 
-    async def claim(self, *, consumer: str, limit: int) -> Sequence[DomainEventDelivery]: ...
+    Every acknowledgement is fenced on the delivery's claim token: one whose claim has expired and been taken by
+    another worker applies nothing and reports `False`.
+    """
 
-    async def complete(self, delivery: DomainEventDelivery) -> bool: ...
+    async def claim(self, *, consumer: str, limit: int) -> Sequence[DomainEventDelivery]:
+        """Claim up to `limit` of the consumer's ready deliveries, including ones whose earlier claim expired."""
+        ...
 
-    async def fail(self, delivery: DomainEventDelivery, error: str, *, max_attempts: int) -> bool: ...
+    async def complete(self, delivery: DomainEventDelivery) -> bool:
+        """Acknowledge the delivery, returning whether the claim was still current."""
+        ...
 
-    async def reject(self, delivery: DomainEventDelivery, error: str) -> bool: ...
+    async def fail(self, delivery: DomainEventDelivery, error: str, *, max_attempts: int) -> bool:
+        """Release the delivery for a later attempt with backoff, recording `error`.
+
+        Returns whether this failure dead-lettered it by reaching `max_attempts`.
+        """
+        ...
+
+    async def reject(self, delivery: DomainEventDelivery, error: str) -> bool:
+        """Dead-letter the delivery now, whatever its attempt count, returning whether the claim was current."""
+        ...
 
 
 class UnsupportedEventVersionError(DataIntegrityError):
-    """A consumer cannot safely interpret an event envelope version."""
+    """A consumer cannot interpret an event's schema version.
+
+    Raising it from a handler rejects the delivery outright, since a retry would read the same envelope again.
+    """
 
 
 class DomainEventService:
     """Claim and acknowledge domain events on behalf of one named consumer.
 
-    Delivery is at-least-once: a handler that crashes after its side effect but
-    before the acknowledgement will see the event again, so handlers must be
-    idempotent.
+    Delivery is at-least-once: a handler that crashes after its side effect but before the acknowledgement sees
+    the event again, so handlers must be idempotent. Construction raises `InvalidStateError` unless `max_attempts`
+    is positive.
     """
 
     def __init__(self, repository: DomainEventRepository, *, max_attempts: int = 8) -> None:
@@ -68,7 +86,10 @@ class DomainEventService:
         self._max_attempts = max_attempts
 
     async def claim(self, consumer: str, limit: int = 20) -> Sequence[DomainEventDelivery]:
-        """Claim ready deliveries, reclaiming those abandoned by crashed workers."""
+        """Claim ready deliveries, reclaiming those abandoned by crashed workers.
+
+        Raises `InvalidStateError` on an empty consumer name or a `limit` outside 1-100.
+        """
         if not consumer:
             msg = tr(t"consumer must be a non-empty name")
             raise InvalidStateError(msg)
@@ -89,5 +110,5 @@ class DomainEventService:
         return await self._repository.fail(delivery, str(error)[:4000], max_attempts=self._max_attempts)
 
     async def reject(self, delivery: DomainEventDelivery, error: Exception) -> bool:
-        """Permanently reject an event whose contract cannot be interpreted."""
+        """Dead-letter an event whose contract cannot be interpreted, bypassing the attempt ceiling."""
         return await self._repository.reject(delivery, str(error)[:4000])

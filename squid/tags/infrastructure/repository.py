@@ -25,7 +25,7 @@ from squid.tags.infrastructure.models import TagDefinition as SQLTagDefinition
 
 
 class PostgresTagDefinitionRepository(TagDefinitionRepository):
-    """Persist definitions using short independent transactions."""
+    """Persist tag definitions, one short transaction per call."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
@@ -136,9 +136,8 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         actor_account_id: int,
     ) -> bool:
         async with self._session_factory.begin() as session:
-            # Compares the build's owning account to the actor's, rather than joining
-            # `account_identities` to compare two snowflakes -- which also means an
-            # account with no Discord identity can tag its own build.
+            # Ownership by account, not by Discord snowflake through `account_identities`,
+            # so an account with no Discord identity can still tag its own build.
             owned_build_id = await session.scalar(
                 select(Build.id).where(Build.id == build_id, Build.submitter_account_id == actor_account_id)
             )
@@ -147,11 +146,10 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             definition = await session.get(SQLTagDefinition, tag_id)
             if definition is None:
                 return False
-            # `value_type` is a bare `Text` column with no TypeDecorator, so a row read
-            # back from the database carries a `str` where the annotation promises the
-            # enum. `_split_value` compares with `is`, so every branch fell through and
-            # every assignment raised. Coerced here rather than in `_split_value` so the
-            # helper keeps a single, honest input type.
+            # `value_type` is a bare `Text` column with no TypeDecorator, so a row read back
+            # from the database carries a `str` where the annotation promises the enum, and
+            # `_split_value` compares with `is`. Coerced here rather than in `_split_value`
+            # so the helper keeps a single, honest input type.
             value_type = TagValueType(definition.value_type)
             numeric_value, text_value, boolean_value = _split_value(value_type, value)
             statement = insert(BuildTagAssignment).values(
@@ -172,8 +170,8 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                         "text_value": statement.excluded.text_value,
                         "boolean_value": statement.excluded.boolean_value,
                         # An `Instant`, not a stdlib datetime: the column's `InstantUTC`
-                        # decorator does the conversion, and pre-converting made its
-                        # `process_bind_param` raise on every upsert.
+                        # decorator does the conversion, and its `process_bind_param`
+                        # raises on anything already converted.
                         "updated_at": Instant.now(),
                     },
                 )

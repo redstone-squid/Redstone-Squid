@@ -4,7 +4,7 @@ from typing import Literal, TypedDict
 
 
 class SettingOptions(TypedDict, total=False):
-    """A map of settings to their values."""
+    """Settings to channel ids; `None` clears one, and an absent key leaves it alone."""
 
     Smallest: int | None
     Fastest: int | None
@@ -15,8 +15,4 @@ class SettingOptions(TypedDict, total=False):
 
 ScalarChannelSetting = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
 Setting = Literal["Smallest", "Fastest", "First", "Builds", "Vote"]
-"""Every configurable server setting.
-
-`Trusted` used to live here: a role list that doubled as an authorization tier.
-Permissions are now nodes granted with `/perm`, so a server's settings are about
-configuration again rather than about who may do what."""
+"""Every configurable server setting. All of them name a channel; who may do what is a permission node instead."""

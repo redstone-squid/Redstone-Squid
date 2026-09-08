@@ -6,14 +6,14 @@ from enum import StrEnum
 
 
 class TagAuthority(StrEnum):
-    """Who controls a tag definition."""
+    """Whether staff or a member defined the tag; only OFFICIAL tags may be restrictions or patterns."""
 
     OFFICIAL = "official"
     USER = "user"
 
 
 class TagSemanticKind(StrEnum):
-    """The behavior associated with a tag definition."""
+    """What a tag asserts: a restriction the build obeys, a pattern it uses, or a free-form showcase label."""
 
     RESTRICTION = "restriction"
     PATTERN = "pattern"
@@ -21,7 +21,7 @@ class TagSemanticKind(StrEnum):
 
 
 class TagValueType(StrEnum):
-    """The scalar value attached to a tag."""
+    """The type of value an assignment carries; NONE tags are bare labels."""
 
     NONE = "none"
     NUMERIC = "numeric"
@@ -39,7 +39,7 @@ class RecordOperator(StrEnum):
 
 
 class TagModerationStatus(StrEnum):
-    """Publication state of a tag definition."""
+    """Publication state; only APPROVED definitions are searchable and assignable."""
 
     PENDING = "pending"
     APPROVED = "approved"
@@ -52,7 +52,7 @@ type TagValue = Decimal | str | bool | None
 
 @dataclass(frozen=True, slots=True)
 class TagDefinition:
-    """Application-facing tag metadata."""
+    """A tag as the application sees it; the unit and step fields are only ever set on numeric tags."""
 
     id: int
     stable_key: str
@@ -73,7 +73,7 @@ class TagDefinition:
 
 @dataclass(frozen=True, slots=True)
 class TagAssignment:
-    """One tag and its strongest declared value on a build."""
+    """One tag on one build, with the value declared for it; a build carries at most one assignment per tag."""
 
     definition: TagDefinition
     value: TagValue = None

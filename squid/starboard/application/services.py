@@ -20,7 +20,11 @@ class StarboardVoteResult:
 
 
 class StarboardService:
-    """Authorize, weight, and atomically plan starboard entries."""
+    """Authorize and weight votes, and keep the per-guild set of relevant emojis cached.
+
+    The cache is only invalidated by this service's own writes, so a config changed elsewhere needs
+    `invalidate_cache`.
+    """
 
     def __init__(self, repository: StarboardRepository) -> None:
         self._repository = repository
@@ -116,15 +120,22 @@ class StarboardService:
         return await self._repository.get(guild_id, name)
 
     async def update_settings(self, guild_id: int, name: str, **settings: object) -> StarboardConfig | None:
+        """Apply settings to a board, or return `None` if the guild has none by that name.
+
+        Raises `ValidationError` if the result would be an invalid config, and `ValueError` on an unknown setting.
+        """
         current = await self._repository.get(guild_id, name)
         if current is None:
             return None
+        # Build the would-be config so __post_init__ rejects the update before it reaches the database.
         replace(current, **settings)  # type: ignore[arg-type]
         updated = await self._repository.update(guild_id, name, settings)
         self.invalidate_cache(guild_id)
         return updated
 
     async def set_emojis(self, config: StarboardConfig, emojis: tuple[StarboardEmoji, ...]) -> None:
+        """Replace the board's emojis; raises `ValidationError` if the new set has duplicates."""
+        # Discarded: constructing the config runs __post_init__, which is where the duplicate check lives.
         StarboardConfig(
             config.id,
             config.guild_id,
@@ -138,6 +149,7 @@ class StarboardService:
         self.invalidate_cache(config.guild_id)
 
     async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None:
+        """Set or clear a role's vote weight; raises `ValidationError` unless it is finite and positive."""
         if multiplier is not None and (not isfinite(multiplier) or multiplier <= 0):
             msg = tr(t"Role multiplier must be finite and greater than zero.")
             raise ValidationError(msg)

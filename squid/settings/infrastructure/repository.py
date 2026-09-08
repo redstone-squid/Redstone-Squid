@@ -42,16 +42,7 @@ class SettingsRepository:
         server_ids: Iterable[int],
         setting: Setting,
     ) -> dict[int, int | None]:
-        """Get a single setting's value for each of the given servers.
-
-        Args:
-            server_ids: The server IDs to look up.
-            setting: The setting to read.
-
-        Returns:
-            A mapping of server ID to that server's value for *setting*.
-            Servers with no row are omitted.
-        """
+        """One setting's value per server; servers with no settings row are omitted from the mapping."""
         async with self._session_factory() as session:
             repository = _ServerSettingModelRepository(session=session)
             rows = await repository.get_many(ServerSetting.server_id.in_(tuple(server_ids)))
@@ -59,16 +50,7 @@ class SettingsRepository:
             return {row.server_id: cast(int | None, getattr(row, column_name)) for row in rows}
 
     async def get_single(self, server_id: int, setting: Setting) -> int | None:
-        """Get a single setting's value for one server.
-
-        Args:
-            server_id: The server ID to look up.
-            setting: The setting to read.
-
-        Returns:
-            The server's value for *setting*, or None if the server has no row
-            or the setting is unset.
-        """
+        """One setting's value, or `None` if it is unset or the server has no row."""
         async with self._session_factory() as session:
             repository = _ServerSettingModelRepository(session=session)
             row = await repository.get_one_or_none(server_id=server_id)
@@ -77,15 +59,7 @@ class SettingsRepository:
             return cast(int | None, getattr(row, _SETTING_TO_DB_KEY[setting]))
 
     async def get_all(self, server_id: int) -> SettingOptions:
-        """Get every setting for one server.
-
-        Args:
-            server_id: The server ID to look up.
-
-        Returns:
-            All settings for the server, or an empty mapping if the server has
-            no row.
-        """
+        """Every setting for one server, or an empty mapping if it has no row."""
         async with self._session_factory() as session:
             repository = _ServerSettingModelRepository(session=session)
             row = await repository.get_one_or_none(server_id=server_id)
@@ -96,12 +70,7 @@ class SettingsRepository:
             )
 
     async def set(self, server_id: int, **settings: Unpack[SettingOptions]) -> None:
-        """Set one or more settings for a server, creating its row if needed.
-
-        Args:
-            server_id: The server ID to update.
-            **settings: The settings to set, by name.
-        """
+        """Write the named settings, creating the server's row if needed and leaving unnamed settings alone."""
         async with self._session_factory() as session:
             repository = _ServerSettingModelRepository(session=session, auto_commit=True)
             row = await repository.get_one_or_none(server_id=server_id)
@@ -116,26 +85,14 @@ class SettingsRepository:
             await repository.update(row)
 
     async def get_locale(self, server_id: int) -> str | None:
-        """Get the server's admin-configured locale override, if any.
-
-        Args:
-            server_id: The server ID to look up.
-
-        Returns:
-            The configured locale tag, or None if unset or the server has no row.
-        """
+        """The server's locale override, or `None` if unset or the server has no row."""
         async with self._session_factory() as session:
             repository = _ServerSettingModelRepository(session=session)
             row = await repository.get_one_or_none(server_id=server_id)
             return row.locale if row is not None else None
 
     async def set_locale(self, server_id: int, locale: str | None) -> None:
-        """Set or clear the server's admin-configured locale override.
-
-        Args:
-            server_id: The server ID to update.
-            locale: The locale tag to set, or None to clear the override.
-        """
+        """Set the locale override, or clear it with `None`, creating the server's row if needed."""
         async with self._session_factory() as session:
             repository = _ServerSettingModelRepository(session=session, auto_commit=True)
             row = await repository.get_one_or_none(server_id=server_id)
@@ -147,11 +104,7 @@ class SettingsRepository:
             await repository.update(row)
 
     async def on_guild_join(self, server_id: int) -> None:
-        """Mark a server as joined, creating its settings row if needed.
-
-        Args:
-            server_id: The server ID that was joined.
-        """
+        """Mark a server as joined, creating its settings row if needed."""
         async with self._session_factory() as session:
             repository = _ServerSettingModelRepository(session=session, auto_commit=True)
             await repository.get_or_upsert(
@@ -161,11 +114,7 @@ class SettingsRepository:
             )
 
     async def on_guild_remove(self, server_id: int) -> None:
-        """Mark a server as no longer joined.
-
-        Args:
-            server_id: The server ID that was removed.
-        """
+        """Mark a server as no longer joined, keeping its settings for a later rejoin."""
         async with self._session_factory() as session:
             repository = _ServerSettingModelRepository(session=session, auto_commit=True)
             row = await repository.get_one_or_none(server_id=server_id)

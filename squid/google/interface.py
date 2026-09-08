@@ -12,7 +12,10 @@ SCOPES = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/a
 
 
 def connect(config: GoogleConfig) -> tuple[Credentials, gspread.Client]:
-    """Create authenticated Google credentials and a Sheets client."""
+    """Create authenticated Google credentials and a Sheets client.
+
+    Raises `ConfigurationError` when no service-account JSON is configured.
+    """
     if config.credentials_info is None:
         msg = "Google credentials are not configured."
         raise ConfigurationError(
@@ -35,7 +38,10 @@ class Connection:
         self._client: gspread.Client | None = None
 
     def get(self) -> gspread.Client:
-        """Return a usable client, refreshing the cached credentials when needed."""
+        """A usable client, reauthorizing when the cached credentials have expired.
+
+        Raises `ConfigurationError` when no service-account JSON is configured.
+        """
         if self._client is None or self._credentials is None or self._credentials.expired:
             self._credentials, self._client = connect(self._config)
         return self._client

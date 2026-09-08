@@ -25,12 +25,10 @@ DISCORD_SYNC_QUEUE_SPEC = QueueSpec(
 
 
 def _job(row: DiscordSyncQueueItem, token: uuid.UUID) -> ReconciliationJob:
-    """Map a claimed row, refusing values its check constraints should have rejected.
+    """Map a claimed row, raising `DataIntegrityError` on a resource kind or action the check constraints forbid.
 
-    These two columns used to be `cast()` into their types, so a row that escaped
-    its constraint reached the reconciler looking like a valid job and failed
-    somewhere else entirely. The constraints stay: they are the reason a bad value
-    here is a data-integrity failure rather than a validation error.
+    Parsed rather than cast, so a row that escaped its constraint fails here instead of reaching the reconciler
+    looking like a valid job.
     """
     try:
         resource_kind = ReconciliationResource(row.resource_kind)

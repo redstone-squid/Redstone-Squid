@@ -19,8 +19,6 @@ class SettingsService:
         await self._repository.on_guild_remove(server_id)
 
     async def get_many(self, server_ids: Iterable[int], setting: Setting) -> Mapping[int, int | None]:
-        # Every remaining setting is a channel id, so the overloads that used to
-        # distinguish role lists from channels have nothing left to distinguish.
         return await self._repository.get(server_ids, setting)
 
     async def get(self, server_id: int, setting: Setting) -> int | None:

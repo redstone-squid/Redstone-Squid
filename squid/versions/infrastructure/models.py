@@ -7,11 +7,12 @@ from squid.persistence.base import Base
 
 
 class Version(Base):
-    """A version of Minecraft that a build is compatible with."""
+    """One released Minecraft version that builds may declare compatibility with."""
 
     __tablename__ = "versions"
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
     edition: Mapped[str] = mapped_column(Text, nullable=False)
+    """'Java' or 'Bedrock'; any other value fails to load."""
     major_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     minor_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     patch_number: Mapped[int] = mapped_column(SmallInteger, nullable=False)

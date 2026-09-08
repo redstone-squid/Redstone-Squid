@@ -15,7 +15,7 @@ class RedstonerPolicy:
 
 
 class RedstonerDecisionKind(Enum):
-    """Possible outcomes when evaluating a starboard post."""
+    """IGNORE for a post from elsewhere, MALFORMED for one the starboard format cannot be read from, GRANT to act."""
 
     IGNORE = auto()
     MALFORMED = auto()
@@ -24,7 +24,7 @@ class RedstonerDecisionKind(Enum):
 
 @dataclass(frozen=True, slots=True)
 class RedstonerDecision:
-    """Result of evaluating a starboard post."""
+    """The verdict on one starboard post; `member_id` and `source_message_url` are set only when the kind is GRANT."""
 
     kind: RedstonerDecisionKind
     member_id: int | None = None
@@ -34,12 +34,18 @@ class RedstonerDecision:
 
 @dataclass(frozen=True, slots=True)
 class WelcomeRelayPolicy:
-    """Configuration for forwarding Discord welcome messages."""
+    """Configuration for forwarding Discord welcome messages.
+
+    Raises `ConfigurationError` unless `forward_chance` is between zero and one and the other two are positive.
+    """
 
     welcome_channel_id: int
     forward_chance: float
+    """Probability that an eligible welcome message is forwarded at all."""
     pending_ttl_seconds: float = 300
+    """How long after joining a member can still be matched to a welcome message."""
     max_pending_members: int = 100
+    """Cap on remembered joins; the oldest are dropped first."""
 
     def __post_init__(self) -> None:
         if not 0 <= self.forward_chance <= 1:
@@ -60,6 +66,7 @@ class PendingWelcomeMember:
     user_id: int
     username: str
     joined_at: float
+    """Monotonic clock reading, not a wall-clock time; only differences are meaningful."""
 
 
 @dataclass(frozen=True, slots=True)

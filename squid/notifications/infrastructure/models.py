@@ -46,6 +46,8 @@ class NotificationProfile(Base, kw_only=True):
 
 
 class NotificationSubscriptionRecord(Base, kw_only=True):
+    """One standing subscription, to a creator, an exact record, or a structured record filter."""
+
     __tablename__ = "notification_subscriptions"
     __table_args__ = (
         CheckConstraint(

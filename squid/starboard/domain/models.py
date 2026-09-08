@@ -39,14 +39,16 @@ EDITABLE_SETTINGS: dict[str, SettingKind] = {
 }
 """Every setting `/starboard edit` accepts, and how its value is parsed.
 
-Shared with the suggestion registry so the names a user can be offered and the names the command
-will actually accept cannot drift apart.
+The suggestion registry reads the same mapping, so the offered names and the accepted names cannot drift apart.
 """
 
 
 @dataclass(frozen=True, slots=True)
 class StarboardEmoji:
-    """An ordered weighted reaction configured for a starboard."""
+    """One weighted reaction on a starboard, ordered by `position`.
+
+    Raises `ValidationError` on a blank emoji, a multiplier that is not finite and positive, or a negative position.
+    """
 
     emoji: str
     direction: StarboardDirection
@@ -67,7 +69,11 @@ class StarboardEmoji:
 
 @dataclass(frozen=True, slots=True)
 class StarboardConfig:
-    """A complete immutable starboard configuration snapshot."""
+    """A starboard's full configuration at one instant.
+
+    Raises `ValidationError` unless `required` exceeds `required_remove`, the ages are non-negative and ordered,
+    `colour` fits in RGB, and the emojis are unique.
+    """
 
     id: int
     guild_id: int
@@ -124,7 +130,7 @@ class StarboardConfig:
 
 @dataclass(frozen=True, slots=True)
 class StarboardSource:
-    """A guild or channel source grant for a starboard."""
+    """A grant letting a starboard mirror one channel, or the whole guild when `channel_id` is 0."""
 
     starboard_id: int
     guild_id: int
@@ -207,7 +213,11 @@ def evaluate_vote(
     *,
     now: Instant | None = None,
 ) -> VoteVerdict:
-    """Authorize a configured reaction using only immutable snapshots."""
+    """Decide what to do with one reaction, from snapshots alone.
+
+    Ignores an unconfigured emoji, a disabled board and a deleted origin; asks for removal when the vote breaks a
+    rule the reactor could see, such as self-voting or the message age window.
+    """
     option = next((item for item in config.emojis if item.emoji == emoji), None)
     if option is None or not config.enabled or not origin.present:
         return VoteVerdict.ignore()
@@ -228,12 +238,9 @@ def entry_should_be_posted(
     origin_present: bool,
     currently_posted: bool,
 ) -> bool:
-    """Whether this entry warrants a post right now, with a stable hysteresis band.
+    """Whether a post should exist for this entry right now.
 
-    Replaces a four-way send/update/remove/noop decision. Those verbs described what
-    to *do* about a post, which only made sense while the entry row remembered whether
-    one existed; the reconciler compares this answer against the posts that are
-    actually there and works out the verb itself.
+    States a desired end state, not a verb: the reconciler compares it against the posts that are actually there.
     """
     if not origin_present:
         # A deleted source removes its mirror only where the board links deletions.
@@ -242,6 +249,6 @@ def entry_should_be_posted(
         return False
     if score >= config.required:
         return True
-    # Between the two thresholds nothing changes, which is what stops an entry
-    # hovering at the boundary from flickering in and out of the channel.
+    # Hysteresis: between the thresholds nothing changes, so an entry hovering at the
+    # boundary does not flicker in and out of the channel.
     return currently_posted

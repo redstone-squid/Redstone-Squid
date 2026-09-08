@@ -36,7 +36,7 @@ class MessageService:
     async def mark_deleted(self, message_id: int) -> bool:
         """Tombstone a message Discord reports gone, retaining it as a fact.
 
-        Returns whether a stored message matched.
+        Returns whether an undeleted stored message matched; a redelivered event does not move the timestamp.
         """
         return await self._repository.mark_deleted(message_id, Instant.now())
 

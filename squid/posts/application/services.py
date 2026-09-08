@@ -53,11 +53,9 @@ class PostService:
         await self._repository.mark_applied(resource_kind, resource_key, generation)
 
     async def suppress(self, message_id: int) -> bool:
-        """Note that a post was deleted outside the bot.
+        """Note that a post was deleted outside the bot, returning whether one matched.
 
-        Returns whether a post matched. Suppressing rather than deleting is what lets a
-        renderer decide between "a moderator removed this, leave it gone" and "put it
-        back", which the two surfaces genuinely disagree about.
+        Suppressing rather than deleting leaves the renderer to choose between leaving it gone and reposting.
         """
         return await self._repository.suppress(message_id)
 

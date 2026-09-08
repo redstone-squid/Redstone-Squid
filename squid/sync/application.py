@@ -22,11 +22,7 @@ class ReconciliationResource(StrEnum):
     def post_kind(self) -> PostResourceKind:
         """The same value, spelled as the posts context types it.
 
-        Written out rather than cast so adding a resource fails here instead of
-        at the renderer lookup. The two contexts naming one set of resources
-        twice is real debt; closing it means converting
-        `squid.posts.domain.ResourceKind` as well, which reaches the starboard
-        paths this review excludes.
+        Written out rather than cast, so a new resource fails to type-check here instead of at the renderer lookup.
         """
         match self:
             case ReconciliationResource.BUILD:
@@ -48,13 +44,9 @@ class ReconciliationAction(StrEnum):
 class ReconciliationJob:
     """One claimed request to bring a Discord resource back in line.
 
-    This is a desired-state queue, not an event log, and the difference decides
-    how every field behaves. Rows are coalesced by `(resource_kind, source_key)`
-    in the database triggers that write them, deleted on acknowledgement, and
-    `generation` is a staleness token drawn from a sequence and compared against
-    the post's applied revision rather than an ordering. An event log would be
-    append-only and replayable; this is neither, and re-reading a row tells you
-    what the resource should look like *now*, not what happened to it.
+    Desired state, not an event: rows are coalesced by `(resource_kind, source_key)` and deleted on
+    acknowledgement, so a job says what the resource should look like now rather than what happened to it.
+    `generation` is a staleness token compared against a post's applied revision, not an ordering.
     """
 
     id: int
@@ -68,17 +60,36 @@ class ReconciliationJob:
 
 
 class ReconciliationQueue(Protocol):
-    """Persistence required by the Discord reconciliation drainer."""
+    """Persistence required by the Discord reconciliation drainer.
 
-    async def claim(self, *, limit: int) -> Sequence[ReconciliationJob]: ...
+    Acknowledgement is fenced on the job's claim token: a worker whose claim expired and was taken over applies
+    nothing and gets `False`.
 
-    async def complete(self, job: ReconciliationJob) -> bool: ...
+    Raises `DataIntegrityError` from `claim` for a row whose resource kind or action the check constraints should
+    have rejected.
+    """
 
-    async def fail(self, job: ReconciliationJob, error: str, *, max_attempts: int) -> bool: ...
+    async def claim(self, *, limit: int) -> Sequence[ReconciliationJob]:
+        """Claim up to `limit` ready jobs, including ones whose earlier claim expired."""
+        ...
+
+    async def complete(self, job: ReconciliationJob) -> bool:
+        """Delete the job's row, returning whether the claim was still current."""
+        ...
+
+    async def fail(self, job: ReconciliationJob, error: str, *, max_attempts: int) -> bool:
+        """Release the job for a later attempt with backoff, recording `error`.
+
+        Returns whether this failure dead-lettered it by reaching `max_attempts`.
+        """
+        ...
 
 
 class DiscordReconciliationService:
-    """Claim and acknowledge durable Discord refresh requests."""
+    """Claim and acknowledge durable Discord refresh requests.
+
+    Construction raises `InvalidStateError` unless `max_attempts` is positive.
+    """
 
     def __init__(self, repository: ReconciliationQueue, *, max_attempts: int = 8) -> None:
         if max_attempts < 1:
@@ -88,7 +99,10 @@ class DiscordReconciliationService:
         self._max_attempts = max_attempts
 
     async def claim(self, limit: int = 20) -> Sequence[ReconciliationJob]:
-        """Claim ready work, reclaiming jobs abandoned by crashed workers."""
+        """Claim ready work, reclaiming jobs abandoned by crashed workers.
+
+        Raises `InvalidStateError` if `limit` is outside 1-100.
+        """
         if not 1 <= limit <= 100:
             msg = tr(t"claim limit must be between 1 and 100")
             raise InvalidStateError(msg)

@@ -33,11 +33,10 @@ DOMAIN_EVENT_DELIVERY_SPEC = QueueSpec(
         counted=DomainEventDeliveryRecord.event_id,
     ),
 )
-"""The queue the shared protocol was modelled on.
+"""The delivery queue, one row per (event, consumer).
 
-It converts with no new configuration knobs beyond `claim_count`, which it already
-had, and the four-field health shape below -- which exists because this is the one
-queue whose gauges are keyed by something other than the table.
+The only queue whose gauges are keyed by consumer rather than by table, which is what the health shape above
+exists for.
 """
 
 

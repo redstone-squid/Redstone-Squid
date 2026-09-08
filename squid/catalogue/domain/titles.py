@@ -10,7 +10,7 @@ from squid.core.i18n import tr
 
 
 class TitleSection(StrEnum):
-    """A semantic section of a catalogue title."""
+    """The part of a title a term belongs to; each section has its own fixed ordering for the terms in it."""
 
     RECORD_CLASS = "record_class"
     WIRING = "wiring"
@@ -43,7 +43,10 @@ class TrapdoorPlacement(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class TitleToken:
-    """One rendered term with enough provenance for presentation."""
+    """One rendered term. `source_value` keeps the input it came from, defaulting to `value`.
+
+    Raises `ValidationError` if `value` is blank.
+    """
 
     value: str
     section: TitleSection
@@ -107,7 +110,7 @@ class DoorCategory:
 
 @dataclass(frozen=True, slots=True)
 class ExtenderCategory:
-    """Facts used by the piston-extender title grammar."""
+    """Facts used by the piston-extender title grammar; raises `ValidationError` unless `length` is positive."""
 
     wiring_restrictions: tuple[str, ...]
     orientation: str
@@ -249,9 +252,18 @@ _MISCELLANEOUS_ORDER: Final = (
 
 
 class RulesTitleFormatter:
-    """Formatter for the Door Rules title grammar."""
+    """Formatter for the Door Rules title grammar.
+
+    Never rejects input: an unrecognized, duplicated or ambiguous term is still rendered, and the reason is
+    reported as a diagnostic on the result.
+    """
 
     def format_door(self, category: DoorCategory) -> FormattedTitle:
+        """Render a piston-door title, moving component and miscellaneous restrictions into the subtitle.
+
+        An explicit `trapdoor_placement` replaces the orientation and drops the trapdoor wiring terms; a trapdoor
+        wiring term with no placement is rendered but reported as ambiguous.
+        """
         diagnostics: list[TitleDiagnostic] = []
         wiring = self._terms(category.wiring_restrictions, TitleSection.WIRING, _WIRING_ORDER, diagnostics)
         animated = self._terms(
@@ -277,6 +289,7 @@ class RulesTitleFormatter:
         return _formatted(title_tokens, subtitle_tokens, diagnostics)
 
     def format_extender(self, category: ExtenderCategory) -> FormattedTitle:
+        """Render a piston-extender title, moving component and miscellaneous restrictions into the subtitle."""
         diagnostics: list[TitleDiagnostic] = []
         wiring = self._terms(category.wiring_restrictions, TitleSection.WIRING, _WIRING_ORDER, diagnostics)
         types = self._terms(category.types, TitleSection.TYPE, _EXTENDER_TYPE_ORDER, diagnostics, omit={"regular"})
@@ -294,6 +307,7 @@ class RulesTitleFormatter:
         return _formatted(title_tokens, subtitle_tokens, diagnostics)
 
     def format_record(self, record_class: str, category: FormattedTitle) -> FormattedTitle:
+        """Prefix an already-formatted title with its record class, keeping the subtitle and diagnostics."""
         record_name = record_class.replace("_", " ").title()
         record_token = _fixed_token(record_name, TitleSection.RECORD_CLASS)
         category_tokens = category.title_tokens or (_fixed_token(category.title, TitleSection.FIXED_NOUN),)

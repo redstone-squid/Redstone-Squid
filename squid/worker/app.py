@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseWorker:
-    """Own periodic database-only application work."""
+    """Own the worker process's periodic database jobs; `close` stops and awaits every one of them."""
 
     def __init__(
         self,
@@ -70,7 +70,7 @@ class DatabaseWorker:
             yield
 
     def start(self) -> None:
-        """Start all jobs after the runtime has been constructed successfully."""
+        """Schedule every periodic job; raises `RuntimeError` unless called inside `running()`."""
         event_interval = self._config.event_interval_seconds
         maintenance_interval = self._config.maintenance_interval_seconds
         self._supervisor.start_periodic(
@@ -187,7 +187,7 @@ class DatabaseWorker:
         await self._supervisor.close()
 
     def is_ready(self) -> bool:
-        """Return whether every critical job has completed at least once."""
+        """Whether every critical job last succeeded within three times the longest configured interval."""
         required = {
             "core-domain-events",
             "schematic-jobs",
@@ -323,7 +323,10 @@ class DatabaseWorker:
 
 
 async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:
-    """Run the worker until a process signal or caller-owned stop event fires."""
+    """Run the worker until a process signal or caller-owned stop event fires.
+
+    SIGINT and SIGTERM are only installed when the caller passes no `stop_event`.
+    """
     resolved_config = process_config or load_or_exit(load_worker_process_config)
     configure_service_worker_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="worker")

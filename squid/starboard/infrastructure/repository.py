@@ -31,7 +31,10 @@ from squid.starboard.infrastructure.models import (
 
 
 class PostgresStarboardRepository:
-    """Persist configs and serialize each origin's score mutations with an advisory lock."""
+    """Persist configs and serialize each origin's score mutations under a per-origin advisory lock.
+
+    The lock is transaction-scoped, so concurrent votes on one message queue rather than losing each other's counts.
+    """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory

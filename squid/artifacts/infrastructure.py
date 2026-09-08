@@ -19,15 +19,18 @@ from squid.core.errors import DataIntegrityError, ValidationError
 
 
 class ArtifactTooLargeError(ValidationError):
-    """An artifact exceeded the caller's download budget."""
+    """A transfer would exceed the caller's `max_bytes` budget; raised before the excess is read."""
 
 
 class ArtifactSourceChangedError(DataIntegrityError):
-    """A staged source changed while it was being copied to durable storage."""
+    """A source file's identity, size or mtime changed mid-transfer, or a download did not match its declared size.
+
+    A transfer that raises it leaves nothing behind: the destination is never published.
+    """
 
 
 class LocalArtifactStore:
-    """Filesystem implementation used by development and single-host deployments."""
+    """Filesystem `ArtifactStore` for development and single-host deployments; `aclose` has nothing to release."""
 
     def __init__(self, directory: Path, *, prefix: str = "") -> None:
         self._directory = directory
@@ -88,7 +91,7 @@ class LocalArtifactStore:
             return
 
     async def aclose(self) -> None:
-        """Release resources owned by the adapter."""
+        """Do nothing: the adapter holds no connections."""
 
     def _path(self, key: str) -> Path:
         normalized = PurePosixPath(key)
@@ -126,7 +129,10 @@ class LocalArtifactStore:
 
 
 class S3ArtifactStore:
-    """S3-compatible adapter with explicit timeouts and bounded downloads."""
+    """S3-compatible `ArtifactStore`; `aclose` closes the SDK connection pool.
+
+    Construction raises `ValueError` unless the configuration selects the s3 backend and names a bucket.
+    """
 
     def __init__(self, config: ObjectStorageConfig) -> None:
         if config.backend != "s3" or config.bucket is None:
@@ -317,7 +323,7 @@ def _copy_regular_atomic(source: Path, destination: Path, max_bytes: int) -> Art
 
 
 class _RegularSource:
-    """Context manager for a no-follow regular file and its initial identity."""
+    """Open a source file without following symlinks, yielding it with the stat the transfer is checked against."""
 
     def __init__(self, path: Path, max_bytes: int) -> None:
         self._path = path

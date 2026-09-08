@@ -19,23 +19,35 @@ _NOTIFICATION_EVENT_SCHEMA_VERSIONS = {
 
 
 class VoteOutcomeReader(Protocol):
-    """Read the authoritative state of a closed vote session."""
+    """Read the authoritative state of a vote session."""
 
-    async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None: ...
+    async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+        """The session's current state, or `None` if no session has that id."""
+        ...
 
 
 class BuildStatusWriter(Protocol):
     """Apply the final moderation status of a build."""
 
-    async def confirm(self, build_id: int) -> object: ...
+    async def confirm(self, build_id: int) -> object:
+        """Publish the build. Idempotent: confirming an already-confirmed build changes nothing."""
+        ...
 
-    async def deny(self, build_id: int) -> object: ...
+    async def deny(self, build_id: int) -> object:
+        """Reject the build. Idempotent: denying an already-denied build changes nothing."""
+        ...
 
 
 class CoreEventHandler(Protocol):
-    """Handle one domain event idempotently, whatever produced it."""
+    """Handle one domain event, whatever produced it."""
 
-    async def handle(self, event: DomainEvent) -> None: ...
+    async def handle(self, event: DomainEvent) -> None:
+        """Apply the event.
+
+        Must be idempotent: a delivery is retried until it is acknowledged. Raising `UnsupportedEventVersionError`
+        rejects the delivery outright; any other exception counts against the delivery's attempts.
+        """
+        ...
 
 
 class ApplyBuildVoteOutcomeHandler:
@@ -46,6 +58,7 @@ class ApplyBuildVoteOutcomeHandler:
         self._builds = builds
 
     async def handle(self, event: DomainEvent) -> None:
+        """Confirm or deny the build the closed session targeted; does nothing if it is still open or not a build."""
         snapshot = await self._votes.get_session_by_id(event.aggregate_id)
         if snapshot is None or snapshot.is_open or not isinstance(snapshot.target, BuildVoteTarget):
             return
@@ -62,6 +75,11 @@ class MaterializeNotificationHandler:
         self._notifications = notifications
 
     async def handle(self, event: DomainEvent) -> None:
+        """Materialize notifications for the event.
+
+        Raises `UnsupportedEventVersionError` for a schema version this worker cannot read, which rejects the
+        delivery rather than retrying it.
+        """
         if event.schema_version not in _NOTIFICATION_EVENT_SCHEMA_VERSIONS.get(event.event_type, frozenset()):
             msg = f"Unsupported {event.event_type} schema version {event.schema_version}"
             raise UnsupportedEventVersionError(msg)
@@ -76,7 +94,11 @@ class CoreDomainEventRunner:
         self._handlers = handlers
 
     async def process_batch(self) -> None:
-        """Process one bounded batch, isolating failure to each delivery."""
+        """Process one bounded batch, isolating failure to each delivery.
+
+        A handler that raises leaves its delivery unacknowledged for a later attempt, and dead-letters it once the
+        attempts run out.
+        """
         for delivery in await self._events.claim(CORE_CONSUMER):
             await self._process(delivery)
 

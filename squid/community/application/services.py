@@ -31,7 +31,11 @@ class RedstonerService:
         mentioned_user_ids: list[int],
         content: str,
     ) -> RedstonerDecision:
-        """Evaluate a starboard post without depending on Discord objects."""
+        """Decide whether the post grants the role.
+
+        Ignores anything not from the configured starboard author and channel; a post from there that does not
+        carry exactly one mention and a message link is MALFORMED rather than ignored.
+        """
         if author_id != self._policy.starboard_author_id or channel_id != self._policy.starboard_channel_id:
             return RedstonerDecision(RedstonerDecisionKind.IGNORE)
 
@@ -56,7 +60,10 @@ class RedstonerService:
 
 
 class WelcomeRelayService:
-    """Track recent members and resolve welcome-message relay decisions."""
+    """Track recent joins in memory and match them to Discord's system welcome messages.
+
+    State is per process and unbounded only by the policy's TTL and member cap; a restart forgets every join.
+    """
 
     def __init__(
         self,
@@ -71,7 +78,7 @@ class WelcomeRelayService:
         self._pending_members: list[PendingWelcomeMember] = []
 
     def record_join(self, user_id: int, username: str) -> None:
-        """Record a recent member join, pruning stale and excess state."""
+        """Record a join, dropping entries past the TTL and then the oldest beyond the member cap."""
         now = self._clock()
         self._prune(now)
         self._pending_members.append(PendingWelcomeMember(user_id, username, now))
@@ -80,7 +87,7 @@ class WelcomeRelayService:
             del self._pending_members[:excess]
 
     def should_consider(self, *, channel_id: int, is_new_member_message: bool) -> bool:
-        """Return whether a welcome event should be considered for forwarding."""
+        """Whether to forward this welcome event; draws on the policy's chance, so it is not a pure predicate."""
         return (
             channel_id == self._policy.welcome_channel_id
             and is_new_member_message
@@ -88,7 +95,7 @@ class WelcomeRelayService:
         )
 
     def resolve(self, system_content: str) -> WelcomeRelayDecision | None:
-        """Resolve and consume the single recent member named in a welcome message."""
+        """Consume and return the one tracked member named in the message, or `None` if zero or several match."""
         self._prune(self._clock())
         matches = [member for member in self._pending_members if member.username in system_content]
         if len(matches) != 1:

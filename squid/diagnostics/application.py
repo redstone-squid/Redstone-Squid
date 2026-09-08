@@ -18,26 +18,36 @@ logger = logging.getLogger(__name__)
 class ErrorReportRepository(Protocol):
     """Persistence required to store a report and find it again."""
 
-    async def save(self, report: ErrorReport) -> None: ...
+    async def save(self, report: ErrorReport) -> None:
+        """Insert the report. References are not unique, so a repeated one is stored alongside its twin."""
+        ...
 
-    async def find(self, reference: str, *, now: Instant) -> ErrorReport | None: ...
+    async def find(self, reference: str, *, now: Instant) -> ErrorReport | None:
+        """The newest unexpired report whose short reference or full correlation ID is `reference`."""
+        ...
 
-    async def count_matching(self, reference: str, *, now: Instant) -> int: ...
+    async def count_matching(self, reference: str, *, now: Instant) -> int:
+        """How many unexpired reports `find` had to choose between."""
+        ...
 
-    async def list_recent(self, *, limit: int, now: Instant, work_lost_only: bool = False) -> Sequence[ErrorReport]: ...
+    async def list_recent(self, *, limit: int, now: Instant, work_lost_only: bool = False) -> Sequence[ErrorReport]:
+        """Unexpired reports, newest first, optionally only those that abandoned work."""
+        ...
 
-    async def purge_expired(self, *, now: Instant) -> int: ...
+    async def purge_expired(self, *, now: Instant) -> int:
+        """Delete reports whose retention window has passed, returning how many went."""
+        ...
 
-    async def clear_all(self) -> int: ...
+    async def clear_all(self) -> int:
+        """Delete every report, expired or not, returning how many went."""
+        ...
 
 
 class ErrorReportService:
     """Store what failed, and hand it back to whoever is allowed to ask.
 
-    Capture is best effort by construction: `record` never raises, because every one of its
-    callers is an error handler that has already failed once and still owes the user a response.
-    A report that cannot be written is a lost diagnostic; a report that raises is a command that
-    silently does nothing.
+    `record` never raises: its callers are error handlers that have already failed once and still owe the user a
+    response. Construction raises `InvalidStateError` if `retention_hours` is below one.
     """
 
     def __init__(
@@ -92,11 +102,10 @@ class ErrorReportService:
             logger.exception("Could not store an error report [correlation_id=%s]", correlation_id)
 
     async def lookup(self, reference: str) -> tuple[ErrorReport, int]:
-        """Resolve a quoted reference to its report and how many share it.
+        """Resolve a quoted reference to its report and how many unexpired reports share it.
 
-        The count is returned rather than hidden because the short reference is a 48-bit prefix,
-        not a key: a second match is astronomically unlikely but not impossible, and a moderator
-        reading a traceback deserves to know they may be reading the wrong one.
+        The short reference is a 48-bit prefix rather than a key, so a reader of the traceback needs to know
+        whether it could be the wrong one. Raises `ErrorReportNotFoundError` if nothing matches.
         """
         normalized = self.normalize(reference)
         now = self._now()
@@ -109,9 +118,8 @@ class ErrorReportService:
     async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
         """List the newest unexpired reports, for looking around without a reference.
 
-        `work_lost_only` narrows to failures that abandoned work. Following the logs means most
-        reports are failures something recovered from, and those can bury the ones that cost
-        something.
+        `work_lost_only` narrows to failures that abandoned work, which the far more numerous recovered failures
+        otherwise bury.
         """
         return await self._repository.list_recent(limit=max(1, limit), now=self._now(), work_lost_only=work_lost_only)
 
@@ -120,19 +128,14 @@ class ErrorReportService:
         return await self._repository.purge_expired(now=self._now())
 
     async def clear_all(self) -> int:
-        """Delete every stored report, expired or not.
-
-        Unlike `purge_expired`, this is an operator action rather than routine housekeeping, so
-        it is gated on `diagnostics.error.clear` rather than running unattended.
-        """
+        """Delete every stored report, expired or not; an operator action gated on `diagnostics.error.clear`."""
         return await self._repository.clear_all()
 
     @staticmethod
     def normalize(reference: str) -> str:
-        """Trim and bound a caller-supplied reference before it reaches a query.
+        """Strip surrounding whitespace and the backticks a Discord error card renders, then bound the length.
 
-        Users paste references out of Discord, so they arrive wrapped in the backticks the error
-        card rendered them in as often as not.
+        Raises `ErrorReportNotFoundError` if nothing is left.
         """
         normalized = reference.strip().strip("`").strip()
         if not normalized:
@@ -140,11 +143,7 @@ class ErrorReportService:
         return normalized[:MAX_REFERENCE_LENGTH]
 
     def _format_traceback(self, error: BaseException) -> str:
-        """Render a traceback, keeping its tail when it has to be cut.
-
-        The frames nearest the failure are the ones worth reading, and a runaway recursion makes
-        the head thousands of identical lines, so the truncation drops from the front.
-        """
+        """Render a traceback, dropping from the front when it has to be cut, so the innermost frames survive."""
         rendered = "".join(traceback.format_exception(error))
         if len(rendered) <= self._max_traceback_chars:
             return rendered

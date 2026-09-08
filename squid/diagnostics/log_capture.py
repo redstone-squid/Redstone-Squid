@@ -1,13 +1,8 @@
 """Turn logged exceptions into stored error reports.
 
-The transports capture their own failures, with the command name or route that produced them. The
-worker mostly cannot: its queue consumers are built to absorb a failure, dead-letter the job, log
-it, and carry on, so nothing ever reaches the supervisor that would have captured it. Those are
-exactly the failures an operator sees in `docker logs` and then cannot look up.
-
-So the store also follows the logs. Anything logged at ERROR or above with an exception attached
-becomes a report, which makes the store mirror the container output by construction and covers
-code written later without it having to know this exists.
+Anything logged at ERROR or above with an exception attached becomes a report, so the store mirrors the container
+output and covers code that knows nothing about it. This is the only path that reaches the worker's queue
+consumers, which absorb their failures and carry on rather than letting them reach a supervisor.
 """
 
 import contextlib
@@ -28,17 +23,15 @@ logger = logging.getLogger(__name__)
 CAPTURED_ATTRIBUTE = "squid_error_captured"
 """Set on a log record whose failure was already stored with richer context.
 
-The API, Discord, and background-job handlers store the command name, route, or job that failed
-before logging it. Without this flag the log handler would file a second, thinner report for the
-same incident.
+The API, Discord and background-job handlers store the command, route or job that failed before logging it; the
+flag stops the log handler filing a second, thinner report for the same incident.
 """
 
 WORK_LOST_ATTRIBUTE = "squid_work_lost"
 """Set on a log record for a failure that permanently abandoned work.
 
-A queue consumer that dead-letters a job sets this on the line it already logs, which is the whole
-of what it has to do to mark the report -- no service, no injection, no new dependency pointing at
-a context it should not know about.
+A queue consumer that dead-letters a job adds it to the line it already logs, which is all it takes to mark the
+report: no service, no injection, no dependency on a context it should not know about.
 """
 
 LOG_SURFACE = "log"
@@ -57,12 +50,10 @@ class _Pending:
 
 
 class ErrorReportLogHandler(logging.Handler):
-    """Queue logged exceptions for storage, without blocking or awaiting on the logging path.
+    """Queue logged exceptions for storage without blocking the logging path; `detach` takes it back off its loggers.
 
-    `emit` is synchronous and may run on any thread -- the bot logs through a `QueueListener`, and
-    anything inside `to_thread` logs from a worker thread -- while storing a report is an awaited
-    database write. So `emit` only appends to a bounded deque and nudges the loop; a supervised
-    task does the writing.
+    `emit` is synchronous and may run on any thread, while storing a report is an awaited database write, so it
+    only appends to a bounded deque and wakes the supervised `run` task that does the writing.
     """
 
     def __init__(self, *, capacity: int = 256) -> None:
@@ -83,9 +74,8 @@ class ErrorReportLogHandler(logging.Handler):
     def detach(self) -> None:
         """Remove this handler from every logger it was added to.
 
-        Called when the drain task stops, so a handler with nothing draining it cannot go on
-        collecting failures nobody will store -- which in a test process means one suite's
-        handler quietly queueing another's.
+        `run` calls it on the way out, so a handler with nothing draining it cannot go on collecting failures
+        nobody will store.
         """
         for target in self._attached:
             target.removeHandler(self)
@@ -146,7 +136,11 @@ class ErrorReportLogHandler(logging.Handler):
             loop.call_soon_threadsafe(wake.set)
 
     async def run(self, service: ErrorReportService) -> None:
-        """Store queued failures until cancelled. Owned by the process supervisor."""
+        """Store queued failures until cancelled, detaching the handler on the way out.
+
+        Owned by the process supervisor; only one task may run a given handler, since it binds the loop `emit`
+        wakes.
+        """
         import asyncio
 
         self._loop = asyncio.get_running_loop()
@@ -201,13 +195,11 @@ def work_lost() -> dict[str, bool]:
 
 
 def install_log_capture(*, capacity: int = 256) -> ErrorReportLogHandler:
-    """Attach the handler wherever records actually stop, and return it.
+    """Attach the handler wherever records actually stop, detaching any handler already there, and return it.
 
-    The root logger alone is not enough. `build_logging_config` gives `squid`, `discord` and the
-    uvicorn loggers `propagate = False`, so a record from `squid.search…` is handled at `squid`
-    and never reaches root -- which is every failure this is meant to catch. The handler therefore
-    goes on root *and* on each non-propagating logger. A record is still stored once, because
-    propagation stopping is exactly what makes those sets disjoint.
+    Root alone is not enough: `build_logging_config` gives `squid`, `discord` and the uvicorn loggers
+    `propagate = False`, so their records never reach root. The handler goes on root and on each non-propagating
+    logger, and a record is still stored once because propagation stopping is what makes those sets disjoint.
     """
     handler = ErrorReportLogHandler(capacity=capacity)
     handler.set_name("error_report_capture")

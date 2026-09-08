@@ -12,6 +12,7 @@ class VersionService:
         self._repository = repository
 
     async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion:
+        """Record a version, `edition` overriding the one in the string; raises `InvalidVersionError` if unparsable."""
         parsed_edition, major, minor, patch = parse_version_string(version_string)
         version = MinecraftVersion(edition or parsed_edition, major, minor, patch)
         return await self._repository.add(version)
@@ -30,14 +31,18 @@ class VersionService:
         return [str(version) for version in (versions if limit is None else versions[:limit])]
 
     async def newest(self, edition: Edition) -> str:
-        """Return the newest recognized version for an edition."""
+        """The newest recognized version; raises `VersionCatalogUnavailableError` if the edition has none."""
         versions = await self.list_versions(edition)
         if not versions:
             raise VersionCatalogUnavailableError(edition)
         return str(versions[-1])
 
     async def resolve_spec(self, version_spec: str) -> list[str]:
-        """Resolve a version range specification against recognized versions."""
+        """Expand a comma-separated spec of `1.20`, `1.20.1`, `1.20+` and `1.19-1.20` parts into known versions.
+
+        A two-part number matches every patch of that minor; an unknown exact version contributes nothing. Raises
+        `InvalidVersionError` if the spec names both editions or a part is malformed.
+        """
         edition = self._edition_from_spec(version_spec)
         normalized_spec = version_spec.replace("Java", "").replace("Bedrock", "").strip()
         versions = await self.list_versions(edition)

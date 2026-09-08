@@ -7,7 +7,7 @@ from squid.posts.domain import DiscordPost, PostReference, ResourceKind, Surface
 
 
 class PostRepository(Protocol):
-    """Persistence required by :class:`PostService`."""
+    """Persistence required by `PostService`."""
 
     async def record(
         self,
@@ -18,18 +18,41 @@ class PostRepository(Protocol):
         resource_key: str,
         surface: Surface,
         applied_revision: int,
-    ) -> None: ...
+    ) -> None:
+        """Claim a sent message as this resource's post in this channel.
 
-    async def list_for_resource(self, resource_kind: ResourceKind, resource_key: str) -> Sequence[DiscordPost]: ...
+        Recording the same message twice is a no-op. A second live message for the same resource and channel
+        violates a unique index, which is what stops a retry posting a duplicate card.
+        """
+        ...
 
-    async def resolve(self, message_id: int) -> PostReference | None: ...
+    async def list_for_resource(self, resource_kind: ResourceKind, resource_key: str) -> Sequence[DiscordPost]:
+        """Every post rendering the resource, suppressed ones included, by channel id."""
+        ...
 
-    async def mark_rendered(self, message_id: int, applied_revision: int) -> None: ...
+    async def resolve(self, message_id: int) -> PostReference | None:
+        """What the message renders, or `None` if the bot does not own it."""
+        ...
 
-    async def mark_applied(self, resource_kind: ResourceKind, resource_key: str, generation: int) -> None: ...
+    async def mark_rendered(self, message_id: int, applied_revision: int) -> None:
+        """Advance one post's applied revision. Never moves it backwards, so an overlapping slower pass is ignored."""
+        ...
 
-    async def suppress(self, message_id: int) -> bool: ...
+    async def mark_applied(self, resource_kind: ResourceKind, resource_key: str, generation: int) -> None:
+        """Advance every post for the resource to `generation`, leaving any already ahead of it alone."""
+        ...
 
-    async def forget(self, message_id: int) -> None: ...
+    async def suppress(self, message_id: int) -> bool:
+        """Tombstone a post deleted outside the bot, freeing its slot in the unique index.
 
-    async def pending_generation(self, resource_kind: ResourceKind, resource_key: str) -> int | None: ...
+        Returns whether a live post matched.
+        """
+        ...
+
+    async def forget(self, message_id: int) -> None:
+        """Delete the post record outright, for a message the bot itself deleted."""
+        ...
+
+    async def pending_generation(self, resource_kind: ResourceKind, resource_key: str) -> int | None:
+        """The queued generation the resource's live posts have not all reached, or `None` when they are current."""
+        ...

@@ -25,7 +25,10 @@ class MinecraftVersion:
 
 
 def parse_version_string(version_string: str) -> tuple[Edition, int, int, int]:
-    """Parse a Minecraft version, defaulting to Java when the edition is omitted."""
+    """Parse a Minecraft version, defaulting to Java when the edition is omitted and to patch 0 when it is.
+
+    Raises `InvalidVersionError` if the string does not match `VERSION_PATTERN`.
+    """
     match = VERSION_PATTERN.match(version_string)
     if not match:
         msg = "Invalid version string format."

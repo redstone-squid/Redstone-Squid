@@ -42,9 +42,13 @@ class UnitDefinition(Base, kw_only=True):
     __tablename__ = "tag_units"
     key: Mapped[str] = mapped_column(Text, primary_key=True)
     dimension: Mapped[str] = mapped_column(Text, nullable=False)
+    """The physical quantity measured; only units sharing a dimension are interconvertible."""
     symbol: Mapped[str] = mapped_column(Text, nullable=False)
+    """How the unit is rendered next to a value."""
     aliases: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default_factory=list)
+    """Alternative spellings accepted when parsing user input."""
     scale_to_base: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
+    """Multiplier converting a value in this unit to its dimension's base unit."""
 
 
 class TagDefinition(Base, kw_only=True):
@@ -90,13 +94,9 @@ class TagDefinition(Base, kw_only=True):
             "(semantic_kind <> 'restriction' AND restriction_type IS NULL)",
             name="tag_definitions_restriction_type_check",
         ),
-        # There was a `tag_definitions_numeric_metadata_check` here. Its second disjunct
-        # (`value_type = 'numeric' AND both columns NULL`) made every numeric row pass
-        # regardless, so all it actually enforced was that a non-numeric row carries no
-        # unit and no step -- which `tag_definitions_non_numeric_unit_check` below already
-        # states, and more strictly. Restoring the apparent intent is not an option either:
-        # `TagRepository.create_showcase` deliberately mints numeric user tags with neither
-        # a canonical unit nor a step, so "numeric implies numeric metadata" is not true here.
+        # No "numeric implies numeric metadata" constraint: `TagRepository.create_showcase`
+        # mints numeric user tags with neither a canonical unit nor a step. Only the converse
+        # holds, and the check below states it.
         CheckConstraint(
             "value_type = 'numeric' OR "
             "(canonical_unit_key IS NULL AND default_display_unit_key IS NULL AND numeric_step IS NULL)",
@@ -118,28 +118,41 @@ class TagDefinition(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     stable_key: Mapped[str] = mapped_column(Text, nullable=False)
+    """Identifier code refers to instead of the id; user tags get an opaque 'user_<uuid>' carrying no submitter."""
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_name: Mapped[str] = mapped_column(Text, nullable=False)
+    """display_name case-folded with runs of whitespace collapsed, for duplicate detection and lookup."""
     query_name: Mapped[str | None] = mapped_column(Text, default=None)
+    """Name this tag answers to in search queries; unique, and null for tags that are not searchable by name."""
     authority: Mapped[TagAuthority] = mapped_column(Text, nullable=False)
+    """Member-defined tags are constrained to showcase, with no restriction type or record operator."""
     semantic_kind: Mapped[TagSemanticKind] = mapped_column(Text, nullable=False)
     restriction_type: Mapped[str | None] = mapped_column(Text, default=None)
+    """Required on restriction tags and null on every other kind."""
     value_type: Mapped[TagValueType] = mapped_column(Text, nullable=False)
+    """Which value column an assignment of this tag fills; 'none' means the tag is a bare label."""
     record_operator: Mapped[RecordOperator | None] = mapped_column(Text, default=None)
+    """How a record category matches this tag; null when the tag takes part in no record category."""
     canonical_unit_key: Mapped[str | None] = mapped_column(
         Text,
         ForeignKey("tag_units.key", name="tag_definitions_canonical_unit_fkey", ondelete="RESTRICT"),
         default=None,
     )
+    """Unit that stored numeric values are expressed in; only ever set on numeric tags."""
     default_display_unit_key: Mapped[str | None] = mapped_column(
         Text,
         ForeignKey("tag_units.key", name="tag_definitions_display_unit_fkey", ondelete="RESTRICT"),
         default=None,
     )
+    """Unit values are shown in when the assignment names none of its own."""
     numeric_step: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
+    """Granularity accepted for values, in the canonical unit; null on tags with no fixed granularity."""
     render_template: Mapped[str] = mapped_column(Text, nullable=False, default="{name}")
+    """Label format, with the placeholders {name}, {value} and {unit}."""
     default_display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+    """Sort key for listing tags; lower sorts first, and assignments may override it."""
     moderation_status: Mapped[TagModerationStatus] = mapped_column(Text, nullable=False)
+    """Only 'approved' tags are searchable and assignable."""
     created_by_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", name="tag_definitions_created_by_account_id_fkey", ondelete="SET NULL"),
         default=None,
@@ -151,6 +164,7 @@ class TagDefinition(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     archived_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """Set exactly while moderation_status is 'archived'."""
 
     aliases: Mapped[list[TagAlias]] = relationship(back_populates="definition", default_factory=list, lazy="selectin")
     applicabilities: Mapped[list[TagApplicability]] = relationship(
@@ -162,7 +176,7 @@ class TagDefinition(Base, kw_only=True):
 
 
 class TagAlias(Base, kw_only=True):
-    """An alternate display name for a tag."""
+    """An alternate name a tag is recognized by when parsing input."""
 
     __tablename__ = "tag_aliases"
     __table_args__ = (
@@ -177,6 +191,7 @@ class TagAlias(Base, kw_only=True):
     )
     alias: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_alias: Mapped[str] = mapped_column(Text, nullable=False)
+    """The alias case-folded and whitespace-collapsed; what lookups match against, and unique per tag."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -185,7 +200,7 @@ class TagAlias(Base, kw_only=True):
 
 
 class TagApplicability(Base, kw_only=True):
-    """A build kind on which a tag may be used."""
+    """A build kind a tag may be used on; a tag with no rows here is unrestricted."""
 
     __tablename__ = "tag_applicabilities"
     __table_args__ = (PrimaryKeyConstraint("tag_id", "build_kind"),)
@@ -201,7 +216,7 @@ class TagApplicability(Base, kw_only=True):
 
 
 class BuildTagAssignment(Base, kw_only=True):
-    """A typed tag value attached to one build."""
+    """A typed tag value attached to one build; at most one row per (build, tag)."""
 
     __tablename__ = "build_tag_assignments"
     __table_args__ = (
@@ -256,17 +271,25 @@ class BuildTagAssignment(Base, kw_only=True):
     )
     tag_id: Mapped[int] = mapped_column(BigInteger, init=False)
     value_type: Mapped[TagValueType] = mapped_column(Text, nullable=False)
+    """Copied from the definition and enforced against it by a foreign key; picks which value column is filled."""
     numeric_value: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
+    """In the definition's canonical unit. Non-null exactly for numeric tags, and always finite."""
     text_value: Mapped[str | None] = mapped_column(Text, default=None)
+    """Non-null exactly for text tags."""
     boolean_value: Mapped[bool | None] = mapped_column(Boolean, default=None)
+    """Non-null exactly for boolean tags."""
     display_unit_key: Mapped[str | None] = mapped_column(
         Text,
         ForeignKey("tag_units.key", name="build_tag_assignments_display_unit_fkey", ondelete="RESTRICT"),
         default=None,
     )
+    """Unit the value is shown in; null falls back to the definition's default display unit."""
     display_order: Mapped[int | None] = mapped_column(SmallInteger, default=None)
+    """Overrides the definition's default order on this build; null keeps it."""
     evidence: Mapped[str | None] = mapped_column(Text, default=None)
+    """Free text backing the claim, such as a link to a test."""
     provenance: Mapped[str] = mapped_column(Text, nullable=False, default="submitted")
+    """Where the assignment came from: submitted, inferred, moderated or legacy_import."""
     created_by_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", name="build_tag_assignments_created_by_account_id_fkey", ondelete="SET NULL"),
         default=None,
@@ -282,7 +305,7 @@ class BuildTagAssignment(Base, kw_only=True):
 
 
 class TagRelation(Base, kw_only=True):
-    """A semantic relationship between official restrictions."""
+    """A directed relation between two tags: the source implies the target, or the two are incompatible."""
 
     __tablename__ = "tag_relations"
     __table_args__ = (
@@ -304,7 +327,7 @@ class TagRelation(Base, kw_only=True):
 
 
 class TagRecordThreshold(Base, kw_only=True):
-    """A staff-seeded eager threshold for a parameterized restriction."""
+    """A staff-seeded value of a numeric restriction that records are tracked at."""
 
     __tablename__ = "tag_record_thresholds"
     __table_args__ = (

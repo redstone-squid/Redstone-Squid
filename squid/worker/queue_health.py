@@ -1,10 +1,7 @@
 """Database-derived health metrics for durable work queues.
 
-The union below is generated from the same `QueueSpec` constants the claim path
-uses, so the readiness predicate is one Python expression rather than eight
-hand-written copies. The copies were the defect: the raw SQL in this module wrote
-`dead_at IS NULL AND (claimed_at IS NULL OR claimed_at < now() - ...)` seven times,
-and nothing made them agree with the adapters or with each other.
+The union below is generated from the same `QueueSpec` constants the claim path uses, so readiness is defined once
+and a queue cannot report a different notion of ready than the one it is drained by.
 """
 
 from dataclasses import dataclass
@@ -83,7 +80,7 @@ QUEUE_HEALTH_STATEMENT = union_all(*(_queue_health_select(spec) for spec in QUEU
 
 @dataclass(frozen=True, slots=True)
 class QueueHealthSnapshot:
-    """Low-cardinality operational state for one durable queue."""
+    """One durable queue's depth at a point in time; `oldest_ready_age` is in seconds and 0 when nothing is ready."""
 
     queue: str
     ready: int
@@ -99,6 +96,7 @@ class PostgresQueueHealthMonitor:
         self._session_factory = session_factory
 
     async def record(self) -> None:
+        """Sample every queue and emit its gauges."""
         async with self._session_factory() as session:
             rows = (await session.execute(QUEUE_HEALTH_STATEMENT)).mappings().all()
         for row in rows:

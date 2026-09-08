@@ -10,11 +10,10 @@ from squid.core.errors import ErrorCode, JSONValue, NotFoundError
 from squid.core.i18n import tr
 
 MAX_REFERENCE_LENGTH = 128
-"""Longest reference a lookup will consider.
+"""Longest reference a lookup considers.
 
-Bounded because a caller supplies it: `resolve_request_id` accepts an inbound `Request-Id` of up
-to 128 characters and echoes it verbatim, so that is the widest value that can legitimately end
-up stored under `correlation_id`.
+`resolve_request_id` echoes an inbound `Request-Id` of up to 128 characters verbatim, so that is the widest value
+that can legitimately be stored as `correlation_id`.
 """
 
 
@@ -44,18 +43,16 @@ class ErrorReport:
     work_lost: bool = False
     """Whether this failure permanently abandoned work.
 
-    A queue consumer that dead-letters a job has lost it: nothing will retry, and a build's search
-    document or a schematic's render simply never appears. That is a different thing from an
-    exception that was logged and recovered from, and the two are worth telling apart when a
-    hundred reports are competing for attention.
+    A dead-lettered job is gone -- nothing retries it, and the search document or render it owed never appears --
+    where a logged-and-recovered exception costs nothing.
     """
 
 
 class ErrorReportNotFoundError(NotFoundError):
     """No stored report matches the reference a caller quoted.
 
-    Expiry and a typo are deliberately indistinguishable here: both mean "nothing to show", and
-    telling a caller that a reference *used* to exist reveals that an error happened.
+    Expiry and a typo are deliberately indistinguishable: saying a reference once existed reveals that an error
+    happened.
     """
 
     default_message = tr(t"No stored error matches that reference.")
