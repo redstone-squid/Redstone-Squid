@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
 from whenever import Instant
 
 from squid.builds.application.editing import BuildEditPatch
@@ -12,10 +11,10 @@ from squid.builds.domain import Build, BuildCategory, BuildDraft, DoorBuild
 from squid.core.errors import JSONValue, ValidationError
 
 
-class RevisionFacts(BaseModel):
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RevisionFacts:
     """Retained inferred facts, before a reviewer chooses a target build."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
     category: BuildCategory | None = None
     version_spec: str | None = None
     width: int | None = None
@@ -38,9 +37,26 @@ class RevisionFacts(BaseModel):
     @classmethod
     def from_draft(cls, draft: BuildDraft) -> RevisionFacts:
         """Copy inference facts without finalizing or applying category defaults."""
-        values = {name: getattr(draft, name) for name in cls.model_fields}
-        values["description"] = draft.description or draft.extra_info.get("user")
-        return cls.model_validate(values)
+        return cls(
+            category=draft.category,
+            version_spec=draft.version_spec,
+            width=draft.width,
+            height=draft.height,
+            depth=draft.depth,
+            door_width=draft.door_width,
+            door_height=draft.door_height,
+            door_depth=draft.door_depth,
+            door_orientation=draft.door_orientation,
+            normal_opening_time=draft.normal_opening_time,
+            normal_closing_time=draft.normal_closing_time,
+            patterns=tuple(draft.patterns),
+            creators_ign=tuple(draft.creators_ign),
+            wiring_placement_restrictions=tuple(draft.wiring_placement_restrictions),
+            animated_restrictions=tuple(draft.animated_restrictions),
+            component_restrictions=tuple(draft.component_restrictions),
+            miscellaneous_restrictions=tuple(draft.miscellaneous_restrictions),
+            description=draft.description or draft.extra_info.get("user"),
+        )
 
     def patch(self, build: Build) -> BuildEditPatch:
         """Preserve missing facts and reject an inferred category change."""

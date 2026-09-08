@@ -20,12 +20,13 @@ from squid.submissions.application.inference_runs import (
     InferenceClaim,
     InferenceStatus,
     candidate_id,
-    decode_facts,
-    encode_facts,
     inference_busy,
 )
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import DraftCapacityExceededError
+
+_DRAFT = TypeAdapter(BuildDraft)
+_SOURCE_FILES = TypeAdapter(tuple[SubmissionSourceFile, ...])
 
 
 class SubmissionInferenceRun(Base, kw_only=True):
@@ -120,7 +121,7 @@ class PostgresInferenceRuns:
             row = await self._claim(session, run_id, token)
             if row is None:
                 raise inference_busy()
-            row.candidates = [encode_facts(draft) for draft in drafts]
+            row.candidates = [_DRAFT.dump_python(draft, mode="json") for draft in drafts]
             row.state = "completed"
             row.claim_token = None
             row.claim_expires_at = None
@@ -252,8 +253,8 @@ def _candidates(row: SubmissionInferenceRun) -> tuple[InferenceCandidate, ...]:
             candidate_id(row.id, index),
             row.id,
             row.owner_account_id,
-            decode_facts(facts),
-            TypeAdapter(tuple[SubmissionSourceFile, ...]).validate_python(row.inputs.get("source_files", [])),
+            _DRAFT.validate_python(facts),
+            _SOURCE_FILES.validate_python(row.inputs.get("source_files", [])),
         )
         for index, facts in enumerate(row.candidates)
     )

@@ -6,7 +6,6 @@ from typing import Literal, Protocol
 from uuid import UUID, uuid5
 
 import anyio
-from pydantic import TypeAdapter
 
 from squid.artifacts.application import ArtifactStore
 from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
@@ -16,9 +15,6 @@ from squid.permissions.application import PermissionService
 from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.submissions.domain.source_files import SubmissionSourceFile
-
-_INPUT = TypeAdapter(BuildInferenceInput)
-_DRAFT = TypeAdapter(BuildDraft)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +67,16 @@ class InferenceRunRepository(Protocol):
     async def delete_expired(self, run_id: UUID) -> None: ...
 
 
+class InferenceRunCodec(Protocol):
+    """Translate retained JSON at the infrastructure boundary."""
+
+    def encode_bundle(self, bundle: BuildInferenceInput) -> dict[str, JSONValue]: ...
+    def decode_bundle(self, value: JSONValue) -> BuildInferenceInput: ...
+    def encode_source_files(self, source_files: tuple[SubmissionSourceFile, ...]) -> list[JSONValue]: ...
+    def decode_source_files(self, value: JSONValue) -> tuple[SubmissionSourceFile, ...]: ...
+    def decode_image(self, value: dict[str, JSONValue], data: bytes) -> InlineImage: ...
+
+
 class SubmissionInferenceRuns:
     """Persist exact model inputs before invocation and reuse retained candidates on replay."""
 
@@ -79,6 +85,7 @@ class SubmissionInferenceRuns:
         repository: InferenceRunRepository,
         inference: BuildInferenceService,
         artifacts: ArtifactStore,
+        codec: InferenceRunCodec,
         *,
         capacity: int = 1_000,
         permissions: PermissionService | None = None,
@@ -86,6 +93,7 @@ class SubmissionInferenceRuns:
         self._repository = repository
         self._inference = inference
         self._artifacts = artifacts
+        self._codec = codec
         self._capacity = capacity
         self._permissions = permissions
 
@@ -104,8 +112,8 @@ class SubmissionInferenceRuns:
         inputs: dict[str, JSONValue] = {
             "schema_revision": 1,
             "purpose": purpose,
-            "source_files": TypeAdapter(tuple[SubmissionSourceFile, ...]).dump_python(source_files, mode="json"),
-            "bundle": _INPUT.dump_python(replace(bundle, images=()), mode="json"),
+            "source_files": self._codec.encode_source_files(source_files),
+            "bundle": self._codec.encode_bundle(replace(bundle, images=())),
             "model": model,
             "reasoning_effort": reasoning_effort,
             "images": [
@@ -148,7 +156,7 @@ class SubmissionInferenceRuns:
             raise AuthorizationError
         if completed:
             return candidates
-        bundle = _INPUT.validate_python(inputs["bundle"])
+        bundle = self._codec.decode_bundle(inputs["bundle"])
         descriptors = inputs.get("images", [])
         assert isinstance(descriptors, list)
         images: list[InlineImage] = []
@@ -158,16 +166,7 @@ class SubmissionInferenceRuns:
             if data is None or hashlib.sha256(data).hexdigest() != descriptor["sha256"]:
                 message = "A retained inference image is unavailable; retry after private storage is restored."
                 raise ConflictError(message)
-            images.append(
-                TypeAdapter(InlineImage).validate_python(
-                    {
-                        "data": data,
-                        "content_type": descriptor["content_type"],
-                        "source_message_id": descriptor["source_message_id"],
-                        "origin": descriptor["origin"],
-                    }
-                )
-            )
+            images.append(self._codec.decode_image(descriptor, data))
         model = inputs["model"]
         reasoning_effort = inputs.get("reasoning_effort")
         assert isinstance(model, str)
@@ -178,7 +177,7 @@ class SubmissionInferenceRuns:
             replace(bundle, images=tuple(images)),
             model=model,
             reasoning_effort=reasoning_effort,
-            source_files=TypeAdapter(tuple[SubmissionSourceFile, ...]).validate_python(inputs.get("source_files", [])),
+            source_files=self._codec.decode_source_files(inputs.get("source_files", [])),
         )
 
     async def get(self, run_id: UUID, actor: Subject) -> tuple[InferenceCandidate, ...]:
@@ -217,14 +216,6 @@ class SubmissionInferenceRuns:
 def candidate_id(run_id: UUID, index: int) -> UUID:
     """Derive identity from the retained run, never from mutable candidate content."""
     return uuid5(run_id, f"candidate:{index}")
-
-
-def encode_facts(draft: BuildDraft) -> dict[str, JSONValue]:
-    return _DRAFT.dump_python(draft, mode="json")
-
-
-def decode_facts(facts: dict[str, JSONValue]) -> BuildDraft:
-    return _DRAFT.validate_python(facts)
 
 
 def inference_busy() -> ConflictError:

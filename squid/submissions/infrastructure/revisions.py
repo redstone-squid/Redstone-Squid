@@ -3,6 +3,7 @@
 from dataclasses import asdict
 from uuid import UUID
 
+from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -16,6 +17,8 @@ from squid.core.errors import AuthorizationError, ConflictError, NotFoundError
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal
 from squid.submissions.infrastructure.revision_models import SubmissionRevisionProposal
+
+_REVISION_FACTS = TypeAdapter(RevisionFacts)
 
 
 class PostgresRevisionProposals:
@@ -37,7 +40,7 @@ class PostgresRevisionProposals:
                     raise AuthorizationError
                 return _snapshot(existing)
             values = asdict(proposal)
-            values["facts"] = proposal.facts.model_dump(mode="json")
+            values["facts"] = _REVISION_FACTS.dump_python(proposal.facts, mode="json")
             model = SubmissionRevisionProposal(**values)
             session.add(model)
             return _snapshot(model)
@@ -122,7 +125,7 @@ def _snapshot(model: SubmissionRevisionProposal) -> RevisionProposal:
         model.owner_account_id,
         model.requested_by_account_id,
         model.source_message_id,
-        RevisionFacts.model_validate(model.facts),
+        _REVISION_FACTS.validate_python(model.facts),
         model.build_id,
         model.expected_revision,
         model.before,
