@@ -12,6 +12,7 @@ from whenever import Instant
 
 from squid.bot.submission import ingestion
 from squid.builds.domain import BuildCategory, BuildDraft
+from squid.permissions.domain import Subject
 from squid.runtime import BotServices
 from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.application.inference_runs import InferenceCandidate
@@ -118,3 +119,14 @@ async def test_replayed_delivery_uses_retained_candidates_without_reading_change
     await ingestion.ingest_message_bundle([message(files=True)], [], services, model="changed-model")
     cast(Any, ingestion.assemble_bundle).assert_not_awaited()
     cast(Any, services.submission_inference.infer).assert_not_awaited()
+
+
+async def test_staff_retry_is_attributed_to_the_staff_actor(monkeypatch: pytest.MonkeyPatch) -> None:
+    item = candidate()
+    services, materialize, _ = setup(monkeypatch, (item,))
+    actor = Subject(account_id=19)
+
+    await ingestion.admit_candidates(services, (item,), actor=actor)
+
+    assert materialize.await_args.kwargs["actor"] == actor
+    cast(Any, services.submission_finalization.submit).assert_awaited_once_with(item.id, actor, locale=None)

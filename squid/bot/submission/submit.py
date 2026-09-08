@@ -25,6 +25,7 @@ from squid.builds.domain import BuildCategory, BuildDraft, DoorOrientationLitera
 from squid.core.i18n import tr
 from squid.messages.application import MessageService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
+from squid.submissions.errors import DraftCapacityExceededError
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -246,13 +247,22 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             self.consent_sticky.record_activity(message.channel.id)
         preceding = [item async for item in message.channel.history(before=message, limit=3)]
         preceding.reverse()
-        run_id = await ingest_message_bundle(
-            [message],
-            preceding,
-            self.bot.services,
-            model=self.bot.inference_model,
-            reasoning_effort=self.bot.inference_reasoning_effort,
-        )
+        try:
+            run_id = await ingest_message_bundle(
+                [message],
+                preceding,
+                self.bot.services,
+                model=self.bot.inference_model,
+                reasoning_effort=self.bot.inference_reasoning_effort,
+            )
+        except DraftCapacityExceededError:
+            await message.channel.send(
+                "Automated submission intake is full. Use `/build drafts` to finish or discard retained work, "
+                "then post this submission again.",
+                reference=message,
+                allowed_mentions=discord.AllowedMentions(replied_user=True),
+            )
+            return
         await self.bot.refresh_posts("inference_run", str(run_id))
 
     @sd.context_menu(name="Recalculate Build", defer="private")

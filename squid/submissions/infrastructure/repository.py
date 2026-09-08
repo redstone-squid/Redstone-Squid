@@ -131,11 +131,26 @@ class PostgresDraftRepository(DraftRepository):
             if existing is not None:
                 if existing.owner_account_id != model.owner_account_id:
                     raise DraftAccessDeniedError
-                if (existing.origin, existing.inferred, existing.category, existing.source_installation_id) != (
+                if (
+                    existing.schema_id,
+                    existing.schema_revision,
+                    existing.origin,
+                    existing.inferred,
+                    existing.category,
+                    existing.source_installation_id,
+                    existing.source_messages,
+                    existing.source_files,
+                    existing.inference_run_id,
+                ) != (
+                    model.schema_id,
+                    model.schema_revision,
                     model.origin,
                     model.inferred,
                     model.category,
                     model.source_installation_id,
+                    model.source_messages,
+                    model.source_files,
+                    model.inference_run_id,
                 ):
                     raise DraftStateConflictError(existing.status.value, operation="create")
                 return _to_stored(existing)
