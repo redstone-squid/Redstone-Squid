@@ -1,7 +1,8 @@
 # Structural debt in squid and its tests
 
-Status: submission convergence implemented around the sanitizer boundary; remaining tracks are queued.
-Reviewed: 2026-09-07.
+Status: submission convergence implemented around the sanitizer boundary. Section 3's API service
+graph is done; its remaining test-boundary work and sections 2 and 4 are queued.
+Reviewed: 2026-09-09.
 
 The approved submission design and implementation record are in
 [`submission-convergence.md`](submission-convergence.md). Its decisions supersede section 1
@@ -124,6 +125,37 @@ refactors costly. More tests built this way can increase maintenance without inc
 - Missing service fields and incompatible collaborator signatures are caught by construction/type checks.
 - Tests fail when wiring or behavior is wrong, but survive private helper moves and equivalent syntax.
 - Existing behavioral coverage is retained when source-shape assertions are removed.
+
+### Progress: API service graph, 2026-09-09
+
+The first acceptance bullet is met for the API graph. `1a4866a4` made every double subclass the
+service it replaces and `build_services` construct a real `ApiServices`; `fdd2113e` converted the
+three `__getattr__` rejection stubs into named operations. No cast remains in the graph.
+
+The review's evidence had already been overtaken: `public_records` was restored by `2fe1e794`, but
+by this milestone the fake was instead missing `submission_schematics`, `submission_revisions`,
+`submission_intake` and `submission_inference`, with 230 API tests passing. Drift returning within
+days of a structural fix is the argument for checking construction rather than re-auditing the fake.
+
+Type-checking the doubles surfaced drift the cast had hidden: a `MockSchematics.content` method
+`SchematicService` does not have, alongside four route-called methods it lacked; a public-records
+double with the wrong parameter name, wrong return type, and a `list_page` the real service has no
+trace of; a sync `manifest` where production is async; a verification-code double accepting `str`
+where production accepts only `UUID`; and an idempotency-test double that was not an `AccountService`.
+
+Subclassing does not catch a double retaining a method production has dropped — it type-checks and
+reads as covered while being dead. `tests/unit/api/test_service_graph_fakes.py` covers that and
+asserts each collaborator is an instance of its declared type. Both guards were verified to fail
+against a reintroduced `content` and against an impostor double, and the graph-completeness guard
+against a field added to `ApiServices`.
+
+Validation: 475 focused API, CLI-auth, Minecraft-auth and submission tests pass, including the
+contract suite driving every generated operation. Project-wide Pyrefly reports zero errors; Ruff,
+format and whitespace checks pass. Six architecture failures in these runs reproduce on a clean
+tree and are unrelated.
+
+Still open in this track: the source-shape assertions in `tests/unit/accounts/test_merge_phases.py`,
+and the bot and worker service graphs, which retain their own unchecked doubles.
 
 ## 4. Give build metadata explicit types and ownership
 
