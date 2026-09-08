@@ -17,9 +17,8 @@ if TYPE_CHECKING:
 class BuildCardRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
     """Publish a confirmed build's card to every guild's builds channel.
 
-    Only confirmed builds are published here. A pending build is shown by its review
-    session instead, and a denied one is shown nowhere, so both answer with an empty
-    set and the reconciler removes whatever is left over.
+    A pending build is shown by its review session and a denied one nowhere, so both answer with an empty set and
+    the reconciler removes any leftover card.
     """
 
     resource_kind: ResourceKind = "build"

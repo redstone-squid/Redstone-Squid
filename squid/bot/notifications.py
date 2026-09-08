@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationCog(sd.Cog[Any]):
-    """Manage notification state and deliver queued DMs without prefix commands."""
+    """Owns the `notification-deliveries` job: a 15-second periodic DM drain, cancelled on unload."""
 
     bot: RedstoneSquid
 
@@ -44,7 +44,7 @@ class NotificationCog(sd.Cog[Any]):
 
     @app_commands.command(name="notifications", description="Manage notification channels and subscriptions")
     async def notifications(self, interaction: discord.Interaction) -> None:
-        """Open the notification preferences and subscription workspace."""
+        """Requires a consented account; `ensure_consented_account` answers the interaction otherwise."""
         account_id = await self._account_id(interaction)
         if account_id is None:
             return
@@ -58,7 +58,11 @@ class NotificationCog(sd.Cog[Any]):
         )
 
     async def process_deliveries(self) -> None:
-        """Drain a bounded DM batch; retry ambiguous failures and suspend explicit forbiddens."""
+        """Send one claimed batch of DMs.
+
+        `discord.Forbidden` suspends the DM channel; any other failure is retried and eventually
+        dead-lettered by `fail_delivery`. The nonce is the delivery nonce truncated to 63 bits.
+        """
         await self.bot.wait_until_ready()
         for delivery in await self.bot.services.notifications.claim_deliveries():
             try:
@@ -81,12 +85,12 @@ class NotificationCog(sd.Cog[Any]):
                 await self.bot.services.notifications.complete_delivery(delivery)
 
     async def _account_id(self, interaction: discord.Interaction) -> int | None:
-        """The caller's consented account, or `None` once they have been told why not."""
+        """The caller's consented account, or None after the interaction has been answered with why not."""
         return await ensure_consented_account(await sd.request(interaction), self.bot.services.accounts)
 
 
 def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None) -> str:
-    """Render transport-safe DM text from a materialized notification payload."""
+    """Plain text with no mentions; the site link is omitted when `site_url` is None or the payload has no build id."""
     build_id = delivery.payload.get("build_id")
     if delivery.kind.value == "staff_build_submitted":
         message = "A new build is awaiting staff review."

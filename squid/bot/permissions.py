@@ -38,7 +38,7 @@ ACCESS_NODES = (
 
 
 class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Permissions"):
-    """Open one capability-aware access workspace per administrator and guild."""
+    """Opens the `AccessScreen` with the tabs the caller's `ACCESS_NODES` grants unlock."""
 
     def __init__(self, bot: BotT) -> None:
         super().__init__(bot)
@@ -53,7 +53,11 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Per
         user: discord.Member | None = None,
         role: discord.Role | None = None,
     ) -> None:
-        """Open subject rules, internal roles, assignments, catalogue, and audit."""
+        """Inspect `user`, `role`, or the caller when neither is given.
+
+        Raises:
+            ValidationError: Both `user` and `role` are given.
+        """
         if user is not None and role is not None:
             message = "Choose either a user or a Discord role, not both."
             raise ValidationError(message)
@@ -93,7 +97,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Per
 
 
 def render_decision(decision: Any, subject_label: str) -> str:
-    """Render a permission decision with its winning rule first."""
+    """Markdown trace of a `Decision`; the decisive rule is first and marked, losers show the rank they lost on."""
     verdict = "ALLOWED" if decision.allowed else "DENIED"
     lines = [f"`{decision.node}` for {subject_label} → **{verdict}**", ""]
     for step in decision.trace:
@@ -120,5 +124,4 @@ def _render_step(step: TraceStep) -> str:
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Load the access-control cog."""
     await bot.add_cog(PermissionCog(bot))

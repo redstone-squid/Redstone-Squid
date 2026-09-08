@@ -28,28 +28,16 @@ def _unmark_element(element: Element, stream: StringIO | None = None):
     return stream.getvalue()
 
 
-# patching Markdown
 Markdown.output_formats["plain"] = _unmark_element  # type: ignore
 __md = Markdown(output_format="plain")  # type: ignore
 __md.stripTopLevelTags = False
 
 
 def remove_markdown(text: str) -> str:
-    """Removes Markdown formatting from a string."""
     return __md.convert(text)
 
 
 def replace_insensitive(string: str, old: str, new: str) -> str:
-    """Replaces a substring in a string case-insensitively.
-
-    Args:
-        string: The string to search and replace in.
-        old: The substring to search for.
-        new: The substring to replace with.
-
-    Returns:
-        The modified string.
-    """
     pattern = re.compile(re.escape(old), re.IGNORECASE)
     return pattern.sub(new, string)
 
@@ -65,20 +53,13 @@ def parse_dimensions(
 
 
 def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tuple[int | None, ...]:
-    """Parses a string representing dimensions.
+    """Parse '5x5' or '5x5x5'; 'x' and '*' both separate, and '?' stands for an unknown dimension.
 
-    For example, '5x5' or '5x5x5'. Both 'x' and '*' are valid separators. '?' is allowed as a placeholder for a dimension.
-
-    Args:
-        dim_str: The string to parse
-        min_dim: The minimum number of dimensions
-        max_dim: The maximum number of dimensions
-
-    Returns:
-        A list of the dimensions, the length of the list will match `max_dim`. If there are fewer dimensions than `max_dim`, the rest will be `None`.
+    The result always has `max_dim` entries, padded with None.
 
     Raises:
-        ValueError: If the number of dimensions is not between `min_dim` and `max_dim`, or the string is not parsable.
+        ValueError: the dimension count is outside `min_dim..max_dim`, an entry is not an integer, or
+            `min_dim > max_dim`.
     """
     if min_dim > max_dim:
         msg = f"min_dim must be less than or equal to max_dim. Got {min_dim=} and {max_dim=}."
@@ -106,19 +87,18 @@ def parse_dimensions(dim_str: str, *, min_dim: int = 2, max_dim: int = 3) -> tup
                 msg = f"Invalid input. Each dimension must be parsable as an integer, found {inputs}. Parsing failed at '{dim}'"
                 raise ValueError(msg) from err
 
-    # Pad with None
     return tuple(dimensions + [None] * (max_dim - len(dimensions)))
 
 
 def format_dimensions(dims: tuple[int | None, ...]) -> str:
-    """Formats a tuple of dimensions into a string."""
+    """Join with ' x ', writing None as '?'."""
     return " x ".join(str(i) if i is not None else "?" for i in dims)
 
 
 def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int | None]:
-    """Parses a string representing the door's <size>, which essentially is the hallway's dimensions.
+    """Parse a door's <size> (the hallway's width, height, depth).
 
-    None is used to represent a dimension that is not given. The value -1 is used to represent a dimension that is not applicable.
+    None is a dimension not given; -1 is a dimension that does not apply.
 
     Examples:
         "5x5x5" -> (5, 5, 5)
@@ -129,8 +109,8 @@ def parse_hallway_dimensions(dim_str: str) -> tuple[int | None, int | None, int 
     References:
         https://docs.google.com/document/d/1kDNXIvQ8uAMU5qRFXIk6nLxbVliIjcMu1MjHjLJrRH4/edit
 
-    Returns:
-        A tuple of the dimensions (width, height, depth).
+    Raises:
+        ValueError: the string is in none of the accepted forms.
     """
     if match := re.match(r"^(\d+)\s*(wide|high)$", dim_str):
         size, direction = match.groups()
@@ -151,10 +131,10 @@ type DispatchTuple[T] = tuple[Callable[[T], str], Callable[[str], T]]
 
 
 def get_formatter_and_parser_for_type[T](attr_type: type[T]) -> DispatchTuple[T]:
-    """Get the formatter and parser for a single type.
+    """Resolve by exact key, then by subhint, then by list or Optional structure; the result is cached in `dispatcher`.
 
-    Args:
-        attr_type: The type to get the formatter and parser for.
+    Raises:
+        RuntimeError: no formatter/parser pair can be derived for `attr_type`.
     """
     # We abused types so hard here that pyright needs a little help
     formatter: Callable[[T], str] | None = None
@@ -182,7 +162,6 @@ def get_formatter_and_parser_for_type[T](attr_type: type[T]) -> DispatchTuple[T]
 
 
 def handle_list[T](outer_type: type[list[T]]) -> DispatchTuple[list[T]]:
-    """Generate a formatter and parser for a list type."""
     inner_type = cast(type[T], outer_type.__args__[0])  # type: ignore
     inner_fmt, inner_parser = get_formatter_and_parser_for_type(inner_type)
 
@@ -190,16 +169,19 @@ def handle_list[T](outer_type: type[list[T]]) -> DispatchTuple[list[T]]:
         return ", ".join(inner_fmt(i) for i in lst)
 
     def _parse(lst_str: str) -> list[T]:
-        # Stripped and emptied out: the formatter writes ", " between entries, so round-tripping
-        # a list through the modal otherwise grows a leading space onto every entry after the
-        # first, and a trailing comma becomes an empty creator.
+        # The formatter writes ", ", so without stripping a round trip through the modal grows a leading
+        # space on every entry after the first, and a trailing comma becomes an empty entry.
         return [inner_parser(item) for entry in lst_str.split(",") if (item := entry.strip())]
 
     return _format, _parse
 
 
 def handle_optional[T](outer_type: type[T | type[None]]) -> DispatchTuple[T | None]:
-    """Generate a formatter and parser for an Optional type."""
+    """None formats as '' and '' parses to None.
+
+    Raises:
+        ValueError: `outer_type` is not exactly `T | None`.
+    """
     args = typing.get_args(outer_type)
     if len(args) != 2 or type(None) not in args:
         msg = f"Invalid Optional type: {outer_type}"

@@ -51,7 +51,7 @@ class BuildFieldSpec:
         display: FieldDisplay = FieldDisplay.TEXT,
         categories: frozenset[BuildCategory] | None = None,
     ) -> BuildFieldSpec:
-        """Build a specification from the shared formatter/parser registry."""
+        """`required` defaults to whether `value_type` excludes None; `label` to the title-cased patch key."""
         formatter, parser = get_formatter_and_parser_for_type(value_type)
         return cls(
             patch_key,
@@ -67,11 +67,15 @@ class BuildFieldSpec:
         )
 
     def applies_to(self, build: Build) -> bool:
-        """Whether this field belongs to the build's category."""
+        """A spec with no `categories` applies to every build."""
         return self.categories is None or build.category in self.categories
 
     def bind(self, build: Build) -> BoundBuildField:
-        """Read this field from a build into a mutable editor value."""
+        """Read this field from a build into a mutable editor value.
+
+        Raises:
+            ValueError: the patch key is not an attribute of the build.
+        """
         value = _read_edit_value(build, self.patch_key)
         if not is_bearable(value, _field_type(build, self.patch_key)):
             logger.error("Invalid hint for %s: %s", self.patch_key, type(value))
@@ -98,7 +102,10 @@ class BoundBuildField:
         return f"{self.spec.label}: {self.current_text}"
 
     def stage(self, text: str) -> None:
-        """Parse and retain a proposed form value without mutating the build."""
+        """Parse and retain a proposed value without touching the build.
+
+        A parse failure lands in `validation_error` instead of raising; text equal to `current_text` is a no-op.
+        """
         self.validation_error = None
         if text == self.current_text:
             return
@@ -184,7 +191,11 @@ def field_spec(
     display: FieldDisplay = FieldDisplay.TEXT,
     categories: frozenset[BuildCategory] | None = None,
 ) -> BuildFieldSpec:
-    """Describe a patch field using the domain model's declared value type."""
+    """Describe a patch field using the domain model's declared value type.
+
+    Raises:
+        ValueError: no portable type is registered for `patch_key`.
+    """
     value_type = _EDIT_FIELD_READERS.get(patch_key, (None, None))[1]
     if value_type is None:
         try:

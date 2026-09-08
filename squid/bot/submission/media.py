@@ -8,15 +8,16 @@ from squid.bot.utils.uploads import CatboxClient
 class MediaMirror(Protocol):
     """Mirror one Discord attachment to durable public storage."""
 
-    async def upload(self, filename: str, data: bytes, content_type: str) -> str: ...
+    async def upload(self, filename: str, data: bytes, content_type: str) -> str:
+        """Store the bytes and return their public URL."""
+        ...
 
 
 class CatboxMirror:
-    """Mirror media through the existing Catbox uploader."""
+    """Mirror media through CatboxClient."""
 
     def __init__(self, client: CatboxClient) -> None:
         self._client = client
 
     async def upload(self, filename: str, data: bytes, content_type: str) -> str:
-        """Upload bytes and return their public URL."""
         return await self._client.upload(filename, data, content_type)

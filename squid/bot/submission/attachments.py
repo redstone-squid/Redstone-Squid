@@ -1,15 +1,8 @@
 """Classification of Discord attachments before anything is downloaded.
 
-Discord derives an attachment's `content_type` from what the uploading client sent, and no
-client maps these extensions to anything, so a schematic arrives as `content_type=None` or
-`application/octet-stream`. Both were observed in production, where the submission flow raised
-a bare `AssertionError` on them and the message-scraping listener silently dropped them. The
-rules here replace both: the **extension is the primary signal** and the content type is
-advisory, because the one thing Discord will not tell us is exactly the thing we care about.
-
-Nothing here reads the file. Size is checked against the attachment metadata first, so an
-oversized upload costs us no bandwidth at all, and the real content check happens afterwards
-in :mod:`squid.schematics.domain.formats` against the bytes themselves.
+Discord reports a schematic's `content_type` as None or `application/octet-stream`, so the extension is the
+primary signal and the content type is advisory. Nothing here reads the file: size comes from the attachment
+metadata, and the byte-level check lives in `squid.schematics.domain.formats`.
 """
 
 import mimetypes
@@ -36,21 +29,14 @@ class ClassifiedAttachment:
 
 
 def classify_attachment(filename: str, content_type: str | None, size: int, *, max_bytes: int) -> ClassifiedAttachment:
-    """Decide what an attachment is, or raise a translated error explaining why we refuse it.
+    """Decide what an attachment is.
 
-    Rules, in order:
-
-    1. Size, before anything else, so we never download something we would reject.
-    2. A schematic extension wins outright. Discord sends `None` or
-       `application/octet-stream` for these, so waiting for a content type would reject every
-       one of them.
-    3. An `image/` or `video/` content type, falling back to guessing from the filename when
-       Discord reported nothing.
-    4. Anything else is refused by name, listing what we do take.
+    Size is checked first; then a schematic extension wins regardless of content type; then an `image/` or
+    `video/` type, guessed from the filename when Discord reported none.
 
     Raises:
         SchematicTooLargeError: the attachment is bigger than `max_bytes`.
-        InvalidSchematicError: the attachment is not a type this application accepts.
+        InvalidSchematicError: the attachment is none of the accepted kinds.
     """
     if size > max_bytes:
         raise SchematicTooLargeError(actual=size, limit=max_bytes, measure="file size")
@@ -67,14 +53,11 @@ def classify_attachment(filename: str, content_type: str | None, size: int, *, m
         if resolved.startswith("video/"):
             return ClassifiedAttachment("video", filename, resolved)
 
-    # `application/octet-stream` reaches here only without a schematic extension, i.e. an
-    # opaque blob we have no reason to accept.
     raise InvalidSchematicError(
         tr(t"`{filename}` is not a file type this command accepts."),
         context={"filename": filename, "content_type": content_type},
         public_context={"filename": filename, "accepted_extensions": list(ACCEPTED_EXTENSIONS)},
-        # The accepted extensions are carried in the public context rather than interpolated
-        # here: `end_user_action` is translated without parameters, so a formatted list would
-        # come back with its placeholder intact in every locale but English.
+        # `end_user_action` is translated without parameters, so the accepted extensions ride in
+        # `public_context` instead of being interpolated here.
         end_user_action=tr(t"Attach an image, a video, or a Minecraft schematic file."),
     )

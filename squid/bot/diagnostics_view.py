@@ -1,9 +1,4 @@
-"""Interactive Components V2 rendering for stored error reports.
-
-The browser is a mounted squid-ui component: the list ↔ detail switch is a state change,
-the traceback pages through the engine's budget solver (which replaced the hand-tuned
-PAGE_CHARS constant), and author lock, expiry, and error routing belong to the mount.
-"""
+"""The `/errors` screen: a paged list of stored error reports and a per-report traceback view."""
 
 import dataclasses
 import io
@@ -23,13 +18,23 @@ RECENT_LIMIT = 100
 
 
 class ErrorReportOperations(Protocol):
-    """Service operations required by the live diagnostics screen."""
+    """Error report reads and the one write the screen performs; `ErrorReportService` implements it."""
 
-    async def lookup(self, reference: str) -> tuple[ErrorReport, int]: ...
+    async def lookup(self, reference: str) -> tuple[ErrorReport, int]:
+        """The newest unexpired report matching a short reference or correlation id, and how many match.
 
-    async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]: ...
+        Raises:
+            ErrorReportNotFoundError: Nothing unexpired matches.
+        """
+        ...
 
-    async def clear_all(self) -> int: ...
+    async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
+        """Newest unexpired reports first, at least one requested; `work_lost_only` keeps abandoned-work failures only."""
+        ...
+
+    async def clear_all(self) -> int:
+        """Delete every stored report, expired or not, and return how many rows went."""
+        ...
 
 
 def _traceback_footer(page: int, pages: int) -> sl.TextLike:
@@ -47,7 +52,11 @@ ERROR_CHROME = dataclasses.replace(
 
 
 class ErrorReportScreen(sd.Screen):
-    """An error browser that ends when closed, cleared, replaced, or timed out."""
+    """Private error report browser; ends when closed, cleared, replaced, or after 300 seconds idle.
+
+    Opens straight on one report when `reference` is given, otherwise on the newest `RECENT_LIMIT`.
+    Clearing requires `can_clear` and re-checks `authorize_clear` on confirmation.
+    """
 
     session = sd.SessionSpec("errors")
     timeout = SESSION_SECONDS
@@ -86,7 +95,7 @@ class ErrorReportScreen(sd.Screen):
         )
 
     async def on_load(self) -> None:
-        """Load the requested report or the current diagnostic window after delivery wins."""
+        """Propagates `ErrorReportNotFoundError` when `reference` matches nothing."""
         if self._reference is not None:
             self._detail, self._matches = await self._operations.lookup(self._reference)
             return
@@ -108,7 +117,6 @@ class ErrorReportScreen(sd.Screen):
 
     @property
     def reports(self) -> tuple[ErrorReport, ...]:
-        """The reports the list offers."""
         return self._reports
 
     def render(self) -> sl.Document[sl.ComponentsV2Target]:
@@ -156,12 +164,11 @@ class ErrorReportScreen(sd.Screen):
         traceback_text: sl.TextLike = report.traceback.strip() or tr(t"No traceback was recorded.")
         children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.primitives.Heading(tr(t"Error {reference}")),
-            # Opens at the end because the failing frame is the last one.
+            # Opens on the last page: the failing frame is at the end.
             sl.primitives.Code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", initial="end")),
         ]
         if report.log_tail:
-            # The run-up to the failure: its last lines matter most, so it trims from the
-            # front; the attachment carries all of it.
+            # Trims from the front: the last lines before the failure matter most.
             children.append(sl.primitives.Heading(tr(t"Log tail"), level=3, priority=2))
             children.append(
                 sl.primitives.Code(
@@ -211,14 +218,14 @@ class ErrorReportScreen(sd.Screen):
 
 
 def report_attachment(report: ErrorReport) -> discord.File:
-    """Bundle the traceback and the log tail, for reading outside Discord."""
+    """`report_asset` as a `discord.File`."""
     asset = report_asset(report)
     assert isinstance(asset.source, sl.document.InlineAsset)
     return discord.File(io.BytesIO(asset.source.data), filename=asset.name)
 
 
 def report_asset(report: ErrorReport) -> sl.document.Asset:
-    """Describe the full report as a portable inline text asset."""
+    """Every stored field, the traceback and the log tail as one `error-<reference>.txt` inline asset."""
     lines = [
         f"reference: {report.reference}",
         f"correlation_id: {report.correlation_id}",
@@ -259,8 +266,7 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
     if report.work_lost:
         entries.append(sl.field(tr(t"Work lost"), tr(t"This job was abandoned; nothing will retry it.")))
     if matches > 1:
-        # The reference is a 48-bit prefix, not a key. Silently showing the newest of several
-        # would have a moderator confidently reading the wrong incident.
+        # The reference is a 48-bit prefix, not a key; the reader may be looking at the wrong incident.
         count = matches
         entries.append(
             sl.field(

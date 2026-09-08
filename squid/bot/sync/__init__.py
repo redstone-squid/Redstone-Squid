@@ -7,7 +7,6 @@ if TYPE_CHECKING:
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Register the durable reconciliation worker."""
     from squid.bot.sync.reconciler import ReconciliationCog
 
     await bot.add_cog(ReconciliationCog(bot))

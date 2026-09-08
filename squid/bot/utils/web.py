@@ -29,7 +29,10 @@ class Preview(TypedDict):
 
 
 class MediaPreviewClient:
-    """Resolve previews only from allowlisted HTTPS origins with bounded responses."""
+    """Previews for `TRUSTED_PREVIEW_HOSTS` only, LRU-cached to `MAX_PREVIEW_CACHE_ENTRIES`.
+
+    Opens its own bounded session on first use unless given one; `aclose` closes an owned one.
+    """
 
     def __init__(self, session: aiohttp.ClientSession | None = None) -> None:
         self._session = session
@@ -37,7 +40,10 @@ class MediaPreviewClient:
         self._cache: OrderedDict[str, Preview] = OrderedDict()
 
     async def get(self, url: str) -> Preview:
-        """Return cached metadata or an empty preview when the origin is not trusted."""
+        """A copy of the preview; empty for an untrusted origin, a failed or non-200 request, or an oversized page.
+
+        An image URL previews as itself; only `text/html` bodies up to `MAX_PREVIEW_PAGE_BYTES` are parsed.
+        """
         cached = self._cache.get(url)
         if cached is not None:
             self._cache.move_to_end(url)
@@ -76,7 +82,11 @@ class MediaPreviewClient:
 
 
 async def extract_first_frame(video_data: bytes, *, timeout_seconds: float = 10) -> io.BytesIO:
-    """Extract one bounded frame from already-downloaded bytes, never a remote URL."""
+    """The first frame as PNG, scaled to fit 1920x1080, via an ffmpeg subprocess fed the bytes on stdin.
+
+    Raises:
+        RuntimeError: ffmpeg fails, exceeds `timeout_seconds`, or produces more than `MAX_VIDEO_FRAME_BYTES`.
+    """
     process = await asyncio.create_subprocess_exec(
         "ffmpeg",
         "-v",
@@ -103,8 +113,7 @@ async def extract_first_frame(video_data: bytes, *, timeout_seconds: float = 10)
         async with asyncio.timeout(timeout_seconds):
             output, _error = await process.communicate(input=video_data)
     except asyncio.CancelledError:
-        # A cancellation from outside — bot shutdown, or a view timing out — would
-        # otherwise leave ffmpeg running with nobody reading its pipes.
+        # Otherwise an outside cancellation leaves ffmpeg running with nobody reading its pipes.
         process.kill()
         await process.wait()
         raise
@@ -123,7 +132,7 @@ async def extract_first_frame(video_data: bytes, *, timeout_seconds: float = 10)
 
 
 def is_trusted_preview_url(url: str) -> bool:
-    """Return whether a URL is safe for the server itself to request."""
+    """HTTPS to a `TRUSTED_PREVIEW_HOSTS` host on the default port with no credentials."""
     try:
         parsed = urlsplit(url)
         port = parsed.port

@@ -52,7 +52,12 @@ VISIBILITY_CHOICES: tuple[tuple[VoteVisibility, sl.TextLike, sl.TextLike], ...] 
 
 
 def parse_poll_duration(value: str) -> int:
-    """Parse a compact duration and return seconds within the supported range."""
+    """Parse `30m`, `12h` or `7d` into seconds.
+
+    Raises:
+        InvalidVoteConfigurationError: the text is not in that form, or the result is outside
+            `MIN_POLL_DURATION_SECONDS..MAX_POLL_DURATION_SECONDS`.
+    """
     match = _DURATION.fullmatch(value.strip())
     if match is None:
         raise InvalidVoteConfigurationError(tr(t"Duration must look like `30m`, `12h`, or `7d`."))
@@ -63,7 +68,7 @@ def parse_poll_duration(value: str) -> int:
 
 
 def format_duration(seconds: int) -> sl.TextLike:
-    """Render a duration the way the presets are labelled."""
+    """A preset's label when `seconds` matches one; otherwise whole days, else whole hours, else minutes."""
     for label, preset in DURATION_PRESETS:
         if preset == seconds:
             return label
@@ -84,7 +89,14 @@ def parse_option_lines(
     palette: Sequence[VoteOption],
     emoji_is_usable: Callable[[str], bool] = lambda _emoji: True,
 ) -> tuple[VoteOption, ...]:
-    """Validate ``emoji | label`` lines, filling missing aliases from the guild palette."""
+    """Parse `emoji | label` lines; a line without `|` is a label and takes the palette emoji at its position.
+
+    Blank lines are ignored. Options are identified "1".."n" in line order.
+
+    Raises:
+        InvalidVoteConfigurationError: fewer than 2 or more than 10 lines, a line needs a palette entry the palette
+            lacks, an emoji or label is empty, `emoji_is_usable` refuses an emoji, or two options share an emoji.
+    """
     cleaned = [line.strip() for line in lines if line.strip()]
     if not 2 <= len(cleaned) <= 10:
         raise InvalidVoteConfigurationError(tr(t"Enter between 2 and 10 option lines."))
@@ -125,8 +137,6 @@ SCOPE_CHOICES: tuple[tuple[PollScope, sl.TextLike, sl.TextLike], ...] = (
 
 @dataclass(frozen=True, slots=True)
 class PollDraft:
-    """The wizard's editable state between the form and publication."""
-
     question: str
     options_text: str
     visibility: VoteVisibility = VoteVisibility.ANONYMOUS_LIVE
@@ -139,7 +149,6 @@ class PollDraft:
 
 
 def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec:
-    """Describe the poll's free-text input through the portable form API."""
     return sl.forms.FormSpec(
         tr(t"Create a poll"),
         (
@@ -242,7 +251,10 @@ def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target]:
 
 
 class PollScreen(sd.Screen):
-    """A poll wizard that ends when published, cancelled, replaced, or timed out."""
+    """Two-step poll wizard; the network-scope choice appears only with `allow_network`.
+
+    A publish failure with `InvalidVoteConfigurationError` reopens the review step with the error as a notice.
+    """
 
     session = sd.SessionSpec("poll-wizard", scope=sd.ScopeKind.USER_GUILD)
     timeout = 900

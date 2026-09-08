@@ -19,12 +19,10 @@ DEFAULT_DEBOUNCE_DELAY = 5.0
 
 
 class StickyMessage(abc.ABC):
-    """Coordinates a sticky message pinned to the bottom of Discord channels.
+    """One bot message kept at the bottom of each channel by deleting and re-sending it.
 
-    Maintains a single message per channel by deleting the prior instance and sending a new one.
-    To avoid rate-limit churn and message spam during active conversations, repositioning is
-    debounced: it allows up to `stale_threshold` messages before forcing an immediate reposition,
-    and uses a trailing timer (`debounce_delay`) during quiet periods.
+    Repositioning is debounced against rate limits: `trigger` reposts at once after `stale_threshold` messages,
+    otherwise on a `debounce_delay` trailing timer.
     """
 
     def __init__(
@@ -47,28 +45,22 @@ class StickyMessage(abc.ABC):
 
     @abc.abstractmethod
     async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
-        """Render the presentation to display in the sticky message."""
+        """The payload to post; called under the channel's lock on every reposition."""
         ...
 
     def is_active_in(self, channel_id: int) -> bool:
-        """Whether a sticky message is currently tracked in the given channel."""
         return channel_id in self._last_message_id
 
     def get_message_id(self, channel_id: int) -> int | None:
-        """Return the ID of the current sticky message in the channel, if any."""
         return self._last_message_id.get(channel_id)
 
     def record_activity(self, channel_id: int) -> None:
-        """Record general message activity in the channel to track staleness."""
+        """Count one message toward the stale threshold; a channel with no sticky is ignored."""
         if channel_id in self._last_message_id:
             self._messages_since_reposition[channel_id] = self._messages_since_reposition.get(channel_id, 0) + 1
 
     async def trigger(self, channel: TextChannel) -> None:
-        """Request the sticky message be posted or refreshed in the channel.
-
-        If no sticky message exists or the staleness threshold has been reached, repositions
-        immediately. Otherwise, schedules a trailing debounce timer.
-        """
+        """Reposition now if the channel has no sticky or `stale_threshold` is reached; otherwise debounce."""
         channel_id = channel.id
         self.record_activity(channel_id)
         staleness = self._messages_since_reposition.get(channel_id, 0)
@@ -95,7 +87,7 @@ class StickyMessage(abc.ABC):
         self._debounce_tasks[channel_id] = asyncio.create_task(_delayed_reposition())
 
     async def reposition(self, channel: TextChannel) -> None:
-        """Force immediate deletion of the old sticky message and posting of a new one."""
+        """Delete the old sticky and post a new one now, cancelling a pending debounce; send failures are logged."""
         async with self._lock_for(channel.id):
             task = self._debounce_tasks.pop(channel.id, None)
             if task is not None and not task.done():
@@ -127,7 +119,7 @@ class StickyMessage(abc.ABC):
                 logger.warning("Failed to send sticky message in channel %s", channel.id, exc_info=True)
 
     async def dismiss(self, channel: TextChannel) -> None:
-        """Delete the current sticky message and remove it from active tracking."""
+        """Delete the sticky and stop tracking the channel, cancelling a pending debounce."""
         async with self._lock_for(channel.id):
             task = self._debounce_tasks.pop(channel.id, None)
             if task is not None and not task.done():
@@ -144,8 +136,6 @@ class StickyMessage(abc.ABC):
 
 
 class FunctionalStickyMessage(StickyMessage):
-    """A sticky message defined via a renderer callback rather than subclassing."""
-
     def __init__(
         self,
         renderer: Callable[[TextChannel], Coroutine[Any, Any, sd.message_payload.MessagePayload]],

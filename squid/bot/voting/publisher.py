@@ -1,9 +1,4 @@
-"""The narrow poll facade the wizard views talk to.
-
-The wizard used to hold the whole `VoteCog`, which gave a modal reach over reaction
-dispatch and every service on the bot. It needs exactly three things: the guild's
-emoji palette, option parsing, and "create this poll and put it in this channel".
-"""
+"""The narrow poll facade the wizard views talk to: emoji palette, option parsing, and create-and-publish."""
 
 from collections.abc import Sequence
 from dataclasses import replace
@@ -23,9 +18,16 @@ if TYPE_CHECKING:
 
 
 class PollPublisher(Protocol):
-    """Poll creation and Discord publication, as the wizard views need it."""
+    """Poll creation and Discord publication, as the wizard views need it; `DiscordPollPublisher` implements it."""
 
-    async def resolve_options(self, guild_id: int, lines: Sequence[str]) -> tuple[VoteOption, ...]: ...
+    async def resolve_options(self, guild_id: int, lines: Sequence[str]) -> tuple[VoteOption, ...]:
+        """Parse wizard option lines into options, filling missing emojis from the guild's palette.
+
+        Raises:
+            InvalidVoteConfigurationError: fewer than 2 or more than 10 lines, a line cannot be parsed, an emoji
+                repeats, or an emoji is unusable in the guild.
+        """
+        ...
 
     async def create_and_publish(
         self,
@@ -37,23 +39,23 @@ class PollPublisher(Protocol):
         duration_seconds: int,
         options: Sequence[VoteOption],
         scope: PollScope = PollScope.GUILD,
-    ) -> discord.Message: ...
+    ) -> discord.Message:
+        """Persist the poll, then post its card into `channel` and return that message."""
+        ...
 
-    async def may_create_network(self, member: discord.Member) -> bool: ...
+    async def may_create_network(self, member: discord.Member) -> bool:
+        """Whether `member` holds VOTE_POLL_NETWORK_CREATE."""
+        ...
 
 
 class DiscordPollPublisher:
-    """Publish polls into Discord channels on behalf of the wizard."""
-
     def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
         self._bot = bot
 
     async def palette(self, guild_id: int) -> tuple[VoteOption, ...]:
-        """Return the guild's configured generic emoji palette."""
         return (await self._bot.services.votes.emoji_preset(guild_id, VoteKind.GENERIC)).options
 
     async def resolve_options(self, guild_id: int, lines: Sequence[str]) -> tuple[VoteOption, ...]:
-        """Turn wizard option lines into stable options, filling aliases from the palette."""
         from squid.bot.voting.poll_wizard import parse_option_lines
 
         return parse_option_lines(
@@ -76,10 +78,8 @@ class DiscordPollPublisher:
     ) -> discord.Message:
         """Persist the poll, then hand one Discord message to the reconciler.
 
-        Creation comes first and takes no channel, so a send that fails leaves an
-        attachable poll rather than a half-made one. The card's location is a human
-        decision -- the channel the command was run in -- so it is sent here and
-        adopted, rather than the renderer inventing somewhere to put it.
+        Creation comes first, so a failed send leaves a poll `attach` can still place. The card goes where the
+        command was run, so it is sent here and adopted rather than the renderer choosing a place.
         """
         if scope is PollScope.NETWORK:
             # Aliases resolved against the author's guild would leave every other
@@ -97,13 +97,16 @@ class DiscordPollPublisher:
         return await self.attach(session_id, channel)
 
     async def may_create_network(self, member: discord.Member) -> bool:
-        """Whether `member` may publish a poll into every server's vote channel."""
         subject = await build_subject(self._bot, member, member.guild.id)
         capabilities = await self._bot.services.permissions.capabilities(subject, (VOTE_POLL_NETWORK_CREATE,))
         return VOTE_POLL_NETWORK_CREATE.name in capabilities
 
     async def attach(self, vote_session_id: int, channel: GuildMessageable) -> discord.Message:
-        """Post one card for an existing poll and let the reconcile loop own it."""
+        """Post a placeholder card for an existing poll and adopt it into the reconciler, which renders it.
+
+        Raises:
+            RuntimeError: delivery returned no message.
+        """
         result = await send_to(channel)(render_payload([text_node("Publishing poll…")]))
         message = result.message
         if message is None:
@@ -115,7 +118,7 @@ class DiscordPollPublisher:
 
 
 def _emoji_is_usable(bot: squid.bot.app.RedstoneSquid, guild_id: int, emoji: str) -> bool:
-    """Whether the bot may react with `emoji` in `guild_id`."""
+    """Unicode emoji always; a custom emoji only if it belongs to the guild and is usable."""
     parsed = discord.PartialEmoji.from_str(emoji)
     if not parsed.is_custom_emoji():
         return True

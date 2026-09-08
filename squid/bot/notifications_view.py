@@ -1,10 +1,4 @@
-"""The panel behind `/notifications`.
-
-Four commands used to answer what one screen shows: `status` read the two channels,
-`channels` wrote both, `list` printed the subscriptions, and `unfollow` took an id you had
-to read off `list` and type back. A subscription is a thing you look at and then remove, so
-looking at it and removing it belong to the same message (audit C5's retyping half).
-"""
+"""The `/notifications` screen: delivery channel toggles, follow forms, and a select-to-unfollow list."""
 
 from typing import TYPE_CHECKING, cast
 from uuid import UUID
@@ -26,7 +20,7 @@ if TYPE_CHECKING:
 SESSION_SECONDS = 300
 
 MAX_LISTED = 25
-"""A select holds 25 options, which is also as many as a card should list."""
+"""Discord's select option limit; subscriptions beyond it are counted but neither listed nor selectable."""
 
 
 def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
@@ -40,7 +34,11 @@ def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
 
 
 class NotificationScreen(sd.Screen):
-    """A notification workspace that ends when closed, replaced, or timed out."""
+    """Per-account notification preferences and subscriptions; ends when closed, replaced, or after 300 seconds idle.
+
+    Preferences and subscriptions are re-read from the service on every load and mutation rather
+    than restored from the session snapshot.
+    """
 
     session = sd.SessionSpec("notifications")
     timeout = SESSION_SECONDS
@@ -48,7 +46,6 @@ class NotificationScreen(sd.Screen):
 
     selected_ids: tuple[str, ...] = sl.state(())
     closed: bool = sl.state(default=False)
-    # Refreshed from the service by load(), so a snapshot would only restore them stale.
     _preferences: NotificationPreferences | None = sl.state(None, persist=False)
     _subscriptions: tuple[NotificationSubscription, ...] = sl.state((), persist=False)
 
@@ -67,7 +64,7 @@ class NotificationScreen(sd.Screen):
         await self._refresh()
 
     async def _refresh(self) -> None:
-        """Re-read this account's channels and follows. Also what unfollowing calls afterwards."""
+        """Re-read from the service and drop selections whose subscription is gone."""
         self._preferences = await self._notifications.preferences(self._account_id)
         self._subscriptions = tuple(await self._notifications.subscriptions(self._account_id))
         self.selected_ids = tuple(
@@ -335,10 +332,7 @@ class NotificationScreen(sd.Screen):
 
 
 def _filter_text(record_filter: RecordSubscriptionFilter) -> str:
-    """Render a structured record filter as the predicates a person wrote.
-
-    `list` used to print `str(filter.as_dict())`, dict braces and all.
-    """
+    """Predicates joined with ` · `; a tag reads `tag <id>` or `tag <id>=<value>`."""
     parts = [
         ", ".join(sorted(values))
         for values in (record_filter.build_kinds, record_filter.record_classes, record_filter.version_scopes)

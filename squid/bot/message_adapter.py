@@ -7,11 +7,7 @@ from squid.messages.domain import MessageFact
 
 
 def to_message_fact(message: discord.Message) -> MessageFact:
-    """Convert a Discord message to the plain fact recorded for it.
-
-    Accepts DMs: a fact is true regardless of where the message lives, and only the
-    guild is unknown.
-    """
+    """Accepts DMs; `guild_id` is None for them."""
     return MessageFact(
         id=message.id,
         channel_id=message.channel.id,

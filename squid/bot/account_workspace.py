@@ -1,4 +1,4 @@
-"""Canonical account workflow combining identity, consent, claims, and merge operations."""
+"""The `/account` workspace: overview, identity linking, claims, merge and (for staff) claim review tabs."""
 
 from collections.abc import Awaitable, Callable
 from typing import cast
@@ -17,7 +17,12 @@ type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class AccountWorkspace(sd.Screen):
-    """An account workspace that ends when closed, replaced, or timed out."""
+    """Tabbed account workspace; ends when closed, replaced, or after 300 seconds idle.
+
+    Tabs depend on state: no overview, claims or merge tab without a persisted account, and the
+    review tab only with `can_review_claims`. Every mutation rebuilds all tabs from the database.
+    A merge preview replaces the tabs with a confirm/cancel decision until answered.
+    """
 
     session = sd.SessionSpec("account")
     timeout = 300

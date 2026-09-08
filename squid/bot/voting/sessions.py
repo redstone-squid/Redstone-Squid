@@ -1,9 +1,7 @@
 """Starting vote sessions from Discord.
 
-Creating a session is all that happens here. Publishing and re-rendering its cards
-belong to `VoteSessionRenderer` and the reconcile loop, which is what let the session
-classes — with their hand-synchronised message sets, ten-message ceiling, and
-two-phase construction — be deleted outright.
+Only creation lives here; publishing and re-rendering cards belong to `VoteSessionRenderer` and the reconcile
+loop.
 """
 
 import logging
@@ -34,16 +32,13 @@ async def ensure_build_review(
     build: Build,
     channels: Sequence[GuildMessageable],
 ) -> int | None:
-    """Create or resume a build's initial review session and publish its cards.
+    """Create or resume a build's review session and publish its cards.
 
-    Safe to repeat: the session is created under an advisory lock keyed by build, and
-    the reconciler posts one card per configured vote channel, filling any that a
-    previous attempt missed. This is what replaced the stable-nonce send that used to
-    deduplicate a retried delivery.
+    Safe to repeat: the session is created under an advisory lock keyed by build, and the reconciler fills any
+    vote channel a previous attempt missed. Returns the session id, or None when `channels` is empty.
 
-    Returns:
-        The session id, or None when no guild has a vote channel configured and there is
-        therefore nothing to review against.
+    Raises:
+        ValueError: the build is unsaved, has no submitter account, or is not pending.
     """
     if build.id is None or build.submitter_account_id is None:
         msg = "A persisted build and submitter account are required for review."
@@ -53,11 +48,9 @@ async def ensure_build_review(
         raise ValueError(msg)
     unique_channels = tuple({channel.id: channel for channel in channels}.values())
     if not unique_channels:
-        # An unconfigured vote channel is a setup gap, not a failed submission: the build is
-        # already committed by every caller that gets here, and raising would both report a
-        # successful submission as an error and make the event handler retry it forever. The
-        # session is skipped rather than opened empty, since its options come from the guilds
-        # of the channels it would be posted to.
+        # A setup gap, not a failed submission: the build is already committed, and raising would make the event
+        # handler retry forever. The session is skipped rather than opened empty, since its options come from the
+        # guilds of the channels it would be posted to.
         logger.warning(
             "No configured Discord vote channel is available for build review; build %s has no vote card.",
             build.id,
@@ -88,11 +81,13 @@ async def start_delete_log_vote(
     target_message: discord.Message,
     published_message: discord.Message,
 ) -> int:
-    """Open a vote on deleting a logged message, rendered into an existing message.
+    """Open a vote on deleting a logged message, rendered into `published_message`.
 
-    The card's location is a human decision — the channel the command was run in — so
-    the caller sends the message and hands it over here, rather than the renderer
-    inventing somewhere to put it.
+    The card's location is the channel the command was run in, so the caller sends the message and hands it over
+    rather than the renderer choosing a place.
+
+    Raises:
+        ValueError: `target_message` is not in a guild.
     """
     if target_message.guild is None:
         msg = "Delete-log votes require a guild message."

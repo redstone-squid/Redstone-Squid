@@ -14,7 +14,6 @@ WRITABLE_EXTENSIONS = {
 
 
 def _describe(stored: StoredSchematic, *, locale: str | None, render_skip: RenderSkipReason | None = None) -> str:
-    """Render the analysis as a readable card body."""
     metrics = stored.analysis.metrics
     dimensions = metrics.dimensions
     lines = [
@@ -73,7 +72,7 @@ _CANDIDATE_LIMIT = 20
 
 
 def _describe_input_refusal(error: AmbiguousSimulationInputError, *, locale: str | None) -> str:
-    """Say why the simulator refused, then list the inputs it would accept."""
+    """The error's public detail, then up to `_CANDIDATE_LIMIT` of the inputs it would accept."""
     lines = [tr("### Simulation input not resolved"), error.public_detail()]
     if error.candidates:
         lines.append(tr("**Inputs found in this schematic**:"))

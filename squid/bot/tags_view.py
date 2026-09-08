@@ -1,4 +1,4 @@
-"""Canonical tag catalogue, contribution, and moderation workspace."""
+"""The `/tags` screen: public catalogue, propose/apply forms, proposal moderation and restriction aliases."""
 
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, Protocol, cast
@@ -20,11 +20,19 @@ from squid.tags.domain import TagDefinition, TagValueType
 
 
 class TagOperations(Protocol):
-    """Tag reads and mutations exposed by the workspace."""
+    """Tag reads and mutations the screen uses; `TagService` implements it.
 
-    async def public_definitions(self) -> Sequence[TagDefinition]: ...
+    `ValidationError` from any member is presented to the user by the UI error handler, not caught
+    here.
+    """
 
-    async def pending(self) -> Sequence[TagDefinition]: ...
+    async def public_definitions(self) -> Sequence[TagDefinition]:
+        """Approved definitions visible to public search."""
+        ...
+
+    async def pending(self) -> Sequence[TagDefinition]:
+        """User proposals awaiting moderation."""
+        ...
 
     async def propose_showcase(
         self,
@@ -33,7 +41,14 @@ class TagOperations(Protocol):
         value_type: TagValueType,
         query_name: str | None,
         created_by_account_id: int,
-    ) -> TagDefinition: ...
+    ) -> TagDefinition:
+        """Create a pending user showcase tag.
+
+        Raises:
+            ValidationError: The name is empty or over 80 characters, or `query_name` is not
+                `[a-z][a-z0-9_]*`.
+        """
+        ...
 
     async def assign_showcase(
         self,
@@ -42,19 +57,52 @@ class TagOperations(Protocol):
         raw_value: str | None,
         *,
         actor_account_id: int,
-    ) -> TagDefinition: ...
+    ) -> TagDefinition:
+        """Attach an approved user showcase tag to a build the actor submitted; returns the tag.
 
-    async def approve(self, tag_id: int) -> TagDefinition: ...
+        Raises:
+            ValidationError: The tag is not an approved user showcase tag, `raw_value` does not fit
+                its value type, or the build is missing or not the actor's.
+        """
+        ...
 
-    async def reject(self, tag_id: int) -> TagDefinition: ...
+    async def approve(self, tag_id: int) -> TagDefinition:
+        """Publish a pending tag.
 
-    async def archive(self, tag_id: int) -> TagDefinition: ...
+        Raises:
+            TagNotFoundError: No tag has this id.
+        """
+        ...
+
+    async def reject(self, tag_id: int) -> TagDefinition:
+        """Reject a proposal, keeping its row.
+
+        Raises:
+            TagNotFoundError: No tag has this id.
+        """
+        ...
+
+    async def archive(self, tag_id: int) -> TagDefinition:
+        """Hide a published tag, keeping its assignments.
+
+        Raises:
+            TagNotFoundError: No tag has this id.
+        """
+        ...
 
 
 class RestrictionOperations(Protocol):
-    """Restriction taxonomy mutation exposed by the workspace."""
+    """The one restriction write the screen performs; `RestrictionService` implements it."""
 
-    async def add_alias(self, restriction: str, alias: str) -> None: ...
+    async def add_alias(self, restriction: str, alias: str) -> None:
+        """Add `alias` to the restriction named or aliased `restriction`.
+
+        Raises:
+            RestrictionNotFoundError: `restriction` names nothing.
+            AliasAlreadyAddedError: `alias` already resolves to this restriction.
+            AliasInUseError: `alias` resolves to a different restriction.
+        """
+        ...
 
 
 type TagAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
@@ -62,7 +110,7 @@ type ModerationRequest = Callable[[sl.PressEvent, TagDefinition, str], Awaitable
 
 
 class _ModerationActions(sl.Component[sl.ComponentsV2Target]):
-    """Portable actions for one tag detail."""
+    """A tag's fields plus one button per moderation action; reject and archive are danger-toned."""
 
     def __init__(
         self,
@@ -93,7 +141,12 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target]):
 
 
 class TagsScreen(sd.Screen):
-    """A tag workspace that ends when closed, replaced, or timed out."""
+    """Tabbed tag workspace; ends when closed, replaced, or after 300 seconds idle.
+
+    Tabs follow `capabilities`: moderation needs `TAG_PROPOSAL_LIST`, aliases need
+    `RESTRICTION_ALIAS_CREATE`. Contribution forms need `actor_account_id`. Every moderation
+    action goes through a confirm decision and re-checks `authorize` on confirmation.
+    """
 
     session = sd.SessionSpec("tags")
     timeout = 300

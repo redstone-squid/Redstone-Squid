@@ -9,6 +9,4 @@ if TYPE_CHECKING:
 
 
 class BuildCommandGroup[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
-    """Own the app-only build command group."""
-
     build_group = sd.Group(name="build", description="Browse and submit redstone builds")

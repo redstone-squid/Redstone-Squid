@@ -1,4 +1,4 @@
-"""A cog with commands to submit builds."""
+"""Build submission command and build-log ingestion."""
 
 import asyncio
 import logging
@@ -50,8 +50,6 @@ def _split_list(value: str) -> list[str]:
 
 
 class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[BotT]):
-    """A cog with commands to submit builds."""
-
     bot: BotT
     builds: BuildService
     inference: BuildInferenceService
@@ -97,8 +95,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         fourth_attachment: discord.Attachment | None = None,
     ) -> sd.CommandResult:
         """Submit a build. Every field is optional; a guided form picks up whatever you skip."""
-        # Before the uploads, not after: declining should not cost the user an attachment round
-        # trip, and the notice describes exactly what submitting a build publishes.
+        # Consent before the uploads: declining should not cost the user an attachment round trip.
         uploader_account_id = await ensure_consented_account(request, self.bot.services.accounts)
         if uploader_account_id is None:
             return None
@@ -157,21 +154,15 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             else:
                 pending_schematics.append((url, data))
 
-        # Prefilling only fills a gap: a declared build size is never overwritten, because a
-        # schematic export is frequently cropped to the mechanism and legitimately smaller than
-        # the build a person measured. The form shows the prefill as an editable default, and
-        # whatever the human submits wins from that point on.
+        # A declared build size is never overwritten: a schematic export is often cropped to the mechanism and
+        # smaller than the build a person measured. The prefill is only an editable default in the form.
         analyses = await self._analyse_attachments(pending_schematics, uploader_account_id=uploader_account_id)
         if analyses and not any(item is not None for item in draft.dimensions):
             measured = analyses[0][1].analysis.metrics.dimensions
             draft.dimensions = (measured.width, measured.height, measured.length)
 
         async def persist_draft() -> SubmissionOutcome:
-            """Commit the draft from inside the form's submit button.
-
-            Anything raised here leaves the workspace message alive and clickable, so the user
-            retries from the draft they already filled in instead of rerunning the command.
-            """
+            """Runs from the form's submit button; anything raised leaves the workspace alive to retry from."""
             build = draft.finalize()
             self._note_dimension_mismatch(build, analyses)
             await self._note_schematic_duplicates(build, analyses)
@@ -186,12 +177,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     async def _analyse_attachments(
         self, pending: Sequence[tuple[str, bytes]], *, uploader_account_id: int
     ) -> list[tuple[IngestRequest, IngestedSchematic]]:
-        """Analyze uploaded schematics, dropping any the engine cannot read.
-
-        A schematic is enrichment, not a prerequisite: a corrupt file, a missing engine, or a
-        crashed worker must leave the submission itself working, so every failure here is
-        logged and skipped rather than raised at the user mid-form.
-        """
+        """Analyze uploaded schematics; a file the engine cannot read is logged and dropped, never raised mid-form."""
         schematics = self.bot.services.schematics
         if not schematics.available:
             return []
@@ -255,11 +241,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
 
     @staticmethod
     def _note_dimension_mismatch(build: Build, analyses: Sequence[tuple[IngestRequest, IngestedSchematic]]) -> None:
-        """Record, but never silently resolve, a disagreement between human and file.
+        """Record a declared-vs-measured size disagreement in `extra_info` for reviewers; the declared value stands.
 
-        The declared value wins: a schematic export is frequently cropped to the mechanism and
-        legitimately smaller than the build a person measured. Overwriting it would corrupt the
-        record, so the discrepancy is surfaced as visible evidence for the reviewers instead.
+        A schematic export is often cropped to the mechanism, so the file is not trusted over the person.
         """
         if not analyses:
             return
@@ -273,11 +257,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         )
 
     def _is_build_log_message(self, message: Message) -> bool:
-        """Whether inference has anything to read this message for.
-
-        Split out of the listener so the right-click can say "not a build log message" instead
-        of reporting a recalculation that never ran.
-        """
+        """Human-authored and posted in a text channel configured as a build log."""
         return (
             not message.author.bot
             and isinstance(message.channel, discord.TextChannel)
@@ -286,7 +266,6 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
 
     @sd.Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
-        """Infer a build from a message."""
         if not self._is_build_log_message(message):
             return
         assert isinstance(message.channel, discord.TextChannel)
@@ -320,11 +299,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
 
     @sd.context_menu(name="Recalculate Build", defer="private")
     async def recalc_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
-        """Re-read a build out of the message that was right-clicked.
+        """Re-run inference on one message; requires BUILD_SUBMISSION_RECALC.
 
-        This was `/build recalc <message>`, which in slash form meant copying a link to a
-        message and pasting it back at the bot (audit C4). Inference is a judgement about one
-        specific message, which is what a message context menu is.
+        Refuses a message outside a build log channel or from an author who has not consented.
         """
         # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
         await enforce(request, BUILD_SUBMISSION_RECALC)

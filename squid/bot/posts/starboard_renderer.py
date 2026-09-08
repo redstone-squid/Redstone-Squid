@@ -26,11 +26,7 @@ class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
 
     resource_kind: ResourceKind = "starboard_entry"
     repost_if_deleted: bool = True
-    """A starboard post is a mirror of something else, so a missing one is damage.
-
-    This is the opposite of a build card, where deletion is a moderator's decision.
-    Both policies now sit on the renderer instead of being re-derived per surface.
-    """
+    """A starboard post mirrors something else, so a missing one is damage to repair."""
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
@@ -73,7 +69,7 @@ class StarboardEntryRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         ]
 
     async def after_send(self, resource_key: str, message: discord.Message) -> None:
-        """Seed the board's own reaction aliases so readers can vote from the mirror."""
+        """Add the board's own vote emojis to the mirror; stops at the first Forbidden."""
         starboard_id, _, origin_message_id = resource_key.partition(":")
         state = await self.bot.services.starboards.entry_state(int(starboard_id), int(origin_message_id))
         if state is None:

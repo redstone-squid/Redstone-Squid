@@ -1,10 +1,7 @@
-"""squid-ui glue: localized chrome, house colours, and the semantic layout vocabulary.
+"""The bot's squid_ui host wiring: translated chrome, the house palette, and card/text node builders.
 
-This module is the bot's front door to the `squid_ui` package. The package resolves text,
-while this host supplies the gettext catalogue and translatable chrome messages.
-
-The bot owns only localized chrome and audience policy; rendering and delivery stay in
-``squid_ui``.
+Rendering and delivery stay in `squid_ui` and `squid_ui_discord`; this module only supplies what
+they cannot know about the host.
 """
 
 from collections.abc import Sequence
@@ -49,22 +46,18 @@ __all__ = [
 
 @dataclass(frozen=True, slots=True)
 class CardField:
-    """A labelled value rendered inside a card."""
-
     name: ui.TextLike
     value: ui.TextLike
 
 
 @dataclass(frozen=True, slots=True)
 class CardSection:
-    """A titled group of related values rendered inside a card."""
-
     title: ui.TextLike
     fields: Sequence[CardField]
 
 
 def _try_again_in(seconds: float) -> ui.text.Message:
-    """Round a guard's remaining cooldown up to whole seconds before wording it."""
+    """Rounds up, never below one second."""
     whole = max(1, ceil(seconds))
     return tr(t"Try again in {whole} seconds.")
 
@@ -133,7 +126,7 @@ def render_item(
     localization: ui.text.Localization = ui.text.NEUTRAL,
     reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
 ) -> discord.ui.Item[Any]:
-    """Render one node to a detached item through the bot's chrome and catalogue."""
+    """`squid_ui_discord.render_item` with the bot's chrome and palette."""
     return sd.render_item(
         node,
         chrome=CHROME,
@@ -150,7 +143,7 @@ def render_payload(
     strict: bool = False,
     reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
 ) -> sd.message_payload.MessagePayload:
-    """Render a complete Discord payload through the bot's chrome and catalogue."""
+    """`squid_ui_discord.render_static` with the bot's chrome and palette."""
     return sd.render_static(
         nodes,
         chrome=CHROME,
@@ -162,7 +155,7 @@ def render_payload(
 
 
 def truncate_display_text(content: str, limit: int) -> str:
-    """Fit text into a Discord display budget with an explicit marker."""
+    """Clip to `limit` characters, the last one an ellipsis; a limit of 0 yields the empty string."""
     if len(content) <= limit:
         return content
     if limit <= 1:
@@ -171,19 +164,17 @@ def truncate_display_text(content: str, limit: int) -> str:
 
 
 async def _component_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
-    # Imported lazily to keep error handling independent from the command UI catalogue.
+    # Lazy: squid.bot.errors imports this module.
     from squid.bot.errors import handle_interaction_error
 
     await handle_interaction_error(interaction, error, surface=f"component:{source}")
 
 
 HOST_DEFAULTS = sd.MessageRootDefaults(chrome=CHROME, palette=PALETTES.resolve(), on_error=_component_error_hook)
-"""What the bot installs with: the chrome and error handling every panel shares.
+"""Chrome, palette and error hook shared by every panel.
 
-Only the half that can be written down as a value. The other half -- a challenge presenter,
-which needs the session registry and the background runner -- is assembled by
-`sd.install` and reached back through `DiscordUIRuntime.of`, so a panel built from a click
-gets the same wiring as one opened through `bot.mounts`.
+Only the value half of the runtime defaults; the challenge presenter needs the session registry
+and is assembled by `squid_ui_discord.install`.
 """
 
 
@@ -192,8 +183,7 @@ def _fields(fields: Sequence[CardField]) -> tuple[ui.semantic.Field, ...]:
 
 
 def _groups(sections: Sequence[CardSection]) -> tuple[ui.semantic.Section, ...]:
-    # A nested section per group: each field steps its own Condense ladder independently
-    # rather than a whole group stepping in lockstep — finer-grained, not a regression.
+    # A nested section per group lets each field step its own Condense ladder independently.
     return tuple(ui.section(ui.heading(s.title), ui.fields(*_fields(s.fields))) for s in sections if s.fields)
 
 
@@ -207,15 +197,15 @@ def card_node(
     footer: ui.TextLike | None = None,
     media: Sequence[str] = (),
 ) -> ui.LayoutNode[ui.ComponentsV2Target]:
-    """Build a semantic card that can be composed inside a component render."""
+    """A section card; `media[0]` is the thumbnail, the rest a gallery; empty sections are dropped.
+
+    Under length pressure the description truncates before any field or the footer loses text.
+    """
     extra_media = media[1:]
     return ui.section(
         ui.heading(title),
-        # The body is the card's shock absorber: truncate lets it give up characters under
-        # pressure before a field or the footer loses any.
         description and ui.truncate(ui.paragraph(description)),
-        # `fields`/`extra_media` are tuples: an empty one is falsy but not `False`, and
-        # `_children` only skips `None`/`False`, so the truthiness check must be explicit.
+        # `_children` skips only `None`/`False`; an empty tuple would be rendered, hence `bool()`.
         bool(fields) and ui.fields(*_fields(fields)),
         *_groups(sections),
         bool(extra_media) and ui.media(*extra_media, key="media"),
@@ -226,9 +216,8 @@ def card_node(
 
 
 def text_node(content: ui.TextLike, *, accent_colour: int | None = None) -> ui.LayoutNode[ui.ComponentsV2Target]:
-    """Build a truncating text response for composition inside a component render."""
-    # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
-    # on an overlong message. This is the bot's most-used reply path, so it clips.
+    """A paragraph that clips rather than raises when the message is too long."""
+    # A bare paragraph lowers to Never and raises on overflow; this is the bot's most-used reply path.
     node: ui.LayoutNode[ui.ComponentsV2Target] = ui.truncate(ui.paragraph(content))
     if accent_colour is not None:
         node = ui.block(node, accent=accent_colour)
@@ -245,7 +234,7 @@ def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
 
 
 def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target]:
-    """Build an error card for composition inside a component render."""
+    """Red card with the description prefixed by `:x:`."""
     return card_node(
         title,
         _prefixed(":x: ", description or ""),
@@ -254,7 +243,6 @@ def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.Layout
 
 
 def info_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target]:
-    """Build an informational card for composition inside a component render."""
     return card_node(title, description, accent_colour=DISCORD_GREEN)
 
 
@@ -265,7 +253,6 @@ def link_node(
     description: ui.TextLike | None = None,
     label: ui.TextLike = _OPEN_LINK,
 ) -> ui.LayoutNode[ui.ComponentsV2Target]:
-    """Build a link card for composition inside a component render."""
     return ui.section(
         ui.heading(title),
         description and ui.truncate(ui.paragraph(description)),

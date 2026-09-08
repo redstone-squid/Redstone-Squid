@@ -43,5 +43,4 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Diagnostics(bot))

@@ -22,23 +22,39 @@ type BoardCreator = Callable[[int, str, float], Awaitable[StarboardConfig]]
 
 
 class StarboardOperations(Protocol):
-    """Starboard reads and writes used by the configuration screen."""
+    """Starboard reads and writes used by the configuration screen; `StarboardService` is the implementation."""
 
-    async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]: ...
+    async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]:
+        """Every board configured for the guild."""
+        ...
 
-    async def get(self, guild_id: int, name: str) -> StarboardConfig | None: ...
+    async def get(self, guild_id: int, name: str) -> StarboardConfig | None:
+        """The board with that name, or None."""
+        ...
 
-    async def delete_starboard(self, guild_id: int, name: str) -> bool: ...
+    async def delete_starboard(self, guild_id: int, name: str) -> bool:
+        """Disable the board, keeping its audit history; False when no such board exists."""
+        ...
 
-    async def update_settings(self, guild_id: int, name: str, **settings: object) -> StarboardConfig | None: ...
+    async def update_settings(self, guild_id: int, name: str, **settings: object) -> StarboardConfig | None:
+        """Apply `EDITABLE_SETTINGS` values by key; None when no such board exists."""
+        ...
 
-    async def set_emojis(self, config: StarboardConfig, emojis: tuple[StarboardEmoji, ...]) -> None: ...
+    async def set_emojis(self, config: StarboardConfig, emojis: tuple[StarboardEmoji, ...]) -> None:
+        """Replace the board's whole emoji set."""
+        ...
 
-    async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None: ...
+    async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None:
+        """Set a role's vote weight; None removes it.
+
+        Raises:
+            ValidationError: `multiplier` is not finite and positive.
+        """
+        ...
 
 
 class StarboardScreen(sd.Screen):
-    """A guild starboard workspace that ends when closed, replaced, or timed out."""
+    """Per-guild starboard configuration; a tab appears only for the capabilities the actor holds."""
 
     session = sd.SessionSpec("starboard", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300

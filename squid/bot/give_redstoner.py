@@ -1,5 +1,5 @@
 # type: ignore
-"""Magical stuff, don't worry about it."""
+"""Redstoner role automation for the owner guild: grants from starboard messages and the self-remove prank button."""
 
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Protocol, Self, cast
@@ -25,11 +25,13 @@ if TYPE_CHECKING:
 
 
 class _OwnerGuildClient(Protocol):
+    """The one client attribute `OwnerGuildOnly` reads."""
+
     owner_server_id: int
 
 
 class OwnerGuildOnly[BotT: discord.Client](sd.routing.Middleware[BotT]):
-    """Silently ignore durable role controls outside the configured owner guild."""
+    """Drops routed presses from outside `owner_server_id` without answering the interaction."""
 
     async def dispatch(
         self,
@@ -51,7 +53,7 @@ remove_redstoner_role = _feature_route(redstoner_roles, "self:remove", aliases=(
 
 @redstoner_roles.route(remove_redstoner_role)
 async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.RedstoneSquid]) -> None:
-    """Let a member drop the redstoner role the bot gave them."""
+    """Remove the role, announce it to the owner in the redstoner corner, then give it back 10 seconds later."""
     assert interaction.guild is not None
     member = interaction.user
     community = interaction.client.community_config
@@ -100,7 +102,11 @@ type PanelPublisher = Callable[[], Awaitable[None]]
 
 
 class RedstonerScreen(sd.Screen):
-    """A Redstoner deployment screen that ends when closed, replaced, or timed out."""
+    """Shows the configured role and channel, with a deploy button for `REDSTONER_PANEL_MANAGE` holders.
+
+    One per user per guild; ends when closed, replaced, or after 300 seconds idle. Deploying
+    re-checks `authorize_deploy` and posts the persistent panel into the invoking channel.
+    """
 
     session = sd.SessionSpec("redstoner", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300
@@ -166,7 +172,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     @app_commands.guild_only()
     @hide_unless(manage_roles=True)
     async def redstoner(self, request: sd.Request[Self]) -> sd.CommandResult:
-        """Open deployment status for the configured owner server."""
+        """Refuses guilds other than `owner_server_id` after the permission check."""
         await enforce(request, REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC, mode="any")
         guild = request.guild
         if guild is None or guild.id != self.bot.owner_server_id:
@@ -181,8 +187,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             await send_to(channel)(
                 render_payload(
                     [
-                        # One persistent panel is shared by the whole channel, so a
-                        # requester's locale would be misleading for everyone else.
+                        # Untranslated: the panel is shared by the whole channel, not the requester.
                         sl.primitives.Text("Redstoner role controls"),
                         sl.action_controls(
                             sl.routed_action_control(
@@ -213,7 +218,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         default_permissions=discord.Permissions(manage_roles=True),
     )
     async def resync_redstoner_context(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
-        """Reprocess the selected message for Redstoner role automation."""
+        """Re-run `give_redstoner_from_message` on a message in the owner guild."""
         await enforce(request, REDSTONER_ROLE_RESYNC)
         guild = request.guild
         if guild is None or guild.id != self.bot.owner_server_id or message.guild != guild:
@@ -222,7 +227,10 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         return text_node(tr("Redstoner automation resynced."))
 
     async def give_redstoner_from_message(self, message: discord.Message) -> None:
-        """Give the redstoner role to a user based on a Starboard message."""
+        """Grant the role to the member a starboard threshold message names, and announce it.
+
+        Malformed messages get a reply explaining why; a missing role is reported in the channel.
+        """
         decision = self.service.evaluate(
             author_id=message.author.id,
             channel_id=message.channel.id,

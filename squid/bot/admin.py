@@ -1,4 +1,4 @@
-"""Various admin commands for the bot."""
+"""Tag moderation, message archiving and owner-only maintenance commands."""
 
 import re
 from typing import TYPE_CHECKING, Literal, Self, override
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 
 class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
-    """Cog for admin commands."""
+    """Subscribes to the reaction router for the archived-copy delete reaction; unsubscribes on unload."""
 
     def __init__(self, bot: BotT):
         super().__init__(bot)
@@ -48,7 +48,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     @sd.command(name="tags", description="Browse, apply, propose, and moderate build tags")
     @app_commands.rename(build_id="build")
     async def tags_workspace(self, request: sd.Request[Self], build_id: int | None = None) -> TagsScreen:
-        """Open the capability-aware build tag workspace."""
+        """Callers without a consented account get a read-only actor (`actor_account_id=None`)."""
         nodes = (
             TAG_PROPOSAL_LIST,
             TAG_PROPOSAL_APPROVE,
@@ -87,7 +87,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         default_permissions=discord.Permissions(manage_messages=True),
     )
     async def archive_message_context(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
-        """Archive the message selected through Discord's Apps menu."""
+        """Refuses messages from another guild than the one the menu was opened in."""
         await enforce(request, MESSAGE_ARCHIVE_CREATE)
         if request.guild is None or message.guild != request.guild:
             return text_node(tr("That message is not from this server."))
@@ -95,7 +95,11 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         return text_node(tr("Message archived."))
 
     async def _archive_message(self, message: discord.Message) -> None:
-        """Copy one message in place and remove the original."""
+        """Repost the message as the bot, then delete the original.
+
+        The copy's first line is the `<@author> ... wrote:` header that `on_reaction_add` matches, so
+        the original author can delete the copy by reacting with the cross mark.
+        """
         if isinstance(message.author, discord.User):
             user = message.author
         else:
@@ -142,18 +146,18 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await message.delete()
 
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
-        """Ignore removals from archived messages."""
+        """No-op; only additions are acted on."""
 
     async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
-        """Ignore clears from archived messages."""
+        """No-op."""
 
     async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
-        """Ignore emoji clears from archived messages."""
+        """No-op."""
 
     @sd.prefix_command(name="s", hidden=True)
     @commands.is_owner()
     async def sync(self, request: sd.Request[Self], guilds: Greedy[discord.Object], spec: Literal["~", "*", "^"] | None = None) -> sd.CommandResult:  # fmt: skip
-        """Syncs the slash commands with the discord API."""
+        """Sync slash commands: no args is global; `~` current guild, `*` copies globals to the guild first, `^` clears it."""
         tree = self.bot.tree
         if not guilds:
             if spec == "~":
@@ -202,8 +206,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             label=tr("Open database"),
         )
 
-    # Not `error`: that name now belongs to the stored-error lookup group, which is the command
-    # someone reaches for while holding a reference a user reported.
+    # Not `error`: too close to `/errors`, the stored-report lookup.
     @sd.prefix_command(name="raise-error", aliases=["e"], hidden=True, pending="Working…")
     @commands.is_owner()
     async def raise_error(self, request: sd.Request[Self]) -> sd.CommandResult:
@@ -213,5 +216,4 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
-    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(Admin(bot))

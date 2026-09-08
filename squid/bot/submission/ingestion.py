@@ -28,15 +28,18 @@ async def ingest_message_bundle(
     include_images: bool = True,
     dry_run: bool = False,
 ) -> list[Build]:
-    """Infer, mirror, analyze, submit, and track one message bundle."""
+    """Infer builds from one message bundle and submit them as AI-generated.
+
+    With `dry_run` the finalized drafts are returned unsubmitted. An attachment that cannot be read, mirrored,
+    analyzed or recorded is logged and skipped; only inference and submission errors propagate.
+    """
     bundle = await assemble_bundle(primary, preceding=preceding, include_images=include_images)
     drafts = await services.build_inference.infer(
         bundle,
         model=model,
         reasoning_effort=reasoning_effort,
     )
-    # Inference may leave the category open; finalization needs one, and a build
-    # log bundle without a clearer signal is overwhelmingly a door.
+    # Finalization needs a category, and a build-log bundle without a clearer signal is overwhelmingly a door.
     for draft in drafts:
         draft.category = draft.category or BuildCategory.DOOR
     if not drafts or dry_run:

@@ -22,11 +22,15 @@ if TYPE_CHECKING:
 
 
 class RecordOperations(Protocol):
-    """Record diagnostics and exact lookup operations."""
+    """Record diagnostics and exact lookup operations; `RecordService` is the implementation."""
 
-    async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]: ...
+    async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
+        """Active record categories missing decisive evidence; every kind when `kind` is None."""
+        ...
 
-    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]: ...
+    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
+        """Active record titles whose taxonomy needs review; every kind when `kind` is None."""
+        ...
 
     async def materialize_definition(
         self,
@@ -34,27 +38,42 @@ class RecordOperations(Protocol):
         *,
         kind: BuildKind,
         version_id: int | None = None,
-    ) -> RebuildSummary: ...
+    ) -> RebuildSummary:
+        """Recompute the exact category an existing definition identifies.
 
-    async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary: ...
+        Raises:
+            RecordDefinitionNotFoundError: no definition has that id.
+            ValidationError: the definition is not of `kind`.
+        """
+        ...
+
+    async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
+        """Persist the requested exact category and rebuild its kind.
+
+        Raises:
+            NoMatchingRecordCategoryError: no confirmed build competes in that category.
+        """
+        ...
 
 
 class RecordComputationOperations(Protocol):
-    """Record rebuild operation exposed by the maintenance tab."""
+    """Record rebuild operation exposed by the maintenance tab; `RecordComputationService` is the implementation."""
 
     async def rebuild(
         self,
         *,
         current_version_id: int | None,
         kinds: Sequence[BuildKind],
-    ) -> RebuildSummary: ...
+    ) -> RebuildSummary:
+        """Recompute every requested kind and atomically activate the results."""
+        ...
 
 
 type RecordAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class RecordsScreen(sd.Screen):
-    """A records workspace that ends when closed, replaced, or timed out."""
+    """Record diagnostics and maintenance tabs; the diagnostics tabs appear only when the actor may inspect."""
 
     session = sd.SessionSpec("records", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300
@@ -238,8 +257,6 @@ class RecordsScreen(sd.Screen):
 
 
 class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
-    """Open the record diagnostics and maintenance workspace."""
-
     def __init__(self, bot: BotT) -> None:
         super().__init__(bot)
         self.records = bot.services.records
@@ -249,7 +266,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
     async def records_workspace(self, interaction: discord.Interaction[BotT]) -> None:
-        """Open capability-aware diagnostics, lookup, and rebuild tools."""
+        """Requires RECORD_ENTRY_INSPECT or RECORD_ENTRY_REBUILD; the screen shows only what the actor holds."""
         await enforce(interaction, RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
 
         async def authorize(node: PermissionNode) -> bool:
@@ -268,5 +285,4 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Load the records workspace cog."""
     await bot.add_cog(RecordCog(bot))

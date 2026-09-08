@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
-    """Listens for built-in welcome messages and occasionally mirrors them elsewhere."""
+    """Mirrors Discord's built-in join messages into the configured general channel, mentioning the member."""
 
     def __init__(self, bot: BotT):
         self.bot = bot
@@ -28,7 +28,7 @@ class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @Cog.listener(name="on_message")
     async def maybe_forward_welcome_message(self, message: discord.Message):
-        """Forward some welcome system messages to the general channel."""
+        """Relay a `new_member` system message, 30 seconds late so the member is in the guild cache."""
         if not self.service.should_consider(
             channel_id=message.channel.id,
             is_new_member_message=message.type is discord.MessageType.new_member,
@@ -41,7 +41,7 @@ class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             logger.warning("General channel %s is not messageable", self.general_channel_id)
             return
 
-        await asyncio.sleep(30)  # Wait to ensure the member is already cached from on_member_join
+        await asyncio.sleep(30)
         decision = self.service.resolve(message.system_content)
         if decision is None:
             logger.warning("Could not find member for welcome message: %s", message.system_content)
@@ -61,10 +61,9 @@ class WelcomeRelay[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @Cog.listener(name="on_member_join")
     async def track_new_member(self, member: discord.Member):
-        """Track a new member who joined, so we can match them to the welcome message later."""
+        """Record the join so the later welcome message can be matched back to a member id."""
         self.service.record_join(member.id, member.name)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
-    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(WelcomeRelay(bot))

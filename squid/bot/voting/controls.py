@@ -1,18 +1,10 @@
 """The buttons a generic poll's own card carries.
 
-Closing and refreshing a poll used to be `/poll close` and `/poll refresh`, each taking a
-`discord.Message` — which in slash form means pasting a link to the card you are already
-looking at (audit C4). Both gestures belong on the card, so they live here as routed
-controls, and the poll a click refers to is the message the button sits on: nothing is
-encoded in the custom id, because nothing has to be.
+The poll a click refers to is the message the button sits on; nothing is encoded in the custom id. Neither action
+stores anything about the clicker, so neither asks for consent: the account id is read, never minted.
 
-Neither action stores anything about whoever clicked, so neither asks for consent. The
-account id below is read, never minted; someone without one cannot be the poll's author,
-and staff closing another person's poll should not gain an account row for it.
-
-Labels are not translated. One card is read by everyone in the channel, so rendering it in
-the guild's locale would still be the wrong language for most of them; what a click
-*replies* is translated, because that reply has exactly one reader.
+Labels are not translated, since one card is read by everyone in the channel; what a click replies is, because
+that reply has one reader.
 """
 
 from typing import TYPE_CHECKING, Any
@@ -76,7 +68,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
         await bot.refresh_posts("vote_session", str(result.session.id))
     text = tr("Poll weights refreshed.")
     if not result.complete:
-        # A count, not the raw account ids the command used to print (audit C5).
+        # A count only; account ids are not shown to users.
         text += " " + tr(
             "{count} voter(s) could not be resolved, so their cached weight was kept.",
             count=len(result.unresolved_account_ids),
@@ -87,10 +79,9 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
 async def _authorize(
     interaction: discord.Interaction[squid.bot.app.RedstoneSquid],
 ) -> tuple[VoteSessionSnapshot, VoteActor] | None:
-    """The session and actor behind a click, or `None` once the click has been refused.
+    """The session and actor behind a click, or None once the click has been refused.
 
-    Refreshing recomputes the weights a close would act on, so both controls are gated by
-    the session's own `can_close` rather than by a second copy of the rule.
+    Both controls are gated by the session's `can_close`: refreshing recomputes the weights a close acts on.
     """
     bot = interaction.client
     message = interaction.message

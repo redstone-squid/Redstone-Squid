@@ -99,8 +99,6 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
     BuildEditCommands[BotT],
     BuildSubmitCommands[BotT],
 ):
-    """Own app-only search, build browsing, and build submission."""
-
     def __init__(self, bot: BotT):
         super().__init__(bot)
         self.queries = bot.services.build_queries
@@ -127,7 +125,6 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
         *,
         query: str,
     ) -> SearchScreen:
-        """Search records, builds, patterns, and restrictions using text and field filters."""
         return await self._search_screen(scope=scope, sort=sort, mode=mode, query=query)
 
     async def _search_screen(
@@ -196,7 +193,7 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
 
     @sd.Cog.listener("on_command_error")
     async def mention_fallback_search(self, ctx: Context[BotT], exception: commands.CommandError, /) -> None:  # type: ignore[override]
-        """Search when the bot is mentioned without a command."""
+        """Treat a bare mention followed by text as a build search."""
         if not isinstance(exception, commands.CommandNotFound):
             return
         assert ctx.command is None, "This listener should only handle non-commands."
@@ -217,5 +214,4 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Load search and build commands."""
     await bot.add_cog(SearchCog(bot))

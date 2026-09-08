@@ -1,8 +1,7 @@
-"""Keep recorded Discord message facts current.
+"""Keep recorded Discord message facts current from gateway edit and delete events.
 
-Content and liveness are properties of the message itself, so they are maintained
-from Discord's own events rather than discovered when some unrelated read happens
-to fetch the message and find it gone.
+Deletion is recorded only here and by the post reconciler; a read that finds a message gone
+does not tombstone it.
 """
 
 import logging
@@ -25,8 +24,8 @@ class MessageFactCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     @commands.Cog.listener()
     async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent) -> None:
-        # Raw payloads are partial: an embed-only update carries no "content" key at
-        # all, which is not the same as an edit that cleared the message body.
+        # Raw payloads are partial: an embed-only update has no "content" key, unlike an edit that
+        # cleared the body.
         if "content" not in payload.data:
             return
         await self.bot.services.messages.record_edit(payload.message_id, payload.data["content"])

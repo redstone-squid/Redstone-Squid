@@ -17,7 +17,7 @@ class MediaUploadError(InfrastructureError):
 
 
 class CatboxClient:
-    """Upload public media through one reusable, explicitly bounded session."""
+    """Catbox uploader; opens its own bounded session on first use unless given one. `aclose` closes an owned one."""
 
     def __init__(self, config: CatboxConfig, session: aiohttp.ClientSession | None = None) -> None:
         self._config = config
@@ -25,7 +25,12 @@ class CatboxClient:
         self._owns_session = session is None
 
     async def upload(self, filename: str, file: bytes | io.BytesIO, mimetype: str) -> str:
-        """Upload bytes and return a validated Catbox file URL."""
+        """Upload and return the `files.catbox.moe` URL.
+
+        Raises:
+            MediaUploadError: the host is unreachable, answers non-200, or returns an oversized, undecodable or
+                non-file-URL body.
+        """
         session = self._session
         if session is None:
             session = aiohttp.ClientSession(
@@ -68,7 +73,11 @@ class CatboxClient:
 
 
 def validate_catbox_url(value: str) -> str:
-    """Accept only Catbox's HTTPS file origin, never an error string or active URL."""
+    """Accept only an `https://files.catbox.moe/<path>` URL without credentials or a non-default port.
+
+    Raises:
+        MediaUploadError: anything else, including Catbox's plain-text error strings.
+    """
     url = value.strip()
     parsed = urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname != "files.catbox.moe" or not parsed.path.strip("/"):

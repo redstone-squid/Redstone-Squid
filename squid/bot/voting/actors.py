@@ -1,7 +1,6 @@
 """The Discord side of who is voting, and why a ballot was refused.
 
-Both halves used to live on `VoteCog`, which made them unreachable from a button on a
-vote card: a component callback has an interaction and a client, not a cog.
+Module-level so a button callback, which has an interaction and a client but no cog, can reach both.
 """
 
 from typing import TYPE_CHECKING
@@ -28,10 +27,9 @@ REJECTION_MESSAGES = {
     VoteRejection.WRONG_GUILD: tr(t"That vote belongs to a different server."),
     VoteRejection.NOT_AUTHORIZED: tr(t"Only the poll creator or staff can do that."),
 }
-"""One localizable sentence per typed rejection.
+"""One localizable sentence per rejection.
 
-Keyed by the enum rather than formatted from it, so adding a rejection to the domain
-fails the lookup here instead of leaking `not_eligible` into a user's channel.
+Keyed by the enum so a new domain rejection fails the lookup here instead of leaking its name into a channel.
 """
 
 
@@ -41,15 +39,10 @@ def describe_rejection(rejection: VoteRejection) -> str:
 
 
 async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member, *, account_id: int) -> VoteActor:
-    """Resolve one member's vote capabilities in a single permission load.
+    """Load every vote kind's nodes in one permission read, so the caller need not say which kind it asks about.
 
-    The tiers this replaces cost up to four round trips here -- a global admin lookup, a
-    guild lookup and a settings read, twice over. Every kind's nodes are loaded together,
-    so the caller does not say which kind it is asking about.
-
-    The account id is required rather than resolved here. This used to mint one on sight,
-    which meant a raw reaction wrote a row naming somebody who had never been asked; every
-    caller now establishes consent first, and the ones that cannot ask refuse instead.
+    `account_id` is required rather than minted here: a raw reaction must not create an account for someone
+    never asked for consent, so callers establish consent first or refuse.
     """
     subject = await build_subject(bot, member, member.guild.id)
     capabilities = await bot.services.permissions.capabilities(

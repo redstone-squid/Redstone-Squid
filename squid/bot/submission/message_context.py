@@ -17,19 +17,27 @@ logger = logging.getLogger(__name__)
 
 
 class GroupableMessage(Protocol):
-    """Minimum message shape consumed by the pure grouping function."""
+    """Minimum message shape consumed by `group_messages` and `collect_lookback`."""
 
     @property
-    def id(self) -> int: ...
+    def id(self) -> int:
+        """Unique within one input sequence; `reference_id` values are matched against it."""
+        ...
 
     @property
-    def author_id(self) -> int: ...
+    def author_id(self) -> int:
+        """Messages with the same author id may share a run."""
+        ...
 
     @property
-    def created_at(self) -> datetime: ...
+    def created_at(self) -> datetime:
+        """Timestamp the run window is measured against; the input is expected in ascending order."""
+        ...
 
     @property
-    def reference_id(self) -> int | None: ...
+    def reference_id(self) -> int | None:
+        """Id of the message this one replies to, or None."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +51,13 @@ class MessageGroup[MessageT: GroupableMessage]:
 def group_messages[MessageT: GroupableMessage](
     messages: Iterable[MessageT], *, window_seconds: float = 300, max_messages: int = 8
 ) -> list[MessageGroup[MessageT]]:
-    """Group chronological messages into author runs without losing interleaved context."""
+    """Split chronological messages into same-author runs; other authors' messages in between become context.
+
+    A run ends after `window_seconds` of silence, at `max_messages`, or at a reply to a message outside it.
+
+    Raises:
+        ValueError: `max_messages` is less than one.
+    """
     if max_messages < 1:
         msg = "max_messages must be at least one"
         raise ValueError(msg)
@@ -85,7 +99,10 @@ async def resolve_reply_chain(
     max_depth: int = 4,
     cache: dict[int, discord.Message | None],
 ) -> tuple[discord.Message, ...]:
-    """Resolve a message's reply ancestry with caching and cycle protection."""
+    """Return reply parents nearest first, at most `max_depth`; a deleted or unfetchable parent ends the chain.
+
+    `cache` maps parent ids to fetched messages (None once known gone) and is meant to be shared across calls.
+    """
     parents: list[discord.Message] = []
     current = message
     seen = {message.id}
@@ -119,7 +136,7 @@ async def resolve_reply_chain(
 def collect_lookback[MessageT: GroupableMessage](
     history: Sequence[MessageT], group: Sequence[MessageT], *, limit: int = 3
 ) -> tuple[MessageT, ...]:
-    """Return the messages immediately preceding a group from chronological history."""
+    """Up to `limit` messages before the group's first message in `history`; empty if it is not in `history`."""
     if not group or limit <= 0:
         return ()
     first_id = group[0].id
@@ -130,7 +147,10 @@ def collect_lookback[MessageT: GroupableMessage](
 async def collect_images(
     messages: Sequence[discord.Message], *, max_images: int = 6, max_bytes: int = 4 * 1024 * 1024
 ) -> tuple[InlineImage, ...]:
-    """Read oldest-first images and video preview frames within aggregate caps."""
+    """Images and first frames of videos, oldest first, at most `max_images` and `max_bytes` in total.
+
+    `max_bytes` also caps each file. Schematics are skipped; an unreadable attachment is logged and skipped.
+    """
     images: list[InlineImage] = []
     total_bytes = 0
     for message in messages:
@@ -212,7 +232,11 @@ async def assemble_bundle(
     reply_cache: dict[int, discord.Message | None] | None = None,
     include_images: bool = True,
 ) -> BuildInferenceInput:
-    """Resolve reply context and images into one inference input holding no Discord objects."""
+    """Resolve reply context and images into one inference input holding no Discord objects.
+
+    Raises:
+        ValueError: `primary` is empty.
+    """
     if not primary:
         msg = "A bundle requires at least one primary message"
         raise ValueError(msg)

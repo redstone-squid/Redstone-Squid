@@ -14,7 +14,7 @@ type RefreshCallback = Callable[[EntryKey, bool], Awaitable[None]]
 
 
 class EntryDebouncer:
-    """Coalesce bursts into one delayed refresh per starboard entry."""
+    """Coalesce bursts into one delayed refresh per entry; `close` cancels pending refreshes and refuses new ones."""
 
     def __init__(
         self,
@@ -33,6 +33,7 @@ class EntryDebouncer:
         self._closing = False
 
     def schedule(self, key: EntryKey, *, force: bool = False) -> None:
+        """A key already scheduled is not rescheduled, but `force` sticks to it until its refresh runs."""
         if self._closing:
             return
         if force:
@@ -49,7 +50,7 @@ class EntryDebouncer:
             await handle.finished.wait()
 
     async def close(self) -> None:
-        """Cancel pending refreshes and bound extension unload latency."""
+        """Cancel pending refreshes, waiting at most `shutdown_timeout` for them and logging any that outlive it."""
         if self._closing:
             return
         self._closing = True

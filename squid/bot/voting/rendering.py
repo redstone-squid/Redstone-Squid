@@ -1,9 +1,4 @@
-"""Vote card rendering, independent of where the cards live.
-
-Kept apart from the session classes so a card can be produced from a snapshot alone.
-Rendering used to be a method that also fetched and edited its own messages, which is
-why every session had to track the messages it had sent.
-"""
+"""Vote card rendering from a `VoteSessionSnapshot` alone; nothing here fetches or edits messages."""
 
 import dataclasses
 from collections.abc import Mapping
@@ -18,7 +13,11 @@ from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapsh
 
 
 def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: int | None = None) -> str:
-    """Return the first configured emoji for a vote choice in one guild."""
+    """The first of the guild's options for `choice`; `guild_id` None selects the unscoped options.
+
+    Raises:
+        StopIteration: no option for `choice` exists in that scope.
+    """
     options = snapshot.options_for_guild(guild_id or 0)
     return next(option.emoji for option in options if option.choice is choice)
 
@@ -28,11 +27,10 @@ def render_build_review(
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
 ) -> sd.message_payload.MessagePayload:
-    """Compose a build card with the review vote state beneath it.
+    """Splice the review vote state into the build card's own container.
 
-    The card arrives as IR rather than as a built container so the whole post is solved in
-    one pass: the vote text competes for the display budget instead of being appended to an
-    already-solved card and overflowing it.
+    The card arrives as layout IR rather than a built container so the vote text competes for the display budget
+    in the same pass instead of overflowing an already-solved card.
     """
     if snapshot.status == "closed":
         result_label = {
@@ -55,28 +53,22 @@ def render_build_review(
             f"**Accept:** {snapshot.upvotes:g}/{snapshot.pass_threshold}  •  "
             f"**Deny:** {snapshot.downvotes:g}/{-snapshot.fail_threshold}"
         )
-    # The vote state is Never: a review whose tallies were trimmed away is worse than a
-    # review whose build description was.
+    # Never trim the vote state: a review missing its tallies is worse than one missing its build description.
     state = (sl.primitives.Sep(), sl.primitives.Text(vote_text, overflow=sl.primitives.Never()))
-    # The build card is now sl.section()'s semantic Section rather than a bare primitive
-    # Panel, so splice into its own children instead of nesting a second container — one
-    # accent-coloured box, and the vote text is solved in the same pass as the card's fields.
+    # Splice into the card's own children rather than nesting a second container, so there is one accent box.
     if isinstance(card, sl.semantic.Section):
         post: sl.LayoutNode[sl.ComponentsV2Target] = dataclasses.replace(card, children=(*card.children, *state))
     elif isinstance(card, sl.primitives.Panel):
         post = sl.primitives.Panel(children=(*card.children, *state), accent=card.accent)
     else:
-        # Not currently reachable — render_node() always returns a Section — kept as a safe
-        # fallback for any future card producer that returns something else entirely.
+        # Unreachable today (render_node() always returns a Section); a fallback for other card producers.
         post = sl.group(card, *state)
     return render_payload([post])
 
 
 def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.message_payload.MessagePayload:
-    """Render the card asking whether a logged message should be deleted."""
-    # Compare enum members rather than their string values: `status == "closed"` is true at
-    # runtime for a StrEnum but reads as a non-overlapping comparison to a type checker, which
-    # then treats every branch below `pending` as unreachable.
+    # Compare enum members, not their string values: `status == "closed"` is true at runtime for a StrEnum but a
+    # type checker reads it as non-overlapping and marks every branch below `pending` unreachable.
     match snapshot.result if snapshot.status is VoteStatus.CLOSED else VoteSessionResult.PENDING:
         case VoteSessionResult.PENDING:
             title = "Vote to Delete Log"
@@ -124,11 +116,7 @@ def render_generic_poll(
     snapshot: VoteSessionSnapshot,
     voter_discord_ids: Mapping[int, int] = {},
 ) -> sd.message_payload.MessagePayload:
-    """Render a user-created poll, honouring its visibility setting.
-
-    An open poll carries its own close and refresh controls; a closed one has nothing left
-    to do, so its card is inert and stays readable as a record.
-    """
+    """A generic poll card; open polls carry the close and refresh controls, closed ones are inert."""
     nodes = _generic_poll_nodes(snapshot, voter_discord_ids)
     if snapshot.status is not VoteStatus.CLOSED:
         nodes.append(poll_controls())
@@ -139,7 +127,6 @@ def _generic_poll_nodes(
     snapshot: VoteSessionSnapshot,
     voter_discord_ids: Mapping[int, int],
 ) -> list[sl.LayoutNode[sl.ComponentsV2Target]]:
-    """Build the semantic content for a generic poll without its controls."""
     poll = snapshot.poll
     assert poll is not None
     closed = snapshot.status is VoteStatus.CLOSED
@@ -206,12 +193,10 @@ def _generic_poll_nodes(
 
 
 def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:
-    """The body of a generic poll card.
+    """A generic poll card as markdown text.
 
-    *voter_discord_ids* maps a voting account to the snowflake to mention it by. A
-    ballot records an account, not a snowflake, so the Discord spelling is supplied by
-    the caller that can look it up; an account with no Discord identity is simply not
-    mentioned.
+    `voter_discord_ids` maps account id to the snowflake to mention; a ballot records only an account, and one
+    absent from the map is not mentioned.
     """
     poll = snapshot.poll
     assert poll is not None
@@ -220,8 +205,7 @@ def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[
     raw = snapshot.raw_tallies()
     weighted = snapshot.weighted_tallies()
     lines = [f"## {poll.question}"]
-    # A poll drafted outside a guild has no aliases of its own, so it falls back to
-    # the unscoped options rather than to some arbitrary guild's palette.
+    # A poll drafted outside a guild has no aliases of its own, so it uses the unscoped options.
     for option in snapshot.options_for_guild(poll.guild_id or 0):
         line = f"{option.emoji} **{option.label}**"
         if show_totals:

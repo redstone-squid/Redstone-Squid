@@ -40,7 +40,7 @@ type RefreshPosts = Callable[[int], Awaitable[None]]
 
 @dataclass(frozen=True, slots=True)
 class BuildCapabilities:
-    """The build operations visible when the workspace opens."""
+    """Permissions snapshotted when the workspace opens; each action re-checks through `authorize` before acting."""
 
     view_pending: bool
     approve: bool
@@ -361,7 +361,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
 
 
 class BuildBrowseScreen(sd.Screen):
-    """A live build workspace that ends when closed, replaced, or timed out."""
+    """Browse confirmed builds (pending too with `view_pending`) or open one by id or semantic search."""
 
     session = sd.SessionSpec("build-browse")
     timeout = 300

@@ -20,7 +20,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True, slots=True)
 class ReactionEvent:
-    """A normalized reaction action with memoized Discord lookups."""
+    """One add or remove reaction, shared by every subscriber; `message()` and `resolve_member()` fetch once.
+
+    `member` is only pre-filled when Discord or the guild cache supplies it, which for remove events is
+    usually not the case.
+    """
 
     payload: discord.RawReactionActionEvent
     emoji: str
@@ -33,7 +37,7 @@ class ReactionEvent:
     _member_loaded: bool = field(default=False, init=False, repr=False, compare=False)
 
     async def message(self) -> discord.Message | None:
-        """Fetch the reacted-to message at most once across all subscribers."""
+        """The reacted-to message, fetched at most once; None if it is gone or inaccessible."""
         async with self._message_lock:
             if self._message_loaded:
                 return self._message
@@ -43,7 +47,7 @@ class ReactionEvent:
             return message
 
     async def resolve_member(self) -> discord.Member | None:
-        """Resolve the reacting guild member at most once, only when a subscriber needs it."""
+        """The reacting member via cache then API, resolved at most once; None outside a guild or if not found."""
         async with self._member_lock:
             if self._member_loaded:
                 return self.member
@@ -61,22 +65,35 @@ class ReactionEvent:
 
 @dataclass(frozen=True, slots=True)
 class ReactionClearEvent:
-    """A normalized clear event, optionally scoped to one emoji."""
+    """A reaction clear on one message; `emoji` is None when every reaction was cleared."""
 
     payload: discord.RawReactionClearEvent | discord.RawReactionClearEmojiEvent
     emoji: str | None = None
 
 
 class ReactionSubscriber(Protocol):
-    """Receive normalized raw-reaction events from the bot router."""
+    """Receives raw-reaction events from `ReactionRouter`.
 
-    async def on_reaction_add(self, event: ReactionEvent) -> None: ...
+    Every subscriber receives every event, concurrently with the others; an exception is logged and
+    does not affect them. Events for one message arrive in gateway order. Register with
+    `ReactionRouter.subscribe` and unregister on unload.
+    """
 
-    async def on_reaction_remove(self, event: ReactionEvent) -> None: ...
+    async def on_reaction_add(self, event: ReactionEvent) -> None:
+        """A reaction was added, including by the bot itself."""
+        ...
 
-    async def on_reaction_clear(self, event: ReactionClearEvent) -> None: ...
+    async def on_reaction_remove(self, event: ReactionEvent) -> None:
+        """A reaction was removed; `event.member` is usually None until `resolve_member()`."""
+        ...
 
-    async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None: ...
+    async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
+        """All reactions on a message were cleared; `event.emoji` is None."""
+        ...
+
+    async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
+        """Every reaction of one emoji was cleared; `event.emoji` names it."""
+        ...
 
 
 type ReactionMethod = Literal[
@@ -96,7 +113,14 @@ class _QueuedReaction:
 
 
 class ReactionRouter:
-    """Dispatch reactions through bounded message-keyed FIFO shards."""
+    """Fans raw reactions out through `concurrency` FIFO shards keyed by message id; `close` drains, then stops them.
+
+    A full shard blocks the gateway listener rather than dropping the event; events arriving after
+    `close` starts are dropped with a warning. The subscriber set is snapshotted at enqueue time.
+
+    Raises:
+        ValueError: `concurrency` is below 1 or `max_pending` is below `concurrency`.
+    """
 
     def __init__(
         self,
@@ -140,7 +164,7 @@ class ReactionRouter:
         await self._dispatch("on_reaction_clear_emoji", ReactionClearEvent(payload, str(payload.emoji)))
 
     async def close(self) -> None:
-        """Stop intake, drain accepted events, then await every shard worker."""
+        """Idempotent; a drain that outlasts `shutdown_timeout` is logged and the workers are cancelled anyway."""
         if self._closing:
             return
         self._closing = True
@@ -200,9 +224,8 @@ class ReactionRouter:
             except asyncio.CancelledError:
                 raise
             except Exception:
-                # A shard that escapes this loop stops draining its queue for the
-                # rest of the process, and close() then blocks on join() until the
-                # shutdown deadline rather than reporting the real failure.
+                # A shard that escapes this loop stops draining its queue for the rest of the process,
+                # and close() then blocks on join() until the deadline instead of reporting the failure.
                 logger.exception("Reaction shard failed to dispatch %s", item.method)
             finally:
                 queue.task_done()
@@ -221,7 +244,7 @@ class ReactionRouter:
 
 
 class ReactionRouterCog(commands.Cog):
-    """Own the bot's only Discord raw-reaction listeners."""
+    """The bot's only raw-reaction listeners; everything else subscribes to `bot.reactions`. Unloading closes the router."""
 
     def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
         self.bot = bot

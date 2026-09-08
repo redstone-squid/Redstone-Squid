@@ -24,10 +24,8 @@ logger = logging.getLogger(__name__)
 class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
     """Keep a vote session's cards current wherever they were published.
 
-    Publication location is not derived the same way for every kind. A build review
-    belongs in each guild's configured vote channel, so a guild that has none yet gets
-    one. A delete-log vote and a generic poll were placed by a person in a channel they
-    chose, so those are rendered where they already are and published explicitly.
+    An open build review or network poll also fills every guild's configured vote channel that lacks a card. A
+    delete-log vote or guild poll is placed by a person and rendered only where it already is.
     """
 
     resource_kind: ResourceKind = "vote_session"
@@ -48,13 +46,12 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         return await self._generic_poll(snapshot)
 
     async def after_send(self, resource_key: str, message: discord.Message) -> None:
-        """Seed the reactions the session is voted on with."""
+        """Add the guild's option emojis to an open session's new card; a Forbidden is logged, not raised."""
         snapshot = await self.bot.services.votes.get_session_by_id(int(resource_key))
         if snapshot is None or snapshot.status == "closed":
             return
         guild_id = message.guild.id if message.guild is not None else 0
-        # settle_all, not gather: one channel denying reactions must not abort the batch
-        # and leave its siblings unawaited.
+        # settle_all, not gather: one denied reaction must not abort the batch and leave siblings unawaited.
         outcomes = await settle_all(
             [_add_reaction(message, option.emoji) for option in snapshot.options_for_guild(guild_id)],
             limit=DISCORD_FANOUT_LIMIT,
@@ -78,8 +75,7 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         handler = self.bot.for_build(build)
         channels = await self._published_channels(snapshot)
         if snapshot.status == "open":
-            # Fill guilds that have a vote channel but no card yet, which is what makes
-            # a retried or partially delivered submission complete itself.
+            # Fill guilds with a vote channel but no card, so a partially delivered submission completes itself.
             channels.update({channel.id: channel.guild.id for channel in await handler.get_channels_to_post_to()})
 
         card = await handler.render_node()
@@ -114,8 +110,7 @@ class VoteSessionRenderer[BotT: "squid.bot.app.RedstoneSquid"]:
         layout = render_generic_poll(snapshot, await self._voter_discord_ids(snapshot))
         channels = await self._published_channels(snapshot)
         if snapshot.poll.scope is PollScope.NETWORK and snapshot.status == "open":
-            # Same fill as a build review: a guild that gains a vote channel mid-poll
-            # still gets a card, and a delivery that failed is retried.
+            # Same fill as a build review: a guild that gains a vote channel mid-poll still gets a card.
             channels.update({channel.id: channel.guild.id for channel in await configured_vote_channels(self.bot)})
         return [
             DesiredPost(channel_id=channel_id, guild_id=guild_id, surface="vote_card", payload=layout)

@@ -48,7 +48,7 @@ def _split_values(value: str) -> list[str]:
 
 
 def _format_dimensions(value: tuple[int | None, ...]) -> str:
-    """Format only dimensions that have actually been supplied."""
+    """Empty when no dimension is known; otherwise each unknown one is '?'."""
     if not any(item is not None for item in value):
         return ""
     return " x ".join("?" if item is None else str(item) for item in value)
@@ -164,7 +164,10 @@ class SubmissionOutcome:
 
 
 class SubmissionScreen(sd.Screen):
-    """A submission draft that ends when it is submitted, cancelled, or times out."""
+    """Guided submission form; a user holds at most one open draft.
+
+    The draft is forced to a pending door with at least the "Regular" pattern.
+    """
 
     session = sd.SessionSpec(
         "build-submission",
@@ -415,7 +418,10 @@ def _edit_form(items: Sequence[BoundBuildField], page: int) -> sl.forms.FormSpec
 
 
 class BuildEditScreen(sd.Screen):
-    """A build editor that ends when saved, closed, replaced, or timed out."""
+    """Paged editor over the `EDIT_FIELDS` that apply to the build, five per section.
+
+    A build without an id is saved as new on apply; one with an id goes through `BuildService.edit`.
+    """
 
     session = sd.SessionSpec("build-edit")
     timeout = 900
@@ -450,7 +456,7 @@ class BuildEditScreen(sd.Screen):
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target] | None]:
-        """Load the edited build and keep its preview current with the build topic."""
+        """The build and its preview, re-read whenever the build topic fires; LookupError once the build is gone."""
         if self._build_id is not None:
             sl.runtime.watch(resource_topic("build", str(self._build_id)))
         seed, self._seed = self._seed, None
@@ -492,6 +498,7 @@ class BuildEditScreen(sd.Screen):
         return max(1, (len(self.items) + 4) // 5)
 
     def stage(self, attribute: str, text: str) -> bool:
+        """Stage `text` into the named field; False when this build has no such field."""
         for item in self.items:
             if item.attribute == attribute:
                 item.stage(text)
@@ -501,7 +508,6 @@ class BuildEditScreen(sd.Screen):
         return False
 
     async def may_edit(self) -> bool:
-        """Recheck whether the actor may currently edit this build."""
         return await self._authorize()
 
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:

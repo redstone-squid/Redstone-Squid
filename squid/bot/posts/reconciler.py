@@ -1,10 +1,7 @@
 """Bring the bot's own Discord posts back in line with what a resource wants.
 
-One diff loop serves every surface. It replaces the per-surface idempotency schemes
-that grew up separately: an "already posted?" set in the confirmed-build handler, a
-stable-nonce send in the review session, and a posted-message-id column in the
-starboard entry table. All three were answering "does a post already exist here?",
-which is now a unique index.
+One diff loop serves every surface; "does a post already exist here?" is answered by the unique index on the
+post table, not by per-surface state.
 """
 
 import contextlib
@@ -46,11 +43,10 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         resource_key: str,
         surface: Surface,
     ) -> None:
-        """Take ownership of a message someone else already sent.
+        """Record a message a command already sent as a post the diff loop keeps rendered.
 
-        Some cards go where a person chose rather than where configuration says — a
-        delete-log vote, a published poll — so the command sends the message and hands
-        it over. From then on it is an ordinary post the diff loop keeps rendered.
+        For cards that go where a person chose rather than where configuration says (a delete-log vote, a
+        published poll). Recorded at revision 0, so the next reconcile re-renders it.
         """
         await self.bot.services.messages.observe(to_message_fact(message))
         await self.bot.services.posts.record(
@@ -83,17 +79,13 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
             post = live.get(want.channel_id)
             if post is not None and await self._edit(post, want, generation):
                 continue
-            # Either there was never a post here, or the one there is has vanished and
-            # was just tombstoned. Both mean the channel now needs a fresh post.
+            # `post is not None` here means `_edit` found the message gone and just tombstoned it.
             was_removed = post is not None or want.channel_id in suppressed
             if was_removed and not renderer.repost_if_deleted:
-                # Someone removed this post deliberately; putting it back would be an
-                # argument with a moderator, not a repair.
+                # Reposting a deliberately deleted card would fight the moderator.
                 continue
             await self._send(renderer, resource_kind, resource_key, want, generation)
 
-        # A post whose channel is no longer wanted is stale in the strongest sense: the
-        # resource says nothing belongs here any more.
         await self._remove_all([post for channel_id, post in live.items() if channel_id not in wanted_channels])
 
     async def _send(
@@ -127,11 +119,10 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         await renderer.after_send(resource_key, message)
 
     async def _edit(self, post: DiscordPost, want: DesiredPost, generation: int) -> bool:
-        """Bring one post up to date, reporting whether it still exists.
+        """Bring one post up to date; False means Discord no longer has the message.
 
-        False means Discord no longer has the message, so the caller decides between
-        reposting and leaving the channel empty. Repairing it in this pass rather than
-        waiting to be enqueued again is what keeps a mirrored surface prompt.
+        The caller then chooses between reposting and leaving the channel empty in this same pass, rather than
+        waiting to be enqueued again.
         """
         if post.applied_revision >= generation:
             return True
@@ -154,11 +145,9 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         await self.bot.services.posts.forget(post.message_id)
 
     async def _fetch(self, post: DiscordPost) -> discord.Message | None:
-        """Resolve a post's message, tombstoning it if Discord says it is gone.
+        """Resolve a post's message, tombstoning the post if Discord says it is gone.
 
-        This is the one place a read still writes, and it is confined to the reconcile
-        loop rather than sitting inside the shared message fetcher where every caller
-        paid for it.
+        The one read in the loop that writes; the shared message fetcher stays side-effect free.
         """
         channel = await self.bot.get_or_fetch_messageable_channel(post.channel_id)
         if channel is None:

@@ -8,7 +8,10 @@ _registry: dict[str, Sentinel] = {}
 
 
 class Sentinel:
-    """Unique sentinel values."""
+    """Interned per (defining module, name): constructing the same name twice returns one object.
+
+    Compares unequal to everything, itself included; test with `is`.
+    """
 
     _name: str
     _repr: str

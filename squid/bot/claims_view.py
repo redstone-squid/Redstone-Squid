@@ -1,4 +1,4 @@
-"""The semantic review workspace for creator credit claims."""
+"""Staff review queue for creator credit claims."""
 
 from collections.abc import Awaitable, Callable, Sequence
 from typing import cast
@@ -18,7 +18,13 @@ type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
 class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
-    """A mounted claim queue whose choices and decisions share one semantic surface."""
+    """Pending alias claims with approve, reject and close controls.
+
+    Approving an alias another account holds raises `AliasAlreadyClaimedError` from the service;
+    the first attempt arms the button as "Take the name" and the second approves with `reassign`.
+    Selecting another claim disarms it. Every decision re-checks `authorize` and requires the
+    reviewer to hold a consented account.
+    """
 
     selected_id: int | None = sl.state(None)
     reassign_armed: int | None = sl.state(None)
@@ -230,7 +236,6 @@ def _claim_label(claim: AliasClaim) -> sl.text.Message:
 
 
 def _conflict_text(conflict: AliasAlreadyClaimedError) -> sl.TextLike:
-    """Explain the second deliberate approval click."""
     held = tr(conflict.message)
     action = tr(t"Approving again takes the name from them.")
     return tr(t"{held} {action}")

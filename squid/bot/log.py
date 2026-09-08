@@ -1,4 +1,4 @@
-"""Logging for the bot."""
+"""Gateway-event logging and the fallback prefix-command error handler."""
 
 import logging
 
@@ -11,21 +11,15 @@ logger = logging.getLogger(__name__)
 
 
 class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
-    """Global listeners for the bot."""
-
     def __init__(self, bot: BotT):
         self.bot = bot
 
     async def log(self, message: str) -> None:
-        """Write an operational message without adding Discord I/O to the hot path."""
         logger.info("%s", message)
 
-    # https://discordpy.readthedocs.io/en/stable/api.html#discord.on_ready
-    # This function is not guaranteed to be the first event called. Likewise, this function is not guaranteed to only be called once.
-    # This library implements reconnection logic and thus will end up calling this event whenever a RESUME request fails.
+    # on_ready fires again after every failed RESUME, so this line repeats over a process lifetime.
     @Cog.listener("on_ready")
     async def log_on_ready(self):
-        """Logs when the bot is ready."""
         assert self.bot.user is not None
         logger.info(
             "Discord gateway ready, logged in as %s",
@@ -38,7 +32,7 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
 
     @Cog.listener("on_command")
     async def log_command_usage(self, ctx: Context[BotT]):
-        """Log low-cardinality command usage without stable human identifiers."""
+        """Logs command name, guild id and interaction flag only; no user identifiers."""
         assert ctx.command is not None
         logger.info(
             "Discord command invoked",
@@ -51,7 +45,7 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
 
     @Cog.listener("on_command_error")
     async def log_command_error(self, ctx: Context[BotT], exception: CommandError):
-        """Global error handler for the bot."""
+        """Route to `handle_context_error` unless the command or cog has its own handler; `CommandNotFound` is dropped."""
         command = ctx.command
         if command and command.has_error_handler():
             return
@@ -67,5 +61,4 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
 
 
 async def setup(bot: commands.Bot):
-    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(LoggingCog(bot))

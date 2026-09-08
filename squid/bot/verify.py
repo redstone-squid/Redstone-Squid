@@ -1,4 +1,4 @@
-"""A cog for verifying minecraft accounts."""
+"""The `/account` command: the caller's account workspace, or another user's public creator page."""
 
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Self
@@ -45,7 +45,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
     async def account(
         self, request: sd.Request[Self], user: discord.Member | discord.User | None = None
     ) -> sd.CommandResult:
-        """Show your account, or somebody else's creator page."""
+        """Own account opens the personal `AccountWorkspace`; another user's page is a shared card."""
         actor = request.user
         if user is not None and user.id != actor.id:
             return await self._creator_page(request, user)
@@ -84,7 +84,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         )
 
     async def _creator_page(self, request: sd.Request[Self], user: discord.Member | discord.User) -> sd.CommandResult:
-        """Somebody else's page is shared content and answers where the channel sees it."""
+        """Shared card in the channel; only the "no creator page" refusal is personal."""
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
         if account is None or account.public_creator_id is None:
             return sd.Response(
@@ -93,7 +93,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         return await self._public_profile_card(account.public_creator_id, user.display_name)
 
     async def _public_profile_card(self, public_id: UUID, fallback_name: str):
-        """Render somebody else's page from the same filtered view the API serves."""
+        """Renders the same `PublicCreatorProfile` the API serves; a hidden page still lists build credit."""
         public = await self.account_service.get_public_profile(public_id)
         if public is None:
             return text_node(tr("That creator page could not be found."))
@@ -111,12 +111,7 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         )
 
     async def _refresh_discord_avatar_key(self, account: Account, user: discord.Member | discord.User) -> None:
-        """Store the viewer's current Discord avatar hash, which only the gateway supplies.
-
-        Opportunistic: this is the one place the bot reliably holds both the account and a fresh
-        `discord.User`, so an avatar that would otherwise render as null gets filled in whenever
-        someone looks at their own page.
-        """
+        """Store the viewer's current Discord avatar hash if it changed; only the gateway supplies it."""
         identity = next(
             (
                 candidate
@@ -133,13 +128,9 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
 
 
 def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:
-    """Return the Minecraft UUID that makes this link impossible, or `None` if it can proceed.
+    """The Minecraft UUID that blocks this link, or None if it can proceed.
 
-    Both cases used to surface only after the notice had been read and agreed to, because they are
-    checked inside the redemption. The reservation makes them answerable first, which is the
-    difference between "that cannot work" and "you consented to something that then failed".
-
-    Relinking the *same* UUID is not a conflict: it is how a renamed player refreshes their name.
+    Relinking the same UUID is not a conflict; that is how a renamed player refreshes their name.
     """
     if existing_java is not None and existing_java.java_uuid != preview.java_uuid:
         return existing_java.java_uuid
@@ -149,13 +140,7 @@ def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) 
 
 
 def _link_message(refresh: IdentityRefresh) -> str:
-    """Render the outcome of a link in the same words a refresh uses.
-
-    Linking used to report only the alias it claimed, which cannot express the contested case at all:
-    a user whose verified name belonged to somebody else was told the link succeeded and never that
-    their credit had not moved. The reconciliation is the same operation in both commands, so it gets
-    the same vocabulary; only the headline differs.
-    """
+    """Link headline plus the shared `_reconciliation_lines`, so a contested alias is reported, not just a claimed one."""
     lines = [
         tr(
             "Your Discord account is now linked to **{name}**.",
@@ -167,7 +152,7 @@ def _link_message(refresh: IdentityRefresh) -> str:
 
 
 def _refresh_message(refresh: IdentityRefresh) -> str:
-    """Render every branch of a refresh, including the one where nothing changed."""
+    """Refresh headline (including the unchanged case) plus the shared `_reconciliation_lines`."""
     if not refresh.renamed:
         lines = [tr("Your Minecraft name is still **{name}**. Nothing changed.", name=refresh.current_name)]
     else:
@@ -183,7 +168,7 @@ def _refresh_message(refresh: IdentityRefresh) -> str:
 
 
 def _reconciliation_lines(refresh: IdentityRefresh) -> list[str]:
-    """Describe what happened to the creator credit, shared by linking and refreshing."""
+    """Claimed or contested alias, then retained names; empty when credit is untouched."""
     lines: list[str] = []
     if refresh.claimed_alias is not None:
         lines.append(
@@ -213,5 +198,4 @@ def _reconciliation_lines(refresh: IdentityRefresh) -> list[str]:
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
-    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VerifyCog(bot))

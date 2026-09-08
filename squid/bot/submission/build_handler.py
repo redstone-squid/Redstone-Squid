@@ -1,4 +1,4 @@
-"""Handles the display of a build object."""
+"""Rendering and posting of one build's card."""
 
 import logging
 import mimetypes
@@ -32,20 +32,21 @@ _SPONSOR_WEBSITE_MAX_CHARACTERS = 512
 
 
 class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
-    """A class to handle the display of a build object."""
-
     def __init__(self, bot: BotT, build: Build):
         self.bot = bot
         self.build = build
         self._build_original_message_obj: discord.Message | None = None
-        """Cache for the original message of the build."""
 
     @override
     def __repr__(self):
         return f"<BuildHandler(bot={self.bot}, build={self.build})>"
 
     async def get_channels_to_post_to(self) -> list[GuildMessageable]:
-        """Gets the channels in which this build should be posted to."""
+        """Every guild's vote channel for a pending build, or its "Builds" channel for a confirmed one.
+
+        Raises:
+            ValueError: the build is denied or has no recognised status.
+        """
         target: Literal["Smallest", "Fastest", "First", "Builds"]
 
         match self.build.submission_status:
@@ -69,10 +70,11 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return cast(list[GuildMessageable], channels)
 
     async def post_for_voting(self, type: Literal["add", "update"] = "add") -> None:
-        """Post a build for voting.
+        """Open (or reuse) the build's review session and post its cards.
 
-        Args:
-            type (Literal["add", "update"]): Whether to add or update the build.
+        Raises:
+            NotImplementedError: `type` is "update".
+            ValueError: the build is not pending.
         """
         build = self.build
         if type == "update":
@@ -86,7 +88,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         await ensure_build_review(self.bot, build, await self.get_channels_to_post_to())
 
     async def get_original_message(self) -> discord.Message | None:
-        """Gets the message this build was submitted from, if it is still reachable."""
+        """The first source message that has a channel id, or None if there is none or it is unreachable."""
         if self._build_original_message_obj:
             return self._build_original_message_obj
 
@@ -96,16 +98,14 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return None
 
     async def render_payload(self) -> sd.message_payload.MessagePayload:
-        """Render the complete message payload used by post delivery."""
         return render_payload([await self.render_node()])
 
     async def render_container(
         self, *, reservation: sd.ResourceCost = sd.EMPTY_RESERVATION
     ) -> discord.ui.Container[discord.ui.LayoutView]:
-        """Render the build card as a detached item, for composition into a larger V2 layout.
+        """The build card as a detached item, for composition into a larger V2 layout.
 
-        ``reservation`` withholds whatever the caller spends on the rest of the message, so
-        the card shrinks to leave room for content the solver cannot see.
+        `reservation` is what the caller spends on the rest of the message; the card shrinks to leave room for it.
         """
         container = render_item(await self.render_node(), reservation=reservation)
         assert isinstance(container, discord.ui.Container)
@@ -138,9 +138,8 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
 
         ladders = self._field_ladders()
 
-        # A nested section per group: each field steps its own Condense ladder independently
-        # rather than a whole group stepping in lockstep — finer granularity, not a
-        # regression. Groups with no matching fields render as nothing.
+        # One section per group, so each field steps its own Condense ladder rather than the group moving in
+        # lockstep. A group with no matching fields renders as nothing.
         def group(title: str, names: set[str]) -> sl.LayoutNode[sl.ComponentsV2Target] | None:
             entries = tuple(
                 sl.field(
@@ -174,8 +173,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         extra_media = media[1:]
         return sl.section(
             sl.heading(format_build_display_title(build, markdown=True, current_version=current_java_version)),
-            # The body is the card's shock absorber: truncate lets it give up characters
-            # under pressure before a field group, media, or the footer loses any.
+            # The body gives up characters under pressure before any field group, media or the footer loses one.
             description and sl.truncate(sl.paragraph(description)),
             group("Review warnings", review_names),
             group("Size & performance", performance_names),
@@ -244,7 +242,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return media[:10]
 
     async def get_description(self) -> str | None:  # type: ignore
-        """Generates a description for the build, which includes component restrictions, version compatibility, and other information."""
+        """Locational/directional notes and the submitter's own message, or None when there is neither."""
         build = self.build
         desc = []
 
@@ -264,17 +262,14 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return "\n".join(desc) if desc else None
 
     def get_metadata_fields(self) -> dict[str, str]:  # type: ignore
-        """Returns a dictionary of metadata fields for the build.
-
-        The fields are formatted as key-value pairs, where the key is the field name and the value is the field value. The values are not escaped.
-        """
+        """Display name to display value, in card order; values are not markdown-escaped."""
         build = self.build
         fields = {"Dimensions": f"{build.width or '?'} x {build.height or '?'} x {build.depth or '?'}"}
 
         if build.width and build.height and build.depth:
             fields["Volume"] = str(build.width * build.height * build.depth)
 
-        # The times are stored as game ticks, so they need to be divided by 20 to get seconds
+        # Times are stored in game ticks, 20 per second.
         if isinstance(build, DoorBuild):
             if build.normal_opening_time:
                 fields["Opening Time"] = f"{build.normal_opening_time / 20}s"

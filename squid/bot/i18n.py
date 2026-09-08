@@ -17,13 +17,11 @@ async def resolve_locale(
     target: discord.Interaction[Any] | commands.Context[Any] | discord.Message,
     settings_service: SettingsService,
 ) -> str:
-    """Resolve the locale to respond in for an interaction, command, or message.
+    """Resolve the locale to respond in.
 
-    Fallback chain: per-guild admin override (`server_settings.locale`) ->
-    the guild's Discord-reported locale -> the invoking user's Discord
-    client locale (interactions only) -> `DEFAULT_LOCALE`. Plain messages and
-    prefix/text command invocations have no user-locale tier, since neither
-    carries the author's Discord client locale.
+    Chain: per-guild admin override -> the guild's Discord-reported locale -> the invoking user's
+    client locale -> `DEFAULT_LOCALE`. Only interactions carry a user locale; plain messages and
+    prefix commands skip that tier.
     """
     guild = target.guild
     if guild is not None:
@@ -31,8 +29,7 @@ async def resolve_locale(
         if override is not None:
             return negotiate_locale(override)
 
-    # Duck-typed rather than `isinstance(target, discord.Interaction)` so lightweight
-    # test doubles (see tests/helpers/discord.py) work without subclassing discord types.
+    # Duck-typed so the test doubles in tests/helpers/discord.py work without subclassing discord types.
     interaction = cast(Any, target if hasattr(target, "guild_locale") else getattr(target, "interaction", None))
     if interaction is not None:
         if interaction.guild_locale is not None:
@@ -45,7 +42,7 @@ async def resolve_locale(
 
 
 async def localization_resolver(source: LocalizationSource) -> Localization:
-    """Resolve one installed bot invocation into its render-time localization."""
+    """Localization for the UI runtime, resolved through `resolve_locale` with the bot's settings service."""
     client = cast(Any, DiscordUIRuntime.of(source).client)
     target = cast(discord.Interaction[Any] | commands.Context[Any] | discord.Message, source)
     locale = await resolve_locale(target, client.services.settings)
@@ -53,7 +50,10 @@ async def localization_resolver(source: LocalizationSource) -> Localization:
 
 
 class SquidAppCommandTranslator(app_commands.Translator):
-    """Translates slash command names, descriptions, and choices via `squid.core.i18n`."""
+    """Translates slash command names, descriptions and choices via `squid.core.i18n.tr`.
+
+    Returns None for the default locale so discord.py keeps the source string.
+    """
 
     @override
     async def translate(
@@ -64,6 +64,6 @@ class SquidAppCommandTranslator(app_commands.Translator):
     ) -> str | None:
         resolved = negotiate_locale(str(locale))
         if resolved == DEFAULT_LOCALE:
-            return None  # Let discord.py fall back to the source string.
+            return None
         with localization_scope(localization_for(resolved)):
             return tr(string.message)

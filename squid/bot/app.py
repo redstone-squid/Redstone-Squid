@@ -90,20 +90,21 @@ EXTENSIONS = (
 )
 """Every cog the bot loads, in load order.
 
-Module-level rather than local to `setup_hook` so a test can load the real set. A name collision
-between two cogs is only raised when they are registered onto the same bot, which no per-cog test
-does -- it used to surface as the process failing to start.
+Module-level so a test can load the real set: a command-name collision between two cogs only
+surfaces when both register onto the same bot, which no per-cog test does.
 """
 
 DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools", "squid.bot.layout_showcase")
-"""Loaded on top of `EXTENSIONS`, in development mode only.
+"""Loaded after `EXTENSIONS` in development mode only.
 
-Owner-gated either way. Keeping them off a production process is the second lock: a mount id
-in a log line is then not one command away from a dump of that session's state.
+Owner-gated as well; staying off production is the second lock, since these can dump a live
+session's state from a mount id found in a log line.
 """
 
 
 class RedstoneSquid(Bot):
+    """The bot process: one per Discord connection, owning every cog, background job and UI session; `close` ends them all."""
+
     def __init__(
         self,
         services: BotServices,
@@ -183,26 +184,23 @@ class RedstoneSquid(Bot):
 
     @property
     def app_ui(self) -> sd.Scope[Self]:
-        """The cached owner scope for bot-level and routed application work."""
         return self.ui.scope(self)
 
     @property
     def sessions(self) -> SessionManager:
-        """The installed registry for live Discord sessions."""
         return self.ui.sessions
 
     def is_operational(self) -> bool:
-        """Return whether Discord and every critical bot-owned job are healthy."""
+        """True once Discord is ready and every `CRITICAL_BOT_JOBS` job has heartbeated within 60 seconds."""
         return self.is_ready() and self.background_tasks.is_healthy(CRITICAL_BOT_JOBS, max_age_seconds=60)
 
     @override
     async def invoke(self, ctx: commands.Context[Any]) -> None:
-        """Run a prefix command under one correlation ID, error dispatch included.
+        """Run a prefix command and its `on_command_error` dispatch under one correlation ID.
 
-        `Bot.invoke` dispatches `on_command_error` itself, so the scope has to wrap it rather than
-        the callback alone -- otherwise the handler that presents the error would see no binding
-        and mint a second ID unrelated to the log lines the command produced. A hybrid command
-        reaching here from the application command tree keeps the ID that tree already bound.
+        `Bot.invoke` dispatches the error handler itself, so the scope wraps the whole call: the
+        handler then shares the ID of the log lines the command produced. A hybrid command arriving
+        from the application command tree keeps the ID that tree already bound.
         """
         with correlation_scope():
             request = await sd.request(ctx)
@@ -211,17 +209,15 @@ class RedstoneSquid(Bot):
 
     @override
     async def close(self) -> None:
-        """Stop gateway-triggered and background work before application resources close."""
+        """Stop reaction routing, UI sessions and background jobs, then close HTTP clients and the gateway."""
         await self.reactions.close()
-        # Panels are left showing disabled controls rather than silently going dead. Bounded
-        # because each one is a gateway round trip: a slow Discord must not stall shutdown,
+        # Disabling each panel is a gateway round trip; a slow Discord must not stall shutdown,
         # and an undisabled panel times out on its own anyway.
         with anyio.move_on_after(3.0):
             await self.ui.close()
         await self.background_tasks.close()
-        # After the supervisor, so the bridge's listener is already cancelled and cannot
-        # log a torn connection on the way out. Bounded, then hung up: shutdown must not
-        # wait on a channel that only ever carried latency hints.
+        # After the supervisor, so the bridge's listener is already cancelled and cannot log a
+        # torn connection. Bounded, then terminated: the channel only carried latency hints.
         if self.topic_bridge is not None:
             with anyio.move_on_after(3.0):
                 await self.topic_bridge.pool.close()
@@ -232,12 +228,16 @@ class RedstoneSquid(Bot):
 
     @override
     async def setup_hook(self) -> None:
-        """Called when the bot is ready to start."""
+        """Wire process services before login, then load extensions and freeze the control router.
+
+        Runs after `start` acquires the HTTP session and before the gateway connects. Order: failure
+        capture, translator, permission-epoch watch, UI runtime, topic bridge, extensions (all
+        unloaded again if one fails), then the router. A failure here aborts startup.
+        """
         self.background_tasks.capture_failures_into(self.services.error_reports)
         await self.tree.set_translator(SquidAppCommandTranslator())
-        # Not a cog: every command's permission check reads through the cache this
-        # watcher keeps honest, so it runs before any extension loads rather than
-        # as a side effect of one of them being enabled.
+        # Not a cog: every command's permission check reads through the cache this watcher keeps
+        # honest, so it starts before any extension loads.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
         self.background_tasks.start(self.ui.run(), name="layout-runtime")
         if self.database_config is not None:
@@ -267,7 +267,7 @@ class RedstoneSquid(Bot):
         control_router.register(self)
 
     async def get_or_fetch_messageable_channel(self, channel_id: int) -> MessageableChannel | None:
-        """Resolve a messageable channel from cache or Discord, if it is accessible."""
+        """Resolve a channel from cache or the API; None if missing, forbidden or not messageable."""
         channel = self.get_channel(channel_id)
         if channel is None:
             try:
@@ -280,15 +280,13 @@ class RedstoneSquid(Bot):
         return channel
 
     async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
-        """Fetches a message from the cache or the API.
+        """Fetch a message via the channel cache or the API; None if the channel or message is missing or forbidden.
 
-        Purely a read. This used to delete the message's tracking row when Discord
-        answered 404, which made a lookup quietly destroy state and forced four of its
-        eight callers to opt out. Deleted messages are now recorded by the raw delete
-        event, and by the reconciler when it finds a post missing.
+        Read-only: a 404 does not delete the message's tracking row. The raw delete event and the
+        reconciler record deletions.
 
         Raises:
-            discord.HTTPException: Fetching the channel or message failed.
+            discord.HTTPException: Fetching the channel or message failed for another reason.
         """
         channel = await self.get_or_fetch_messageable_channel(channel_id)
         if channel is None:
@@ -302,15 +300,13 @@ class RedstoneSquid(Bot):
         return None
 
     def for_build(self, build: Build) -> BuildHandler[Self]:
-        """A helper function to create a BuildHandler with the bot instance."""
         return BuildHandler(self, build)
 
     async def refresh_posts(self, resource_kind: ResourceKind, resource_key: str) -> None:
-        """Render a resource's posts now instead of waiting for the reconciler.
+        """Reconcile a resource's posts now instead of waiting for the background job.
 
-        A latency nudge into the same diff loop the background job uses, not a second
-        way to publish: the write that prompted it already enqueued durable work, so a
-        failure here is retried rather than lost, and a duplicate run is a no-op.
+        A latency nudge only: the write that prompted it already enqueued durable work, so a failure
+        here is retried by the reconciler and a duplicate run is a no-op.
         """
         self.topic_publisher.publish(resource_topic(resource_kind, resource_key))
         generation = await self.services.posts.pending_generation(resource_kind, resource_key)
@@ -323,7 +319,6 @@ async def main(
     process_config: BotProcessConfig | None = None,
     identity_config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
 ) -> None:
-    """Main entry point for the bot."""
     resolved_config = process_config or load_or_exit(load_bot_process_config)
     queue_listener = configure_bot_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="bot")
@@ -347,9 +342,8 @@ async def main(
                 await runtime.ready()
                 return bot.is_operational()
 
-            # The supervisor's task group has to be entered and exited by the same
-            # task, and Bot.close() can be driven from more than one place, so the
-            # group is held here and close() only cancels what it owns.
+            # The supervisor's task group must be entered and exited by the same task, and
+            # Bot.close() can be driven from more than one place, so the group is held here.
             async with (
                 bot.background_tasks.running(),
                 bot,
@@ -368,5 +362,5 @@ async def main(
 
 
 if __name__ == "__main__":
-    # You probably want to run app.py instead, this is just for convenience
+    # The repo-root app.py is the launcher; this is a convenience for running the bot alone.
     asyncio.run(main())

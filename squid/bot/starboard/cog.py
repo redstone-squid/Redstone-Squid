@@ -102,8 +102,8 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
     @sd.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
-        # A deleted *post* is tombstoned by the shared message listener and repaired by
-        # the reconciler, so only the origin's disappearance is starboard business.
+        # A deleted *post* is tombstoned by the shared message listener and repaired by the reconciler; only the
+        # origin's disappearance is starboard business.
         self._schedule(await self.service.mark_origin_deleted(payload.message_id), force=True)
 
     @sd.Cog.listener()
@@ -136,9 +136,8 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def _refresh_key(self, key: EntryKey, force: bool) -> None:
         """Nudge the reconciler for one entry.
 
-        The debouncer exists for latency, not correctness: the score write already
-        enqueued durable work, so a dropped nudge costs a few seconds rather than a
-        missing post. Coalescing reaction storms is what it is actually for.
+        The score write already enqueued durable work, so a dropped nudge costs seconds, not a post; the debouncer
+        only coalesces reaction storms.
         """
         del force
         starboard_id, origin_message_id = key
@@ -148,7 +147,7 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
     async def starboard(self, interaction: discord.Interaction[BotT]) -> None:
-        """Open capability-aware starboard configuration."""
+        """Requires any node in STARBOARD_CAPABILITIES; the screen exposes only the ones the actor holds."""
         await enforce(interaction, *STARBOARD_CAPABILITIES, mode="any")
         guild = interaction.guild
         assert guild is not None

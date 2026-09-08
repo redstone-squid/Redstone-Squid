@@ -1,4 +1,4 @@
-"""Handles reaction-based voting for various purposes."""
+"""Reaction-cast ballots, `/poll`, and the Vote to Delete context menu."""
 
 import contextlib
 import logging
@@ -32,11 +32,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _QUIET_REJECTIONS = frozenset({VoteRejection.NOT_FOUND, VoteRejection.CLOSED, VoteRejection.INVALID_OPTION})
-"""Refusals a reaction should not be answered with.
-
-Racing a close, or reacting with an emoji that is not an option, is ordinary and
-would otherwise put a bot message in the channel for every stray reaction.
-"""
+"""Refusals a reaction is not answered with: racing a close or reacting with a non-option emoji is ordinary."""
 
 
 class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
@@ -54,18 +50,17 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await self.bot.background_tasks.cancel(*self._background_tasks)
 
     def _track(self, handle: JobHandle) -> None:
-        """Hold a handle for cancellation on unload, dropping the settled ones.
-
-        A JobHandle has no completion callback, so the set is swept on insert
-        rather than pruned as each job finishes.
-        """
+        """Hold a handle for cancellation on unload; a JobHandle has no completion callback, so sweep on insert."""
         self._background_tasks = {tracked for tracked in self._background_tasks if not tracked.finished.is_set()}
         self._background_tasks.add(handle)
 
     async def on_reaction_add(self, event: ReactionEvent) -> None:
-        """Record a ballot, keeping it secret unless the poll publishes ballots."""
+        """Cast a ballot from a reaction; an unconsented voter is declined and an anonymous poll removes the reaction.
+
+        Votes in DMs are ignored.
+        """
         payload = event.payload
-        # This must be before the removal of the reaction to prevent the bot from removing its own reaction
+        # Before any reaction removal, so the bot never strips its own baseline reactions.
         if self.bot.user is not None and payload.user_id == self.bot.user.id:
             return
 
@@ -107,20 +102,18 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         if result.session is None:
             return
 
-        # A public poll keeps reactions as the visible ballot, so a changed vote has
-        # to have its previous reaction taken back or the message would show both.
+        # A public poll's reactions are the visible ballot, so a changed vote takes its previous reaction back.
         if not result.session.is_anonymous and previous is not None and previous.emoji != emoji_name:
             await self._remove_reaction(message, previous.emoji, user)
         await self.bot.refresh_posts("vote_session", str(snapshot.id))
 
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
-        """Synchronize reaction removal for polls that publicly retain reactions."""
+        """On a public poll, removing one's own reaction retracts that ballot."""
         payload = event.payload
         snapshot = await self.vote_service.get_session(payload.message_id)
         if snapshot is None or not snapshot.is_open or snapshot.is_anonymous:
             return
-        # Read-only resolution: someone with no account cannot have a selection here,
-        # and removing a reaction is no reason to write a row for them.
+        # Read-only: someone with no account has no selection, and removing a reaction is no reason to mint one.
         account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, payload.user_id)
         if account_id is None:
             return
@@ -131,8 +124,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         if member is None or member.bot:
             return
         actor = await resolve_actor(self.bot, member, account_id=account_id)
-        # Re-casting the same option toggles it off, which is what removing the
-        # reaction means for a poll whose reactions are the ballots.
+        # Re-casting the same option toggles it off.
         result = await self.vote_service.cast_vote(payload.message_id, actor, selection.emoji)
         if result.accepted and result.session is not None:
             await self.bot.refresh_posts("vote_session", str(result.session.id))
@@ -146,12 +138,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await self._restore_reactions(event.payload.message_id)
 
     async def _restore_reactions(self, message_id: int) -> None:
-        """Put the configured baseline reactions back, without inferring lost ballots.
-
-        Ballots live in the database, so a clear costs the affordance and not the
-        vote. Nothing here tries to reconstruct who had reacted: for an anonymous
-        session that information was never on the message to begin with.
-        """
+        """Re-add the option reactions to an open vote card; ballots live in the database, so none are inferred."""
         snapshot = await self.vote_service.get_session(message_id)
         if snapshot is None or not snapshot.is_open:
             return
@@ -169,12 +156,12 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def _remove_reaction(
         message: discord.Message, emoji: discord.PartialEmoji | str, user: discord.abc.Snowflake
     ) -> None:
-        """Take one reaction off a message, tolerating a message or permission that is gone."""
+        """Tolerates a message or permission that is gone."""
         with contextlib.suppress(discord.NotFound, discord.Forbidden):
             await message.remove_reaction(emoji, user)
 
     async def _report_rejection(self, message: discord.Message, rejection: VoteRejection) -> None:
-        """Tell a voter why their ballot was refused, in their server's language."""
+        """Post the refusal in the channel in the server's locale; `_QUIET_REJECTIONS` are not answered."""
         if rejection in _QUIET_REJECTIONS:
             return
         locale = await resolve_locale(message, self.bot.services.settings)
@@ -224,11 +211,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
     @sd.context_menu(name="Vote to Delete", defer="private")
     async def delete_vote_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
-        """Open a vote on deleting the message that was right-clicked.
-
-        This was `/vote delete <message>`, which in slash form meant pasting a link to a
-        message you were already looking at (audit C4).
-        """
+        """Open a vote on deleting the right-clicked message; the card is posted in that message's channel."""
         if request.guild is None or message.guild != request.guild:
             return error_node(tr("Cannot vote on this message"), tr("The message is not from this guild."))
 
@@ -236,9 +219,8 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         if author_account_id is None:
             return None
 
-        # The card is a public artifact of a public decision, so it goes in the channel rather
-        # than into the ephemeral reply the right-click opened. The placeholder is adopted by the
-        # reconciler, which replaces it with the vote card.
+        # A public decision goes in the channel, not the ephemeral reply; the reconciler adopts the placeholder
+        # and replaces it with the vote card.
         placeholder = await self.ui.send(
             message.channel, info_node(tr("Working"), tr("Getting information...")), locale=request.locale
         )
@@ -260,11 +242,9 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         return text_node(tr("Deletion vote opened."))
 
     async def _consented_account_id(self, discord_id: int) -> int | None:
-        """Resolve a voter's account without creating one.
+        """The voter's account id if it exists and consent is current; never creates one.
 
-        A reaction is not evidence that anybody asked to be remembered, and casting a ballot
-        stores a row naming them. There is no ephemeral surface on a raw reaction to ask in, so
-        the answer here is only ever "already agreed" or "not yet".
+        Casting a ballot stores a row naming the voter, and a raw reaction has no surface to ask for consent in.
         """
         account = await self.bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(discord_id))
         if account is None or account.id is None or account.needs_consent_refresh:
@@ -277,11 +257,9 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         user: discord.Member | discord.User,
         emoji: discord.PartialEmoji | str,
     ) -> None:
-        """Take the reaction back and say, once and briefly, how to make it count.
+        """Remove the reaction and post a self-deleting in-channel pointer to `/account consent`.
 
-        A raw reaction has no ephemeral surface, so this is in-channel and self-deleting. It is
-        deliberately not a DM: an unsolicited consent prompt arriving from a bot is worse than the
-        gap it closes.
+        Not a DM: an unsolicited consent prompt from a bot is worse than the gap it closes.
         """
         await self._remove_reaction(message, emoji, user)
         locale = await resolve_locale(message, self.bot.services.settings)
@@ -300,13 +278,11 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             await send_to(message.channel, delete_after=30)(payload)
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
-        """Resolve current member facts for a service-level weight refresh.
+        """The vote service's actor resolver, used when refreshing cached weights.
 
-        A ballot records an account, so the snowflake to look the member up by is read
-        here. Somebody who is definitely not in the guild resolves to an actor holding
-        nothing, which weighs the default; `None` is kept for the questions we could
-        not ask, so the caller leaves the cached weight alone instead of rewriting it
-        from an answer we never got.
+        An account with no Discord identity, or one confirmed absent from the guild, resolves to an actor holding
+        nothing. None means the question could not be answered (guild not visible, fetch forbidden), and the
+        caller keeps the cached weight.
         """
         guild = self.bot.get_guild(guild_id)
         account = await self.bot.services.accounts.get_account_by_id(account_id)
@@ -329,5 +305,4 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
-    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VoteCog(bot))

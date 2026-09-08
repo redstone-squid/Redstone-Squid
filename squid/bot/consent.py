@@ -1,4 +1,4 @@
-"""Asking one Discord user for informed consent, and continuing what they asked for."""
+"""The privacy-notice consent prompt, in an awaiting form for commands and a continuation form for action handlers."""
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
@@ -27,35 +27,34 @@ class NotAskedType(Enum):
 
 
 NOT_ASKED = NotAskedType.NOT_ASKED
-"""The question was never put to the user, and they have already been told why."""
+"""The prompt was not opened (admission rejected it); the user has already been told why."""
 
 type ConsentContinuation = Callable[[sl.PressEvent, AccountConsent | None], Awaitable[None]]
-"""What to do once the reader has answered, run by the prompt's own press.
+"""Runs from the prompt's own press once answered; `None` consent means cancelled.
 
-The awaiting form is only safe where the caller owns the wait. Inside a mounted action
-handler it is not: the handler runs in the mount's transaction and, under the default
-`EXCLUSIVE` policy, in its dispatch lock, so awaiting an answer holds both for as long as
-the reader takes to read. A continuation runs in the *prompt's* dispatch instead, which is
-a separate mount, so the press that opened it is already finished by then.
+An action handler must not await the answer: it runs inside its mount's transaction and, under
+the default `EXCLUSIVE` policy, its dispatch lock. The continuation runs in the prompt's mount
+instead, after the opening press has finished.
 """
 
 
 @dataclass(slots=True)
 class _Answer:
-    """What the reader said, held off the component on purpose.
+    """The answer, held off the component so the write is not staged by the handler's transaction.
 
-    Nothing renders it, and it has to outlive the press that writes it: the answering handler
-    runs in a transaction, so a declared cell would only be staged -- invisible to a waiter in
-    another task, and dropped by the teardown `finish` performs a line later. Writing through
-    an object the component merely holds is what keeps it off `Component.__setattr__`, which
-    is where an undeclared write raises.
+    A declared state cell would be invisible to `wait()` in another task and dropped by the
+    `finish` that follows; an undeclared attribute write raises in `Component.__setattr__`.
     """
 
     consent: AccountConsent | None = None
 
 
 class ConsentPrompt(sd.Screen):
-    """A semantic consent prompt with a native-free waiting lifecycle."""
+    """Privacy notice with agree/cancel; one open prompt per user, gone after 120 seconds or on answer.
+
+    A second prompt for the same user is rejected with a notice. `wait()` returns None on cancel,
+    on timeout and on unmount; `on_answer` runs only for an explicit answer.
+    """
 
     session = sd.SessionSpec(
         "consent",
@@ -130,9 +129,8 @@ class ConsentPrompt(sd.Screen):
         self._answer.consent = consent
         self.closed = True
         self._done.set()
-        # The continuation runs last, so nothing in this handler can fail after it and roll
-        # back what it wrote. Closing first also answers the click inside its own deadline,
-        # whatever the continuation then goes on to do.
+        # Finish first: the click is answered within its deadline and nothing after the
+        # continuation can roll back what it wrote.
         await event.finish()
         if self._on_answer is not None:
             await self._on_answer(event, consent)
@@ -171,7 +169,7 @@ async def _show_prompt(
     on_answer: ConsentContinuation | None,
     parent: sd.MessageRoot | None,
 ) -> ConsentPrompt | None:
-    """The notice this reader is owed, worded for what agreeing would actually store."""
+    """Open the prompt worded for what agreeing stores; None when admission rejected it."""
     version = CURRENT_CONSENT_VERSION
     if preview is None:
         prompt = ConsentPrompt(
@@ -236,11 +234,10 @@ async def prompt_for_consent(
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
 ) -> AccountConsent | NotAskedType | None:
-    """Show the notice and wait, returning the consent the user granted.
+    """Show the notice and await the answer; `NOT_ASKED` if the prompt could not open, None on cancel or timeout.
 
-    For callers that own their own wait -- a command, which holds no mount state while it
-    blocks. A mounted action handler wants `request_consent` instead, because the wait it
-    would do here happens inside the mount's transaction and dispatch lock.
+    For commands only. An action handler must use `request_consent`: awaiting here would hold
+    the mount's transaction and dispatch lock while the reader reads.
     """
     component = await _show_prompt(
         request,
@@ -264,12 +261,10 @@ async def request_consent(
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
 ) -> bool:
-    """Show the notice and return, running `on_answer` from the prompt's own press.
+    """Show the notice and return at once; `on_answer` runs from the prompt's own press.
 
-    Returns whether the prompt was opened; `False` means the reader has already been told
-    why not, and `on_answer` will never run. An unanswered prompt expires with its mount and
-    also never runs it, which is the right reading of an abandoned question: nothing was
-    stored, and nothing the reader did not ask for happens later.
+    False means the prompt was not opened, the reader has been told why, and `on_answer` never
+    runs. An unanswered prompt expires with its mount and never runs it either.
     """
     component = await _show_prompt(
         request,
@@ -283,7 +278,7 @@ async def request_consent(
 
 
 type ConsentedAccountWork = Callable[[sl.ActionEvent, int], Awaitable[None]]
-"""Work needing a consented account id, run against whichever press is live when it runs."""
+"""Runs with whichever press is live: the caller's if consent was current, the prompt's if it had to be asked."""
 
 
 async def with_consented_account(
@@ -293,17 +288,11 @@ async def with_consented_account(
     *,
     timeout: float = 120.0,
 ) -> None:
-    """Run `work` with the reader's consented account id, asking first when consent is stale.
+    """Run `work` with the reader's consented account id, prompting first when consent is missing or stale.
 
-    The mounted counterpart of `ensure_consented_account`, which may not be called from an
-    action handler: this one never awaits the answer, so the press that called it ends and
-    the panel's transaction and dispatch lock end with it.
-
-    `work` receives whichever press is live when it runs -- this one when the reader had
-    already agreed, the prompt's own when the question had to be put -- so a notice always
-    answers the click the reader last made. On the asking path the panel is redrawn here,
-    through its own handle: the prompt's interaction addresses the prompt's message, and
-    flushing the panel through it would draw the panel into the dialog.
+    The action-handler counterpart of `ensure_consented_account`: never awaits the answer. On the
+    prompting path the account is created on agreement and the panel is redrawn through its own
+    root, since the prompt's interaction addresses the prompt's message.
     """
     request = await sd.request(event)
     user = request.user
@@ -338,10 +327,10 @@ async def ensure_consented_account(
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
 ) -> int | None:
-    """Return the user's account id after current consent has been granted.
+    """The user's account id, prompting for consent first when missing or stale; None if refused or not asked.
 
-    Awaits the answer, so it belongs to a command rather than to a mounted action handler;
-    `with_consented_account` is the form for the latter.
+    Awaits the answer, so for commands only; action handlers use `with_consented_account`. A
+    refusal is answered with a personal "Cancelled" notice; `NOT_ASKED` is answered by admission.
     """
     user = request.user
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))

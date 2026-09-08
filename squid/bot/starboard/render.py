@@ -13,7 +13,7 @@ from squid.starboard.application import EntryState
 def starboard_layout(
     state: EntryState, message: discord.Message, *, locale: str | None = None
 ) -> sd.message_payload.MessagePayload:
-    """Render one source message as a semantic Components V2 card."""
+    """Author header, then reply note, up to 10 attachments and a jump link, each gated by the board's config."""
     config = state.config
     entry = state.entry
     author_name = getattr(message.author, "display_name", message.author.name)

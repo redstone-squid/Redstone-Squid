@@ -1,4 +1,4 @@
-"""Minecraft version catalogue management."""
+"""The `/versions` catalogue screen and the version-announcement channel listener."""
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
@@ -23,17 +23,23 @@ if TYPE_CHECKING:
 
 
 class VersionOperations(Protocol):
-    """Version reads and writes used by the live catalogue."""
+    """Version reads and writes used by the live catalogue; `VersionService` implements it."""
 
-    async def list_display(self, edition: Edition, *, limit: int | None = None) -> Sequence[str]: ...
+    async def list_display(self, edition: Edition, *, limit: int | None = None) -> Sequence[str]:
+        """Recognized versions of one edition as display strings, oldest first, truncated to `limit` when given."""
+        ...
 
-    async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion: ...
+    async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion:
+        """Parse and store a version; `edition` overrides any edition prefix in the string, else Java is assumed.
+
+        Raises:
+            InvalidVersionError: `version_string` does not match the version pattern.
+        """
+        ...
 
 
 @dataclass(frozen=True, slots=True)
 class VersionItem:
-    """One edition-qualified version shown in the catalogue."""
-
     edition: Edition
     value: str
 
@@ -42,7 +48,11 @@ type VersionAuthorizer = Callable[[], Awaitable[bool]]
 
 
 class VersionScreen(sd.Screen):
-    """A version catalogue that ends when closed, replaced, or timed out."""
+    """Paged version catalogue with an add form for callers holding `VERSION_ENTRY_CREATE`.
+
+    Ends when closed, replaced, or after 300 seconds idle. The add form re-checks authorization on
+    every submit.
+    """
 
     session = sd.SessionSpec("versions")
     timeout = 300
@@ -136,7 +146,7 @@ class VersionScreen(sd.Screen):
 
 
 class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="VersionTracker"):
-    """Open the version catalogue and ingest configured channel announcements."""
+    """Serves `/versions` and records the first line of every message in the configured version-tracker channel."""
 
     def __init__(self, bot: BotT):
         super().__init__(bot)
@@ -144,8 +154,6 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Ve
 
     @app_commands.command(name="versions", description="Browse recognized Minecraft versions")
     async def versions(self, interaction: discord.Interaction[BotT]) -> None:
-        """Open the paged version catalogue."""
-
         async def may_create() -> bool:
             return await allows(interaction, VERSION_ENTRY_CREATE)
 
@@ -160,7 +168,7 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Ve
 
     @sd.Cog.listener(name="on_message")
     async def on_message_version_add(self, message: discord.Message) -> None:
-        """Parse messages in the version-tracking channel and add them to the database."""
+        """Add the first line of a message in `version_tracker_channel_id` as a version and confirm in that channel."""
         channel_id = message.channel.id
         if channel_id != self.bot.community_config.version_tracker_channel_id:
             return
@@ -174,5 +182,4 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Ve
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Load the version catalogue cog."""
     await bot.add_cog(VersionTracker(bot))

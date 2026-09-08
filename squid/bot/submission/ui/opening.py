@@ -19,7 +19,7 @@ async def prepare_build_editor(
     build: Build,
     builds: BuildService | None = None,
 ) -> BuildEditScreen:
-    """Inject actor-aware Discord operations into one build editor."""
+    """Build an editor whose authorize hook admits a pending build's submitter or anyone with BUILD_SUBMISSION_EDIT."""
     client = cast("RedstoneSquid", request.client)
     actor_id = request.user.id
     prepared: BuildEditScreen | None = None
@@ -53,7 +53,7 @@ async def prepare_build_editor(
 
 
 async def show_build_editor(request: sd.Request[Any], screen: BuildEditScreen) -> BuildEditScreen | None:
-    """Authorize and show a prepared editor under its user/build key."""
+    """Show a prepared editor, or answer with a refusal and return None when the actor may not edit."""
     if not await screen.may_edit():
         await request.respond(
             error_node(
@@ -69,7 +69,6 @@ async def show_build_editor(request: sd.Request[Any], screen: BuildEditScreen) -
 
 
 async def open_build_editor(request: sd.Request[Any], build: Build) -> BuildEditScreen | None:
-    """Prepare and show a build editor in one call."""
     return await show_build_editor(request, await prepare_build_editor(request, build))
 
 

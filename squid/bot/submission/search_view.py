@@ -122,7 +122,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
 
 
 class SearchScreen(sd.Screen):
-    """A resource-backed search workspace that ends when closed, replaced, or timed out."""
+    """Paged search results; a hit that names a build opens the build card inline."""
 
     session = sd.SessionSpec("search")
     timeout = 180
@@ -163,32 +163,28 @@ class SearchScreen(sd.Screen):
 
     @property
     def request(self) -> SearchRequest:
-        """Return the request currently displayed by the component."""
+        """The base request at the offset of the visible page."""
         return self._source.request_at(self._visible_window().position.offset)
 
     @property
     def page(self) -> SearchPage:
-        """Return the current result page."""
         return self._source.page_for(self._visible_window())
 
     @property
     def hits(self) -> tuple[SearchHit, ...]:
-        """Return the results currently displayed."""
         return self._visible_window().window.items
 
     @property
     def can_go_back(self) -> bool:
-        """Return whether an earlier page exists."""
         return self._visible_window().window.has_previous
 
     @property
     def can_go_forward(self) -> bool:
-        """Return whether a later page exists."""
         return self._visible_window().window.has_next
 
     @property
     def detail_index(self) -> int | None:
-        """Return the opened page index for compatibility with the historical view."""
+        """Position of the opened hit within `hits`, or None when nothing is open."""
         if self._browser.opened is None:
             return None
         identity = _hit_identity(self._browser.opened)

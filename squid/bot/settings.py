@@ -61,15 +61,12 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Setti
 
     @sd.Cog.listener("on_guild_join")
     async def on_guild_join(self, guild: discord.Guild) -> None:
-        """Register a guild when the bot joins it."""
         await self.settings_service.guild_joined(guild.id)
 
     @sd.Cog.listener("on_guild_remove")
     async def on_guild_remove(self, guild: discord.Guild) -> None:
-        """Remove a guild registration when the bot leaves it."""
         await self.settings_service.guild_removed(guild.id)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Load the settings cog."""
     await bot.add_cog(SettingsCog(bot))
