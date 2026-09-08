@@ -114,7 +114,10 @@ class DraftChange:
 
 @dataclass(frozen=True, slots=True)
 class DraftSnapshot:
-    """Current compacted state of one account-owned draft."""
+    """Current compacted state of one account-owned draft.
+
+    Construction deep-copies `answers`, so a snapshot never aliases the caller's mapping.
+    """
 
     id: UUID
     owner_account_id: int
@@ -140,7 +143,13 @@ class DraftSnapshot:
         object.__setattr__(self, "answers", deepcopy(dict(self.answers)))
 
     def apply(self, change: DraftChange) -> DraftSnapshot:
-        """Apply an atomic edit or reject it when the client is stale."""
+        """Return the next snapshot: revision incremented, status back to `EDITING`, answers rewritten.
+
+        Raises:
+            DraftRevisionConflictError: If the change was based on a revision other than this one.
+            ValidationError: If the draft is not in an editable state, or the resulting answers
+                exceed the retained JSON budget.
+        """
         if self.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
             current_status = self.status.value
             raise ValidationError(
@@ -172,7 +181,11 @@ class DraftSnapshot:
         return replace(self, revision=self.revision + 1, status=DraftStatus.EDITING, answers=answers)
 
     def transition(self, status: DraftStatus) -> DraftSnapshot:
-        """Apply an allowed lifecycle transition."""
+        """Move to another lifecycle state; `SUBMITTED` and `EXPIRED` are terminal.
+
+        Raises:
+            ValidationError: If the transition is not allowed from the current state.
+        """
         allowed: dict[DraftStatus, frozenset[DraftStatus]] = {
             DraftStatus.EDITING: frozenset({DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION, DraftStatus.EXPIRED}),
             DraftStatus.PROCESSING: frozenset(

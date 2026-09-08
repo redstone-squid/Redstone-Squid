@@ -19,7 +19,12 @@ _SHOWCASE_QUALIFIER = re.compile(r"(?:\d+\.\d+\s*s|\d+\s*[Bb]locks)")
 
 
 def format_build_category(build: Build) -> FormattedTitle:
-    """Format the canonical category title without individual-build decoration."""
+    """Format the canonical category title without individual-build decoration.
+
+    Raises:
+        InvalidBuildError: If the build lacks an orientation or length the grammar requires.
+        NotImplementedError: If the build has no category, so no grammar applies.
+    """
     formatter = RulesTitleFormatter()
     unknown = build.extra_info.get("unknown_restrictions", {})
     match build:
@@ -90,7 +95,14 @@ def format_build_category(build: Build) -> FormattedTitle:
 
 
 def format_build_display_title(build: Build, *, markdown: bool, current_version: str | None = None) -> str:
-    """Decorate a canonical title with individual-build moderation and showcase UX."""
+    """Decorate a canonical title with individual-build moderation and showcase UX.
+
+    Marks the build ``[BROKEN]`` when `current_version` is given and absent from its versions.
+
+    Raises:
+        InvalidBuildError: If the build lacks a fact the category grammar requires.
+        NotImplementedError: If the build has no category, so no grammar applies.
+    """
     category = format_build_category(build)
     terms: list[str] = []
     if build.submission_status == Status.PENDING:

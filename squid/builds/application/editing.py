@@ -56,7 +56,11 @@ class BuildEditPatch:
 
     @classmethod
     def from_attributes(cls, changes: Mapping[str, object]) -> Self:
-        """Create a patch from build attribute names used by the generic edit UI."""
+        """Create a patch from build attribute names used by the generic edit UI.
+
+        Raises:
+            InvalidBuildError: If a key names no patchable field.
+        """
         supported = cls.__dataclass_fields__.keys()
         unknown = changes.keys() - supported
         if unknown:
@@ -124,8 +128,7 @@ class BuildEditPatch:
                 )
             if not isinstance(self.door_dimensions, _Unset):
                 width, height, depth = self.door_dimensions
-                # A cleared width or height falls back to the entity's declared
-                # defaults, matching the save-time coercion this replaced.
+                # A cleared width or height falls back to the entity's declared defaults.
                 door_fields_by_name = type(build).__dataclass_fields__
                 build.door_width = width if width is not None else cast(int, door_fields_by_name["door_width"].default)
                 build.door_height = (
@@ -208,7 +211,11 @@ class BuildEditPatch:
 
 
 class BuildEditLease:
-    """Exception-safe lease for previewing and committing one build edit."""
+    """Exception-safe lease for previewing and committing one build edit.
+
+    Entering takes the build's lock and applies the patch to the in-memory entity; leaving
+    releases the lock whether or not `commit` ran. A lease commits at most once.
+    """
 
     def __init__(
         self,
@@ -235,12 +242,25 @@ class BuildEditLease:
 
     @property
     def build(self) -> Build:
+        """The leased entity with the patch already applied.
+
+        Raises:
+            InvalidStateError: If the lease has not been entered.
+        """
         if self._build is None:
             msg = "The edit lease has not been entered."
             raise InvalidStateError(msg)
         return self._build
 
     async def __aenter__(self) -> Self:
+        """Take the lock, load the build and apply the patch, releasing the lock on any failure.
+
+        Raises:
+            BuildBusyError: If the lock is held elsewhere and could not be taken.
+            BuildNotFoundError: If no build has this ID.
+            BuildRevisionMismatchError: If `expected_revision` no longer matches the stored build.
+            InvalidBuildError: If the patch does not apply to this build's category.
+        """
         acquired = await self._locks.acquire(
             self._build_id,
             blocking=self._blocking,
@@ -270,6 +290,11 @@ class BuildEditLease:
         return self
 
     async def commit(self) -> Build:
+        """Persist the patched build while the lock is still held.
+
+        Raises:
+            InvalidStateError: If the lease was never entered, or has already committed.
+        """
         if self._committed:
             msg = "This build edit has already been committed."
             raise InvalidStateError(msg)

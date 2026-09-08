@@ -32,9 +32,13 @@ def _persisted_build_id(build: Build) -> int:
 class BuildQueryRepository(Protocol):
     """Build persistence queries required by search workflows."""
 
-    async def get_by_id(self, build_id: int) -> Build | None: ...
+    async def get_by_id(self, build_id: int) -> Build | None:
+        """The build with this ID, or None when no row has it."""
+        ...
 
-    async def get_many(self, build_ids: Sequence[int]) -> list[Build]: ...
+    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
+        """The requested builds in the requested order, dropping IDs that do not exist."""
+        ...
 
     async def list_page(
         self,
@@ -46,22 +50,34 @@ class BuildQueryRepository(Protocol):
         after_id: int | None,
         before_id: int | None,
         limit: int,
-    ) -> list[Build]: ...
+    ) -> list[Build]:
+        """One page in display order, restricted to `statuses` and, if given, one submitter.
+
+        `after_id` and `before_id` anchor relative to the ID order and are only valid with the ID
+        sort. A `before_id` page arrives with its overfetched row at the front.
+        """
+        ...
 
     async def count(
         self,
         *,
         statuses: frozenset[Status],
         submitter_account_id: int | None,
-    ) -> int: ...
+    ) -> int:
+        """How many builds `list_page` would return under the same visibility policy."""
+        ...
 
-    async def get_pending(self) -> list[Build]: ...
+    async def get_pending(self) -> list[Build]:
+        """Every build still awaiting review."""
+        ...
 
 
 class SemanticBuildSearch(Protocol):
     """Natural-language build lookup."""
 
-    async def find_build_id(self, query: str) -> int | None: ...
+    async def find_build_id(self, query: str) -> int | None:
+        """The ID of the build nearest to a query, or None when nothing can be matched."""
+        ...
 
 
 class BuildQueryService:
@@ -79,16 +95,14 @@ class BuildQueryService:
         return await self._builds.get_by_id(build_id)
 
     async def get_public(self, build_id: int) -> Build:
-        """Return a build the public catalogue may show, or raise `BuildNotFoundError`.
+        """Return a build the public catalogue may show, meaning a confirmed one.
 
-        One rule, one place. Four routes each wrote `build is None or
-        build.submission_status is not Status.CONFIRMED`, which meant the
-        definition of "public" lived in the transport layer in four copies.
+        A pending or denied build raises the same error as a missing one on purpose: the two are
+        indistinguishable to a caller without `build.submission.view_pending`, which is what keeps
+        a submission's existence private until it is confirmed.
 
-        A pending build raises the same error as a missing one on purpose: the
-        two are indistinguishable to a caller without
-        `build.submission.view_pending`, which is what keeps a submission's
-        existence private until it is confirmed.
+        Raises:
+            BuildNotFoundError: If the build does not exist or is not confirmed.
         """
         build = await self._builds.get_by_id(build_id)
         if build is None or build.submission_status is not Status.CONFIRMED:
@@ -136,6 +150,7 @@ class BuildQueryService:
         )
 
     async def semantic(self, query: str) -> Build | None:
+        """The build nearest to a natural-language query, whatever its status."""
         build_id = await self._semantic_search.find_build_id(query)
         if build_id is None:
             return None

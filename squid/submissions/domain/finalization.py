@@ -267,7 +267,12 @@ type SubmissionCategoryDetails = DoorSubmissionDetails | ExtenderSubmissionDetai
 
 @dataclass(frozen=True, slots=True)
 class NormalizedSubmission:
-    """Complete immutable input to the idempotent build-creation target."""
+    """Complete immutable input to the idempotent build-creation target.
+
+    Construction raises `ValidationError` when the details do not match the category, when a
+    sponsor projection is not backed by the Paper installation the submission came from, or when
+    creators or the exact source version are missing.
+    """
 
     source_draft_id: UUID
     owner_account_id: int

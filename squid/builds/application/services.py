@@ -36,9 +36,8 @@ from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 class BuildEditor:
     """Who is editing a build, in the terms the edit policy asks about.
 
-    One fact and no transport: the permission subject behind the caller, which already
-    carries the account ownership is recorded against. An HTTP request, a slash command,
-    and a modal submission all reduce to this.
+    One fact and no transport: the permission subject behind the caller, which already carries the
+    account ownership is recorded against.
     """
 
     subject: Subject
@@ -74,7 +73,7 @@ class BuildService:
         return await self._repository.get_by_source_submission_draft_id(draft_id)
 
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
-        """Return every build inferred from one Discord message, newest bundle included."""
+        """Return every build attributed to one Discord message, in ascending build-ID order."""
         return await self._repository.list_ids_for_source_message(message_id)
 
     async def submit_door(self, submission: DoorSubmissionInput) -> DoorBuild:
@@ -124,7 +123,7 @@ class BuildService:
         return build
 
     async def clean_stale_locks(self, *, older_than: Instant) -> None:
-        """Release persisted build locks older than a cutoff."""
+        """Reclaim persisted build locks that have expired."""
         await self._locks.clean_stale(older_than=older_than)
 
     async def classify_restrictions[BuildT: (Build, BuildDraft)](
@@ -163,9 +162,12 @@ class BuildService:
     ) -> Build:
         """Finalize one synchronized draft under an account, whatever identity it linked.
 
-        The draft UUID is both persisted for audit and used as the retry key. A later
-        finalization attempt returns the already-created build without requiring any
-        Discord identity on the owning account.
+        The draft UUID is both persisted for audit and used as the retry key: a later attempt
+        returns the already-created build instead of a second one.
+
+        Raises:
+            InvalidStateError: If the draft already produced a build owned by another account or
+                carrying different sponsor provenance.
         """
         existing = await self._repository.get_by_source_submission_draft_id(source_submission_draft_id)
         if existing is not None:
@@ -199,6 +201,7 @@ class BuildService:
         timeout: float = 30,
         expected_revision: int | None = None,
     ) -> BuildEditLease:
+        """An unentered lease; the lock is taken and the patch applied on `async with`."""
         return BuildEditLease(
             self._repository,
             self._locks,
@@ -220,14 +223,17 @@ class BuildService:
     ) -> Build:
         """Edit an owned pending build, or any build with `build.submission.edit`.
 
-        The authorizing wrapper around `edit()`, not a replacement for it. This
-        policy used to live in the HTTP route, which read the leased build's
-        status and submitter and decided there -- so the bot's two edit paths
-        could not reuse it, and the rule existed only for HTTP callers.
+        The authorizing wrapper around `edit()`, not a replacement for it. Authorization happens
+        inside the lease because it reads the build: a check before the load would race an
+        approval that flips the build out of `PENDING` between the two.
 
-        Authorization happens inside the lease because it reads the build: a
-        check before the load would race an approval that flips the build out of
-        `PENDING` between the two.
+        Raises:
+            InvalidStateError: If the service was built without a permission service.
+            AuthorizationError: If the actor neither owns the pending build nor holds
+                `build.submission.edit`.
+            BuildBusyError: If another edit holds the build's lock.
+            BuildNotFoundError: If no build has this ID.
+            BuildRevisionMismatchError: If `expected_revision` no longer matches the stored build.
         """
         if self._permissions is None:
             msg = "Authorized editing requires a permission service."
@@ -243,12 +249,24 @@ class BuildService:
             return await lease.commit()
 
     async def confirm(self, build_id: int) -> Build:
+        """Confirm a build under its lock.
+
+        Raises:
+            BuildBusyError: If another edit holds the build's lock.
+            BuildNotFoundError: If no build has this ID.
+        """
         async with self._locks.locked(build_id):
             build = await self._get_required(build_id)
             await self._repository.confirm(build)
         return build
 
     async def deny(self, build_id: int) -> Build:
+        """Deny a build under its lock.
+
+        Raises:
+            BuildBusyError: If another edit holds the build's lock.
+            BuildNotFoundError: If no build has this ID.
+        """
         async with self._locks.locked(build_id):
             build = await self._get_required(build_id)
             await self._repository.deny(build)

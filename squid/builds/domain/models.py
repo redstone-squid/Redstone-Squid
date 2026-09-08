@@ -60,8 +60,6 @@ class UnknownRestrictions(TypedDict, total=False):
 
 
 class ServerInfo(TypedDict, total=False):
-    """Various additional information about the server."""
-
     server_ip: str
     coordinates: str
     command_to_build: str
@@ -76,7 +74,7 @@ class SchematicDuplicateInfo(TypedDict):
 
 
 class Info(TypedDict, total=False):
-    """A special JSON field in the database that stores various additional information about the build."""
+    """The shape of the build's ``extra_info`` JSON column."""
 
     user: str  # Provided by the submitter if they have any additional information to provide.
     unknown_patterns: list[str]
@@ -91,16 +89,12 @@ class Info(TypedDict, total=False):
 
 
 class Status(IntEnum):
-    """The status of a submission."""
-
     PENDING = 0
     CONFIRMED = 1
     DENIED = 2
 
 
 class BuildCategory(StrEnum):
-    """The categories of the builds."""
-
     DOOR = "Door"
     EXTENDER = "Extender"
     UTILITY = "Utility"
@@ -109,7 +103,7 @@ class BuildCategory(StrEnum):
 
 
 class FrozenField[T]:
-    """A descriptor that makes an attribute immutable after it has been set."""
+    """A descriptor that raises `InvalidStateError` on every assignment after the first."""
 
     __slots__ = ("_private_name",)
 
@@ -136,21 +130,18 @@ class FrozenField[T]:
 
 
 def frozen_field(**kwargs: Any) -> Any:
-    """A field that is immutable after it has been set. See `dataclasses.field` for more information."""
+    """A `dataclasses.field` that `freeze_fields` turns into a `FrozenField` descriptor."""
     metadata = kwargs.pop("metadata", {}) | {"frozen": True}
     return field(**kwargs, metadata=metadata)
 
 
 def freeze_fields[T](cls: type[T]) -> type[T]:
-    """A decorator that makes fields of a dataclass immutable, if they have the `frozen` metadata set to True.
+    """Replace every field carrying `frozen` metadata with a `FrozenField` descriptor.
 
-    This is done by replacing the fields with FrozenField descriptors.
-
-    Args:
-        cls: The class to make immutable, must be a dataclass.
+    An already-frozen dataclass is returned untouched.
 
     Raises:
-        TypeError: If cls is not a dataclass
+        InvalidStateError: If `cls` is not a dataclass.
     """
     cls_fields = getattr(cls, "__dataclass_fields__", None)
     if cls_fields is None:
@@ -171,9 +162,7 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
 class BuildLink:
     """One media URL attached to a build.
 
-    The database keys links by ``(build_id, url)``, so a URL carries exactly one
-    media type per build; modelling links as one typed collection makes the
-    conflicting state unrepresentable.
+    The database keys links by ``(build_id, url)``, so a URL carries exactly one media type per build.
     """
 
     url: str
@@ -196,7 +185,11 @@ class SourceMessage:
 
     @property
     def link(self) -> str | None:
-        """The Discord jump link to the message."""
+        """The Discord jump link, or None when the channel is unknown.
+
+        Raises:
+            NotImplementedError: If the message has a channel but no guild, i.e. it came from a DM.
+        """
         if self.channel_id is None:
             return None
         if self.guild_id is None:
@@ -255,9 +248,8 @@ def sort_restrictions(
 ) -> dict[RestrictionTypeLiteral, list[str]]:
     """Group restriction names into their buckets, canonicalizing the spelling.
 
-    A free function rather than a method, because a caller staging an edit needs the buckets
-    without a build to write them onto: `/build edit` takes restrictions as one option and has
-    to distribute them across the workspace's per-bucket fields before anything is applied.
+    Names absent from `definitions` are dropped. A free function, because `/build edit` needs the
+    buckets before it has a build to write them onto.
 
     Raises:
         DataIntegrityError: If a known restriction has no type recorded.
@@ -320,7 +312,11 @@ class StagedTaxonomy:
         restrictions: Sequence[str],
         definitions: Mapping[str, RestrictionTypeLiteral | None],
     ) -> None:
-        """Replace restrictions using already-loaded classification metadata."""
+        """Replace the four staged restriction lists from already-loaded classification metadata.
+
+        Raises:
+            DataIntegrityError: If a known restriction has no type recorded.
+        """
         sorted_restrictions = sort_restrictions(restrictions, definitions)
         self.wiring_placement_restrictions = sorted_restrictions["wiring-placement"]
         self.animated_restrictions = sorted_restrictions["animated"]
@@ -333,16 +329,14 @@ class StagedTaxonomy:
 class Build(StagedMedia, StagedTaxonomy):
     """The facts shared by every build category.
 
-    Do not instantiate this class directly: every persisted build belongs to
-    exactly one category subclass (:class:`DoorBuild`, :class:`ExtenderBuild`,
-    :class:`UtilityBuild`, :class:`EntranceBuild`, :class:`OtherBuild`), and
-    ``category`` is derived from the type. Use :class:`BuildDraft` while the
-    category is still unknown.
+    Every persisted build belongs to exactly one category subclass (:class:`DoorBuild`,
+    :class:`ExtenderBuild`, :class:`UtilityBuild`, :class:`EntranceBuild`, :class:`OtherBuild`) and
+    ``category`` is derived from the type; constructing :class:`Build` itself raises
+    :class:`InvalidStateError`. Use :class:`BuildDraft` while the category is still unknown.
 
-    The four restriction lists and ``patterns`` are *staged taxonomy input*:
-    callers write requested display names into them, and
-    `squid.builds.application.taxonomy.apply_build_taxonomy` canonicalizes them
-    into ``tags`` — the persisted source of truth — before any save.
+    The four restriction lists and ``patterns`` are staged taxonomy input: callers write requested
+    display names into them, and `squid.builds.application.taxonomy.apply_build_taxonomy`
+    canonicalizes them into ``tags`` — the persisted source of truth — before any save.
     """
 
     category: ClassVar[BuildCategory]
@@ -376,10 +370,7 @@ class Build(StagedMedia, StagedTaxonomy):
     submitter_discord_id: int | None = None
     """Read-only derived state, filled on load for Discord rendering.
 
-    Ownership is `submitter_account_id` and nothing reads this to decide anything.
-    Named for the provider so it stops sitting ambiguously beside the account id -- that
-    ambiguity is what let the edit ownership test compare a snowflake to a snowflake
-    while a perfectly good account id sat one attribute away."""
+    Ownership is `submitter_account_id`; nothing decides anything from this snowflake."""
     completion_time: str | None = None
     completion_at: Instant | None = None
     completion_evidence: str | None = None
@@ -402,8 +393,7 @@ class Build(StagedMedia, StagedTaxonomy):
     def original_link(self) -> str | None:
         """The jump link to the message this build was submitted from, if any.
 
-        The first source message is the submission itself; later ones are follow-ups
-        such as images, so linking anything else would point away from the request.
+        The first source message is the submission; later ones are follow-ups such as images.
         """
         for message in self.source_messages:
             if (link := message.link) is not None:
@@ -412,7 +402,6 @@ class Build(StagedMedia, StagedTaxonomy):
 
     @property
     def dimensions(self) -> tuple[int | None, int | None, int | None]:
-        """The dimensions of the build."""
         return self.width, self.height, self.depth
 
     @dimensions.setter
@@ -421,7 +410,11 @@ class Build(StagedMedia, StagedTaxonomy):
 
     @property
     def title(self) -> str:
-        """The user-facing title, including individual-build UX decoration."""
+        """The user-facing title in markdown, with moderation and showcase decoration.
+
+        Raises:
+            InvalidBuildError: If a fact the category's title grammar requires is missing.
+        """
         from squid.builds.domain.titles import format_build_display_title
 
         return format_build_display_title(self, markdown=True)
@@ -429,9 +422,8 @@ class Build(StagedMedia, StagedTaxonomy):
     def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """Returns the differences between this build and another of the same category.
 
-        Values are rendered as plain data — callers persist the result as JSON —
-        so link collections come back as one entry per media type rather than as
-        :class:`BuildLink` objects.
+        Values are plain data — callers persist the result as JSON — so links come back as one
+        ``<media_type>_urls`` entry per media type rather than as :class:`BuildLink` objects.
 
         Args:
             other: Another build to compare to.
@@ -464,7 +456,11 @@ class Build(StagedMedia, StagedTaxonomy):
         return differences
 
     def get_attr_type(self, attribute: str) -> type:
-        """Gets the declared type of a field or property on this build's class."""
+        """Gets the declared type of a field or property on this build's class.
+
+        Raises:
+            InvalidBuildError: If the class declares no such field or property.
+        """
         cls = type(self)
         if attribute in typing.get_type_hints(cls):
             return typing.get_type_hints(cls)[attribute]
@@ -493,14 +489,12 @@ class DoorBuild(Build):
 
     @property
     def door_dimensions(self) -> tuple[int, int, int | None]:
-        """The dimensions of the door (hallway)."""
+        """The hallway opening — width, height, depth — not the dimensions of the build around it."""
         return self.door_width, self.door_height, self.door_depth
 
 
 @dataclass(kw_only=True)
 class ExtenderBuild(Build):
-    """A piston extender."""
-
     category: ClassVar[BuildCategory] = BuildCategory.EXTENDER
 
     orientation: str | None = None
@@ -510,8 +504,6 @@ class ExtenderBuild(Build):
 
 @dataclass(kw_only=True)
 class UtilityBuild(Build):
-    """A redstone utility."""
-
     category: ClassVar[BuildCategory] = BuildCategory.UTILITY
 
 

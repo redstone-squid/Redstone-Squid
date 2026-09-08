@@ -1,9 +1,8 @@
 """Submission form options served from the shared suggestion registry.
 
-The form manifest's `option_source` values and the suggestion registry's source ids are the same
-namespace by design. Serving both from one catalogue is what makes that true rather than merely
-intended: a source cannot be completable in Discord but missing from the web form, and the two
-cannot disagree about what a name means.
+The form manifest's `option_source` values and the suggestion registry's source ids are one
+namespace. Serving both from this catalogue is what enforces that: no source can be completable
+in Discord but missing from the web form, and the two cannot disagree about what a name means.
 """
 
 from typing import override
@@ -28,11 +27,11 @@ class SuggestionFormOptionCatalog(FormOptionCatalog):
         *,
         locale: str | None,
     ) -> FormOptionSet:
-        """Return a deterministic content revision for one supported option source.
+        """Enumerate one registered source, carrying through its content-addressed revision.
 
-        Raises `ValueError` for anything a form may not read, preserving the contract the route
-        already relies on. A queried source is refused as firmly as an unregistered one: a form
-        needs the whole set, and a source that cannot be enumerated has no whole set to give.
+        Raises:
+            ValueError: If the source is unregistered, or is queried rather than enumerable. A
+                form needs the whole set, and a queried source has no whole set to give.
         """
         try:
             definition = self._suggestions.registry.resolve(source)

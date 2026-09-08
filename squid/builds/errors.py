@@ -5,16 +5,12 @@ from squid.core.i18n import tr
 
 
 class InvalidBuildError(ValidationError):
-    """Build data is invalid."""
-
     default_message = tr(t"The build data is invalid.")
     default_code = ErrorCode.INVALID_BUILD
     default_resource = "build"
 
 
 class BuildNotFoundError(NotFoundError):
-    """A build could not be found."""
-
     default_message = tr(t"Build not found.")
     default_code = ErrorCode.BUILD_NOT_FOUND
     default_resource = "build"

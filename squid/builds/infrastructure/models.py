@@ -41,7 +41,11 @@ if TYPE_CHECKING:
 
 
 class Build(Base, kw_only=True):
-    """A build submitted by a user."""
+    """A build submitted by a user, and the base row of the joined-table category hierarchy.
+
+    ``category`` discriminates the subtype table; ``revision`` is the optimistic-lock version,
+    so a write against a stale row raises SQLAlchemy's ``StaleDataError``.
+    """
 
     __tablename__ = "builds"
     __table_args__ = (
@@ -145,12 +149,10 @@ class Build(Base, kw_only=True):
     )
     is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
 
-    # Every one of these four child tables declares `ON DELETE CASCADE`, so
-    # `passive_deletes=True` lets PostgreSQL do the cascade in the same statement that
-    # deletes the build. Without it the ORM insists on its own cascade: it loads each
-    # collection and emits one DELETE per child row, re-doing work the database was
-    # going to do anyway. `delete-orphan` still applies to items removed from a
-    # collection on a live parent, which is the case that genuinely needs the ORM.
+    # All four child tables declare `ON DELETE CASCADE`, so `passive_deletes=True` lets
+    # PostgreSQL cascade in the same statement that deletes the build; without it the ORM
+    # loads each collection and emits one DELETE per child row. `delete-orphan` still covers
+    # items removed from a collection on a live parent, which is the case that needs the ORM.
     build_creators: Mapped[list[BuildCreator]] = relationship(
         back_populates="build",
         default_factory=list,
@@ -187,7 +189,7 @@ class Build(Base, kw_only=True):
 
 
 class Door(Build, kw_only=True):
-    """A door build with specific dimensions and timing information."""
+    """A build whose category is Door: the hallway it opens and how long it takes."""
 
     __tablename__ = "doors"
     __mapper_args__ = {
@@ -212,7 +214,7 @@ class Door(Build, kw_only=True):
 
 
 class Extender(Build, kw_only=True):
-    """An extender build."""
+    """A build whose category is Extender: a piston extender and how far it reaches."""
 
     __tablename__ = "extenders"
     __mapper_args__ = {
@@ -232,7 +234,7 @@ class Extender(Build, kw_only=True):
 
 
 class Utility(Build, kw_only=True):
-    """A utility build."""
+    """A build whose category is Utility; it carries no category-specific columns."""
 
     __tablename__ = "utilities"
     __mapper_args__ = {
@@ -249,7 +251,7 @@ class Utility(Build, kw_only=True):
 
 
 class Entrance(Build, kw_only=True):
-    """An entrance build."""
+    """A build whose category is Entrance, meaning an entrance that is not a door."""
 
     __tablename__ = "entrances"
     __mapper_args__ = {
@@ -350,7 +352,7 @@ class BuildVersion(Base):
 
 
 class BuildLink(Base):
-    """A link associated with a build (image, video, world download)."""
+    """One media URL on a build, keyed by ``(build_id, url)``, so a URL carries one media type."""
 
     __tablename__ = "build_links"
     build_id: Mapped[int] = mapped_column(

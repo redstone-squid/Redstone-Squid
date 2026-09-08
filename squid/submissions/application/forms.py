@@ -35,7 +35,9 @@ class FormOptionCatalog(Protocol):
         category: str,
         *,
         locale: str | None,
-    ) -> FormOptionSet: ...
+    ) -> FormOptionSet:
+        """The approved options a field's `option_source` names, for one build category."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,12 +1,10 @@
 """Process-local bookkeeping for context-reentrant build leases.
 
-The tracker records which execution context currently holds a build's
-in-process lease and how many times it has re-entered it. Leases are keyed on
-a ContextVar rather than on the running task, because a child task inherits
-its parent's context at spawn: keying on task identity meant a gather branch
-or task-group child could not re-enter a lease its own caller held, and would
-instead spin the acquire backoff against itself. BuildLockRepository combines
-that bookkeeping with the persisted lock flag.
+The tracker records which execution context holds a build's in-process lease and how many times
+it has re-entered it. Leases are keyed on a ContextVar rather than on the running task, because a
+child task inherits its parent's context at spawn: a gather branch or task-group child must be
+able to re-enter a lease its own caller holds instead of spinning the acquire backoff against
+itself. BuildLockRepository combines that bookkeeping with the persisted lock flag.
 """
 
 import asyncio
@@ -32,9 +30,8 @@ from squid.core.errors import InvalidStateError
 class _Lease:
     """One held lease, shared by reference with every context that inherits it.
 
-    The depth is mutated in place rather than rebound in the ContextVar so that
-    a child task's nested acquire and release stay balanced against the same
-    counter its parent is using.
+    The depth is mutated in place rather than rebound in the ContextVar, so a child task's nested
+    acquire and release balance against the same counter its parent uses.
     """
 
     token: UUID
@@ -62,8 +59,8 @@ class BuildLockTracker:
     def _current_lease(self, build_id: int) -> _Lease | None:
         """Return the live lease for *build_id* held by the calling context.
 
-        An inherited mapping can outlive the lease it names, so the entry only
-        counts when it is still the lease this tracker considers held.
+        An inherited mapping can outlive the lease it names, so the entry only counts while it is
+        still the lease this tracker considers held.
         """
         lease = _held().get(build_id)
         if lease is None or self._lock_owners.get(build_id) is not lease:
@@ -88,12 +85,11 @@ class BuildLockTracker:
         """Release one level of *build_id*'s lease for the calling context.
 
         Returns:
-            The persisted lease token on the outermost release, or ``None`` if
-            a nested lease remains or there was nothing to release.
+            The persisted lease token on the outermost release, or ``None`` if a nested lease
+            remains or there was nothing to release.
 
         Raises:
-            InvalidStateError: If a context that does not hold the lease tries
-                to release it.
+            InvalidStateError: If a context that does not hold the lease tries to release it.
         """
         lease = self._current_lease(build_id)
         if lease is None:
@@ -127,6 +123,12 @@ class BuildLockRepository:
         self._tracker = BuildLockTracker()
 
     async def acquire(self, build_id: int, *, blocking: bool = True, timeout: float = -1) -> bool:
+        """Take the build's lease, or re-enter it when the calling context already holds it.
+
+        Returns False when the lease is held elsewhere and `blocking` is False or `timeout`
+        elapses; a negative `timeout` waits forever. The persisted lock expires after five
+        minutes, so a crashed holder does not block the build permanently.
+        """
         if self._tracker.try_reenter(build_id):
             return True
         if not blocking:
@@ -167,6 +169,11 @@ class BuildLockRepository:
         return False
 
     async def release(self, build_id: int) -> None:
+        """Drop one level of the calling context's lease, clearing the persisted lock at depth zero.
+
+        Raises:
+            InvalidStateError: If a context that does not hold the lease releases it.
+        """
         token = self._tracker.release(build_id)
         if token is None:
             return
@@ -180,6 +187,11 @@ class BuildLockRepository:
 
     @asynccontextmanager
     async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncGenerator[None]:
+        """Hold the build's lease for the block, releasing it however the block exits.
+
+        Raises:
+            BuildBusyError: If the lease cannot be taken within `timeout`.
+        """
         if not await self.acquire(build_id, timeout=timeout):
             raise BuildBusyError(build_id)
         try:
@@ -188,6 +200,7 @@ class BuildLockRepository:
             await self.release(build_id)
 
     async def clean_stale(self, *, older_than: Instant) -> None:
+        """Reclaim every persisted lock whose expiry has passed and forget the leases naming them."""
         async with self._session_factory() as session:
             result = await session.execute(
                 update(Build)

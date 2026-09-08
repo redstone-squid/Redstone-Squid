@@ -19,13 +19,17 @@ _SOURCES = {
 class ApprovedTagDefinitions(Protocol):
     """Read the tag definitions approved for public clients."""
 
-    async def public_definitions(self) -> Sequence[TagDefinition]: ...
+    async def public_definitions(self) -> Sequence[TagDefinition]:
+        """Every tag definition a public client may be offered, of any semantic kind."""
+        ...
 
 
 class CanonicalMinecraftVersions(Protocol):
     """Read canonical versions recognized by build persistence."""
 
-    async def list_all(self) -> Sequence[MinecraftVersion]: ...
+    async def list_all(self) -> Sequence[MinecraftVersion]:
+        """Every version a build may declare, across editions."""
+        ...
 
 
 class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
@@ -43,7 +47,13 @@ class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
         *,
         locale: str | None,
     ) -> FormOptionSet:
-        """Return a deterministic content revision for one supported option source."""
+        """Resolve one option source, revisioned by a hash of the options themselves.
+
+        Labels come from the stored display names, so `locale` is accepted for the port and ignored.
+
+        Raises:
+            ValueError: If `source` is not an option source this catalog serves.
+        """
         del locale
         if source == "approved_source_versions":
             choices = tuple(

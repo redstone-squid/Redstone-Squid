@@ -27,7 +27,7 @@ class OpenAITextGenerator:
 
     @classmethod
     def from_config(cls, config: OpenAIConfig) -> OpenAITextGenerator:
-        """Create an adapter from typed process configuration."""
+        """Create an adapter; without an API key the adapter is inert and `generate` returns None."""
         if not config.api_key:
             logger.warning("No OpenAI API key found; build inference is disabled.")
             return cls(None)
@@ -58,7 +58,16 @@ class OpenAITextGenerator:
         images: Sequence[InlineImage] = (),
         reasoning_effort: str | None = None,
     ) -> T | None:
-        """Generate a schema-validated response, with a compatibility fallback."""
+        """Generate a schema-validated response, or None when the adapter is inert or the model returns nothing.
+
+        A provider that rejects strict structured output is retried once with the schema spelled
+        out in the system prompt and the response parsed from the raw text.
+
+        Raises:
+            openai.OpenAIError: If the provider fails for any reason other than rejecting strict
+                structured output.
+            pydantic.ValidationError: If the fallback response does not match `schema`.
+        """
         if self._client is None:
             return None
 

@@ -99,9 +99,8 @@ class _CrossContextValues:
 class BuildMapper:
     """Load cross-context values explicitly while mapping a build.
 
-    Cross-context relationships were deliberately removed from the ORM models,
-    so the values other contexts own are fetched here instead of traversed.
-    Batch them per page: `to_domain` is the single-row delegate of
+    The ORM models carry no cross-context relationships, so values other contexts own are fetched
+    here rather than traversed. Batch them per page: `to_domain` is the single-row delegate of
     `to_domain_many`, which issues a fixed four queries regardless of page size.
     """
 
@@ -225,8 +224,8 @@ class BuildMapper:
             tags=tags,
             extra_info=sql_build.extra_info,
             creators_ign=list(values.creators.get(sql_build.id, ())),
-            # A NULL media_type (the column is legacy-nullable) was invisible to the old
-            # per-type filters as well, so such rows stay unmapped rather than guessed at.
+            # media_type is legacy-nullable, and a NULL row has no type to map, so it is
+            # dropped rather than guessed at.
             links=[
                 BuildLink(url=link.url, media_type=link.media_type)
                 for link in sql_build.links
@@ -303,6 +302,12 @@ def _tag_assignment_to_domain(assignment: BuildTagAssignment) -> TagAssignment:
 
 
 def _sponsor(build: SQLBuild) -> PublicSponsor | None:
+    """The row's sponsor attribution.
+
+    Raises:
+        DataIntegrityError: If the row carries sponsor metadata without an installation ID, or
+            metadata the public value object rejects.
+    """
     values = (
         build.sponsor_display_name,
         build.sponsor_address,

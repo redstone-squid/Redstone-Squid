@@ -54,7 +54,9 @@ _RESTRICTION_FIELDS = {
 class ProviderNeutralBuilds(Protocol):
     """The build command needed by synchronized finalization."""
 
-    async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None: ...
+    async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
+        """The build this draft already produced, or None when it has produced none."""
+        ...
 
     async def submit_for_account(
         self,
@@ -64,19 +66,31 @@ class ProviderNeutralBuilds(Protocol):
         source_submission_draft_id: UUID,
         display_name: str | None,
         ai_generated: bool,
-    ) -> Build: ...
+    ) -> Build:
+        """Persist the build as pending, keyed on the draft ID so a retry returns the same build.
+
+        Raises:
+            InvalidStateError: If the draft already produced a build under another account or
+                with different sponsor provenance.
+            InvalidBuildError: If the build's taxonomy, versions or display name are invalid.
+        """
+        ...
 
 
 class ApprovedSubmissionTags(Protocol):
     """Read the currently approved definitions behind stable form option keys."""
 
-    async def public_definitions(self) -> Sequence[TagDefinition]: ...
+    async def public_definitions(self) -> Sequence[TagDefinition]:
+        """Every tag definition a public client may be offered; the caller keeps only approved ones."""
+        ...
 
 
 class CanonicalSubmissionVersions(Protocol):
     """Read exact version names recognized by build persistence."""
 
-    async def list_all(self) -> Sequence[MinecraftVersion]: ...
+    async def list_all(self) -> Sequence[MinecraftVersion]:
+        """Every version a build may declare, across editions."""
+        ...
 
 
 class BuildSubmissionTarget:
@@ -93,7 +107,12 @@ class BuildSubmissionTarget:
         self._versions = versions
 
     async def create_or_get(self, submission: NormalizedSubmission) -> SubmissionTargetResult:
-        """Translate a normalized payload and delegate retry-safe creation to builds."""
+        """Translate a normalized payload and delegate retry-safe creation to builds.
+
+        Raises:
+            ActionableSubmissionError: If a stable key, version, name or creator the submitter
+                supplied is not acceptable, or the draft already produced someone else's build.
+        """
         existing = await self._builds.get_by_source_submission_draft_id(submission.source_draft_id)
         if existing is not None:
             if existing.submitter_account_id != submission.owner_account_id or existing.sponsor != submission.sponsor:

@@ -66,12 +66,10 @@ def _page_filter[S: Select[Any]](
 def _mapper_load_options() -> tuple[Any, ...]:
     """The relationship graph BuildMapper reads off a row.
 
-    Model-level ``lazy="selectin"`` would already load these, but stating the
-    contract here keeps every read path loading the same graph rather than
-    depending on which query happened to declare it. Creators and versions are
-    fenced off because the mapper batches them itself across the whole page;
-    ``raiseload`` makes a future traversal fail loudly instead of silently
-    reading an empty collection.
+    Stated here so every read path loads the same graph rather than whatever its own query
+    declared. Creators and versions are ``raiseload`` because the mapper batches them itself
+    across the whole page; a stray traversal then fails loudly instead of silently reading an
+    empty collection.
     """
     return (
         selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
@@ -92,8 +90,6 @@ def _write_load_options() -> tuple[Any, ...]:
 
 
 class BuildRepository:
-    """Persistence and high-level operations on the Build domain object."""
-
     __slots__ = ("_mapper", "_session_factory")
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -101,14 +97,7 @@ class BuildRepository:
         self._mapper = BuildMapper()
 
     async def get_by_id(self, build_id: int) -> Build | None:
-        """Creates a new Build object from a database ID.
-
-        Args:
-            build_id: The ID of the build to retrieve.
-
-        Returns:
-            The Build object with the specified ID, or None if the build was not found.
-        """
+        """The build with this ID, or None when no row has it."""
         async with self._session_factory() as session:
             stmt = select(SQLBuild).where(SQLBuild.id == build_id).options(*_mapper_load_options())
             result = await session.execute(stmt)
@@ -118,7 +107,7 @@ class BuildRepository:
             return await self._mapper.to_domain(session, sql_build)
 
     async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
-        """Load several builds with one row query and preserve requested ordering."""
+        """Load several builds with one row query, in requested order, dropping IDs that do not exist."""
         if not build_ids:
             return []
         async with self._session_factory() as session:
@@ -157,9 +146,12 @@ class BuildRepository:
     ) -> list[Build]:
         """Load one page of authoritative builds in display order for status and submitter views.
 
-        ID anchors page relative to the display order, so they require the ID sort. A `before_id`
-        page is fetched in reversed order and restored in memory; its overfetched row therefore
-        sits at the front for the caller to trim.
+        A `before_id` page is fetched in reversed order and restored in memory, so its overfetched
+        row sits at the front for the caller to trim.
+
+        Raises:
+            ValueError: If `after_id` or `before_id` is given with a sort other than by ID, which
+                is the only order those anchors are relative to.
         """
         if not statuses or limit <= 0:
             return []
@@ -203,7 +195,7 @@ class BuildRepository:
             return 0
         async with self._session_factory() as session:
             statement = _page_filter(
-                # No DISTINCT: the identity join that could multiply rows is gone.
+                # No DISTINCT: nothing here joins a table that could multiply rows.
                 select(func.count()).select_from(SQLBuild),
                 statuses=statuses,
                 submitter_account_id=submitter_account_id,
@@ -211,10 +203,9 @@ class BuildRepository:
             return await session.scalar(statement) or 0
 
     async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
-        """Return every build inferred from one Discord message.
+        """Return every build inferred from one Discord message, in ascending build-ID order.
 
-        Plural because a build-log message routinely yields a bundle, which the old
-        single `messages.build_id` column could not express.
+        Plural because a build-log message routinely yields a bundle.
         """
         async with self._session_factory() as session:
             return (
@@ -226,9 +217,15 @@ class BuildRepository:
             ).all()
 
     async def save(self, build: Build) -> None:
-        """Updates the build in the database with the given data.
+        """Insert the build when it has no ID, otherwise update the stored row.
 
-        If the build does not exist in the database, it will be inserted instead.
+        Stamps `edited_time` and writes back the row's `id` and `revision`.
+
+        Raises:
+            InvalidStateError: If the build has no submitter account or status, the account does
+                not exist, or its sponsor or source draft differs from the stored row's.
+            InvalidBuildError: If the category changed, or a version, tag or display name is invalid.
+            BuildRevisionMismatchError: If the stored revision has moved past `build.revision`.
         """
         build.edited_time = now()
 
@@ -362,10 +359,10 @@ class BuildRepository:
     async def _resolve_submitter_account_id(self, session: AsyncSession, build: Build) -> int:
         """Check that the supplied owning account exists.
 
-        This used to mint an account from a snowflake when none was supplied -- the last
-        identity-creating path outside the accounts context, reached from a persistence
-        layer with no evidence anybody had asked to be remembered. Callers now resolve an
-        account before submitting.
+        Callers resolve an account before submitting; persistence never mints identities.
+
+        Raises:
+            InvalidStateError: If the build names no account, or names one that does not exist.
         """
         if build.submitter_account_id is None:
             msg = "Submitter account ID must be set for new builds."
@@ -380,19 +377,15 @@ class BuildRepository:
         return build.submitter_account_id
 
     async def _setup_relationships(self, build: Build, session: AsyncSession, sql_build: SQLBuild) -> None:
-        """Set up all relationships for the build using SQLAlchemy's relationship handling."""
-        # Handle creators
         if build.creators_ign:
             alias_ids = await self._get_or_create_aliases(session, build.creators_ign)
             sql_build.build_creators.extend(BuildCreator(alias_id=alias_id) for alias_id in alias_ids)
 
         await self._setup_tag_assignments(build, session, sql_build)
 
-        # Handle versions
         version_objects = await self._get_versions(session, build.versions)
         sql_build.build_versions.extend(BuildVersion(version_id=version.id) for version in version_objects)
 
-        # Handle links
         sql_build.links.extend(BuildLink(url=link.url, media_type=link.media_type) for link in build.links)
 
     async def _setup_tag_assignments(
@@ -404,8 +397,12 @@ class BuildRepository:
         """Persist ``build.tags`` verbatim.
 
         Taxonomy names are resolved into assignments at edit time by
-        ``squid.builds.application.taxonomy.apply_build_taxonomy``; the
-        repository no longer interprets the restriction string fields.
+        ``squid.builds.application.taxonomy.apply_build_taxonomy``; the repository does not
+        interpret the restriction string fields.
+
+        Raises:
+            InvalidBuildError: If an assignment names an unknown tag definition, or the stored
+                definition's value type no longer matches the assignment's.
         """
         assignments = build.tags
         if not assignments:
@@ -451,11 +448,10 @@ class BuildRepository:
     async def _get_or_create_aliases(session: AsyncSession, igns: list[str]) -> list[int]:
         """Return the creator alias IDs for *igns*, creating missing names.
 
-        Names are matched case-insensitively via the ``normalized_name``
-        column, so ``Foo`` and ``foo`` share one credit. The insert relies on
-        that column's unique constraint rather than a read-then-write, so two
-        submissions naming the same creator cannot race. The column is written
-        from ``name`` by a column default, so it is never set here.
+        Names match case-insensitively through the ``normalized_name`` column, so ``Foo`` and
+        ``foo`` share one credit. The insert leans on that column's unique constraint instead of a
+        read-then-write, so two submissions naming the same creator cannot race. A column default
+        writes ``normalized_name`` from ``name``, so it is never set here.
         """
         alias_ids: list[int] = []
         seen: set[str] = set()
@@ -486,7 +482,11 @@ class BuildRepository:
 
     @staticmethod
     async def _get_versions(session: AsyncSession, version_strings: list[str]) -> list[Version]:
-        """Get Version objects for the given version strings."""
+        """Resolve quantified version names to rows.
+
+        Raises:
+            InvalidBuildError: If any name is not a canonical Minecraft version.
+        """
         qvn = func.get_quantified_version_names().table_valued("id", "quantified_name").alias("qvn")
 
         requested = set(version_strings)
@@ -508,14 +508,10 @@ class BuildRepository:
     async def _sync_source_messages(build: Build, session: AsyncSession) -> None:
         """Record the message facts a build came from, then relink the build to them.
 
-        The message rows are upserted rather than inserted because the same Discord
-        message legitimately backs several builds: a build-log post that yields a
-        bundle is one message fact with one link row per build.
-
-        This writes `messages` directly instead of going through `MessageService`
-        because `build_source_messages.message_id` is RESTRICT: the fact and the link
-        have to land in one transaction, or the link has a window where its target
-        does not exist yet.
+        Message rows are upserted because one Discord message legitimately backs several builds.
+        This writes `messages` directly rather than through `MessageService` because
+        `build_source_messages.message_id` is RESTRICT: the fact and the link must land in one
+        transaction, or the link briefly points at a row that does not exist.
         """
         assert build.id is not None
         await session.execute(delete(BuildSourceMessage).where(BuildSourceMessage.build_id == build.id))
@@ -555,10 +551,12 @@ class BuildRepository:
         )
 
     async def confirm(self, build: Build) -> None:
-        """Marks the build as confirmed.
+        """Mark the build confirmed, bumping its revision and `edited_time` in place.
 
         Raises:
-            ValueError: If the build could not be confirmed.
+            InvalidStateError: If the build has no ID.
+            BuildRevisionMismatchError: If the stored revision has moved past `build.revision`.
+            PersistenceError: If the row disappeared before the update landed.
         """
         if build.id is None:
             msg = "Build ID is missing."
@@ -567,10 +565,12 @@ class BuildRepository:
         await self._set_status(build, Status.CONFIRMED, operation="confirm")
 
     async def deny(self, build: Build) -> None:
-        """Marks the build as denied.
+        """Mark the build denied, bumping its revision and `edited_time` in place.
 
         Raises:
-            ValueError: If the build could not be denied.
+            InvalidStateError: If the build has no ID.
+            BuildRevisionMismatchError: If the stored revision has moved past `build.revision`.
+            PersistenceError: If the row disappeared before the update landed.
         """
         if build.id is None:
             msg = "Build ID is missing."
@@ -618,7 +618,7 @@ class BuildRepository:
             return await self._mapper.to_domain_many(session, list(result.unique().scalars().all()))
 
     async def get_builds_by_id(self, build_ids: list[int]) -> list[Build | None]:
-        """Fetches builds from the database with the given IDs."""
+        """One entry per requested ID, in that order, with None where no build exists."""
         if len(build_ids) == 0:
             return []
 

@@ -83,7 +83,7 @@ class SubmissionDraft(Base, kw_only=True):
 
 
 class SubmissionDraftAccess(Base, kw_only=True):
-    """An account's role on a draft; v1 creates exactly one owner grant."""
+    """An account's role on a draft; a partial unique index allows exactly one owner per draft."""
 
     __tablename__ = "submission_draft_access"
     __table_args__ = (

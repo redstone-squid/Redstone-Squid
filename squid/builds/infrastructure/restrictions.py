@@ -45,6 +45,13 @@ class RestrictionRepository:
             ]
 
     async def add_alias(self, restriction: str, alias: str) -> None:
+        """Attach an alternate spelling to a restriction and invalidate the definition cache.
+
+        Raises:
+            RestrictionNotFoundError: If no restriction goes by `restriction`.
+            AliasAlreadyAddedError: If `alias` already resolves to that same restriction.
+            AliasInUseError: If `alias` already resolves to a different restriction.
+        """
         normalized_alias = _normalize(alias)
         async with self._session_factory() as session:
             restriction_id = await get_restriction_id(session, restriction)
@@ -68,6 +75,7 @@ class RestrictionRepository:
 
 
 async def get_restriction_id(session: AsyncSession, name_or_alias: str) -> int | None:
+    """The official restriction matching a name or alias, or None when it matches none or several."""
     normalized = _normalize(name_or_alias)
     statement = (
         select(TagDefinition.id)

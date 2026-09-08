@@ -134,13 +134,17 @@ class DraftArtifactReadiness(Protocol):
     rejected uploads must be represented by stable attention issues.
     """
 
-    async def assess(self, draft_id: UUID) -> SubmissionArtifactReadiness: ...
+    async def assess(self, draft_id: UUID) -> SubmissionArtifactReadiness:
+        """The current readiness of every artifact attached to the draft."""
+        ...
 
 
 class SubmissionSponsorResolver(Protocol):
     """Resolve only an installation's currently authorized public sponsor projection."""
 
-    async def resolve(self, installation_id: UUID) -> PublicSponsor | None: ...
+    async def resolve(self, installation_id: UUID) -> PublicSponsor | None:
+        """The sponsor projection, or None when the installation has not published one."""
+        ...
 
 
 class SubmissionTarget(Protocol):
@@ -150,25 +154,38 @@ class SubmissionTarget(Protocol):
     same ``source_draft_id``, including after the first call committed and the worker crashed.
     """
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> SubmissionTargetResult: ...
+    async def create_or_get(self, submission: NormalizedSubmission) -> SubmissionTargetResult:
+        """Create the build, or return the result of the call that already created it.
+
+        Raises:
+            ActionableSubmissionError: If the submission is rejected for reasons the draft owner
+                can repair; any other exception is treated as a retryable failure.
+        """
+        ...
 
 
 class SubmissionNotificationPort(Protocol):
     """Deliver an idempotent status notification without assuming a transport."""
 
-    async def publish(self, event: SubmissionNotificationEvent) -> None: ...
+    async def publish(self, event: SubmissionNotificationEvent) -> None:
+        """Deliver the event, deduplicating on `event.event_id`."""
+        ...
 
 
 class SubmissionReviewEventPort(Protocol):
     """Deliver an idempotent staff-review event without assuming a transport."""
 
-    async def publish(self, event: SubmissionReviewEvent) -> None: ...
+    async def publish(self, event: SubmissionReviewEvent) -> None:
+        """Deliver the event, deduplicating on `event.event_id`."""
+        ...
 
 
 class FinalizationJobRepository(Protocol):
     """Atomic draft transitions and durable claim-token-fenced queue operations."""
 
-    async def get(self, draft_id: UUID) -> FinalizationJobSnapshot | None: ...
+    async def get(self, draft_id: UUID) -> FinalizationJobSnapshot | None:
+        """The draft's retained job, or None when finalization was never requested for it."""
+        ...
 
     async def enqueue(
         self,
@@ -177,7 +194,21 @@ class FinalizationJobRepository(Protocol):
         *,
         now: Instant,
         expires_at: Instant,
-    ) -> FinalizationJobSnapshot: ...
+    ) -> FinalizationJobSnapshot:
+        """Move the draft to `PROCESSING` and persist its immutable payload in one transaction.
+
+        A draft already processing or submitted under the same payload is returned unchanged.
+
+        Raises:
+            ValueError: If the payload's provenance does not match the draft.
+            DraftNotFoundError: If the draft no longer exists.
+            DraftAccessDeniedError: If the stored draft has a different owner.
+            DraftRevisionConflictError: If the draft moved on since it was read.
+            DraftArtifactsChangedError: If its media changed since readiness was assessed.
+            InvalidStateError: If provenance changed, or a processing draft's job disagrees.
+            ValidationError: If the draft's state does not allow finalization.
+        """
+        ...
 
     async def record_preparation_attention(
         self,
@@ -186,9 +217,27 @@ class FinalizationJobRepository(Protocol):
         *,
         now: Instant,
         expires_at: Instant,
-    ) -> FinalizationJobSnapshot: ...
+    ) -> FinalizationJobSnapshot:
+        """Retain repair issues against the draft and leave it editable in `NEEDS_ATTENTION`.
 
-    async def claim(self, *, now: Instant, limit: int) -> Sequence[ClaimedFinalizationJob]: ...
+        Raises:
+            ValueError: If `issues` is empty.
+            DraftNotFoundError: If the draft no longer exists.
+            DraftAccessDeniedError: If the stored draft has a different owner.
+            DraftRevisionConflictError: If the draft moved on since it was read.
+            InvalidStateError: If provenance changed, or a processing draft has no job.
+            ValidationError: If the draft's state does not allow finalization.
+        """
+        ...
+
+    async def claim(self, *, now: Instant, limit: int) -> Sequence[ClaimedFinalizationJob]:
+        """Lease up to `limit` due or claim-expired jobs, each fenced by a fresh claim token.
+
+        Raises:
+            ValueError: If `limit` is outside 1..`MAX_FINALIZATION_JOB_CLAIM`.
+            DataIntegrityError: If a claimable payload is missing or fails its digest check.
+        """
+        ...
 
     async def complete(
         self,
@@ -196,7 +245,17 @@ class FinalizationJobRepository(Protocol):
         result: SubmissionTargetResult,
         *,
         now: Instant,
-    ) -> bool: ...
+    ) -> bool:
+        """Retain the target result and mark the draft submitted, if this claim still owns the job.
+
+        Returns False when the claim was superseded, so the caller must not publish an outcome.
+
+        Raises:
+            DraftNotFoundError: If the draft no longer exists.
+            InvalidStateError: If the claimed job's draft is no longer processing.
+            DataIntegrityError: If a different result was already retained for this job.
+        """
+        ...
 
     async def needs_attention(
         self,
@@ -205,7 +264,17 @@ class FinalizationJobRepository(Protocol):
         *,
         now: Instant,
         expires_at: Instant,
-    ) -> bool: ...
+    ) -> bool:
+        """Hand an actionable target rejection back to the owner as an editable draft.
+
+        Returns False when the claim was superseded.
+
+        Raises:
+            ValueError: If `issues` is empty.
+            DraftNotFoundError: If the draft no longer exists.
+            InvalidStateError: If the claimed job's draft is no longer processing.
+        """
+        ...
 
     async def fail(
         self,
@@ -216,7 +285,17 @@ class FinalizationJobRepository(Protocol):
         retry_at: Instant,
         expires_at: Instant,
         max_attempts: int,
-    ) -> FinalizationFailureOutcome: ...
+    ) -> FinalizationFailureOutcome:
+        """Reschedule an unexpected failure for `retry_at`, or dead-letter it at `max_attempts`.
+
+        A dead job reopens the draft for repair. The outcome reports `applied=False` when the
+        claim was superseded and nothing was written.
+
+        Raises:
+            ValueError: If `max_attempts` is not positive.
+            DraftNotFoundError: If the draft no longer exists.
+        """
+        ...
 
 
 class SubmissionFinalizationService:
@@ -248,7 +327,16 @@ class SubmissionFinalizationService:
         locale: str | None,
         now: Instant | None = None,
     ) -> FinalizationJobSnapshot:
-        """Start idempotent processing or persist actionable preparation issues."""
+        """Start idempotent processing, or retain actionable preparation issues against the draft.
+
+        Resubmitting a draft that is already processing or submitted returns its existing job.
+
+        Raises:
+            DraftNotFoundError: If no draft has this ID.
+            DraftAccessDeniedError: If the account does not own it.
+            DraftStateConflictError: If the draft has expired.
+            InvalidStateError: If a processing or submitted draft has no matching job.
+        """
         current = await self._drafts.get_owned(draft_id, account_id)
         if current.snapshot.status is DraftStatus.PROCESSING:
             existing = await self._jobs.get(draft_id)
@@ -307,7 +395,13 @@ class SubmissionFinalizationService:
         )
 
     async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None:
-        """Return retained finalization state after rechecking draft ownership."""
+        """Return retained finalization state after rechecking draft ownership.
+
+        Raises:
+            DraftNotFoundError: If no draft has this ID.
+            DraftAccessDeniedError: If the account does not own it.
+            DraftStateConflictError: If the draft has expired.
+        """
         await self._drafts.get_owned(draft_id, account_id)
         return await self._jobs.get(draft_id)
 
@@ -351,7 +445,14 @@ class SubmissionFinalizationWorker:
         self._retention_days = retention_days
 
     async def process_batch(self, *, limit: int = 8, now: Instant | None = None) -> None:
-        """Claim and process at most ``limit`` jobs sequentially."""
+        """Claim and process at most ``limit`` jobs sequentially.
+
+        A job whose claim was superseded is dropped silently, and a notification that fails to
+        deliver is logged rather than retried.
+
+        Raises:
+            InvalidStateError: If `limit` is outside 1..`MAX_FINALIZATION_JOB_CLAIM`.
+        """
         if not 1 <= limit <= MAX_FINALIZATION_JOB_CLAIM:
             maximum = MAX_FINALIZATION_JOB_CLAIM
             raise InvalidStateError(tr(t"finalization claim limit must be between 1 and {maximum}"))

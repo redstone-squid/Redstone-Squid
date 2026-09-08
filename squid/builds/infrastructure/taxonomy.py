@@ -27,6 +27,7 @@ class BuildTagsManager:
 
     @alru_cache
     async def fetch_all_restrictions(self) -> list[TagDefinition]:
+        """Every approved official restriction, cached until an alias is added through this object."""
         async with self.session() as session:
             result = await session.execute(
                 select(TagDefinition).where(
@@ -38,6 +39,13 @@ class BuildTagsManager:
             return list(result.scalars().all())
 
     async def add_restriction_alias_by_id(self, restriction_id: int, alias: str) -> None:
+        """Attach an alternate spelling to a restriction identified by row ID.
+
+        Raises:
+            RestrictionNotFoundError: If no restriction has that ID.
+            AliasAlreadyAddedError: If `alias` already resolves to that same restriction.
+            AliasInUseError: If `alias` already resolves to a different restriction.
+        """
         async with self.session() as session:
             definition = await session.get(TagDefinition, restriction_id)
         if definition is None:
@@ -46,6 +54,13 @@ class BuildTagsManager:
         self.fetch_all_restrictions.cache_clear()
 
     async def add_restriction_alias(self, name_or_alias: str, alias: str) -> None:
+        """Attach an alternate spelling to a restriction identified by name or existing alias.
+
+        Raises:
+            RestrictionNotFoundError: If `name_or_alias` matches no restriction, or matches several.
+            AliasAlreadyAddedError: If `alias` already resolves to that same restriction.
+            AliasInUseError: If `alias` already resolves to a different restriction.
+        """
         rid = await self.get_restriction_id(name_or_alias)
         alias_rid = await self.get_restriction_id(alias)
         if rid is None:
@@ -104,12 +119,10 @@ class BuildTagsManager:
 
 
 class OfficialTagResolver:
-    """Resolve requested taxonomy names against approved official definitions.
+    """The persistence adapter behind `squid.builds.application.taxonomy.BuildTaxonomyResolver`.
 
-    This is the persistence adapter behind
-    `squid.builds.application.taxonomy.BuildTaxonomyResolver`; the query logic
-    previously lived inside `BuildRepository.save`, which resolved names as a
-    side effect of persistence.
+    A requested name that matches several approved definitions is reported unknown rather than
+    resolved to one of them.
     """
 
     __slots__ = ("_session_factory",)

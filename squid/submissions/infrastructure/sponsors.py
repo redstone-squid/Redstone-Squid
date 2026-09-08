@@ -13,7 +13,7 @@ class PaperSponsorResolver:
         self._installations = installations
 
     async def resolve(self, installation_id: UUID) -> PublicSponsor | None:
-        """Return an allowlisted snapshot or fail closed when public consent is absent."""
+        """The published sponsor snapshot, or None when the installation is unknown, not public, or has not opted in."""
         try:
             server = await self._installations.get_public_server(installation_id)
         except ValueError:

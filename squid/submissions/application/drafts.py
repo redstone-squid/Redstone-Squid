@@ -65,7 +65,9 @@ class ValidatedDraft:
 class DraftRepository(Protocol):
     """Atomic persistence required by the draft application service."""
 
-    async def count_active_for_account(self, account_id: int) -> int: ...
+    async def count_active_for_account(self, account_id: int) -> int:
+        """How many unexpired drafts in an active state the account owns."""
+        ...
 
     async def list_active_for_account(
         self,
@@ -73,18 +75,26 @@ class DraftRepository(Protocol):
         *,
         now: Instant,
         limit: int,
-    ) -> tuple[StoredDraft, ...]: ...
+    ) -> tuple[StoredDraft, ...]:
+        """The account's unexpired active drafts as of `now`, most recently updated first."""
+        ...
 
-    async def create(self, draft: StoredDraft) -> StoredDraft: ...
+    async def create(self, draft: StoredDraft) -> StoredDraft:
+        """Persist a new draft together with its owner access row."""
+        ...
 
-    async def get(self, draft_id: UUID) -> StoredDraft | None: ...
+    async def get(self, draft_id: UUID) -> StoredDraft | None:
+        """The draft with this ID whatever its owner or state, or None when there is none."""
+        ...
 
     async def replayed_change(
         self,
         draft_id: UUID,
         account_id: int,
         idempotency_key: str,
-    ) -> AppliedDraftChange | None: ...
+    ) -> AppliedDraftChange | None:
+        """The outcome already recorded for this idempotency key, or None when the key is new."""
+        ...
 
     async def apply_change(
         self,
@@ -94,7 +104,18 @@ class DraftRepository(Protocol):
         *,
         updated_at: Instant,
         expires_at: Instant,
-    ) -> AppliedDraftChange: ...
+    ) -> AppliedDraftChange:
+        """Apply one change under a per-draft lock and retain it as an immutable record.
+
+        Returns the earlier outcome marked `replayed` when the idempotency key was already used.
+
+        Raises:
+            DraftNotFoundError: If no draft has this ID.
+            DraftAccessDeniedError: If the account does not own the draft.
+            DraftRevisionConflictError: If the change is based on a stale revision.
+            ValidationError: If the draft is not editable, or the result exceeds the JSON budget.
+        """
+        ...
 
     async def transition(
         self,
@@ -105,25 +126,53 @@ class DraftRepository(Protocol):
         status: DraftStatus,
         updated_at: Instant,
         expires_at: Instant,
-    ) -> StoredDraft: ...
+    ) -> StoredDraft:
+        """Move an owned draft to another lifecycle state under a per-draft lock.
 
-    async def delete_owned(self, draft_id: UUID, account_id: int) -> bool: ...
+        Raises:
+            DraftNotFoundError: If no draft has this ID.
+            DraftAccessDeniedError: If the account does not own the draft.
+            DraftRevisionConflictError: If the stored revision is not `expected_revision`.
+            ValidationError: If the transition is not allowed from the current state.
+        """
+        ...
 
-    async def expire_due(self, *, now: Instant, limit: int = 100) -> int: ...
+    async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
+        """Delete an owned draft, returning False when it no longer exists.
+
+        Raises:
+            DraftAccessDeniedError: If the account does not own the draft.
+            DraftStateConflictError: If the draft is no longer user-editable.
+        """
+        ...
+
+    async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
+        """Expire at most `limit` drafts already past their retention, and return how many.
+
+        Expiring a draft also drops its unfinished finalization job and discards its unfinished
+        media normalization work.
+        """
+        ...
 
 
 class FormManifestRegistry(Protocol):
     """Resolve current and still-pinned form revisions."""
 
-    async def current(self, *, locale: str | None) -> FormManifest: ...
+    async def current(self, *, locale: str | None) -> FormManifest:
+        """The newest form revision, with labels localized when a locale is given."""
+        ...
 
-    async def get(self, schema_id: str, revision: int, *, locale: str | None) -> FormManifest | None: ...
+    async def get(self, schema_id: str, revision: int, *, locale: str | None) -> FormManifest | None:
+        """One pinned revision, or None when this build no longer ships it."""
+        ...
 
 
 class AccountDraftCapacity(Protocol):
     """Resolve staff-adjusted synchronized-draft capacity for an account."""
 
-    async def limit_for(self, account_id: int) -> int: ...
+    async def limit_for(self, account_id: int) -> int:
+        """How many active drafts the account may hold at once."""
+        ...
 
 
 class FixedAccountDraftCapacity:
@@ -174,7 +223,14 @@ class SubmissionDraftService:
         now: Instant | None = None,
         draft_id: UUID | None = None,
     ) -> StoredDraft:
-        """Create an empty synchronized draft pinned to the current schema revision."""
+        """Create an empty synchronized draft pinned to the current schema revision.
+
+        Raises:
+            ValidationError: If installation provenance is present without a Paper origin, or
+                absent with one.
+            DraftCapacityExceededError: If the account already holds its limit of active drafts.
+            DraftSchemaUnsupportedError: If the client cannot render every required field.
+        """
         if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
             msg = tr(t"Paper drafts require server-derived installation provenance.")
             raise ValidationError(msg)
@@ -204,14 +260,26 @@ class SubmissionDraftService:
         return await self._repository.create(stored)
 
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
-        """List a bounded newest-first view of one account's unexpired active drafts."""
+        """List a bounded newest-first view of one account's unexpired active drafts.
+
+        Raises:
+            InvalidStateError: If `limit` is outside 1..`DEFAULT_ACCOUNT_DRAFT_CAPACITY`.
+        """
         if not 1 <= limit <= DEFAULT_ACCOUNT_DRAFT_CAPACITY:
             maximum = DEFAULT_ACCOUNT_DRAFT_CAPACITY
             raise InvalidStateError(tr(t"draft discovery limit must be between 1 and {maximum}"))
         return await self._repository.list_active_for_account(account_id, now=self._now(), limit=limit)
 
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
-        """Return one draft after enforcing its v1 single-owner boundary."""
+        """Return one draft after enforcing its single-owner boundary.
+
+        A draft past its retention is reported as expired even before the sweeper rewrites it.
+
+        Raises:
+            DraftNotFoundError: If no draft has this ID.
+            DraftAccessDeniedError: If the account does not own it.
+            DraftStateConflictError: If the draft has expired.
+        """
         draft = await self._repository.get(draft_id)
         if draft is None:
             raise DraftNotFoundError(draft_id)
@@ -224,7 +292,13 @@ class SubmissionDraftService:
         return draft
 
     async def delete(self, draft_id: UUID, account_id: int) -> None:
-        """Delete an owned draft only while it remains user-editable."""
+        """Delete an owned draft only while it remains user-editable.
+
+        Raises:
+            DraftNotFoundError: If no draft has this ID.
+            DraftAccessDeniedError: If the account does not own it.
+            DraftStateConflictError: If the draft has expired or is no longer editable.
+        """
         current = await self.get_owned(draft_id, account_id)
         if current.snapshot.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
             raise DraftStateConflictError(current.snapshot.status.value, operation="delete")
@@ -232,7 +306,11 @@ class SubmissionDraftService:
             raise DraftNotFoundError(draft_id)
 
     async def expire_due(self, *, limit: int = 100, now: Instant | None = None) -> int:
-        """Expire one bounded batch using the same authoritative service clock."""
+        """Expire one bounded batch using the same authoritative service clock.
+
+        Raises:
+            InvalidStateError: If `limit` is outside 1..1000.
+        """
         if not 1 <= limit <= 1_000:
             msg = tr(t"draft expiry limit must be between 1 and 1000")
             raise InvalidStateError(msg)
@@ -247,7 +325,18 @@ class SubmissionDraftService:
         locale: str | None,
         now: Instant | None = None,
     ) -> AppliedDraftChange:
-        """Validate field IDs/types and atomically persist one optimistic edit."""
+        """Validate field IDs and types, then atomically persist one optimistic edit.
+
+        Required fields may still be missing here; completeness is only enforced at finalization.
+
+        Raises:
+            DraftNotFoundError: If no draft has this ID.
+            DraftAccessDeniedError: If the account does not own it.
+            DraftStateConflictError: If the draft has expired.
+            DraftSchemaUnsupportedError: If the pinned schema revision is no longer served.
+            DraftIncompleteError: If a supplied value is unknown or invalid.
+            DraftRevisionConflictError: If the change is based on a stale revision.
+        """
         current = await self.get_owned(draft_id, account_id)
         replayed = await self._repository.replayed_change(draft_id, account_id, change.idempotency_key)
         if replayed is not None:
@@ -278,10 +367,16 @@ class SubmissionDraftService:
         *,
         locale: str | None,
     ) -> ValidatedDraft:
-        """Validate a pinned manifest without trusting client artifact assertions.
+        """Check the draft against its pinned manifest, defaults applied, without touching artifacts.
 
-        The finalization service performs backend-owned artifact checks and atomically
-        changes the draft state while enqueuing its durable job.
+        Artifact readiness and the state change belong to the finalization service.
+
+        Raises:
+            DraftNotFoundError: If no draft has this ID.
+            DraftAccessDeniedError: If the account does not own it.
+            DraftStateConflictError: If the draft has expired.
+            DraftSchemaUnsupportedError: If the pinned schema revision is no longer served.
+            DraftIncompleteError: If any required value is missing or invalid.
         """
         current = await self.get_owned(draft_id, account_id)
         manifest = await self._pinned_manifest(current, locale)

@@ -24,7 +24,7 @@ class OpenAIEmbeddingModel:
 
     @classmethod
     def from_config(cls, config: EmbeddingConfig) -> Self:
-        """Create an embedding adapter from typed process configuration."""
+        """Create an embedding adapter; without an API key the adapter is inert and `embed` returns None."""
         if not config.api_key:
             logger.warning("No OpenAI API key found; build embeddings are disabled.")
             return cls(None, config.model)

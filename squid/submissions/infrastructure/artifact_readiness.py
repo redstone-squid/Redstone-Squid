@@ -27,7 +27,9 @@ _ACTIVE_MEDIA_STATES = {MediaJobStatus.PENDING, MediaJobStatus.CLAIMED, MediaJob
 class DraftMediaJobReader(Protocol):
     """Read server-owned normalization jobs associated with one draft."""
 
-    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]: ...
+    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]:
+        """Every normalization job for the draft, discarded ones included."""
+        ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,35 +99,38 @@ class DraftSchematicSnapshot:
 
 
 class DraftSchematicReader(Protocol):
-    """Future sanitizer repository port consumed by finalization.
+    """Sanitizer repository port consumed by finalization.
 
-    ``read_for_draft`` must read backend-owned quarantine and worker records. It may
-    return ``SANITIZED`` only after a claim-fenced sanitizer transaction persisted a
-    canonical artifact UUID, sanitizer version, exact applied policy, and non-sensitive
-    report counts together. The applied inventory/text flags must match the current
-    persisted draft policy; those client choices are requirements, never evidence that
-    sanitization occurred. Implementations must never infer success from draft answers,
-    filenames, extensions, object keys, hashes, serialization, or format conversion.
-
-    The Nucleation-backed implementation should implement this exact port once
+    The Nucleation-backed implementation implements this exact port once
     Schem-at/Nucleation#10 ships a released format-aware sanitizer.
     """
 
-    async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot: ...
+    async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot:
+        """The draft's schematic state, read from backend-owned quarantine and worker records.
+
+        ``SANITIZED`` is permitted only after a claim-fenced sanitizer transaction persisted a
+        canonical artifact UUID, sanitizer version, exact applied policy, and non-sensitive report
+        counts together, with the applied inventory and free-text flags matching the draft's
+        current policy; those client choices are requirements, never evidence that sanitization
+        happened. Never infer success from draft answers, filenames, extensions, object keys,
+        hashes, serialization, or format conversion.
+        """
+        ...
 
 
 class DraftSchematicPresenceReader(Protocol):
     """Read whether backend quarantine has ever accepted a schematic for a draft."""
 
-    async def has_supplied_schematic(self, draft_id: UUID) -> bool: ...
+    async def has_supplied_schematic(self, draft_id: UUID) -> bool:
+        """Whether quarantine holds any schematic bytes for the draft, sanitized or not."""
+        ...
 
 
 class FailClosedDraftSchematicReader:
     """Reject quarantined schematics while Nucleation#10 is unavailable.
 
-    With no quarantine reader, the only truthful result is ``ABSENT``. If backend
-    quarantine reports that bytes were supplied, they are ``REJECTED`` because this
-    implementation has no sanitizer and deliberately has no ``SANITIZED`` path.
+    With no quarantine reader the only truthful result is ``ABSENT``; supplied bytes are
+    ``REJECTED`` because this implementation has no sanitizer and no ``SANITIZED`` path.
     """
 
     def __init__(self, presence: DraftSchematicPresenceReader | None = None) -> None:

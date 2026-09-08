@@ -130,7 +130,9 @@ class StructuredGenerator(Protocol):
         model: str,
         images: Sequence[InlineImage] = (),
         reasoning_effort: str | None = None,
-    ) -> T | None: ...
+    ) -> T | None:
+        """A response validated against `schema`, or None when the model fails or answers off-schema."""
+        ...
 
 
 class BuildTaxonomy(Protocol):
@@ -140,17 +142,25 @@ class BuildTaxonomy(Protocol):
         self,
         restrictions: list[str],
         type: RestrictionTypeLiteral,
-    ) -> tuple[list[str], list[str]]: ...
+    ) -> tuple[list[str], list[str]]:
+        """Split the names into recognized restrictions of that type and unrecognized ones."""
+        ...
 
-    async def validate_door_types(self, door_types: list[str]) -> tuple[list[str], list[str]]: ...
+    async def validate_door_types(self, door_types: list[str]) -> tuple[list[str], list[str]]:
+        """Split the names into recognized door patterns and unrecognized ones."""
+        ...
 
 
 class VersionResolver(Protocol):
     """Resolve build version specifications."""
 
-    async def newest(self, edition: Edition) -> str: ...
+    async def newest(self, edition: Edition) -> str:
+        """The newest known version string for an edition."""
+        ...
 
-    async def resolve_spec(self, version_spec: str) -> list[str]: ...
+    async def resolve_spec(self, version_spec: str) -> list[str]:
+        """Expand a specification — a range, a ``1.20+`` bound, or a comma list — into every version it names."""
+        ...
 
 
 class BuildInferenceService:
@@ -175,7 +185,11 @@ class BuildInferenceService:
         model: str,
         reasoning_effort: str | None = None,
     ) -> list[BuildDraft]:
-        """Infer zero or more builds from a normalized message bundle."""
+        """Infer zero or more builds from a normalized message bundle.
+
+        Returns no builds when the model answers off-schema, and drops any inferred build whose
+        cited source messages are not in the bundle's primaries.
+        """
         result = await self._generator.generate(
             self._system_prompt,
             self._render_user_message(source),
