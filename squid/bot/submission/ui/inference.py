@@ -35,6 +35,9 @@ class InferenceCandidatesScreen(sd.Screen):
                 sl.paragraph(self.notice or "Choose a candidate. Missing facts and file assignments require review."),
             )
         ]
+        nodes.append(
+            sl.action_controls(sl.action_control("Retry retained inference", self._retry, key="retry"), key="recovery")
+        )
         if not self.candidates:
             nodes.append(sl.note("No retained candidates are available yet. Reopen this run to refresh."))
             return tuple(nodes)
@@ -72,6 +75,20 @@ class InferenceCandidatesScreen(sd.Screen):
                 )
             )
         return tuple(nodes)
+
+    async def _retry(self, event: sl.PressEvent) -> None:
+        from squid.bot.submission.ingestion import admit_candidates
+
+        await event.acknowledge()
+        actor = await subject_for_interaction(await sd.request(sd.responder(event).interaction))
+        try:
+            candidates = await self.services.submission_inference.resume(self.run_id, actor)
+            if candidates is not None:
+                self.candidates = candidates
+                await admit_candidates(self.services, candidates)
+                self.notice = "Retained inference recovered. Open a candidate to continue."
+        except SquidError as error:
+            self.notice = error.public_detail()
 
     async def _select(self, event: sl.ChoiceEvent) -> None:
         self.selected = event.selected[0]

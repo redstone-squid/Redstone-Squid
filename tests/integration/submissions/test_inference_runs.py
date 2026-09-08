@@ -62,3 +62,21 @@ async def test_reclaimed_run_fences_late_completion_and_failure(
     await repository.fail(run, first.token)
     result = await repository.complete(run, second.token, (BuildDraft(width=2),))
     assert result[0].facts.width == 2
+
+
+async def test_completed_empty_run_releases_admission_capacity(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from squid.submissions.errors import DraftCapacityExceededError
+
+    sessions = migrated_session_factory
+    owner = await seed_account_and_version(sessions)
+    repository = PostgresInferenceRuns(sessions)
+    run = uuid4()
+    claim = await repository.begin(run, owner, {"purpose": "submission"}, capacity=1)
+    assert claim.token is not None
+    with pytest.raises(DraftCapacityExceededError):
+        await repository.begin(uuid4(), owner, {"purpose": "submission"}, capacity=1)
+    await repository.complete(run, claim.token, ())
+    next_claim = await repository.begin(uuid4(), owner, {"purpose": "submission"}, capacity=1)
+    assert next_claim.token is not None
