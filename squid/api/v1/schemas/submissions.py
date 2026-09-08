@@ -441,6 +441,7 @@ class SubmissionAttemptResponse(StrictSchema):
     draft_id: UUID
     attempt_id: UUID
     attempt_number: int
+    input_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")] | None
     draft_revision: int
     status: FinalizationJobStatus
     issues: list[SubmissionAttentionIssueResponse]
@@ -452,6 +453,7 @@ class SubmissionAttemptResponse(StrictSchema):
             draft_id=snapshot.draft_id,
             attempt_id=snapshot.job_id,
             attempt_number=snapshot.attempt_number,
+            input_sha256=snapshot.input_sha256,
             draft_revision=snapshot.draft_revision,
             status=snapshot.status,
             issues=[

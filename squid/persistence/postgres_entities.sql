@@ -746,3 +746,17 @@ CREATE TRIGGER submission_runs_enqueue_status AFTER INSERT OR DELETE OR UPDATE O
 CREATE TRIGGER submission_drafts_enqueue_status AFTER INSERT OR DELETE OR UPDATE ON public.submission_drafts FOR EACH ROW EXECUTE FUNCTION public.enqueue_submission_status();
 
 CREATE TRIGGER submission_intake_enqueue_status AFTER INSERT OR DELETE OR UPDATE ON public.submission_supplied_attachments FOR EACH ROW EXECUTE FUNCTION public.enqueue_submission_status();
+
+CREATE FUNCTION public.reject_submission_finalization_input_update() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+    RAISE EXCEPTION USING
+        ERRCODE = 'check_violation',
+        MESSAGE = 'submission finalization inputs are immutable',
+        SCHEMA = 'public',
+        TABLE = 'submission_finalization_inputs';
+END;
+$$;
+
+CREATE TRIGGER submission_finalization_inputs_immutable BEFORE UPDATE ON public.submission_finalization_inputs FOR EACH ROW EXECUTE FUNCTION public.reject_submission_finalization_input_update();
