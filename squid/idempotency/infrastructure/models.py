@@ -2,14 +2,14 @@
 
 import uuid
 
-from sqlalchemy import CheckConstraint, Enum, Index, LargeBinary, SmallInteger, Text, UniqueConstraint, func, text
+from sqlalchemy import CheckConstraint, Index, LargeBinary, SmallInteger, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.idempotency.domain import IdempotencyState, UnsafeHttpMethod
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC, StrEnumText, now
 
 
 class IdempotencyRequest(Base, kw_only=True):
@@ -49,22 +49,12 @@ class IdempotencyRequest(Base, kw_only=True):
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
     request_fingerprint: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     method: Mapped[UnsafeHttpMethod] = mapped_column(
-        Enum(
-            UnsafeHttpMethod,
-            native_enum=False,
-            create_constraint=False,
-            values_callable=lambda members: [member.value for member in members],
-        ),
+        StrEnumText(UnsafeHttpMethod),
         nullable=False,
     )
     route: Mapped[str] = mapped_column(Text, nullable=False)
     state: Mapped[IdempotencyState] = mapped_column(
-        Enum(
-            IdempotencyState,
-            native_enum=False,
-            create_constraint=False,
-            values_callable=lambda members: [member.value for member in members],
-        ),
+        StrEnumText(IdempotencyState),
         nullable=False,
         server_default=text("'in_progress'"),
         default=IdempotencyState.IN_PROGRESS,
