@@ -73,8 +73,9 @@ def test_build_creation_requires_the_durable_submission_workflow() -> None:
 def test_every_mutating_operation_accepts_an_idempotency_key() -> None:
     document = _app.openapi()
     streaming_retries = {
-        ("/v1/submissions/drafts/{draft_id}/media/{kind}", "post"): "query",
-        ("/v1/submissions/drafts/{draft_id}/schematics/{upload_id}", "put"): "path",
+        ("/v1/submissions/drafts/{draft_id}/media/{kind}", "post"): ("query", "upload_id"),
+        ("/v1/submissions/drafts/{draft_id}/schematics/{upload_id}", "put"): ("path", "upload_id"),
+        ("/v1/submissions/drafts/{draft_id}/supplied-files/{source_id}", "put"): ("path", "source_id"),
     }
 
     for path, path_item in document["paths"].items():
@@ -85,7 +86,7 @@ def test_every_mutating_operation_accepts_an_idempotency_key() -> None:
             parameters = [*path_item.get("parameters", []), *operation.get("parameters", [])]
             if (path, method) in streaming_retries:
                 assert any(
-                    parameter.get("in") == streaming_retries[(path, method)] and parameter.get("name") == "upload_id"
+                    (parameter.get("in"), parameter.get("name")) == streaming_retries[(path, method)]
                     for parameter in parameters
                 ), f"{method.upper()} {path} lacks its streaming-safe retry UUID"
                 continue
