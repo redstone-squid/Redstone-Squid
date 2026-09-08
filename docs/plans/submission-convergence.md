@@ -1,6 +1,7 @@
 # Converge submission orchestration
 
-Status: implementation in progress. Approved 2026-09-07.
+Status: implemented around the sanitizer boundary. Sanitized schematic production remains blocked
+on the upstream gate. Approved 2026-09-07.
 
 Execution clarification: the sanitizer is an unavailable attachment processor, not a reason to
 defer orchestration or Discord integration. Supplied schematics remain private and pending;
@@ -46,12 +47,12 @@ Stop old workers during cutover and extend account merge/expiry handling for all
 
 ## Milestones
 
-- [ ] Characterize recovery, verify sanitizer gate, and remove deprecated endpoint.
-- [ ] Introduce draft/attempt/receipt persistence, access policy, migrations, and API contracts.
-- [ ] Complete durable attachments and transactional build commit.
-- [ ] Migrate Discord editor and persistent status/reopen behavior.
-- [ ] Migrate inference, correction inbox, capacity, and revision proposals.
-- [ ] Remove superseded orchestration and update the structural-debt plan.
+- [x] Characterize recovery, verify sanitizer gate, and remove deprecated endpoint.
+- [x] Introduce draft/attempt/receipt persistence, access policy, migrations, and API contracts.
+- [x] Complete durable attachments and transactional build commit around the sanitizer boundary.
+- [x] Migrate Discord editor and persistent status/reopen behavior.
+- [x] Migrate inference, correction inbox, capacity, and revision proposals.
+- [x] Remove superseded orchestration and update the structural-debt plan.
 
 Commit each independently valid milestone in reviewable pieces. Do not confuse successful
 preparatory extractions with completion of the workflow migration.
@@ -115,16 +116,12 @@ Additional checks exposed failures outside these changes:
 - The submission/account ownership integration test fails while inserting its existing schematic
   fixture against `build_schematics_sanitization_complete`, before performing the account merge.
 
-### Remaining work
+### Historical checkpoint after foundations
 
-These commits are foundations, not completion of the approved workflow. The existing HTTP
-`/submission` contract and job-shaped application interfaces remain. Still implement explicit
-attempt create/list/read APIs, draft issue storage, separate immutable inputs and receipts,
-transactional build/attachment/event commit, access/actor policy, durable attachment operations,
-Discord manifest rendering and restart recovery, and inference intake/correction/revision proposals.
-Do not mark the milestone checkboxes complete until their full acceptance criteria pass. The
-sanitizer gate blocks sanitized artifact production only; Discord and other orchestration work
-continue using private pending sources.
+At this point the commits were foundations rather than completion of the approved workflow. The
+later entries below implement the listed attempt APIs, issue storage, immutable inputs and receipts,
+transactional commit, actor policy, durable attachments, Discord recovery, inference intake, and
+revision proposals. The sanitizer gate still blocks sanitized artifact production only.
 
 ### Orchestration implementation continued, 2026-09-07
 
@@ -150,10 +147,9 @@ not exist; that test now checks the supported revision and an actually unsupport
 Broader configuration checks also exposed an existing process-projection failure in the schematic
 background-color validator; the new submission configuration projection passes its focused test.
 
-Next: durable shared attachment intake around the sanitizer boundary, persisted inference and
-candidate conversion, Discord manifest editing/recovery, revision proposals, and removal of the
-superseded transport orchestration. The earlier remaining-work paragraph is a historical checkpoint;
-use this execution record when determining what is still outstanding.
+The later entries complete durable shared attachment intake around the sanitizer boundary,
+persisted inference and candidate conversion, Discord manifest recovery, and removal of the
+superseded transport orchestration.
 
 ### Private schematic intake, 2026-09-07
 
@@ -201,3 +197,41 @@ Validation: 41 focused unit tests and 44 PostgreSQL/build/API contract tests pas
 missing inferred values, protected build metadata, stale approvals, permission revocation,
 receipt rollback, retry, and the recalculation transport's separation from submission. Pyrefly
 reports zero errors. `e140bb5b` contains the independently tested transaction/policy extraction.
+
+### Convergence completed around the sanitizer boundary, 2026-09-07
+
+- `4095fe8a` and `ea080f4f` made normalized media shareable across drafts and persisted manual
+  Discord attachment intent before download side effects.
+- `35fa20f1`, `11808b7a`, and `134ae930` retained inference inputs and candidates, converted them
+  into stable drafts, and made interrupted inference resumable without duplicating candidates.
+- `8bd164ca` reconciled public source status with private live draft editors. `f62e3a4b` exposed
+  supplied-file retry, discard, primary selection, and recovery through the API and clients.
+- `761cbd3a` separated each attempt's immutable accepted input from its mutable worker envelope.
+  The original digest is visible through the API, account merging rewrites execution ownership
+  without rewriting the accepted input, and `db078647` verifies migration backfill, immutability,
+  and non-destructive downgrade against PostgreSQL.
+- `bed7da62` closed retained-intake recovery gaps: Discord candidate paging reaches every candidate,
+  retries retain the actual staff actor, full inferred capacity gets actionable feedback, and stable
+  replays compare all immutable source facts.
+- `30f44725` removed the superseded source writer and direct submission persistence backdoors.
+  `10fe0323` stopped writing retired receipt metadata while preserving historical nullable columns.
+  `520901e8` regenerated OpenAPI with the immutable input digest, and `2fe1e794` made API transport
+  fakes structurally complete.
+- `eb294f6a` made public build projections independent of polymorphic ORM joins and corrected nullable
+  schematic JSON persistence found by the broad integration run. `e098c382` closed the pre-existing
+  Alembic type/comment drift and retired a redundant rollout trigger, restoring the clean-schema gate.
+- `37fc30b0` moved retained inference serialization behind an infrastructure codec and made revision
+  facts a plain immutable application value, restoring the rule that submission policy does not import
+  transport validation frameworks.
+
+The active migration head is `d9f3b6c1e4a7`. The deprecated direct endpoint and old submission
+writer are gone; all supported API, manual Discord, inferred-message, and recalculation paths now
+converge on retained drafts, attempts, receipts, and reconciliation. Supplied schematics stay private
+and block preparation until the Nucleation gate passes. Enabling sanitized artifact production is
+the only remaining item in this plan.
+
+Final validation passed 171 submission unit tests, 87 broad PostgreSQL submission/media/build tests,
+8 focused inference/revision PostgreSQL tests, 20 idempotency tests, 14 generated OpenAPI contract
+tests, and 15 relevant architecture tests. The historical immutable-input migration test and the
+complete Alembic upgrade/downgrade/autogenerate drift test pass. Pyrefly reports zero errors, Ruff and
+whitespace checks pass, and Alembic has one head.

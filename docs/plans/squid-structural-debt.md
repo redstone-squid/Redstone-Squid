@@ -1,6 +1,6 @@
 # Structural debt in squid and its tests
 
-Status: submission foundations implemented; workflow convergence remains in progress.
+Status: submission convergence implemented around the sanitizer boundary; remaining tracks are queued.
 Reviewed: 2026-09-07.
 
 The approved submission design and implementation record are in
@@ -48,6 +48,19 @@ attachment types, and validation rules can multiply implementations and failure 
   interruption wherever durable recovery is promised. Retries do not create duplicate builds or posts.
 - Existing Discord recovery behavior remains covered; OpenAPI verifies the deprecated endpoint is absent.
 - Shared submission policy no longer requires matching edits in the form and inference transports.
+
+### Completion
+
+Completed 2026-09-07. API, manual Discord, inferred-message, and recalculation entry points now use
+persisted drafts and shared preparation/finalization policy. Attempts retain immutable accepted inputs,
+build/media/receipt/event commits are atomic, and Discord recovery reads durable state. The deprecated
+endpoint, superseded source writer, and direct persistence backdoors are removed. Supplied schematics
+remain private and pending until the upstream sanitizer gate in `submission-convergence.md` passes.
+
+The checked API fake now includes every production service field, and transport tests fail on missing
+collaborators. Submission application policy also no longer imports Pydantic; retained JSON encoding
+and validation sit behind an infrastructure codec. The broader test-boundary cleanup in section 3
+remains its own track.
 
 ## 2. Establish ownership for cross-feature persistence
 
