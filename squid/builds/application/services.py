@@ -95,18 +95,6 @@ class BuildService:
         definitions = await self._restrictions.fetch_all_restrictions()
         return sort_restrictions(restrictions, {definition.name: definition.type for definition in definitions})
 
-    async def submit(self, build: Build, *, submitter_account_id: int, ai_generated: bool) -> Build:
-        """Apply submission metadata and persist an already prepared build.
-
-        The build's category is a fact of its type; callers construct the right
-        subclass (or finalize a :class:`BuildDraft`) before submitting.
-        """
-        build.submitter_account_id = submitter_account_id
-        build.ai_generated = ai_generated
-        build.submission_status = Status.PENDING
-        await self._persist(build)
-        return build
-
     async def prepare_for_account(
         self,
         build: Build,
