@@ -22,10 +22,9 @@ type SpanAttribute = str | bool | int | float
 CORRELATION_REFERENCE_LENGTH = 12
 """Hex characters shown to users: 48 bits, and the width of the untraced fallback.
 
-The requirement is that one reported reference resolves to one incident within the retention
-window, so the bound is `N / 2**48`: at 10 000 unexpected errors per window that is ~4e-11, and
-even the stricter all-pairs-distinct bound, `N**2 / 2**49`, is ~2e-7. Eight characters would put
-that all-pairs bound near 1% for the same volume, which is why the prefix is not shortened further.
+One reported reference must resolve to one incident within the retention window. At 10 000
+unexpected errors per window the all-pairs collision bound `N**2 / 2**49` is ~2e-7; at eight
+characters it would be near 1%, which is why the prefix is not shortened further.
 """
 
 # Request-scoped correlation id, bound by the API's RequestContextMiddleware. When set it wins
@@ -49,13 +48,13 @@ def active_trace_id() -> str | None:
 
 
 class TraceSpan:
-    """Small transport-facing facade over an optional OpenTelemetry span."""
+    """Transport-facing facade over an OpenTelemetry span; every method no-ops without one."""
 
     def __init__(self, span: Any | None = None) -> None:
         self._span = span
 
     def set_error(self, error: BaseException | None = None) -> None:
-        """Mark the span failed, recording an exception when one is available."""
+        """Set the span status to ERROR, recording `error` on it when one is given."""
         if self._span is None:
             return
         if error is not None:
@@ -65,7 +64,7 @@ class TraceSpan:
         self._span.set_status(Status(StatusCode.ERROR))
 
     def set_attribute(self, name: str, value: SpanAttribute) -> None:
-        """Attach one low-cardinality attribute when a real span is active."""
+        """Attach one attribute to the span; values must stay low-cardinality."""
         if self._span is not None:
             self._span.set_attribute(name, value)
 
@@ -93,14 +92,11 @@ CORRELATION_BUFFER_HANDLER = "correlation_buffer"
 class CorrelatedLogBuffer(logging.Handler):
     """Keep the most recent log lines per correlation ID so an error can be explained.
 
-    Records are formatted on arrival rather than held: a `LogRecord` keeps its `args` and
-    `exc_info` alive, so buffering thousands of them would pin arbitrary application objects for
-    as long as the correlation lives. Formatting eagerly costs a little CPU on the logging path
-    and bounds the memory to text we already know we want.
-
-    Both dimensions are bounded. `max_correlations` evicts whole correlations in insertion order,
-    which for request-scoped IDs is close enough to least-recently-used, and `max_records` caps
-    each one, so a single pathological loop cannot displace every other correlation's tail.
+    Records are formatted on arrival rather than held, because a `LogRecord` keeps its `args` and
+    `exc_info` alive and would pin arbitrary application objects for as long as the correlation
+    lives. Both dimensions are bounded: `max_correlations` evicts whole correlations in insertion
+    order, and `max_records` caps each one, so one pathological loop cannot displace every other
+    correlation's tail.
     """
 
     def __init__(self, *, max_records: int = 50, max_correlations: int = 256) -> None:
@@ -139,8 +135,7 @@ class CorrelatedLogBuffer(logging.Handler):
         """Read a correlation's buffered lines without consuming them.
 
         Log-driven capture uses this rather than `drain`: one run can log several failures, and
-        the first of them must not take the context away from the rest, or from a later explicit
-        capture on the same correlation.
+        the first must not take the context away from the rest.
         """
         self.acquire()
         try:
@@ -152,8 +147,8 @@ class CorrelatedLogBuffer(logging.Handler):
     def drain(self, correlation: str) -> tuple[str, ...]:
         """Take and forget everything buffered under `correlation`.
 
-        Draining rather than copying keeps a captured error from being reported twice with the
-        same tail, and releases the memory at the one moment we know the correlation is over.
+        Draining keeps a captured error from being reported twice with the same tail, and frees
+        the memory at the one moment the correlation is known to be over.
         """
         self.acquire()
         try:
@@ -170,7 +165,7 @@ def correlated_log_buffer() -> CorrelatedLogBuffer | None:
 
 
 class ObservabilityHandle:
-    """Own one process's telemetry provider shutdown."""
+    """Own one process's tracer and meter providers; `shutdown` flushes and stops both, once."""
 
     def __init__(self, shutdown: Callable[[], None] | None = None) -> None:
         self._shutdown = shutdown
@@ -178,7 +173,7 @@ class ObservabilityHandle:
         self._lock = threading.Lock()
 
     def shutdown(self) -> None:
-        """Flush and stop telemetry once."""
+        """Flush and stop telemetry; later calls return without doing anything."""
         with self._lock:
             if self._closed:
                 return
@@ -201,10 +196,16 @@ _gauges: dict[str, Any] = {}
 
 
 def configure_observability(config: ObservabilityConfig, *, service_name: str) -> ObservabilityHandle:
-    """Configure OTLP trace export once in the current process.
+    """Configure OTLP trace and metric export once in the current process.
 
-    Disabled deployments return before importing OpenTelemetry. The configuration service
-    name is a deployment-owned base; ``service_name`` distinguishes the process component.
+    Returns a handle that does nothing when observability is disabled or the optional
+    `observability` extra is not installed; a disabled deployment never imports OpenTelemetry.
+    `config.service_name` is the deployment-owned base and `service_name` names this process
+    component. Repeat calls in the same process return the first handle.
+
+    Raises:
+        RuntimeError: This process inherited a configuration made before it forked.
+        ValueError: `service_name` is blank.
     """
     if not config.enabled:
         return _NOOP_HANDLE
@@ -261,9 +262,9 @@ def correlation_id() -> str:
 def correlation_scope() -> Generator[str]:
     """Bind one correlation ID for the duration of a unit of work, and yield it.
 
-    Re-entrant on purpose: a nested scope keeps the outer binding rather than minting a second
-    ID. A hybrid command arrives through the application command tree and is then invoked through
-    the prefix path, so both scopes open around the same invocation and must agree.
+    Re-entrant: a nested scope keeps the outer binding rather than minting a second ID. A hybrid
+    command opens both an application-command and a prefix scope around one invocation, and the
+    two must agree.
     """
     existing = _bound_correlation_id.get()
     if existing is not None:
@@ -280,9 +281,8 @@ def correlation_scope() -> Generator[str]:
 def correlation_reference(correlation_id: str) -> str:
     """Shorten a correlation ID for display without changing what is stored or sent.
 
-    A 32-hex trace ID becomes its first 12 characters; the untraced fallback is already that
-    width, so this is the identity function for it. Both paths therefore look the same to a user
-    reading an error card and to whoever they report it to.
+    A 32-hex trace ID becomes its first `CORRELATION_REFERENCE_LENGTH` characters; the untraced
+    fallback is already that width, so both look alike to whoever reports one.
     """
     return correlation_id[:CORRELATION_REFERENCE_LENGTH]
 
@@ -510,12 +510,11 @@ def install_trace_context_log_filter() -> None:
 
 
 def _trace_endpoint(endpoint: str) -> str:
-    """Resolve the generic OTLP HTTP base URL to the traces signal endpoint."""
     return _signal_endpoint(endpoint, "traces")
 
 
 def _signal_endpoint(endpoint: str, signal: str) -> str:
-    """Resolve the generic OTLP HTTP base URL to one signal endpoint."""
+    """Append `/v1/{signal}` to a generic OTLP HTTP base URL, unless its path already ends there."""
     parsed = urlsplit(endpoint)
     base_path = parsed.path.rstrip("/")
     signal_path = f"/v1/{signal}"

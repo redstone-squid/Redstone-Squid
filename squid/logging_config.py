@@ -12,16 +12,14 @@ from squid.core.errors import ConfigurationError
 from squid.observability import CORRELATION_BUFFER_HANDLER, install_trace_context_log_filter
 
 DEFAULT_LOG_LEVEL = "INFO"
-"""Default log level for application loggers when SQUID_LOG_LEVEL is not set."""
+"""Level pinned on the `squid` and `discord` loggers; SQUID_LOG_LEVEL sets handler levels only."""
 
 DEFAULT_ROOT_LOG_LEVEL = "WARNING"
-"""Default root log level when SQUID_LOG_ROOT_LEVEL is not set."""
+"""Root level a schematic worker child uses when the supervising process names none."""
 
 DEFAULT_LOG_DIR_NAME = "logs"
-"""Default directory used when SQUID_LOG_DIRECTORY is not set."""
 
 DEFAULT_DISCORD_LOG_FILE = "discord.log"
-"""Default log file for the Discord bot process."""
 
 DEFAULT_MAX_BYTES = 32 * 1024 * 1024
 """Maximum log file size in bytes before rotation."""
@@ -30,7 +28,6 @@ DEFAULT_BACKUP_COUNT = 5
 """Number of rotated log files to keep."""
 
 DEFAULT_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
-"""Timestamp format for log records."""
 
 DEFAULT_LOG_FORMAT = "[%(asctime)s] [%(levelname)-8s] %(name)s: %(message)s"
 """Default format for non-access log records."""
@@ -43,9 +40,9 @@ DEFAULT_ACCESS_LOG_FORMAT = (
 JSON_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s %(created)s %(pathname)s %(lineno)s"
 """Fields emitted for structured application and worker logs.
 
-`service_name` is deliberately absent: it is supplied as a formatter *default* so that a record
-forwarded from a schematic worker child keeps the identity the child stamped on it. As a format
-field it would be a required field, which `static_fields` overwrite and record attributes cannot.
+`service_name` is deliberately absent: it is supplied as a formatter *default*, so a record
+forwarded from a schematic worker child keeps the identity the child stamped on it. Naming it
+here would make it a required field, which record attributes cannot supply.
 """
 
 JSON_ACCESS_LOG_FORMAT = f"{JSON_LOG_FORMAT} %(client_addr)s %(request_line)s %(status_code)s"
@@ -63,7 +60,11 @@ __all__ = [
 
 
 def resolve_level(level_name: str) -> int:
-    """Convert a log level name to its corresponding logging constant."""
+    """Convert a log level name to its logging constant.
+
+    Raises:
+        ConfigurationError: `level_name` is not a registered logging level.
+    """
     level = logging.getLevelNamesMapping().get(level_name.upper())
     if level is None:
         msg = f"Invalid log level: {level_name}"
@@ -72,7 +73,11 @@ def resolve_level(level_name: str) -> int:
 
 
 def prepare_log_path(log_dir: Path, path_str: str | None) -> Path | None:
-    """Prepare a relative log path beneath the configured log directory."""
+    """Resolve a relative log path beneath `log_dir`, creating its parent directory.
+
+    Returns `None`, after a warning on stderr, when `path_str` is empty or absolute or the parent
+    directory cannot be created; the caller then leaves file logging off for that path.
+    """
     if not path_str:
         return None
 
@@ -114,8 +119,11 @@ def build_logging_config(
     """Build a logging configuration dictionary for dictConfig.
 
     `log_tail_records` installs a `CorrelatedLogBuffer` keeping that many records per correlation
-    ID, so a stored error report can show what the process was doing around the failure. Zero
-    disables it and costs nothing.
+    ID, so a stored error report can show what the process was doing around the failure; zero
+    leaves it out entirely.
+
+    Raises:
+        ConfigurationError: A level in `config` or `named_logger_levels` is not a logging level.
     """
     level = resolve_level(config.level)
     root_level = resolve_level(config.root_level)
@@ -250,7 +258,15 @@ def build_logging_config(
 
 
 def configure_bot_logging(config: LoggingConfig, *, dev_mode: bool = False) -> QueueListener:
-    """Configure logging for the Discord bot process."""
+    """Configure queue-backed logging for the Discord bot process and start the listener.
+
+    The caller owns the returned listener and stops it on shutdown; until then every record
+    leaves the event loop thread through the queue.
+
+    Raises:
+        ConfigurationError: A configured level is not a logging level.
+        TypeError: dictConfig produced no queue handler or no listener behind it.
+    """
     named_logger_levels = {
         "discord": DEFAULT_LOG_LEVEL,
         "squid": DEFAULT_LOG_LEVEL,
@@ -295,13 +311,13 @@ def configure_api_logging(config: LoggingConfig, *, dev_mode: bool = False) -> N
             log_tail_records=config.tail_records,
         )
     )
-    # Stamp trace/request-id correlation onto records even when the observability extra is absent,
-    # so the API's RequestContextMiddleware id reaches log lines without OpenTelemetry configured.
+    # Runs even without the observability extra, so the id RequestContextMiddleware binds still
+    # reaches log lines when OpenTelemetry is not configured.
     install_trace_context_log_filter()
 
 
 def configure_service_worker_logging(config: LoggingConfig, *, dev_mode: bool = False) -> None:
-    """Configure logging for the long-lived database worker process."""
+    """Configure logging for the long-lived database worker process, not the schematic child."""
     logging.config.dictConfig(
         build_logging_config(
             config=config,
@@ -317,9 +333,9 @@ def configure_service_worker_logging(config: LoggingConfig, *, dev_mode: bool = 
 def configure_worker_logging(*, level: str = DEFAULT_LOG_LEVEL, root_level: str = DEFAULT_ROOT_LOG_LEVEL) -> None:
     """Configure JSON logging to stderr for a schematic worker child.
 
-    Levels mirror the supervising process rather than being pinned to DEBUG: every record the
-    child emits is serialised, piped, parsed and rebuilt by the parent, so a record the parent
-    would only discard is work nobody asked for.
+    The handler and root levels come from the supervising process, because every record the child
+    emits is serialised, piped, parsed and rebuilt by the parent: a record the parent would
+    discard is work nobody asked for. The `squid` logger stays at `DEFAULT_LOG_LEVEL`.
     """
     logging.config.dictConfig(
         {

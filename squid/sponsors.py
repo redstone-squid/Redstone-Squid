@@ -10,7 +10,14 @@ _HTTP_URL = TypeAdapter(AnyHttpUrl)
 
 @dataclass(frozen=True, slots=True)
 class PublicSponsor:
-    """Allowlisted public snapshot of one sponsoring Paper installation."""
+    """Allowlisted public snapshot of one sponsoring Paper installation.
+
+    Raises:
+        ValueError: From construction, when the installation ID is nil, a text field is empty,
+            surrounded by whitespace or over its length limit (80 for the display name, 255 for
+            the address, 500 for the description, 2048 for the URL), or the website URL is not
+            an HTTP(S) URL free of whitespace and embedded credentials.
+    """
 
     installation_id: UUID
     display_name: str | None = None

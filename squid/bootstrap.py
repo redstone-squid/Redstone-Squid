@@ -159,10 +159,8 @@ def create_schematic_service(
     """Assemble the schematic service over whichever analyzer this process can run.
 
     `render_capable` says this process may *ask* for renders, not that it performs them: the
-    native work always happens in the worker behind the durable job queue. What it actually
-    buys is the resource pack, which a process must be able to load before it can name a
-    recipe — so the API and the bot carry it for on-demand renders, and the worker for the
-    previews it publishes.
+    native work always happens in the worker behind the durable job queue. What it buys is the
+    resource pack, which a process must load before it can name a recipe.
     """
     analyzer = create_schematic_analyzer(config, jobs, artifacts)
     resource_pack = None
@@ -241,9 +239,8 @@ class _ServiceGraph:
     def permission_epoch(self) -> PermissionEpochWatcher:
         """The watcher keeping this process's rule cache honest.
 
-        It shares the cache instance with the service above, which is the whole
-        point: a grant written in another process clears the one cache the checks
-        in this process read through.
+        It shares the cache instance with `permissions`, so a grant written in another process
+        clears the one cache this process's checks read through.
         """
         listener = (
             None
@@ -336,7 +333,7 @@ class _ServiceGraph:
 
     @cached_property
     def media_job_service(self) -> MediaNormalizationJobService:
-        """Build durable media metadata services even when normalization is disabled."""
+        """The job service itself, built even when media normalization is off, unlike `media_jobs`."""
         return MediaNormalizationJobService(
             self.media_repository,
             self.artifacts,
@@ -516,9 +513,9 @@ class _ServiceGraph:
 
     @cached_property
     def votes(self) -> VoteService:
-        # Build reviews are shared across every guild with a vote channel, so their
-        # weights answer to the network's own server. BotIdentityConfig is
-        # code-owned, so reading it here matches what the bot itself uses.
+        # Build reviews are shared across every guild with a vote channel, so their weights
+        # answer to the network's own server. BotIdentityConfig is code-owned, so reading it
+        # here gives the same value the bot uses.
         return VoteService(
             VoteRepository(self.db.async_session),
             build_owner_guild_id=BotIdentityConfig().owner_server_id,
@@ -580,8 +577,8 @@ class _ServiceGraph:
     def web_auth(self) -> WebSessionService | None:
         """Browser login over every provider this deployment has credentials for.
 
-        The httpx client is owned here rather than by the service, so adding a second
-        provider shares one connection pool instead of opening a second.
+        `None` without OAuth clients or a session pepper. The httpx client is owned here rather
+        than by the service, so a second provider shares one connection pool.
         """
         if self.config.oauth is None or self.config.session_pepper is None:
             return None
@@ -636,7 +633,11 @@ class _ServiceGraph:
 
 
 def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_stack: AsyncExitStack) -> ApiServices:
-    """Create only capabilities used by the HTTP API."""
+    """Create only capabilities used by the HTTP API.
+
+    Raises:
+        RuntimeError: The configuration carries no idempotency response-encryption keyring.
+    """
     graph = _ServiceGraph(db, config, resources_stack, render_capable=True)
     encryption = config.idempotency_encryption
     if encryption is None:
@@ -764,17 +765,17 @@ def _create_runtime[ServicesT](
 
 
 def create_api_runtime(config: RuntimeConfig, db: DatabaseEngine | None = None) -> ApplicationRuntime[ApiServices]:
-    """Create process-owned API infrastructure and services."""
+    """Create the API process's services; the caller owns the runtime and must close it."""
     return _create_runtime(config, create_api_services, db)
 
 
 def create_bot_runtime(config: RuntimeConfig, db: DatabaseEngine | None = None) -> ApplicationRuntime[BotServices]:
-    """Create process-owned Discord infrastructure and services."""
+    """Create the Discord process's services; the caller owns the runtime and must close it."""
     return _create_runtime(config, create_bot_services, db)
 
 
 def create_worker_runtime(
     config: RuntimeConfig, db: DatabaseEngine | None = None
 ) -> ApplicationRuntime[WorkerServices]:
-    """Create process-owned worker infrastructure and services."""
+    """Create the worker process's services; the caller owns the runtime and must close it."""
     return _create_runtime(config, create_worker_services, db)

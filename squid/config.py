@@ -44,12 +44,11 @@ EMBEDDING_DIMENSION = 1536
 """Vector dimension fixed by the application-owned PostgreSQL schema."""
 
 OPENAI_REQUEST_TIMEOUT_SECONDS = 60.0
-"""Per-request bound on OpenAI-compatible calls.
+"""Per-request bound on OpenAI-compatible calls, against an SDK default of ten minutes.
 
-The SDK defaults to ten minutes with retries on top. Embedding work runs inside
-a periodic job that awaits it to completion, so an unbounded call stalls the
-job's heartbeat and flips the worker readiness probe; inference runs behind
-interactive Discord surfaces that will have given up long before.
+Embedding work runs inside a periodic job that awaits it to completion, so a long call stalls
+that job's heartbeat and flips the worker readiness probe; inference runs behind interactive
+Discord surfaces that will have given up long before.
 """
 
 OPENAI_MAX_RETRIES = 2
@@ -108,7 +107,11 @@ class _FrozenModel(BaseModel):
 
 
 class DatabaseConfig(_FrozenModel):
-    """Relational database connection configuration."""
+    """PostgreSQL connection URLs.
+
+    `listener_url` is the direct, unpooled URL used for session-level `LISTEN`; without it a
+    deployment keeps only the pollers that back every notification.
+    """
 
     url: SecretStr
     listener_url: SecretStr | None = None
@@ -365,14 +368,11 @@ class ApiConfig(_FrozenModel):
     cors_origins: tuple[str, ...] = ()
     trusted_proxy_ips: tuple[str, ...] = ()
     secret_nodes: tuple[str, ...] = ("build.submission.read",)
-    """Permission nodes the legacy bootstrap secret carries.
+    """Permission nodes the legacy bootstrap secret carries, and nothing more.
 
-    It used to carry every capability the API defined, forever, with no way to
-    narrow it. Deployments that still need it for writes list the nodes here
-    explicitly; the default is what an anonymous caller already has, so leaving
-    it unset makes the secret useless rather than dangerous.
-
-    Validated as patterns at load, so a typo fails startup rather than quietly
+    A deployment that needs the secret for writes lists those nodes here explicitly; the default
+    is what an anonymous caller already has, so leaving it unset makes the secret useless rather
+    than dangerous. Validated as patterns at load, so a typo fails startup rather than quietly
     matching nothing. Read `secret_patterns` at request time.
     """
 
@@ -954,11 +954,10 @@ def _projection_type[ConfigT: BaseSettings](config_type: type[ConfigT]) -> type[
     """A twin of `config_type` that reads nothing but the values it is handed.
 
     `BaseSettings` builds its sources in `__init__`, and pydantic routes `model_validate` through
-    `__init__` for any model that defines one — so validating a projection re-read `./.env` and
-    `os.environ` and merged them *over* the values passed in. Scalars survived that, since init has
-    the highest priority, but dict fields merge key by key: an API process projected from a config
-    loaded elsewhere ended up holding the union of both idempotency keyrings, trusting a key its own
-    configuration never named.
+    `__init__`, so a plain projection would re-read `./.env` and `os.environ` and merge them *over*
+    the values passed in. Scalars survive that, since init has the highest priority, but dict
+    fields merge key by key: an API process projected from a config loaded elsewhere would hold
+    the union of both idempotency keyrings and trust a key its own configuration never named.
     """
 
     class _Projection(config_type):  # pyright: ignore[reportUntypedBaseClass]  # pyrefly: ignore[invalid-inheritance]
@@ -1261,11 +1260,11 @@ _INFRASTRUCTURE_ENVIRONMENT_KEYS = frozenset(
 )
 """Keys the Compose files interpolate that no process reads as configuration.
 
-They select images, published host ports and the env file itself, so they are resolved by Compose
-before a container exists. The same `.env` is then handed to the containers wholesale via
-`env_file`, which puts them in front of this audit anyway -- and under
-`SQUID_STRICT_UNKNOWN_KEYS` an unknown key is a boot failure, so leaving them out would mean
-publishing the API on a spare host port took the whole stack down.
+They select images, published host ports and the env file itself, and Compose resolves them
+before a container exists. The same `.env` then reaches the containers wholesale via `env_file`,
+which puts them in front of this audit; under `SQUID_STRICT_UNKNOWN_KEYS` an unknown key is a
+boot failure, so omitting them would mean publishing the API on a spare host port takes the
+whole stack down.
 """
 
 
@@ -1299,11 +1298,11 @@ def _environment_group(field: str) -> tuple[str, tuple[str, ...]] | None:
 def _setting_name(field: str, issue_type: str) -> str:
     """Render a validation location as the ``SQUID_*`` name(s) an operator can act on.
 
-    Every character of the result comes from a declared field name. A validation location is
-    not a settings path: its tail can be a configured dictionary key, and a validator that
-    rejects a whole model reports no leaf at all, so neither the raw location nor a name
-    assembled from it can be shown. A variable that does not exist would be set and then
-    silently ignored, which is worse than naming the group.
+    Every character of the result comes from a declared field name; anything unverifiable falls
+    back to a wildcard. A validation location is not a settings path: its tail can be a
+    configured dictionary key, and a validator rejecting a whole model reports no leaf at all, so
+    a name assembled from one can name a variable that does not exist — which an operator would
+    then set and see silently ignored.
     """
     if field.upper().startswith("SQUID_"):
         return field  # The unknown-key audit already reports literal variable names.
@@ -1351,7 +1350,11 @@ def _configured_environment_keys(dotenv_path: Path) -> set[str]:
 
 
 def _audit_unknown_environment_keys(*, strict: bool, dotenv_path: Path) -> None:
-    """Report likely deployment typos while accepting sibling-process keys."""
+    """Report likely deployment typos while accepting sibling-process keys.
+
+    Raises:
+        ConfigurationError: `strict` is set and an unknown ``SQUID_*`` key is configured.
+    """
     known = _known_environment_keys() | _RETIRED_ENVIRONMENT_KEYS | _INFRASTRUCTURE_ENVIRONMENT_KEYS
     unknown = sorted(name for name in _configured_environment_keys(dotenv_path) if name.upper() not in known)
     if not unknown:
@@ -1429,10 +1432,10 @@ def _load_settings[ConfigT: _ProcessSettings](config_type: type[ConfigT], dotenv
 
 
 def load_or_exit[ConfigT](loader: Callable[[], ConfigT]) -> ConfigT:
-    """Load a process configuration, reporting a boot failure without a traceback.
+    """Load a process configuration, or print the failure to stderr and `SystemExit(1)`.
 
     Logging is configured from the very settings being loaded, so the report goes straight to
-    stderr. The guard covers one call and one exception type: a configuration error raised
+    stderr. The guard covers this one call and `ConfigurationError` alone: the same error raised
     later, by real work, still surfaces with its traceback.
     """
     try:
@@ -1443,27 +1446,50 @@ def load_or_exit[ConfigT](loader: Callable[[], ConfigT]) -> ConfigT:
 
 
 def load_application_config(*, dotenv_path: Path | None = None) -> ApplicationConfig:
-    """Load and validate settings for the combined application launcher."""
+    """Load and validate settings for the combined application launcher.
+
+    Raises:
+        ConfigurationError: A setting is missing, unparsable, or (under
+            `SQUID_STRICT_UNKNOWN_KEYS`) unknown. Wrap the call in `load_or_exit` to report it
+            without a traceback.
+    """
     return _load_settings(ApplicationConfig, dotenv_path)
 
 
 def load_bot_process_config(*, dotenv_path: Path | None = None) -> BotProcessConfig:
-    """Load and validate settings for the standalone Discord process."""
+    """Load and validate settings for the standalone Discord process.
+
+    Raises:
+        ConfigurationError: A setting is missing, unparsable, or unknown under strict mode.
+    """
     return _load_settings(BotProcessConfig, dotenv_path)
 
 
 def load_api_process_config(*, dotenv_path: Path | None = None) -> ApiProcessConfig:
-    """Load and validate settings for the standalone HTTP API process."""
+    """Load and validate settings for the standalone HTTP API process.
+
+    Raises:
+        ConfigurationError: A setting is missing, unparsable, or unknown under strict mode.
+    """
     return _load_settings(ApiProcessConfig, dotenv_path)
 
 
 def load_worker_process_config(*, dotenv_path: Path | None = None) -> WorkerProcessConfig:
-    """Load and validate settings for the standalone database worker process."""
+    """Load and validate settings for the standalone database worker process.
+
+    Raises:
+        ConfigurationError: A setting is missing, unparsable, or unknown under strict mode.
+    """
     return _load_settings(WorkerProcessConfig, dotenv_path)
 
 
 def load_database_config(*, dotenv_path: Path | None = None) -> DatabaseConfig:
-    """Load only the database settings needed by migration tooling."""
+    """Load only the database settings needed by migration tooling.
+
+    Raises:
+        ConfigurationError: The database settings are missing or unparsable, or a key is unknown
+            under strict mode.
+    """
 
     class DatabaseSettings(BaseSettings):
         model_config = _ProcessSettings.model_config
@@ -1480,7 +1506,12 @@ def load_database_config(*, dotenv_path: Path | None = None) -> DatabaseConfig:
 
 
 def load_worker_observability_config(*, dotenv_path: Path | None = None) -> ObservabilityConfig:
-    """Load only inherited observability settings in a schematic worker child."""
+    """Load only inherited observability settings in a schematic worker child.
+
+    Raises:
+        ConfigurationError: The observability settings are unparsable, or a key is unknown under
+            strict mode.
+    """
 
     class WorkerObservabilitySettings(BaseSettings):
         model_config = _ProcessSettings.model_config
@@ -1497,7 +1528,12 @@ def load_worker_observability_config(*, dotenv_path: Path | None = None) -> Obse
 
 
 def load_worker_log_config(*, dotenv_path: Path | None = None) -> LogConfig:
-    """Load only inherited logging settings in a schematic worker child."""
+    """Load only inherited logging settings in a schematic worker child.
+
+    Raises:
+        ConfigurationError: The logging settings are unparsable, or a key is unknown under strict
+            mode.
+    """
 
     class WorkerLogSettings(BaseSettings):
         model_config = _ProcessSettings.model_config

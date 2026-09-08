@@ -157,7 +157,7 @@ class WorkerServices:
 
 @dataclass(frozen=True, slots=True)
 class ApplicationRuntime[ServicesT]:
-    """Own application services and process-level resource callbacks."""
+    """Own one process's services; `close` unwinds the resource stack behind them, in LIFO order."""
 
     services: ServicesT
     close_resources: Callable[[], Awaitable[None]]
@@ -168,7 +168,10 @@ class ApplicationRuntime[ServicesT]:
         await self.close_resources()
 
     async def ready(self) -> None:
-        """Raise when a required process dependency is unavailable."""
+        """Raise whatever the readiness check raises when a required dependency is unavailable.
+
+        Falls back to the database keepalive when the runtime was built without a dedicated check.
+        """
         check = self.check_readiness or self.keep_database_active
         await check()
 
@@ -195,10 +198,12 @@ def start_log_capture(
     enabled: bool = True,
     capacity: int = 256,
 ) -> None:
-    """Store every logged exception, not only the failures a transport captures itself.
+    """Store exceptions logged at ERROR or above as reports, under `LOG_CAPTURE_JOB` on `supervisor`.
 
     This is what makes worker failures reachable at all: its queue consumers absorb a failure,
     dead-letter the job and log it, so nothing reaches the supervisor that would have captured it.
+    `enabled=False` starts nothing; `capacity` bounds the failures held between the logging call
+    and the database write, and the oldest are dropped past it.
     """
     if not enabled:
         return
@@ -212,9 +217,9 @@ def start_permission_epoch_watch(
 ) -> None:
     """Start one process's permission-cache invalidation jobs.
 
-    Two jobs, deliberately: the poll is what makes invalidation durable, and the
-    `LISTEN` connection only shortens the window. A deployment with no listener
-    URL configured still converges, just five seconds slower.
+    Two jobs, deliberately: the poll is what makes invalidation durable, and the `LISTEN`
+    connection only shortens the window. A deployment with no listener URL still converges,
+    just a poll interval slower.
     """
     supervisor.start_periodic(
         watcher.refresh,
@@ -227,11 +232,10 @@ def start_permission_epoch_watch(
 
 @dataclass(eq=False, slots=True)
 class JobHandle:
-    """A supervised task, cancellable independently of its siblings.
+    """A supervised task, whose `cancel` stops it without touching its siblings.
 
-    Task groups cancel as a unit, so per-job cancellation needs a scope of its
-    own. The handle carries that scope plus a completion event, because
-    ``start_soon`` returns nothing to await.
+    Task groups cancel as a unit, so per-job cancellation needs a scope of its own; `finished`
+    exists because `start_soon` returns nothing to await.
     """
 
     name: str
@@ -244,12 +248,11 @@ class JobHandle:
 
 
 class BackgroundTaskSupervisor:
-    """Own process background tasks and await every task during shutdown.
+    """Owner of every background task in the process; `close` cancels them and awaits them all.
 
-    The supervisor must be entered with ``async with supervisor.running()``
-    before any work is started, and that ``async with`` has to live in the task
-    that owns the process, since a task group can only be exited by the task
-    that entered it.
+    Work can only start inside ``async with supervisor.running()``, which holds the task group and
+    must be entered by the task that owns the process, since a task group can only be exited by
+    the task that entered it. Leaving that block closes the supervisor.
     """
 
     def __init__(self, *, shutdown_timeout: float = 10.0) -> None:
@@ -263,14 +266,18 @@ class BackgroundTaskSupervisor:
     def capture_failures_into(self, service: ErrorReportService | None) -> None:
         """Store background job failures, which otherwise only ever reach a log file.
 
-        Set after construction because the supervisor is built before the service graph in every
-        process that owns one, and a job that fails before this is called is still logged.
+        Set after construction because the supervisor is built before the service graph; a job
+        that fails before this is called is still logged.
         """
         self._error_reports = service
 
     @asynccontextmanager
     async def running(self) -> AsyncGenerator[Self]:
-        """Hold the task group that owns every supervised job."""
+        """Hold the task group that owns every supervised job, closing the supervisor on exit.
+
+        Raises:
+            RuntimeError: This supervisor is already running.
+        """
         if self._task_group is not None:
             msg = "The background task supervisor is already running."
             raise RuntimeError(msg)
@@ -283,13 +290,10 @@ class BackgroundTaskSupervisor:
                 # block on work that close() was supposed to have stopped.
                 await self.close()
                 # close() gives up at the shutdown deadline, so re-cancel at the
-                # group level to force down anything merely slow to notice.
-                #
-                # Unlike the asyncio.wait this replaces, a task group cannot
-                # abandon a child: a job that shields itself past the deadline
-                # will still delay process exit rather than being left orphaned.
-                # That is the intended trade -- orphaned tasks are what the
-                # supervisor exists to prevent -- and nothing here shields.
+                # group level to force down anything merely slow to notice. A task
+                # group cannot abandon a child, so a job that shielded itself past
+                # the deadline would delay process exit rather than be orphaned;
+                # that is the intended trade, and nothing here shields.
                 task_group.cancel_scope.cancel()
 
     @property
@@ -298,7 +302,13 @@ class BackgroundTaskSupervisor:
         return dict(self._last_success)
 
     def is_healthy(self, required: Collection[str], *, max_age_seconds: float) -> bool:
-        """Return whether every required job completed successfully within the allowed age."""
+        """Return whether every required job completed successfully within the allowed age.
+
+        A job that has never succeeded, including one that has not yet run, counts as unhealthy.
+
+        Raises:
+            ValueError: `max_age_seconds` is not positive.
+        """
         if max_age_seconds <= 0:
             msg = "Background heartbeat age must be positive."
             raise ValueError(msg)
@@ -310,7 +320,13 @@ class BackgroundTaskSupervisor:
         )
 
     def start(self, coroutine: Coroutine[Any, Any, None], *, name: str) -> JobHandle:
-        """Start one owned task while this supervisor is accepting work."""
+        """Start one owned task, whose failures stay local to it and never cancel a sibling.
+
+        Closes `coroutine` rather than leaving it un-awaited when the call is refused.
+
+        Raises:
+            RuntimeError: The supervisor is not running yet, or is already closing.
+        """
         if self._task_group is None:
             coroutine.close()
             msg = "Cannot start background work before the supervisor is running."
@@ -332,7 +348,15 @@ class BackgroundTaskSupervisor:
         interval: float,
         run_immediately: bool = True,
     ) -> JobHandle:
-        """Run an operation repeatedly with uniform failure isolation and ownership."""
+        """Run an operation every `interval` seconds until cancelled, each run its own correlation.
+
+        A failing run is captured, logged and counted, then the loop waits and runs again; only
+        the successful runs advance the job's `last_success` heartbeat.
+
+        Raises:
+            ValueError: `interval` is not positive.
+            RuntimeError: The supervisor is not running yet, or is already closing.
+        """
         if interval <= 0:
             msg = "Periodic job interval must be positive."
             raise ValueError(msg)
@@ -342,14 +366,17 @@ class BackgroundTaskSupervisor:
         )
 
     async def close(self) -> None:
-        """Stop accepting work, cancel tasks, and wait for all of them with a deadline."""
+        """Stop accepting work, cancel every task, and await them until `shutdown_timeout`.
+
+        Tasks still running at the deadline are logged by name and left; calling twice is a no-op.
+        """
         if self._closing:
             return
         self._closing = True
         await self._stop(tuple(self._handles), description="Background tasks")
 
     async def cancel(self, *handles: JobHandle) -> None:
-        """Cancel and await a feature's owned tasks without closing the process supervisor."""
+        """Cancel and await a feature's own tasks, under the same deadline, leaving the rest alone."""
         await self._stop(handles, description="Feature background tasks")
 
     async def _stop(self, handles: tuple[JobHandle, ...], *, description: str) -> None:
@@ -383,7 +410,7 @@ class BackgroundTaskSupervisor:
             attributes = {"squid.job.name": name}
             # One correlation per run, so a failure's stored report carries the lines this run
             # logged rather than a slice of whatever else the process was doing. The logging call
-            # stays inside the scope; only then does it carry the id the report is filed under.
+            # stays inside the scope, or it would not carry the id the report is filed under.
             with correlation_scope() as correlation:
                 try:
                     await operation()
@@ -439,9 +466,8 @@ class BackgroundTaskSupervisor:
             with handle.scope:
                 await coroutine
         except Exception:
-            # Failures stay local to the job. Letting one escape would cancel
-            # every sibling in the task group, which for the worker means one
-            # bad job taking down the other seventeen.
+            # Failures stay local to the job: letting one escape would cancel every
+            # sibling in the task group, so one bad job would take down the worker.
             if not self._closing:
                 logger.exception("Background task %s stopped unexpectedly", handle.name)
         finally:

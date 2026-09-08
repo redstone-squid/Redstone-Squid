@@ -13,7 +13,11 @@ type ReadinessCheck = Callable[[], Awaitable[bool]]
 
 
 class ProcessHealthServer:
-    """Expose liveness and dependency-aware readiness for one process."""
+    """Serve `/livez` and `/readyz` for one process until `close` stops the listener.
+
+    `/readyz` answers 503 when the readiness check returns false, raises, or exceeds
+    `timeout_seconds`; `/livez` answers 200 as long as the loop is running.
+    """
 
     def __init__(
         self,
