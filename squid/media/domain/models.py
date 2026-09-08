@@ -54,7 +54,7 @@ class MediaBatchTotals:
 
 @dataclass(frozen=True, slots=True)
 class MediaLimits:
-    """Centrally advertised submission and decoder-work budgets."""
+    """Per-submission counts and bytes plus per-file decode budgets; every field must be positive."""
 
     max_images: int = 10
     max_videos: int = 3
@@ -81,7 +81,7 @@ class MediaLimits:
             raise ValidationError(msg)
 
     def batch_violation(self, totals: MediaBatchTotals) -> MediaViolation | None:
-        """Return the first aggregate violation in a stable order."""
+        """First violation, checking image count, video count, source bytes, then output bytes."""
         checks = (
             (MediaLimitMeasure.IMAGE_COUNT, totals.image_count, self.max_images),
             (MediaLimitMeasure.VIDEO_COUNT, totals.video_count, self.max_videos),
@@ -94,7 +94,7 @@ class MediaLimits:
         )
 
     def probe_violation(self, kind: MediaKind, probe: MediaProbe) -> MediaViolation | None:
-        """Return a decoded-work violation without using floating-point arithmetic."""
+        """First violation of pixels per frame, then for videos duration (when known) and decode rate."""
         checks: list[tuple[MediaLimitMeasure, int, int]] = [
             (MediaLimitMeasure.PIXELS_PER_FRAME, probe.pixels_per_frame, self.max_pixels_per_frame)
         ]
@@ -150,17 +150,15 @@ class MediaProbe:
 
     @property
     def has_audio(self) -> bool:
-        """Whether the inspected input contains an audio stream."""
         return self.audio_codec is not None
 
     @property
     def pixels_per_frame(self) -> int:
-        """Return decoded pixels in one full frame."""
         return self.width * self.height
 
     @property
     def decoded_pixels_per_second(self) -> int:
-        """Return the ceiling of width x height x average FPS."""
+        """Ceiling of `pixels_per_frame` x average frame rate, in integer arithmetic."""
         numerator = self.pixels_per_frame * self.frame_rate_numerator
         return (numerator + self.frame_rate_denominator - 1) // self.frame_rate_denominator
 

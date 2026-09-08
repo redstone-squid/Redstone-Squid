@@ -48,12 +48,10 @@ from squid.tags.infrastructure.models import BuildTagAssignment
 def _staff_role_ids():
     """The `global-admin` role's id, as a scalar subquery.
 
-    Staff notification targeting is a set query over every account, so it cannot run the
-    resolver per row; holding the `global-admin` role is the structural stand-in.
-
-    This answers only *whom do we notify*. The other question the config allowlist used
-    to conflate with it -- *may this caller read staff inbox items* -- is per-caller and
-    now resolves `build.submission.view_pending` in the route.
+    Staff targeting is a set query over every account, so it cannot run the permission resolver
+    per row; holding `global-admin` is the structural stand-in. This answers only whom to notify.
+    Whether a caller may read staff inbox items is `build.submission.view_pending`, resolved in
+    the route.
     """
     return select(PermissionRole.id).where(PermissionRole.builtin_key == BuiltinRoleKeys.GLOBAL_ADMIN.value)
 
@@ -76,8 +74,6 @@ class _RecordGain:
 
 
 class PostgresNotificationRepository:
-    """Persist opt-ins and project durable events into channel-specific work."""
-
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
@@ -95,12 +91,9 @@ class PostgresNotificationRepository:
     async def update_preferences(
         self, account_id: int, *, web_enabled: bool, dm_enabled: bool
     ) -> NotificationPreferences | None:
-        """Set both channels, creating the profile row on first use.
+        """Upsert both channels; None when the account has not accepted the privacy notice.
 
-        An upsert rather than an update because there is no longer a separate accept step to
-        have created the row: a consented account turning a channel on for the first time is one
-        call. The gate is read first and separately because an UPDATE cannot join to `accounts`,
-        and this runs when a human toggles a switch, so a second round trip costs nothing.
+        The consent gate is a separate read because an UPDATE cannot join `accounts`.
         """
         async with self._session_factory() as session, session.begin():
             if await self._consent_pending(session, account_id):
@@ -318,11 +311,8 @@ class PostgresNotificationRepository:
     async def claim_deliveries(self, *, limit: int) -> Sequence[PendingNotificationDelivery]:
         async with self._session_factory() as session, session.begin():
             claimable_staff = _is_staff_account(NotificationDeliveryRecord.account_id)
-            # The DM address is read at claim time rather than copied onto the delivery
-            # row at enqueue time. The write path already made this join to decide
-            # whether to enqueue at all, so the cost moves rather than appearing -- and
-            # the inner join means unlinking Discord suppresses a pending DM, which is
-            # the correct reading of an unlink.
+            # The DM address is read at claim time rather than copied onto the delivery row,
+            # so the inner join makes unlinking Discord suppress a pending DM.
             candidates = tuple(
                 (
                     await session.execute(
@@ -605,7 +595,7 @@ class PostgresNotificationRepository:
         source_key: Callable[[int], str],
         payload: dict[str, object],
     ) -> None:
-        """Fan one event out to many recipients in three queries rather than three each."""
+        """Fan one event out to many recipients in three queries rather than three per recipient."""
         if not account_ids:
             return
         eligible = (
@@ -654,8 +644,7 @@ class PostgresNotificationRepository:
                 .returning(NotificationRecord.id, NotificationRecord.account_id)
             )
         ).all()
-        # The join above already proved a Discord identity exists; the address itself is
-        # read at claim time, so nothing is copied onto the delivery rows here.
+        # The join proved a Discord identity exists; the address is read at claim time.
         deliverable = {
             profile.account_id for profile in profiles if profile.dm_enabled and profile.dm_suspended_at is None
         }
@@ -714,8 +703,7 @@ class PostgresNotificationRepository:
             .on_conflict_do_nothing(index_elements=[NotificationRecord.source_key])
             .returning(NotificationRecord.id)
         )
-        # The join above already proved a Discord identity exists; the address itself is
-        # read at claim time, so nothing is copied onto the delivery row here.
+        # The join proved a Discord identity exists; the address is read at claim time.
         if notification_id is None or not profile.dm_enabled or profile.dm_suspended_at is not None:
             return
         await session.execute(

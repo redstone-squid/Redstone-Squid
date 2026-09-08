@@ -16,16 +16,12 @@ _VERSION_SCOPES = frozenset({"all_time", "current"})
 
 
 class SubscriptionKind(StrEnum):
-    """Durable subject types an account may follow."""
-
     CREATOR = "creator"
     RECORD = "record"
     RECORD_FILTER = "record_filter"
 
 
 class NotificationKind(StrEnum):
-    """Inbox and delivery message categories."""
-
     BUILD_CONFIRMED = "build_confirmed"
     BUILD_DENIED = "build_denied"
     CREATOR_BUILD_CONFIRMED = "creator_build_confirmed"
@@ -35,12 +31,10 @@ class NotificationKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class NotificationPreferences:
-    """An account's notification channel switches, and whether it may use them yet.
+    """An account's channel switches.
 
-    There is no notification-specific notice any more. Notifications are described by the one
-    privacy notice, so `consent_pending` is the account's answer to that, read from the account
-    rather than stored again here. The channel switches stay independent: accepting the notice
-    permits notifications, it does not turn any on.
+    `consent_pending` is the account's privacy-notice state, read from the account rather than
+    stored here. Accepting the notice permits notifications; it turns none on.
     """
 
     account_id: int
@@ -57,7 +51,7 @@ class NotificationPreferences:
 
 @dataclass(frozen=True, slots=True)
 class TagPredicate:
-    """A required build tag, optionally with an exact typed value."""
+    """A required build tag, optionally pinned to an exact value; raises `ValidationError` when malformed."""
 
     tag_id: int
     operator: str = "present"
@@ -74,7 +68,6 @@ class TagPredicate:
             raise ValidationError(tr(t"exact predicates require a value"))
 
     def as_dict(self) -> dict[str, object]:
-        """Serialize the predicate into JSON-safe persistence data."""
         result: dict[str, object] = {"tag_id": self.tag_id, "operator": self.operator}
         if self.value is not None:
             result["value"] = self.value
@@ -83,7 +76,7 @@ class TagPredicate:
 
 @dataclass(frozen=True, slots=True)
 class RecordSubscriptionFilter:
-    """Structured record-gain predicates; omitted fields are wildcards."""
+    """Record-gain predicates; omitted fields are wildcards. Raises `ValidationError` when empty or malformed."""
 
     build_kinds: frozenset[str] = frozenset()
     record_classes: frozenset[str] = frozenset()
@@ -100,7 +93,7 @@ class RecordSubscriptionFilter:
             raise ValidationError(tr(t"record filters may contain only one predicate per tag"))
 
     def as_dict(self) -> dict[str, object]:
-        """Serialize the filter into a stable JSON shape."""
+        """Serialize with sorted members so equal filters compare equal under the database's unique index."""
         return {
             "build_kinds": sorted(self.build_kinds),
             "record_classes": sorted(self.record_classes),
@@ -110,7 +103,7 @@ class RecordSubscriptionFilter:
 
     @classmethod
     def from_dict(cls, value: dict[str, object]) -> RecordSubscriptionFilter:
-        """Parse trusted persisted JSON, raising when it no longer matches the contract."""
+        """Parse persisted JSON; raises `DataIntegrityError` on a bad shape and `ValidationError` on bad values."""
         raw_tags_value = value.get("tags", [])
         if not isinstance(raw_tags_value, list):
             raise DataIntegrityError(tr(t"tags must be a list"))
@@ -138,8 +131,6 @@ class RecordSubscriptionFilter:
 
 @dataclass(frozen=True, slots=True)
 class NotificationSubscription:
-    """One enabled subscription owned by an account."""
-
     id: int
     account_id: int
     kind: SubscriptionKind
@@ -150,8 +141,6 @@ class NotificationSubscription:
 
 @dataclass(frozen=True, slots=True)
 class InboxNotification:
-    """One materialized inbox item."""
-
     id: int
     kind: NotificationKind
     payload: dict[str, object]
@@ -161,7 +150,7 @@ class InboxNotification:
 
 @dataclass(frozen=True, slots=True)
 class PendingNotificationDelivery:
-    """One fenced Discord DM claim with its materialized message data."""
+    """A claimed DM; `generation` and `claim_token` fence its completion and failure updates."""
 
     id: int
     generation: int

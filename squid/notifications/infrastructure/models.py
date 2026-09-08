@@ -25,11 +25,7 @@ from squid.persistence.types import InstantUTC, now
 
 
 class NotificationProfile(Base, kw_only=True):
-    """Independent notification channel preferences.
-
-    Carries no consent receipt: notifications are covered by the one privacy notice, whose
-    receipt lives on `accounts`. A row here means "these switches", not "this person agreed".
-    """
+    """Per-account channel switches. Consent lives on `accounts`; a row here does not imply the notice was accepted."""
 
     __tablename__ = "notification_profiles"
 
@@ -50,8 +46,6 @@ class NotificationProfile(Base, kw_only=True):
 
 
 class NotificationSubscriptionRecord(Base, kw_only=True):
-    """A creator, exact record, or structured record-filter subscription."""
-
     __tablename__ = "notification_subscriptions"
     __table_args__ = (
         CheckConstraint(
@@ -102,7 +96,7 @@ class NotificationSubscriptionRecord(Base, kw_only=True):
 
 
 class NotificationRecord(Base, kw_only=True):
-    """An idempotently materialized user notification."""
+    """One inbox item; the unique `source_key` makes re-materializing an event a no-op."""
 
     __tablename__ = "notifications"
     __table_args__ = (

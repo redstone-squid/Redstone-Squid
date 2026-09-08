@@ -27,7 +27,7 @@ class _SourceSnapshot:
 
 
 class MediaNormalizationService:
-    """Validate attacker-controlled files around a tool-specific normalizer port."""
+    """Validate attacker-controlled files before and after a tool-specific `MediaNormalizer`."""
 
     def __init__(self, normalizer: MediaNormalizer, *, limits: MediaLimits | None = None) -> None:
         self._normalizer = normalizer
@@ -35,17 +35,29 @@ class MediaNormalizationService:
 
     @property
     def limits(self) -> MediaLimits:
-        """Return the limits transports should advertise before accepting bytes."""
+        """The limits transports advertise before accepting bytes."""
         return self._limits
 
     def validate_batch(self, totals: MediaBatchTotals) -> None:
-        """Validate submission-wide counts and byte reservations."""
+        """Raise `MediaLimitExceededError` for the first aggregate count or byte limit `totals` exceeds."""
         violation = self._limits.batch_violation(totals)
         if violation is not None:
             raise MediaLimitExceededError(violation)
 
     async def normalize(self, request: MediaNormalizationRequest) -> MediaNormalizationResult:
-        """Probe, validate, and normalize one staged upload."""
+        """Probe, validate, and normalize one staged upload, discarding the outputs if postflight fails.
+
+        The source must be a regular file (no symlink) and must not change between the first stat and
+        the end of normalization.
+
+        Raises:
+            InvalidMediaError: The source is not a regular file, changes underfoot, or is a video with
+                unknown duration or frame rate or odd dimensions.
+            MediaLimitExceededError: The source, decoded work, or outputs exceed `limits`.
+            MediaProcessingError: The normalizer's result does not match the request or input probe, or
+                a tool fails.
+            MediaToolUnavailableError: A tool is not installed.
+        """
         source = _snapshot_source(request.source_path)
         if source.byte_size > self._limits.max_source_bytes:
             raise MediaLimitExceededError(
@@ -75,7 +87,6 @@ class MediaNormalizationService:
         return result
 
     async def aclose(self) -> None:
-        """Release normalizer resources."""
         await self._normalizer.aclose()
 
     def _validate_probe(self, kind: MediaKind, probe: MediaProbe) -> None:

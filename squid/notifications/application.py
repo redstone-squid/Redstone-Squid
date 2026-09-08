@@ -23,13 +23,22 @@ from squid.notifications.errors import NotificationSubscriptionNotFoundError
 class NotificationRepository(Protocol):
     """Persistence needed by the notification application service."""
 
-    async def get_preferences(self, account_id: int) -> NotificationPreferences: ...
+    async def get_preferences(self, account_id: int) -> NotificationPreferences:
+        """Return the account's switches, or an all-off profile when it has no row."""
+        ...
 
     async def update_preferences(
         self, account_id: int, *, web_enabled: bool, dm_enabled: bool
-    ) -> NotificationPreferences | None: ...
+    ) -> NotificationPreferences | None:
+        """Upsert both switches; None when the account has not accepted the privacy notice.
 
-    async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool: ...
+        Turning DMs off kills the account's unsent deliveries; turning them on clears a suspension.
+        """
+        ...
+
+    async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool:
+        """Whether a creator (`CREATOR`) or record competition (`RECORD`) with this public id exists."""
+        ...
 
     async def add_subscription(
         self,
@@ -38,11 +47,17 @@ class NotificationRepository(Protocol):
         kind: SubscriptionKind,
         subject_id: UUID | None,
         record_filter: RecordSubscriptionFilter | None,
-    ) -> NotificationSubscription: ...
+    ) -> NotificationSubscription:
+        """Return the account's equivalent enabled subscription, inserting it when absent."""
+        ...
 
-    async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]: ...
+    async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
+        """Enabled subscriptions, oldest first."""
+        ...
 
-    async def delete_subscription(self, account_id: int, subscription_id: int) -> bool: ...
+    async def delete_subscription(self, account_id: int, subscription_id: int) -> bool:
+        """False when no such subscription belongs to the account."""
+        ...
 
     async def list_inbox(
         self,
@@ -53,27 +68,49 @@ class NotificationRepository(Protocol):
         before_id: int | None,
         limit: int,
         include_staff: bool,
-    ) -> Sequence[InboxNotification]: ...
+    ) -> Sequence[InboxNotification]:
+        """Newest-first web-visible items; empty when the web inbox is off.
 
-    async def count_inbox(self, account_id: int, *, include_staff: bool) -> int: ...
+        `STAFF_BUILD_SUBMITTED` items appear only with `include_staff`. A `before_id` page carries
+        its overfetched row at the front rather than the back.
+        """
+        ...
 
-    async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool) -> bool: ...
+    async def count_inbox(self, account_id: int, *, include_staff: bool) -> int:
+        """Count under the visibility rules of `list_inbox`."""
+        ...
 
-    async def materialize(self, event: DomainEvent) -> None: ...
+    async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool) -> bool:
+        """False when the item is not visible to the account; an already-read item keeps its `read_at`."""
+        ...
 
-    async def cleanup(self, *, retention_days: int) -> int: ...
+    async def materialize(self, event: DomainEvent) -> None:
+        """Project one event into inbox rows and DM deliveries; a redelivered event inserts nothing."""
+        ...
 
-    async def claim_deliveries(self, *, limit: int) -> Sequence[PendingNotificationDelivery]: ...
+    async def cleanup(self, *, retention_days: int) -> int:
+        """Delete inbox items older than `retention_days` and unreferenced source events; return the item count."""
+        ...
 
-    async def complete_delivery(self, delivery: PendingNotificationDelivery) -> bool: ...
+    async def claim_deliveries(self, *, limit: int) -> Sequence[PendingNotificationDelivery]:
+        """Claim up to `limit` ready DMs, skipping rows another worker holds and reclaiming expired claims."""
+        ...
 
-    async def fail_delivery(self, delivery: PendingNotificationDelivery, error: str, *, max_attempts: int) -> bool: ...
+    async def complete_delivery(self, delivery: PendingNotificationDelivery) -> bool:
+        """Mark sent; False when the claim has been superseded."""
+        ...
 
-    async def suspend_dm(self, delivery: PendingNotificationDelivery, error: str) -> bool: ...
+    async def fail_delivery(self, delivery: PendingNotificationDelivery, error: str, *, max_attempts: int) -> bool:
+        """Reschedule with backoff, or mark dead once `attempts` reaches `max_attempts`; True only when dead."""
+        ...
+
+    async def suspend_dm(self, delivery: PendingNotificationDelivery, error: str) -> bool:
+        """Mark dead and switch the recipient's DMs off; False when the claim has been superseded."""
+        ...
 
 
 class NotificationService:
-    """Manage opt-in notification state and idempotent event materialization."""
+    """Raises `InvalidStateError` when `retention_days` is below 1."""
 
     def __init__(self, repository: NotificationRepository, *, retention_days: int = 90) -> None:
         if retention_days < 1:
@@ -87,7 +124,7 @@ class NotificationService:
         return await self._repository.get_preferences(account_id)
 
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
-        """Set both channels, once the account has accepted the privacy notice."""
+        """Set both channels; raises `ConsentRequiredError` until the account accepts the privacy notice."""
         preferences = await self._repository.update_preferences(
             account_id,
             web_enabled=web_enabled,
@@ -105,7 +142,14 @@ class NotificationService:
         subject_id: UUID | None = None,
         record_filter: RecordSubscriptionFilter | None = None,
     ) -> NotificationSubscription:
-        """Create or return one equivalent enabled subscription."""
+        """Create or return one equivalent enabled subscription.
+
+        Raises:
+            ConsentRequiredError: The account has not accepted the privacy notice.
+            ValidationError: `subject_id` and `record_filter` do not match `kind` (a filter alone for
+                `RECORD_FILTER`, a subject alone otherwise).
+            NotificationSubscriptionNotFoundError: No creator or record competition has `subject_id`.
+        """
         preferences = await self._repository.get_preferences(account_id)
         if not preferences.has_current_consent:
             raise ConsentRequiredError(account_id=account_id)
@@ -126,11 +170,10 @@ class NotificationService:
         )
 
     async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
-        """List the caller's enabled subscriptions."""
         return await self._repository.list_subscriptions(account_id)
 
     async def unsubscribe(self, account_id: int, subscription_id: int) -> None:
-        """Delete one caller-owned subscription."""
+        """Raises `NotificationSubscriptionNotFoundError` when the subscription is not the caller's."""
         if not await self._repository.delete_subscription(account_id, subscription_id):
             raise NotificationSubscriptionNotFoundError(public_context={"subscription_id": subscription_id})
 
@@ -142,7 +185,10 @@ class NotificationService:
         page_size: int = 20,
         include_staff: bool = False,
     ) -> Page[InboxNotification]:
-        """Return one page of web-visible inbox items in newest-first display order."""
+        """Return one newest-first page of web-visible items.
+
+        Raises `InvalidStateError` unless 1 <= page_size <= 100.
+        """
         if not 1 <= page_size <= 100:
             msg = tr(t"page_size must be between 1 and 100")
             raise InvalidStateError(msg)
@@ -165,7 +211,7 @@ class NotificationService:
         )
 
     async def mark_read(self, account_id: int, notification_id: int, *, include_staff: bool = False) -> None:
-        """Mark a visible caller-owned inbox item as read."""
+        """Raises `NotificationSubscriptionNotFoundError` when the item is not visible to the caller."""
         if not await self._repository.mark_read(account_id, notification_id, include_staff=include_staff):
             raise NotificationSubscriptionNotFoundError(
                 resource="notification", public_context={"notification_id": notification_id}
@@ -180,18 +226,21 @@ class NotificationService:
         return await self._repository.cleanup(retention_days=self._retention_days)
 
     async def claim_deliveries(self, *, limit: int = 20) -> Sequence[PendingNotificationDelivery]:
-        """Claim ready Discord DMs with database-clock UUID fencing tokens."""
+        """Claim ready DMs with fresh fencing tokens; raises `InvalidStateError` unless 1 <= limit <= 100."""
         if not 1 <= limit <= 100:
             msg = tr(t"delivery claim limit must be between 1 and 100")
             raise InvalidStateError(msg)
         return await self._repository.claim_deliveries(limit=limit)
 
     async def complete_delivery(self, delivery: PendingNotificationDelivery) -> bool:
-        """Mark a DM sent only while this claim still owns its generation."""
+        """Mark a DM sent; False when this claim no longer owns the row."""
         return await self._repository.complete_delivery(delivery)
 
     async def fail_delivery(self, delivery: PendingNotificationDelivery, error: Exception) -> bool:
-        """Retry a failed or ambiguous send; duplicates are possible after timeouts."""
+        """Retry with backoff, or mark dead after 8 attempts (True).
+
+        A timed-out send may already have arrived, so a retry can duplicate the DM.
+        """
         return await self._repository.fail_delivery(delivery, str(error)[:4000], max_attempts=8)
 
     async def suspend_dm(self, delivery: PendingNotificationDelivery, error: Exception) -> bool:

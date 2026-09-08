@@ -53,14 +53,18 @@ class _ClaimedArtifactCleanup:
 
 
 class PostgresMediaJobRepository(MediaJobRepository):
-    """Persist immutable uploads and fence every worker transition on a UUID token."""
+    """`MediaJobRepository` on PostgreSQL; `discard` marks one upload discarded under the draft lifecycle lock.
+
+    Claim-fenced writes match on the claim token in the same statement, and the draft lifecycle
+    advisory lock serializes capacity changes against submission finalization.
+    """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
     @override
     async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
-        """Reserve aggregate draft capacity, or accept an identical retry."""
+        """Only pending, claimed and completed uploads count toward the draft's capacity."""
         async with self._session_factory.begin() as session:
             await lock_uuid(session, upload.id, namespace=_MEDIA_UPLOAD_LOCK_NAMESPACE)
             existing = await session.get(MediaUploadRecord, upload.id)
@@ -161,7 +165,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
     @override
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
-        """Fence in-flight work and retain a terminal cleanup record."""
+        """The row is kept, not deleted, so `terminal_sources` can still schedule its raw object for cleanup."""
         async with self._session_factory.begin() as session:
             await _lock_mutable_submission_draft(session, draft_id)
             row = (
@@ -188,7 +192,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
     @override
     async def claim(self, *, limit: int) -> Sequence[ClaimedMediaJob]:
-        """Lease ready or abandoned work with a fresh token per row."""
+        """A claim is abandoned once `claimed_at` is older than `VISIBILITY_TIMEOUT`; heartbeats reset it."""
         ready = or_(
             and_(
                 MediaNormalizationJobRecord.status == MediaJobStatus.PENDING.value,
@@ -232,7 +236,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
     @override
     async def heartbeat(self, job: ClaimedMediaJob) -> bool:
-        """Renew a current job claim and its crash-recovery publication leases."""
         async with self._session_factory.begin() as session:
             current = await session.scalar(
                 select(MediaNormalizationJobRecord).where(*_claim_filter(job)).with_for_update()
@@ -252,7 +255,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
     @override
     async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool:
-        """Release a cleanup-blocked claim without charging a failed attempt."""
         statement = (
             update(MediaNormalizationJobRecord)
             .where(*_claim_filter(job))
@@ -285,7 +287,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
         artifacts: Sequence[StoredMediaArtifact],
         limits: MediaLimits,
     ) -> bool:
-        """Atomically persist outputs and complete the job if the claim is current."""
+        """Re-tracks the artifacts first, so a key tombstoned since publication is revived before it is referenced."""
         _validate_completed_artifacts(job.upload.kind, artifacts)
         if not await self.track_artifacts(job, artifacts):
             return False
@@ -355,7 +357,11 @@ class PostgresMediaJobRepository(MediaJobRepository):
         job: ClaimedMediaJob,
         artifacts: Sequence[StoredMediaArtifact],
     ) -> bool:
-        """Register possible object keys before upload and report whether the claim is current."""
+        """A key already registered with a different digest or size is left alone and raises `ValueError`.
+
+        A tombstoned key is revived with its retry state reset. Leases are only taken while the claim is
+        current; the object rows are written either way.
+        """
         _validate_completed_artifacts(job.upload.kind, artifacts)
         async with self._session_factory.begin() as session:
             current_claim = await session.scalar(
@@ -440,7 +446,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
         job: ClaimedMediaJob,
         artifacts: Sequence[StoredMediaArtifact],
     ) -> None:
-        """Release exactly one claim's leases after its object-store writes have stopped."""
         async with self._session_factory.begin() as session:
             await _release_artifact_leases(session, job, artifacts)
 
@@ -451,7 +456,11 @@ class PostgresMediaJobRepository(MediaJobRepository):
         *,
         limit: int,
     ) -> MediaArtifactCleanupOutcome:
-        """Claim due keys, perform storage I/O outside transactions, and token-fence acknowledgments."""
+        """Expired publication leases are revoked and legacy artifact rows reconciled before candidates are chosen.
+
+        Revoking a lease also returns its still-claimed job to pending, so a dead publisher's work is retried
+        rather than waiting out the visibility timeout.
+        """
         async with self._session_factory.begin() as session:
             await _revoke_expired_publications(session, limit=limit)
             await _reconcile_artifact_objects(session)
@@ -525,9 +534,9 @@ class PostgresMediaJobRepository(MediaJobRepository):
     ) -> None:
         """Acknowledge a whole cleanup batch in one transaction.
 
-        Deletion is idempotent and an unacknowledged claim expires on its own,
-        so a crash here costs a repeated delete rather than a lost object --
-        which is all a transaction per object was buying.
+        Deletion is idempotent and an unacknowledged claim expires on its own, so a crash here costs
+        a repeated delete, not a lost object. A key whose `last_seen_at` moved during the delete is
+        made due again instead of tombstoned: a publisher re-registered it meanwhile.
         """
         if not resolutions:
             return
@@ -546,9 +555,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
                 )
             ).all()
             for candidate in candidates:
-                # Both halves of the pair have to match, exactly as the
-                # per-object statement required: one row's key with another
-                # row's token acknowledges a claim nobody holds.
+                # The `IN` filters match key and token independently; the pair must match.
                 if tokens.get(candidate.object_key) != candidate.cleanup_claim_token:
                     continue
                 error_name = errors[candidate.object_key]
@@ -577,7 +584,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
         max_attempts: int,
         terminal: bool,
     ) -> MediaJobFailureOutcome:
-        """Release retryable work with backoff or retain a dead terminal row."""
         attempts = job.attempts + 1
         dead = terminal or attempts >= max_attempts
         values: dict[str, object] = {
@@ -609,7 +615,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
     @override
     async def terminal_sources(self, *, limit: int) -> Sequence[TerminalMediaSource]:
-        """List raw objects whose terminal metadata still lacks cleanup confirmation."""
         async with self._session_factory() as session:
             rows = (
                 await session.execute(
@@ -636,7 +641,6 @@ class PostgresMediaJobRepository(MediaJobRepository):
 
     @override
     async def mark_source_deleted(self, source: TerminalMediaSource) -> bool:
-        """Confirm an idempotent raw-object deletion only while the job is terminal."""
         terminal_job = exists(
             select(MediaNormalizationJobRecord.upload_id).where(
                 MediaNormalizationJobRecord.upload_id == source.upload_id,
@@ -670,7 +674,6 @@ async def _lock_mutable_submission_draft(session: AsyncSession, draft_id: UUID) 
         select(SubmissionDraft.status).where(SubmissionDraft.id == draft_id).with_for_update()
     )
     if status is None:
-        # Once the draft row is gone there is no owner against which a public mutation can be authorized.
         raise MediaDraftNotFoundError(draft_id)
     if DraftStatus(status) not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
         raise MediaDraftStateConflictError(status)
@@ -681,7 +684,7 @@ def _publication_expiry() -> Instant:
 
 
 async def _reconcile_artifact_objects(session: AsyncSession) -> None:
-    """Discover artifact rows committed by workers predating lifecycle tracking."""
+    """Give every artifact row a lifecycle row, reviving tombstones older than the artifact that references them."""
     lifecycle_missing_or_stale = or_(
         MediaArtifactObjectRecord.object_key.is_(None),
         and_(
@@ -751,7 +754,7 @@ async def _reconcile_artifact_objects(session: AsyncSession) -> None:
 
 
 async def _revoke_expired_publications(session: AsyncSession, *, limit: int) -> None:
-    """Fence an expired publisher before releasing its objects for deletion."""
+    """Drop expired leases; a job still claimed under the same token goes back to pending immediately."""
     identities = tuple(
         (
             await session.execute(

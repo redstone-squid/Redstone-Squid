@@ -10,7 +10,11 @@ from squid.media.domain.models import MediaKind
 
 @dataclass(frozen=True, slots=True)
 class MediaNormalizationRequest:
-    """Source and job-local destinations for one normalization operation."""
+    """Source and job-local destinations for one normalization.
+
+    Construction raises `ValidationError` when any two paths coincide, an image carries a poster path or
+    `strip_audio`, or a video lacks a poster path.
+    """
 
     kind: MediaKind
     source_path: Path

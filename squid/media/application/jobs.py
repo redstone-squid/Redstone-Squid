@@ -52,20 +52,18 @@ MAX_MEDIA_JOB_CLEANUP = 500
 DEFAULT_MEDIA_JOB_ATTEMPTS = 3
 MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS = 30.0
 MEDIA_ARTIFACT_PUBLICATION_LEASE = timedelta(hours=48)
-"""Crash-recovery lease covering the object-store publish phase after normalization.
+"""How long a lost worker's object-store publish phase blocks cleanup of its keys.
 
-Object storage allows at most ten retries with 60-second connect and one-hour read
-timeouts. A video publishes at most three sequential objects; conservatively counting
-an initial attempt plus all ten retries for every object takes under thirty-four hours
-before SDK backoff, leaving more than fourteen hours of lease margin. Active workers
-also renew their claim before and after every publication.
+Sized to outlast the worst case: three sequential objects per video, each allowed an initial
+attempt plus ten retries with 60-second connect and one-hour read timeouts, is under 34 hours.
+Live workers renew the lease on every heartbeat, so only a dead one ever runs it down.
 """
 MEDIA_ARTIFACT_CLEANUP_CLAIM = timedelta(hours=24)
-"""Recovery window for an object deletion that may still be running after worker loss."""
+"""How long a cleanup claim on an object key stays exclusive after the claiming worker is lost."""
 
 
 class MediaJobStatus(StrEnum):
-    """Stable durable states for one normalization request."""
+    """Persisted job states; the string values are stored in `media_normalization_jobs.status`."""
 
     PENDING = "pending"
     CLAIMED = "claimed"
@@ -75,7 +73,7 @@ class MediaJobStatus(StrEnum):
 
 
 class MediaArtifactRole(StrEnum):
-    """The purpose of a durable artifact produced by normalization."""
+    """Which file an artifact is: the normalized output, the video poster, or the JSON normalization report."""
 
     OUTPUT = "output"
     POSTER = "poster"
@@ -257,28 +255,68 @@ class TerminalMediaSource:
 
 
 class MediaJobRepository(Protocol):
-    """Durable metadata and claim-fenced queue operations."""
+    """Durable upload metadata and a claim-token queue; `discard` withdraws one upload from its draft.
 
-    async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome: ...
+    Every transition that takes a `ClaimedMediaJob` is fenced on its claim token and reports `False`
+    instead of acting when the token is no longer current.
+    """
 
-    async def get(self, upload_id: UUID) -> MediaJobSnapshot | None: ...
+    async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
+        """Persist `upload` with a pending job, or accept a byte-identical retry of the same id.
 
-    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]: ...
+        Raises:
+            MediaUploadConflictError: The id exists with different metadata.
+            MediaDraftNotFoundError: The draft row is gone.
+            MediaDraftStateConflictError: The draft is not editable.
+            MediaLimitExceededError: The draft's active counts or source bytes would exceed `limits`.
+        """
+        ...
 
-    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool: ...
+    async def get(self, upload_id: UUID) -> MediaJobSnapshot | None:
+        """Current state and persisted artifacts, or `None` for an unknown upload."""
+        ...
 
-    async def claim(self, *, limit: int) -> Sequence[ClaimedMediaJob]: ...
+    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]:
+        """Every upload for the draft in creation order, terminal ones included."""
+        ...
 
-    async def heartbeat(self, job: ClaimedMediaJob) -> bool: ...
+    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
+        """Mark the upload discarded, invalidating any live claim; idempotent.
 
-    async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool: ...
+        Returns `False` when the upload does not belong to `draft_id`. Raises `MediaDraftNotFoundError`
+        or `MediaDraftStateConflictError` when the draft is gone or not editable.
+        """
+        ...
+
+    async def claim(self, *, limit: int) -> Sequence[ClaimedMediaJob]:
+        """Lease up to `limit` jobs that are pending or whose claim outlived the visibility timeout.
+
+        Each row gets a fresh claim token, so a reclaimed job's previous holder fails every fenced call.
+        """
+        ...
+
+    async def heartbeat(self, job: ClaimedMediaJob) -> bool:
+        """Renew the claim and every publication lease it holds; `False` when the claim is not current."""
+        ...
+
+    async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool:
+        """Return the job to pending until `until` without counting an attempt, dropping its publication leases."""
+        ...
 
     async def complete(
         self,
         job: ClaimedMediaJob,
         artifacts: Sequence[StoredMediaArtifact],
         limits: MediaLimits,
-    ) -> bool: ...
+    ) -> bool:
+        """Record `artifacts` and complete the job in one transaction; `False` when the claim is not current.
+
+        Raises:
+            MediaLimitExceededError: The draft's completed output bytes would exceed `limits`.
+            MediaArtifactCleanupInProgressError: An artifact key is mid-deletion; retry after `retry_at`.
+            ValueError: `artifacts` lacks or duplicates a role the upload's kind requires.
+        """
+        ...
 
     async def fail(
         self,
@@ -287,34 +325,65 @@ class MediaJobRepository(Protocol):
         *,
         max_attempts: int,
         terminal: bool,
-    ) -> MediaJobFailureOutcome: ...
+    ) -> MediaJobFailureOutcome:
+        """Release the job for a backed-off retry, or mark it dead when `terminal` or attempts reach `max_attempts`.
 
-    async def terminal_sources(self, *, limit: int) -> Sequence[TerminalMediaSource]: ...
+        `error` is truncated to 4000 characters. `applied` is `False` when the claim is not current.
+        """
+        ...
 
-    async def mark_source_deleted(self, source: TerminalMediaSource) -> bool: ...
+    async def terminal_sources(self, *, limit: int) -> Sequence[TerminalMediaSource]:
+        """Raw objects of completed, dead, or discarded jobs not yet confirmed deleted, oldest first."""
+        ...
+
+    async def mark_source_deleted(self, source: TerminalMediaSource) -> bool:
+        """Confirm the raw object's deletion; `False` unless the job is terminal and the key still matches."""
+        ...
 
     async def track_artifacts(
         self,
         job: ClaimedMediaJob,
         artifacts: Sequence[StoredMediaArtifact],
-    ) -> bool: ...
+    ) -> bool:
+        """Register the artifacts' object keys and lease each to this claim before any bytes are written.
+
+        Returns `False` when the claim is not current; the keys are still registered so cleanup can find
+        whatever the caller already stored.
+
+        Raises:
+            MediaArtifactCleanupInProgressError: A key is mid-deletion; retry after `retry_at`.
+            ValueError: A key is registered with a different digest or size, or the roles are wrong.
+        """
+        ...
 
     async def release_artifacts(
         self,
         job: ClaimedMediaJob,
         artifacts: Sequence[StoredMediaArtifact],
-    ) -> None: ...
+    ) -> None:
+        """Drop this claim's publication leases on `artifacts`; other claims' leases on the same keys stay."""
+        ...
 
     async def cleanup_artifacts(
         self,
         delete: Callable[[str], Awaitable[None]],
         *,
         limit: int,
-    ) -> MediaArtifactCleanupOutcome: ...
+    ) -> MediaArtifactCleanupOutcome:
+        """Delete up to `limit` due, unreferenced, unleased objects through `delete`, outside any transaction.
+
+        Each key is claimed with a token first and its outcome acknowledged against that token, so a
+        concurrent cleaner or a crash costs a repeated idempotent delete, never a lost object.
+        """
+        ...
 
 
 class MediaNormalizationJobService:
-    """Stage bounded raw uploads and coordinate durable queue transitions."""
+    """Stage raw uploads in object storage and drive the durable queue; `discard` withdraws one upload.
+
+    Every staging path deletes the raw object again when the queue rejects it or already holds a
+    terminal result for the same id, so a failed submit leaves no orphan in storage.
+    """
 
     def __init__(
         self,
@@ -334,11 +403,20 @@ class MediaNormalizationJobService:
 
     @property
     def limits(self) -> MediaLimits:
-        """Return the same source and output limits enforced by the worker."""
+        """Must equal the worker's `MediaNormalizationService.limits`; the runner refuses to start otherwise."""
         return self._limits
 
     async def submit(self, submission: MediaUploadSubmission) -> UUID:
-        """Stage a raw object and idempotently enqueue its immutable metadata."""
+        """Stage the in-memory source and enqueue it; retrying with the same `upload_id` and bytes is a no-op.
+
+        Raises:
+            ValidationError: The source exceeds `limits.max_source_bytes`.
+            MediaJobArtifactError: Object storage reports a different size or digest than was sent.
+            MediaUploadConflictError: `upload_id` exists with different metadata.
+            MediaDraftNotFoundError: The draft row is gone.
+            MediaDraftStateConflictError: The draft is not editable.
+            MediaLimitExceededError: The draft's active media would exceed `limits`.
+        """
         if len(submission.source) > self._limits.max_source_bytes:
             limit = self._limits.max_source_bytes
             raise ValidationError(tr(t"Media upload exceeds the {limit}-byte source limit."))
@@ -368,7 +446,11 @@ class MediaNormalizationJobService:
         )
 
     async def submit_staged(self, submission: StagedMediaUploadSubmission) -> UUID:
-        """Stage a bounded regular file without buffering it in application memory."""
+        """Like `submit`, streaming a regular file from disk instead of holding it in memory.
+
+        Also raises `ValidationError` when the path is not a regular file, is empty, or changes while
+        being hashed.
+        """
         byte_size, digest = await asyncio.to_thread(
             _staged_source_metadata,
             submission.source_path,
@@ -400,7 +482,7 @@ class MediaNormalizationJobService:
         )
 
     async def _register(self, upload: MediaUploadMetadata) -> UUID:
-        """Register immutable staged metadata and reconcile terminal replays."""
+        """Enqueue `upload`, deleting its raw object when the queue rejects it or is already terminal for the id."""
         object_key = upload.source_object_key
         upload_id = upload.id
         try:
@@ -425,25 +507,28 @@ class MediaNormalizationJobService:
         return await self._repository.get(upload_id)
 
     async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]:
-        """List retained upload state for one draft in creation order."""
+        """Every upload for the draft in creation order, terminal ones included."""
         return await self._repository.list_for_draft(draft_id)
 
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
-        """Withdraw one upload and schedule any remaining raw source for cleanup."""
+        """Withdraw one upload; its raw object is deleted by the next `MediaStorageCleanup` pass, not here.
+
+        Raises `MediaDraftNotFoundError` or `MediaDraftStateConflictError` when the draft is gone or not
+        editable.
+        """
         return await self._repository.discard(draft_id, upload_id)
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedMediaJob]:
+        """Raises `InvalidStateError` unless `1 <= limit <= MAX_MEDIA_JOB_CLAIM`."""
         if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
             maximum = MAX_MEDIA_JOB_CLAIM
             raise InvalidStateError(tr(t"Media job claim limit must be between 1 and {maximum}."))
         return await self._repository.claim(limit=limit)
 
     async def heartbeat(self, job: ClaimedMediaJob) -> bool:
-        """Renew a current media claim and every publication lease it owns."""
         return await self._repository.heartbeat(job)
 
     async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool:
-        """Release a current claim without consuming a normalization attempt."""
         return await self._repository.defer(job, until=until)
 
     async def complete(self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact]) -> bool:
@@ -456,6 +541,7 @@ class MediaNormalizationJobService:
         *,
         terminal: bool,
     ) -> MediaJobFailureOutcome:
+        """Only Squid errors persist their message; anything else stores just its type name."""
         message = str(error) if isinstance(error, SquidError | MediaJobSourceError) else type(error).__name__
         return await self._repository.fail(
             job,
@@ -465,6 +551,7 @@ class MediaNormalizationJobService:
         )
 
     async def terminal_sources(self, *, limit: int = 100) -> Sequence[TerminalMediaSource]:
+        """Raises `InvalidStateError` unless `1 <= limit <= MAX_MEDIA_JOB_CLEANUP`."""
         if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
             maximum = MAX_MEDIA_JOB_CLEANUP
             raise InvalidStateError(tr(t"Media source cleanup limit must be between 1 and {maximum}."))
@@ -478,7 +565,6 @@ class MediaNormalizationJobService:
         job: ClaimedMediaJob,
         artifacts: Sequence[StoredMediaArtifact],
     ) -> bool:
-        """Register possible object keys before publishing bytes to storage."""
         return await self._repository.track_artifacts(job, artifacts)
 
     async def release_artifacts(
@@ -486,11 +572,10 @@ class MediaNormalizationJobService:
         job: ClaimedMediaJob,
         artifacts: Sequence[StoredMediaArtifact],
     ) -> None:
-        """Release only this claim's per-object publication leases."""
         await self._repository.release_artifacts(job, artifacts)
 
     async def cleanup_artifacts(self, *, limit: int = 100) -> MediaArtifactCleanupOutcome:
-        """Delete due unreferenced artifacts through the durable repository fence."""
+        """Raises `InvalidStateError` unless `1 <= limit <= MAX_MEDIA_JOB_CLEANUP`."""
         if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
             maximum = MAX_MEDIA_JOB_CLEANUP
             raise InvalidStateError(tr(t"Media artifact cleanup limit must be between 1 and {maximum}."))
@@ -498,19 +583,18 @@ class MediaNormalizationJobService:
 
 
 class MediaStorageCleanup:
-    """Always-on cleanup for raw and normalized media object storage."""
+    """Deletes raw objects of terminal jobs and unreferenced normalized objects; each pass logs failures and returns."""
 
     def __init__(self, jobs: MediaNormalizationJobService, artifacts: ArtifactStore) -> None:
         self._jobs = jobs
         self._artifacts = artifacts
 
     async def process_batch(self, *, limit: int = 100) -> None:
-        """Retry a bounded batch of raw and reference-fenced normalized deletions."""
         await self.cleanup_terminal_sources(limit=limit)
         await self.cleanup_terminal_artifacts(limit=limit)
 
     async def cleanup_terminal_sources(self, *, limit: int = 100) -> None:
-        """Retry idempotent deletion of raw objects committed to terminal states."""
+        """One failed deletion is logged and skipped; the rest of the batch still runs."""
         for source in await self._jobs.terminal_sources(limit=limit):
             try:
                 await self._artifacts.delete(source.object_key)
@@ -522,7 +606,6 @@ class MediaStorageCleanup:
                 )
 
     async def cleanup_terminal_artifacts(self, *, limit: int = 100) -> None:
-        """Retry reference-fenced deletion of normalized objects and reports."""
         outcome = await self._jobs.cleanup_artifacts(limit=limit)
         if outcome.failed:
             logger.warning(
@@ -536,7 +619,11 @@ class MediaStorageCleanup:
 
 
 class MediaNormalizationJobRunner:
-    """Normalize claimed uploads in private directories and publish verified outputs."""
+    """Normalize claimed uploads in a private temporary directory each and publish the verified outputs.
+
+    Construction raises `InvalidStateError` when `jobs.limits != normalization.limits` or the heartbeat
+    interval is not positive.
+    """
 
     def __init__(
         self,
@@ -562,20 +649,17 @@ class MediaNormalizationJobRunner:
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
 
     async def process_batch(self, *, limit: int = 8) -> None:
-        """Claim and process a bounded batch without coupling work to storage cleanup."""
+        """Claim up to `limit` jobs and process them concurrently; failures raise only after every job settles."""
         claimed = await self._jobs.claim(limit=limit)
-        # Settled rather than cancelled on the first failure: the jobs are
-        # independent, and a cancelled one never reaches the handler that fails it,
-        # so it would hold its claim, its heartbeat and its temporary directory
-        # until the lease expires. Failures still raise once the batch is done.
+        # Settled rather than cancelled on first failure: a cancelled job never reaches
+        # the handler that fails it, so it would hold its claim, heartbeat and temporary
+        # directory until the lease expires.
         await run_all_settled([partial(self._process, job) for job in claimed])
 
     async def cleanup_terminal_sources(self, *, limit: int = 100) -> None:
-        """Retry idempotent deletion of raw objects committed to terminal states."""
         await self._cleanup.cleanup_terminal_sources(limit=limit)
 
     async def cleanup_terminal_artifacts(self, *, limit: int = 100) -> None:
-        """Retry reference-fenced deletion of normalized objects and reports."""
         await self._cleanup.cleanup_terminal_artifacts(limit=limit)
 
     async def _process(self, job: ClaimedMediaJob) -> None:
@@ -585,8 +669,6 @@ class MediaNormalizationJobRunner:
             try:
                 await self._process_claim(job, claim_lost)
             finally:
-                # The heartbeat runs until the work it fences is over, however
-                # that happens; the task group owns its lifetime either way.
                 heartbeat.cancel_scope.cancel()
 
     async def _process_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
@@ -612,7 +694,7 @@ class MediaNormalizationJobRunner:
                 await self._jobs.fail(job, error, terminal=_is_terminal(error))
 
     async def _maintain_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
-        """Keep long normalization work owned, and self-fence on any renewal failure."""
+        """Renew the claim every interval; the first failed or rejected renewal sets `claim_lost` and stops."""
         while True:
             await asyncio.sleep(self._heartbeat_interval_seconds)
             try:
@@ -743,6 +825,7 @@ class MediaNormalizationJobRunner:
                 try:
                     await self._require_claim(job, claim_lost)
                 except MediaJobClaimLostError:
+                    # The object is already in storage; re-register its key so cleanup can find it.
                     await self._jobs.track_artifacts(job, artifacts)
                     raise
         except Exception:

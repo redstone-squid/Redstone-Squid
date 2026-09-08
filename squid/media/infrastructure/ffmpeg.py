@@ -48,7 +48,7 @@ _MAX_PROBE_OUTPUT_BYTES = 1024 * 1024
 
 @dataclass(frozen=True, slots=True)
 class MediaProcessLimits:
-    """Wall-clock and child-process guardrails for one-shot media tools."""
+    """Per-invocation timeouts and rlimits for ffmpeg/ffprobe children; every field must be positive."""
 
     probe_timeout_seconds: float = 15.0
     image_timeout_seconds: float = 120.0
@@ -78,7 +78,11 @@ class MediaProcessLimits:
 
 
 class FfmpegMediaNormalizer:
-    """Normalize staged images and videos with isolated, one-shot subprocesses."""
+    """`MediaNormalizer` over one-shot ffmpeg/ffprobe children; `discard` unlinks one result's output files.
+
+    Images become PNG, videos become H.264/AAC MP4 with a JPEG poster, all with metadata stripped. Each
+    child runs in its own session with network protocols disallowed and `MediaProcessLimits` applied.
+    """
 
     def __init__(
         self,
@@ -92,7 +96,10 @@ class FfmpegMediaNormalizer:
         self._process_limits = process_limits or MediaProcessLimits()
 
     async def probe(self, source_path: Path) -> MediaProbe:
-        """Inspect the first video stream and optional first audio stream."""
+        """Reads only the first video stream and, if present, the first audio stream.
+
+        ffprobe output over 1 MiB is rejected as `InvalidMediaError(PROBE_INVALID)`.
+        """
         stdout = await self._run(
             self._ffprobe,
             (
@@ -133,16 +140,20 @@ class FfmpegMediaNormalizer:
         source_bytes: int,
         limits: MediaLimits,
     ) -> MediaNormalizationResult:
-        """Produce normalized artifacts, committing them only after validation."""
+        """Encodes into a temporary file beside each destination and hard-links it into place only after re-probing it.
+
+        The destinations must not exist (`InvalidMediaError(OUTPUT_EXISTS)`). A video's poster is taken at
+        the midpoint, capped at 30 s in, and scaled to at most 1920 px wide.
+        """
         if request.kind is MediaKind.IMAGE:
             return await self._normalize_image(request, probe=probe, source_bytes=source_bytes, limits=limits)
         return await self._normalize_video(request, probe=probe, source_bytes=source_bytes, limits=limits)
 
     async def aclose(self) -> None:
-        """One-shot FFmpeg processes leave no reusable resources."""
+        """No-op: nothing outlives a single `_run`."""
 
     async def discard(self, result: MediaNormalizationResult) -> None:
-        """Remove job-local outputs after an application postflight failure."""
+        """Raises `MediaProcessingError(OUTPUT_INVALID)` if an unlink fails for a reason other than absence."""
         try:
             result.output_path.unlink(missing_ok=True)
             if result.poster_path is not None:
@@ -416,6 +427,7 @@ class FfmpegMediaNormalizer:
             await _terminate(process)
             raise MediaProcessingTimeoutError(operation=operation) from exc
         if process.returncode != 0:
+            # RLIMIT_FSIZE kills the child with SIGXFSZ; that is the output budget, not a tool failure.
             if process.returncode == -getattr(signal, "SIGXFSZ", 25):
                 raise MediaLimitExceededError(
                     MediaViolation(MediaLimitMeasure.OUTPUT_BYTES, max_file_bytes + 1, max_file_bytes)
@@ -429,7 +441,11 @@ class FfmpegMediaNormalizer:
 
 
 def parse_ffprobe_output(data: bytes) -> MediaProbe:
-    """Translate bounded ffprobe JSON into a deterministic domain value."""
+    """Parse ffprobe `-of json` output; any missing, malformed, or oversized field raises `InvalidMediaError`.
+
+    Duration falls back from the video stream to the container and is rounded up to whole milliseconds.
+    Frame rate prefers `avg_frame_rate` over `r_frame_rate` and is 0/1 when neither parses.
+    """
     try:
         payload = cast(Mapping[str, Any], json.loads(data))
         streams = cast(list[Mapping[str, Any]], payload["streams"])
