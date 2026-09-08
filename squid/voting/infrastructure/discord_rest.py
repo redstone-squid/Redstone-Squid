@@ -191,7 +191,8 @@ class DiscordRestActorResolver:
 
         Login is lazy because the service graph builds synchronously, so a deployment that never
         resolves a vote actor never opens a Discord session. Raises
-        `DiscordMemberServiceUnavailableError` once `aclose` has run.
+        `DiscordMemberServiceUnavailableError` after `aclose` has cleared a client this resolver
+        opened; an injected client is returned before that check and keeps working.
         """
         if self._http is not None:
             return self._http
