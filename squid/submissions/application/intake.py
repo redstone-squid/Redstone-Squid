@@ -86,6 +86,8 @@ class SubmissionAttachmentIntake:
         if attachment.status is IntakeStatus.DISCARDED:
             message = "This supplied file was discarded; supply a new file identifier."
             raise ConflictError(message)
+        if content_type in {None, "application/octet-stream"}:
+            content_type = mimetypes.guess_type(attachment.filename)[0]
         try:
             await self._register(draft, actor, attachment, path, content_type)
         except Exception:
@@ -163,7 +165,11 @@ class SubmissionAttachmentIntake:
 def classify_supplied_file(filename: str, content_type: str | None) -> str:
     """Classify supplied-file intent without treating the filename as verified content."""
     suffix = Path(filename.lower()).suffix
-    mime = content_type or mimetypes.guess_type(filename)[0] or ""
+    mime = (
+        content_type
+        if content_type not in {None, "application/octet-stream"}
+        else mimetypes.guess_type(filename)[0] or ""
+    )
     return (
         "schematic"
         if suffix in SCHEMATIC_EXTENSIONS

@@ -47,7 +47,7 @@ class DraftAttachmentJobs(Protocol):
 class DraftAttachmentOwnership(Protocol):
     """Resolve account-owned draft snapshots for attachment commands."""
 
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
+    async def get_accessible(self, draft_id: UUID, account_id: int, /) -> StoredDraft: ...
 
 
 @dataclass(slots=True)
@@ -58,6 +58,7 @@ class DraftUploadAuthority:
     account_id: int
     draft_revision: int
     kind: MediaKind
+    actor_account_id: int | None = None
     _available: bool = field(default=True, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -118,8 +119,10 @@ class DraftAttachmentService:
 
     async def authorize_upload(self, draft_id: UUID, account_id: int, kind: MediaKind) -> DraftUploadAuthority:
         """Issue revision-bound authority before a transport accepts request bytes."""
-        draft = await self._drafts.get_owned(draft_id, account_id)
-        return DraftUploadAuthority(draft_id, account_id, draft.snapshot.revision, kind)
+        draft = await self._drafts.get_accessible(draft_id, account_id)
+        return DraftUploadAuthority(
+            draft_id, draft.snapshot.owner_account_id, draft.snapshot.revision, kind, account_id
+        )
 
     async def register(
         self,
@@ -131,6 +134,7 @@ class DraftAttachmentService:
     ) -> MediaJobSnapshot:
         """Consume staged bytes and atomically revalidate their upload authority."""
         try:
+            await self._drafts.get_accessible(authority.draft_id, authority.actor_account_id or authority.account_id)
             registered_id = await self._jobs.submit_staged(
                 StagedMediaUploadSubmission(
                     draft_id=authority.draft_id,
@@ -150,24 +154,24 @@ class DraftAttachmentService:
 
     async def list(self, draft_id: UUID, account_id: int) -> Sequence[MediaJobSnapshot]:
         """List attachment jobs after enforcing current draft ownership."""
-        await self._drafts.get_owned(draft_id, account_id)
+        await self._drafts.get_accessible(draft_id, account_id)
         return await self._jobs.list_for_draft(draft_id)
 
     async def get(self, draft_id: UUID, account_id: int, upload_id: UUID) -> MediaJobSnapshot:
         """Return one attachment after enforcing ownership and draft association."""
-        await self._drafts.get_owned(draft_id, account_id)
+        await self._drafts.get_accessible(draft_id, account_id)
         return await self._owned_snapshot(draft_id, upload_id)
 
     async def discard(self, draft_id: UUID, account_id: int, upload_id: UUID) -> None:
         """Discard one attachment after enforcing current draft ownership."""
-        await self._drafts.get_owned(draft_id, account_id)
+        await self._drafts.get_accessible(draft_id, account_id)
         if not await self._jobs.discard(draft_id, upload_id):
             raise DraftMediaNotFoundError(upload_id)
 
     async def attach(self, source_id: UUID, target_id: UUID, account_id: int, upload_id: UUID) -> MediaJobSnapshot:
         """Assign one previously supplied file to another owned draft without normalizing it again."""
-        await self._drafts.get_owned(source_id, account_id)
-        await self._drafts.get_owned(target_id, account_id)
+        await self._drafts.get_accessible(source_id, account_id)
+        await self._drafts.get_accessible(target_id, account_id)
         if not await self._jobs.attach(source_id, target_id, upload_id):
             raise DraftMediaNotFoundError(upload_id)
         return await self._owned_snapshot(target_id, upload_id)
