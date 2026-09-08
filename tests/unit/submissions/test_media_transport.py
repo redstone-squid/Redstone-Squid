@@ -79,7 +79,7 @@ async def test_upload_streams_to_private_file_and_returns_only_safe_state() -> N
         "source_content_type": "video/mp4",
         "artifacts": [],
     }
-    assert events == ["owner", "submit"]
+    assert events == ["owner", "owner", "submit"]
     assert media.staged_bytes == b"abcd"
     if os.name == "posix":
         assert media.staged_mode == 0o600
