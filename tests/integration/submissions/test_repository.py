@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.infrastructure.models import Account
+from squid.builds.domain import SourceMessage
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.domain import MediaKind
 from squid.media.infrastructure.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
@@ -27,6 +28,7 @@ from squid.submissions.domain import (
     FinalizationJobStatus,
     SubmissionOrigin,
 )
+from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import DraftStateConflictError
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import (
@@ -422,6 +424,33 @@ async def test_concurrent_creation_respects_capacity_and_replays_stable_sources(
 
     other_pool = replace(template, inferred=not inferred, snapshot=replace(template.snapshot, id=UUID(int=802)))
     assert (await repository.create(other_pool, capacity=1)).inferred is not inferred
+
+
+async def test_stable_draft_identity_rejects_changed_inference_provenance(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+    source = SubmissionSourceFile(
+        UUID(int=804),
+        "source.png",
+        "image/png",
+        "https://cdn.discordapp.com/attachments/source.png",
+        4,
+    )
+    retained = replace(
+        _stored(account_id, origin=SubmissionOrigin.DISCORD),
+        inferred=True,
+        source_messages=(SourceMessage(40, content="original"),),
+        source_files=(source,),
+        inference_run_id=UUID(int=805),
+    )
+    await repository.create(retained)
+
+    with pytest.raises(DraftStateConflictError):
+        await repository.create(replace(retained, source_messages=(SourceMessage(40, content="changed"),)))
+    with pytest.raises(DraftStateConflictError):
+        await repository.create(replace(retained, inference_run_id=UUID(int=806)))
 
 
 async def test_inferred_capacity_is_global_and_expiry_releases_it(

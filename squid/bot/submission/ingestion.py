@@ -12,6 +12,7 @@ from squid.bot.utils.accounts import account_id_for
 from squid.core.errors import SquidError
 from squid.permissions.domain import Subject
 from squid.runtime import BotServices
+from squid.submissions.application.drafts import DraftActor
 from squid.submissions.application.inference_runs import InferenceCandidate
 from squid.submissions.application.inferred_drafts import materialize_candidate
 from squid.submissions.domain import DraftStatus
@@ -58,25 +59,29 @@ async def ingest_message_bundle(
     return run_id
 
 
-async def admit_candidates(services: BotServices, candidates: tuple[InferenceCandidate, ...]) -> None:
+async def admit_candidates(
+    services: BotServices, candidates: tuple[InferenceCandidate, ...], *, actor: DraftActor | None = None
+) -> None:
     """Resume candidate admission while preserving user edits and unresolved supplied files."""
     for candidate in candidates:
         if candidate.facts.category is None:
             continue
         try:
-            draft = await materialize_candidate(candidate, services.submission_drafts, services.submission_forms)
+            authority = actor if actor is not None else candidate.owner_account_id
+            draft = await materialize_candidate(
+                candidate, services.submission_drafts, services.submission_forms, actor=authority
+            )
             # Replayed deliveries must not submit a draft that the owner has since corrected.
             if draft.snapshot.revision != 1 or draft.snapshot.status is not DraftStatus.EDITING:
                 continue
-            owner = candidate.owner_account_id
             if len(candidates) > 1 and candidate.source_files:
-                await services.submission_finalization.submit(candidate.id, owner, locale=None)
+                await services.submission_finalization.submit(candidate.id, authority, locale=None)
                 continue
             for source in candidate.source_files:
                 try:
-                    await receive_retained_file(services, candidate.id, owner, source.id)
+                    await receive_retained_file(services, candidate.id, authority, source.id)
                 except Exception:
                     logger.warning("Could not receive inferred source %s", source.id, exc_info=True)
-            await services.submission_finalization.submit(candidate.id, owner, locale=None)
+            await services.submission_finalization.submit(candidate.id, authority, locale=None)
         except SquidError:
             logger.warning("Inferred candidate %s requires recovery", candidate.id, exc_info=True)
