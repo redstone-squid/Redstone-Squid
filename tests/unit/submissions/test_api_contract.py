@@ -479,6 +479,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         "draft_id": draft_id,
         "attempt_id": str(finalization.snapshot.job_id),
         "attempt_number": 1,
+        "input_sha256": None,
         "draft_revision": 1,
         "status": "needs_attention",
         "issues": [{"field_id": "schematic", "reason": "schematic_processing"}],
@@ -567,11 +568,13 @@ def test_finalization_response_does_not_expose_worker_or_target_internals() -> N
         completed_at=NOW,
         last_error="private worker detail",
         result=FinalizedBuild(91),
+        input_sha256="a" * 64,
     )
 
     payload = SubmissionAttemptResponse.from_domain(snapshot).model_dump(mode="json")
 
     assert payload["build_id"] == 91
+    assert payload["input_sha256"] == "a" * 64
     assert "job_id" not in payload
     assert "attempts" not in payload
     assert "last_error" not in payload

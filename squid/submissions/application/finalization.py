@@ -77,6 +77,7 @@ class FinalizationJobSnapshot:
     issues: tuple[SubmissionAttentionIssue, ...] = ()
     result: FinalizedBuild | None = None
     attempt_number: int = 1
+    input_sha256: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

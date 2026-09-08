@@ -7,7 +7,7 @@ from dataclasses import replace
 import anyio
 import pytest
 from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -58,7 +58,7 @@ from squid.submissions.domain import (
 )
 from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
-from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
+from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationInput, SubmissionFinalizationJob
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.models import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
@@ -760,6 +760,16 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
         pending_status = await session.scalar(
             select(SubmissionDraft.status).where(SubmissionDraft.id == pending_draft_id)
         )
+        original_inputs = {
+            original.job_id: original
+            for original in (
+                await session.scalars(
+                    select(SubmissionFinalizationInput).where(
+                        SubmissionFinalizationInput.job_id.in_(tuple(job.id for job in jobs.values()))
+                    )
+                )
+            ).all()
+        }
 
     pending_job = jobs[pending_draft_id]
     completed_job = jobs[claimed_draft_id]
@@ -768,15 +778,27 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     assert pending_job.payload["payload_schema"] == 1
     assert pending_job.payload["owner_account_id"] == survivor.id
     assert pending_job.payload_sha256 == submission_payload_digest(pending_job.payload)
+    assert original_inputs[pending_job.id].payload["owner_account_id"] == absorbed.id
+    assert original_inputs[pending_job.id].payload_sha256 != pending_job.payload_sha256
     assert completed_job.status == FinalizationJobStatus.COMPLETED.value
     assert completed_job.payload is not None
     assert completed_job.payload["payload_schema"] == 2
     assert completed_job.payload["owner_account_id"] == survivor.id
     assert completed_job.payload_sha256 == submission_payload_digest(completed_job.payload)
+    assert original_inputs[completed_job.id].payload["owner_account_id"] == absorbed.id
+    assert original_inputs[completed_job.id].payload_sha256 != completed_job.payload_sha256
     assert stale_claim.claim_token != replacement_claim.claim_token
     assert replacement_claim.attempts == stale_claim.attempts + 1
     assert build_owner == survivor.id
     assert pending_status is DraftStatus.PROCESSING
+
+    with pytest.raises(DBAPIError, match="submission finalization inputs are immutable"):
+        async with migrated_session_factory.begin() as session:
+            await session.execute(
+                update(SubmissionFinalizationInput)
+                .where(SubmissionFinalizationInput.job_id == pending_job.id)
+                .values(payload_sha256="0" * 64)
+            )
 
 
 async def test_account_merge_refuses_to_bless_a_conflicting_finalization_digest(

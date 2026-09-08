@@ -41,6 +41,7 @@ from squid.submissions.domain import (
 )
 from squid.submissions.errors import DraftArtifactsChangedError, DraftNotFoundError, DraftStateConflictError
 from squid.submissions.infrastructure.finalization_models import (
+    SubmissionFinalizationInput,
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
 )
@@ -65,6 +66,7 @@ _TABLES: tuple[Table, ...] = (
     cast(Table, MediaNormalizationJobRecord.__table__),
     cast(Table, MediaDraftReference.__table__),
     cast(Table, SubmissionFinalizationJob.__table__),
+    cast(Table, SubmissionFinalizationInput.__table__),
     cast(Table, SubmissionFinalizationResult.__table__),
 )
 
@@ -431,13 +433,21 @@ async def test_retry_retains_failed_payload_and_rejects_its_stale_completion(
     async with async_session_factory() as session:
         previous = await session.get(SubmissionFinalizationJob, first.job_id)
         current = await session.get(SubmissionFinalizationJob, second.job_id)
+        previous_input = await session.get(SubmissionFinalizationInput, first.job_id)
+        current_input = await session.get(SubmissionFinalizationInput, second.job_id)
         assert previous is not None
         assert current is not None
+        assert previous_input is not None
+        assert current_input is not None
         assert previous.status is FinalizationJobStatus.NEEDS_ATTENTION
         assert previous.payload is not None
         assert current.payload is not None
         assert previous.payload["description"] == payload.description
         assert current.payload["description"] == "corrected"
+        assert previous_input.payload == previous.payload
+        assert current_input.payload == current.payload
+        assert previous_input.payload_sha256 == first.input_sha256
+        assert current_input.payload_sha256 == second.input_sha256
         assert (previous.attempt_number, current.attempt_number) == (1, 2)
 
 
