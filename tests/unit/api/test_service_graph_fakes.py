@@ -15,14 +15,9 @@ from squid.runtime import ApiServices
 from tests.unit.api import fakes
 from tests.unit.api.fakes import build_services
 
-# The three collaborators that answer through `__getattr__` instead of named methods.
-# They cannot subclass their service, so they are checked by the contract suite driving
-# every generated operation rather than here.
-UNTYPED_STANDINS = {
-    "cli_authorization",
-    "minecraft_installations",
-    "minecraft_player_authorization",
-}
+# Every collaborator now subclasses the service it replaces. Keeping this set named and
+# empty means reintroducing an untyped stand-in has to be an explicit edit here.
+UNTYPED_STANDINS: set[str] = set()
 
 
 def _doubles() -> list[tuple[str, type]]:
