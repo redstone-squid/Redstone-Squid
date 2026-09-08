@@ -23977,6 +23977,18 @@
             "type": "integer",
             "title": "Attempt Number"
           },
+          "input_sha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Sha256"
+          },
           "draft_revision": {
             "type": "integer",
             "title": "Draft Revision"
@@ -24009,6 +24021,7 @@
           "draft_id",
           "attempt_id",
           "attempt_number",
+          "input_sha256",
           "draft_revision",
           "status",
           "issues",
