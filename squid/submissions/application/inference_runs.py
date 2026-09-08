@@ -9,7 +9,7 @@ import anyio
 from pydantic import TypeAdapter
 
 from squid.artifacts.application import ArtifactStore
-from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService
+from squid.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
 from squid.builds.domain import BuildDraft
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue, NotFoundError
 from squid.permissions.application import PermissionService
@@ -62,6 +62,9 @@ class InferenceRunRepository(Protocol):
     ) -> tuple[InferenceCandidate, ...]: ...
     async def fail(self, run_id: UUID, token: UUID) -> None: ...
     async def get(self, run_id: UUID) -> tuple[int, tuple[InferenceCandidate, ...]] | None: ...
+    async def retained(
+        self, run_id: UUID
+    ) -> tuple[int, dict[str, JSONValue], bool, tuple[InferenceCandidate, ...]] | None: ...
     async def public_status(self, run_id: UUID) -> InferenceStatus | None: ...
     async def list_active(self, owner: int | None) -> tuple[UUID, ...]: ...
     async def expired(self) -> tuple[tuple[UUID, int], ...]: ...
@@ -130,6 +133,53 @@ class SubmissionInferenceRuns:
         except Exception:
             await self._repository.fail(run_id, claim.token)
             raise
+
+    async def resume(self, run_id: UUID, actor: Subject) -> tuple[InferenceCandidate, ...] | None:
+        """Retry retained inputs, or return completed candidates without rereading the source message."""
+        retained = await self._repository.retained(run_id)
+        if retained is None:
+            return None
+        owner, inputs, completed, candidates = retained
+        if inputs.get("purpose") != "submission":
+            raise AuthorizationError
+        if actor.account_id != owner and not (
+            self._permissions is not None and await self._permissions.allows(actor, BUILD_SUBMISSION_EDIT)
+        ):
+            raise AuthorizationError
+        if completed:
+            return candidates
+        bundle = _INPUT.validate_python(inputs["bundle"])
+        descriptors = inputs.get("images", [])
+        assert isinstance(descriptors, list)
+        images: list[InlineImage] = []
+        for index, descriptor in enumerate(descriptors):
+            assert isinstance(descriptor, dict)
+            data = await self._artifacts.get(f"submission-inference/{run_id}/{index}", max_bytes=16 * 1024 * 1024)
+            if data is None or hashlib.sha256(data).hexdigest() != descriptor["sha256"]:
+                message = "A retained inference image is unavailable; retry after private storage is restored."
+                raise ConflictError(message)
+            images.append(
+                TypeAdapter(InlineImage).validate_python(
+                    {
+                        "data": data,
+                        "content_type": descriptor["content_type"],
+                        "source_message_id": descriptor["source_message_id"],
+                        "origin": descriptor["origin"],
+                    }
+                )
+            )
+        model = inputs["model"]
+        reasoning_effort = inputs.get("reasoning_effort")
+        assert isinstance(model, str)
+        assert reasoning_effort is None or isinstance(reasoning_effort, str)
+        return await self.infer(
+            run_id,
+            owner,
+            replace(bundle, images=tuple(images)),
+            model=model,
+            reasoning_effort=reasoning_effort,
+            source_files=TypeAdapter(tuple[SubmissionSourceFile, ...]).validate_python(inputs.get("source_files", [])),
+        )
 
     async def get(self, run_id: UUID, actor: Subject) -> tuple[InferenceCandidate, ...]:
         """Reopen retained candidates under the current owner or staff authority."""
