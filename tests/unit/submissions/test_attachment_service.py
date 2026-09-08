@@ -71,7 +71,7 @@ class FakeDrafts:
     draft: StoredDraft
     calls: list[tuple[UUID, int]]
 
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft:
         self.calls.append((draft_id, account_id))
         return self.draft
 
@@ -126,7 +126,7 @@ async def test_authorize_then_register_revalidates_owner_and_revision_and_consum
     )
 
     assert snapshot.upload.id == UPLOAD_ID
-    assert drafts.calls == [(DRAFT_ID, 7)]
+    assert drafts.calls == [(DRAFT_ID, 7), (DRAFT_ID, 7)]
     submission, authorization = jobs.submissions[0]
     assert submission.draft_id == DRAFT_ID
     assert submission.kind is MediaKind.IMAGE
@@ -215,3 +215,16 @@ async def test_get_and_discard_enforce_ownership_then_draft_association() -> Non
 
     assert drafts.calls == [(DRAFT_ID, 7), (DRAFT_ID, 7)]
     assert jobs.discarded == [(DRAFT_ID, UPLOAD_ID)]
+
+
+async def test_staff_upload_authority_keeps_original_owner(tmp_path: Path) -> None:
+    drafts = FakeDrafts(_draft(), [])
+    jobs = FakeJobs()
+    service = DraftAttachmentService(drafts, jobs)
+    authority = await service.authorize_upload(DRAFT_ID, 99, MediaKind.IMAGE)
+    assert authority.account_id == drafts.draft.snapshot.owner_account_id
+    assert authority.actor_account_id == 99
+    source = tmp_path / "source"
+    source.write_bytes(b"image")
+    await service.register(authority, StagedUpload(source, "image/png"), strip_audio=False, upload_id=UPLOAD_ID)
+    assert drafts.calls == [(DRAFT_ID, 99), (DRAFT_ID, 99)]
