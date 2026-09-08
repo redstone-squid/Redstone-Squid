@@ -38,7 +38,9 @@ def setup(
     monkeypatch.setattr(ingestion, "receive_retained_file", download)
     services = SimpleNamespace(
         accounts=object(),
-        submission_inference=SimpleNamespace(infer=AsyncMock(return_value=candidates)),
+        submission_inference=SimpleNamespace(
+            infer=AsyncMock(return_value=candidates), resume=AsyncMock(return_value=None)
+        ),
         submission_drafts=object(),
         submission_forms=object(),
         submission_finalization=SimpleNamespace(submit=AsyncMock()),
@@ -105,3 +107,14 @@ async def test_redelivery_does_not_submit_a_corrected_draft(monkeypatch: pytest.
     await ingestion.ingest_message_bundle([message()], [], services, model="test")
     download.assert_not_awaited()
     cast(Any, services.submission_finalization.submit).assert_not_awaited()
+
+
+async def test_replayed_delivery_uses_retained_candidates_without_reading_changed_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = candidate()
+    services, _, _ = setup(monkeypatch, (item,), revision=2)
+    cast(Any, services.submission_inference.resume).return_value = (item,)
+    await ingestion.ingest_message_bundle([message(files=True)], [], services, model="changed-model")
+    cast(Any, ingestion.assemble_bundle).assert_not_awaited()
+    cast(Any, services.submission_inference.infer).assert_not_awaited()

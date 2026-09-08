@@ -3,7 +3,7 @@
 from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, Text, func, select
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, Text, func, or_, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as SQLUUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -72,12 +72,31 @@ class PostgresInferenceRuns:
                 if row.claim_expires_at is not None and row.claim_expires_at > current:
                     raise inference_busy()
             else:
+                from squid.submissions.infrastructure.models import SubmissionDraft
+
+                terminal = (
+                    select(func.count())
+                    .select_from(SubmissionDraft)
+                    .where(
+                        SubmissionDraft.inference_run_id == SubmissionInferenceRun.id,
+                        SubmissionDraft.status.in_(("submitted", "expired")),
+                    )
+                    .correlate(SubmissionInferenceRun)
+                    .scalar_subquery()
+                )
                 count = await session.scalar(
                     select(func.count())
                     .select_from(SubmissionInferenceRun)
-                    .where(SubmissionInferenceRun.expires_at > func.now())
+                    .where(
+                        SubmissionInferenceRun.expires_at > func.now(),
+                        SubmissionInferenceRun.inputs["purpose"].astext.is_distinct_from("recalculation"),
+                        or_(
+                            SubmissionInferenceRun.state != "completed",
+                            func.jsonb_array_length(SubmissionInferenceRun.candidates) > terminal,
+                        ),
+                    )
                 )
-                if (count or 0) >= capacity:
+                if inputs.get("purpose") != "recalculation" and (count or 0) >= capacity:
                     raise DraftCapacityExceededError(capacity)
                 row = SubmissionInferenceRun(
                     id=run_id,
@@ -114,6 +133,21 @@ class PostgresInferenceRuns:
                 row.state = "failed"
                 row.claim_token = None
                 row.claim_expires_at = None
+
+    async def retained(
+        self, run_id: UUID
+    ) -> tuple[int, dict[str, JSONValue], bool, tuple[InferenceCandidate, ...]] | None:
+        async with self._sessions() as session:
+            row = await session.scalar(
+                select(SubmissionInferenceRun).where(
+                    SubmissionInferenceRun.id == run_id, SubmissionInferenceRun.expires_at > func.now()
+                )
+            )
+            return (
+                (row.owner_account_id, row.inputs, row.state == "completed", _candidates(row))
+                if row is not None
+                else None
+            )
 
     async def get(self, run_id: UUID) -> tuple[int, tuple[InferenceCandidate, ...]] | None:
         async with self._sessions() as session:
