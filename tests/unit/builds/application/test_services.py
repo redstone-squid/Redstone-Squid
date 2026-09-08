@@ -10,7 +10,6 @@ import pytest
 from whenever import Instant
 
 from squid.builds.application import BuildEditPatch, RestrictionDefinition
-from squid.builds.application.ports import SourceSubmissionBuildWrite
 from squid.builds.application.services import (
     BuildEditor,
     BuildService,
@@ -22,7 +21,6 @@ from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import GrantRecord, SubjectRecords
 from squid.permissions.domain import Subject
-from squid.sponsors import PublicSponsor
 from squid.tags.domain import (
     TagAssignment,
     TagAuthority,
@@ -42,13 +40,6 @@ class FakeBuildRepository:
 
     async def save(self, build: Build) -> None:
         self.saved.append(build)
-
-    async def save_for_source_submission(self, build: Build) -> SourceSubmissionBuildWrite:
-        if self.build is not None:
-            return SourceSubmissionBuildWrite(self.build, created=False)
-        await self.save(build)
-        self.build = build
-        return SourceSubmissionBuildWrite(build, created=True)
 
     async def confirm(self, build: Build) -> None:
         self.confirmed.append(build)
@@ -402,12 +393,12 @@ async def test_classify_restrictions_replaces_existing_values_without_persisting
     assert repository.saved == []
 
 
-async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
+async def test_prepare_for_account_does_not_require_a_discord_identity() -> None:
     repository = FakeBuildRepository()
     service = build_service(repository)
     draft_id = UUID("11111111-1111-1111-1111-111111111111")
 
-    build = await service.submit_for_account(
+    build = await service.prepare_for_account(
         OtherBuild(description="A submission with no chat client attached"),
         submitter_account_id=17,
         source_submission_draft_id=draft_id,
@@ -421,7 +412,7 @@ async def test_submit_for_account_does_not_require_a_discord_identity() -> None:
     assert build.display_name == "Workshop prototype"
     assert build.category is BuildCategory.OTHER
     assert build.submission_status is Status.PENDING
-    assert repository.saved == [build]
+    assert repository.saved == []
 
 
 async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> None:
@@ -431,119 +422,6 @@ async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> 
     result = await build_service(FakeBuildRepository(existing)).get_by_source_submission_draft_id(draft_id)
 
     assert result is existing
-
-
-async def test_submit_for_account_returns_the_build_created_by_an_earlier_retry() -> None:
-    draft_id = UUID("22222222-2222-2222-2222-222222222222")
-    existing = UtilityBuild(
-        id=42,
-        submitter_account_id=17,
-        source_submission_draft_id=draft_id,
-        submission_status=Status.PENDING,
-    )
-    repository = FakeBuildRepository(existing)
-
-    result = await build_service(repository).submit_for_account(
-        OtherBuild(),
-        submitter_account_id=17,
-        source_submission_draft_id=draft_id,
-        display_name="ignored retry value",
-        ai_generated=False,
-    )
-
-    assert result is existing
-    assert repository.saved == []
-
-
-async def test_submit_for_account_returns_the_source_draft_collision_winner() -> None:
-    draft_id = UUID("22222222-2222-4222-8222-222222222224")
-    winner = UtilityBuild(
-        id=43,
-        submitter_account_id=17,
-        source_submission_draft_id=draft_id,
-        submission_status=Status.PENDING,
-    )
-
-    class CollidingRepository(FakeBuildRepository):
-        def __init__(self) -> None:
-            super().__init__(winner)
-            self.first_read = True
-
-        async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
-            if self.first_read:
-                self.first_read = False
-                return None
-            return await super().get_by_source_submission_draft_id(draft_id)
-
-    repository = CollidingRepository()
-
-    result = await build_service(repository).submit_for_account(
-        OtherBuild(),
-        submitter_account_id=17,
-        source_submission_draft_id=draft_id,
-        display_name=None,
-        ai_generated=False,
-    )
-
-    assert result is winner
-    assert repository.saved == []
-
-
-async def test_submit_for_account_replay_observes_a_commit_after_an_ambiguous_failure() -> None:
-    draft_id = UUID("22222222-2222-4222-8222-222222222225")
-
-    class AmbiguousCommitRepository(FakeBuildRepository):
-        async def save_for_source_submission(self, build: Build) -> SourceSubmissionBuildWrite:
-            build.id = 44
-            self.build = build
-            raise RuntimeError("connection lost after commit")
-
-    repository = AmbiguousCommitRepository()
-    service = build_service(repository)
-    with pytest.raises(RuntimeError, match="connection lost"):
-        await service.submit_for_account(
-            OtherBuild(),
-            submitter_account_id=17,
-            source_submission_draft_id=draft_id,
-            display_name=None,
-            ai_generated=False,
-        )
-
-    result = await service.submit_for_account(
-        OtherBuild(),
-        submitter_account_id=17,
-        source_submission_draft_id=draft_id,
-        display_name=None,
-        ai_generated=False,
-    )
-
-    assert result is repository.build
-    assert result is not None
-    assert result.id == 44
-
-
-async def test_submit_for_account_rejects_existing_build_with_different_sponsor() -> None:
-    draft_id = UUID("22222222-2222-4222-8222-222222222223")
-    installation_id = UUID("33333333-3333-4333-8333-333333333333")
-    existing = UtilityBuild(
-        id=42,
-        submitter_account_id=17,
-        source_submission_draft_id=draft_id,
-        submission_status=Status.PENDING,
-        sponsor=PublicSponsor(installation_id, display_name="Original server"),
-    )
-    repository = FakeBuildRepository(existing)
-
-    with pytest.raises(InvalidStateError):
-        await build_service(repository).submit_for_account(
-            OtherBuild(sponsor=PublicSponsor(installation_id, display_name="Changed server")),
-            submitter_account_id=17,
-            source_submission_draft_id=draft_id,
-            display_name="Retry",
-            ai_generated=False,
-        )
-
-    assert repository.saved == []
 
 
 async def test_save_prepares_defaults_then_indexes_after_relational_persistence() -> None:

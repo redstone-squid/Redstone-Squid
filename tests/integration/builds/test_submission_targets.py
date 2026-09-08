@@ -44,18 +44,20 @@ from squid.permissions.infrastructure.models import (
 from squid.persistence.types import now
 from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile
 from squid.sponsors import PublicSponsor
-from squid.submissions.application import StoredDraft
+from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
 from squid.submissions.domain import (
     BuildSubmissionRejected,
     DraftSnapshot,
     DraftStatus,
     FinalizationJobStatus,
     FinalizedBuild,
+    NormalizedSubmission,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
     SubmissionOrigin,
 )
-from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
+from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
+from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
 from squid.submissions.infrastructure.models import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
@@ -203,6 +205,38 @@ async def test_public_summaries_select_only_allowlisted_fields_and_preserve_requ
     assert summaries[0].preview.url == "https://cdn.example.test/render.png"
 
 
+async def _claim_submission(
+    sessions: async_sessionmaker[AsyncSession], payload: NormalizedSubmission
+) -> ClaimedFinalizationJob:
+    current = Instant.now()
+    draft = StoredDraft(
+        DraftSnapshot(
+            payload.source_draft_id, payload.owner_account_id, "build_submission.v1", 1, payload.category.value
+        ),
+        payload.origin,
+        current,
+        current,
+        current.add(days=7, days_assumed_24h_ok=True),
+        source_installation_id=payload.source_installation_id,
+    )
+    await PostgresDraftRepository(sessions).create(draft)
+    jobs = PostgresFinalizationJobRepository(sessions)
+    await jobs.enqueue(draft, payload, now=current, expires_at=draft.expires_at)
+    (claim,) = await jobs.claim(now=current, limit=1)
+    return claim
+
+
+async def _execute_submission(
+    preparation: SubmissionBuildPreparation, sessions: async_sessionmaker[AsyncSession], payload: NormalizedSubmission
+) -> FinalizedBuild | BuildSubmissionRejected:
+    claim = await _claim_submission(sessions, payload)
+    result = await PostgresSubmissionExecutor(sessions, BuildRepository(sessions), preparation).execute(
+        claim, now=Instant.now()
+    )
+    assert result is not None
+    return result
+
+
 async def test_submission_target_persists_only_the_exact_canonical_source_version(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -217,10 +251,12 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
         NoopEmbeddings(),
         OfficialTagResolver(migrated_session_factory),
     )
-    target = CanonicalBuildSubmissionWriter(builds, NoApprovedTags(), versions)
+    target = SubmissionBuildPreparation(builds, NoApprovedTags(), versions)
     canonical_draft_id = uuid.UUID("77777777-7777-4777-8777-777777777777")
 
-    result = await target.create_or_get(normalized_submission(account_id, canonical_draft_id, "Java 1.21.0"))
+    result = await _execute_submission(
+        target, migrated_session_factory, normalized_submission(account_id, canonical_draft_id, "Java 1.21.0")
+    )
 
     assert isinstance(result, FinalizedBuild)
     persisted = await repository.get_by_id(result.build_id)
@@ -228,7 +264,9 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
     assert persisted.versions == ["Java 1.21.0"]
 
     unknown_draft_id = uuid.UUID("88888888-8888-4888-8888-888888888888")
-    rejected = await target.create_or_get(normalized_submission(account_id, unknown_draft_id, "Java 1.21.99"))
+    rejected = await _execute_submission(
+        target, migrated_session_factory, normalized_submission(account_id, unknown_draft_id, "Java 1.21.99")
+    )
 
     assert rejected == BuildSubmissionRejected(
         (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
@@ -251,7 +289,7 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
     draft_id = uuid.UUID("99999999-9999-4999-8999-999999999999")
     repository = BuildRepository(migrated_session_factory)
     versions = VersionService(VersionRepository(migrated_session_factory))
-    writer = CanonicalBuildSubmissionWriter(
+    writer = SubmissionBuildPreparation(
         BuildService(
             repository,
             BuildLockRepository(migrated_session_factory),
@@ -263,19 +301,22 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
         NoApprovedTags(),
         versions,
     )
-    results: list[FinalizedBuild | BuildSubmissionRejected] = []
+    claim = await _claim_submission(
+        migrated_session_factory, normalized_submission(account_id, draft_id, "Java 1.21.0")
+    )
+    executor = PostgresSubmissionExecutor(migrated_session_factory, repository, writer)
+    results: list[FinalizedBuild | BuildSubmissionRejected | None] = []
 
     async def create() -> None:
-        results.append(await writer.create_or_get(normalized_submission(account_id, draft_id, "Java 1.21.0")))
+        results.append(await executor.execute(claim, now=Instant.now()))
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(create)
         tasks.start_soon(create)
 
     assert len(results) == 2
-    assert all(isinstance(result, FinalizedBuild) for result in results)
-    assert results[0] == results[1]
-    result = results[0]
+    assert sum(result is None for result in results) == 1
+    result = next(result for result in results if result is not None)
     assert isinstance(result, FinalizedBuild)
 
     async with migrated_session_factory.begin() as session:

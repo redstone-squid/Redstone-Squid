@@ -107,43 +107,6 @@ class BuildService:
         await self._persist(build)
         return build
 
-    async def submit_for_account(
-        self,
-        build: Build,
-        *,
-        submitter_account_id: int,
-        source_submission_draft_id: UUID,
-        display_name: str | None,
-        ai_generated: bool,
-    ) -> Build:
-        """Finalize one synchronized draft under an account, whatever identity it linked.
-
-        The draft UUID is both persisted for audit and used as the retry key. A later
-        finalization attempt returns the already-created build without requiring any
-        Discord identity on the owning account.
-        """
-        existing = await self._repository.get_by_source_submission_draft_id(source_submission_draft_id)
-        if existing is not None:
-            _require_matching_source_submission(existing, build, submitter_account_id, source_submission_draft_id)
-            return existing
-        await self.prepare_for_account(
-            build,
-            submitter_account_id=submitter_account_id,
-            source_submission_draft_id=source_submission_draft_id,
-            display_name=display_name,
-            ai_generated=ai_generated,
-        )
-        outcome = await self._repository.save_for_source_submission(build)
-        _require_matching_source_submission(
-            outcome.build,
-            build,
-            submitter_account_id,
-            source_submission_draft_id,
-        )
-        if outcome.created:
-            await self._embeddings.index(outcome.build)
-        return outcome.build
-
     async def prepare_for_account(
         self,
         build: Build,
@@ -265,23 +228,3 @@ class BuildService:
         # verbatim and unresolvable names are recorded before anything is saved.
         await apply_build_taxonomy(build, self._taxonomy)
         await self._embeddings.prepare(build)
-
-
-def _require_matching_source_submission(
-    persisted: Build,
-    candidate: Build,
-    submitter_account_id: int,
-    source_submission_draft_id: UUID,
-) -> None:
-    if persisted.submitter_account_id != submitter_account_id:
-        msg = "The source submission draft is already owned by another account."
-        raise InvalidStateError(
-            msg,
-            context={"source_submission_draft_id": str(source_submission_draft_id)},
-        )
-    if persisted.sponsor != candidate.sponsor:
-        msg = "The source submission draft already produced a build with different immutable provenance."
-        raise InvalidStateError(
-            msg,
-            context={"source_submission_draft_id": str(source_submission_draft_id)},
-        )
