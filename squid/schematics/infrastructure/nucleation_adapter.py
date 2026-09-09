@@ -107,7 +107,11 @@ def analyze(
     """Read every fact we persist about one schematic file.
 
     `source_format` is what the caller's content sniff concluded, including any filename hint
-    it had. When omitted the bytes are sniffed again here without a hint.
+    it had. When omitted the bytes are sniffed again here without a hint. Lattice detection is
+    skipped above `lattice_max_block_count` blocks rather than made to run slowly.
+
+    Raises `InvalidSchematicError` for bytes the engine will not parse, and
+    `SchematicTooLargeError` when the file's allocated bounds exceed `limits`.
     """
     schematic = _load(data)
     _guard_allocated_volume(schematic, limits)
@@ -131,9 +135,9 @@ def convert(
 ) -> tuple[bytes, tuple[VersionLossEntry, ...]]:
     """Re-encode a schematic, optionally retargeting it at another Minecraft data version.
 
-    Only the litematic writer reports fidelity losses alongside its output. For the other
-    formats a data-version retarget is applied to the loaded schematic first, and that step's
-    loss report is returned with the re-encoded bytes.
+    Losses are reported only for a retarget: a plain re-encode returns an empty tuple. Only the
+    litematic writer reports them alongside its output; for the other formats the retarget is
+    applied to the loaded schematic first and that step's loss report is returned instead.
     """
     schematic = _load(data)
 
@@ -174,7 +178,11 @@ def compare(left: bytes, right: bytes, *, preset: FingerprintPreset) -> Schemati
 
 
 def render(data: bytes, *, request: RenderRequest, resource_pack: bytes) -> bytes:
-    """Render a schematic to PNG bytes. Phase 3 wires this up; the plumbing exists now."""
+    """Render a schematic to PNG bytes.
+
+    The engine's pack handle is cached per process by pack digest, because building one is far
+    more expensive than the render itself. The renderer answers base64, decoded here.
+    """
     schematic = _load(data)
     config = _render_config(request)
     pack_digest = hashlib.sha256(resource_pack).hexdigest()
@@ -204,10 +212,12 @@ def _render_config(request: RenderRequest) -> Any:
 def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
     """Actuate one input and collect moderator-facing piston timing evidence.
 
-    The 0.10.1 tick engine is distinct from the MCHPRS circuit evaluator: it models piston
-    movement and vanilla tick ordering and is conformance-tested against captured community
-    doors. A saved schematic is loaded in ``InWorld`` mode so placement does not spuriously
-    pulse every observer before the moderator presses the input.
+    The tick engine is distinct from the MCHPRS circuit evaluator: it models piston movement and
+    vanilla tick ordering. A saved schematic is loaded in ``InWorld`` mode so placement does not
+    spuriously pulse every observer before the moderator presses the input.
+
+    Raises `InvalidSchematicError` when the tick engine cannot load the file, or when the build is
+    already active at load, and `AmbiguousSimulationInputError` when no single control is implied.
     """
     schematic = _load(data)
     try:
@@ -503,6 +513,7 @@ def _signs(schematic: nucleation.Schematic) -> tuple[SchematicSign, ...]:
 
 
 def _export(schematic: nucleation.Schematic, target: SchematicFormat) -> bytes:
+    """Encode to `target`, raising `InvalidSchematicError` for a format the engine cannot write."""
     writer = _EXPORTERS.get(target)
     if writer is None:
         msg = f"The engine cannot write {target.value} files."

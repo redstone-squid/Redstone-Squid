@@ -36,7 +36,11 @@ _BUILD_TABLE = cast(Table, SQLBuild.__table__)
 
 
 class SchematicRepository:
-    """Persist schematic metadata and store payloads in a bounded artifact adapter."""
+    """Persist schematic metadata and store payloads in a bounded artifact adapter.
+
+    Every payload read and write is verified against its digest, and a mismatch raises
+    `RuntimeError` rather than returning bytes nobody vouched for.
+    """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession], artifacts: ArtifactStore) -> None:
         self._session_factory = session_factory
@@ -68,6 +72,11 @@ class SchematicRepository:
         return digest
 
     async def get_file(self, sha256: str) -> bytes | None:
+        """The stored bytes, or `None` when no row carries that digest.
+
+        Raises `RuntimeError` when object storage answers with a payload that does not hash back
+        to `sha256`: a row exists, so silently returning `None` would read as "never uploaded".
+        """
         async with self._session_factory() as session:
             row = (
                 await session.execute(
@@ -109,7 +118,11 @@ class SchematicRepository:
         """Attach an analysis to a build, replacing any earlier analysis of the same file.
 
         Re-analysing after an engine upgrade must overwrite rather than accumulate, so the
-        `(build_id, file_sha256)` uniqueness doubles as the upsert key.
+        `(build_id, file_sha256)` uniqueness doubles as the upsert key. Returns the attachment id.
+
+        `primary=True` does three further things in the same transaction, under the build row's
+        lock: it demotes the build's other attachments, drops the render link projected onto the
+        build, and resets the build's render queue row so a new preview is produced.
         """
         values = {
             "build_id": build_id,

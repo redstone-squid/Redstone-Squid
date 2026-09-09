@@ -59,6 +59,7 @@ class Frame:
     payloads: tuple[bytes, ...] = ()
 
     def encode(self) -> bytes:
+        """Serialise to one framed message; `parts` is computed here and overrides any in `header`."""
         header = {**self.header, "parts": [len(payload) for payload in self.payloads]}
         header_bytes = json.dumps(header, separators=(",", ":")).encode("utf-8")
         body = b"".join(self.payloads)
@@ -71,11 +72,19 @@ class Frame:
 
 
 class FrameStreamClosed(Exception):
-    """The peer closed the stream, cleanly or otherwise."""
+    """No further frame can be read: the peer closed the stream, or it went out of sync.
+
+    A desynchronised stream is unrecoverable rather than skippable, so an undecodable header or an
+    impossible length is reported the same way as a clean close and ends the connection.
+    """
 
 
 async def read_frame(stream: asyncio.StreamReader) -> Frame:
-    """Read exactly one frame, raising :class:`FrameStreamClosed` at end of stream."""
+    """Read exactly one frame.
+
+    Raises `FrameStreamClosed` at end of stream, on a header that is not UTF-8 JSON, and on a
+    frame claiming more than `MAX_FRAME_BYTES`.
+    """
     try:
         header_length = int.from_bytes(await stream.readexactly(LENGTH_PREFIX_BYTES), "big")
         body_length = int.from_bytes(await stream.readexactly(LENGTH_PREFIX_BYTES), "big")

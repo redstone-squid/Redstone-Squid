@@ -14,7 +14,12 @@ PACK_TOO_LARGE_MESSAGE = "The configured resource pack is too large."
 
 
 class ResourcePackLoader:
-    """Load a configured pack once, verifying remote content before caching it."""
+    """Load a configured pack once, verifying remote content before caching it.
+
+    `aclose` closes the HTTP session, and only when this loader opened it rather than being
+    handed one. Downloads are capped at 256 MiB and never follow redirects; a fetched pack is
+    cached on disk under its expected digest and re-verified on every read.
+    """
 
     def __init__(
         self,
@@ -35,7 +40,11 @@ class ResourcePackLoader:
         self._owns_session = session is None
 
     async def load(self) -> tuple[bytes, str]:
-        """Return the verified pack, fetching a configured URL only on first use."""
+        """Return the verified pack and its SHA-256, fetching a configured URL only on first use.
+
+        Raises `SchematicRenderUnavailableError` when nothing is configured, the source is
+        unreadable, the download exceeds `MAX_RESOURCE_PACK_BYTES`, or the digest does not match.
+        """
         if self._loaded is not None:
             return self._loaded
         async with self._lock:

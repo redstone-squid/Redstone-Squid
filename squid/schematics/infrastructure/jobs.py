@@ -34,7 +34,11 @@ SCHEMATIC_JOB_SPEC = QueueSpec(
 
 
 class PostgresSchematicJobRepository:
-    """Claim, fence, and retain native-engine jobs in PostgreSQL."""
+    """Claim, fence, and retain native-engine jobs in PostgreSQL.
+
+    Acknowledged rows are retained so a client can still poll their result; `cleanup` deletes them
+    once `expires_at` has passed and hands back the result object keys the caller must delete.
+    """
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory

@@ -1,4 +1,9 @@
-"""Durable client and worker runner for native schematic operations."""
+"""Durable client and worker runner for native schematic operations.
+
+Both sides move bytes through the artifact store and only job rows through the database: the
+client stages every input under its SHA-256, submits a job row, and polls it; the runner claims
+the row, reads those artifacts back, and writes any binary result to a key of its own.
+"""
 
 import asyncio
 import dataclasses
@@ -53,7 +58,14 @@ class _JobResponse:
 
 
 class QueuedSchematicAnalyzer:
-    """Submit native-engine requests to the database worker and await durable results."""
+    """Submit native-engine requests to the database worker and await durable results.
+
+    Every operation blocks for at most `job_wait_timeout_seconds`, polling every
+    `job_poll_interval_seconds`, and raises `SchematicTimeoutError` when that expires — the job row
+    survives and the worker keeps going. A dead-lettered job is re-raised as the typed exception
+    its `error_kind` names, so callers catch the same errors they would from an in-process
+    analyzer. `capabilities` is the exception: it reports failure as `available=False`.
+    """
 
     def __init__(
         self,
@@ -221,7 +233,11 @@ class QueuedSchematicAnalyzer:
 
 
 class SchematicJobRunner:
-    """Execute claimed jobs with the worker process's native analyzer."""
+    """Execute claimed jobs with the worker process's native analyzer.
+
+    A job that raises is acknowledged as a failure rather than re-raised, so one poison payload
+    does not stop the batch it was claimed with.
+    """
 
     def __init__(
         self,
@@ -244,6 +260,7 @@ class SchematicJobRunner:
         await run_all_settled([partial(self._process, job) for job in jobs])
 
     async def cleanup(self) -> None:
+        """Delete expired job rows and the result artifacts they were holding."""
         for object_key in await self._jobs.cleanup():
             await self._artifacts.delete(object_key)
 
@@ -376,6 +393,11 @@ def _simulation_request(params: Mapping[str, Any]) -> SimulationRequest:
 
 
 def _classify_error(error: Exception) -> tuple[SchematicJobErrorKind, Mapping[str, Any], bool]:
+    """Name an error for the client and say whether the job is terminal.
+
+    Every typed schematic failure is terminal: retrying an oversized, invalid, or worker-killing
+    payload produces the same outcome. Only an unrecognised exception is worth another attempt.
+    """
     context = dict(error.context) if isinstance(error, SquidError) else {}
     if isinstance(error, SchematicTooLargeError):
         return "too_large", context, True
@@ -397,6 +419,7 @@ def _job_failure(
     timeout_seconds: float,
     snapshot: SchematicJobSnapshot,
 ) -> Exception:
+    """Rebuild the client-side exception a dead-lettered job's `error_kind` and context describe."""
     context = snapshot.error_context
     if snapshot.error_kind == "too_large":
         return SchematicTooLargeError(

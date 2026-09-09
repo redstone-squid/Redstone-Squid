@@ -263,8 +263,8 @@ class _Worker:
                     process.kill()
         with contextlib.suppress(TimeoutError):
             await asyncio.wait_for(process.wait(), 5.0)
-        # Drain after the process is gone, never before: on a crash the traceback we care about
-        # is still sitting in the pipe at exactly the moment the old code cancelled the pump.
+        # Drain after the process is gone, never before: on a crash the traceback worth having is
+        # still sitting in the pipe when the child dies.
         if pump is not None:
             await pump.drain(2.0)
         if process.returncode is not None:
@@ -290,10 +290,9 @@ class _Worker:
 def _emit_child_record(record: logging.LogRecord) -> None:
     """Dispatch a rebuilt child record as if the child's own logger had emitted it.
 
-    `Logger.handle` skips `isEnabledFor`, so re-emitting through one fixed logger made
-    parent-side level configuration for the child's module names inert. Going through the
-    record's own logger, with the level check the parent applies to its own records, keeps
-    filtering meaningful; the handler chain is unchanged because child loggers are `squid.*`.
+    `Logger.handle` skips `isEnabledFor`, so the level check is applied here instead; without it
+    the parent's level configuration for the child's module names would be inert. The handler
+    chain is unaffected, because child loggers are all under `squid.`.
     """
     target = logging.getLogger(record.name)
     if target.isEnabledFor(record.levelno):
@@ -349,9 +348,8 @@ def _worker_log_record(line: str, process_id: int) -> logging.LogRecord | None:
 def _record_worker_failure(exit_code: int | None, *, reason: str) -> None:
     """Record a worker death as both a metric and a log line.
 
-    Metrics alone are not a signal: `add_counter` is a no-op when the optional observability
-    extra is not installed, which left such a deployment with no way at all to see that its
-    workers were crash-looping.
+    The log line is not redundant: `add_counter` is a no-op without the optional observability
+    extra, so on such a deployment it is the only evidence that workers are crash-looping.
     """
     attributes: dict[str, str | int] = {"squid.worker.failure_reason": reason}
     if exit_code is not None:
@@ -390,6 +388,7 @@ class _CircuitBreaker:
             self._failures.popleft()
 
     def is_open(self, now: float) -> bool:
+        """Whether the breaker is tripped, pruning failures that have aged out of the window."""
         while self._failures and now - self._failures[0] > self.window_seconds:
             self._failures.popleft()
         return len(self._failures) >= self.max_failures
@@ -400,7 +399,12 @@ class _CircuitBreaker:
 
 
 class SchematicWorkerPool:
-    """A `SchematicAnalyzer` backed by supervised subprocesses."""
+    """A `SchematicAnalyzer` backed by supervised subprocesses.
+
+    Must be entered with `running()` before it serves anything, and `aclose` ends it for good:
+    every child is killed and no later request is accepted. Once the circuit breaker is open,
+    operations raise `SchematicSupportUnavailableError` without touching a worker.
+    """
 
     def __init__(self, config: SchematicConfig) -> None:
         self._config = config
@@ -480,6 +484,7 @@ class SchematicWorkerPool:
             logger.info("Schematic worker circuit breaker closed; schematic operations resume.")
 
     async def capabilities(self) -> AnalyzerCapabilities:
+        """Ask a worker what the engine can do, reporting an unreachable one as `available=False`."""
         try:
             frame = await self._call("capabilities", {}, (), self._config.parse_timeout_seconds)
         except (SchematicWorkerCrashedError, SchematicTimeoutError, SchematicSupportUnavailableError) as exc:

@@ -69,12 +69,15 @@ class IngestedSchematic:
 
 
 class SchematicService:
-    """Accept, analyze, store, and re-encode schematic files.
+    """Accept, analyze, store, and re-encode schematic files; `aclose` ends the analyzer and pack provider.
 
     The service owns the order in which an upload is vetted, and that order is the security
     property: cheap stdlib checks run to exhaustion on the caller's thread before a single byte
-    is handed to the native engine, and the engine only ever sees bytes that have already been
-    proven to be a bounded, well-formed NBT stream.
+    is handed to the native engine, so the engine only ever sees bytes already proven to be a
+    bounded, well-formed NBT stream.
+
+    Every method that needs the engine raises `SchematicSupportUnavailableError` when it is not
+    installed on this instance.
     """
 
     def __init__(
@@ -137,6 +140,12 @@ class SchematicService:
         Storing happens *before* analysis so that a file which crashes the engine is still on
         disk to reproduce with, and so a byte-identical resubmission is recognised without
         paying for analysis twice.
+
+        Raises:
+            SchematicTooLargeError: the upload or its inflated size exceeds this service's limits.
+            InvalidSchematicError: the bytes are not a schematic format this application reads, or
+                the file already crashed a worker on this instance.
+            SchematicWorkerCrashedError: analysis killed the worker; the file is quarantined here.
         """
         self._require_available()
         source_format = self._vet(request.data, filename=request.filename)
@@ -175,11 +184,11 @@ class SchematicService:
         primary: bool = True,
         publication: SchematicPublication | None = None,
     ) -> int:
-        """Attach an already-analyzed file to a build.
+        """Attach an already-analyzed file to a build, returning the attachment id.
 
-        Split out from :meth:`attach` because the submission flow has to analyze *before* the
-        build exists — the measured dimensions are prefilled into the form the user is about to
-        fill in — and can only record once `submit` has assigned an id.
+        Chosen over :meth:`attach` by the submission flow, which analyzes before the build exists
+        — the measured dimensions prefill the form — and can only record once `submit` has
+        assigned an id.
         """
         return await self._store.record_analysis(
             build_id,
@@ -211,16 +220,9 @@ class SchematicService:
     ) -> Page[StoredSchematic]:
         """Return one page of a build's publicly downloadable attachments.
 
-        Paging belongs here rather than in the route, which was the last list
-        endpoint slicing its own results after builds, records, and notifications
-        moved theirs into their services.
-
-        Slicing in memory is deliberate for now: a single build's attachment
-        count is small and bounded in practice, and the store port has no
-        offset/limit. The trigger to change that is one build's attachments no
-        longer fitting comfortably in one query -- then `list_for_build` gains
-        `offset`/`limit` and a count, and this body changes without the route
-        noticing.
+        Slicing happens in memory: the store port has no offset/limit, and a single build's
+        attachment count is small and bounded. Pushing the page into the query means giving
+        `list_for_build` an `offset`/`limit` and a count; callers see no difference.
         """
         return offset_page(
             await self.list_public_for_build(build_id),
@@ -229,7 +231,12 @@ class SchematicService:
         )
 
     async def public_download(self, build_id: int, schematic_id: int) -> PublicSchematicDownload:
-        """Return canonical bytes only through an attachment's explicit publication policy."""
+        """Return canonical bytes only through an attachment's explicit publication policy.
+
+        Raises `SchematicNotFoundError` when the attachment does not belong to the build, is not
+        publicly downloadable, or its bytes are gone; `DataIntegrityError` when a downloadable row
+        carries no license.
+        """
         stored = await self._store.get_for_build(build_id, schematic_id)
         if stored is None or not stored.publication.is_public_downloadable:
             raise SchematicNotFoundError
@@ -436,15 +443,16 @@ class SchematicService:
     async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
         """Render a build's primary schematic for a caller who is waiting for the image.
 
-        Distinct from `prepare_render`, which serves the durable projection queue: that path
-        decides what a build's *published* preview should be and hands its transport a PNG to
-        upload, while this one answers one request and publishes nothing. A recipe the queue
-        has already rendered is served from its stored artifact, so the default framing costs
-        an object-storage read rather than a render.
+        Chosen over `prepare_render` when one request wants a PNG and nothing should be published:
+        the result is never written back to the cache, because recording a render also projects it
+        onto the build as its public preview. A recipe the durable queue has already rendered is
+        served from its stored artifact, so the default framing costs an object-storage read.
 
-        Deliberately not written back to the cache. Recording a render also projects it onto
-        the build as its preview, and a request whose only claim to authority is that somebody
-        asked for it must not decide what a build looks like to everyone else.
+        Raises:
+            SchematicRenderUnavailableError: rendering is disabled, has no resource pack or GPU
+                adapter, or the engine answered with something that is not a PNG.
+            SchematicRenderRefusedError: this attachment will never render under any recipe.
+            SchematicNotFoundError: the build has no primary attachment, or its bytes are gone.
         """
         self._require_available()
         if not self._render_enabled:
@@ -591,7 +599,10 @@ class SchematicService:
         return await self._store.project_render(render.schematic_id, render.recipe_hash, render.url)
 
     async def render_content(self, recipe_hash: str, *, max_bytes: int = _MAX_RENDER_CONTENT_BYTES) -> bytes:
-        """Return one registered PNG preview from private object storage."""
+        """Return one registered PNG preview from private object storage.
+
+        Raises `SchematicNotFoundError` when the recipe is unknown, unstored, or over `max_bytes`.
+        """
         content = await self._store.get_render_content(recipe_hash, max_bytes=max_bytes)
         if content is None:
             raise SchematicNotFoundError(context={"recipe_hash": recipe_hash})
@@ -607,11 +618,8 @@ class SchematicService:
     ) -> Generator[None]:
         """Quarantine a file that kills a worker, so the next request refuses it outright.
 
-        Analysis, rendering, and simulation all have to do this, and all three used to spell
-        it out themselves. Only the log line differs per operation, so only that is a
-        parameter; whether the caller then skips, retries, or fails is left to the caller,
-        because that policy genuinely does differ — a render is durable work the queue will
-        retry, an upload is a user waiting on an answer.
+        Re-raises the crash: what to do about it differs per caller — a render is durable work
+        the queue retries, an upload is a user waiting on an answer.
         """
         try:
             yield
@@ -644,7 +652,12 @@ class SchematicService:
     async def convert(
         self, build_id: int, request: ConvertRequest, *, version_label: str | None = None
     ) -> tuple[bytes, tuple[VersionLossEntry, ...]]:
-        """Re-encode a build's primary schematic, optionally retargeting its data version."""
+        """Re-encode a build's primary schematic, optionally retargeting its data version.
+
+        `version_label` is resolved only when the request names no target data version. Raises
+        `SchematicNotFoundError` when the build has no primary attachment or its bytes are gone,
+        and `InvalidSchematicError` when the label maps to no known data version.
+        """
         self._require_available()
         stored = await self._store.get_primary(build_id)
         if stored is None:
@@ -670,7 +683,11 @@ class SchematicService:
         return await self._analyzer.convert(data, target=request.target_format, data_version=data_version)
 
     async def detect_lattice(self, build_id: int) -> AutostackLattice | None:
-        """Return the opportunistically detected repeating unit for a build."""
+        """Return the repeating unit detected at ingest, or `None` when none was found.
+
+        Reads the stored analysis; it never re-runs detection. Raises `SchematicNotFoundError`
+        when the build has no primary attachment.
+        """
         self._require_available()
         stored = await self._store.get_primary(build_id)
         if stored is None:
@@ -684,7 +701,15 @@ class SchematicService:
         input_position: Vector3 | None = None,
         max_ticks: int = 200,
     ) -> SimulationResult:
-        """Run and persist staff-facing timing evidence without editing the build timing."""
+        """Run and persist staff-facing timing evidence without editing the build's declared timing.
+
+        Raises:
+            SchematicSupportUnavailableError: this engine build has no verified tick simulator.
+            SchematicNotFoundError: the build has no primary attachment, or its bytes are gone.
+            InvalidSchematicError: the file already crashed a worker on this instance.
+            AmbiguousSimulationInputError: the schematic offers no single control to actuate.
+            SchematicWorkerCrashedError: simulation killed the worker; the file is quarantined here.
+        """
         self._require_available()
         capabilities = await self._analyzer.capabilities()
         if not capabilities.can_simulate:
@@ -712,7 +737,7 @@ class SchematicService:
             await self._resource_pack.aclose()
 
     async def bytes_for(self, sha256: str) -> bytes:
-        """Return stored schematic bytes, or raise if they are gone."""
+        """Return stored schematic bytes; raises `SchematicNotFoundError` when the digest has no file."""
         data = await self._store.get_file(sha256)
         if data is None:
             raise SchematicNotFoundError(context={"sha256": sha256}, public_context={"sha256": sha256})
@@ -755,8 +780,8 @@ def summarise_losses(losses: Sequence[VersionLossEntry], *, limit: int = 10) -> 
 def _refused(reason: RenderSkipReason) -> SchematicRenderRefusedError:
     """Turn a permanent skip into the refusal a waiting caller is owed.
 
-    The queue treats these as "acknowledge and move on"; someone who asked for the image has
-    to be told which of them happened, and `description` is already the sentence to tell them.
+    The durable queue acknowledges these silently; a caller waiting on the image is told which
+    one happened, in the reason's own end-user sentence.
     """
     return SchematicRenderRefusedError(reason.value, reason.description)
 

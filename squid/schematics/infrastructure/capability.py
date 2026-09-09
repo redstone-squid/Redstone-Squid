@@ -44,9 +44,9 @@ def engine_installed() -> bool:
 class NullSchematicAnalyzer:
     """The analyzer used when the engine is absent or switched off.
 
-    Every operation raises the same typed, translated error, so an instance without the
-    optional extra behaves exactly like today's bot plus one clear message, rather than
-    failing somewhere deep with an `ImportError`.
+    Every operation but `capabilities` raises `SchematicSupportUnavailableError` carrying `reason`
+    as its developer action, so an instance without the optional extra fails with one clear
+    message rather than an `ImportError` from somewhere deep.
     """
 
     def __init__(self, reason: str | None = None) -> None:

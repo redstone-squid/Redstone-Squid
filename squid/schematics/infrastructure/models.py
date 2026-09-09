@@ -27,7 +27,11 @@ MAX_SCHEMATIC_BYTES = 16 * 1024 * 1024
 
 
 class SchematicFile(Base):
-    """Relational metadata for a content-addressed schematic artifact."""
+    """Relational metadata for a content-addressed schematic artifact.
+
+    One row per distinct file, shared by every build that uploaded those exact bytes. The payload
+    itself lives in object storage under `object_key`.
+    """
 
     __tablename__ = "schematic_files"
     __table_args__ = (
@@ -41,13 +45,17 @@ class SchematicFile(Base):
     source_format: Mapped[str] = mapped_column(Text, nullable=False)
     """The format the content sniffer identified, e.g. `litematic`."""
     object_key: Mapped[str] = mapped_column(Text, nullable=False)
+    """Object-storage key holding the payload, derived from the digest."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+    """When these bytes were first stored. Re-uploading the same file does not move it."""
 
 
 class BuildSchematic(Base, kw_only=True):
     """One analyzed schematic attached to a build.
+
+    Unique on `(build_id, file_sha256)`, with at most one primary row per build.
 
     Metrics and fingerprints are denormalised onto this row so duplicate shortlisting is a
     plain indexed query. Fingerprints are only comparable within the `analyzer_version` that
@@ -147,13 +155,17 @@ class BuildSchematic(Base, kw_only=True):
     bounding_volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
     """Tight bounding box volume including air. Materialised so it can be range-scanned."""
     entity_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    """Entities stored in the file, such as item frames and minecarts. Never counted as blocks."""
     palette_size: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     """How many distinct block states the file declares."""
     region_names: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default_factory=list)
+    """Names of the regions the file declares. Litematic files can carry several; other formats one."""
     source_data_version: Mapped[int | None] = mapped_column(Integer, default=None)
     """The Minecraft data version the file declares, or `None` when it declares none."""
     declared_name: Mapped[str | None] = mapped_column(Text, default=None)
+    """The name written inside the file by its author. Uploader-controlled; display only."""
     declared_author: Mapped[str | None] = mapped_column(Text, default=None)
+    """The author written inside the file. Uploader-controlled, and not an account reference."""
     signs: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False, default_factory=list)
     """Sign text recovered from the schematic, as `{x, y, z, text}` objects."""
 
@@ -184,7 +196,9 @@ class BuildSchematic(Base, kw_only=True):
     )
     """Explicit download choice. Existing attachments remain private until re-attested."""
     license_code: Mapped[str | None] = mapped_column(Text, default=None)
+    """Creative Commons license the uploader granted. Required once visibility is `public_download`."""
     rights_attested_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When someone affirmed the right to redistribute this file under `license_code`."""
     rights_attested_by_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey(
@@ -194,11 +208,17 @@ class BuildSchematic(Base, kw_only=True):
         ),
         default=None,
     )
+    """Who made that attestation. `RESTRICT`, because the claim must stay attributable."""
     sanitized_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the sanitizer last ran. Set with `sanitizer_version` and `sanitization_report`, or all NULL."""
     sanitizer_version: Mapped[str | None] = mapped_column(Text, default=None)
+    """Which sanitizer build produced the report, so a fixed sanitizer means a visible re-run."""
     sanitization_report: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    """The sanitizer's audit output: what it stripped from the file and what it left alone."""
     published_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When public downloads began. NULL blocks them however complete the rest of the row is."""
     withdrawn_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When downloads were withdrawn. Set, it blocks them permanently without deleting the row."""
 
     uploaded_by_account_id: Mapped[int | None] = mapped_column(
         Integer,
@@ -214,10 +234,15 @@ class BuildSchematic(Base, kw_only=True):
     analyzed_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+    """When this analysis was written. Re-analysis under a newer engine moves it forward."""
 
 
 class SchematicRender(Base, kw_only=True):
-    """A replaceable preview artifact keyed by the complete rendering recipe."""
+    """A replaceable preview artifact keyed by the complete rendering recipe.
+
+    Unique on `(build_schematic_id, recipe_hash)`: one stored image per attachment per recipe, and
+    a changed pack, camera, size, or analyzer version is a different recipe rather than an update.
+    """
 
     __tablename__ = "schematic_renders"
     __table_args__ = (
@@ -234,17 +259,25 @@ class SchematicRender(Base, kw_only=True):
     recipe_hash: Mapped[str] = mapped_column(Text, nullable=False)
     """SHA-256 of the pack, camera recipe, output dimensions, and analyzer version."""
     url: Mapped[str] = mapped_column(Text, nullable=False)
+    """Where the preview is served from, and the URL projected onto the build as a render link."""
     object_key: Mapped[str | None] = mapped_column(Text, default=None)
+    """Object-storage key of the PNG. NULL means only the URL is known and the bytes cannot be re-read."""
     width: Mapped[int] = mapped_column(Integer, nullable=False)
+    """Rendered image width in pixels, from the recipe rather than the schematic."""
     height: Mapped[int] = mapped_column(Integer, nullable=False)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    """PNG size in bytes, read before the object so an oversized preview is refused unfetched."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
 class SchematicRenderQueueItem(Base, kw_only=True):
-    """A durable request to render and publish one build's primary schematic."""
+    """A durable request to render and publish one build's primary schematic.
+
+    Keyed by build, so re-attaching a primary schematic resets the existing row rather than
+    queueing a second render.
+    """
 
     __tablename__ = "schematic_render_queue"
     __table_args__ = (
@@ -263,20 +296,30 @@ class SchematicRenderQueueItem(Base, kw_only=True):
     enqueued_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+    """When the render was last requested. Reset when a new primary schematic is attached."""
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     """When this row next becomes claimable, and the only column backoff writes."""
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When a worker leased this row. NULL means unclaimed and, if due, ready."""
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """The database-minted fencing token handed to the worker that claimed this row."""
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When retries were given up on. Set, this row is never claimed again."""
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    """Failed attempts so far; the row dies once this reaches the worker's configured maximum."""
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
+    """The most recent failure's message, truncated to 4000 characters."""
 
 
 class SchematicJob(Base, kw_only=True):
-    """A durable request for the worker-owned native schematic engine."""
+    """A durable request for the worker-owned native schematic engine.
+
+    The one queue whose rows outlive their acknowledgement: a client polls this row for its result
+    until `expires_at` passes and cleanup deletes it. `completed_at` and `dead_at` are mutually
+    exclusive, and either one means the row is no longer claimable.
+    """
 
     __tablename__ = "schematic_jobs"
     __table_args__ = (
@@ -298,23 +341,39 @@ class SchematicJob(Base, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
     operation: Mapped[str] = mapped_column(Text, nullable=False)
+    """Which native-engine call to make, constrained to the seven the worker implements."""
     params: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
+    """The call's non-binary arguments, already wire-encoded. Never contains schematic bytes."""
     input_keys: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default_factory=list)
+    """Object-storage keys of the binary inputs, in the order the operation reads them."""
     result: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    """The wire-encoded non-binary result, readable once `completed_at` is set."""
     result_object_key: Mapped[str | None] = mapped_column(Text, default=None)
+    """Object-storage key of a binary result, if the operation produced one. Deleted with the row."""
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
+    """Failed attempts so far; a typed schematic failure dies on the first one rather than retrying."""
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+    """When this row next becomes claimable, and the only column backoff writes."""
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When a worker leased this row. NULL means unclaimed and, if due and unfinished, ready."""
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """The database-minted fencing token handed to the worker that claimed this row."""
     completed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the operation succeeded. Mutually exclusive with `dead_at`."""
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When the job failed for good. The client raises the error described below from it."""
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When cleanup may delete this row and its result artifact. Set on reaching a terminal state."""
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
+    """The most recent failure's message."""
     error_kind: Mapped[str | None] = mapped_column(Text, default=None)
+    """Which typed exception the client rebuilds: `invalid`, `too_large`, `unavailable`, `timeout`,
+    `crashed`, or `internal`."""
     error_context: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
+    """The failed exception's structured context, used to reconstruct it client-side."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+    """When the job was submitted, unchanged by retries."""

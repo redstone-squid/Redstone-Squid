@@ -20,17 +20,32 @@ class ClaimedRenderJob:
 
 
 class SchematicRenderJobRepository(Protocol):
-    """Persistence contract for build-render projection work."""
+    """Persistence contract for build-render projection work.
 
-    async def claim(self, *, limit: int) -> Sequence[ClaimedRenderJob]: ...
+    Both acknowledgements are fenced on the job's claim token and do nothing when it is stale.
+    """
 
-    async def complete(self, job: ClaimedRenderJob) -> bool: ...
+    async def claim(self, *, limit: int) -> Sequence[ClaimedRenderJob]:
+        """Lease up to `limit` due jobs, each with a fresh claim token."""
+        ...
 
-    async def fail(self, job: ClaimedRenderJob, error: str, *, max_attempts: int) -> bool: ...
+    async def complete(self, job: ClaimedRenderJob) -> bool:
+        """Delete the job's row; `False` when the claim is stale."""
+        ...
+
+    async def fail(self, job: ClaimedRenderJob, error: str, *, max_attempts: int) -> bool:
+        """Back the job off for a retry, or dead-letter it once attempts reach `max_attempts`.
+
+        Returns whether the job was dead-lettered.
+        """
+        ...
 
 
 class SchematicRenderJobService:
-    """Claim and acknowledge durable build-render projections."""
+    """Claim and acknowledge durable build-render projections.
+
+    Construction raises `InvalidStateError` unless `max_attempts` is positive.
+    """
 
     def __init__(self, repository: SchematicRenderJobRepository, *, max_attempts: int = 5) -> None:
         if max_attempts < 1:
@@ -40,6 +55,7 @@ class SchematicRenderJobService:
         self._max_attempts = max_attempts
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedRenderJob]:
+        """Lease due jobs; raises `InvalidStateError` unless `1 <= limit <= 32`."""
         if not 1 <= limit <= 32:
             msg = tr(t"Render claim limit must be between 1 and 32.")
             raise InvalidStateError(msg)
@@ -49,4 +65,5 @@ class SchematicRenderJobService:
         return await self._repository.complete(job)
 
     async def fail(self, job: ClaimedRenderJob, error: Exception) -> bool:
+        """Record `error` truncated to 4000 characters; returns whether the job was dead-lettered."""
         return await self._repository.fail(job, str(error)[:4000], max_attempts=self._max_attempts)

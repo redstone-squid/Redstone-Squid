@@ -33,7 +33,11 @@ logger = logging.getLogger(__name__)
 
 
 class ThreadedSchematicAnalyzer:
-    """Run engine calls on the default executor, in-process."""
+    """Run engine calls on the default executor, in-process.
+
+    `render` raises `SchematicRenderUnavailableError` and `simulate` raises
+    `SchematicSupportUnavailableError`; neither is ever attempted here.
+    """
 
     def __init__(self, config: SchematicConfig) -> None:
         self._config = config
@@ -91,8 +95,8 @@ class ThreadedSchematicAnalyzer:
     ) -> SchematicComparison:
         from squid.schematics.infrastructure import nucleation_adapter as engine
 
-        # Threads cannot be safely cancelled. The subprocess implementation enforces the
-        # caller's deadline; this development-only fallback retains its documented limitation.
+        # Threads cannot be safely cancelled, so `timeout_seconds` is ignored here. Only the
+        # subprocess pool enforces the caller's deadline.
         return await asyncio.to_thread(engine.compare, left, right, preset=preset)
 
     async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes:

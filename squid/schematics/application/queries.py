@@ -93,11 +93,8 @@ class StoredSchematic:
 class PublicSchematicDownload:
     """Sanitized bytes plus everything a download response must state.
 
-    The route used to receive `(content, stored)` and then `assert
-    publication.license is not None` to satisfy the type checker -- restating an
-    invariant `SchematicPublication` already enforces, in a layer where
-    assertions are enabled only by convention. Carrying the license and the
-    stored container format here means the response has no facts left to derive.
+    The license and container format are carried rather than derived, so a route can build the
+    response without re-deriving invariants `SchematicPublication` already enforces.
     """
 
     content: bytes
@@ -199,11 +196,10 @@ class SkippedRender:
 
 @dataclass(frozen=True, slots=True)
 class RenderedSchematic:
-    """A PNG answered to a caller who asked for it and is waiting for it.
+    """A PNG answered to a caller who is waiting for it.
 
-    Separate from `FreshRender` because nothing here is on its way to being published: the
-    bytes travel to one Discord message or one HTTP response, and `from_cache` only says
-    whether a GPU was involved, which is what a log line or a header wants to know.
+    Unlike `FreshRender`, nothing here is on its way to being published: the bytes travel to one
+    Discord message or one HTTP response, and `from_cache` says only whether a GPU was involved.
     """
 
     build_id: int
@@ -218,8 +214,6 @@ class RenderedSchematic:
 type RenderPreparation = FreshRender | CachedRender | SkippedRender
 """What `SchematicService.prepare_render` decided.
 
-Three explicit states rather than `PreparedRender | None`: the old shape collapsed "disabled",
-"no attachment", "unsanitized", "poisoned", "over budget", "file gone", "already rendered", and
-"just rendered" into one value, so neither the durable worker nor a moderator-facing surface
-could tell a permanent skip from an absent attachment.
+Three explicit states rather than an optional result: the durable worker uploads a `FreshRender`,
+projects a `CachedRender`, and acknowledges a `SkippedRender` without retrying it.
 """

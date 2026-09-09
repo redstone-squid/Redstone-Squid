@@ -116,9 +116,8 @@ def _current_address_space_bytes(statm_path: Path = STATM_PATH) -> int:
     That baseline is not portable: Termux's bionic/Scudo allocator reserves on the order of
     10 GB of address space before a single line of this module runs, dwarfing the configured
     memory budget and making an absolute `RLIMIT_AS` fail during interpreter start-up, before
-    the engine is even imported. glibc hosts have a much smaller baseline, which is why this
-    went unnoticed there. `resource.getrusage` reports peak resident set size, not mapped
-    address space, so it can't stand in for this.
+    the engine is even imported. glibc hosts have a much smaller baseline. `resource.getrusage`
+    reports peak resident set size, not mapped address space, so it cannot stand in for this.
 
     `statm_path` is a parameter because a real `/proc/self/statm` reports whatever the host
     happens to have mapped, so tests can neither pin the arithmetic nor reach the fallback.
