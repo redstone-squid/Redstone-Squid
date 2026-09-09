@@ -339,7 +339,7 @@ class _Compiler:
                 | sem.FallbackContent()
             ):
                 return self._adapted(node, path)
-            case _ as unreachable:
+            case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
     def _container(self, node: _Container, path: str) -> tuple[scene.HtmlNode, ...]:
@@ -441,7 +441,7 @@ class _Compiler:
                         colour=self.palette.tone(tone),
                     ),
                 )
-            case _ as unreachable:
+            case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
     def _display(self, node: _Display) -> tuple[scene.HtmlNode, ...]:
@@ -583,7 +583,7 @@ class _Compiler:
                     time_ref=scene.HtmlTimeRef(value.instant.isoformat(), timezone=value.timezone),
                 )
                 return self._labelled_time(label, time_node)
-            case _ as unreachable:
+            case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
     def _interactive(self, node: _Interactive, path: str) -> tuple[scene.HtmlNode, ...]:
@@ -658,7 +658,7 @@ class _Compiler:
                 return (self._items(node, path),)
             case sem.Navigation():
                 return (self._navigation(node),)
-            case _ as unreachable:
+            case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
     def _adapted(self, node: _Adapted, path: str) -> tuple[scene.HtmlNode, ...]:
@@ -685,7 +685,7 @@ class _Compiler:
                 return self._paged(node, path)
             case sem.Unbreakable(node=child) | sem.KeepWithNext(node=child):
                 return self.compile(child, path)
-            case _ as unreachable:
+            case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
     def _resolved(self, value: TextLike) -> str:
