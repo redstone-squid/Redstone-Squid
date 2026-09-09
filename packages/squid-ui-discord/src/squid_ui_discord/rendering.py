@@ -16,7 +16,8 @@ from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
-from squid_ui.planning.target import ResourceCost
+from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.target import Target
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
 from squid_ui.scene.model import PlanResult
@@ -27,7 +28,7 @@ from squid_ui_discord._draw import plan_and_draw
 from squid_ui_discord.adapter import require_discord_py_target
 from squid_ui_discord.message_payload import MessageModeError, MessagePayload
 from squid_ui_discord.renderer import V2Renderer, Wire
-from squid_ui_discord.target import DISCORD_V2_DPY27, Target
+from squid_ui_discord.target import DISCORD_V2_DPY27
 
 logger = logging.getLogger(__name__)
 

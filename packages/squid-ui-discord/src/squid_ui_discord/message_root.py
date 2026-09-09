@@ -58,7 +58,7 @@ from squid_ui.planning.navigation import (
     default_nav,
 )
 from squid_ui.planning.planner import plan as plan_document
-from squid_ui.planning.target import AnyTarget
+from squid_ui.planning.target import AnyTarget, Target
 from squid_ui.primitives.nodes import Button, Row
 from squid_ui.profiling import (
     ActionStatus,
@@ -149,7 +149,6 @@ from squid_ui_discord.message_root_wiring import (
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import MountedRenderer, RoutedItem, RoutedSelectItem, V2Renderer
 from squid_ui_discord.rendering import RenderedMessage, render_message
-from squid_ui_discord.target import Target
 
 logger = logging.getLogger(__name__)
 
