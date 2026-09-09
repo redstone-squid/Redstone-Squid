@@ -10,7 +10,7 @@ import gc
 import json
 import time
 from dataclasses import asdict, dataclass
-from typing import Any, override
+from typing import Any, cast, override
 
 import squid_ui as sl
 from squid_ui import Component, computed, state
@@ -20,7 +20,7 @@ from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.testing import commit_render, delivered_to, message_harness
 
 
-class _Leaf(Component):
+class _Leaf(Component[sl.ComponentsV2Target]):
     source: int = state(0)
 
     def __init__(self, *, observed: bool) -> None:
@@ -37,9 +37,11 @@ class _Leaf(Component):
         return Text(str(self.even)) if self.observed else ()
 
 
-class _Root(Component):
+class _Root(Component[sl.ComponentsV2Target]):
     def __init__(self, components: int) -> None:
-        self.leaves = tuple(_Leaf(observed=index == 0) for index in range(components))
+        self.leaves: tuple[Component[sl.ComponentsV2Target], ...] = tuple(
+            _Leaf(observed=index == 0) for index in range(components)
+        )
         self.renders = 0
 
     @override
@@ -212,7 +214,7 @@ def measure_case(
     )
 
 
-class _ValueLeaf(Component):
+class _ValueLeaf(Component[sl.ComponentsV2Target]):
     value: int = state(0)
 
     def __init__(self, *, visible: bool) -> None:
@@ -225,7 +227,7 @@ class _ValueLeaf(Component):
         return Text(str(self.value)) if self.visible else ()
 
 
-class _ValueRoot(Component):
+class _ValueRoot(Component[sl.ComponentsV2Target]):
     def __init__(self, components: int, visible: int) -> None:
         self.leaves = tuple(_ValueLeaf(visible=index < visible) for index in range(components))
         self.renders = 0
@@ -236,21 +238,21 @@ class _ValueRoot(Component):
         return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
 
 
-class _BranchLeaf(Component):
+class _BranchLeaf(Component[sl.ComponentsV2Target]):
     alternate: bool = state(default=False)
 
     def __init__(self) -> None:
         self.renders = 0
 
     @override
-    def render(self):
+    def render(self) -> Panel | Text:
         self.renders += 1
         if self.alternate:
             return Panel(children=(Text("alternate"),))
         return Text("primary")
 
 
-class _TextLeaf(Component):
+class _TextLeaf(Component[sl.ComponentsV2Target]):
     long: bool = state(default=False)
 
     def __init__(self) -> None:
@@ -262,7 +264,7 @@ class _TextLeaf(Component):
         return Text("x" * (4_500 if self.long else 2_000))
 
 
-class _MountedChild(Component):
+class _MountedChild(Component[sl.ComponentsV2Target]):
     def __init__(self) -> None:
         self.mounts = 0
         self.unmounts = 0
@@ -280,7 +282,7 @@ class _MountedChild(Component):
         self.unmounts += 1
 
 
-class _MountingLeaf(Component):
+class _MountingLeaf(Component[sl.ComponentsV2Target]):
     mounted: bool = state(default=False)
 
     def __init__(self) -> None:
@@ -293,7 +295,7 @@ class _MountingLeaf(Component):
         return self.boundary(self.child, key="child") if self.mounted else Text("unmounted")
 
 
-class _ResourceLeaf(Component):
+class _ResourceLeaf(Component[sl.ComponentsV2Target]):
     key: int = state(0)
 
     def __init__(self) -> None:
@@ -313,7 +315,7 @@ class _ResourceLeaf(Component):
         return Text(status.value)
 
 
-def _root_with_special(components: int, special: Component) -> _Root:
+def _root_with_special(components: int, special: Component[sl.ComponentsV2Target]) -> _Root:
     root = _Root(components)
     root.leaves = (special, *root.leaves[1:])
     return root
@@ -471,7 +473,7 @@ async def measure_resource_pipeline(
                 if span.name == "planner":
                     attributes = {attribute.key: attribute.value for attribute in span.attributes}
                     planner_reuse.add(str(attributes["reuse"]))
-                    planner_states_explored.add(int(attributes["states_explored"]))
+                    planner_states_explored.add(int(cast(int, attributes["states_explored"])))
                 if span.name not in {
                     "runtime_render",
                     "resource_settle.atomic",
