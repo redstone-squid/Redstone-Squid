@@ -10,7 +10,8 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.limits import CLASSIC_LIMITS
 from squid_ui.semantic import ActionControls, Link, Note, Paragraph
 from squid_ui_discord import DISCORD_V1_DPY27, classic
-from squid_ui_discord.classic_renderer import ClassicRenderer, audit_classic_payload
+from squid_ui_discord.classic_renderer import ClassicRenderer
+from squid_ui_discord.inspection import audit_classic_payload
 
 
 def _document(body: scene.ClassicMessage) -> scene.Scene[scene.ClassicMessage]:

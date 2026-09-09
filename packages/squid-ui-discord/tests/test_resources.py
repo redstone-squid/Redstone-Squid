@@ -8,7 +8,7 @@ from squid_ui.planning.layout_measurement.costing import measure_nodes
 from squid_ui.planning.layout_measurement.model import MeasuredText
 from squid_ui.planning.layout_measurement.text import BudgetRegion, make_unit, text_total
 from squid_ui.planning.limits import Axis
-from squid_ui.planning.target import ResourceCost
+from squid_ui.planning.resources import ResourceCost
 from squid_ui.primitives import Never, Panel, Text, Variants
 from squid_ui_discord import DISCORD_V2_DPY27
 from squid_ui_discord import V2_LIMITS as LIMITS
