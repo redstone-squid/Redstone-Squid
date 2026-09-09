@@ -7,13 +7,12 @@ import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui.entity import EntityKind, EntityRef
+from squid_ui.entity import EntityKind, EntityRef, EntityType
 from squid_ui.forms import FormText
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.modal import (
     CheckboxGroupField,
     EntityField,
-    EntityType,
     FileField,
     _entity_defaults,
     build_form_modal,

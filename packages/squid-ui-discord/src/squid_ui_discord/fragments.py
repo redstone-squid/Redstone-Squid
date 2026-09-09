@@ -24,14 +24,15 @@ from squid_ui.errors import ExistingLayoutError, LayoutError
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.limits import LIMITS, Axis, V2Limits
 from squid_ui.planning.planner import EMPTY_RESERVATION
-from squid_ui.planning.target import ResourceCost
+from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.target import Target
 from squid_ui.scene.model import PlanReport, PlanResult
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.attachments import files_for
 from squid_ui_discord.inspection import MessageReservation, audit, cost, measure
 from squid_ui_discord.rendering import render_message
-from squid_ui_discord.target import DISCORD_V2_DPY27, Target
+from squid_ui_discord.target import DISCORD_V2_DPY27
 
 
 class StaleReservationError(LayoutError):
