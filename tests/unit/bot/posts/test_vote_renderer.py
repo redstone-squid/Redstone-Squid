@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any, cast
+from typing import Any, cast, override
 
 from squid.accounts.application import AccountService
 from squid.accounts.domain import Account
@@ -34,6 +34,7 @@ class VoteRecorder(VoteService):
     def __init__(self, snapshot: VoteSessionSnapshot) -> None:
         self.snapshot = snapshot
 
+    @override
     async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         assert vote_session_id == self.snapshot.id
         return self.snapshot
@@ -43,6 +44,7 @@ class SettingsRecorder(SettingsService):
     def __init__(self, vote_channels: dict[int, int]) -> None:
         self.vote_channels = vote_channels
 
+    @override
     async def get_many(self, server_ids: Iterable[int], setting: Setting) -> Mapping[int, int | None]:
         assert setting == "Vote"
         return {guild_id: channel_id for channel_id, guild_id in self.vote_channels.items() if guild_id in server_ids}
@@ -52,6 +54,7 @@ class PostRecorder(PostService):
     def __init__(self, snapshot: VoteSessionSnapshot) -> None:
         self.snapshot = snapshot
 
+    @override
     async def list_for_resource(self, resource_kind: ResourceKind, resource_key: str) -> Sequence[DiscordPost]:
         assert (resource_kind, resource_key) == ("vote_session", str(self.snapshot.id))
         return [
@@ -71,6 +74,7 @@ class AccountRecorder(AccountService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_accounts(self, account_ids: Sequence[int]) -> dict[int, Account]:
         return {}
 

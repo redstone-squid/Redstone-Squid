@@ -1,7 +1,7 @@
 """`/build submit` as one request: the private defer is completed by the workspace."""
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 
 from whenever import Instant
 
@@ -25,6 +25,7 @@ class AccountRecorder(AccountService):
             consent=AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 29)),
         )
 
+    @override
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         return self.account
 
@@ -33,6 +34,7 @@ class SettingsRecorder(SettingsService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
 

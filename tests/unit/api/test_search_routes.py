@@ -1,7 +1,7 @@
 """Cross-resource search and suggestion route tests."""
 
 from collections.abc import Sequence
-from typing import NamedTuple
+from typing import NamedTuple, override
 
 import pytest
 
@@ -36,10 +36,12 @@ class SearchRecorder(SearchService):
         self.requests: list[SearchRequest] = []
         self.suggestions: list[tuple[str, int]] = []
 
+    @override
     async def search(self, request: SearchRequest) -> SearchPage:
         self.requests.append(request)
         return self.page
 
+    @override
     async def suggest(self, query: str | SearchQuery, *, limit: int = 5) -> tuple[str, ...]:
         self.suggestions.append((str(query), limit))
         return ("piston",)
@@ -50,6 +52,7 @@ class BuildQueryFake(BuildQueryService):
         self.builds = builds
         self.requested: list[tuple[int, ...]] = []
 
+    @override
     async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
         self.requested.append(tuple(build_ids))
         return self.builds

@@ -3,6 +3,7 @@
 import uuid
 from collections.abc import Sequence
 from dataclasses import replace
+from typing import override
 
 import anyio
 import pytest
@@ -85,6 +86,7 @@ class NoApprovedTags:
 class PublicSummaryOnlyBuildRepository(BuildRepository):
     """Fail if the public read model falls back to aggregate hydration."""
 
+    @override
     async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
         del build_ids
         raise AssertionError("public summaries must not hydrate private build aggregates")

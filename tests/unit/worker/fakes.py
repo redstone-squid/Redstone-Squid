@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any, cast, override
 
 from squid.builds.application import BuildService
 from squid.diagnostics.application import ErrorReportService
@@ -54,6 +54,7 @@ class MediaCleanupRecorder(MediaStorageCleanup):
     def __init__(self) -> None:
         self.processed = 0
 
+    @override
     async def process_batch(self, *, limit: int = 100) -> None:
         self.processed += 1
 
@@ -106,9 +107,11 @@ class SupervisorRecorder(BackgroundTaskSupervisor):
     captured_errors: ErrorReportService | None = None
     healthy: bool = True
 
+    @override
     def capture_failures_into(self, service: ErrorReportService | None) -> None:
         self.captured_errors = service
 
+    @override
     def start_periodic(
         self,
         operation: Callable[[], Awaitable[None]],
@@ -120,6 +123,7 @@ class SupervisorRecorder(BackgroundTaskSupervisor):
         self.jobs.append(ScheduledJob(operation, name, interval, run_immediately))
         return cast(JobHandle, object())
 
+    @override
     def is_healthy(self, required: Collection[str], *, max_age_seconds: float) -> bool:
         self.readiness_queries.append(frozenset(required))
         self.readiness_max_ages.append(max_age_seconds)

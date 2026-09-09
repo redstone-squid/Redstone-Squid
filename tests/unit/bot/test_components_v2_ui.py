@@ -1,7 +1,7 @@
 """Structural tests for the bot's semantic Components V2 workflows."""
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, override
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -35,6 +35,7 @@ class VersionRecorder(VersionService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def newest(self, edition: Edition) -> str:
         assert edition == "Java"
         return "Java 1.20"
@@ -44,6 +45,7 @@ class SearchRecorder(SearchService):
     def __init__(self) -> None:
         self.calls: list[SearchRequest] = []
 
+    @override
     async def search(self, request: SearchRequest) -> SearchPage:
         self.calls.append(request)
         raise AssertionError("the seeded first page must not be fetched again")
@@ -60,6 +62,7 @@ class EditRecorder(BuildService):
         self.conflict = conflict
         self.expected_revision: int | None = None
 
+    @override
     def edit(
         self,
         build_id: int,

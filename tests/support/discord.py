@@ -3,7 +3,7 @@
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
 
@@ -123,10 +123,12 @@ class _AutocompletePermissions(PermissionService):
     def __init__(self, allowed_nodes: frozenset[str]) -> None:
         self.allowed_nodes = allowed_nodes
 
+    @override
     async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
         del subject
         return str(getattr(node, "name", node)) in self.allowed_nodes
 
+    @override
     async def decisions(
         self,
         subject: Subject,
@@ -328,6 +330,7 @@ class FakeClient:
     def __init__(self, **attributes: Any) -> None:
         self.__dict__.update(attributes)
 
+    @override
     def __repr__(self) -> str:
         return f"FakeClient({', '.join(sorted(self.__dict__))})"
 
