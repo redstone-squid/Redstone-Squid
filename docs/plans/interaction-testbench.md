@@ -84,8 +84,8 @@ Initial probes, chosen because each reaches a path nothing offline can:
 | `consent` | `open_consent_prompt(interaction)` — the full ephemeral consent flow |
 | `editor` | `open_build_editor` for a fixed build id, the same way the routed card does |
 | `echo` | replies with `values`; exists so the select route has something to show |
-| `poll` | click one leases the bench as a real poll card; click two runs `close_poll` on it |
-| `reset` | static lease of the index again, after another probe has taken the message |
+| `poll` | click one leases a real poll card; click two runs `close_poll` on it |
+| `finish` | leases a live component with a Close button; pressing it finishes the mount and the seed must come back |
 
 ### The `/tests` command
 
@@ -112,29 +112,42 @@ public-ness safe.
 
 ### The lease
 
-A probe may take over the bench message itself. The bench passes each probe a `Bench`
-handle:
+A probe may hold a message of its own that carries its seed. The bench passes each probe a
+`Bench` handle:
 
 ```python
 bench.seed(name)            # the RoutedButton node for r:bench:{name}; the probe places it
-await bench.lease(content)  # app_ui.edit(interaction.message, content + seed row)
+await bench.lease(content)  # the probe's message becomes `content` + the seed row
 ```
 
 `lease` accepts what `app_ui.edit` accepts — a document or a live component — and appends
 one action row holding the seed button (two component slots, marked `overflow=Never` so
-planning cuts the probe's content before the row). For a live component it wraps it in a
-`BenchFrame` whose render is `(self.boundary(child), seed_row)`, so the row survives every
-re-render of the mount. The seed routes to the probe that leased, so after the first click
-`interaction.message` *is* the probe's card, and subsequent clicks reach the probe with
-that fact true. This is how a handler that reads `interaction.message` expecting its own
-card gets one: the probe renders the card into the bench on click one, and calls the handler
-on click two.
+planning cuts the probe's content before the row). Where it goes depends on where the click
+came from: from the index, `lease` **posts** a new message, which is now the probe's; from a
+leased message, it **edits** that message in place. The index is never leased, so it stays a
+permanent launcher and every probe can hold a lease at once. For a live component `lease`
+wraps it in a `BenchFrame` whose render is `(self.boundary(child), seed_row)`, so the row
+is redrawn by the mount rather than fighting it.
+
+The seed routes to the probe that leased, so from the second click on `interaction.message`
+*is* the probe's card. This is how a handler that reads `interaction.message` expecting its
+own card gets one: the probe renders the card on click one and calls the handler on click
+two.
 
 Stability: the seed is a routed control, so its identity is the custom id and nothing about
-the mount's state, generation or lifetime. The one way to lose it is a mount that finishes
-and strips its controls, or a probe that leases without the row. Running `/tests` again
-posts a fresh bench; a `reset` probe restores the index in place through a static lease.
-Only one probe holds the lease at a time — it is the message.
+the mount's state, generation or lifetime. The one thing that touches it is a mount
+finishing: the terminal edit disables every control on the message, seed included. `lease`
+intercepts that through `Presented.root.on_finish`, which fires from every terminal path
+(`finish`, `finish_via`, `dismiss`, timeout, a failed disable-edit) after teardown. The hook
+rebuilds the view with `LayoutView.from_message`, re-enables the one item carrying the seed's
+custom id, and edits with the bot's own authority — the finished card stays exactly as the
+mount left it, only the seed is live again. A hook registered on an already-finished root
+never fires, so `lease` checks `root.finished` after registering and revives at once if so.
+
+Not done instead: teaching `_disable_all` to skip routed controls, or a per-node
+survives-finish flag. A poll card's routed Close button *should* die with the poll, so the
+engine default is right and a flag would be library API for one consumer. It remains the
+fallback if the hook proves fragile.
 
 ## What it does not do
 
@@ -153,7 +166,9 @@ Only one probe holds the lease at a time — it is the message.
   unanswered probe gets the summary reply and an answered one does not; an unknown name is
   reported, not raised; a static lease's payload ends with the seed row and a live lease's
   `BenchFrame` renders it after the child; a document that overfills the message loses its
-  own content and keeps the row.
+  own content and keeps the row; a lease from the index posts and a lease from a leased
+  message edits; finishing a leased mount leaves the seed enabled and everything else
+  disabled, including when the root finished before the hook was registered.
 - `test_extension_loading.py`: the module joins `LOADABLE` automatically. The
   `test_production_chat_input_taxonomy` filter that excludes `squid.bot.layout_showcase`
   by module becomes "exclude every module in `DEVELOPMENT_EXTENSIONS`", so the next dev
