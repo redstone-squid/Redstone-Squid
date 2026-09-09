@@ -1,6 +1,6 @@
 """Pyrefly fixture pinning owner, request, and outcome inference."""
 
-from typing import Any, Self, assert_type
+from typing import Any, Self, assert_type, override
 
 import discord
 from discord import app_commands
@@ -11,6 +11,7 @@ import squid_ui_discord as sd
 
 
 class Panel(sd.Screen[object]):
+    @override
     def render(self) -> sl.LayoutNode:
         return sl.paragraph("Panel")
 

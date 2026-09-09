@@ -6,7 +6,7 @@ coherence at construction and about which mode transitions reach Discord at all.
 """
 
 import io
-from typing import Any
+from typing import Any, override
 from unittest.mock import AsyncMock
 
 import discord
@@ -32,6 +32,7 @@ V2 = MessageMode.COMPONENTS_V2
 class Panel(sl.Component[sl.ComponentsV2Target]):
     count: int = sl.state(0)
 
+    @override
     def render(self):
         return Text(f"count {self.count}")
 
@@ -57,6 +58,7 @@ class _FlaggedView(discord.ui.View):
     derives, and the resulting 400 names nothing.
     """
 
+    @override
     def has_components_v2(self) -> bool:
         return True
 

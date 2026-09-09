@@ -4,7 +4,7 @@ import gc
 import uuid
 import weakref
 from datetime import UTC, datetime
-from typing import cast
+from typing import cast, override
 
 import anyio
 import pytest
@@ -59,6 +59,7 @@ class Panel(Component[DiscordTarget]):
     def __init__(self, workspace: Workspace) -> None:
         self.workspace = workspace
 
+    @override
     def render(self):
         return Text(str(self.page))
 
@@ -76,6 +77,7 @@ class UnassignedPanel(Component[DiscordTarget]):
     history: History = history()
     value: int = state(0)
 
+    @override
     def render(self):
         return Text("unassigned")
 

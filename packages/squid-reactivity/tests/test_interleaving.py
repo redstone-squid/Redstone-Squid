@@ -1,6 +1,7 @@
 """Adversarial transaction schedules at named deterministic checkpoints."""
 
 import asyncio
+from typing import override
 
 import pytest
 
@@ -166,19 +167,24 @@ def test_change_description_failure_aborts_with_the_prepared_value() -> None:
     add_action_result_sink(ledger)
 
     class Participant(TransactionParticipant[object]):
+        @override
         def prepare(self, view) -> object:
             return prepared_value
 
+        @override
         def describe_change(self, prepared: object) -> None:
             assert prepared is prepared_value
             raise RuntimeError("cannot describe change")
 
+        @override
         def apply(self, prepared: object) -> None:
             raise AssertionError("unreachable")
 
+        @override
         def abort(self, prepared: object | None, cause: BaseException) -> None:
             aborted.append(prepared)
 
+        @override
         def finalize(self, prepared: object) -> None:
             raise AssertionError("unreachable")
 

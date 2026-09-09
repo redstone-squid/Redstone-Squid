@@ -1,6 +1,6 @@
 """Audience-aware static and live facade presentation."""
 
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -19,6 +19,7 @@ class Owner:
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return sl.heading("Panel")
 
@@ -85,6 +86,7 @@ def test_response_policy_overlays_in_documented_order() -> None:
     class Timed(sd.Screen[Any]):
         timeout = 30
 
+        @override
         def render(self):
             return sl.heading("Timed")
 

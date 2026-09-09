@@ -1,7 +1,7 @@
 """Installing the Discord runtime on a client, and finding it again from a click."""
 
 import asyncio
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
 import discord
@@ -18,6 +18,7 @@ from squid_ui_discord.testing import ContextHarness, delivered_to, interaction_h
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return [Heading("Panel")]
 

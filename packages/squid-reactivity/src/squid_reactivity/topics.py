@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, override, runtime_checkable
 from weakref import WeakValueDictionary
 
 from squid_reactivity.core import _Cell
@@ -19,6 +19,7 @@ class Topic:
     kind: str
     key: str
 
+    @override
     def __str__(self) -> str:
         return f"{self.kind}:{self.key}"
 
@@ -30,14 +31,17 @@ class CellAddress:
     owner: object
     name: str
 
+    @override
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, CellAddress):
             return NotImplemented
         return other.owner is self.owner and other.name == self.name
 
+    @override
     def __hash__(self) -> int:
         return hash((id(self.owner), self.name))
 
+    @override
     def __str__(self) -> str:
         """``Preferences(Member(1, 2)).theme``: what a person needs to find the field.
 

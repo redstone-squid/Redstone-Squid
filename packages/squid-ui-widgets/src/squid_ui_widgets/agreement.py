@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, override
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
@@ -68,6 +68,7 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTarg
         self.allow_withdraw = allow_withdraw
         self.on_resolve = on_resolve
 
+    @override
     def render(self) -> DocumentLike[RenderTargetT]:
         """Render participant status and the available actor controls."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)

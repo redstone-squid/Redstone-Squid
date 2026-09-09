@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, TypedDict
+from typing import Any, TypedDict, override
 
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
@@ -25,6 +25,7 @@ class Identity:
     def __init__(self, value: object) -> None:
         self.value = value
 
+    @override
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Identity) and self.value is other.value
 

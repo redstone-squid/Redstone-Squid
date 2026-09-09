@@ -2,7 +2,7 @@
 
 import json
 import re
-from typing import Any
+from typing import Any, override
 
 import pytest
 
@@ -25,6 +25,7 @@ from squid_ui_discord.testing import commit_classic_render, commit_render
 class Screen(sl.Component[sl.RenderTarget]):
     count: int = sl.state(0)
 
+    @override
     def render(self):
         return sl.paragraph(f"count {self.count}")
 

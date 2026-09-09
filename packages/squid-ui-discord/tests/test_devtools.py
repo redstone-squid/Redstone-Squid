@@ -2,7 +2,7 @@
 
 import json
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
 import discord
@@ -21,6 +21,7 @@ from squid_ui_discord.testing import ContextHarness, commit_render, delivered_to
 
 
 class Subject(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return [Heading("Subject")]
 
@@ -28,6 +29,7 @@ class Subject(sl.Component[sl.ComponentsV2Target]):
 class Clicker(sl.Component[sl.ComponentsV2Target]):
     count: int = sl.state(0)
 
+    @override
     def render(self):
         return [Heading("Clicker"), Row((Button(label="Bump", on_click=self.bump, key="bump"),))]
 

@@ -11,7 +11,7 @@ Every `pyrefly: ignore` below is an assertion that the line *is* an error. If on
 the guarantee it protects has changed.
 """
 
-from typing import assert_type
+from typing import assert_type, override
 
 import discord
 
@@ -28,11 +28,13 @@ from squid_ui_discord.target import classic, v2
 
 
 class ClassicPanel(sl.Component[ClassicTarget]):
+    @override
     def render(self) -> DocumentLike[ClassicTarget]:
         return sl.stack(sl.heading("title"))
 
 
 class V2Panel(sl.Component[ComponentsV2Target]):
+    @override
     def render(self) -> DocumentLike[ComponentsV2Target]:
         return sl.stack(sl.heading("title"))
 

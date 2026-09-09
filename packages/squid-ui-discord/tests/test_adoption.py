@@ -4,7 +4,7 @@ Adversarial by design. The proxy is the part that rots, so most of this file is 
 legacy callback makes that would put a second writer on the mount's message.
 """
 
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
 import discord
@@ -262,6 +262,7 @@ async def test_an_overridden_on_timeout_refuses_unless_discarded() -> None:
     cleaned: list[str] = []
 
     class Closing(Paginator):
+        @override
         async def on_timeout(self) -> None:
             cleaned.append("released")
 
@@ -338,6 +339,7 @@ async def test_a_premium_button_and_a_dynamic_item_refuse() -> None:
             super().__init__(discord.ui.Button(label="dyn", custom_id="dyn:1"))
 
         @classmethod
+        @override
         async def from_custom_id(cls, interaction, item, match):
             return cls()
 
@@ -592,6 +594,7 @@ async def test_an_overridden_interaction_check_can_refuse_the_press() -> None:
     ran: list[str] = []
 
     class Guarded(discord.ui.View):
+        @override
         async def interaction_check(self, interaction: discord.Interaction) -> bool:
             return False
 
@@ -608,6 +611,7 @@ async def test_an_overridden_interaction_check_can_refuse_the_press() -> None:
 
 async def test_a_refusing_interaction_check_still_reports_mutation_and_finishes() -> None:
     class Guarded(discord.ui.View):
+        @override
         async def interaction_check(self, interaction: discord.Interaction) -> bool:
             self.go.disabled = True
             self.stop()
@@ -633,9 +637,11 @@ async def test_an_interaction_check_error_uses_the_legacy_error_hook() -> None:
     caught: list[BaseException] = []
 
     class Failing(discord.ui.View):
+        @override
         async def interaction_check(self, interaction: discord.Interaction) -> bool:
             raise RuntimeError("check failed")
 
+        @override
         async def on_error(self, interaction, error, item) -> None:
             caught.append(error)
 
@@ -653,6 +659,7 @@ async def test_an_interaction_check_error_uses_the_legacy_error_hook() -> None:
 
 async def test_without_a_legacy_error_hook_an_interaction_check_error_reaches_the_root() -> None:
     class Failing(discord.ui.View):
+        @override
         async def interaction_check(self, interaction: discord.Interaction) -> bool:
             raise RuntimeError("check failed")
 
@@ -671,6 +678,7 @@ async def test_an_overridden_on_error_intercepts_before_the_message_root_sees_it
     caught: list[BaseException] = []
 
     class Failing(discord.ui.View):
+        @override
         async def on_error(self, interaction, error, item) -> None:
             caught.append(error)
 
@@ -713,6 +721,7 @@ async def test_a_modal_submit_refreshes_the_message_root_and_issues_no_edit_of_i
             super().__init__()
             self.owner = view
 
+        @override
         async def on_submit(self, interaction: discord.Interaction) -> None:
             self.owner.name = "renamed"
             await interaction.response.edit_message(view=self.owner)
@@ -776,6 +785,7 @@ async def test_an_adopted_view_embeds_in_a_larger_squid_screen() -> None:
         def __init__(self, child: sl.Component) -> None:
             self.child = child
 
+        @override
         def render(self):
             return [sl.semantic.Paragraph("Legacy controls below"), self.boundary(self.child, key="legacy")]
 

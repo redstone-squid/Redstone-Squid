@@ -13,7 +13,7 @@ import weakref
 from collections.abc import Awaitable, Callable, Coroutine, Sequence
 from dataclasses import dataclass, replace
 from functools import wraps
-from typing import Any, Concatenate, Protocol, Unpack, cast, get_origin, overload
+from typing import Any, Concatenate, Protocol, Unpack, cast, get_origin, overload, override
 
 import discord
 from discord import app_commands
@@ -402,6 +402,7 @@ class Group(app_commands.Group):
             pending=cls.pending if pending is None else pending,
         )
 
+    @override
     def command(  # pyrefly: ignore[bad-override]  # squid callbacks, not discord.py's; same native kwargs
         self,
         *,
@@ -428,6 +429,7 @@ class HybridGroup(commands.HybridGroup[Any, ..., Any]):
         super().__init__(func, **attrs)
         self.policy = policy
 
+    @override
     def command(  # pyrefly: ignore[bad-override]  # squid callbacks, not discord.py's; same native kwargs
         self,
         *,

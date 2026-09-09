@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum, StrEnum
+from typing import override
 
 from squid_ui.errors import LayoutError
 
@@ -66,6 +67,7 @@ class SolveNote:
     message: str
     severity: SolveNoteSeverity = SolveNoteSeverity.DEGRADATION
 
+    @override
     def __str__(self) -> str:
         return self.message
 

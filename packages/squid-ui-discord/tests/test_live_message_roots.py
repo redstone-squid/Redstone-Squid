@@ -1,6 +1,7 @@
 """The weak registry behind `squid_ui_discord.message_roots()`: who is live, and for how long."""
 
 import gc
+from typing import override
 
 import squid_ui as sl
 from squid_ui import Component, PressEvent, state
@@ -13,6 +14,7 @@ from squid_ui_discord.testing import commit_render, delivered_to, interaction_ha
 class Panel(Component[sl.ComponentsV2Target]):
     count: int = state(0)
 
+    @override
     def render(self):
         return [
             Heading("Panel"),

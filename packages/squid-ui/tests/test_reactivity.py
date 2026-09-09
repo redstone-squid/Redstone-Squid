@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 import pytest
 
@@ -36,6 +36,7 @@ class Panel(Component[DiscordTarget]):
     def __init__(self, service: Service) -> None:
         self.service = service
 
+    @override
     def render(self):
         return Text(str(self.rows))
 
@@ -81,6 +82,7 @@ class TestMutated:
             def __init__(self, service: Service) -> None:
                 self.first = self.second = service
 
+            @override
             def render(self):
                 return Text("")
 
@@ -108,6 +110,7 @@ class TestOpaqueFields:
         """`==` on a collaborator is the author's code, not a cheap settled-value check."""
 
         class Loud(Service):
+            @override
             def __eq__(self, other: object) -> bool:
                 message = "a collaborator was compared"
                 raise AssertionError(message)

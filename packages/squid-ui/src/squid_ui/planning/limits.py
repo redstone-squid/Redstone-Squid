@@ -24,7 +24,7 @@ knows. A shared planning layer takes a `MessageLimits` and may touch only what i
 from abc import ABC, abstractmethod
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, fields, is_dataclass, replace
-from typing import Self
+from typing import Self, override
 
 from squid_ui.planning.resources import TEXT_AXES as TEXT_AXES
 from squid_ui.planning.resources import Axis as Axis
@@ -197,6 +197,7 @@ class V2Limits(MessageLimits):
     gallery_item_description: int = 1024
 
     @property
+    @override
     def capacities(self) -> Mapping[Axis, int]:
         return {
             Axis.DISPLAY_TEXT: self.total_text,
@@ -204,6 +205,7 @@ class V2Limits(MessageLimits):
             Axis.ATTACHMENTS: self.attachments,
         }
 
+    @override
     def with_capacities(self, reductions: Mapping[Axis, int]) -> Self:
         return replace(
             self,
@@ -213,16 +215,19 @@ class V2Limits(MessageLimits):
         )
 
     @property
+    @override
     def text_axes(self) -> Mapping[Axis, int]:
         # Exactly one pool, which is why this looks like ceremony here and stops looking
         # like it the moment a target has two.
         return {Axis.DISPLAY_TEXT: self.total_text}
 
+    @override
     def fits_controls(self, controls: int, rows: int) -> bool:
         # An ActionRow and each of its buttons are all components against one total.
         return controls + rows <= self.total_components
 
     @property
+    @override
     def component_budget(self) -> int:
         return self.total_components
 
@@ -257,6 +262,7 @@ class ClassicLimits(MessageLimits):
     """
 
     @property
+    @override
     def capacities(self) -> Mapping[Axis, int]:
         return {
             Axis.CONTENT_TEXT: self.content,
@@ -267,6 +273,7 @@ class ClassicLimits(MessageLimits):
             Axis.ATTACHMENTS: self.attachments,
         }
 
+    @override
     def with_capacities(self, reductions: Mapping[Axis, int]) -> Self:
         return replace(
             self,
@@ -279,13 +286,16 @@ class ClassicLimits(MessageLimits):
         )
 
     @property
+    @override
     def text_axes(self) -> Mapping[Axis, int]:
         return {Axis.CONTENT_TEXT: self.content, Axis.EMBED_TEXT: self.embed_text}
 
+    @override
     def fits_controls(self, controls: int, rows: int) -> bool:
         return controls <= self.controls and rows <= self.rows
 
     @property
+    @override
     def component_budget(self) -> int:
         return self.controls
 

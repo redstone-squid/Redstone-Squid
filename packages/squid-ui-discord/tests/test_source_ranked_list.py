@@ -7,6 +7,7 @@ failure. All three are mount behaviour, and none of them exists until a message 
 """
 
 from dataclasses import dataclass
+from typing import override
 
 import discord
 import pytest
@@ -76,6 +77,7 @@ class FlakyScoreSource(ScoreSource):
         super().__init__(entries, capabilities=capabilities)
         self.fail_next = False
 
+    @override
     async def fetch(self, position: Position, extent: int) -> Window[tuple[str, int]]:
         if self.fail_next:
             self.fail_next = False
