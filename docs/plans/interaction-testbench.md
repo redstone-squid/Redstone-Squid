@@ -63,12 +63,13 @@ personally that the probe no longer exists.
 
 ```python
 @probe("raise", "Raise inside a routed handler; expect the error card.")
-async def raise_error(interaction: Interaction[RedstoneSquid], values: tuple[str, ...]) -> None:
+async def raise_error(interaction: Interaction[RedstoneSquid], bench: Bench) -> None:
     raise RuntimeError("bench")
 ```
 
-A probe is an `async (interaction, values) -> None`; `values` is empty from a button. The
-decorator records name and one-line purpose. The registry is a module-level dict, so adding
+A probe is an `async (interaction, bench) -> None`. `bench.values` is what the select
+route chose, empty from a button; `bench.seed` and `bench.lease` are below. The decorator
+records name and one-line purpose. The registry is a module-level dict, so adding
 a probe is adding a function — no wiring.
 
 Initial probes, chosen because each reaches a path nothing offline can:
@@ -83,6 +84,8 @@ Initial probes, chosen because each reaches a path nothing offline can:
 | `consent` | `open_consent_prompt(interaction)` — the full ephemeral consent flow |
 | `editor` | `open_build_editor` for a fixed build id, the same way the routed card does |
 | `echo` | replies with `values`; exists so the select route has something to show |
+| `poll` | click one leases the bench as a real poll card; click two runs `close_poll` on it |
+| `reset` | static lease of the index again, after another probe has taken the message |
 
 ### The `/tests` command
 
@@ -107,11 +110,36 @@ The message is public in whichever channel it is posted, on purpose: an ephemera
 dies with the client session, and durability is the point. The owner gate makes the
 public-ness safe.
 
+### The lease
+
+A probe may take over the bench message itself. The bench passes each probe a `Bench`
+handle:
+
+```python
+bench.seed(name)            # the RoutedButton node for r:bench:{name}; the probe places it
+await bench.lease(content)  # app_ui.edit(interaction.message, content + seed row)
+```
+
+`lease` accepts what `app_ui.edit` accepts — a document or a live component — and appends
+one action row holding the seed button (two component slots, marked `overflow=Never` so
+planning cuts the probe's content before the row). For a live component it wraps it in a
+`BenchFrame` whose render is `(self.boundary(child), seed_row)`, so the row survives every
+re-render of the mount. The seed routes to the probe that leased, so after the first click
+`interaction.message` *is* the probe's card, and subsequent clicks reach the probe with
+that fact true. This is how a handler that reads `interaction.message` expecting its own
+card gets one: the probe renders the card into the bench on click one, and calls the handler
+on click two.
+
+Stability: the seed is a routed control, so its identity is the custom id and nothing about
+the mount's state, generation or lifetime. The one way to lose it is a mount that finishes
+and strips its controls, or a probe that leases without the row. Running `/tests` again
+posts a fresh bench; a `reset` probe restores the index in place through a static lease.
+Only one probe holds the lease at a time — it is the message.
+
 ## What it does not do
 
-- Replace fixtures. A handler that reads `interaction.message` expecting its own card gets
-  the bench message instead. The fix is a probe that posts the real card (`editor`,
-  `consent`) — probes are fixture factories.
+- Replace fixtures for free. A probe that needs its own card leases the bench and draws
+  it, or posts a separate real card (`editor`, `consent`); probes are fixture factories.
 - Generate slash-command, context-menu or autocomplete interactions. Those are commands;
   the owner invokes them directly.
 - Produce an interaction from a different user. That needs a second account.
@@ -123,7 +151,9 @@ public-ness safe.
 - `tests/unit/bot/test_testbench.py`, using `interaction_harness` + `router.dispatch`:
   the bench route calls the named probe; a non-owner is refused before the probe runs; an
   unanswered probe gets the summary reply and an answered one does not; an unknown name is
-  reported, not raised.
+  reported, not raised; a static lease's payload ends with the seed row and a live lease's
+  `BenchFrame` renders it after the child; a document that overfills the message loses its
+  own content and keeps the row.
 - `test_extension_loading.py`: the module joins `LOADABLE` automatically. The
   `test_production_chat_input_taxonomy` filter that excludes `squid.bot.layout_showcase`
   by module becomes "exclude every module in `DEVELOPMENT_EXTENSIONS`", so the next dev
