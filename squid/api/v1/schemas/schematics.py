@@ -1,6 +1,6 @@
 """Public schematic metadata representations."""
 
-from typing import Self
+from typing import Self, override
 
 from pydantic import ConfigDict
 
@@ -19,6 +19,7 @@ class SchematicSize(FromDomain[SchematicDimensions]):
     depth: int
 
     @classmethod
+    @override
     def from_domain(cls, dimensions: SchematicDimensions, /) -> Self:
         return cls(width=dimensions.width, height=dimensions.height, depth=dimensions.length)
 
@@ -46,6 +47,7 @@ class SchematicSummary(FromDomain[StoredSchematic]):
     download_url: str
 
     @classmethod
+    @override
     def from_domain(cls, schematic: StoredSchematic, /, *, download_url: str | None = None) -> Self:
         analysis = schematic.analysis
         metrics = analysis.metrics

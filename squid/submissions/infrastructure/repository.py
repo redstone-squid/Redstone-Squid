@@ -349,6 +349,7 @@ class PostgresDraftRepository(DraftRepository):
             await session.delete(model)
         return True
 
+    @override
     async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
         """Expire a fenced batch and cancel every unfinished artifact workflow."""
         if not 1 <= limit <= 1_000:

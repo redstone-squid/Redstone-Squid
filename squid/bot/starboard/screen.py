@@ -1,7 +1,7 @@
 """Canonical starboard configuration workspace."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Protocol, cast
+from typing import Protocol, cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -63,6 +63,7 @@ class StarboardScreen(sd.Screen):
         self._deleting: str | None = None
         self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
@@ -90,6 +91,7 @@ class StarboardScreen(sd.Screen):
             tabs.append(sp.Tab("weights", tr(t"Role weights"), self._weight_nodes()))
         self._tabs = sp.Tabs(tabs, key="starboard-tabs", title=tr(t"Starboard configuration")).build_component()
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._deleting is not None and self._decision is not None:
             board_name = self._deleting

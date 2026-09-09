@@ -3,7 +3,7 @@
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import cast
+from typing import cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -270,6 +270,7 @@ class PollScreen(sd.Screen):
         self.wizard = wizard
         self.driver = wizard.build_component(on_finish=self._finish)
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.published_url is not None:
             published_url = self.published_url

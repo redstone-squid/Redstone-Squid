@@ -1,7 +1,7 @@
 """Discord workspace for querying and maintaining computed records."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast, override
 
 import discord
 from discord import app_commands
@@ -78,6 +78,7 @@ class RecordsScreen(sd.Screen):
         self._titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target] | None = None
         self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         if self._can_inspect:
             await self._refresh_diagnostics()
@@ -131,6 +132,7 @@ class RecordsScreen(sd.Screen):
         tabs.append(sp.Tab("maintenance", tr(t"Lookup and rebuild"), self._maintenance_nodes()))
         self._tabs = sp.Tabs(tabs, key="records-tabs", title=tr(t"Records")).build_component()
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._tabs is None:
             return (sl.status(tr(t"Loading record diagnostics.")),)

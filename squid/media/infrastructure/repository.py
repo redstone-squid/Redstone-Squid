@@ -232,6 +232,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             job.last_error = None
         return True
 
+    @override
     async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, limits: MediaLimits) -> bool:
         """Share one normalization job, preserving per-draft capacity and discard authority."""
         async with self._session_factory.begin() as session:
