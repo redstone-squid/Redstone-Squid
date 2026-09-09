@@ -2,6 +2,7 @@ from uuid import UUID
 
 import anyio
 import pytest
+from anyio.lowlevel import checkpoint
 
 from squid.core.errors import JSONValue
 from squid.submissions.application import (
@@ -150,7 +151,7 @@ async def test_manifest_localization_is_isolated_between_tasks(monkeypatch: pyte
     titles: dict[str, str] = {}
 
     async def build_for(locale: str) -> None:
-        await anyio.lowlevel.checkpoint()
+        await checkpoint()
         titles[locale] = build_submission_manifest(locale).common_sections[0].title
 
     async with anyio.create_task_group() as tasks:

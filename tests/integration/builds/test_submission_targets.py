@@ -682,11 +682,13 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     sponsor = PublicSponsor(installation_id, display_name="Merge-safe server")
     queued_at = Instant.now()
 
+    absorbed_id = absorbed.id
+
     def draft(draft_id: uuid.UUID) -> StoredDraft:
         return StoredDraft(
             snapshot=DraftSnapshot(
                 id=draft_id,
-                owner_account_id=absorbed.id,
+                owner_account_id=absorbed_id,
                 schema_id="build_submission.v1",
                 schema_revision=1,
                 category="other",

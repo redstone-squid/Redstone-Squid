@@ -4,7 +4,7 @@ import re
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import Table
+from sqlalchemy import CheckConstraint, Table
 from sqlalchemy.dialects.postgresql import dialect
 
 from squid.notifications.domain import NotificationKind, SubscriptionKind
@@ -27,7 +27,7 @@ def test_persisted_kind_checks_are_total_over_domain_enums() -> None:
         constraint.name: str(constraint.sqltext)
         for model in (NotificationRecord, NotificationSubscriptionRecord)
         for constraint in cast(Table, model.__table__).constraints
-        if constraint.name is not None and hasattr(constraint, "sqltext")
+        if constraint.name is not None and isinstance(constraint, CheckConstraint)
     }
 
     assert set(re.findall(r"'([^']+)'", constraints["notifications_kind_check"])) == {

@@ -360,6 +360,7 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                     resolved_at=resolved_at,
                 ),
                 Vote(
+                    vote_session=vote_session,
                     vote_session_id=vote_session.id,
                     account_id=survivor.id,
                     guild_id=1,
@@ -368,6 +369,7 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                     weight=1.0,
                 ),
                 Vote(
+                    vote_session=vote_session,
                     vote_session_id=vote_session.id,
                     account_id=absorbed.id,
                     guild_id=1,
