@@ -9,6 +9,7 @@ That version check is the whole reason to prefer a graph: a computed whose input
 changed but whose *value* did not stops propagating, and so do the computeds above
 it. Work is pull-driven, so a computed nobody reads is never recomputed at all.
 """
+from typing import override
 
 from contextvars import ContextVar
 
@@ -73,6 +74,7 @@ class _Derived(_Cell):
         for dependent in self.dependents:
             dependent.mark()
 
+    @override
     def get(self):
         if self.stale:
             self._settle()

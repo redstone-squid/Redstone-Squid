@@ -9,6 +9,7 @@ calls it directly, so the only job left for the graph is deciding whether a comp
 is still valid, and a version comparison answers that at read time. Every reference
 then points from reader to source, which dies with the reader.
 """
+from typing import override
 
 from contextvars import ContextVar
 
@@ -71,6 +72,7 @@ class _Derived(_Cell):
         self.settled = False
         self.epoch = -1
 
+    @override
     def settle(self) -> int:
         """Return this node's current version, recomputing only if a source moved."""
         if self.epoch == _EPOCH[0]:
@@ -90,6 +92,7 @@ class _Derived(_Cell):
         self.set(value)
         return self.version
 
+    @override
     def get(self):
         self.settle()
         return super().get()
