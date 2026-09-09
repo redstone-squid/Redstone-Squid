@@ -67,6 +67,32 @@ The dominant warnings are `reportPrivateUsage` (713) and `reportMissingParameter
 5. **The two warning clusters last**, and only after deciding whether `reportPrivateUsage`
    at 713 is telling us something structural or is mis-tuned for this codebase.
 
+## Bug found while measuring: a bare RoutedButton cannot be planned
+
+`RoutedButton` is public, documented, and rejected by the planner. Reproduced against the
+real Discord V2 target, not a test double:
+
+```python
+plan(as_document([RoutedButton(label="x", route_id="r")]), target=DISCORD_V2_DPY27)
+# LayoutInvariantError: RoutedButton must be normalized before measuring
+```
+
+A `LinkButton` in the same position plans fine.
+
+The cause is a three-file gap. `layout_measurement/realization.py:308` passes through
+`File() | Sep() | Thumbnail() | PremiumButton() | Button() | LinkButton()` and lets
+`RoutedButton` fall to `case _`, so `Realized` (`layout_measurement/model.py:101`) never
+includes it. Meanwhile `control_validation.py:73` accepts a bare `RoutedButton` as valid
+and `discord_dialect.py:120` knows how to convert one — so validation passes and
+measurement then fails with a message blaming a normalization step the caller never
+skipped.
+
+The dead `case` arms naming `RoutedButton` in `planning/classic.py:297` and
+`planning/v2.py:182` are the symptom, and are kept with a suppression pointing here.
+Adding `RoutedButton()` to realization's pass-through arm and to `Realized` is the
+one-file fix; this needs whoever owns `layout_measurement/` to confirm that is the
+intended behaviour rather than the validator being too permissive.
+
 ## Dead files found while measuring
 
 Five files import modules that do not exist, so they raise `ImportError` before running a
