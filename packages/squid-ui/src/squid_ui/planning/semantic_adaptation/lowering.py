@@ -522,7 +522,7 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Nod
             # `Panel` is claimed above because its children may carry semantic nodes to lower,
             # so this arm must stay after it.
             return [_primitive(node, context)]
-        case _ as unreachable:
+        case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
             assert_never(unreachable)
 
 
@@ -660,7 +660,7 @@ def _primitive(node: Node, context: _Context) -> Node:
             # Nothing on these carries author text; stated by name so a new primitive that
             # does carry some cannot slip through unresolved.
             return node
-        case _ as unreachable:
+        case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
             assert_never(unreachable)
 
 
