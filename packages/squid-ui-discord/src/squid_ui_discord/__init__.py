@@ -16,7 +16,7 @@ from squid_ui.planning import limits as limits
 from squid_ui.planning import navigation as navigation_controls
 from squid_ui.planning.limits import LIMITS as V2_LIMITS
 from squid_ui.planning.planner import EMPTY_RESERVATION
-from squid_ui.planning.target import ResourceCost
+from squid_ui.planning.resources import ResourceCost
 from squid_ui_discord import (
     access,
     actions,
@@ -133,6 +133,8 @@ from squid_ui_discord.message_root_contracts import (
     ChallengeRequest,
     ChallengeSupervisor,
     MessageRootConfig,
+    MessageRootSnapshot,
+    MessageRootStatus,
     PauseUpdates,
     RenewEphemeral,
 )
@@ -271,6 +273,8 @@ __all__ = [
     "MessageRootOptions",
     "MessageRootScheduler",
     "MessageRootSchedulerSnapshot",
+    "MessageRootSnapshot",
+    "MessageRootStatus",
     "NativeCommandKwargs",
     "NativeContextMenuKwargs",
     "NativeHybridKwargs",

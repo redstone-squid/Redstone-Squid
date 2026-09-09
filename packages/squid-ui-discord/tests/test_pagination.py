@@ -235,7 +235,7 @@ class TestMountPagination:
         from squid_ui_discord import message_root as message_root_module
 
         calls = 0
-        planner = message_root_module.plan_document
+        planner = message_root_module.plan_document  # pyright: ignore[reportPrivateImportUsage]  # monkeypatch target: the caller resolves it here
 
         def counted(*args, **kwargs):
             nonlocal calls
