@@ -94,7 +94,7 @@ Module-level so a test can load the real set: a command-name collision between t
 surfaces when both register onto the same bot, which no per-cog test does.
 """
 
-DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools", "squid.bot.layout_showcase")
+DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools", "squid.bot.layout_showcase", "squid.bot.testbench")
 """Loaded after `EXTENSIONS` in development mode only.
 
 Owner-gated as well; staying off production is the second lock, since these can dump a live

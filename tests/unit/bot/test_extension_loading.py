@@ -11,6 +11,7 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import discord
+import pytest
 import pytest_asyncio
 from discord.ext import commands
 
@@ -122,9 +123,10 @@ def test_extension_list_has_no_duplicates() -> None:
     assert len(EXTENSIONS) == len(set(EXTENSIONS))
 
 
-def test_layout_showcase_is_development_only() -> None:
-    assert "squid.bot.layout_showcase" not in EXTENSIONS
-    assert "squid.bot.layout_showcase" in DEVELOPMENT_EXTENSIONS
+@pytest.mark.parametrize("extension", ["squid.bot.layout_showcase", "squid.bot.testbench"])
+def test_development_only_extensions(extension: str) -> None:
+    assert extension not in EXTENSIONS
+    assert extension in DEVELOPMENT_EXTENSIONS
 
 
 async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands.Bot) -> None:
@@ -160,7 +162,7 @@ async def test_production_chat_input_taxonomy(loaded_bot: commands.Bot) -> None:
     names = {
         command.name
         for command in loaded_bot.tree.get_commands(type=discord.AppCommandType.chat_input)
-        if command.module != "squid.bot.layout_showcase"
+        if command.module not in DEVELOPMENT_EXTENSIONS
     }
 
     assert names == {
