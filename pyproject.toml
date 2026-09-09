@@ -367,9 +367,20 @@ files.glob = "**/config.py,pyproject.toml"
 pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "standard"
-# `site` is the generated documentation build, not source: it holds copies of the
-# Python under docs/ and was being checked twice.
-exclude = ["**/node_modules", "**/__pycache__", "**/.*", "scripts/migrations", "site"]
+# Match what Pyrefly's `project-includes` already treats as this repo's source.
+# `site` is the generated documentation build and holds copies of the Python under docs/.
+# `alembic` is migration history, immutable by policy and already excluded from Pyrefly.
+# `docs` holds spike scripts attached to plan documents: records of past exploration,
+# written against APIs that have since been renamed, and not run by anything.
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "scripts/migrations",
+    "site",
+    "alembic",
+    "docs",
+]
 
 strictListInference = true
 strictDictionaryInference = true

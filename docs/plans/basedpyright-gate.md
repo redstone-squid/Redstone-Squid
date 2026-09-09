@@ -67,6 +67,27 @@ The dominant warnings are `reportPrivateUsage` (713) and `reportMissingParameter
 5. **The two warning clusters last**, and only after deciding whether `reportPrivateUsage`
    at 713 is telling us something structural or is mis-tuned for this codebase.
 
+## Dead files found while measuring
+
+Five files import modules that do not exist, so they raise `ImportError` before running a
+line. This is rot, not a typing complaint, and it is left for a decision rather than
+quietly excluded or renamed:
+
+| File | Unresolvable import |
+|---|---|
+| `benchmarks/plan68.py` | `squid_reactive` (the package is `squid_reactivity`) |
+| `benchmarks/plan68_backends.py` | `squid_replicated.backends.{loro,pycrdt}` |
+| `benchmarks/plan68_backend_actions.py` | `squid_replicated.backends.{loro,pycrdt}` |
+| `benchmarks/plan68_fake_replication.py` | `squid_replicated.fake` |
+| `scripts/populate_db_with_logs_historical_messages.py` | `squid.bot.submission.media` |
+
+`squid_replicated` is now `squid_replication`, and that rename fixes the two `backends`
+imports, but `squid_replicated.fake` has no successor. The script additionally imports
+three names that no longer exist (`create_application_runtime`, `BUILD_LOG_CHANNEL_IDS`,
+`ApplicationServices`) and passes two parameters (`mirror`, `dry_run`) that no signature
+accepts, so it needs more than a rename. Deleting these or repairing them is a judgement
+call about whether the plan-68 benchmarks and the backfill script are still wanted.
+
 ## Caveats
 
 - The two checkers genuinely disagree in places. `_Projection.settings_customise_sources`
