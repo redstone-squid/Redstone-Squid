@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import MagicMock
 
 import discord
@@ -33,6 +33,7 @@ class StubPermissions(PermissionService):
     def __init__(self, *, allowed: bool) -> None:
         self.allowed = allowed
 
+    @override
     async def decisions(self, subject: Subject, nodes: Iterable[PermissionNode | str]) -> tuple[Decision, ...]:
         return tuple(
             Decision(
@@ -48,6 +49,7 @@ class AccountRecorder(AccountService):
     def __init__(self, account: Account | None) -> None:
         self.account = account
 
+    @override
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         return self.account
 
@@ -56,6 +58,7 @@ class SettingsRecorder(SettingsService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
 
@@ -79,6 +82,7 @@ class ConsentStickyRecorder(BuildLogConsentStickyMessage):
     def __init__(self) -> None:
         self.calls: list[discord.TextChannel] = []
 
+    @override
     async def trigger(self, channel: discord.TextChannel) -> None:
         self.calls.append(channel)
 
@@ -87,6 +91,7 @@ class RecordingSubmitCommands(BuildSubmitCommands[Any]):
     def __init__(self) -> None:
         self.inferred: list[discord.Message] = []
 
+    @override
     async def propose_recalculation(self, request: Any, message: discord.Message, *, owner_account_id: int) -> Any:
         from squid.bot.ui import text_node
 

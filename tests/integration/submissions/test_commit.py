@@ -1,6 +1,7 @@
 """PostgreSQL transaction and claim-fence coverage for submission execution."""
 
 from dataclasses import replace
+from typing import override
 from uuid import UUID
 
 import pytest
@@ -194,6 +195,7 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
     permissions = Permissions()
 
     class RevokingPreparation(PreparedBuilds):
+        @override
         async def prepare(self, submission: NormalizedSubmission) -> Build:
             permissions.allowed = False
             return await super().prepare(submission)

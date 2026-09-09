@@ -1,6 +1,7 @@
 """Revision approval preserves identity and commits its receipt atomically."""
 
 from dataclasses import replace
+from typing import override
 from uuid import uuid4
 
 import pytest
@@ -22,6 +23,7 @@ class EditPolicy(BuildService):
     def __init__(self) -> None:
         self.allowed = True
 
+    @override
     async def authorize_edit(self, actor: BuildEditor, build: Build) -> None:
         if not self.allowed:
             raise AuthorizationError

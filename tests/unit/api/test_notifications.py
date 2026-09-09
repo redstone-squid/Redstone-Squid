@@ -1,5 +1,6 @@
 """Notification REST orchestration contracts."""
 
+from typing import override
 from uuid import UUID
 
 import pytest
@@ -45,10 +46,12 @@ class NotificationRecorder(NotificationService):
         self.inbox_reads: list[tuple[int, PageSelector, int, InboxVisibility]] = []
         self.read_changes: list[tuple[int, int, bool, InboxVisibility]] = []
 
+    @override
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
         self.preference_updates.append((account_id, web_enabled, dm_enabled))
         return self.preferences_result
 
+    @override
     async def subscribe(
         self,
         account_id: int,
@@ -61,6 +64,7 @@ class NotificationRecorder(NotificationService):
         assert self.subscription_result is not None
         return self.subscription_result
 
+    @override
     async def inbox(
         self,
         account_id: int,
@@ -72,11 +76,13 @@ class NotificationRecorder(NotificationService):
         self.inbox_reads.append((account_id, selector, page_size, visibility))
         return self.inbox_result
 
+    @override
     async def mark_read(
         self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
     ) -> None:
         self.read_changes.append((account_id, notification_id, True, visibility))
 
+    @override
     async def mark_unread(
         self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
     ) -> None:
@@ -87,6 +93,7 @@ class PermissionAnswer(PermissionService):
     def __init__(self, allowed: bool) -> None:
         self.allowed = allowed
 
+    @override
     async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
         return self.allowed
 

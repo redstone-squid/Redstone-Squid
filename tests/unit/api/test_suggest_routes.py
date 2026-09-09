@@ -1,7 +1,7 @@
 """Typeahead route tests."""
 
 from dataclasses import dataclass
-from typing import cast
+from typing import cast, override
 
 import pytest
 from fastapi import FastAPI, Request, Response
@@ -63,6 +63,7 @@ class PermissionAnswer(PermissionService):
     def __init__(self, allowed: bool) -> None:
         self.allowed = allowed
 
+    @override
     async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
         del subject
         return self.allowed and str(getattr(node, "name", node)) == VIEW_PENDING

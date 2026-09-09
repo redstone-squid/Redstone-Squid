@@ -1,5 +1,6 @@
 """Public creator route contracts."""
 
+from typing import override
 from uuid import UUID
 
 import pytest
@@ -25,6 +26,7 @@ class AccountReader(AccountService):
     def __init__(self, profile: PublicCreatorProfile | None) -> None:
         self.profile = profile
 
+    @override
     async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
         return self.profile
 

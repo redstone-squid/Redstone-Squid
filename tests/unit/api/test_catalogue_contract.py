@@ -1,7 +1,7 @@
 """Public catalogue API contract extensions."""
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, override
 from uuid import UUID
 
 import pytest
@@ -76,6 +76,7 @@ class PublicRecordFake(PublicRecordQueryService):
         self.builds = tuple(PublicBuildSummary.from_build(build) for build in builds)
         self.requests: list[int] = []
 
+    @override
     async def get(self, standing_id: int) -> PublicRecordDetail | None:
         self.requests.append(standing_id)
         if standing_id != self.record.id:
