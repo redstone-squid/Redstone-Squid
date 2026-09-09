@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from whenever import Instant
 
 from squid.accounts.domain import (
@@ -21,8 +21,10 @@ class CreatorAliasDetail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    claimed: bool
-    creator_id: UUID | None
+    claimed: bool = Field(description="Whether an account has claimed this name.")
+    creator_id: UUID | None = Field(
+        description="Public creator id to fetch a profile with. Null while the alias is unclaimed."
+    )
 
     @classmethod
     def from_domain(cls, alias: CreatorAlias) -> CreatorAliasDetail:
@@ -35,7 +37,7 @@ class CreditedAliasDetail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    build_count: int
+    build_count: int = Field(description="How many builds credit this name.")
 
     @classmethod
     def from_domain(cls, alias: CreditedAlias) -> CreditedAliasDetail:
@@ -52,8 +54,11 @@ class PublicIdentityDetail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     provider: IdentityProvider
-    subject: str
-    display_name: str | None
+    subject: str = Field(
+        description="The provider's own identifier: a Discord user snowflake, a lowercase hyphenated Minecraft UUID "
+        "for `java`, or a decimal XUID for `bedrock`."
+    )
+    display_name: str | None = Field(description="The name the provider reports, null when it is unknown.")
 
     @classmethod
     def from_domain(cls, identity: PublicIdentity) -> PublicIdentityDetail:
@@ -84,10 +89,10 @@ class CreatorProfileDetail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
-    canonical_id: UUID | None
-    """Set when the requested id belonged to an account that was merged into this one."""
-
-    hidden: bool
+    canonical_id: UUID | None = Field(
+        description="Set when the requested id belonged to an account that was merged into this one; null otherwise."
+    )
+    hidden: bool = Field(description="True when the creator hides their profile, leaving every other field empty.")
     aliases: list[CreditedAliasDetail]
     display_name: str | None
     bio: str | None
@@ -95,7 +100,9 @@ class CreatorProfileDetail(BaseModel):
     links: list[ProfileLinkDetail]
     avatar_url: str | None
     joined_at: Instant | None
-    identities: list[PublicIdentityDetail]
+    identities: list[PublicIdentityDetail] = Field(
+        description="Only the identities the creator chose to publish; an account may publish none."
+    )
 
     @classmethod
     def from_domain(cls, profile: PublicCreatorProfile) -> CreatorProfileDetail:

@@ -32,9 +32,33 @@ from squid.submissions.domain import (
     VisibilityRule,
 )
 
-StableIdentifier = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")]
-ClientInstanceIdentifier = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")]
-IdempotencyKey = Annotated[str, Field(min_length=8, max_length=255, pattern=r"^[\x21-\x7e]+$")]
+StableIdentifier = Annotated[
+    str,
+    Field(
+        pattern=r"^[a-z][a-z0-9_]{0,63}$",
+        description="Lowercase snake_case identifier of at most 64 characters, stable across form revisions.",
+    ),
+]
+ClientInstanceIdentifier = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_.:-]+$",
+        description="Names one running client, so a draft edited from two of them can be attributed. Chosen by the "
+        "client and stable for its lifetime.",
+    ),
+]
+IdempotencyKey = Annotated[
+    str,
+    Field(
+        min_length=8,
+        max_length=255,
+        pattern=r"^[\x21-\x7e]+$",
+        description="Caller-chosen visible-ASCII key. Resending a change under a key already applied returns the "
+        "earlier outcome instead of applying it twice.",
+    ),
+]
 _JSON_VALUE = TypeAdapter(JsonValue)
 
 
@@ -56,10 +80,16 @@ class ChoiceOptionResponse(StrictSchema):
 
 
 class VisibilityRuleResponse(StrictSchema):
-    """A condition controlling whether a field is shown, evaluated by any client."""
+    """A condition controlling whether a field is shown, evaluated by any client.
 
-    field_id: StableIdentifier
-    operator: VisibilityOperator
+    A field whose rule does not match is hidden and not validated, so leaving it unanswered is fine.
+    """
+
+    field_id: StableIdentifier = Field(description="The field whose answer is tested.")
+    operator: VisibilityOperator = Field(
+        description="`equals` and `not_equals` compare the answer to `value`; `in` tests membership and requires "
+        "`value` to be an array."
+    )
     value: JsonValue
 
     @classmethod
@@ -68,15 +98,18 @@ class VisibilityRuleResponse(StrictSchema):
 
 
 class FieldConstraintsResponse(StrictSchema):
-    """Validation bounds interpreted the same way by clients and the server."""
+    """Validation bounds interpreted the same way by clients and the server.
 
-    minimum: int | float | None
-    maximum: int | float | None
-    min_length: int | None
-    max_length: int | None
-    min_items: int | None
-    max_items: int | None
-    must_equal: JsonValue
+    Every bound is null when the field is unconstrained on that axis.
+    """
+
+    minimum: int | float | None = Field(description="Inclusive numeric lower bound.")
+    maximum: int | float | None = Field(description="Inclusive numeric upper bound.")
+    min_length: int | None = Field(description="Shortest accepted string.")
+    max_length: int | None = Field(description="Longest accepted string.")
+    min_items: int | None = Field(description="Fewest accepted list entries.")
+    max_items: int | None = Field(description="Most accepted list entries.")
+    must_equal: JsonValue = Field(description="The one accepted value, when the field admits only one.")
 
     @classmethod
     def from_domain(cls, constraints: FieldConstraints) -> FieldConstraintsResponse:
@@ -92,22 +125,39 @@ class FieldConstraintsResponse(StrictSchema):
 
 
 class FormFieldResponse(StrictSchema):
-    """One field that any supported submission renderer can present."""
+    """One field that any supported submission renderer can present.
 
-    id: StableIdentifier
+    `options` and `option_source` are mutually exclusive: a choice field carries inline options or
+    names a dynamic source, never both.
+    """
+
+    id: StableIdentifier = Field(description="The `field_id` used in draft operations.")
     label: str
-    control: ControlKind
-    value_kind: ValueKind
-    required: bool
+    control: ControlKind = Field(description="How to draw the field; every client draws all of them.")
+    value_kind: ValueKind = Field(
+        description="JSON shape of the answer. `game_ticks` is an integer counted in Minecraft ticks, and "
+        "`string_list` is an array of strings."
+    )
+    required: bool = Field(description="Enforced only at finalization; a draft may be saved without it.")
     help_text: str | None
     constraints: FieldConstraintsResponse
-    options: list[ChoiceOptionResponse]
-    option_source: str | None
-    visible_when: VisibilityRuleResponse | None
-    default: JsonValue
-    repeatable: bool
-    required_capability: str | None
-    origins: list[SubmissionOrigin]
+    options: list[ChoiceOptionResponse] = Field(description="Inline options, empty when `option_source` is set.")
+    option_source: str | None = Field(
+        description="Names a dynamic option set to fetch for this category; null when `options` carries them inline."
+    )
+    visible_when: VisibilityRuleResponse | None = Field(description="Null when the field is always visible.")
+    default: JsonValue = Field(description="Value to prefill, null when the field has none.")
+    repeatable: bool = Field(
+        description="True only on `string_list` fields, whose entries a client may add and remove."
+    )
+    required_capability: str | None = Field(
+        description="A renderer capability the field needs, drawn from `renderer.capability_identifiers` in "
+        "`/v1/capabilities`. A client lacking it cannot draw this field."
+    )
+    origins: list[SubmissionOrigin] = Field(
+        description="Transports the field applies to. A draft created with another origin neither shows nor validates "
+        "it."
+    )
 
     @classmethod
     def from_domain(cls, form_field: FormField) -> FormFieldResponse:
@@ -167,11 +217,16 @@ class FormManifestResponse(StrictSchema):
     """One immutable submission form revision, drawn however the client chooses."""
 
     schema_id: str
-    revision: int
-    minimum_protocol: int
-    maximum_protocol: int
-    common_sections: list[FormSectionResponse]
-    categories: list[CategoryFormResponse]
+    revision: int = Field(
+        description="Rises when the form changes. A draft stays pinned to the revision it was created under."
+    )
+    minimum_protocol: int = Field(
+        description="Lowest submission protocol version that can render this manifest. Compare against "
+        "`protocols.submission` in `/v1/capabilities` and refuse a manifest outside the overlap."
+    )
+    maximum_protocol: int = Field(description="Highest submission protocol version that can render this manifest.")
+    common_sections: list[FormSectionResponse] = Field(description="Sections presented whatever the category.")
+    categories: list[CategoryFormResponse] = Field(description="Every category and the sections specific to it.")
 
     @classmethod
     def from_domain(cls, manifest: FormManifest) -> FormManifestResponse:
@@ -188,9 +243,9 @@ class FormManifestResponse(StrictSchema):
 class FormOptionSetResponse(StrictSchema):
     """One revision of a category-aware dynamic option source."""
 
-    source: StableIdentifier
-    category: StableIdentifier
-    revision: int
+    source: StableIdentifier = Field(description="The `option_source` a form field named.")
+    category: StableIdentifier = Field(description="Build category these options apply to.")
+    revision: int = Field(description="Rises when the option set changes; starts at 1.")
     options: list[ChoiceOptionResponse]
 
     @classmethod
@@ -206,18 +261,27 @@ class FormOptionSetResponse(StrictSchema):
 class DraftCreateRequest(StrictSchema):
     """Request an empty account-owned draft pinned to the current form revision."""
 
-    category: StableIdentifier
-    origin: SubmissionOrigin
-    client_capabilities: set[StableIdentifier] = Field(default_factory=set, max_length=64)
+    category: StableIdentifier = Field(description="A `code` from the manifest's `categories`.")
+    origin: SubmissionOrigin = Field(description="The transport that owns the draft, deciding which fields apply.")
+    client_capabilities: set[StableIdentifier] = Field(
+        default_factory=set,
+        max_length=64,
+        description="Renderer capabilities this client has. Creation is refused with 400 when a required field of "
+        "`category` names one that is missing.",
+    )
 
 
 class FieldOperationRequest(StrictSchema):
     """Set or unset exactly one stable form field."""
 
-    operation_id: UUID
-    field_id: StableIdentifier
-    kind: FieldOperationKind
-    value: JsonValue = None
+    operation_id: UUID = Field(description="Unique within the change; identifies this operation on replay.")
+    field_id: StableIdentifier = Field(description="A field `id` from the manifest.")
+    kind: FieldOperationKind = Field(description="`set` writes `value`; `unset` clears the answer.")
+    value: JsonValue = Field(
+        default=None,
+        description="The new answer, in the field's `value_kind` shape and at most 16 KiB encoded. Must be null when "
+        "`kind` is `unset`.",
+    )
 
     @model_validator(mode="after")
     def validate_operation(self) -> Self:
@@ -240,9 +304,15 @@ class FieldOperationRequest(StrictSchema):
 
 
 class DraftChangeRequest(StrictSchema):
-    """An atomic optimistic draft edit with retry-safe identity."""
+    """An atomic optimistic draft edit with retry-safe identity.
 
-    base_revision: int = Field(ge=0)
+    Every operation applies or none does. Operation ids must be unique within the change, and a change
+    may touch each field at most once.
+    """
+
+    base_revision: int = Field(
+        ge=0, description="The draft `revision` this edit was composed against. A stale value is refused with 409."
+    )
     client_instance_id: ClientInstanceIdentifier
     idempotency_key: IdempotencyKey
     operations: list[FieldOperationRequest] = Field(min_length=1, max_length=100)
@@ -267,16 +337,21 @@ class StoredDraftResponse(StrictSchema):
 
     id: UUID
     schema_id: str
-    schema_revision: int
+    schema_revision: int = Field(description="Form revision this draft is pinned to.")
     category: StableIdentifier
-    revision: int
-    status: DraftStatus
-    answers: dict[str, JsonValue]
+    revision: int = Field(description="Rises by one per applied change; send it as the next change's `base_revision`.")
+    status: DraftStatus = Field(
+        description="`editing` accepts changes; `processing` is being finalized; `needs_attention` has repairable "
+        "issues; `submitted` produced a build; `expired` passed `expires_at`."
+    )
+    answers: dict[str, JsonValue] = Field(description="Current answers by field id. An unanswered field is absent.")
     origin: SubmissionOrigin
     created_at: datetime
     updated_at: datetime
-    expires_at: datetime
-    source_installation_id: UUID | None = None
+    expires_at: datetime = Field(description="When the draft is discarded if it is not finalized first.")
+    source_installation_id: UUID | None = Field(
+        default=None, description="The Paper installation the draft came from. Null for every other origin."
+    )
 
     @classmethod
     def from_domain(cls, draft: StoredDraft) -> StoredDraftResponse:
@@ -306,7 +381,9 @@ class DraftSummaryResponse(StrictSchema):
     revision: int
     status: DraftStatus
     origin: SubmissionOrigin
-    display_name: str | None
+    display_name: str | None = Field(
+        description="The draft's `display_name` answer, for listing it. Null while it is unanswered."
+    )
     created_at: datetime
     updated_at: datetime
     expires_at: datetime
@@ -332,7 +409,9 @@ class DraftSummaryResponse(StrictSchema):
 class DraftListResponse(StrictSchema):
     """Bounded active drafts owned by one authenticated account."""
 
-    drafts: list[DraftSummaryResponse] = Field(max_length=10)
+    drafts: list[DraftSummaryResponse] = Field(
+        max_length=10, description="An account holds at most ten active drafts, so this is the whole collection."
+    )
 
     @classmethod
     def from_domain(cls, drafts: tuple[StoredDraft, ...]) -> DraftListResponse:
@@ -343,24 +422,32 @@ class DraftChangeResponse(StrictSchema):
     """The state produced by a draft change and whether it was a replay."""
 
     draft: StoredDraftResponse
-    replayed: bool
+    replayed: bool = Field(
+        description="True when this `idempotency_key` had already been applied, so `draft` is the earlier outcome and "
+        "nothing changed."
+    )
 
 
 class SubmissionAttentionIssueResponse(StrictSchema):
     """One stable field-level reason that a submitter can act on."""
 
-    field_id: StableIdentifier
-    reason: SubmissionAttentionReason
+    field_id: StableIdentifier = Field(description="The field to repair.")
+    reason: SubmissionAttentionReason = Field(description="What is wrong with it, as a stable code to branch on.")
 
 
 class SubmissionFinalizationResponse(StrictSchema):
     """Owner-visible state of durable draft finalization."""
 
     draft_id: UUID
-    draft_revision: int
-    status: FinalizationJobStatus
-    issues: list[SubmissionAttentionIssueResponse]
-    build_id: int | None
+    draft_revision: int = Field(description="The draft revision this job was started from.")
+    status: FinalizationJobStatus = Field(
+        description="`pending` and `claimed` are still running; `needs_attention` lists repairable `issues`; "
+        "`completed` carries `build_id`; `dead` failed for good."
+    )
+    issues: list[SubmissionAttentionIssueResponse] = Field(
+        description="Non-empty only when `status` is `needs_attention`."
+    )
+    build_id: int | None = Field(description="The build finalization produced. Null until `status` is `completed`.")
 
     @classmethod
     def from_domain(cls, snapshot: FinalizationJobSnapshot) -> SubmissionFinalizationResponse:

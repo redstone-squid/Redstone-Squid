@@ -2,7 +2,7 @@
 
 from typing import Self
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, Field
 
 from squid.api.v1.schemas import FromDomain
 from squid.schematics.application.queries import StoredSchematic
@@ -10,7 +10,7 @@ from squid.schematics.domain import SchematicDimensions
 
 
 class SchematicSize(FromDomain[SchematicDimensions]):
-    """A schematic bounding-box size."""
+    """A schematic bounding-box size, in blocks along each axis."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -24,26 +24,40 @@ class SchematicSize(FromDomain[SchematicDimensions]):
 
 
 class SchematicSummary(FromDomain[StoredSchematic]):
-    """Allowlisted analysis metadata for one stored build schematic."""
+    """Allowlisted analysis metadata for one stored build schematic.
+
+    Only schematics the submitter published for download appear here, so every one carries a license.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     id: int
-    primary: bool
-    format: str
-    byte_size: int
-    dimensions: SchematicSize
-    allocated_dimensions: SchematicSize
-    block_count: int
-    bounding_volume: int
+    primary: bool = Field(description="Whether this is the build's main schematic.")
+    format: str = Field(
+        description="Container format of the stored file: `litematic`, `schem`, `schematic`, `nbt` or `mcstructure`."
+    )
+    byte_size: int = Field(description="Size of the stored file in bytes.")
+    dimensions: SchematicSize = Field(description="Tight bounding box of the placed blocks.")
+    allocated_dimensions: SchematicSize = Field(
+        description="Region the file allocates, which the tight box can be much smaller than."
+    )
+    block_count: int = Field(
+        description="Non-air blocks. Not the Door Rules cumulative volume, which counts air pockets and carries "
+        "hallway, frame and hitbox exceptions."
+    )
+    bounding_volume: int = Field(description="Volume of `dimensions`, air included.")
     entity_count: int
-    palette_size: int
-    source_data_version: int | None
-    analyzer_version: str
+    palette_size: int = Field(description="Distinct block states in the file's palette.")
+    source_data_version: int | None = Field(
+        description="Minecraft data version the file declares, null when its format records none."
+    )
+    analyzer_version: str = Field(
+        description="Which analysis pass produced these metrics. Values from different versions are not comparable."
+    )
     analysis_schema_version: int
-    license: str
-    license_url: str
-    download_url: str
+    license: str = Field(description="Creative Commons license the submitter granted, such as `cc_by_4_0`.")
+    license_url: str = Field(description="Canonical deed URI for `license`.")
+    download_url: str = Field(description="Path on this API serving the file; relative to the API root, not absolute.")
 
     @classmethod
     def from_domain(cls, schematic: StoredSchematic, /) -> Self:

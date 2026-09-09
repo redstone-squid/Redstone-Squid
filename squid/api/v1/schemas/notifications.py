@@ -17,18 +17,20 @@ from squid.notifications import (
 
 
 class NotificationPreferencesDetail(BaseModel):
-    """Independent channel switches, and whether the account may use them yet.
-
-    `consent_pending` is spelled as it is on `UserMe`: it is the same fact about the same one
-    privacy notice, and there is no notification-specific notice to report separately.
-    """
+    """Independent channel switches, and whether the account may use them yet."""
 
     model_config = ConfigDict(extra="forbid")
 
-    consent_pending: bool
-    web_enabled: bool
-    dm_enabled: bool
-    dm_suspended: bool
+    consent_pending: bool = Field(
+        description="True while the account still owes the current privacy notice, which refuses every attempt to "
+        "enable a channel. The same fact reported by `UserMe`; there is no notification-specific notice."
+    )
+    web_enabled: bool = Field(description="Whether new notifications reach the web inbox.")
+    dm_enabled: bool = Field(description="Whether new notifications are sent as Discord direct messages.")
+    dm_suspended: bool = Field(
+        description="True after a direct message failed to deliver, which also turns `dm_enabled` off. Enabling DMs "
+        "again clears it."
+    )
 
     @classmethod
     def from_domain(cls, preferences: NotificationPreferences) -> NotificationPreferencesDetail:
@@ -41,7 +43,10 @@ class NotificationPreferencesDetail(BaseModel):
 
 
 class NotificationPreferenceUpdate(BaseModel):
-    """A complete pair of independently configurable notification channels."""
+    """A complete pair of independently configurable notification channels.
+
+    Both switches are replaced, so an omitted one defaults to false and turns that channel off.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -54,9 +59,15 @@ class TagPredicateInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    tag_id: int = Field(ge=1)
-    operator: Literal["present", "exact"] = "present"
-    value: Annotated[str, Field(max_length=128)] | int | float | bool | None = None
+    tag_id: int = Field(ge=1, description="Id of a tag published by `/v1/tags`.")
+    operator: Literal["present", "exact"] = Field(
+        default="present",
+        description="`present` matches any assignment of the tag; `exact` additionally requires `value` to equal the "
+        "assigned value.",
+    )
+    value: Annotated[str, Field(max_length=128)] | int | float | bool | None = Field(
+        default=None, description="Required when `operator` is `exact`, and rejected when it is `present`."
+    )
 
     @model_validator(mode="after")
     def validate_value(self) -> Self:
@@ -68,7 +79,11 @@ class TagPredicateInput(BaseModel):
 
 
 class RecordFilterInput(BaseModel):
-    """Broad structured predicates for record-gain subscriptions."""
+    """Broad structured predicates for record-gain subscriptions.
+
+    An empty set is a wildcard over that facet, but at least one of the four must be non-empty. A
+    record matches when it satisfies every non-empty facet and every tag predicate.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -76,8 +91,13 @@ class RecordFilterInput(BaseModel):
     record_classes: set[Literal["first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"]] = Field(
         default_factory=set
     )
-    version_scopes: set[Literal["all_time", "current"]] = Field(default_factory=set)
-    tags: list[TagPredicateInput] = Field(default_factory=list, max_length=8)
+    version_scopes: set[Literal["all_time", "current"]] = Field(
+        default_factory=set,
+        description="`all_time` records span every version; `current` records are scoped to the newest one.",
+    )
+    tags: list[TagPredicateInput] = Field(
+        default_factory=list, max_length=8, description="At most one predicate per `tag_id`."
+    )
 
     def to_domain(self) -> RecordSubscriptionFilter:
         return RecordSubscriptionFilter(
@@ -89,12 +109,20 @@ class RecordFilterInput(BaseModel):
 
 
 class NotificationSubscriptionCreate(BaseModel):
-    """A creator, exact-record, or record-filter subscription request."""
+    """A creator, exact-record, or record-filter subscription request.
+
+    `subject_id` and `filter` are mutually exclusive: `creator` and `record` require the former,
+    `record_filter` requires the latter, and sending both or neither is rejected.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     kind: SubscriptionKind
-    subject_id: UUID | None = None
+    subject_id: UUID | None = Field(
+        default=None,
+        description="A creator's `id` for `creator`, or a record's `competition_id` for `record`. The target must "
+        "already exist.",
+    )
     filter: RecordFilterInput | None = None
 
     @model_validator(mode="after")
@@ -117,8 +145,10 @@ class NotificationSubscriptionDetail(BaseModel):
 
     id: int
     kind: SubscriptionKind
-    subject_id: UUID | None
-    filter: dict[str, object] | None
+    subject_id: UUID | None = Field(description="Null exactly when `kind` is `record_filter`.")
+    filter: dict[str, object] | None = Field(
+        description="The stored `RecordFilterInput` with every member sorted. Null unless `kind` is `record_filter`."
+    )
 
     @classmethod
     def from_domain(cls, subscription: NotificationSubscription) -> NotificationSubscriptionDetail:
@@ -136,10 +166,13 @@ class InboxNotificationDetail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: int
-    kind: str
-    payload: dict[str, object]
+    kind: str = Field(
+        description="One of `build_confirmed`, `build_denied`, `creator_build_confirmed`, `record_gained` or "
+        "`staff_build_submitted`, which decides the shape of `payload`."
+    )
+    payload: dict[str, object] = Field(description="Kind-specific fields; treat unknown keys as additive.")
     created_at: datetime
-    read_at: datetime | None
+    read_at: datetime | None = Field(description="Null while the item is unread.")
 
     @classmethod
     def from_domain(cls, notification: InboxNotification) -> InboxNotificationDetail:

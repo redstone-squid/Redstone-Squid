@@ -18,11 +18,44 @@ from squid.minecraft_auth.domain import (
     PublicServerProfile,
 )
 
-InstallationLabel = Annotated[str, Field(min_length=1, max_length=80)]
-DeviceCode = Annotated[str, Field(min_length=32, max_length=256, pattern=r"^[A-Za-z0-9_-]+$")]
-UserCode = Annotated[str, Field(min_length=8, max_length=32, pattern=r"^[A-Za-z2-7a-z-]+$")]
-PkceS256Challenge = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{43}$")]
-PkceVerifier = Annotated[str, Field(min_length=43, max_length=128, pattern=r"^[A-Za-z0-9._~-]+$")]
+InstallationLabel = Annotated[
+    str, Field(min_length=1, max_length=80, description="Free text shown to the account owner.")
+]
+DeviceCode = Annotated[
+    str,
+    Field(
+        min_length=32,
+        max_length=256,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="The `device_code` returned when the challenge was created, echoed verbatim.",
+    ),
+]
+UserCode = Annotated[
+    str,
+    Field(
+        min_length=8,
+        max_length=32,
+        pattern=r"^[A-Za-z2-7a-z-]+$",
+        description="The code displayed to the player, as issued: base32 in dash-separated groups of four.",
+    ),
+]
+PkceS256Challenge = Annotated[
+    str,
+    Field(
+        pattern=r"^[A-Za-z0-9_-]{43}$",
+        description="RFC 7636 S256 commitment: the SHA-256 of the verifier, unpadded URL-safe base64. Only S256 is "
+        "accepted; `plain` is not.",
+    ),
+]
+PkceVerifier = Annotated[
+    str,
+    Field(
+        min_length=43,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9._~-]+$",
+        description="The RFC 7636 verifier whose SHA-256 was sent as `pkce_s256_challenge`.",
+    ),
+]
 
 
 class StrictSchema(BaseModel):
@@ -32,11 +65,14 @@ class StrictSchema(BaseModel):
 
 
 class ServerProfileSchema(StrictSchema):
-    """Explicit public listing and sponsor preferences for a Paper server."""
+    """Explicit public listing and sponsor preferences for a Paper server.
 
-    enabled: bool = False
+    Every text field is trimmed before storage; nothing here is published until `enabled` is true.
+    """
+
+    enabled: bool = Field(default=False, description="Whether this installation appears in the public server list.")
     display_name: str | None = Field(default=None, min_length=1, max_length=80)
-    address: str | None = Field(default=None, min_length=1, max_length=255)
+    address: str | None = Field(default=None, min_length=1, max_length=255, description="Address players connect to.")
     description: str | None = Field(default=None, min_length=1, max_length=500)
     website_url: str | None = Field(
         default=None,
@@ -44,7 +80,11 @@ class ServerProfileSchema(StrictSchema):
         max_length=2048,
         pattern=r"^https?://[^\s]+$",
     )
-    sponsor_opt_in: bool = False
+    sponsor_opt_in: bool = Field(
+        default=False,
+        description="Whether builds submitted through this installation carry it as their sponsor. The attribution "
+        "is captured at finalization and does not change afterwards.",
+    )
 
     @model_validator(mode="after")
     def validate_profile(self) -> Self:
@@ -93,11 +133,14 @@ class InstallationResponse(StrictSchema):
 
     id: UUID
     label: str
-    credential_version: int
+    credential_version: int = Field(
+        description="Rises by one on every rotation, starting at 1. The previous secret stops authenticating, and "
+        "idempotency keys are namespaced by it, so a rotation starts a fresh key space."
+    )
     profile: ServerProfileSchema
     created_at: datetime
-    rotated_at: datetime | None
-    revoked_at: datetime | None
+    rotated_at: datetime | None = Field(description="Null until the credential is first rotated.")
+    revoked_at: datetime | None = Field(description="Null while the installation may still authenticate.")
 
     @classmethod
     def from_domain(cls, installation: PaperInstallation) -> InstallationResponse:
@@ -122,7 +165,10 @@ class IssuedInstallationResponse(StrictSchema):
     """Installation metadata and its one-time plaintext secret."""
 
     installation: InstallationResponse
-    secret: str
+    secret: str = Field(
+        description="Disclosed once and never retrievable. Send it with the installation id in the "
+        "`Squid-Installation-ID` and `Squid-Installation-Secret` headers."
+    )
 
     @classmethod
     def from_domain(cls, issued: IssuedInstallationCredential) -> IssuedInstallationResponse:
@@ -139,13 +185,17 @@ class IssuedInstallationResponse(StrictSchema):
 class PaperChallengeCreateRequest(StrictSchema):
     """Request player authorization from an authenticated Paper server."""
 
-    java_uuid: UUID
+    java_uuid: UUID = Field(description="Java Edition UUID of the player being authorized.")
 
 
 class FabricChallengeCreateRequest(StrictSchema):
-    """Request player authorization from Fabric with an S256 PKCE commitment."""
+    """Request player authorization from Fabric with an S256 PKCE commitment.
 
-    java_uuid: UUID
+    Fabric has no installation credential, so the PKCE pair is what binds the exchange to the client
+    that opened the challenge.
+    """
+
+    java_uuid: UUID = Field(description="Java Edition UUID of the player being authorized.")
     pkce_s256_challenge: PkceS256Challenge
 
 
@@ -153,12 +203,18 @@ class ChallengeCreateResponse(StrictSchema):
     """One-time device-flow codes and their polling policy."""
 
     id: UUID
-    device_code: str
-    user_code: str
-    verification_uri: AnyHttpUrl
-    verification_uri_complete: AnyHttpUrl
-    expires_at: datetime
-    polling_interval_seconds: int
+    device_code: str = Field(
+        description="Secret half of the challenge, disclosed once. Sent back at exchange, and never displayed."
+    )
+    user_code: str = Field(description="Code the player types into the browser, in dash-separated groups of four.")
+    verification_uri: AnyHttpUrl = Field(description="Browser page where the player enters `user_code`.")
+    verification_uri_complete: AnyHttpUrl = Field(
+        description="Same page with `user_code` in the query string, so a follow can skip typing it."
+    )
+    expires_at: datetime = Field(
+        description="When the challenge stops being approvable or exchangeable; start a new one afterwards."
+    )
+    polling_interval_seconds: int = Field(description="Minimum seconds to wait between exchange attempts.")
 
     @classmethod
     def from_domain(
@@ -204,8 +260,8 @@ class ChallengeApprovalResponse(StrictSchema):
     """Non-secret confirmation of an exact-identity approval."""
 
     id: UUID
-    java_uuid: UUID
-    origin: MinecraftClientOrigin
+    java_uuid: UUID = Field(description="Java Edition UUID the approval is bound to.")
+    origin: MinecraftClientOrigin = Field(description="Which client opened the challenge: `paper` or `fabric`.")
     approved_at: datetime
 
     @classmethod
@@ -225,11 +281,14 @@ class IssuedPlayerGrantResponse(StrictSchema):
     """One-time player bearer token response from a consumed challenge."""
 
     grant_id: UUID
-    token: str
+    token: str = Field(description="Sent as `Authorization: Bearer <token>`. Returned once and never retrievable.")
     java_uuid: UUID
-    origin: MinecraftClientOrigin
-    installation_id: UUID | None
-    expires_at: datetime
+    origin: MinecraftClientOrigin = Field(description="Which client the grant was issued to: `paper` or `fabric`.")
+    installation_id: UUID | None = Field(
+        description="The Paper installation that vouched for the player. Always set when `origin` is `paper` and "
+        "always null when it is `fabric`."
+    )
+    expires_at: datetime = Field(description="When the token stops authenticating; open a new challenge to renew.")
 
     @classmethod
     def from_domain(cls, issued: IssuedPlayerGrant) -> IssuedPlayerGrantResponse:

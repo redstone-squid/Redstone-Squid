@@ -4,7 +4,7 @@ from enum import StrEnum
 from typing import Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from squid.media.application.jobs import MediaArtifactRole, MediaJobSnapshot, MediaJobStatus
 from squid.media.domain import MediaKind, MediaLimits
@@ -17,7 +17,12 @@ class StrictSchema(BaseModel):
 
 
 class DraftMediaStatus(StrEnum):
-    """Stable client states that do not expose worker claim details."""
+    """Stable client states that do not expose worker claim details.
+
+    `processing` covers queued and in-flight normalization alike, so poll it. `completed`, `dead` and
+    `discarded` are terminal: a dead upload failed normalization for good and never gains artifacts,
+    and a discarded one was withdrawn by its owner.
+    """
 
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -26,7 +31,10 @@ class DraftMediaStatus(StrEnum):
 
 
 class DraftMediaArtifactRole(StrEnum):
-    """Normalized visual outputs visible to a draft owner."""
+    """Normalized visual outputs visible to a draft owner.
+
+    `output` is the re-encoded image or video; `poster` is a still frame, and only a video has one.
+    """
 
     OUTPUT = "output"
     POSTER = "poster"
@@ -36,9 +44,9 @@ class DraftMediaArtifactResponse(StrictSchema):
     """Safe facts about one normalized visual artifact."""
 
     role: DraftMediaArtifactRole
-    content_type: str
-    width: int
-    height: int
+    content_type: str = Field(description="Media type of the normalized file, not of the upload.")
+    width: int = Field(description="Pixels.")
+    height: int = Field(description="Pixels.")
 
 
 class DraftMediaResponse(StrictSchema):
@@ -48,8 +56,10 @@ class DraftMediaResponse(StrictSchema):
     draft_id: UUID
     kind: MediaKind
     status: DraftMediaStatus
-    source_content_type: str
-    artifacts: list[DraftMediaArtifactResponse]
+    source_content_type: str = Field(description="Media type of the bytes as uploaded.")
+    artifacts: list[DraftMediaArtifactResponse] = Field(
+        description="Empty until `status` is `completed`, and sorted by `role`."
+    )
 
     @classmethod
     def from_snapshot(cls, snapshot: MediaJobSnapshot) -> Self:
@@ -88,15 +98,20 @@ class DraftMediaResponse(StrictSchema):
 
 
 class DraftMediaLimitsResponse(StrictSchema):
-    """Server-enforced upload, batch, and decoder-work budgets."""
+    """Server-enforced upload, batch, and decoder-work budgets.
 
-    max_upload_bytes: int
-    max_images: int
-    max_videos: int
-    max_output_bytes: int
-    max_duration_milliseconds: int
-    max_pixels_per_frame: int
-    max_decoded_pixels_per_second: int
+    Exceeding any of them is rejected server-side; a client that checks first spares the upload.
+    """
+
+    max_upload_bytes: int = Field(description="Total uploaded bytes across a draft, not one file.")
+    max_images: int = Field(description="Images per draft.")
+    max_videos: int = Field(description="Videos per draft.")
+    max_output_bytes: int = Field(description="Total normalized bytes across a draft, not one file.")
+    max_duration_milliseconds: int = Field(description="Longest accepted video, per file.")
+    max_pixels_per_frame: int = Field(description="Width times height of one decoded frame, per file.")
+    max_decoded_pixels_per_second: int = Field(
+        description="Pixels per frame times frame rate, per video file. Images are exempt."
+    )
 
     @classmethod
     def from_domain(cls, limits: MediaLimits) -> Self:
@@ -115,7 +130,9 @@ class DraftMediaListResponse(StrictSchema):
     """The complete bounded media collection for one owned draft."""
 
     limits: DraftMediaLimitsResponse
-    media: list[DraftMediaResponse]
+    media: list[DraftMediaResponse] = Field(
+        description="Every upload for the draft in creation order, including terminal ones."
+    )
 
 
 def _dimension(value: int | None) -> int:

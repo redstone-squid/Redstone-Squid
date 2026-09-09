@@ -13,14 +13,29 @@ class ErrorReportSummary(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    reference: str
-    correlation_id: str
+    reference: str = Field(
+        description="The short form the user was shown and quotes back. A 48-bit prefix rather than a key, so more "
+        "than one unexpired report can share it."
+    )
+    correlation_id: str = Field(
+        description="Full identifier of the failed request, as it appears in the `Request-Id` response header."
+    )
     occurred_at: datetime
-    surface: str
-    origin: str | None = None
+    surface: str = Field(
+        description="Which transport failed: an application command, a view callback, a route, a worker job."
+    )
+    origin: str | None = Field(
+        default=None, description="The command name, route or job it came from; null when the surface does not know."
+    )
     exception_type: str
-    code: ErrorCode | None = None
-    work_lost: bool = False
+    code: ErrorCode | None = Field(
+        default=None, description="Stable error code, null for a failure not raised as a typed `SquidError`."
+    )
+    work_lost: bool = Field(
+        default=False,
+        description="True when the failure permanently abandoned work, such as a dead-lettered job nothing retries. "
+        "False for an exception that was logged and recovered from.",
+    )
 
     @classmethod
     def from_domain(cls, report: ErrorReport) -> ErrorReportSummary:
@@ -45,14 +60,18 @@ class ErrorReportDetail(ErrorReportSummary):
 
     message: str
     traceback: str
-    context: dict[str, JSONValue] = Field(default_factory=dict)
-    log_tail: list[str] = Field(default_factory=list)
-    matching_references: int = 1
-    """How many unexpired reports share this reference.
-
-    Normally one. The short reference is a 48-bit prefix rather than a key, so a reader has to be
-    told when they may be looking at the wrong incident.
-    """
+    context: dict[str, JSONValue] = Field(
+        default_factory=dict, description="Redacted diagnostic context; never carries stable Discord account ids."
+    )
+    log_tail: list[str] = Field(
+        default_factory=list,
+        description="What the process logged under this correlation id before the failure, oldest first.",
+    )
+    matching_references: int = Field(
+        default=1,
+        description="How many unexpired reports share this reference. Normally one; above one the report shown may "
+        "be a different incident from the one the user meant.",
+    )
 
     @classmethod
     def of(cls, report: ErrorReport, matches: int) -> ErrorReportDetail:

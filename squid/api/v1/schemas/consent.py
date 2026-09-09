@@ -1,6 +1,6 @@
 """The published privacy notice, as served to any client that has to display it."""
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class PrivacyNoticeDetail(BaseModel):
@@ -8,14 +8,16 @@ class PrivacyNoticeDetail(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    version: str
-    locale: str
-    """Echoed so a client can tell it received a fallback rather than what it asked for."""
-
+    version: str = Field(description="Identifier of the published notice, sent back when recording consent.")
+    locale: str = Field(
+        description="Locale the body was rendered in, echoed so a client can tell it received a fallback rather than "
+        "what it asked for."
+    )
     title: str
-    body: str
-    """Paragraphs separated by blank lines. Plain text, never markup: it is rendered into a
-    Discord card, an HTML page and a terminal, and only one of those could parse anything else."""
+    body: str = Field(
+        description="Paragraphs separated by blank lines. Plain text, never markup: it is rendered into a Discord "
+        "card, an HTML page and a terminal, and only one of those could parse anything else."
+    )
 
 
 class ConsentGrantRequest(BaseModel):
@@ -23,6 +25,9 @@ class ConsentGrantRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    version: str | None = None
-    """Optional so an older client keeps working; supplied, it is checked against the published
-    version so a stale cached notice cannot record consent to text nobody read."""
+    version: str | None = Field(
+        default=None,
+        description="Version of the notice that was displayed. Optional so an older client keeps working; supplied, "
+        "it is checked against the published version, so a stale cached notice cannot record consent to text nobody "
+        "read.",
+    )

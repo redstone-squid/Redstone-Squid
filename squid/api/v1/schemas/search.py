@@ -15,11 +15,11 @@ class SearchField(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str
-    type: str
-    supports_range: bool
-    supports_sort: bool
-    aliases: list[str]
+    name: str = Field(description="Canonical name to use in a query.")
+    type: str = Field(description="Value type accepted: `text`, `number`, `timestamp` or `boolean`.")
+    supports_range: bool = Field(description="Whether the field accepts range comparisons rather than equality only.")
+    supports_sort: bool = Field(description="Whether results may be ordered by this field.")
+    aliases: list[str] = Field(description="Other names accepted for `name`, matched case-insensitively.")
 
     @classmethod
     def from_domain(cls, field: FieldDefinition) -> SearchField:
@@ -37,7 +37,9 @@ class SearchSuggestions(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    suggestions: list[str]
+    suggestions: list[str] = Field(
+        description="Indexed terms close to the query's positive text, at most the requested limit."
+    )
 
 
 class RecordSearchEntry(BaseModel):
@@ -52,12 +54,17 @@ class RecordSearchEntry(BaseModel):
     record_id: int
     title: str
     subtitle: str | None
-    build_id: int
+    build_id: int = Field(description="The top-ranked holder build this entry is titled after.")
     build_title: str
-    record_class: str
-    version_scope: str
+    record_class: str = Field(
+        description="Normally one of `first`, `fastest`, `smallest`, `fastest_smallest` or `smallest_fastest`."
+    )
+    version_scope: str = Field(description="Normally `all_time` or `current`.")
     tags: list[str]
-    metrics: dict[str, str | int | float | bool]
+    metrics: dict[str, str | int | float | bool] = Field(
+        description="Indexed measurements of the holder build, keyed by metric name. Which keys appear depends on the "
+        "record, so read them by name."
+    )
 
     @classmethod
     def from_domain(cls, hit: RecordSearchHit) -> RecordSearchEntry:
@@ -79,9 +86,12 @@ class MetadataSearchEntry(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: str
+    id: str = Field(description="Opaque projection key. Match it for equality; do not parse it.")
     title: str
-    metadata_kind: str
+    metadata_kind: str = Field(
+        description="What was matched: `creator`, `version`, or a tag's semantic kind (`restriction`, `pattern` or "
+        "`showcase`)."
+    )
     description: str | None
     aliases: list[str]
 
@@ -102,7 +112,10 @@ class BuildSearchResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     resource_kind: Literal["build"] = "build"
-    score: float | None
+    score: float | None = Field(
+        description="Relevance, higher first. Comparable within one response only, never across queries; null when "
+        "the results carry no ranking."
+    )
     build: BuildSummary
 
 
@@ -112,7 +125,10 @@ class RecordSearchResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     resource_kind: Literal["record"] = "record"
-    score: float | None
+    score: float | None = Field(
+        description="Relevance, higher first. Comparable within one response only, never across queries; null when "
+        "the results carry no ranking."
+    )
     record: RecordSearchEntry
 
 
@@ -122,7 +138,10 @@ class MetadataSearchResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     resource_kind: Literal["metadata"] = "metadata"
-    score: float | None
+    score: float | None = Field(
+        description="Relevance, higher first. Comparable within one response only, never across queries; null when "
+        "the results carry no ranking."
+    )
     metadata: MetadataSearchEntry
 
 
@@ -133,7 +152,10 @@ type SearchResult = Annotated[
 
 
 def _record_id(source_id: str) -> int:
-    """Parse the ``result:<id>`` projection key records are indexed under."""
+    """Parse the `result:<id>` projection key records are indexed under, or a bare id.
+
+    Raises `ValidationError` when the id part is not an integer.
+    """
     _, separator, raw_id = source_id.partition(":")
     try:
         return int(raw_id if separator else source_id)

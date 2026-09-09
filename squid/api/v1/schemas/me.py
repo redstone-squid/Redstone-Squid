@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from whenever import Instant
 
 from squid.accounts.domain import (
@@ -40,9 +40,10 @@ class AvatarDetail(BaseModel):
 
     identity_id: int
     provider: IdentityProvider
-    url: str | None
-    """Null when the provider cannot supply one yet, such as a Discord identity whose avatar
-    hash has not been observed since it was linked."""
+    url: str | None = Field(
+        description="Null when the provider cannot supply one yet, such as a Discord identity whose avatar "
+        "hash has not been observed since it was linked."
+    )
 
 
 class IdentityDetail(BaseModel):
@@ -60,8 +61,7 @@ class IdentityDetail(BaseModel):
     subject: str
     display_name: str | None
     verified_at: Instant | None
-    is_public: bool
-    """Whether this identity appears on the account's public creator profile."""
+    is_public: bool = Field(description="Whether this identity appears on the account's public creator profile.")
 
     @classmethod
     def from_domain(cls, identity: AccountIdentity) -> IdentityDetail:
@@ -85,9 +85,10 @@ class ProfileDetail(BaseModel):
     bio: str | None
     pronouns: str | None
     links: list[ProfileLinkDetail]
-    hidden: bool
-    """Whether the public creator page is withheld. A hidden profile still serves its aliases and
-    build credits, so builds stay attributable."""
+    hidden: bool = Field(
+        description="Whether the public creator page is withheld. A hidden profile still serves its aliases and "
+        "build credits, so builds stay attributable."
+    )
 
     avatar: AvatarDetail | None
 
@@ -122,16 +123,17 @@ class UserMe(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: int
-    creator_id: UUID
-    """The public identifier this account's creator page is served under."""
+    creator_id: UUID = Field(description="The public identifier this account's creator page is served under.")
 
     created_at: Instant | None
-    consent_version: str | None
-    """Version of the privacy notice this account last consented to; null if it never has."""
+    consent_version: str | None = Field(
+        description="Version of the privacy notice this account last consented to; null if it never has."
+    )
 
-    consent_pending: bool
-    """Whether the account still owes the current privacy notice. While true every write fails with 400 until
-    `/v1/users/me/consent` is posted."""
+    consent_pending: bool = Field(
+        description="Whether the account still owes the current privacy notice. While true every write fails with "
+        "400 until `/v1/users/me/consent` is posted."
+    )
 
     identities: list[IdentityDetail]
     profile: ProfileDetail
@@ -208,14 +210,16 @@ class MinecraftIdentityRefresh(BaseModel):
     ign: str
     previous_ign: str | None
     renamed: bool
-    claimed_creator_name: str | None
-    """The creator credit now attributed to the caller under the current name."""
-    retained_creator_names: tuple[str, ...]
-    """Credits kept under previously verified names. A rename does not retract them."""
-    contested_creator_name: str | None
-    """Set when the current name is credited to a different account and was not taken."""
-    pending_claim_id: int | None
-    """The staff review opened for a contested name."""
+    claimed_creator_name: str | None = Field(
+        description="The creator credit now attributed to the caller under the current name."
+    )
+    retained_creator_names: tuple[str, ...] = Field(
+        description="Credits kept under previously verified names. A rename does not retract them."
+    )
+    contested_creator_name: str | None = Field(
+        description="Set when the current name is credited to a different account and was not taken."
+    )
+    pending_claim_id: int | None = Field(description="The staff review opened for a contested name.")
 
     @classmethod
     def from_domain(cls, refresh: IdentityRefresh) -> MinecraftIdentityRefresh:
@@ -257,8 +261,9 @@ class MergePreviewDetail(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    absorbed_creator_id: UUID
-    """The creator id that would become a permanent redirect to the caller's."""
+    absorbed_creator_id: UUID = Field(
+        description="The creator id that would become a permanent redirect to the caller's."
+    )
 
     alias_names: list[str]
     identity_count: int
@@ -280,8 +285,9 @@ class AccountMergeDetail(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     surviving_creator_id: UUID
-    redirected_creator_id: UUID
-    """Permanently redirects to `surviving_creator_id`, so links to the absorbed creator survive."""
+    redirected_creator_id: UUID = Field(
+        description="Permanently redirects to `surviving_creator_id`, so links to the absorbed creator survive."
+    )
 
     @classmethod
     def from_domain(cls, merge: AccountMerge) -> AccountMergeDetail:

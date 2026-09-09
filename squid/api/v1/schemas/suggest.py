@@ -1,6 +1,6 @@
 """Public representations of typeahead suggestions."""
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from squid.suggestions.application import SuggestionSource
 from squid.suggestions.domain import (
@@ -23,8 +23,10 @@ class SuggestionItem(BaseModel):
 
     value: str
     label: str
-    description: str | None
-    kind: str
+    description: str | None = Field(
+        description="Secondary text disambiguating candidates that share a label; null when there is none."
+    )
+    kind: str = Field(description="The entity type behind the candidate, for keeping a mixed list readable.")
 
     @classmethod
     def from_domain(cls, suggestion: Suggestion) -> SuggestionItem:
@@ -37,12 +39,15 @@ class SuggestionItem(BaseModel):
 
 
 class SuggestionReplacement(BaseModel):
-    """The half-open range of the submitted query a value replaces."""
+    """The half-open range of the submitted query a value replaces.
+
+    Splice the chosen `value` over it rather than clobbering the whole input.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    start: int
-    end: int
+    start: int = Field(description="Character offset of the first replaced character.")
+    end: int = Field(description="Character offset just past the last replaced character.")
 
     @classmethod
     def from_domain(cls, span: ReplacementSpan) -> SuggestionReplacement:
@@ -54,14 +59,15 @@ class SuggestionPage(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    source: str
-    revision: int | None
-    """Content revision of an enumerable source, matching the response `ETag`."""
-
-    replacement: SuggestionReplacement | None
-    """Present when the value completes part of the query rather than all of it."""
-
-    items: list[SuggestionItem]
+    source: str = Field(description="The source these completions came from.")
+    revision: int | None = Field(
+        description="Content revision of an enumerable source, matching the response `ETag`. Null for a queried "
+        "source, which has no enumerable content to revision."
+    )
+    replacement: SuggestionReplacement | None = Field(
+        description="Present when a value completes part of the query; null when it replaces all of it."
+    )
+    items: list[SuggestionItem] = Field(description="Ranked, best first.")
 
     @classmethod
     def from_domain(cls, source: str, result: SuggestionResult) -> SuggestionPage:
@@ -79,12 +85,20 @@ class SuggestionSourceInfo(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    kind: SourceKind
-    value_type: ValueType
-    context_keys: list[str]
-    multi_value: str | None
-    requires_authentication: bool
-    """True when the source is gated or scoped, so an anonymous caller gets nothing."""
+    kind: SourceKind = Field(
+        description="`enumerable` sources can be listed and cached whole; `queried` ones must be asked per query."
+    )
+    value_type: ValueType = Field(description="Scalar type each `value` carries: `string` or `integer`.")
+    context_keys: list[str] = Field(
+        description="Context this source needs supplied, such as `category`, sorted ascending."
+    )
+    multi_value: str | None = Field(
+        description="Separator when the completed parameter holds a list, so a client splices one entry. Null for a "
+        "single-valued parameter."
+    )
+    requires_authentication: bool = Field(
+        description="True when the source is gated or scoped, so an anonymous caller gets nothing."
+    )
 
     @classmethod
     def from_domain(cls, source: SuggestionSource) -> SuggestionSourceInfo:

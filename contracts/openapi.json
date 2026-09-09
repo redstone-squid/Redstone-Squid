@@ -15741,7 +15741,8 @@
           "redirected_creator_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Redirected Creator Id"
+            "title": "Redirected Creator Id",
+            "description": "Permanently redirects to `surviving_creator_id`, so links to the absorbed creator survive."
           }
         },
         "additionalProperties": false,
@@ -15837,7 +15838,8 @@
                 "type": "null"
               }
             ],
-            "title": "Url"
+            "title": "Url",
+            "description": "Null when the provider cannot supply one yet, such as a Discord identity whose avatar hash has not been observed since it was linked."
           }
         },
         "additionalProperties": false,
@@ -16442,7 +16444,8 @@
                 "type": "null"
               }
             ],
-            "title": "Score"
+            "title": "Score",
+            "description": "Relevance, higher first. Comparable within one response only, never across queries; null when the results carry no ranking."
           },
           "build": {
             "$ref": "#/components/schemas/BuildSummary"
@@ -16749,7 +16752,8 @@
           "code": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Code"
+            "title": "Code",
+            "description": "Lowercase snake_case identifier of at most 64 characters, stable across form revisions."
           },
           "label": {
             "type": "string",
@@ -16780,7 +16784,8 @@
             "maxLength": 32,
             "minLength": 8,
             "pattern": "^[A-Za-z2-7a-z-]+$",
-            "title": "User Code"
+            "title": "User Code",
+            "description": "The code displayed to the player, as issued: base32 in dash-separated groups of four."
           }
         },
         "additionalProperties": false,
@@ -16801,10 +16806,12 @@
           "java_uuid": {
             "type": "string",
             "format": "uuid",
-            "title": "Java Uuid"
+            "title": "Java Uuid",
+            "description": "Java Edition UUID the approval is bound to."
           },
           "origin": {
-            "$ref": "#/components/schemas/MinecraftClientOrigin"
+            "$ref": "#/components/schemas/MinecraftClientOrigin",
+            "description": "Which client opened the challenge: `paper` or `fabric`."
           },
           "approved_at": {
             "type": "string",
@@ -16832,32 +16839,38 @@
           },
           "device_code": {
             "type": "string",
-            "title": "Device Code"
+            "title": "Device Code",
+            "description": "Secret half of the challenge, disclosed once. Sent back at exchange, and never displayed."
           },
           "user_code": {
             "type": "string",
-            "title": "User Code"
+            "title": "User Code",
+            "description": "Code the player types into the browser, in dash-separated groups of four."
           },
           "verification_uri": {
             "type": "string",
             "minLength": 1,
             "format": "uri",
-            "title": "Verification Uri"
+            "title": "Verification Uri",
+            "description": "Browser page where the player enters `user_code`."
           },
           "verification_uri_complete": {
             "type": "string",
             "minLength": 1,
             "format": "uri",
-            "title": "Verification Uri Complete"
+            "title": "Verification Uri Complete",
+            "description": "Same page with `user_code` in the query string, so a follow can skip typing it."
           },
           "expires_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Expires At"
+            "title": "Expires At",
+            "description": "When the challenge stops being approvable or exchangeable; start a new one afterwards."
           },
           "polling_interval_seconds": {
             "type": "integer",
-            "title": "Polling Interval Seconds"
+            "title": "Polling Interval Seconds",
+            "description": "Minimum seconds to wait between exchange attempts."
           }
         },
         "additionalProperties": false,
@@ -16879,7 +16892,8 @@
           "value": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Value"
+            "title": "Value",
+            "description": "Lowercase snake_case identifier of at most 64 characters, stable across form revisions."
           },
           "label": {
             "type": "string",
@@ -16931,7 +16945,8 @@
           },
           "public_key_fingerprint": {
             "type": "string",
-            "title": "Public Key Fingerprint"
+            "title": "Public Key Fingerprint",
+            "description": "First 20 hex digits of the public key's SHA-256, uppercased in five dash-separated groups."
           },
           "created_at": {
             "type": "string",
@@ -16953,7 +16968,8 @@
                 "type": "null"
               }
             ],
-            "title": "Revoked At"
+            "title": "Revoked At",
+            "description": "Null while the device may still open sessions."
           }
         },
         "additionalProperties": false,
@@ -16977,7 +16993,8 @@
             "maxLength": 32,
             "minLength": 8,
             "pattern": "^[A-Za-z0-9-]+$",
-            "title": "User Code"
+            "title": "User Code",
+            "description": "The code displayed by the CLI. Case and dashes are ignored, but it must normalize to exactly eight alphanumerics."
           }
         },
         "additionalProperties": false,
@@ -17006,7 +17023,8 @@
           },
           "public_key_fingerprint": {
             "type": "string",
-            "title": "Public Key Fingerprint"
+            "title": "Public Key Fingerprint",
+            "description": "First 20 hex digits of the public key's SHA-256, uppercased in five dash-separated groups. Compare it against the fingerprint the CLI printed before approving."
           },
           "created_at": {
             "type": "string",
@@ -17028,7 +17046,8 @@
                 "type": "null"
               }
             ],
-            "title": "Approved At"
+            "title": "Approved At",
+            "description": "Null until the browser approves this enrollment."
           }
         },
         "additionalProperties": false,
@@ -17050,7 +17069,8 @@
           "public_key": {
             "type": "string",
             "pattern": "^[A-Za-z0-9_-]{43}$",
-            "title": "Public Key"
+            "title": "Public Key",
+            "description": "A raw 32-byte Ed25519 public key, unpadded URL-safe base64."
           },
           "client_instance_id": {
             "type": "string",
@@ -17061,7 +17081,8 @@
             "type": "string",
             "maxLength": 80,
             "minLength": 1,
-            "title": "Label"
+            "title": "Label",
+            "description": "Free text shown to the account owner."
           }
         },
         "additionalProperties": false,
@@ -17081,12 +17102,14 @@
             "maxLength": 128,
             "minLength": 32,
             "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Device Code"
+            "title": "Device Code",
+            "description": "The `device_code` returned by enrollment, echoed verbatim."
           },
           "signature": {
             "type": "string",
             "pattern": "^[A-Za-z0-9_-]{86}$",
-            "title": "Signature"
+            "title": "Signature",
+            "description": "A raw 64-byte Ed25519 signature, unpadded URL-safe base64."
           }
         },
         "additionalProperties": false,
@@ -17096,7 +17119,7 @@
           "signature"
         ],
         "title": "CliEnrollmentExchangeRequest",
-        "description": "Prove the enrolled private key and exchange browser approval."
+        "description": "Prove the enrolled private key and exchange browser approval.\n\n`signature` covers the ASCII bytes `squid-cli-enrollment-v1`, a NUL byte, the enrollment id as 16\nraw bytes, then the UTF-8 `device_code` prefixed by its big-endian uint16 length."
       },
       "CliEnrollmentResponse": {
         "properties": {
@@ -17107,32 +17130,38 @@
           },
           "device_code": {
             "type": "string",
-            "title": "Device Code"
+            "title": "Device Code",
+            "description": "Secret half of the enrollment, disclosed once. Signed at exchange, and never displayed."
           },
           "user_code": {
             "type": "string",
-            "title": "User Code"
+            "title": "User Code",
+            "description": "Code the user types into the browser, formatted `XXXX-XXXX` over an alphabet with no ambiguous characters."
           },
           "verification_uri": {
             "type": "string",
             "minLength": 1,
             "format": "uri",
-            "title": "Verification Uri"
+            "title": "Verification Uri",
+            "description": "Browser page where the user enters `user_code`."
           },
           "verification_uri_complete": {
             "type": "string",
             "minLength": 1,
             "format": "uri",
-            "title": "Verification Uri Complete"
+            "title": "Verification Uri Complete",
+            "description": "Same page with `user_code` in the fragment, so a follow can skip typing it."
           },
           "expires_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Expires At"
+            "title": "Expires At",
+            "description": "When the approval window closes; the enrollment cannot be approved or exchanged afterwards."
           },
           "polling_interval_seconds": {
             "type": "integer",
-            "title": "Polling Interval Seconds"
+            "title": "Polling Interval Seconds",
+            "description": "Minimum seconds to wait between exchange attempts."
           }
         },
         "additionalProperties": false,
@@ -17179,12 +17208,14 @@
           },
           "nonce": {
             "type": "string",
-            "title": "Nonce"
+            "title": "Nonce",
+            "description": "Disclosed once. Sign it to obtain a session token."
           },
           "expires_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Expires At"
+            "title": "Expires At",
+            "description": "When the nonce stops being consumable."
           }
         },
         "additionalProperties": false,
@@ -17215,12 +17246,14 @@
             "maxLength": 128,
             "minLength": 32,
             "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Nonce"
+            "title": "Nonce",
+            "description": "The `nonce` returned by the session challenge, echoed verbatim."
           },
           "signature": {
             "type": "string",
             "pattern": "^[A-Za-z0-9_-]{86}$",
-            "title": "Signature"
+            "title": "Signature",
+            "description": "A raw 64-byte Ed25519 signature, unpadded URL-safe base64."
           }
         },
         "additionalProperties": false,
@@ -17232,7 +17265,7 @@
           "signature"
         ],
         "title": "CliSessionExchangeRequest",
-        "description": "Exchange an Ed25519-signed proof nonce for a short session."
+        "description": "Exchange an Ed25519-signed proof nonce for a short session.\n\n`signature` covers the ASCII bytes `squid-cli-session-v1`, a NUL byte, the device id and challenge\nid as 16 raw bytes each, then the UTF-8 `nonce` prefixed by its big-endian uint16 length."
       },
       "ConsentGrantRequest": {
         "properties": {
@@ -17245,7 +17278,8 @@
                 "type": "null"
               }
             ],
-            "title": "Version"
+            "title": "Version",
+            "description": "Version of the notice that was displayed. Optional so an older client keeps working; supplied, it is checked against the published version, so a stale cached notice cannot record consent to text nobody read."
           }
         },
         "additionalProperties": false,
@@ -17274,7 +17308,8 @@
           },
           "claimed": {
             "type": "boolean",
-            "title": "Claimed"
+            "title": "Claimed",
+            "description": "Whether an account has claimed this name."
           },
           "creator_id": {
             "anyOf": [
@@ -17286,7 +17321,8 @@
                 "type": "null"
               }
             ],
-            "title": "Creator Id"
+            "title": "Creator Id",
+            "description": "Public creator id to fetch a profile with. Null while the alias is unclaimed."
           }
         },
         "additionalProperties": false,
@@ -17316,11 +17352,13 @@
                 "type": "null"
               }
             ],
-            "title": "Canonical Id"
+            "title": "Canonical Id",
+            "description": "Set when the requested id belonged to an account that was merged into this one; null otherwise."
           },
           "hidden": {
             "type": "boolean",
-            "title": "Hidden"
+            "title": "Hidden",
+            "description": "True when the creator hides their profile, leaving every other field empty."
           },
           "aliases": {
             "items": {
@@ -17396,7 +17434,8 @@
               "$ref": "#/components/schemas/PublicIdentityDetail"
             },
             "type": "array",
-            "title": "Identities"
+            "title": "Identities",
+            "description": "Only the identities the creator chose to publish; an account may publish none."
           }
         },
         "additionalProperties": false,
@@ -17425,7 +17464,8 @@
           },
           "build_count": {
             "type": "integer",
-            "title": "Build Count"
+            "title": "Build Count",
+            "description": "How many builds credit this name."
           }
         },
         "additionalProperties": false,
@@ -17443,7 +17483,8 @@
             "type": "string",
             "maxLength": 128,
             "minLength": 16,
-            "title": "Csrf Token"
+            "title": "Csrf Token",
+            "description": "Value of the `squid_csrf` cookie. Send it back in the `CSRF-Token` header on every unsafe method; a request whose header and cookie differ is refused with 403."
           }
         },
         "additionalProperties": false,
@@ -17828,21 +17869,24 @@
           "base_revision": {
             "type": "integer",
             "minimum": 0.0,
-            "title": "Base Revision"
+            "title": "Base Revision",
+            "description": "The draft `revision` this edit was composed against. A stale value is refused with 409."
           },
           "client_instance_id": {
             "type": "string",
             "maxLength": 128,
             "minLength": 1,
             "pattern": "^[A-Za-z0-9_.:-]+$",
-            "title": "Client Instance Id"
+            "title": "Client Instance Id",
+            "description": "Names one running client, so a draft edited from two of them can be attributed. Chosen by the client and stable for its lifetime."
           },
           "idempotency_key": {
             "type": "string",
             "maxLength": 255,
             "minLength": 8,
             "pattern": "^[\\x21-\\x7e]+$",
-            "title": "Idempotency Key"
+            "title": "Idempotency Key",
+            "description": "Caller-chosen visible-ASCII key. Resending a change under a key already applied returns the earlier outcome instead of applying it twice."
           },
           "operations": {
             "items": {
@@ -17863,7 +17907,7 @@
           "operations"
         ],
         "title": "DraftChangeRequest",
-        "description": "An atomic optimistic draft edit with retry-safe identity."
+        "description": "An atomic optimistic draft edit with retry-safe identity.\n\nEvery operation applies or none does. Operation ids must be unique within the change, and a change\nmay touch each field at most once."
       },
       "DraftChangeResponse": {
         "properties": {
@@ -17872,7 +17916,8 @@
           },
           "replayed": {
             "type": "boolean",
-            "title": "Replayed"
+            "title": "Replayed",
+            "description": "True when this `idempotency_key` had already been applied, so `draft` is the earlier outcome and nothing changed."
           }
         },
         "additionalProperties": false,
@@ -17889,20 +17934,24 @@
           "category": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Category"
+            "title": "Category",
+            "description": "A `code` from the manifest's `categories`."
           },
           "origin": {
-            "$ref": "#/components/schemas/SubmissionOrigin"
+            "$ref": "#/components/schemas/SubmissionOrigin",
+            "description": "The transport that owns the draft, deciding which fields apply."
           },
           "client_capabilities": {
             "items": {
               "type": "string",
-              "pattern": "^[a-z][a-z0-9_]{0,63}$"
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "description": "Lowercase snake_case identifier of at most 64 characters, stable across form revisions."
             },
             "type": "array",
             "maxItems": 64,
             "uniqueItems": true,
-            "title": "Client Capabilities"
+            "title": "Client Capabilities",
+            "description": "Renderer capabilities this client has. Creation is refused with 400 when a required field of `category` names one that is missing."
           }
         },
         "additionalProperties": false,
@@ -17922,7 +17971,8 @@
             },
             "type": "array",
             "maxItems": 10,
-            "title": "Drafts"
+            "title": "Drafts",
+            "description": "An account holds at most ten active drafts, so this is the whole collection."
           }
         },
         "additionalProperties": false,
@@ -17940,15 +17990,18 @@
           },
           "content_type": {
             "type": "string",
-            "title": "Content Type"
+            "title": "Content Type",
+            "description": "Media type of the normalized file, not of the upload."
           },
           "width": {
             "type": "integer",
-            "title": "Width"
+            "title": "Width",
+            "description": "Pixels."
           },
           "height": {
             "type": "integer",
-            "title": "Height"
+            "title": "Height",
+            "description": "Pixels."
           }
         },
         "additionalProperties": false,
@@ -17969,37 +18022,44 @@
           "poster"
         ],
         "title": "DraftMediaArtifactRole",
-        "description": "Normalized visual outputs visible to a draft owner."
+        "description": "Normalized visual outputs visible to a draft owner.\n\n`output` is the re-encoded image or video; `poster` is a still frame, and only a video has one."
       },
       "DraftMediaLimitsResponse": {
         "properties": {
           "max_upload_bytes": {
             "type": "integer",
-            "title": "Max Upload Bytes"
+            "title": "Max Upload Bytes",
+            "description": "Total uploaded bytes across a draft, not one file."
           },
           "max_images": {
             "type": "integer",
-            "title": "Max Images"
+            "title": "Max Images",
+            "description": "Images per draft."
           },
           "max_videos": {
             "type": "integer",
-            "title": "Max Videos"
+            "title": "Max Videos",
+            "description": "Videos per draft."
           },
           "max_output_bytes": {
             "type": "integer",
-            "title": "Max Output Bytes"
+            "title": "Max Output Bytes",
+            "description": "Total normalized bytes across a draft, not one file."
           },
           "max_duration_milliseconds": {
             "type": "integer",
-            "title": "Max Duration Milliseconds"
+            "title": "Max Duration Milliseconds",
+            "description": "Longest accepted video, per file."
           },
           "max_pixels_per_frame": {
             "type": "integer",
-            "title": "Max Pixels Per Frame"
+            "title": "Max Pixels Per Frame",
+            "description": "Width times height of one decoded frame, per file."
           },
           "max_decoded_pixels_per_second": {
             "type": "integer",
-            "title": "Max Decoded Pixels Per Second"
+            "title": "Max Decoded Pixels Per Second",
+            "description": "Pixels per frame times frame rate, per video file. Images are exempt."
           }
         },
         "additionalProperties": false,
@@ -18014,7 +18074,7 @@
           "max_decoded_pixels_per_second"
         ],
         "title": "DraftMediaLimitsResponse",
-        "description": "Server-enforced upload, batch, and decoder-work budgets."
+        "description": "Server-enforced upload, batch, and decoder-work budgets.\n\nExceeding any of them is rejected server-side; a client that checks first spares the upload."
       },
       "DraftMediaListResponse": {
         "properties": {
@@ -18026,7 +18086,8 @@
               "$ref": "#/components/schemas/DraftMediaResponse"
             },
             "type": "array",
-            "title": "Media"
+            "title": "Media",
+            "description": "Every upload for the draft in creation order, including terminal ones."
           }
         },
         "additionalProperties": false,
@@ -18058,14 +18119,16 @@
           },
           "source_content_type": {
             "type": "string",
-            "title": "Source Content Type"
+            "title": "Source Content Type",
+            "description": "Media type of the bytes as uploaded."
           },
           "artifacts": {
             "items": {
               "$ref": "#/components/schemas/DraftMediaArtifactResponse"
             },
             "type": "array",
-            "title": "Artifacts"
+            "title": "Artifacts",
+            "description": "Empty until `status` is `completed`, and sorted by `role`."
           }
         },
         "additionalProperties": false,
@@ -18090,7 +18153,7 @@
           "discarded"
         ],
         "title": "DraftMediaStatus",
-        "description": "Stable client states that do not expose worker claim details."
+        "description": "Stable client states that do not expose worker claim details.\n\n`processing` covers queued and in-flight normalization alike, so poll it. `completed`, `dead` and\n`discarded` are terminal: a dead upload failed normalization for good and never gains artifacts,\nand a discarded one was withdrawn by its owner."
       },
       "DraftStatus": {
         "type": "string",
@@ -18122,7 +18185,8 @@
           "category": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Category"
+            "title": "Category",
+            "description": "Lowercase snake_case identifier of at most 64 characters, stable across form revisions."
           },
           "revision": {
             "type": "integer",
@@ -18143,7 +18207,8 @@
                 "type": "null"
               }
             ],
-            "title": "Display Name"
+            "title": "Display Name",
+            "description": "The draft's `display_name` answer, for listing it. Null while it is unanswered."
           },
           "created_at": {
             "type": "string",
@@ -18247,11 +18312,13 @@
         "properties": {
           "reference": {
             "type": "string",
-            "title": "Reference"
+            "title": "Reference",
+            "description": "The short form the user was shown and quotes back. A 48-bit prefix rather than a key, so more than one unexpired report can share it."
           },
           "correlation_id": {
             "type": "string",
-            "title": "Correlation Id"
+            "title": "Correlation Id",
+            "description": "Full identifier of the failed request, as it appears in the `Request-Id` response header."
           },
           "occurred_at": {
             "type": "string",
@@ -18260,7 +18327,8 @@
           },
           "surface": {
             "type": "string",
-            "title": "Surface"
+            "title": "Surface",
+            "description": "Which transport failed: an application command, a view callback, a route, a worker job."
           },
           "origin": {
             "anyOf": [
@@ -18271,7 +18339,8 @@
                 "type": "null"
               }
             ],
-            "title": "Origin"
+            "title": "Origin",
+            "description": "The command name, route or job it came from; null when the surface does not know."
           },
           "exception_type": {
             "type": "string",
@@ -18285,11 +18354,13 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Stable error code, null for a failure not raised as a typed `SquidError`."
           },
           "work_lost": {
             "type": "boolean",
             "title": "Work Lost",
+            "description": "True when the failure permanently abandoned work, such as a dead-lettered job nothing retries. False for an exception that was logged and recovered from.",
             "default": false
           },
           "message": {
@@ -18305,18 +18376,21 @@
               "$ref": "#/components/schemas/JSONValue"
             },
             "type": "object",
-            "title": "Context"
+            "title": "Context",
+            "description": "Redacted diagnostic context; never carries stable Discord account ids."
           },
           "log_tail": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Log Tail"
+            "title": "Log Tail",
+            "description": "What the process logged under this correlation id before the failure, oldest first."
           },
           "matching_references": {
             "type": "integer",
             "title": "Matching References",
+            "description": "How many unexpired reports share this reference. Normally one; above one the report shown may be a different incident from the one the user meant.",
             "default": 1
           }
         },
@@ -18338,11 +18412,13 @@
         "properties": {
           "reference": {
             "type": "string",
-            "title": "Reference"
+            "title": "Reference",
+            "description": "The short form the user was shown and quotes back. A 48-bit prefix rather than a key, so more than one unexpired report can share it."
           },
           "correlation_id": {
             "type": "string",
-            "title": "Correlation Id"
+            "title": "Correlation Id",
+            "description": "Full identifier of the failed request, as it appears in the `Request-Id` response header."
           },
           "occurred_at": {
             "type": "string",
@@ -18351,7 +18427,8 @@
           },
           "surface": {
             "type": "string",
-            "title": "Surface"
+            "title": "Surface",
+            "description": "Which transport failed: an application command, a view callback, a route, a worker job."
           },
           "origin": {
             "anyOf": [
@@ -18362,7 +18439,8 @@
                 "type": "null"
               }
             ],
-            "title": "Origin"
+            "title": "Origin",
+            "description": "The command name, route or job it came from; null when the surface does not know."
           },
           "exception_type": {
             "type": "string",
@@ -18376,11 +18454,13 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Stable error code, null for a failure not raised as a typed `SquidError`."
           },
           "work_lost": {
             "type": "boolean",
             "title": "Work Lost",
+            "description": "True when the failure permanently abandoned work, such as a dead-lettered job nothing retries. False for an exception that was logged and recovered from.",
             "default": false
           }
         },
@@ -18461,12 +18541,14 @@
           "java_uuid": {
             "type": "string",
             "format": "uuid",
-            "title": "Java Uuid"
+            "title": "Java Uuid",
+            "description": "Java Edition UUID of the player being authorized."
           },
           "pkce_s256_challenge": {
             "type": "string",
             "pattern": "^[A-Za-z0-9_-]{43}$",
-            "title": "Pkce S256 Challenge"
+            "title": "Pkce S256 Challenge",
+            "description": "RFC 7636 S256 commitment: the SHA-256 of the verifier, unpadded URL-safe base64. Only S256 is accepted; `plain` is not."
           }
         },
         "additionalProperties": false,
@@ -18476,7 +18558,7 @@
           "pkce_s256_challenge"
         ],
         "title": "FabricChallengeCreateRequest",
-        "description": "Request player authorization from Fabric with an S256 PKCE commitment."
+        "description": "Request player authorization from Fabric with an S256 PKCE commitment.\n\nFabric has no installation credential, so the PKCE pair is what binds the exchange to the client\nthat opened the challenge."
       },
       "FabricChallengeExchangeRequest": {
         "properties": {
@@ -18485,14 +18567,16 @@
             "maxLength": 256,
             "minLength": 32,
             "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Device Code"
+            "title": "Device Code",
+            "description": "The `device_code` returned when the challenge was created, echoed verbatim."
           },
           "pkce_verifier": {
             "type": "string",
             "maxLength": 128,
             "minLength": 43,
             "pattern": "^[A-Za-z0-9._~-]+$",
-            "title": "Pkce Verifier"
+            "title": "Pkce Verifier",
+            "description": "The RFC 7636 verifier whose SHA-256 was sent as `pkce_s256_challenge`."
           }
         },
         "additionalProperties": false,
@@ -18518,7 +18602,8 @@
                 "type": "null"
               }
             ],
-            "title": "Minimum"
+            "title": "Minimum",
+            "description": "Inclusive numeric lower bound."
           },
           "maximum": {
             "anyOf": [
@@ -18532,7 +18617,8 @@
                 "type": "null"
               }
             ],
-            "title": "Maximum"
+            "title": "Maximum",
+            "description": "Inclusive numeric upper bound."
           },
           "min_length": {
             "anyOf": [
@@ -18543,7 +18629,8 @@
                 "type": "null"
               }
             ],
-            "title": "Min Length"
+            "title": "Min Length",
+            "description": "Shortest accepted string."
           },
           "max_length": {
             "anyOf": [
@@ -18554,7 +18641,8 @@
                 "type": "null"
               }
             ],
-            "title": "Max Length"
+            "title": "Max Length",
+            "description": "Longest accepted string."
           },
           "min_items": {
             "anyOf": [
@@ -18565,7 +18653,8 @@
                 "type": "null"
               }
             ],
-            "title": "Min Items"
+            "title": "Min Items",
+            "description": "Fewest accepted list entries."
           },
           "max_items": {
             "anyOf": [
@@ -18576,10 +18665,12 @@
                 "type": "null"
               }
             ],
-            "title": "Max Items"
+            "title": "Max Items",
+            "description": "Most accepted list entries."
           },
           "must_equal": {
-            "$ref": "#/components/schemas/JsonValue"
+            "$ref": "#/components/schemas/JsonValue",
+            "description": "The one accepted value, when the field admits only one."
           }
         },
         "additionalProperties": false,
@@ -18594,7 +18685,7 @@
           "must_equal"
         ],
         "title": "FieldConstraintsResponse",
-        "description": "Validation bounds interpreted the same way by clients and the server."
+        "description": "Validation bounds interpreted the same way by clients and the server.\n\nEvery bound is null when the field is unconstrained on that axis."
       },
       "FieldOperationKind": {
         "type": "string",
@@ -18610,18 +18701,22 @@
           "operation_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Operation Id"
+            "title": "Operation Id",
+            "description": "Unique within the change; identifies this operation on replay."
           },
           "field_id": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Field Id"
+            "title": "Field Id",
+            "description": "A field `id` from the manifest."
           },
           "kind": {
-            "$ref": "#/components/schemas/FieldOperationKind"
+            "$ref": "#/components/schemas/FieldOperationKind",
+            "description": "`set` writes `value`; `unset` clears the answer."
           },
           "value": {
-            "$ref": "#/components/schemas/JsonValue"
+            "$ref": "#/components/schemas/JsonValue",
+            "description": "The new answer, in the field's `value_kind` shape and at most 16 KiB encoded. Must be null when `kind` is `unset`."
           }
         },
         "additionalProperties": false,
@@ -18651,21 +18746,25 @@
           "id": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Id"
+            "title": "Id",
+            "description": "The `field_id` used in draft operations."
           },
           "label": {
             "type": "string",
             "title": "Label"
           },
           "control": {
-            "$ref": "#/components/schemas/ControlKind"
+            "$ref": "#/components/schemas/ControlKind",
+            "description": "How to draw the field; every client draws all of them."
           },
           "value_kind": {
-            "$ref": "#/components/schemas/ValueKind"
+            "$ref": "#/components/schemas/ValueKind",
+            "description": "JSON shape of the answer. `game_ticks` is an integer counted in Minecraft ticks, and `string_list` is an array of strings."
           },
           "required": {
             "type": "boolean",
-            "title": "Required"
+            "title": "Required",
+            "description": "Enforced only at finalization; a draft may be saved without it."
           },
           "help_text": {
             "anyOf": [
@@ -18686,7 +18785,8 @@
               "$ref": "#/components/schemas/ChoiceOptionResponse"
             },
             "type": "array",
-            "title": "Options"
+            "title": "Options",
+            "description": "Inline options, empty when `option_source` is set."
           },
           "option_source": {
             "anyOf": [
@@ -18697,7 +18797,8 @@
                 "type": "null"
               }
             ],
-            "title": "Option Source"
+            "title": "Option Source",
+            "description": "Names a dynamic option set to fetch for this category; null when `options` carries them inline."
           },
           "visible_when": {
             "anyOf": [
@@ -18707,14 +18808,17 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Null when the field is always visible."
           },
           "default": {
-            "$ref": "#/components/schemas/JsonValue"
+            "$ref": "#/components/schemas/JsonValue",
+            "description": "Value to prefill, null when the field has none."
           },
           "repeatable": {
             "type": "boolean",
-            "title": "Repeatable"
+            "title": "Repeatable",
+            "description": "True only on `string_list` fields, whose entries a client may add and remove."
           },
           "required_capability": {
             "anyOf": [
@@ -18725,14 +18829,16 @@
                 "type": "null"
               }
             ],
-            "title": "Required Capability"
+            "title": "Required Capability",
+            "description": "A renderer capability the field needs, drawn from `renderer.capability_identifiers` in `/v1/capabilities`. A client lacking it cannot draw this field."
           },
           "origins": {
             "items": {
               "$ref": "#/components/schemas/SubmissionOrigin"
             },
             "type": "array",
-            "title": "Origins"
+            "title": "Origins",
+            "description": "Transports the field applies to. A draft created with another origin neither shows nor validates it."
           }
         },
         "additionalProperties": false,
@@ -18754,7 +18860,7 @@
           "origins"
         ],
         "title": "FormFieldResponse",
-        "description": "One field that any supported submission renderer can present."
+        "description": "One field that any supported submission renderer can present.\n\n`options` and `option_source` are mutually exclusive: a choice field carries inline options or\nnames a dynamic source, never both."
       },
       "FormManifestResponse": {
         "properties": {
@@ -18764,29 +18870,34 @@
           },
           "revision": {
             "type": "integer",
-            "title": "Revision"
+            "title": "Revision",
+            "description": "Rises when the form changes. A draft stays pinned to the revision it was created under."
           },
           "minimum_protocol": {
             "type": "integer",
-            "title": "Minimum Protocol"
+            "title": "Minimum Protocol",
+            "description": "Lowest submission protocol version that can render this manifest. Compare against `protocols.submission` in `/v1/capabilities` and refuse a manifest outside the overlap."
           },
           "maximum_protocol": {
             "type": "integer",
-            "title": "Maximum Protocol"
+            "title": "Maximum Protocol",
+            "description": "Highest submission protocol version that can render this manifest."
           },
           "common_sections": {
             "items": {
               "$ref": "#/components/schemas/FormSectionResponse"
             },
             "type": "array",
-            "title": "Common Sections"
+            "title": "Common Sections",
+            "description": "Sections presented whatever the category."
           },
           "categories": {
             "items": {
               "$ref": "#/components/schemas/CategoryFormResponse"
             },
             "type": "array",
-            "title": "Categories"
+            "title": "Categories",
+            "description": "Every category and the sections specific to it."
           }
         },
         "additionalProperties": false,
@@ -18807,16 +18918,19 @@
           "source": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Source"
+            "title": "Source",
+            "description": "The `option_source` a form field named."
           },
           "category": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Category"
+            "title": "Category",
+            "description": "Build category these options apply to."
           },
           "revision": {
             "type": "integer",
-            "title": "Revision"
+            "title": "Revision",
+            "description": "Rises when the option set changes; starts at 1."
           },
           "options": {
             "items": {
@@ -18842,7 +18956,8 @@
           "id": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Id"
+            "title": "Id",
+            "description": "Lowercase snake_case identifier of at most 64 characters, stable across form revisions."
           },
           "title": {
             "type": "string",
@@ -18936,7 +19051,8 @@
           },
           "is_public": {
             "type": "boolean",
-            "title": "Is Public"
+            "title": "Is Public",
+            "description": "Whether this identity appears on the account's public creator profile."
           }
         },
         "additionalProperties": false,
@@ -18985,12 +19101,14 @@
           },
           "kind": {
             "type": "string",
-            "title": "Kind"
+            "title": "Kind",
+            "description": "One of `build_confirmed`, `build_denied`, `creator_build_confirmed`, `record_gained` or `staff_build_submitted`, which decides the shape of `payload`."
           },
           "payload": {
             "additionalProperties": true,
             "type": "object",
-            "title": "Payload"
+            "title": "Payload",
+            "description": "Kind-specific fields; treat unknown keys as additive."
           },
           "created_at": {
             "type": "string",
@@ -19007,7 +19125,8 @@
                 "type": "null"
               }
             ],
-            "title": "Read At"
+            "title": "Read At",
+            "description": "Null while the item is unread."
           }
         },
         "additionalProperties": false,
@@ -19065,7 +19184,8 @@
             "type": "string",
             "maxLength": 80,
             "minLength": 1,
-            "title": "Label"
+            "title": "Label",
+            "description": "Free text shown to the account owner."
           },
           "profile": {
             "$ref": "#/components/schemas/ServerProfileSchema"
@@ -19110,7 +19230,8 @@
           },
           "credential_version": {
             "type": "integer",
-            "title": "Credential Version"
+            "title": "Credential Version",
+            "description": "Rises by one on every rotation, starting at 1. The previous secret stops authenticating, and idempotency keys are namespaced by it, so a rotation starts a fresh key space."
           },
           "profile": {
             "$ref": "#/components/schemas/ServerProfileSchema"
@@ -19130,7 +19251,8 @@
                 "type": "null"
               }
             ],
-            "title": "Rotated At"
+            "title": "Rotated At",
+            "description": "Null until the credential is first rotated."
           },
           "revoked_at": {
             "anyOf": [
@@ -19142,7 +19264,8 @@
                 "type": "null"
               }
             ],
-            "title": "Revoked At"
+            "title": "Revoked At",
+            "description": "Null while the installation may still authenticate."
           }
         },
         "additionalProperties": false,
@@ -19171,12 +19294,14 @@
           },
           "token": {
             "type": "string",
-            "title": "Token"
+            "title": "Token",
+            "description": "Sent as `Authorization: Bearer <token>`. Returned once and never retrievable."
           },
           "expires_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Expires At"
+            "title": "Expires At",
+            "description": "When the token stops authenticating; obtain a new challenge to renew."
           }
         },
         "additionalProperties": false,
@@ -19197,7 +19322,8 @@
           },
           "secret": {
             "type": "string",
-            "title": "Secret"
+            "title": "Secret",
+            "description": "Disclosed once and never retrievable. Send it with the installation id in the `Squid-Installation-ID` and `Squid-Installation-Secret` headers."
           }
         },
         "additionalProperties": false,
@@ -19218,7 +19344,8 @@
           },
           "token": {
             "type": "string",
-            "title": "Token"
+            "title": "Token",
+            "description": "Sent as `Authorization: Bearer <token>`. Returned once and never retrievable."
           },
           "java_uuid": {
             "type": "string",
@@ -19226,7 +19353,8 @@
             "title": "Java Uuid"
           },
           "origin": {
-            "$ref": "#/components/schemas/MinecraftClientOrigin"
+            "$ref": "#/components/schemas/MinecraftClientOrigin",
+            "description": "Which client the grant was issued to: `paper` or `fabric`."
           },
           "installation_id": {
             "anyOf": [
@@ -19238,12 +19366,14 @@
                 "type": "null"
               }
             ],
-            "title": "Installation Id"
+            "title": "Installation Id",
+            "description": "The Paper installation that vouched for the player. Always set when `origin` is `paper` and always null when it is `fabric`."
           },
           "expires_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Expires At"
+            "title": "Expires At",
+            "description": "When the token stops authenticating; open a new challenge to renew."
           }
         },
         "additionalProperties": false,
@@ -19325,7 +19455,8 @@
           "absorbed_creator_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Absorbed Creator Id"
+            "title": "Absorbed Creator Id",
+            "description": "The creator id that would become a permanent redirect to the caller's."
           },
           "alias_names": {
             "items": {
@@ -19373,7 +19504,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "title": "Id"
+            "title": "Id",
+            "description": "Opaque projection key. Match it for equality; do not parse it."
           },
           "title": {
             "type": "string",
@@ -19381,7 +19513,8 @@
           },
           "metadata_kind": {
             "type": "string",
-            "title": "Metadata Kind"
+            "title": "Metadata Kind",
+            "description": "What was matched: `creator`, `version`, or a tag's semantic kind (`restriction`, `pattern` or `showcase`)."
           },
           "description": {
             "anyOf": [
@@ -19431,7 +19564,8 @@
                 "type": "null"
               }
             ],
-            "title": "Score"
+            "title": "Score",
+            "description": "Relevance, higher first. Comparable within one response only, never across queries; null when the results carry no ranking."
           },
           "metadata": {
             "$ref": "#/components/schemas/MetadataSearchEntry"
@@ -19489,14 +19623,16 @@
                 "type": "null"
               }
             ],
-            "title": "Claimed Creator Name"
+            "title": "Claimed Creator Name",
+            "description": "The creator credit now attributed to the caller under the current name."
           },
           "retained_creator_names": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Retained Creator Names"
+            "title": "Retained Creator Names",
+            "description": "Credits kept under previously verified names. A rename does not retract them."
           },
           "contested_creator_name": {
             "anyOf": [
@@ -19507,7 +19643,8 @@
                 "type": "null"
               }
             ],
-            "title": "Contested Creator Name"
+            "title": "Contested Creator Name",
+            "description": "Set when the current name is credited to a different account and was not taken."
           },
           "pending_claim_id": {
             "anyOf": [
@@ -19518,7 +19655,8 @@
                 "type": "null"
               }
             ],
-            "title": "Pending Claim Id"
+            "title": "Pending Claim Id",
+            "description": "The staff review opened for a contested name."
           }
         },
         "additionalProperties": false,
@@ -19552,25 +19690,29 @@
         "additionalProperties": false,
         "type": "object",
         "title": "NotificationPreferenceUpdate",
-        "description": "A complete pair of independently configurable notification channels."
+        "description": "A complete pair of independently configurable notification channels.\n\nBoth switches are replaced, so an omitted one defaults to false and turns that channel off."
       },
       "NotificationPreferencesDetail": {
         "properties": {
           "consent_pending": {
             "type": "boolean",
-            "title": "Consent Pending"
+            "title": "Consent Pending",
+            "description": "True while the account still owes the current privacy notice, which refuses every attempt to enable a channel. The same fact reported by `UserMe`; there is no notification-specific notice."
           },
           "web_enabled": {
             "type": "boolean",
-            "title": "Web Enabled"
+            "title": "Web Enabled",
+            "description": "Whether new notifications reach the web inbox."
           },
           "dm_enabled": {
             "type": "boolean",
-            "title": "Dm Enabled"
+            "title": "Dm Enabled",
+            "description": "Whether new notifications are sent as Discord direct messages."
           },
           "dm_suspended": {
             "type": "boolean",
-            "title": "Dm Suspended"
+            "title": "Dm Suspended",
+            "description": "True after a direct message failed to deliver, which also turns `dm_enabled` off. Enabling DMs again clears it."
           }
         },
         "additionalProperties": false,
@@ -19582,7 +19724,7 @@
           "dm_suspended"
         ],
         "title": "NotificationPreferencesDetail",
-        "description": "Independent channel switches, and whether the account may use them yet.\n\n`consent_pending` is spelled as it is on `UserMe`: it is the same fact about the same one\nprivacy notice, and there is no notification-specific notice to report separately."
+        "description": "Independent channel switches, and whether the account may use them yet."
       },
       "NotificationSubscriptionCreate": {
         "properties": {
@@ -19599,7 +19741,8 @@
                 "type": "null"
               }
             ],
-            "title": "Subject Id"
+            "title": "Subject Id",
+            "description": "A creator's `id` for `creator`, or a record's `competition_id` for `record`. The target must already exist."
           },
           "filter": {
             "anyOf": [
@@ -19618,7 +19761,7 @@
           "kind"
         ],
         "title": "NotificationSubscriptionCreate",
-        "description": "A creator, exact-record, or record-filter subscription request."
+        "description": "A creator, exact-record, or record-filter subscription request.\n\n`subject_id` and `filter` are mutually exclusive: `creator` and `record` require the former,\n`record_filter` requires the latter, and sending both or neither is rejected."
       },
       "NotificationSubscriptionDetail": {
         "properties": {
@@ -19639,7 +19782,8 @@
                 "type": "null"
               }
             ],
-            "title": "Subject Id"
+            "title": "Subject Id",
+            "description": "Null exactly when `kind` is `record_filter`."
           },
           "filter": {
             "anyOf": [
@@ -19651,7 +19795,8 @@
                 "type": "null"
               }
             ],
-            "title": "Filter"
+            "title": "Filter",
+            "description": "The stored `RecordFilterInput` with every member sorted. Null unless `kind` is `record_filter`."
           }
         },
         "additionalProperties": false,
@@ -19669,7 +19814,8 @@
         "properties": {
           "option_id": {
             "type": "string",
-            "title": "Option Id"
+            "title": "Option Id",
+            "description": "The `id` of the option the caller chose."
           }
         },
         "additionalProperties": false,
@@ -20078,7 +20224,8 @@
           "java_uuid": {
             "type": "string",
             "format": "uuid",
-            "title": "Java Uuid"
+            "title": "Java Uuid",
+            "description": "Java Edition UUID of the player being authorized."
           }
         },
         "additionalProperties": false,
@@ -20096,7 +20243,8 @@
             "maxLength": 256,
             "minLength": 32,
             "pattern": "^[A-Za-z0-9_-]+$",
-            "title": "Device Code"
+            "title": "Device Code",
+            "description": "The `device_code` returned when the challenge was created, echoed verbatim."
           }
         },
         "additionalProperties": false,
@@ -20120,11 +20268,13 @@
         "properties": {
           "version": {
             "type": "string",
-            "title": "Version"
+            "title": "Version",
+            "description": "Identifier of the published notice, sent back when recording consent."
           },
           "locale": {
             "type": "string",
-            "title": "Locale"
+            "title": "Locale",
+            "description": "Locale the body was rendered in, echoed so a client can tell it received a fallback rather than what it asked for."
           },
           "title": {
             "type": "string",
@@ -20132,7 +20282,8 @@
           },
           "body": {
             "type": "string",
-            "title": "Body"
+            "title": "Body",
+            "description": "Paragraphs separated by blank lines. Plain text, never markup: it is rendered into a Discord card, an HTML page and a terminal, and only one of those could parse anything else."
           }
         },
         "additionalProperties": false,
@@ -20272,7 +20423,8 @@
           },
           "hidden": {
             "type": "boolean",
-            "title": "Hidden"
+            "title": "Hidden",
+            "description": "Whether the public creator page is withheld. A hidden profile still serves its aliases and build credits, so builds stay attributable."
           },
           "avatar": {
             "anyOf": [
@@ -20437,7 +20589,8 @@
           },
           "subject": {
             "type": "string",
-            "title": "Subject"
+            "title": "Subject",
+            "description": "The provider's own identifier: a Discord user snowflake, a lowercase hyphenated Minecraft UUID for `java`, or a decimal XUID for `bedrock`."
           },
           "display_name": {
             "anyOf": [
@@ -20448,7 +20601,8 @@
                 "type": "null"
               }
             ],
-            "title": "Display Name"
+            "title": "Display Name",
+            "description": "The name the provider reports, null when it is unknown."
           }
         },
         "additionalProperties": false,
@@ -20493,26 +20647,31 @@
           },
           "record_class": {
             "type": "string",
-            "title": "Record Class"
+            "title": "Record Class",
+            "description": "One of `first`, `fastest`, `smallest`, `fastest_smallest` or `smallest_fastest`."
           },
           "build_kind": {
             "type": "string",
-            "title": "Build Kind"
+            "title": "Build Kind",
+            "description": "One of `door`, `entrance`, `extender` or `utility`."
           },
           "version_scope": {
             "type": "string",
-            "title": "Version Scope"
+            "title": "Version Scope",
+            "description": "`all_time` for a record over every version, `current` for one scoped to the newest."
           },
           "status": {
             "type": "string",
-            "title": "Status"
+            "title": "Status",
+            "description": "`resolved` when the competition produced official holders, `unresolved` when the candidates left it undecided, `no_candidate` when nothing qualified."
           },
           "holder_build_ids": {
             "items": {
               "type": "integer"
             },
             "type": "array",
-            "title": "Holder Build Ids"
+            "title": "Holder Build Ids",
+            "description": "Non-empty only when `status` is `resolved`."
           },
           "computed_at": {
             "type": "string",
@@ -20524,7 +20683,8 @@
               "$ref": "#/components/schemas/BuildSummary"
             },
             "type": "array",
-            "title": "Holder Builds"
+            "title": "Holder Builds",
+            "description": "The builds named by `holder_build_ids`, in that order."
           }
         },
         "additionalProperties": false,
@@ -20587,7 +20747,8 @@
             },
             "type": "array",
             "uniqueItems": true,
-            "title": "Version Scopes"
+            "title": "Version Scopes",
+            "description": "`all_time` records span every version; `current` records are scoped to the newest one."
           },
           "tags": {
             "items": {
@@ -20595,13 +20756,14 @@
             },
             "type": "array",
             "maxItems": 8,
-            "title": "Tags"
+            "title": "Tags",
+            "description": "At most one predicate per `tag_id`."
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "RecordFilterInput",
-        "description": "Broad structured predicates for record-gain subscriptions."
+        "description": "Broad structured predicates for record-gain subscriptions.\n\nAn empty set is a wildcard over that facet, but at least one of the four must be non-empty. A\nrecord matches when it satisfies every non-empty facet and every tag predicate."
       },
       "RecordSearchEntry": {
         "properties": {
@@ -20626,7 +20788,8 @@
           },
           "build_id": {
             "type": "integer",
-            "title": "Build Id"
+            "title": "Build Id",
+            "description": "The top-ranked holder build this entry is titled after."
           },
           "build_title": {
             "type": "string",
@@ -20634,11 +20797,13 @@
           },
           "record_class": {
             "type": "string",
-            "title": "Record Class"
+            "title": "Record Class",
+            "description": "Normally one of `first`, `fastest`, `smallest`, `fastest_smallest` or `smallest_fastest`."
           },
           "version_scope": {
             "type": "string",
-            "title": "Version Scope"
+            "title": "Version Scope",
+            "description": "Normally `all_time` or `current`."
           },
           "tags": {
             "items": {
@@ -20665,7 +20830,8 @@
               ]
             },
             "type": "object",
-            "title": "Metrics"
+            "title": "Metrics",
+            "description": "Indexed measurements of the holder build, keyed by metric name. Which keys appear depends on the record, so read them by name."
           }
         },
         "additionalProperties": false,
@@ -20701,7 +20867,8 @@
                 "type": "null"
               }
             ],
-            "title": "Score"
+            "title": "Score",
+            "description": "Relevance, higher first. Comparable within one response only, never across queries; null when the results carry no ranking."
           },
           "record": {
             "$ref": "#/components/schemas/RecordSearchEntry"
@@ -20748,26 +20915,31 @@
           },
           "record_class": {
             "type": "string",
-            "title": "Record Class"
+            "title": "Record Class",
+            "description": "One of `first`, `fastest`, `smallest`, `fastest_smallest` or `smallest_fastest`."
           },
           "build_kind": {
             "type": "string",
-            "title": "Build Kind"
+            "title": "Build Kind",
+            "description": "One of `door`, `entrance`, `extender` or `utility`."
           },
           "version_scope": {
             "type": "string",
-            "title": "Version Scope"
+            "title": "Version Scope",
+            "description": "`all_time` for a record over every version, `current` for one scoped to the newest."
           },
           "status": {
             "type": "string",
-            "title": "Status"
+            "title": "Status",
+            "description": "`resolved` when the competition produced official holders, `unresolved` when the candidates left it undecided, `no_candidate` when nothing qualified."
           },
           "holder_build_ids": {
             "items": {
               "type": "integer"
             },
             "type": "array",
-            "title": "Holder Build Ids"
+            "title": "Holder Build Ids",
+            "description": "Non-empty only when `status` is `resolved`."
           },
           "computed_at": {
             "type": "string",
@@ -20791,7 +20963,7 @@
           "computed_at"
         ],
         "title": "RecordSummary",
-        "description": "One published computed record result."
+        "description": "One published computed record result.\n\nA result belongs to the currently published computation run for its build kind and version, and a\nnewer run replaces it. `competition_id` names the competition across runs; it is what a record\nnotification subscription is keyed on."
       },
       "RendererCapabilities": {
         "properties": {
@@ -20873,7 +21045,7 @@
           "depth"
         ],
         "title": "SchematicSize",
-        "description": "A schematic bounding-box size."
+        "description": "A schematic bounding-box size, in blocks along each axis."
       },
       "SchematicSummary": {
         "properties": {
@@ -20883,29 +21055,36 @@
           },
           "primary": {
             "type": "boolean",
-            "title": "Primary"
+            "title": "Primary",
+            "description": "Whether this is the build's main schematic."
           },
           "format": {
             "type": "string",
-            "title": "Format"
+            "title": "Format",
+            "description": "Container format of the stored file: `litematic`, `schem`, `schematic`, `nbt` or `mcstructure`."
           },
           "byte_size": {
             "type": "integer",
-            "title": "Byte Size"
+            "title": "Byte Size",
+            "description": "Size of the stored file in bytes."
           },
           "dimensions": {
-            "$ref": "#/components/schemas/SchematicSize"
+            "$ref": "#/components/schemas/SchematicSize",
+            "description": "Tight bounding box of the placed blocks."
           },
           "allocated_dimensions": {
-            "$ref": "#/components/schemas/SchematicSize"
+            "$ref": "#/components/schemas/SchematicSize",
+            "description": "Region the file allocates, which the tight box can be much smaller than."
           },
           "block_count": {
             "type": "integer",
-            "title": "Block Count"
+            "title": "Block Count",
+            "description": "Non-air blocks. Not the Door Rules cumulative volume, which counts air pockets and carries hallway, frame and hitbox exceptions."
           },
           "bounding_volume": {
             "type": "integer",
-            "title": "Bounding Volume"
+            "title": "Bounding Volume",
+            "description": "Volume of `dimensions`, air included."
           },
           "entity_count": {
             "type": "integer",
@@ -20913,7 +21092,8 @@
           },
           "palette_size": {
             "type": "integer",
-            "title": "Palette Size"
+            "title": "Palette Size",
+            "description": "Distinct block states in the file's palette."
           },
           "source_data_version": {
             "anyOf": [
@@ -20924,11 +21104,13 @@
                 "type": "null"
               }
             ],
-            "title": "Source Data Version"
+            "title": "Source Data Version",
+            "description": "Minecraft data version the file declares, null when its format records none."
           },
           "analyzer_version": {
             "type": "string",
-            "title": "Analyzer Version"
+            "title": "Analyzer Version",
+            "description": "Which analysis pass produced these metrics. Values from different versions are not comparable."
           },
           "analysis_schema_version": {
             "type": "integer",
@@ -20936,15 +21118,18 @@
           },
           "license": {
             "type": "string",
-            "title": "License"
+            "title": "License",
+            "description": "Creative Commons license the submitter granted, such as `cc_by_4_0`."
           },
           "license_url": {
             "type": "string",
-            "title": "License Url"
+            "title": "License Url",
+            "description": "Canonical deed URI for `license`."
           },
           "download_url": {
             "type": "string",
-            "title": "Download Url"
+            "title": "Download Url",
+            "description": "Path on this API serving the file; relative to the API root, not absolute."
           }
         },
         "additionalProperties": false,
@@ -20968,32 +21153,37 @@
           "download_url"
         ],
         "title": "SchematicSummary",
-        "description": "Allowlisted analysis metadata for one stored build schematic."
+        "description": "Allowlisted analysis metadata for one stored build schematic.\n\nOnly schematics the submitter published for download appear here, so every one carries a license."
       },
       "SearchField": {
         "properties": {
           "name": {
             "type": "string",
-            "title": "Name"
+            "title": "Name",
+            "description": "Canonical name to use in a query."
           },
           "type": {
             "type": "string",
-            "title": "Type"
+            "title": "Type",
+            "description": "Value type accepted: `text`, `number`, `timestamp` or `boolean`."
           },
           "supports_range": {
             "type": "boolean",
-            "title": "Supports Range"
+            "title": "Supports Range",
+            "description": "Whether the field accepts range comparisons rather than equality only."
           },
           "supports_sort": {
             "type": "boolean",
-            "title": "Supports Sort"
+            "title": "Supports Sort",
+            "description": "Whether results may be ordered by this field."
           },
           "aliases": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Aliases"
+            "title": "Aliases",
+            "description": "Other names accepted for `name`, matched case-insensitively."
           }
         },
         "additionalProperties": false,
@@ -21047,7 +21237,8 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Suggestions"
+            "title": "Suggestions",
+            "description": "Indexed terms close to the query's positive text, at most the requested limit."
           }
         },
         "additionalProperties": false,
@@ -21063,6 +21254,7 @@
           "enabled": {
             "type": "boolean",
             "title": "Enabled",
+            "description": "Whether this installation appears in the public server list.",
             "default": false
           },
           "display_name": {
@@ -21089,7 +21281,8 @@
                 "type": "null"
               }
             ],
-            "title": "Address"
+            "title": "Address",
+            "description": "Address players connect to."
           },
           "description": {
             "anyOf": [
@@ -21121,13 +21314,14 @@
           "sponsor_opt_in": {
             "type": "boolean",
             "title": "Sponsor Opt In",
+            "description": "Whether builds submitted through this installation carry it as their sponsor. The attribution is captured at finalization and does not change afterwards.",
             "default": false
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "ServerProfileSchema",
-        "description": "Explicit public listing and sponsor preferences for a Paper server."
+        "description": "Explicit public listing and sponsor preferences for a Paper server.\n\nEvery text field is trimmed before storage; nothing here is published until `enabled` is true."
       },
       "SourceKind": {
         "type": "string",
@@ -21151,26 +21345,31 @@
           },
           "schema_revision": {
             "type": "integer",
-            "title": "Schema Revision"
+            "title": "Schema Revision",
+            "description": "Form revision this draft is pinned to."
           },
           "category": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Category"
+            "title": "Category",
+            "description": "Lowercase snake_case identifier of at most 64 characters, stable across form revisions."
           },
           "revision": {
             "type": "integer",
-            "title": "Revision"
+            "title": "Revision",
+            "description": "Rises by one per applied change; send it as the next change's `base_revision`."
           },
           "status": {
-            "$ref": "#/components/schemas/DraftStatus"
+            "$ref": "#/components/schemas/DraftStatus",
+            "description": "`editing` accepts changes; `processing` is being finalized; `needs_attention` has repairable issues; `submitted` produced a build; `expired` passed `expires_at`."
           },
           "answers": {
             "additionalProperties": {
               "$ref": "#/components/schemas/JsonValue"
             },
             "type": "object",
-            "title": "Answers"
+            "title": "Answers",
+            "description": "Current answers by field id. An unanswered field is absent."
           },
           "origin": {
             "$ref": "#/components/schemas/SubmissionOrigin"
@@ -21188,7 +21387,8 @@
           "expires_at": {
             "type": "string",
             "format": "date-time",
-            "title": "Expires At"
+            "title": "Expires At",
+            "description": "When the draft is discarded if it is not finalized first."
           },
           "source_installation_id": {
             "anyOf": [
@@ -21200,7 +21400,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Installation Id"
+            "title": "Source Installation Id",
+            "description": "The Paper installation the draft came from. Null for every other origin."
           }
         },
         "additionalProperties": false,
@@ -21226,10 +21427,12 @@
           "field_id": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Field Id"
+            "title": "Field Id",
+            "description": "The field to repair."
           },
           "reason": {
-            "$ref": "#/components/schemas/SubmissionAttentionReason"
+            "$ref": "#/components/schemas/SubmissionAttentionReason",
+            "description": "What is wrong with it, as a stable code to branch on."
           }
         },
         "additionalProperties": false,
@@ -21277,17 +21480,20 @@
           },
           "draft_revision": {
             "type": "integer",
-            "title": "Draft Revision"
+            "title": "Draft Revision",
+            "description": "The draft revision this job was started from."
           },
           "status": {
-            "$ref": "#/components/schemas/FinalizationJobStatus"
+            "$ref": "#/components/schemas/FinalizationJobStatus",
+            "description": "`pending` and `claimed` are still running; `needs_attention` lists repairable `issues`; `completed` carries `build_id`; `dead` failed for good."
           },
           "issues": {
             "items": {
               "$ref": "#/components/schemas/SubmissionAttentionIssueResponse"
             },
             "type": "array",
-            "title": "Issues"
+            "title": "Issues",
+            "description": "Non-empty only when `status` is `needs_attention`."
           },
           "build_id": {
             "anyOf": [
@@ -21298,7 +21504,8 @@
                 "type": "null"
               }
             ],
-            "title": "Build Id"
+            "title": "Build Id",
+            "description": "The build finalization produced. Null until `status` is `completed`."
           }
         },
         "additionalProperties": false,
@@ -21353,11 +21560,13 @@
                 "type": "null"
               }
             ],
-            "title": "Description"
+            "title": "Description",
+            "description": "Secondary text disambiguating candidates that share a label; null when there is none."
           },
           "kind": {
             "type": "string",
-            "title": "Kind"
+            "title": "Kind",
+            "description": "The entity type behind the candidate, for keeping a mixed list readable."
           }
         },
         "additionalProperties": false,
@@ -21375,7 +21584,8 @@
         "properties": {
           "source": {
             "type": "string",
-            "title": "Source"
+            "title": "Source",
+            "description": "The source these completions came from."
           },
           "revision": {
             "anyOf": [
@@ -21386,7 +21596,8 @@
                 "type": "null"
               }
             ],
-            "title": "Revision"
+            "title": "Revision",
+            "description": "Content revision of an enumerable source, matching the response `ETag`. Null for a queried source, which has no enumerable content to revision."
           },
           "replacement": {
             "anyOf": [
@@ -21396,14 +21607,16 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Present when a value completes part of the query; null when it replaces all of it."
           },
           "items": {
             "items": {
               "$ref": "#/components/schemas/SuggestionItem"
             },
             "type": "array",
-            "title": "Items"
+            "title": "Items",
+            "description": "Ranked, best first."
           }
         },
         "additionalProperties": false,
@@ -21421,11 +21634,13 @@
         "properties": {
           "start": {
             "type": "integer",
-            "title": "Start"
+            "title": "Start",
+            "description": "Character offset of the first replaced character."
           },
           "end": {
             "type": "integer",
-            "title": "End"
+            "title": "End",
+            "description": "Character offset just past the last replaced character."
           }
         },
         "additionalProperties": false,
@@ -21435,7 +21650,7 @@
           "end"
         ],
         "title": "SuggestionReplacement",
-        "description": "The half-open range of the submitted query a value replaces."
+        "description": "The half-open range of the submitted query a value replaces.\n\nSplice the chosen `value` over it rather than clobbering the whole input."
       },
       "SuggestionSourceInfo": {
         "properties": {
@@ -21444,17 +21659,20 @@
             "title": "Id"
           },
           "kind": {
-            "$ref": "#/components/schemas/SourceKind"
+            "$ref": "#/components/schemas/SourceKind",
+            "description": "`enumerable` sources can be listed and cached whole; `queried` ones must be asked per query."
           },
           "value_type": {
-            "$ref": "#/components/schemas/ValueType"
+            "$ref": "#/components/schemas/ValueType",
+            "description": "Scalar type each `value` carries: `string` or `integer`."
           },
           "context_keys": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Context Keys"
+            "title": "Context Keys",
+            "description": "Context this source needs supplied, such as `category`, sorted ascending."
           },
           "multi_value": {
             "anyOf": [
@@ -21465,11 +21683,13 @@
                 "type": "null"
               }
             ],
-            "title": "Multi Value"
+            "title": "Multi Value",
+            "description": "Separator when the completed parameter holds a list, so a client splices one entry. Null for a single-valued parameter."
           },
           "requires_authentication": {
             "type": "boolean",
-            "title": "Requires Authentication"
+            "title": "Requires Authentication",
+            "description": "True when the source is gated or scoped, so an anonymous caller gets nothing."
           }
         },
         "additionalProperties": false,
@@ -21493,11 +21713,13 @@
           },
           "key": {
             "type": "string",
-            "title": "Key"
+            "title": "Key",
+            "description": "Stable identifier, safe to hardcode; `name` is not."
           },
           "name": {
             "type": "string",
-            "title": "Name"
+            "title": "Name",
+            "description": "Display name, which staff may change."
           },
           "query_name": {
             "anyOf": [
@@ -21508,19 +21730,23 @@
                 "type": "null"
               }
             ],
-            "title": "Query Name"
+            "title": "Query Name",
+            "description": "Lowercase snake_case name accepted in search queries. Null when the tag is not queryable."
           },
           "authority": {
             "type": "string",
-            "title": "Authority"
+            "title": "Authority",
+            "description": "`official` for a staff-defined tag, `user` for a member-defined one. Only official tags are restrictions or patterns."
           },
           "kind": {
             "type": "string",
-            "title": "Kind"
+            "title": "Kind",
+            "description": "What the tag asserts: `restriction` for a rule the build obeys, `pattern` for one it uses, `showcase` for a free-form label."
           },
           "value_type": {
             "type": "string",
-            "title": "Value Type"
+            "title": "Value Type",
+            "description": "Type an assignment carries: `none`, `numeric`, `text` or `boolean`. A `none` tag is a bare label."
           },
           "restriction_type": {
             "anyOf": [
@@ -21531,7 +21757,8 @@
                 "type": "null"
               }
             ],
-            "title": "Restriction Type"
+            "title": "Restriction Type",
+            "description": "Set exactly when `kind` is `restriction`, and null otherwise."
           },
           "record_operator": {
             "anyOf": [
@@ -21542,7 +21769,8 @@
                 "type": "null"
               }
             ],
-            "title": "Record Operator"
+            "title": "Record Operator",
+            "description": "How an assignment satisfies a record predicate: `present`, `exact`, `at_most` or `at_least`. Always null when `kind` is `showcase`."
           },
           "canonical_unit": {
             "anyOf": [
@@ -21553,7 +21781,8 @@
                 "type": "null"
               }
             ],
-            "title": "Canonical Unit"
+            "title": "Canonical Unit",
+            "description": "Unit assigned values are stored in."
           },
           "display_unit": {
             "anyOf": [
@@ -21564,7 +21793,8 @@
                 "type": "null"
               }
             ],
-            "title": "Display Unit"
+            "title": "Display Unit",
+            "description": "Unit to present values in by default, which may differ from storage."
           },
           "numeric_step": {
             "anyOf": [
@@ -21576,7 +21806,8 @@
                 "type": "null"
               }
             ],
-            "title": "Numeric Step"
+            "title": "Numeric Step",
+            "description": "Granularity assigned values snap to."
           }
         },
         "additionalProperties": false,
@@ -21596,14 +21827,15 @@
           "numeric_step"
         ],
         "title": "TagDetail",
-        "description": "A published tag clients may use in build and search views."
+        "description": "A published tag clients may use in build and search views.\n\nOnly approved tags are published, and the unit and step fields are set on numeric tags alone."
       },
       "TagPredicateInput": {
         "properties": {
           "tag_id": {
             "type": "integer",
             "minimum": 1.0,
-            "title": "Tag Id"
+            "title": "Tag Id",
+            "description": "Id of a tag published by `/v1/tags`."
           },
           "operator": {
             "type": "string",
@@ -21612,6 +21844,7 @@
               "exact"
             ],
             "title": "Operator",
+            "description": "`present` matches any assignment of the tag; `exact` additionally requires `value` to equal the assigned value.",
             "default": "present"
           },
           "value": {
@@ -21633,7 +21866,8 @@
                 "type": "null"
               }
             ],
-            "title": "Value"
+            "title": "Value",
+            "description": "Required when `operator` is `exact`, and rejected when it is `present`."
           }
         },
         "additionalProperties": false,
@@ -21726,7 +21960,8 @@
           "creator_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Creator Id"
+            "title": "Creator Id",
+            "description": "The public identifier this account's creator page is served under."
           },
           "created_at": {
             "anyOf": [
@@ -21748,11 +21983,13 @@
                 "type": "null"
               }
             ],
-            "title": "Consent Version"
+            "title": "Consent Version",
+            "description": "Version of the privacy notice this account last consented to; null if it never has."
           },
           "consent_pending": {
             "type": "boolean",
-            "title": "Consent Pending"
+            "title": "Consent Pending",
+            "description": "Whether the account still owes the current privacy notice. While true every write fails with 400 until `/v1/users/me/consent` is posted."
           },
           "identities": {
             "items": {
@@ -21845,7 +22082,8 @@
         "properties": {
           "edition": {
             "type": "string",
-            "title": "Edition"
+            "title": "Edition",
+            "description": "`Java` or `Bedrock`."
           },
           "major": {
             "type": "integer",
@@ -21857,11 +22095,13 @@
           },
           "patch": {
             "type": "integer",
-            "title": "Patch"
+            "title": "Patch",
+            "description": "Zero for a release written without one, such as `1.20`."
           },
           "display_name": {
             "type": "string",
-            "title": "Display Name"
+            "title": "Display Name",
+            "description": "Formatted as `<edition> <major>.<minor>.<patch>`."
           }
         },
         "additionalProperties": false,
@@ -21891,10 +22131,12 @@
           "field_id": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
-            "title": "Field Id"
+            "title": "Field Id",
+            "description": "The field whose answer is tested."
           },
           "operator": {
-            "$ref": "#/components/schemas/VisibilityOperator"
+            "$ref": "#/components/schemas/VisibilityOperator",
+            "description": "`equals` and `not_equals` compare the answer to `value`; `in` tests membership and requires `value` to be an array."
           },
           "value": {
             "$ref": "#/components/schemas/JsonValue"
@@ -21908,7 +22150,7 @@
           "value"
         ],
         "title": "VisibilityRuleResponse",
-        "description": "A condition controlling whether a field is shown, evaluated by any client."
+        "description": "A condition controlling whether a field is shown, evaluated by any client.\n\nA field whose rule does not match is hidden and not validated, so leaving it unanswered is fine."
       },
       "VoteInput": {
         "properties": {
@@ -21947,7 +22189,8 @@
         "properties": {
           "id": {
             "type": "string",
-            "title": "Id"
+            "title": "Id",
+            "description": "Stable option identifier, and the key used in `tallies` and `own_selection`."
           },
           "label": {
             "anyOf": [
@@ -21958,15 +22201,18 @@
                 "type": "null"
               }
             ],
-            "title": "Label"
+            "title": "Label",
+            "description": "Display text. Always set on a generic poll's options; null on the fixed approve and deny ones, which a client labels itself."
           },
           "choice": {
             "type": "string",
-            "title": "Choice"
+            "title": "Choice",
+            "description": "`approve` and `deny` sign the option's weight in the net score; `generic` options do not score."
           },
           "position": {
             "type": "integer",
-            "title": "Position"
+            "title": "Position",
+            "description": "Display order, ascending."
           }
         },
         "additionalProperties": false,
@@ -21987,15 +22233,18 @@
             "title": "Question"
           },
           "visibility": {
-            "$ref": "#/components/schemas/VoteVisibility"
+            "$ref": "#/components/schemas/VoteVisibility",
+            "description": "How much is disclosed while the poll is open: `anonymous_live` and `visible_live` publish tallies, `anonymous_hidden` withholds them until it closes."
           },
           "scope": {
-            "$ref": "#/components/schemas/PollScope"
+            "$ref": "#/components/schemas/PollScope",
+            "description": "`guild` accepts ballots from one server, `network` from every server the bot serves."
           },
           "deadline": {
             "type": "string",
             "format": "date-time",
-            "title": "Deadline"
+            "title": "Deadline",
+            "description": "When the poll closes itself; a generic poll never closes on a score."
           }
         },
         "additionalProperties": false,
@@ -22016,13 +22265,16 @@
             "title": "Id"
           },
           "kind": {
-            "$ref": "#/components/schemas/VoteKind"
+            "$ref": "#/components/schemas/VoteKind",
+            "description": "`build` and `delete_log` close themselves once `net` reaches a threshold; `generic` closes on its deadline."
           },
           "status": {
-            "$ref": "#/components/schemas/VoteStatus"
+            "$ref": "#/components/schemas/VoteStatus",
+            "description": "`open` while ballots are accepted, `closed` afterwards."
           },
           "result": {
-            "$ref": "#/components/schemas/VoteSessionResult"
+            "$ref": "#/components/schemas/VoteSessionResult",
+            "description": "`pending` until the session closes; then `approved`, `denied` or `cancelled`."
           },
           "pass_threshold": {
             "anyOf": [
@@ -22033,7 +22285,8 @@
                 "type": "null"
               }
             ],
-            "title": "Pass Threshold"
+            "title": "Pass Threshold",
+            "description": "Positive net score that approves the session. Set on threshold kinds and null on a generic poll."
           },
           "fail_threshold": {
             "anyOf": [
@@ -22044,7 +22297,8 @@
                 "type": "null"
               }
             ],
-            "title": "Fail Threshold"
+            "title": "Fail Threshold",
+            "description": "Negative net score that denies the session. Set on threshold kinds and null on a generic poll."
           },
           "build_id": {
             "anyOf": [
@@ -22055,7 +22309,8 @@
                 "type": "null"
               }
             ],
-            "title": "Build Id"
+            "title": "Build Id",
+            "description": "Null unless the session targets a build."
           },
           "options": {
             "items": {
@@ -22072,7 +22327,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Null while an `anonymous_hidden` poll is open; present once it closes."
           },
           "poll": {
             "anyOf": [
@@ -22082,7 +22338,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Null unless `kind` is `generic`."
           },
           "own_selection": {
             "anyOf": [
@@ -22092,7 +22349,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "The authenticated caller's own ballot; null when they have not voted."
           }
         },
         "additionalProperties": false,
@@ -22140,26 +22398,31 @@
               "type": "integer"
             },
             "type": "object",
-            "title": "Raw"
+            "title": "Raw",
+            "description": "How many ballots chose each option, by option id."
           },
           "weighted": {
             "additionalProperties": {
               "type": "number"
             },
             "type": "object",
-            "title": "Weighted"
+            "title": "Weighted",
+            "description": "Summed ballot weights per option id."
           },
           "upvotes": {
             "type": "number",
-            "title": "Upvotes"
+            "title": "Upvotes",
+            "description": "Total weight cast in favour."
           },
           "downvotes": {
             "type": "number",
-            "title": "Downvotes"
+            "title": "Downvotes",
+            "description": "Total weight cast against, as a positive number."
           },
           "net": {
             "type": "number",
-            "title": "Net"
+            "title": "Net",
+            "description": "`upvotes` minus `downvotes`, the score a threshold vote closes on."
           }
         },
         "additionalProperties": false,

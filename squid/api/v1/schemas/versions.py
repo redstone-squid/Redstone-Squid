@@ -1,6 +1,6 @@
 """Public Minecraft-version representations."""
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from squid.versions.domain import MinecraftVersion
 
@@ -10,11 +10,11 @@ class VersionDetail(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    edition: str
+    edition: str = Field(description="`Java` or `Bedrock`.")
     major: int
     minor: int
-    patch: int
-    display_name: str
+    patch: int = Field(description="Zero for a release written without one, such as `1.20`.")
+    display_name: str = Field(description="Formatted as `<edition> <major>.<minor>.<patch>`.")
 
     @classmethod
     def from_domain(cls, version: MinecraftVersion) -> VersionDetail:
