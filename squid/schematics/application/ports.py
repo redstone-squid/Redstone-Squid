@@ -19,11 +19,12 @@ from squid.schematics.domain.models import (
 
 
 class SchematicAnalyzer(Protocol):
-    """Native schematic operations, executed off the event loop.
+    """Native schematic operations, executed off the event loop; `aclose` ends the analyzer for good.
 
-    Implementations take bytes and return domain values. They deliberately do not accept or
-    return engine handles: a schematic object reused across calls would carry a cached
-    simulation world with it, so every operation reloads from bytes.
+    Implementations take bytes and return domain values, never engine handles: a schematic object
+    reused across calls carries a cached simulation world with it, so every operation reloads from
+    bytes. Any operation may raise `InvalidSchematicError`, `SchematicTooLargeError`,
+    `SchematicTimeoutError`, `SchematicWorkerCrashedError`, or `SchematicSupportUnavailableError`.
     """
 
     async def analyze(
@@ -36,16 +37,17 @@ class SchematicAnalyzer(Protocol):
     ) -> SchematicAnalysis:
         """Read every fact worth persisting about one schematic file.
 
-        `source_format` is what the caller's own content sniff concluded, filename hint
-        included. Implementations sniff the bytes themselves when it is omitted, but they
-        cannot see the filename, so passing it through gives a better answer for formats whose
-        root compounds are ambiguous.
+        `source_format` is what the caller's own content sniff concluded, filename hint included.
+        Implementations sniff the bytes again when it is omitted, but they cannot see the filename,
+        so passing it through gives a better answer for ambiguous root compounds.
         """
         ...
 
     async def convert(
         self, data: bytes, *, target: SchematicFormat, data_version: int | None = None
-    ) -> tuple[bytes, tuple[VersionLossEntry, ...]]: ...
+    ) -> tuple[bytes, tuple[VersionLossEntry, ...]]:
+        """Re-encode into `target`, retargeting `data_version` when given; returns bytes and fidelity losses."""
+        ...
 
     async def compare(
         self,
@@ -58,16 +60,27 @@ class SchematicAnalyzer(Protocol):
         """Compare two files, optionally under a stricter caller-owned deadline."""
         ...
 
-    async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes: ...
+    async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes:
+        """Render to PNG bytes with `resource_pack`; implementations that own a GPU serialise renders."""
+        ...
 
-    async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult: ...
+    async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:
+        """Actuate one input and return tick-engine timing evidence.
 
-    async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes: ...
+        Raises `AmbiguousSimulationInputError` when the schematic offers no single control to press.
+        """
+        ...
 
-    async def capabilities(self) -> AnalyzerCapabilities: ...
+    async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes:
+        """Repeat `lattice`'s unit cell `counts` times along its period vectors and re-encode."""
+        ...
+
+    async def capabilities(self) -> AnalyzerCapabilities:
+        """What this engine build can do; an unusable engine answers `available=False` rather than raising."""
+        ...
 
     async def aclose(self) -> None:
-        """Release any process-level resources this analyzer owns."""
+        """Release any process-level resources this analyzer owns; no operation may follow."""
         ...
 
 
@@ -75,10 +88,12 @@ class SchematicStore(Protocol):
     """Persistence operations required by the schematic service."""
 
     async def put_file(self, data: bytes, *, source_format: SchematicFormat) -> str:
-        """Store bytes content-addressed by SHA-256 and return the digest."""
+        """Store bytes content-addressed by SHA-256 and return the digest. Idempotent."""
         ...
 
-    async def get_file(self, sha256: str) -> bytes | None: ...
+    async def get_file(self, sha256: str) -> bytes | None:
+        """The stored bytes, or `None` when no file row carries that digest."""
+        ...
 
     async def record_analysis(
         self,
@@ -90,13 +105,25 @@ class SchematicStore(Protocol):
         original_filename: str | None = None,
         uploaded_by_account_id: int | None = None,
         publication: SchematicPublication | None = None,
-    ) -> int: ...
+    ) -> int:
+        """Attach `analysis` to a build, replacing any earlier analysis of the same file.
 
-    async def list_for_build(self, build_id: int) -> list[StoredSchematic]: ...
+        `primary=True` demotes the build's previous primary and re-enqueues its render, since the
+        build's preview now describes the wrong file. Returns the attachment id.
+        """
+        ...
 
-    async def get_for_build(self, build_id: int, schematic_id: int) -> StoredSchematic | None: ...
+    async def list_for_build(self, build_id: int) -> list[StoredSchematic]:
+        """Every attachment of the build, published or not."""
+        ...
 
-    async def get_primary(self, build_id: int) -> StoredSchematic | None: ...
+    async def get_for_build(self, build_id: int, schematic_id: int) -> StoredSchematic | None:
+        """One attachment, or `None` when it does not belong to `build_id`."""
+        ...
+
+    async def get_primary(self, build_id: int) -> StoredSchematic | None:
+        """The build's primary attachment, or `None` when it has none."""
+        ...
 
     async def find_file_matches(
         self,
@@ -135,7 +162,9 @@ class SchematicStore(Protocol):
         """Shortlist schematics of comparable size for pairwise near-duplicate ranking."""
         ...
 
-    async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None: ...
+    async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None:
+        """The stored render for one recipe, or `None` when that recipe has never been rendered."""
+        ...
 
     async def record_render(
         self,
@@ -148,14 +177,16 @@ class SchematicStore(Protocol):
         height: int,
         byte_size: int,
     ) -> StoredRender | None:
-        """Record and project a render only while its schematic remains primary."""
+        """Record and project a render only while its schematic remains primary; `None` otherwise."""
         ...
 
     async def project_render(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
-        """Project a cached render only while its schematic remains primary."""
+        """Project an already-recorded render only while its schematic remains primary."""
         ...
 
-    async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None: ...
+    async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None:
+        """The stored PNG for a recipe, or `None` when it is unknown, unstored, or over `max_bytes`."""
+        ...
 
     async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
         """Persist moderator-facing simulation evidence for one attachment."""
@@ -163,16 +194,31 @@ class SchematicStore(Protocol):
 
 
 class SchematicResourcePackProvider(Protocol):
-    """Lazy source for verified resource-pack bytes and their SHA-256 digest."""
+    """Lazy source for verified resource-pack bytes; `aclose` ends the provider and its transport.
 
-    async def load(self) -> tuple[bytes, str]: ...
+    The digest is part of every render's recipe hash, so a pack swap invalidates cached previews.
+    """
 
-    async def aclose(self) -> None: ...
+    async def load(self) -> tuple[bytes, str]:
+        """The verified pack and its SHA-256, fetched on first use.
+
+        Raises `SchematicRenderUnavailableError` when no pack is configured, or when the configured
+        one is unreadable, oversized, or fails its digest check.
+        """
+        ...
+
+    async def aclose(self) -> None:
+        """Release whatever transport this provider opened to fetch the pack."""
+        ...
 
 
 class SchematicVersionResolver(Protocol):
     """Translation between Minecraft version labels and numeric data versions."""
 
-    async def data_version_for(self, version_label: str) -> int | None: ...
+    async def data_version_for(self, version_label: str) -> int | None:
+        """The data version for a label, or `None` when the label is unknown or unparseable."""
+        ...
 
-    async def label_for_data_version(self, data_version: int) -> str | None: ...
+    async def label_for_data_version(self, data_version: int) -> str | None:
+        """The earliest release label carrying `data_version`, or `None` when no version does."""
+        ...

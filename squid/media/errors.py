@@ -38,7 +38,7 @@ class MediaFailureReason(StrEnum):
 
 
 class MediaLimitExceededError(ValidationError):
-    """An upload, output, or decoded-work budget was exceeded."""
+    """A source, output, or decoded-work measure exceeds `MediaLimits`; `violation` names which one."""
 
     default_message = tr(t"The media exceeds a processing limit.")
     default_code = ErrorCode.INVALID_REQUEST
@@ -63,7 +63,7 @@ class MediaLimitExceededError(ValidationError):
 
 
 class MediaDraftStateConflictError(ConflictError):
-    """A media mutation lost a race with submission finalization."""
+    """A media mutation names a draft that is no longer editable; `status` is the draft's state."""
 
     default_message = tr(t"Media cannot be changed while this submission draft is locked.")
     default_title = tr(t"Draft media locked")
@@ -75,7 +75,7 @@ class MediaDraftStateConflictError(ConflictError):
 
 
 class MediaDraftNotFoundError(NotFoundError):
-    """A media mutation cannot re-establish ownership after draft deletion."""
+    """A media mutation names a draft row that does not exist."""
 
     default_message = tr(t"Submission draft not found.")
     default_title = tr(t"Draft not found")
@@ -86,7 +86,7 @@ class MediaDraftNotFoundError(NotFoundError):
 
 
 class InvalidMediaError(ValidationError):
-    """The file or requested transformation is not safe and well-formed."""
+    """The file or the requested transformation failed validation; `reason` says which check."""
 
     default_message = tr(t"The media file cannot be normalized.")
     default_code = ErrorCode.INVALID_REQUEST
@@ -115,7 +115,7 @@ class MediaToolUnavailableError(ServiceUnavailableError):
 
 
 class MediaProcessingError(InfrastructureError):
-    """A bounded media subprocess or its output failed validation."""
+    """A media subprocess failed or its output did not validate; carries `operation` and `exit_code`."""
 
     default_message = tr(t"Media processing failed.")
     default_resource = "media"
@@ -182,7 +182,7 @@ class MediaJobArtifactError(DataIntegrityError):
 
 
 class MediaArtifactCleanupInProgressError(ConflictError):
-    """A retryable publication conflict with a token-fenced object deletion."""
+    """Publication hit an object key that a token-fenced deletion holds; retry after `retry_at`."""
 
     default_message = tr(t"A normalized media object is being cleaned up.")
     default_resource = "media_artifact"
@@ -193,7 +193,7 @@ class MediaArtifactCleanupInProgressError(ConflictError):
 
 
 class MediaJobClaimLostError(InvalidStateError):
-    """A worker must stop after its durable claim token is revoked or reclaimed."""
+    """The worker's claim token is no longer current, so it must stop working on the job."""
 
     default_message = tr(t"The media job claim is no longer valid.")
     default_resource = "media_job"

@@ -50,18 +50,28 @@ class SchematicJobSnapshot:
 
 
 class SchematicJobRepository(Protocol):
-    """Persistence operations for durable schematic work."""
+    """A claim-token queue whose rows survive their own acknowledgement so clients can poll them.
+
+    Every transition that takes a `ClaimedSchematicJob` is fenced on its claim token and reports
+    `False` instead of acting when the token is no longer current.
+    """
 
     async def submit(
         self,
         operation: SchematicJobOperation,
         params: Mapping[str, Any],
         input_keys: Sequence[str],
-    ) -> int: ...
+    ) -> int:
+        """Enqueue one operation over the already-staged `input_keys` and return its job id."""
+        ...
 
-    async def get(self, job_id: int) -> SchematicJobSnapshot | None: ...
+    async def get(self, job_id: int) -> SchematicJobSnapshot | None:
+        """Current state of one job, or `None` once cleanup has deleted the row."""
+        ...
 
-    async def claim(self, *, limit: int) -> Sequence[ClaimedSchematicJob]: ...
+    async def claim(self, *, limit: int) -> Sequence[ClaimedSchematicJob]:
+        """Lease up to `limit` unfinished jobs that are due, each with a fresh claim token."""
+        ...
 
     async def complete(
         self,
@@ -70,7 +80,9 @@ class SchematicJobRepository(Protocol):
         result_object_key: str | None,
         *,
         retention_hours: int,
-    ) -> bool: ...
+    ) -> bool:
+        """Record the result and retain the row for `retention_hours`; `False` when the claim is stale."""
+        ...
 
     async def fail(
         self,
@@ -82,13 +94,24 @@ class SchematicJobRepository(Protocol):
         max_attempts: int,
         terminal: bool,
         retention_hours: int,
-    ) -> bool: ...
+    ) -> bool:
+        """Back the job off for a retry, or kill it when `terminal` or attempts reach `max_attempts`.
 
-    async def cleanup(self, *, limit: int) -> Sequence[str]: ...
+        Returns whether the job was dead-lettered. `error_kind` and `error_context` are what a
+        polling client rebuilds its typed exception from.
+        """
+        ...
+
+    async def cleanup(self, *, limit: int) -> Sequence[str]:
+        """Delete up to `limit` expired jobs, returning the result object keys the caller must delete."""
+        ...
 
 
 class SchematicJobService:
-    """Validate and coordinate durable schematic jobs."""
+    """Bounds-check durable schematic job calls before they reach the repository.
+
+    Construction raises `InvalidStateError` unless `max_attempts` and `retention_hours` are positive.
+    """
 
     def __init__(
         self,
@@ -116,6 +139,7 @@ class SchematicJobService:
         return await self._repository.get(job_id)
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedSchematicJob]:
+        """Lease due jobs; raises `InvalidStateError` unless `1 <= limit <= 32`."""
         if not 1 <= limit <= 32:
             msg = tr(t"Schematic job claim limit must be between 1 and 32.")
             raise InvalidStateError(msg)
@@ -154,6 +178,7 @@ class SchematicJobService:
         )
 
     async def cleanup(self, *, limit: int = 100) -> Sequence[str]:
+        """Delete expired jobs and return their object keys; `InvalidStateError` unless `1 <= limit <= 500`."""
         if not 1 <= limit <= 500:
             msg = tr(t"Schematic job cleanup limit must be between 1 and 500.")
             raise InvalidStateError(msg)

@@ -28,11 +28,11 @@ class ConvertRequest:
 
 MIN_RENDER_EXTENT = 64
 MAX_RENDER_EXTENT = 4096
-"""Pixel bounds on a rendered image, matching the deployment's configured render size.
+"""Pixel bounds on a rendered image.
 
-Enforced in the request object rather than at each transport because the framing is now
-caller-chosen: a render is sized in the worker's memory, so an unbounded extent is a way to
-kill the engine from a Discord command or an unauthenticated GET.
+Enforced in the request object rather than at each transport: framing is caller-chosen and a
+render is sized in the worker's memory, so an unbounded extent kills the engine from a Discord
+command or an unauthenticated GET.
 """
 
 
@@ -40,8 +40,10 @@ kill the engine from a Discord command or an unauthenticated GET.
 class RenderRequest:
     """Camera and framing for one headless render.
 
-    The defaults produce a rotation-stable isometric view on a transparent background, which
-    reads correctly against both Discord themes.
+    The defaults give a rotation-stable isometric view on a transparent background, which reads
+    correctly against both Discord themes. Construction raises `ValidationError` when an extent
+    falls outside `MIN_RENDER_EXTENT`..`MAX_RENDER_EXTENT`, `zoom` is not positive, or a
+    background channel falls outside 0..1.
     """
 
     width: int = 768
@@ -84,9 +86,8 @@ class RenderRequest:
 class SimulationRequest:
     """A redstone simulation run.
 
-    `input_position` is the block to right-click. It is never guessed: it comes from Insign
-    sign annotations inside the schematic, from a lone unambiguous lever, or from an explicit
-    coordinate supplied by a moderator.
+    `input_position` is the block to right-click, never guessed: it comes from an Insign
+    annotation inside the schematic, from a lone unambiguous lever, or from a moderator.
     """
 
     input_position: Vector3 | None = None

@@ -25,12 +25,10 @@ class InvalidSchematicError(ValidationError):
 
 
 class AmbiguousSimulationInputError(InvalidSchematicError):
-    """The tick simulator could not be told which control to actuate.
+    """The tick simulator cannot tell which control to actuate, so it refuses rather than guess.
 
-    Choosing between several levers would silently time a different circuit than the one a
-    moderator meant, so the engine refuses instead. Refusing is only useful if the caller is
-    told what to choose *between*, which is why the candidates travel as public context: they
-    are coordinates inside a file the caller uploaded, so there is nothing to withhold.
+    `candidates` holds every lever and button found, and travels as public context: they are
+    coordinates inside a file the caller uploaded, so there is nothing to withhold.
     """
 
     def __init__(
@@ -80,10 +78,9 @@ class SchematicTooLargeError(ValidationError):
 
 
 class DecompressionBudgetExceededError(SchematicTooLargeError):
-    """A compressed upload inflates past the allowed budget.
+    """A compressed upload inflates past its budget, detected during the streaming read.
 
-    Raised before any byte reaches the native engine, so a decompression bomb costs us only
-    the streaming read that detected it.
+    Raised before any byte reaches the native engine, so a decompression bomb costs only that read.
     """
 
     def __init__(self, *, limit: int) -> None:
@@ -108,12 +105,10 @@ class SchematicSupportUnavailableError(ServiceUnavailableError):
 
 
 class SchematicRenderRefusedError(ConflictError):
-    """This attachment will never render under the requested recipe.
+    """This attachment will never render, whatever the recipe: unsanitized, poisoned, or over budget.
 
-    A refusal is about the stored schematic, not about the request: an unsanitized file, one
-    that already crashed the engine, or one past a preview budget answers the same way however
-    the camera is pointed. The reason travels as public context because it is the only thing
-    that tells a caller whether to fix something or to stop asking.
+    `reason` travels as public context because it is the only thing telling a caller whether to
+    fix something or to stop asking.
     """
 
     default_message = tr(t"This build's schematic cannot be previewed.")
@@ -153,8 +148,8 @@ class SchematicTimeoutError(InfrastructureError, TimeoutError):
 class SchematicWorkerCrashedError(InfrastructureError, RuntimeError):
     """A schematic worker process died while handling a request.
 
-    The supervisor respawns the worker; the request itself is never retried, because
-    retrying a payload that just killed a process is how you build a crash loop.
+    The supervisor respawns the worker, but never retries the request: a payload that just
+    killed a process would kill the next one too.
     """
 
     default_message = tr(t"The schematic engine failed while reading this file.")

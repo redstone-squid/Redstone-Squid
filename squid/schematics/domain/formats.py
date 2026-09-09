@@ -1,14 +1,13 @@
 """Container and format detection for uploaded schematic files.
 
-This module is deliberately standard-library only. It runs on attacker-controlled bytes
-straight off a Discord attachment, *before* anything reaches the native engine, so it must be
-cheap, total, and impossible to turn into a decompression bomb: every entry point either
-returns a value or raises a :mod:`squid.schematics.errors` exception, and nothing here ever
-materialises more than the caller's budget.
+Standard-library only, and it runs on attacker-controlled bytes straight off a Discord
+attachment, *before* anything reaches the native engine. Every entry point either returns a
+value or raises a :mod:`squid.schematics.errors` exception, and none materialises more than
+the caller's budget.
 
-Detection is content-first. A filename extension is only consulted when the bytes are a valid
+Detection is content-first: a filename extension is consulted only when the bytes are a valid
 NBT stream whose root compound carries none of the marker names we recognise, so renaming
-`bomb.gz` to `door.litematic` cannot buy an attacker anything.
+`bomb.gz` to `door.litematic` buys an attacker nothing.
 """
 
 import zlib
@@ -53,9 +52,9 @@ def format_from_filename(filename: str) -> SchematicFormat | None:
 def sniff_container(data: bytes) -> Container:
     """Classify the outer wrapper of `data` from its magic bytes alone.
 
-    `"raw-nbt"` means the bytes begin plausibly like an uncompressed NBT file: a root
-    `TAG_Compound` followed by a name length that fits inside the data. That is a shape check,
-    not a validation - `.mcstructure` (little-endian) and Java structure files both land here.
+    `"raw-nbt"` is a shape check, not a validation: a root `TAG_Compound` followed by a name
+    length that fits inside the data. Both `.mcstructure` (little-endian) and Java structure
+    files land there.
     """
     if data.startswith(_GZIP_MAGIC):
         return "gzip"
@@ -107,14 +106,13 @@ def sniff_schematic_format(
 ) -> SchematicFormat | None:
     """Identify the schematic format of `data`, or `None` if it is not one we read.
 
-    Only the first `max_sniff_bytes` of inflated output are examined, which is ample: every
-    format we support names its top-level members in the root compound, at the front of the
-    stream. Truncation partway through is therefore expected and not an error here.
+    Only the first `max_sniff_bytes` of inflated output are examined; every supported format
+    names its top-level members in the root compound, so truncation past that is expected
+    rather than an error.
 
-    `filename_hint` is consulted only as a last resort, and only once the bytes have been
-    shown to be a real NBT stream - an unrecognised root compound from a format version we do
-    not know is worth handing to the engine, whereas arbitrary garbage with a `.litematic`
-    name is not.
+    `filename_hint` is a last resort, consulted only once the bytes are known to be a real NBT
+    stream: an unrecognised root compound is worth handing to the engine, arbitrary garbage
+    named `.litematic` is not.
     """
     container = sniff_container(data)
     if container == "zip" or container == "unknown":
@@ -145,7 +143,6 @@ def sniff_schematic_format(
 
 
 def _looks_like_zlib(data: bytes) -> bool:
-    """Report whether `data` opens with a well-formed zlib header."""
     if len(data) < 2:
         return False
     cmf, flg = data[0], data[1]
@@ -153,7 +150,6 @@ def _looks_like_zlib(data: bytes) -> bool:
 
 
 def _looks_like_raw_nbt(data: bytes) -> bool:
-    """Report whether `data` opens like an uncompressed NBT root compound."""
     if len(data) < 3 or data[0] != _TAG_COMPOUND:
         return False
     # The root name length is two bytes; accept either endianness, since Bedrock writes
@@ -166,8 +162,8 @@ def _looks_like_raw_nbt(data: bytes) -> bool:
 def _names_present(payload: bytes, names: tuple[str, ...], *, little_endian: bool = False) -> bool:
     """Report whether every name appears in `payload` as an NBT length-prefixed string.
 
-    Requiring the two-byte length immediately before the name is what keeps this from firing
-    on block identifiers and sign text that happen to contain the same word.
+    Requiring the two-byte length immediately before the name keeps this from firing on block
+    identifiers and sign text containing the same word.
     """
     byte_order: Literal["little", "big"] = "little" if little_endian else "big"
     return all(
@@ -177,7 +173,6 @@ def _names_present(payload: bytes, names: tuple[str, ...], *, little_endian: boo
 
 
 def _streamed_inflated_size(data: bytes, limit: int, *, wbits: int) -> int:
-    """Inflate `data` in bounded chunks, returning its total size."""
     total = 0
     decompressor = zlib.decompressobj(wbits)
     pending = memoryview(data)
@@ -200,10 +195,10 @@ def _streamed_inflated_size(data: bytes, limit: int, *, wbits: int) -> int:
 
 
 def _inflated_prefix(data: bytes, size: int, *, container: Container) -> bytes:
-    """Return at most `size` bytes of inflated output, tolerating a truncated stream.
+    """Return at most `size` bytes of inflated output, answering `b""` for an unreadable stream.
 
-    Used for sniffing only, where a partial read is the normal case and a corrupt tail tells
-    us nothing we need: the root compound has already gone past.
+    Sniffing only: a partial read is the normal case, and a corrupt tail arrives after the root
+    compound has already been seen.
     """
     if container == "raw-nbt":
         return data[:size]

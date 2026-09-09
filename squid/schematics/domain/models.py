@@ -122,9 +122,8 @@ class SchematicFingerprints:
 class AutostackLattice:
     """A repeating structure detected inside a build.
 
-    `vectors` holds one period vector for a 1D run and two for a 2D array. `coverage` is the
-    fraction of the build explained by this period, so a decoder attached to an otherwise
-    periodic screen still yields a usable lattice.
+    `vectors` holds one period vector for a 1D run and two for a 2D array; `coverage` is the
+    fraction of the build that period explains, so a partially periodic build still yields one.
     """
 
     mode: Literal["1d", "2d"]
@@ -177,10 +176,9 @@ class SchematicMetrics:
 class SchematicAnalysis:
     """Everything one pass over a schematic file produced.
 
-    `analyzer_version` and `analysis_schema_version` are load-bearing: fingerprints are not
-    stable across engine upgrades, so persisted fingerprints record what produced them and
-    duplicate lookups filter on it. A version bump therefore becomes a backfill job instead
-    of a silent correctness regression.
+    Fingerprints are not stable across engine upgrades, so `analyzer_version` and
+    `analysis_schema_version` record what produced them and every duplicate lookup filters on
+    the version. A bump is a backfill job, not a silent correctness regression.
     """
 
     metrics: SchematicMetrics

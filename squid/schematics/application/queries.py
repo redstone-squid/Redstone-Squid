@@ -22,7 +22,11 @@ type DuplicateTier = Literal["identical", "structural-match", "near"]
 
 @dataclass(frozen=True, slots=True)
 class SchematicPublication:
-    """Rights, sanitization, and withdrawal facts governing an attachment."""
+    """Rights, sanitization, and withdrawal facts governing an attachment.
+
+    Construction raises `DataIntegrityError` when `PUBLIC_DOWNLOAD` lacks a license or attestation,
+    or when the three sanitization fields are not all set together.
+    """
 
     visibility: SchematicVisibility = SchematicVisibility.LEGACY_UNVERIFIED
     license: SchematicLicense | None = None
@@ -50,7 +54,7 @@ class SchematicPublication:
 
     @property
     def is_sanitized(self) -> bool:
-        """Whether a format-aware sanitizer completed successfully."""
+        """Whether a sanitizer ran to completion, which all three sanitization fields being set means."""
         return (
             self.sanitized_at is not None
             and self.sanitizer_version is not None
