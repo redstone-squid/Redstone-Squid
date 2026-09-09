@@ -54,7 +54,11 @@ _MISSING = object()
 
 
 class ReactiveOwner(Protocol):
-    __dict__: dict[str, Any]
+    """The behaviour reactive state needs from its declaring owner.
+
+    The instance dictionary is reached through `vars()`; see
+    `squid_ui.runtime.histories.HistoryOwner`.
+    """
 
     def _state_changed(self, names: frozenset[str]) -> None: ...
 
