@@ -20,7 +20,7 @@ from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Se
 from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
-from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, get_args, get_origin
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, TypeAliasType, TypeIs, cast, get_args, get_origin
 
 from squid_ui.assets import Asset
 from squid_ui.entity import ConversationType, EntityRef, EntityType
@@ -242,7 +242,7 @@ def _is_component(value: object) -> bool:
     return isinstance(value, Component)
 
 
-def _children[RenderTargetT: RenderTarget](
+def _children[RenderTargetT = RenderTarget](
     values: tuple[ChildLike[RenderTargetT], ...], origin: str
 ) -> tuple[LayoutNode[RenderTargetT], ...]:
     collected: list[LayoutNode[RenderTargetT]] = []
@@ -250,7 +250,9 @@ def _children[RenderTargetT: RenderTarget](
         if value is None or value is False:
             continue
         if isinstance(value, str | ResolvedText | Message | Template):
-            collected.append(Paragraph(_text(value)))
+            # A paragraph renders on every target, but its own annotation names the base
+            # `RenderTarget`, so it cannot be spelled as satisfying an arbitrary one.
+            collected.append(cast(LayoutNode[RenderTargetT], Paragraph(_text(value))))
         elif is_layout_node(value):
             collected.append(value)
         else:
