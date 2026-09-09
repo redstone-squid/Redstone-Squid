@@ -88,6 +88,36 @@ three names that no longer exist (`create_application_runtime`, `BUILD_LOG_CHANN
 accepts, so it needs more than a rename. Deleting these or repairing them is a judgement
 call about whether the plan-68 benchmarks and the backfill script are still wanted.
 
+## The variance divergence
+
+The largest single source of disagreement between the two checkers. For a PEP 695
+parameter on a frozen dataclass, BasedPyright infers **invariance**; Pyrefly infers
+**covariance**. Verified with a standalone repro:
+
+```python
+@dataclass(frozen=True, slots=True)
+class Box[T]:
+    value: T
+
+def takes(x: Box[object]) -> None: ...
+def check(b: Box[int]) -> None:
+    takes(b)          # BasedPyright: "T@Box is invariant". Pyrefly: clean.
+```
+
+Pyrefly is right: a frozen field is read-only, which is exactly when covariance is sound.
+BasedPyright is being conservative about dataclass fields.
+
+Four classes hit this and accounted for roughly twenty errors across eleven files:
+`AdapterProfile` (`squid_ui/planning/adapter.py`), `PlanResult` (`squid_ui/scene/model.py`),
+`Document` (`squid_ui/document.py`) and `Presented` (`squid_ui_discord/response.py`).
+
+PEP 695 has no syntax for explicit variance, so the portable fix is the pre-695 form:
+`TypeVar("T_co", covariant=True)`. `squid_ui.planning.target.Target` already does exactly
+this, and its docstring argues for covariance on the same grounds. Declaring it is safe —
+both checkers verify a declared variance against usage, so an unsound claim becomes an
+error rather than a silent lie. Doing this at the four declarations would remove the whole
+class of divergence and several of the suppressions added to work around it.
+
 ## Caveats
 
 - The two checkers genuinely disagree in places. `_Projection.settings_customise_sources`
