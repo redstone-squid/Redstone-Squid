@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import AsyncGenerator, Sequence
 from contextlib import asynccontextmanager
-from typing import Literal, cast
+from typing import Literal, cast, override
 from uuid import UUID
 
 import pytest
@@ -296,6 +296,7 @@ async def test_edit_releases_lease_when_cancelled_while_loading(existing_build: 
     loading = asyncio.Event()
 
     class BlockingRepository(FakeBuildRepository):
+        @override
         async def get_by_id(self, build_id: int) -> Build | None:
             loading.set()
             await asyncio.sleep(3600)

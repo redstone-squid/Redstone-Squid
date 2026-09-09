@@ -1,6 +1,7 @@
 """HTTP vote mutation tests."""
 
 from dataclasses import dataclass
+from typing import override
 
 import pytest
 
@@ -57,10 +58,12 @@ class VoteRecorder(VoteService):
         self.rejection = rejection
         self.cast_calls: list[CastCall] = []
 
+    @override
     async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         assert vote_session_id == 12
         return self.session
 
+    @override
     async def cast_vote_by_session(self, vote_session_id: int, actor: VoteActor, option_id: str) -> CastVoteResult:
         self.cast_calls.append(CastCall(vote_session_id, actor, option_id))
         return CastVoteResult(self.session, rejection=self.rejection)

@@ -2,6 +2,7 @@
 
 import base64
 from dataclasses import dataclass
+from typing import override
 from uuid import UUID, uuid4
 
 import pytest
@@ -108,6 +109,7 @@ class FakeCliAuthorization(CliAuthorizationService):
         self.revoked_identity: CliIdentity | None = None
         self.pending = False
 
+    @override
     async def start_enrollment(
         self,
         *,
@@ -118,15 +120,18 @@ class FakeCliAuthorization(CliAuthorizationService):
         self.started = (public_key, client_instance_id, label)
         return IssuedCliEnrollment(enrollment(), DEVICE_CODE, USER_CODE, 3)
 
+    @override
     async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
         assert user_code == USER_CODE
         return enrollment()
 
+    @override
     async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment:
         assert user_code == USER_CODE
         self.approved_as = account_id
         return enrollment(approved=True)
 
+    @override
     async def exchange_enrollment(self, *, device_code: str, signature: bytes) -> IssuedCliSession:
         assert device_code == DEVICE_CODE
         if self.pending:
@@ -134,6 +139,7 @@ class FakeCliAuthorization(CliAuthorizationService):
         self.enrollment_signature = signature
         return issued_session()
 
+    @override
     async def start_session_challenge(self, device_id: UUID) -> IssuedCliSessionChallenge:
         assert device_id == DEVICE_ID
         return IssuedCliSessionChallenge(
@@ -147,6 +153,7 @@ class FakeCliAuthorization(CliAuthorizationService):
             NONCE,
         )
 
+    @override
     async def exchange_session_challenge(
         self,
         *,
@@ -158,14 +165,17 @@ class FakeCliAuthorization(CliAuthorizationService):
         self.session_proof = (device_id, challenge_id, nonce, signature)
         return issued_session()
 
+    @override
     async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
         assert account_id == ACCOUNT_ID
         return (device(),)
 
+    @override
     async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
         self.revoked_device = (device_id, account_id)
         return True
 
+    @override
     async def revoke_current_session(self, identity: CliIdentity) -> bool:
         self.revoked_identity = identity
         return True

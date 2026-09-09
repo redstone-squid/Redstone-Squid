@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import override
 
 import pytest
 from whenever import Instant
@@ -32,16 +33,19 @@ class AccountRecorder(AccountService):
         self.conflict = conflict
         self.decisions: list[tuple[str, int, int, bool]] = []
 
+    @override
     async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
         assert with_claimants is True
         return self.claims
 
+    @override
     async def approve_alias_claim(self, claim_id: int, *, staff_account_id: int, reassign: bool = False) -> AliasClaim:
         self.decisions.append(("approve", claim_id, staff_account_id, reassign))
         if self.conflict and not reassign:
             raise AliasAlreadyClaimedError("Notch").with_holder_name("Builder")
         return next(claim for claim in self.claims if claim.id == claim_id)
 
+    @override
     async def reject_alias_claim(self, claim_id: int, *, staff_account_id: int) -> AliasClaim:
         self.decisions.append(("reject", claim_id, staff_account_id, False))
         return next(claim for claim in self.claims if claim.id == claim_id)
