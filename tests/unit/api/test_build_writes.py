@@ -1,5 +1,7 @@
 """Build mutation route tests."""
 
+from typing import override
+
 import pytest
 from fastapi import Response
 from pydantic import ValidationError
@@ -49,6 +51,7 @@ class BuildRecorder(BuildService):
         self.edit_error = edit_error
         self.edits: list[tuple[BuildEditor, int, BuildEditPatch, int | None]] = []
 
+    @override
     async def apply_edit(
         self,
         actor: BuildEditor,

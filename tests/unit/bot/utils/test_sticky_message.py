@@ -1,7 +1,7 @@
 """Unit tests for the reusable StickyMessage coordinator."""
 
 import asyncio
-from typing import Any
+from typing import Any, override
 from unittest.mock import AsyncMock, MagicMock
 
 import discord
@@ -16,6 +16,7 @@ class StubStickyMessage(StickyMessage):
         super().__init__(stale_threshold=stale_threshold, debounce_delay=debounce_delay)
         self.render_count = 0
 
+    @override
     async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
         self.render_count += 1
         return sd.render_static([])

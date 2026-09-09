@@ -1,6 +1,7 @@
 """Tests for reading a stored error report from Discord."""
 
 from collections.abc import Sequence
+from typing import override
 from uuid import UUID
 
 import discord
@@ -73,15 +74,18 @@ class ErrorReportRecorder(ErrorReportService):
         self.recent_calls: list[tuple[int, bool]] = []
         self.clear_calls = 0
 
+    @override
     async def lookup(self, reference: str) -> tuple[ErrorReport, int]:
         assert self.report is not None
         assert reference == self.report.reference
         return self.report, self.matches
 
+    @override
     async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
         self.recent_calls.append((limit, work_lost_only))
         return self.reports
 
+    @override
     async def clear_all(self) -> int:
         self.clear_calls += 1
         return 3

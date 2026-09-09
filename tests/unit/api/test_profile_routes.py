@@ -1,6 +1,7 @@
 """Profile, visibility, and identity-management route contracts."""
 
 from dataclasses import replace
+from typing import override
 from uuid import UUID
 
 import pytest
@@ -65,31 +66,38 @@ class AccountRecorder(AccountService):
         self.merge_previews: list[tuple[int, str]] = []
         self.merges: list[tuple[int, str]] = []
 
+    @override
     async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
         return self.identities
 
+    @override
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
         self.profile_updates.append((account_id, update))
         return self.profile
 
+    @override
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
         self.visibility_updates.append((account_id, identity_id, is_public))
         return replace(JAVA, is_public=is_public)
 
+    @override
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
         self.unlinks.append((account_id, identity_id))
         if self.unlink_error is not None:
             raise self.unlink_error
         return JAVA
 
+    @override
     async def clear_profile(self, account_id: int) -> AccountProfile:
         self.clears.append(account_id)
         return AccountProfile.empty(account_id)
 
+    @override
     async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
         self.merge_codes.append(account_id)
         return "ABCD2345", MergeTicket(1, Instant.from_utc(2026, 8, 18), Instant.from_utc(2026, 8, 18, 0, 10))
 
+    @override
     async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
         self.merge_previews.append((surviving_account_id, code))
         return MergePreview(
@@ -99,6 +107,7 @@ class AccountRecorder(AccountService):
             build_count=3,
         )
 
+    @override
     async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
         self.merges.append((surviving_account_id, code))
         if self.merge_error is not None:

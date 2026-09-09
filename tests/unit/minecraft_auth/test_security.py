@@ -1,7 +1,7 @@
 """Player-grant authentication at the shared API security boundary."""
 
 from dataclasses import dataclass
-from typing import cast
+from typing import cast, override
 from uuid import UUID
 
 import pytest
@@ -31,10 +31,12 @@ class FakeInstallations(InstallationCredentialService):
     def __init__(self) -> None:
         self.token: str | None = None
 
+    @override
     async def authenticate(self, token: str) -> AuthenticatedPaperInstallation:
         self.token = token
         return AuthenticatedPaperInstallation(INSTALLATION_ID, 9, 3)
 
+    @override
     async def authenticate_headers(
         self,
         installation_id: str | None,
@@ -54,6 +56,7 @@ class FakePlayers(PlayerAuthorizationService):
         self.fabric_token: str | None = None
         self.paper_call: tuple[str, AuthenticatedPaperInstallation] | None = None
 
+    @override
     async def authenticate_fabric_player(self, token: str) -> MinecraftPlayerContext:
         self.fabric_token = token
         return MinecraftPlayerContext(
@@ -63,6 +66,7 @@ class FakePlayers(PlayerAuthorizationService):
             origin=MinecraftClientOrigin.FABRIC,
         )
 
+    @override
     async def authenticate_paper_player(
         self,
         token: str,

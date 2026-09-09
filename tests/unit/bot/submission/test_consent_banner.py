@@ -1,7 +1,7 @@
 """Unit tests for the build log consent banner and its routed button."""
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import AsyncMock, MagicMock
 
 import discord
@@ -54,10 +54,12 @@ class AccountRecorder(AccountService):
         self.reads: list[tuple[IdentityProvider, str]] = []
         self.creations: list[IdentityCreation] = []
 
+    @override
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         self.reads.append((provider, subject))
         return self.account
 
+    @override
     async def get_or_create_identity(
         self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
     ) -> Account:
@@ -69,6 +71,7 @@ class SettingsRecorder(SettingsService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
 
@@ -89,9 +92,11 @@ class StickyRecorder(BuildLogConsentStickyMessage):
         self.triggers: list[discord.TextChannel] = []
         self.activity: list[int] = []
 
+    @override
     async def trigger(self, channel: discord.TextChannel) -> None:
         self.triggers.append(channel)
 
+    @override
     def record_activity(self, channel_id: int) -> None:
         self.activity.append(channel_id)
 

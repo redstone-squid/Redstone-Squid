@@ -6,7 +6,7 @@ these tests pin that along with the Minecraft refresh responses.
 """
 
 from dataclasses import replace
-from typing import Any, cast
+from typing import Any, cast, override
 from uuid import UUID
 
 import pytest
@@ -62,22 +62,27 @@ class AccountRecorder(AccountService):
         self.consent_grants: list[int] = []
         self.refreshes: list[tuple[int, UUID | None]] = []
 
+    @override
     async def get_account_by_id(self, account_id: int) -> Account | None:
         self.account_reads.append(account_id)
         return self.account
 
+    @override
     async def get_profile(self, account_id: int) -> AccountProfile:
         assert account_id == 1
         return self.profile
 
+    @override
     async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
         assert account_id == 1
         return self.account.identities
 
+    @override
     async def grant_current_consent(self, account_id: int) -> Account:
         self.consent_grants.append(account_id)
         return self.account
 
+    @override
     async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
         self.refreshes.append((account_id, java_uuid))
         assert self.refresh is not None

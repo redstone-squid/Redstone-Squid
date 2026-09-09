@@ -1,7 +1,7 @@
 """Discord-facing permission checks over the node engine."""
 
 from dataclasses import dataclass
-from typing import cast
+from typing import cast, override
 from unittest.mock import Mock
 
 import discord
@@ -33,6 +33,7 @@ class FakeAccountService(AccountService):
     def __init__(self) -> None:
         self.lookups = 0
 
+    @override
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account:
         assert provider is IdentityProvider.DISCORD
         self.lookups += 1

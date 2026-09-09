@@ -1,7 +1,7 @@
 """The one ephemerality rule, at the sites where getting it wrong costs something (audit C2)."""
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -30,6 +30,7 @@ class SettingsRecorder(SettingsService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
 

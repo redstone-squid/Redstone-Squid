@@ -108,7 +108,11 @@ def test_build_slash_group_includes_the_app_only_workspaces() -> None:
         command for command in cast(Any, SearchCog).__cog_app_commands__ if command.qualified_name == "build"
     )
 
-    assert {command.qualified_name for command in build_group.walk_commands()} == {"build browse", "build submit", "build drafts"}
+    assert {command.qualified_name for command in build_group.walk_commands()} == {
+        "build browse",
+        "build submit",
+        "build drafts",
+    }
 
 
 def test_guided_submit_puts_attachments_last() -> None:

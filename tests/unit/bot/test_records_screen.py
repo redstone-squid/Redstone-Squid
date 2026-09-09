@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import override
 
 from squid.bot.submission.records import RecordsScreen
 from squid.permissions.domain import PermissionNode
@@ -23,13 +24,16 @@ class RecordRecorder(RecordService):
         self.gap_reads = 0
         self.materialize_calls: list[tuple[int, BuildKind | None, int | None]] = []
 
+    @override
     async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         self.gap_reads += 1
         return (RecordGap(1, "Smallest door", None, RecordClass.SMALLEST, (7,), ("volume",)),)
 
+    @override
     async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[TitleDiagnosticGap]:
         return (TitleDiagnosticGap(2, "Unknown door", ({"code": "unknown"},)),)
 
+    @override
     async def materialize_definition(
         self,
         definition_id: int,
@@ -40,6 +44,7 @@ class RecordRecorder(RecordService):
         self.materialize_calls.append((definition_id, kind, version_id))
         return RebuildSummary((), 1, 1, 0)
 
+    @override
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
         return RebuildSummary((), 1, 1, 0)
 
@@ -48,6 +53,7 @@ class ComputationRecorder(RecordComputationService):
     def __init__(self) -> None:
         self.rebuild_calls: list[tuple[int | None, tuple[BuildKind, ...]]] = []
 
+    @override
     async def rebuild(
         self,
         *,

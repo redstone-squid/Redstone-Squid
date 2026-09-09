@@ -1,7 +1,7 @@
 """Authoritative build collection views: moderation status and submitter ownership."""
 
 from dataclasses import dataclass
-from typing import Any, NamedTuple, cast
+from typing import Any, NamedTuple, cast, override
 
 import pytest
 
@@ -42,6 +42,7 @@ class BuildQueryRecorder(BuildQueryService):
         self.builds = builds
         self.calls: list[ListPageCall] = []
 
+    @override
     async def list_page(
         self,
         *,
@@ -67,6 +68,7 @@ class PermissionRecorder(PermissionService):
         self.allowed = allowed
         self.calls: list[tuple[Subject, PermissionNode | str]] = []
 
+    @override
     async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
         self.calls.append((subject, node))
         return self.allowed

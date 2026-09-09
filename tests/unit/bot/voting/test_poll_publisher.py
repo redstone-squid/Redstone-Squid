@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -92,6 +92,7 @@ class PublisherRecorder(DiscordPollPublisher):
         self.send_failure = send_failure
         self.send_calls = 0
 
+    @override
     async def _send_placeholder(self, channel: Any) -> discord.Message:
         del channel
         self.send_calls += 1
