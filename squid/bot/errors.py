@@ -1,4 +1,10 @@
-"""Shared Discord error notice and framework hooks."""
+"""The bot's error taxonomy: classifying an exception into a user-facing notice, and the discord.py hooks that do it.
+
+Every surface funnels through `build_error_notice`, so the same exception reads the same way whether
+it came from a prefix command, an application command, a component or a `pending=` operation. An
+exception that matches no known class becomes a generic notice carrying a correlation reference, and
+only those are logged and stored as an error report.
+"""
 
 import logging
 from collections.abc import Awaitable, Callable, Mapping
@@ -42,25 +48,29 @@ def _reports_from(client: object) -> ErrorReportService | None:
 
 @dataclass(frozen=True, slots=True)
 class ErrorNotice:
-    """Safe Discord-facing representation of an exception."""
+    """Discord-facing text for an exception, carrying no internals.
+
+    `error_id` is set only for an unclassified failure, which is also the only kind captured as an
+    error report.
+    """
 
     title: str
     detail: str
     error_id: str | None = None
     reference: str | None = None
-    """The shortened form of `error_id` shown to the user, who has to retype it.
+    """The shortened form of `error_id` shown on the card, since the user has to retype it.
 
-    Both are kept because they index the same report: logs and the stored record carry the full
-    ID, while a moderator looking one up will be quoting whatever the card showed.
+    Both index the same report: logs and the stored record carry the full id, while a moderator
+    looking one up quotes whatever the card showed.
     """
 
     def to_node(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
-        """Build the composable Components V2 node for this error."""
+        """Lower to `squid.bot.ui.error_node`; the reference, if any, is already inside `detail`."""
         return error_node(self.title, self.detail)
 
 
 def _safe_log_context(context: Mapping[str, object] | None) -> dict[str, object]:
-    """Return diagnostic context without stable Discord account identifiers."""
+    """Diagnostic context with Discord user id keys dropped, at every depth of nested mappings."""
 
     def sanitize(value: object) -> object:
         if isinstance(value, Mapping):
@@ -112,13 +122,11 @@ def mark_error_presented(error: BaseException) -> None:
 
 
 def _presentation_locale(interaction: discord.Interaction[Any] | None) -> str | None:
-    """Best-effort Discord-native locale for error notice.
+    """The interaction's guild locale, else the user's, without touching the database.
 
-    Deliberately skips the admin-configured guild override (which requires a
-    database lookup): this runs on every error, including ones raised from
-    generic views/modals that don't carry a concrete bot type, so it stays
-    synchronous-cheap and safe to call with test doubles. Regular command
-    responses use the fully accurate `squid.bot.i18n.resolve_locale` instead.
+    Skips the admin-configured guild override on purpose: this runs on every error, including ones
+    from objects that carry no concrete bot, so it stays synchronous and safe with test doubles.
+    Successful command responses use `squid.bot.i18n.resolve_locale`, which honours the override.
     """
     if interaction is None:
         return None
@@ -132,9 +140,8 @@ def _presentation_locale(interaction: discord.Interaction[Any] | None) -> str | 
 def _present_missing_nodes(error: PermissionNodeRequired) -> ErrorNotice:
     """Name the nodes a caller is missing, with what each one is for.
 
-    Node names are identifiers and stay untranslated; their catalogue
-    descriptions are translated, so a refusal reads as "you need this capability"
-    rather than as a tier the user has no way to look up.
+    Node names are identifiers and stay untranslated; their catalogue descriptions are translated.
+    A node absent from the catalogue is silently omitted.
     """
     described = "\n".join(f"`{name}` — {tr(CATALOGUE[name].description)}" for name in error.nodes if name in CATALOGUE)
     if error.forbidden:
@@ -155,7 +162,13 @@ def _present_missing_nodes(error: PermissionNodeRequired) -> ErrorNotice:
 
 
 def build_error_notice(error: BaseException, locale: str | None = None) -> ErrorNotice:
-    """Classify an exception into safe Discord-facing text, translated into `locale`."""
+    """Classify an exception into Discord-facing text, translated into `locale`.
+
+    Command wrappers are unwrapped first. A `DomainError` supplies its own title, message and
+    end-user action; framework check and input failures get a fixed notice each; anything else
+    becomes "Something went wrong" with a fresh correlation id in `error_id`, which is what marks it
+    for capture. Never raises: an unrecognised exception still yields a notice.
+    """
     with localization_scope(localization_for(locale)):
         return _build_error_notice(error)
 
@@ -241,11 +254,10 @@ async def _capture(
     context: Mapping[str, object],
     reports: ErrorReportService | None,
 ) -> None:
-    """Store the failure, if this process was wired with somewhere to store it.
+    """Store the failure when this process has a report service; a capture failure is logged, never raised.
 
-    Guarded even though `ErrorReportService.record` already swallows: the buffer drain and the
-    service lookup happen out here, and this runs inside a handler that owes the user a reply.
-    Losing the diagnostic is survivable; losing the reply is a command that silently does nothing.
+    Guarded even though `ErrorReportService.record` already swallows, because the buffer drain and
+    the service lookup happen out here and the caller still owes the user a reply.
     """
     if reports is None or notice.error_id is None or notice.reference is None:
         return
@@ -282,9 +294,9 @@ async def _handle_discord_error(
     if notice.error_id is not None:
         application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None
         safe_context = _safe_log_context(context)
-        # Capture before logging, so the stored tail is what the command was doing before it
-        # failed rather than an echo of the traceback the report already carries. The context is
-        # the redacted one: persisting is more exposing than logging, not less.
+        # Capture before logging, so the stored tail is what the command was doing before it failed
+        # rather than an echo of the traceback the report already carries. The context is the
+        # redacted one: persisting is more exposing than logging, not less.
         await _capture(
             original,
             notice,
@@ -334,7 +346,7 @@ def _error_responder(request: sd.Request[Any]) -> ErrorResponder:
 
 
 def render_request_error(request: sd.Request[Any], error: Exception) -> sl.LayoutNode[sl.ComponentsV2Target]:
-    """Render a failed `pending=` command's notice in the request's locale."""
+    """Render a failed `pending=` command's notice in the request's locale, replacing its card."""
     return build_error_notice(error, request.localization.locale).to_node()
 
 
@@ -352,13 +364,18 @@ async def observe_request_error(
 
 
 COMMAND_ERRORS = sd.ErrorPolicy(render=render_request_error, observe=observe_request_error)
+"""The policy every `pending=` command runs under: the notice replaces the pending card, then is recorded."""
 
 
 async def handle_context_error[BotT: commands.Bot](
     context: commands.Context[BotT],
     error: BaseException,
 ) -> None:
-    """Handle an exception raised by a prefix or hybrid command."""
+    """Present an exception from a prefix or hybrid command, once.
+
+    Answers personally unless a managed defer already fixed the audience. A second call for the same
+    exception object does nothing, so both the cog hook and the global hook may call it.
+    """
     request = await sd.request(context)
     command_name = context.command.qualified_name if context.command is not None else None
     await _handle_discord_error(
@@ -381,7 +398,11 @@ async def handle_interaction_error(
     *,
     surface: str,
 ) -> None:
-    """Handle an exception raised by an application command or UI interaction."""
+    """Present an exception from an application command or UI interaction, once.
+
+    `surface` labels the stored report and the log line. As with `handle_context_error`, a repeat
+    call for the same exception object is a no-op.
+    """
     request = await sd.request(interaction)
     command = interaction.command
     await _handle_discord_error(
@@ -406,7 +427,11 @@ async def record_operation_error(
     presented: bool,
     reports: ErrorReportService | None = None,
 ) -> None:
-    """Capture an operation failure and mark it only when its card reached Discord."""
+    """Capture an operation failure, marking it presented only when `presented` says its card reached Discord.
+
+    Sends nothing itself: the notice has already been rendered by the delivery machinery. An
+    unmarked error is presented again by whichever hook catches it next.
+    """
     if is_error_presented(error):
         return
     original = unwrap_error(error)
@@ -438,7 +463,11 @@ async def record_operation_error(
 
 
 class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT]):
-    """Application command tree with centralized error handling."""
+    """Command tree that wraps every non-autocomplete invocation in a trace span, correlation scope and locale.
+
+    The correlation scope is what lets an error report carry the log lines the command produced
+    before it failed, so anything raised outside it is recorded without a log tail.
+    """
 
     @override
     async def _call(self, interaction: discord.Interaction[ClientT]) -> None:
@@ -456,8 +485,6 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
         if interaction.channel_id is not None:
             attributes["squid.channel.id"] = interaction.channel_id
         # The correlation scope opens inside the span so it adopts the trace id when one exists.
-        # Binding here rather than at notice time is what lets an error report carry the log
-        # lines the command produced before it failed.
         with (
             trace_span(f"discord.command {command_name}", attributes) as span,
             correlation_scope(),

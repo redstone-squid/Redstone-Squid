@@ -1,9 +1,8 @@
-"""Permission checking utilities for the bot.
+"""Permission checks for commands and interactions.
 
-Commands declare the permission *nodes* they need with `requires(...)`, and the
-engine in `squid.permissions` decides. Nothing here knows about tiers any more:
-`check_is_home_server` is the one remaining non-node check, and it asks where a
-command runs rather than who is running it.
+Commands declare the permission *nodes* they need with `requires(...)`; the engine in
+`squid.permissions` decides. `check_is_home_server` is the one non-node check here, and it
+asks where a command runs rather than who runs it.
 """
 
 from collections.abc import Callable
@@ -29,18 +28,18 @@ if TYPE_CHECKING:
 type CheckMode = Literal["all", "any"]
 
 SUBJECT_ATTRIBUTE = "_squid_permission_subject"
-"""Where a resolved subject is memoized for the rest of one invocation.
+"""Context attribute memoizing the resolved subject for one invocation.
 
-Checks run *before* `before_invoke`, and a command in a group runs the group's
-checks too, so the memo lives on the context object rather than in a hook.
+Checks run before `before_invoke`, and a command in a group runs the group's checks too, so the
+memo lives on the context object rather than in a hook.
 """
 
 
 class PermissionNodeRequired(CheckFailure):
-    """Raised when the caller does not hold the nodes a command declares.
+    """Raised by `requires(...)` and `enforce` when the caller does not hold the declared nodes.
 
-    Carries the nodes rather than a rendered message so the error presenter can
-    translate the description and say something specific about a `forbid`.
+    Carries the node names rather than a rendered message, so the error presenter can translate
+    each catalogue description and distinguish a missing node from an explicit `forbid`.
     """
 
     def __init__(self, nodes: tuple[str, ...], *, mode: CheckMode = "all", forbidden: bool = False) -> None:
@@ -51,17 +50,11 @@ class PermissionNodeRequired(CheckFailure):
 
 
 class AccountIdCache:
-    """Discord id to account id, held briefly.
+    """Discord id to account id, read-only so a permission check never writes a row for a stranger.
 
-    A permission check must never create an account row — that would write one
-    for every unauthenticated caller — so this only ever reads, and caches the
-    absence of an account too. Misses expire faster than hits because linking an
-    account is exactly the event that invalidates one.
-
-    This is why the read goes through `get_account_by_identity` and not
-    `get_or_create_identity`: observing a snowflake in a permission check is not
-    evidence anybody asked us to remember them. `account_id_for` is the
-    get-or-create counterpart, for the command paths that did.
+    Absences are cached too, but expire faster than hits, since linking an account is the event
+    that invalidates one. `squid.bot.utils.accounts.account_id_for` is the get-or-create
+    counterpart for command paths that may create.
     """
 
     def __init__(self, *, ttl_seconds: float = 300, miss_ttl_seconds: float = 30, max_entries: int = 4096) -> None:
@@ -71,7 +64,10 @@ class AccountIdCache:
         self._max_entries = max_entries
 
     async def resolve(self, accounts: AccountService, discord_id: int) -> int | None:
-        """The account id behind a Discord id, or None when there is no account."""
+        """The account id behind a Discord id, or None when there is no account.
+
+        Reaching `max_entries` drops every entry rather than evicting the oldest.
+        """
         now = Instant.now()
         cached = self._entries.get(discord_id)
         if cached is not None and cached[1] > now:
@@ -91,7 +87,7 @@ class AccountIdCache:
 
 
 def has_manage_server(member: discord.Member) -> bool:
-    """Whether a member holds what Discord calls administrative control of a guild."""
+    """True for the guild owner and for anyone holding `administrator` or `manage_guild`."""
     permissions = member.guild_permissions
     return member.id == member.guild.owner_id or permissions.administrator or permissions.manage_guild
 
@@ -103,8 +99,8 @@ async def build_subject(
 ) -> Subject:
     """Describe a caller for the permission engine.
 
-    Discord role membership is not cached here: `member.roles` is gateway-fresh
-    already, and caching it would add staleness the gateway does not have.
+    Role membership is read straight off the member: `member.roles` is gateway-fresh, and caching
+    it would add staleness the gateway does not have.
     """
     member = user if isinstance(user, discord.Member) else None
     return Subject(
@@ -131,7 +127,7 @@ type Caller = discord.Interaction[squid.bot.app.RedstoneSquid] | sd.Request[Any]
 
 
 async def subject_for_interaction(caller: Caller) -> Subject:
-    """The subject behind a request, component, or modal interaction."""
+    """The subject behind an interaction, resolved fresh: unlike `subject_for`, nothing memoizes it."""
     if isinstance(caller, sd.Request):
         guild_id = None if caller.guild is None else caller.guild.id
         return await build_subject(cast("squid.bot.app.RedstoneSquid", caller.client), caller.user, guild_id)
@@ -155,13 +151,12 @@ async def enforce(
 ) -> None:
     """Deny an interaction the way `requires(...)` denies a command.
 
-    Context menus and component callbacks cannot carry a `commands.check`, so the check has to
-    happen in the body — and answering it with a hand-written "you cannot do that" card would
-    make the same refusal read differently depending on which surface it came from. Raising
-    what the decorator raises means one presenter renders both, `forbid` explanation included.
+    For context menus and component callbacks, which cannot carry a `commands.check`. Raising what
+    the decorator raises keeps one presenter rendering both refusals, `forbid` explanation included.
 
     Raises:
-        PermissionNodeRequired: If the caller does not hold the nodes.
+        PermissionNodeRequired: The caller does not hold the nodes.
+        UnknownPermissionNodeError: A node was named by a string the catalogue does not define.
     """
     resolved = tuple(CATALOGUE[node] if isinstance(node, str) else node for node in nodes)
     subject = await subject_for_interaction(caller)
@@ -182,10 +177,14 @@ def requires(
 ) -> Check[Context[squid.bot.app.RedstoneSquid]]:
     """Require permission nodes, decided by the permission engine.
 
-    `mode="any"` passes when the caller holds one of the nodes, for a command
-    reachable by more than one route. Node names are validated against the
-    catalogue at import time, so a typo fails at startup rather than denying a
-    real user at runtime.
+    `mode="any"` passes when the caller holds one of the nodes, for a command reachable by more than
+    one route. The check raises `PermissionNodeRequired` on refusal and `NoPrivateMessage` when
+    `guild_only` and the command runs in a DM, so a denial is never a bare "check failed".
+
+    Raises:
+        ValueError: No nodes were given.
+        UnknownPermissionNodeError: A node name is not in the catalogue. Raised at decoration time,
+            so a typo fails at import rather than denying a real user at runtime.
     """
     if not nodes:
         msg = "requires() needs at least one permission node."
@@ -205,8 +204,8 @@ def requires(
             forbidden=any(decision.reason is Reason.FORBIDDEN for decision in decisions),
         )
 
-    # Stamped on the predicate so the taxonomy test can read a command's real
-    # contract instead of guessing it from a check's name.
+    # Stamped on the predicate so the taxonomy test reads a command's real contract instead of
+    # guessing it from a check's name.
     predicate.__squid_nodes__ = tuple(node.name for node in resolved)  # pyrefly: ignore[missing-attribute]
     predicate.__squid_mode__ = mode  # pyrefly: ignore[missing-attribute]
     return check(predicate)
@@ -230,10 +229,9 @@ def _satisfied(decisions: tuple[Decision, ...], mode: CheckMode) -> bool:
 def check_is_home_server():
     """Require the guild configured for home-community-specific features.
 
-    Feature availability, not authorization: it asks *where* a command is being
-    run, never *who* is running it. Conflating the two is what produced the four
-    overlapping tiers this module is replacing, so it stays a separate check
-    applied alongside `requires(...)`.
+    Feature availability, not authorization: it asks where a command runs, never who runs it, so it
+    is applied alongside `requires(...)` rather than instead of it. The check raises
+    `NoPrivateMessage` in a DM and `CheckFailure` in any other guild.
     """
 
     async def predicate(ctx: Context[squid.bot.app.RedstoneSquid]) -> bool:

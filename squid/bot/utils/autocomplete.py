@@ -1,7 +1,7 @@
 """Discord autocomplete bound to the shared suggestion registry.
 
-Autocomplete is unlike every other command path, and this module exists to handle the differences
-in one place rather than in sixty callbacks:
+Autocomplete differs from every other command path, and the differences are handled here rather
+than in each callback:
 
 - Discord discards a response after three seconds and there is no deferral, so a slow source must
   degrade to an empty dropdown rather than an error.
@@ -63,6 +63,9 @@ def suggests(
     multi: bool = False,
 ) -> AutocompleteCallback:
     """Build an autocomplete callback answering from a registered suggestion source.
+
+    The callback never raises: an unregistered source, a failure or an overrun of
+    `RESPONSE_BUDGET_SECONDS` all answer with an empty dropdown, logged.
 
     `multi` completes one entry of a separator-joined list, keeping everything already typed. It is
     opt-in per parameter rather than implied by the source, because the same taxonomy backs both

@@ -50,10 +50,8 @@ _ACCENTS = (DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW)
 _PAGE_SIZE = 6
 """Entries the pagination exhibit asks for per page.
 
-Small on purpose. Letting the solver fill Discord's whole text budget is the more
-impressive demonstration and produces a wall of sample rows nobody reads; a page a reader
-can take in at a glance still shows the two things that matter — that nothing was dropped,
-and that the footer and buttons were measured as part of the page.
+Small on purpose: a page a reader takes in at a glance still shows that nothing was dropped and
+that the footer and buttons were measured as part of the page.
 """
 
 _DOOR_KINDS = ("piston door", "trapdoor", "hipster door", "bridge door", "vault door", "glass door")
@@ -491,9 +489,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
     ) -> sl.semantic.Section[sl.ComponentsV2Target]:
         """The shape every exhibit shares: name the problem, explain it, say what to press.
 
-        One instruction reads as an aside and becomes a note; several are an order that
-        matters, so they become a numbered list. The uniform shape is the point — a reader
-        who has understood one exhibit knows where to look in the next eleven.
+        One step becomes a note; several become an ordered list, because their order matters.
         """
         match steps:
             case ():
@@ -880,10 +876,10 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         )
 
     def _source_example(self) -> sl.semantic.Details[sl.ComponentsV2Target]:
-        """The engine's own disclosure, holding the part of the message only authors want.
+        """The source listing for the current section, behind a disclosure.
 
-        Collapsed, this costs one button; expanded, several hundred characters. Making it the
-        reader's choice is what keeps every exhibit above short enough to read.
+        Collapsed it costs one button, expanded several hundred characters, so it is the reader's
+        choice rather than part of every exhibit's budget.
         """
         return sl.details(
             sl.summary(tr(t"Show the code behind this exhibit")),
@@ -1073,11 +1069,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         self.compensation_result = self._history_result_text("Undo", result)
 
     def _history_result_text(self, verb: str, result: sl.runtime.HistoryResult) -> str:
-        """Say what happened, in the words a reader would use.
-
-        The status names are the interesting part of this exhibit, so each one keeps its own
-        sentence rather than collapsing into "it did not work".
-        """
+        """One sentence per `HistoryResultStatus`; the distinctions between them are the exhibit."""
         match result.status:
             case sl.runtime.HistoryResultStatus.APPLIED:
                 return f"{verb} worked."
@@ -1121,9 +1113,8 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
 class Appearance(sl.runtime.SharedState[UserScope]):
     """View state two live panels agree on, scoped to one reader.
 
-    Nothing outside the screen wants a theme name, so it is not a service and not a row: it
-    is a namespace the panels hold. Writes join the action's transaction, and a change
-    reaches the other panel through the bot's topic bus with nothing declared for it.
+    A namespace the panels hold rather than a service or a row. Writes join the action's
+    transaction, and a change reaches the other panel through the bot's topic bus undeclared.
     """
 
     accent: int = sl.state(DISCORD_BLUE)
@@ -1351,9 +1342,8 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
     def __init__(self, bot: BotT) -> None:
         super().__init__(bot)
-        # Retention state, per §3 of the shared-state plan: the cog outlives every panel, so
-        # a reader's accent survives closing and reopening the demo. The pool is the retention
-        # policy, written down where the lifetime is known.
+        # Retention state, per §3 of the shared-state plan: the cog outlives every panel, so a
+        # reader's accent survives closing and reopening the demo.
         self._appearance = sl.runtime.SharedStatePool(Appearance, bot.topic_bus)
 
     @commands.hybrid_group(name="layout")
@@ -1409,5 +1399,4 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Load the public layout showcase."""
     await bot.add_cog(LayoutShowcaseCog(bot))

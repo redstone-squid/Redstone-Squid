@@ -27,7 +27,11 @@ CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 
 @build_log_consents.route(build_log_consent)
 async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
-    """Open the ephemeral consent prompt behind the public banner button."""
+    """Open the personal consent prompt behind the public banner button.
+
+    A user whose consent is already current gets a notice instead. Agreeing creates or updates the
+    Discord identity with the consent recorded; cancelling or timing out stores nothing.
+    """
     ui = interaction.client.app_ui
     accounts = interaction.client.services.accounts
 
@@ -97,7 +101,10 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
 
 
 class BuildLogConsentStickyMessage(StickyMessage):
-    """Sticky banner posted in build-log channels when unconsented users post."""
+    """Sticky banner reposted at the foot of a build-log channel when an unconsented user posts.
+
+    Its button is durable: `CONSENT_BUTTON_CUSTOM_ID` keeps working across restarts.
+    """
 
     @override
     async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:

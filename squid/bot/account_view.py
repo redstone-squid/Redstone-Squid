@@ -1,11 +1,8 @@
-"""The panel behind `/account`.
+"""The panel behind `/account`: linked identities, their visibility, the creator page, and the profile editor.
 
-Five commands used to answer what one screen shows: `identities` printed the linked accounts
-and their ids, `unlink` took one of those ids back, `visibility` took it too — or nothing at all,
-in which case it hid the whole creator page instead — and `profile` and `profile-edit` showed and
-edited the card the rest of it hangs off. An identity is a thing you look at and then show, hide
-or drop, so looking at it and acting on it belong to the same message (audit C5's retyping half,
-the shape 5.3 and 5.4 already removed from notifications and claim review).
+Looking at an identity and acting on it happen in one message, so nobody retypes an id they can
+see. Changing visibility or the profile asks for consent first when it is stale; unlinking, which
+only removes, does not.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
@@ -45,6 +42,11 @@ type ConsentRequest = Callable[
     [sl.ActionEvent, Callable[[AccountConsent | None], Awaitable[None]]],
     Awaitable[None],
 ]
+"""Opens the consent prompt and returns; the callback runs in the prompt's own press, with None on cancel.
+
+It must not await the answer: the panel's transaction and dispatch lock would be held for as long
+as the reader reads.
+"""
 
 
 def _link_count(count: int) -> sl.text.Message:
@@ -115,7 +117,11 @@ class AccountScreen(sd.Screen):
         await self._refresh()
 
     async def _refresh(self) -> None:
-        """Re-read the account this panel is about. Also what a write calls to show its result."""
+        """Re-read the account this panel is about, which is also how a write shows its result.
+
+        Raises:
+            AccountNotFoundError: The account has gone since the panel opened.
+        """
         account = await self._accounts.get_account_by_id(self._account_id)
         if account is None:
             raise AccountNotFoundError(self._account_id)
@@ -253,7 +259,7 @@ class AccountScreen(sd.Screen):
         await self._with_consent(event, apply)
 
     async def _unlink(self, event: sl.PressEvent) -> None:
-        """Remove the selected identity. The reader has already agreed to this."""
+        """Remove the selected identity; the confirm guard has already put `_unlink_warning` to the reader."""
         identity = self.selected
         if identity is None or identity.id is None:
             return
@@ -396,13 +402,10 @@ class AccountScreen(sd.Screen):
         self._profile_editor = None
 
     async def _with_consent(self, event: sl.ActionEvent, work: Callable[[], Awaitable[None]]) -> None:
-        """Run `work` now, or once the reader has agreed to be recorded.
+        """Run `work` now, or from the consent prompt's own press once the reader has agreed.
 
-        Opening the notice ends this press: `request_consent` returns as soon as it is on
-        screen, so the panel's transaction closes and its dispatch lock is released rather
-        than being held for as long as the reader takes to read. `work` then runs inside the
-        prompt's own press, and the panel redraws through its own handle -- never through the
-        prompt's interaction, which addresses the prompt's message rather than the panel's.
+        Opening the notice ends this press, so the panel's transaction and dispatch lock do not
+        outlast it. A cancelled prompt never runs `work`.
         """
         if not self._needs_consent:
             await work()
@@ -410,8 +413,8 @@ class AccountScreen(sd.Screen):
 
         async def answered(consent: AccountConsent | None) -> None:
             if consent is None:
-                # Cancelled. The notice said agreeing is what stores anything, and the prompt
-                # closing is the whole answer; the panel already shows the unchanged truth.
+                # Cancelled: nothing was stored and the panel already shows that, so the prompt
+                # closing is the whole answer.
                 return
             await self._accounts.grant_current_consent(self._account_id)
             self._needs_consent = False

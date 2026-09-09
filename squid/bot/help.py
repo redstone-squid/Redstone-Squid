@@ -1,4 +1,4 @@
-"""Defines how the help command works in the bot."""
+"""`/help`, as a paged command browser, plus the prefix-command help discord.py renders itself."""
 
 from collections.abc import Mapping, Sequence
 from textwrap import dedent
@@ -36,9 +36,9 @@ DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
 )
 """How the directory groups top-level commands, by command name.
 
-Out here rather than inline so a name that no longer exists is a failing test instead of a
-silently empty category — `patterns` and `vote` both outlived their commands in this map.
-Staff groups remain listed because the help screen already respects Discord's command visibility.
+Matched by name against both command trees, so a retired group leaves a category that lists
+nothing; `tests/unit/bot/test_extension_loading.py` asserts every name still resolves. Staff groups
+are listed because Discord, not this map, decides who sees a command in the picker.
 """
 
 
@@ -50,13 +50,17 @@ PROJECT_URL = "https://github.com/redstone-squid/Redstone-Squid"
 
 
 class HelpClient(Protocol):
-    """Bot facts rendered by the help screen."""
+    """The bot facts `HelpScreen` renders, kept narrow so tests can pass a stub instead of a client."""
 
     @property
-    def source_code_url(self) -> str | None: ...
+    def source_code_url(self) -> str | None:
+        """Where this deployment's source lives; None falls back to `PROJECT_URL`."""
+        ...
 
     @property
-    def user(self) -> discord.ClientUser | None: ...
+    def user(self) -> discord.ClientUser | None:
+        """The bot's own user, None before login; the invite link is omitted while it is None."""
+        ...
 
 
 class HelpScreen(sd.Screen):
@@ -146,12 +150,7 @@ class HelpScreen(sd.Screen):
 
 
 def _summary(command: AnyCommand) -> str:
-    """One line about a command, from wherever that surface keeps it.
-
-    A prefix command carries `short_doc`, an app command a `description`. The directory
-    lists both, because the app-only ones are exactly the commands a user cannot discover
-    any other way.
-    """
+    """One line about a command: a prefix command carries `short_doc`, an app command a `description`."""
     text = getattr(command, "short_doc", None) or getattr(command, "description", "")
     return text or tr("No details provided")
 
@@ -160,7 +159,7 @@ def _command_section(
     title: str,
     commands_: Sequence[AnyCommand],
 ) -> CardSection:
-    """Render a compact command category for the slash-help directory."""
+    """One category of the card-style directory, one field per command."""
     return CardSection(
         title,
         tuple(CardField(f"/{command.qualified_name}", _summary(command)) for command in commands_),
@@ -194,12 +193,10 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         return commands_
 
     def _root_commands(self) -> list[AnyCommand]:
-        """Every top-level command a user could run, prefix tree and app tree alike.
+        """Every top-level command a user could run, prefix tree and app tree alike, hidden ones aside.
 
-        The directory used to read `bot.commands` alone, which meant an app-only command
-        was undiscoverable from the one surface built for discovery — `/poll`, `/help`
-        and `/notifications` were all missing. Hybrid commands appear in both trees, so the
-        prefix spelling wins and the app tree only contributes what it alone has.
+        A hybrid command appears in both trees, so the prefix spelling wins and the app tree
+        contributes only what it alone has, such as `/poll`.
         """
         prefix_commands = [item for item in self.bot.commands if not item.hidden]
         named = {item.name for item in prefix_commands}
@@ -211,11 +208,10 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def command_autocomplete(
         self, _interaction: discord.Interaction[BotT], needle: str
     ) -> list[app_commands.Choice[str]]:
-        """Complete a command or cog name.
+        """Complete a command or cog name; an empty needle lists cogs that have commands.
 
-        Not a registry source: the candidates are this process's loaded command tree, which no
-        other surface can see. It still ranks through the shared matcher so `/help` orders results
-        the same way every other autocomplete does.
+        The candidates are this process's loaded command tree rather than a registry, ranked
+        through the shared matcher so ordering matches every other autocomplete.
         """
         if not needle:
             return [
@@ -232,7 +228,7 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
 
 class Help(commands.MinimalHelpCommand):
-    """Show help for a command or a group of commands."""
+    """The prefix `!help`, rendered as squid cards; installed on the bot by `HelpCog`."""
 
     def __init__(self):
         super().__init__(command_attrs={"help": "Show help for a command or a group of commands."})
@@ -248,9 +244,8 @@ class Help(commands.MinimalHelpCommand):
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
         commands_ = list(self.context.bot.commands)
 
-        # We do not filter commands here, because it is too slow.
-        # Every command needs to run its own checks even if the same check is used.
-        # filtered_commands = await self.filter_commands(commands_, sort=True)
+        # Unfiltered: `filter_commands` runs every command's checks individually, even when they
+        # share one, which is too slow for a listing.
         desc = dedent(
             tr(
                 "{description}\n\nCommands:{commands}\n\n{more_information}\n",
@@ -287,9 +282,9 @@ class Help(commands.MinimalHelpCommand):
     def get_commands_brief_details(
         commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False
     ) -> list[str] | str:
-        """Formats the prefix, command name and signature, and short doc for an iterable of commands.
+        """One newline-led line per command: qualified name, signature and short doc.
 
-        return_as_list is helpful for passing these command details into the paginator as a list of command details.
+        `return_as_list` keeps the lines separate, for a caller that pages them.
         """
         no_details = tr("No details provided")
         details: list[str] = []
@@ -309,11 +304,11 @@ class Help(commands.MinimalHelpCommand):
         return "".join(details)
 
     # !help <group>
-    # In our case, send_cog_help is the same as send_group_help, since every group is defined in a cog class under the same name.
-    # In general though, @group may be used outside a cog, and in that case, send_cog_help would be different.
+    # Equivalent to send_cog_help here, because every group lives in a cog of the same name; a
+    # group defined outside a cog would make the two differ.
     @override
     async def send_group_help(self, group: Group[Any, ..., Any], /) -> None:
-        """Sends help for a group command."""
+        """A group's subcommands, or the group's own command help when it has none."""
         commands_ = group.commands
 
         if len(commands_) == 0:
@@ -334,7 +329,6 @@ class Help(commands.MinimalHelpCommand):
     # !help <cog>
     @override
     async def send_cog_help(self, cog: Cog, /) -> None:
-        """Sends help for a cog."""
         commands_ = cog.walk_commands()
         command_details = self.get_commands_brief_details(list(commands_))
         desc = tr(
@@ -359,5 +353,4 @@ class Help(commands.MinimalHelpCommand):
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
-    """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(HelpCog(bot))

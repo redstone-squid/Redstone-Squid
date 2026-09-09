@@ -17,17 +17,28 @@ logger = logging.getLogger(__name__)
 
 
 class DomainEventHandler(Protocol):
-    """React to one kind of recorded transition.
+    """React to one kind of recorded transition; registered by event type in `build_handler_registry`."""
 
-    Delivery is at-least-once, so `handle` must be safe to run more than once for
-    the same event.
-    """
+    async def handle(self, event: DomainEvent) -> None:
+        """React to one delivery of `event`.
 
-    async def handle(self, event: DomainEvent) -> None: ...
+        Delivery is at-least-once and a sibling handler's failure retries the whole delivery, so
+        this must be safe to run more than once for the same event. Raising
+        `UnsupportedEventVersionError` rejects the delivery outright; any other exception retries it
+        until the queue dead-letters it.
+        """
+        ...
 
 
 class PostSubmittedBuildHandler:
-    """Create or resume Discord review delivery for a submitted build."""
+    """Create or resume Discord review delivery for a submitted build.
+
+    A build that has been deleted or has left `PENDING` since the event was recorded is skipped, so
+    a redelivery cannot repost a decided build.
+
+    Raises:
+        UnsupportedEventVersionError: The event carries a schema version this handler cannot read.
+    """
 
     _SCHEMA_VERSIONS = frozenset({1, 2})
 
@@ -51,7 +62,11 @@ class PostSubmittedBuildHandler:
 
 
 class DeleteVotedMessageHandler:
-    """Delete the message a closed delete-log vote approved removing."""
+    """Delete the message a closed delete-log vote approved removing.
+
+    Does nothing unless the session is closed, approved and aimed at a delete-log target; the vote
+    is re-read rather than trusted from the event.
+    """
 
     def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
         self.bot = bot
@@ -75,8 +90,8 @@ def build_handler_registry(bot: squid.bot.app.RedstoneSquid) -> dict[str, tuple[
     """Map each handled event type to the handlers that react to it."""
     return {
         "build.submitted": (PostSubmittedBuildHandler(bot),),
-        # `build.confirmed` needs no handler: confirming a build updates its row, which
-        # enqueues a Discord sync job, and the reconciler publishes the card. Posting it
-        # from the event as well raced the reconciler and needed its own idempotency check.
+        # `build.confirmed` needs no handler: confirming a build updates its row, which enqueues a
+        # Discord sync job, and the reconciler publishes the card. Posting from the event too would
+        # race the reconciler.
         "vote_session.closed": (DeleteVotedMessageHandler(bot),),
     }

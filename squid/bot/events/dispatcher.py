@@ -18,10 +18,14 @@ logger = logging.getLogger(__name__)
 CONSUMER = "discord"
 """The consumer name this process claims deliveries under, seeded by migration."""
 DELIVERY_REQUIRED_EVENTS = frozenset({"build.submitted"})
+"""Event types whose absence from the registry is a bug: they are failed rather than acknowledged."""
 
 
 class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
-    """Run one-shot side effects for recorded state transitions."""
+    """Run one-shot side effects for recorded state transitions, polling every 15 seconds while loaded.
+
+    Unloading the cog cancels the polling job.
+    """
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
@@ -42,7 +46,10 @@ class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             await self.bot.background_tasks.cancel(self._task)
 
     async def process_domain_events(self) -> None:
-        """Dispatch bounded transition work to its handlers."""
+        """Claim one bounded batch for the `discord` consumer and run each delivery's handlers.
+
+        Waits for the gateway first, so a delivery is never handled before the bot can send.
+        """
         await self.bot.wait_until_ready()
         with trace_span("squid.background.domain_events", {"squid.surface": "background_loop"}):
             for delivery in await self.bot.services.domain_events.claim(CONSUMER):
@@ -55,13 +62,13 @@ class DomainEventCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 error = RuntimeError(f"No Discord delivery handler for {delivery.event.event_type}")
                 await self.bot.services.domain_events.fail(delivery, error)
                 return
-            # Every registered consumer receives every event, so an unhandled type is
-            # normal rather than an error; acknowledge it instead of retrying forever.
+            # Every consumer receives every event, so an unhandled type is normal rather than an
+            # error; acknowledge it instead of retrying forever.
             await self.bot.services.domain_events.complete(delivery)
             return
         try:
-            # One failure retries the whole delivery, re-running the handlers that
-            # already succeeded. That is why every handler must be idempotent.
+            # One failure retries the whole delivery, re-running the handlers that already
+            # succeeded, so every handler must be idempotent.
             for handler in handlers:
                 await handler.handle(delivery.event)
         except UnsupportedEventVersionError as error:

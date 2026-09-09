@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 
 
 class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
-    """Repair Discord views from durable database-triggered work."""
+    """Repair Discord views from durable database-triggered work, polling every 15 seconds while loaded.
+
+    Unloading the cog cancels the polling job.
+    """
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
@@ -37,21 +40,21 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             await self.bot.background_tasks.cancel(self._task)
 
     async def process_reconciliation(self) -> None:
-        """Drain bounded Discord refresh work."""
+        """Claim one bounded batch of reconciliation jobs and render each; waits for the gateway first."""
         await self.bot.wait_until_ready()
         with trace_span("squid.background.reconciliation", {"squid.surface": "background_loop"}):
             for job in await self.bot.services.discord_reconciliation.claim():
                 await self._process_job(job)
 
     async def _process_job(self, job: ReconciliationJob) -> None:
-        """Render one resource, then acknowledge the job only if that succeeded.
+        """Render one resource, publish its topic, then acknowledge the job; a failure leaves it to retry.
 
-        Deletion needs no branch of its own: a renderer reports a vanished resource as
-        wanting no posts, and the diff loop removes whatever is left.
+        Deletion needs no branch of its own: a renderer reports a vanished resource as wanting no
+        posts, and the diff loop removes whatever is left.
         """
         try:
-            # The same reconciler the bot exposes for latency nudges, so a command and
-            # this job cannot render a resource two different ways.
+            # The same reconciler the bot exposes for latency nudges, so a command and this job
+            # cannot render a resource two different ways.
             await self.bot.post_reconciler.reconcile(job.resource_kind.post_kind, job.source_key, job.generation)
         except Exception as error:
             dead_lettered = await self.bot.services.discord_reconciliation.fail(job, error)

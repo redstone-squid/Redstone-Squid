@@ -19,7 +19,10 @@ build_edit = _feature_route(builds, "{build_id:int}:edit", aliases=("edit:build:
 
 @builds.route(build_edit)
 async def edit_build(interaction: Interaction[RedstoneSquid], build_id: int) -> None:
-    """Open the build editor for the build a posted card points at."""
+    """Open the build editor for the build a posted card points at, or say so if it is gone.
+
+    The card outlives the process, so the route resolves the build on every press.
+    """
     from squid.bot.submission.ui.opening import open_build_editor
 
     request = await sd.request(interaction)

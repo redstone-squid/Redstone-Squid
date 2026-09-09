@@ -1,4 +1,4 @@
-"""Interactive Components V2 rendering for server settings."""
+"""The panel behind `/settings`: channel routing and bot language on one page, vote configuration on the other."""
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -71,10 +71,16 @@ class SettingsCapabilities:
 
 
 type SettingsAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
+"""Re-asks the permission engine on every write, including an undo of an earlier one."""
 
 
 class SettingsPanel(sd.Screen):
-    """A semantic, mount-owned settings workspace."""
+    """A settings workspace that ends when closed, replaced, or timed out.
+
+    One panel per user per guild: opening `/settings` again replaces the last one. Which pages and
+    controls exist comes from `SettingsCapabilities`; whether a write goes through comes from
+    `authorize`.
+    """
 
     session = sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD)
     timeout = SESSION_SECONDS
@@ -135,11 +141,7 @@ class SettingsPanel(sd.Screen):
         return next((weight.multiplier for weight in self._weights if weight.role_id == role_id), None)
 
     async def on_load(self) -> None:
-        """Open the first page allowed by the caller.
-
-        Both branches are the same methods the page buttons call, so nothing here is a
-        lifecycle hook masquerading as a re-fetch API.
-        """
+        """Open the first page the caller may see, through the same methods the page buttons call."""
         if self.shows_server:
             await self.open_server()
         else:
@@ -447,6 +449,7 @@ class SettingsPanel(sd.Screen):
         return False
 
     async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
+        """Route or, with None, unset one channel setting, recording an undoable entry."""
         previous = self._channels[setting]
         await self._write_channel(setting, channel_id)
         self._channels = {**self._channels, setting: channel_id}
@@ -467,6 +470,11 @@ class SettingsPanel(sd.Screen):
             await self._settings.set_channel(self._guild.id, setting, channel_id)
 
     async def set_locale(self, locale: str | None, *, message_root: sd.MessageRoot) -> None:
+        """Set or, with None, clear the guild's language override, relocalizing this message too.
+
+        Recorded as an undoable entry, which restores both the stored override and the mount's
+        locale.
+        """
         previous_override = self._locale_override
         previous_locale = message_root.localization.locale
         await self._write_locale(locale, locale or previous_locale, message_root)
@@ -482,14 +490,18 @@ class SettingsPanel(sd.Screen):
     async def _write_locale(self, override: str | None, effective: str | None, message_root: sd.MessageRoot) -> None:
         """The stored locale and the mount's, neither of which is component state.
 
-        Both halves of the effective locale are captured at the call site rather than read
-        back here, because an inverse runs before the framework restores `locale` and
-        `_locale_override` -- so reading them here would see the values being reversed.
+        Both halves are passed in rather than read back here: an inverse runs before the framework
+        restores `_locale_override`, so reading it here would see the value being reversed.
         """
         await self._settings.set_locale(self._guild.id, override)
         message_root.localize(localization_for(effective))
 
     async def set_weight(self, role_id: int, multiplier: float | None) -> None:
+        """Set or, with None, remove a role's multiplier for the current vote kind; not undoable.
+
+        Raises:
+            InvalidVoteConfigurationError: The multiplier is not finite and positive.
+        """
         if multiplier is None:
             await self._votes.remove_role_weight(self._guild.id, self.kind, role_id)
         else:
@@ -497,6 +509,12 @@ class SettingsPanel(sd.Screen):
         await self.open_voting()
 
     async def set_emojis(self, options: Sequence[VoteOption]) -> None:
+        """Replace the emoji preset for the current vote kind; not undoable.
+
+        Raises:
+            InvalidVoteConfigurationError: The options are empty, repeat an emoji, or do not carry
+                the choices the kind requires.
+        """
         await self._votes.set_emoji_preset(self._guild.id, self.kind, options)
         await self.open_voting()
 

@@ -28,11 +28,19 @@ from squid.permissions.domain.catalogue import (
 )
 
 type ActorProvider = Callable[[], Awaitable[Actor]]
+"""Resolves the acting administrator, awaited per mutation so an audit row names a current actor."""
+
 type AccessAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
+"""Re-asks the permission engine at mutation time, since the screen outlives the grant that opened it."""
 
 
 class AccessScreen(sd.Screen):
-    """A guild access workspace that ends when closed, replaced, or timed out."""
+    """A guild access workspace that ends when closed, replaced, or timed out.
+
+    `capabilities` is a snapshot taken when the screen opens and decides only which tabs exist;
+    every mutation re-authorizes through `authorize` and refuses with a notice if the caller has
+    since lost the node.
+    """
 
     session = sd.SessionSpec("access")
     timeout = 300

@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 
 routes: sd.routing.RouteGroup[RedstoneSquid] = sd.routing.RouteGroup("r")
-"""The ordinary root group reserving the bot's durable ``r:`` namespace."""
+"""The root group reserving the bot's durable `r:` custom-id namespace; every feature group hangs off it."""
 
 _FEATURE_GROUPS: dict[str, sd.routing.RouteGroup[RedstoneSquid]] = {}
 _FEATURE_ROUTES: dict[tuple[str, str], sd.routing.Route] = {}
@@ -30,7 +30,12 @@ def _feature_group(prefix: str) -> tuple[sd.routing.RouteGroup[RedstoneSquid], b
 def _feature_route(
     group: sd.routing.RouteGroup[RedstoneSquid], format: str, *, aliases: tuple[str, ...] = ()
 ) -> sd.routing.Route:
-    """Define an identity once while allowing discord.py to reload its handler module."""
+    """Define a route once, so discord.py may reload the handler module without redefining its identity.
+
+    Raises:
+        ValueError: A reload changed the aliases of an already-defined route, which would strand
+            custom ids on live messages.
+    """
     key = (group.prefix, format)
     if route := _FEATURE_ROUTES.get(key):
         if route.aliases != aliases:
@@ -43,7 +48,11 @@ def _feature_route(
 
 
 class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
-    """Trace every routed interaction without recording user-controlled route values."""
+    """Open a span and a correlation scope around every routed interaction.
+
+    Records the route format and group, never the matched values: those come from a custom id a
+    user could have crafted.
+    """
 
     async def dispatch(self, request: sd.routing.RouteRequest[BotT], proceed: sd.routing.RouteProceed) -> None:
         attributes: dict[str, SpanAttribute] = {
