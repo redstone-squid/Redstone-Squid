@@ -1,7 +1,7 @@
 """Session identity, structured outcomes, cardinality, and attachment lifetime."""
 
 from dataclasses import fields
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
 import anyio
@@ -31,6 +31,7 @@ from squid_ui_discord.testing import message_harness
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return [Heading("Panel"), Row((Button(label="Go", on_click=self._noop, key="go"),))]
 
@@ -420,6 +421,7 @@ class TestMembership:
         seen: list[frozenset[int] | None] = []
 
         class Roster(sl.Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 session = manager.session_for(message_root)
                 seen.append(None if session is None else session.members)

@@ -1,6 +1,7 @@
 """Operational devtools runtime contracts."""
 
 from collections.abc import Callable
+from typing import override
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -27,6 +28,7 @@ class Panel(sl.Component[sl.ComponentsV2Target]):
     history: sl.runtime.History = sl.runtime.history(limit=4)
     count: int = sl.state(0)
 
+    @override
     def render(self):
         return sl.paragraph(f"count {self.count}")
 

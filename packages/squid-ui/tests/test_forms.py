@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, timezone
-from typing import ClassVar
+from typing import ClassVar, override
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -35,6 +35,7 @@ class ProfileForm(sl.forms.Form):
         super().__init__(**prefill)
         self.validations = 0
 
+    @override
     def validate(self):
         self.validations += 1
         return (sl.forms.FormError("Name and age cannot match."),) if self.name == str(self.age) else ()
@@ -422,6 +423,7 @@ def test_form_trigger_plans_as_content_with_a_submission_binding() -> None:
 class NativeOnlyField(sl.forms.ExtensionField[str]):
     capability: ClassVar[str] = "forms.native-only"
 
+    @override
     def parse(self, raw: object) -> str | None:
         return None if raw is None else str(raw)
 
@@ -456,6 +458,7 @@ def test_extension_field_uses_its_portable_fallback() -> None:
 class BrokenField(sl.forms.FormField[str]):
     """A field with a bug in its parser, as opposed to input a reader can correct."""
 
+    @override
     def parse(self, raw: object) -> str | None:
         return raw.no_such_attribute  # type: ignore[attr-defined]
 
@@ -469,6 +472,7 @@ async def test_a_bug_in_a_field_propagates_instead_of_becoming_a_field_error() -
 
 @dataclass(frozen=True, slots=True)
 class CorrectableField(sl.forms.FormField[str]):
+    @override
     def parse(self, raw: object) -> str | None:
         if raw != "good":
             message = "Type 'good'."

@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
-from typing import Any, Generic, Protocol, TypeVar, cast, overload
+from typing import Any, Generic, Protocol, TypeVar, cast, overload, override
 
 from squid_reactivity.core import (
     Observation,
@@ -228,6 +228,7 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
         {"_runtime", "_parent", "_loaded", "_state_revision", "_dependency_invalidation"}
     )
 
+    @override
     def _state_changed(self, names: frozenset[str]) -> None:
         """React to committed writes to these state slots.
 
@@ -242,6 +243,7 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
         finally:
             self.__dict__.pop("_dependency_invalidation", None)
 
+    @override
     def on_state_rollback(self) -> None:
         self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
 
@@ -283,6 +285,7 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
     def on_unmount(self) -> None:
         """Run after this component leaves a successfully drawn tree."""
 
+    @override
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
         dependency = self.__dict__.get("_dependency_invalidation", False)

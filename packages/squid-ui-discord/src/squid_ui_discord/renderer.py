@@ -46,6 +46,7 @@ class MountedRenderer[BodyT: scene.Body](Renderer[BodyT, MessagePayload], Protoc
     went through `cast(Any, renderer)` and nothing checked either half.
     """
 
+    @override
     def draw(
         self,
         document: scene.Scene[BodyT],

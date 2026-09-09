@@ -1,5 +1,7 @@
 """`squid_ui_discord.responder`/`native` — the sanctioned escape hatches to Discord's own surfaces."""
 
+from typing import override
+
 import pytest
 
 import squid_ui as sl
@@ -89,6 +91,7 @@ async def test_handlers_reach_the_dispatching_interaction_through_native() -> No
     seen: list[object] = []
 
     class Inspect(Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return Row((Button(label="inspect", on_click=self.inspect, key="inspect"),))
 

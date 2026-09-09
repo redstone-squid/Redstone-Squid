@@ -1,7 +1,7 @@
 """Native semantic planning for the first-class HTML target."""
 
 from datetime import UTC, date, datetime, time
-from typing import Any, cast
+from typing import Any, cast, override
 
 import pytest
 
@@ -190,6 +190,7 @@ def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
 class _PortableExtension(ExtensionField[str]):
     capability = "forms.test.native"
 
+    @override
     def parse(self, raw: object) -> str | None:
         # Never reached in this test: the target lacks the capability, so the portable
         # fallback stands in and it is the fallback's parse that runs.

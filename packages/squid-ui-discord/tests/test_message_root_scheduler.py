@@ -4,7 +4,7 @@ import asyncio
 import gc
 import weakref
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, override
 from unittest.mock import AsyncMock
 
 import anyio
@@ -20,6 +20,7 @@ from squid_ui_discord.testing import delivered_to, interaction_harness, message_
 
 
 class Empty(Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return []
 

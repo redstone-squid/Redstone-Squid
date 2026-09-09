@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from functools import partial
-from typing import Any, cast
+from typing import Any, cast, override
 
 import anyio
 import pytest
@@ -313,9 +313,11 @@ def test_a_namespace_that_defines_equality_cannot_merge_two_addresses() -> None:
     class Loose(SharedState[int]):
         selected: int | None = state(None)
 
+        @override
         def __eq__(self, other: object) -> bool:
             return isinstance(other, Loose)
 
+        @override
         def __hash__(self) -> int:
             return 0
 

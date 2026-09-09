@@ -1,6 +1,6 @@
 """Discord form presentation, submission funnel, and validation retry."""
 
-from typing import cast
+from typing import cast, override
 from unittest.mock import AsyncMock, Mock
 
 import discord
@@ -241,6 +241,7 @@ class DurationPanel(sl.Component[sl.ComponentsV2Target]):
             validation=validation,
         )
 
+    @override
     def render(self) -> sl.LayoutNode:
         return sl.form("Duration", self.spec, key="duration", on_submit=self.submitted)
 

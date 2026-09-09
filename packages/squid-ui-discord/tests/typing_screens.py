@@ -1,6 +1,6 @@
 """Pyrefly fixture for Screen construction and scoped presentation."""
 
-from typing import Any
+from typing import Any, override
 
 import squid_ui as sl
 from squid_ui_discord import DiscordUI, Screen
@@ -11,6 +11,7 @@ class RequiredArguments(Screen):
         self.label = label
         self.count = count
 
+    @override
     def render(self):
         return sl.heading(f"{self.label}: {self.count}")
 

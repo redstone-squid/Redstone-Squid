@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, override
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
@@ -225,6 +225,7 @@ class SearchPicker[ItemT](Component):
             )
         return tuple(nodes)
 
+    @override
     def render(self) -> DocumentLike:
         """Render query input, retained picks, and result status."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)

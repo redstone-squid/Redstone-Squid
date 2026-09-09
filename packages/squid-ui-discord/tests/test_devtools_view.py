@@ -1,7 +1,7 @@
 """The owner-only mount inspector: what it lists, what it opens, and what it refuses."""
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, override
 
 import discord
 import pytest
@@ -36,6 +36,7 @@ class Subject(sl.Component[sl.ComponentsV2Target]):
         """Never rendered, so never evaluated -- which the inspector should say."""
         return "unused"
 
+    @override
     def render(self):
         return [
             Heading("Subject"),

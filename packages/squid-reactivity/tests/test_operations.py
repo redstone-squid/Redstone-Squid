@@ -1,4 +1,5 @@
 import asyncio
+from typing import override
 
 import anyio
 import pytest
@@ -146,6 +147,7 @@ async def test_operation_completion_publishes_state_as_a_fresh_caused_action() -
     class StatefulOwner(StateOwner):
         value: int = state(0)
 
+        @override
         def invalidate(self) -> None:
             pass
 
@@ -174,6 +176,7 @@ async def test_action_operation_response_and_resource_generation_form_one_graph(
     class GraphOwner(StateOwner):
         value: int = state(0)
 
+        @override
         def invalidate(self) -> None:
             pass
 

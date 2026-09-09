@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import cast
+from typing import cast, override
 
 import anyio
 import pytest
@@ -33,6 +33,7 @@ from squid_ui_discord.testing import commit_render
 class DurableChild(Component[sl.ComponentsV2Target]):
     entries: tuple[str, ...] = state(factory=lambda: tuple(f"entry {index}" for index in range(6)))
 
+    @override
     def render(self):
         return Lines(self.entries, overflow=Paginate(key="items", per=2))
 
@@ -44,6 +45,7 @@ class DurableRoot(Component[sl.ComponentsV2Target]):
     def __init__(self) -> None:
         self.child = DurableChild()
 
+    @override
     def render(self):
         return [Text(f"count {self.count}"), self.boundary(self.child, key="child")]
 
@@ -207,6 +209,7 @@ def test_non_json_persistent_state_fails_at_capture_boundary() -> None:
     class Invalid(Component[sl.ComponentsV2Target]):
         value: object = state(factory=object)
 
+        @override
         def render(self):
             return Text("invalid")
 

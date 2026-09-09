@@ -1,6 +1,7 @@
 """How a render finds the shared cells it read, and how a change reaches the bus."""
 
 from dataclasses import dataclass
+from typing import override
 
 import pytest
 
@@ -45,6 +46,7 @@ class Panel(Component[DiscordTarget]):
     def __init__(self, preferences: Preferences) -> None:
         self.preferences = preferences
 
+    @override
     def render(self) -> Text:
         if self.show_locale:
             return Text(f"{self.preferences.theme} {self.preferences.locale}")
@@ -69,6 +71,7 @@ def test_a_dropped_conditional_read_stops_being_observed(preferences: Preference
 
 def test_repeated_reads_are_one_observation(preferences: Preferences) -> None:
     class Repeats(Component[DiscordTarget]):
+        @override
         def render(self) -> Text:
             return Text(f"{preferences.theme}{preferences.theme}{preferences.theme}")
 
@@ -79,6 +82,7 @@ def test_a_render_observes_component_state_as_nothing(preferences: Preferences) 
     class Local(Component[DiscordTarget]):
         count: int = state(0)
 
+        @override
         def render(self) -> Text:
             return Text(str(self.count))
 
@@ -94,6 +98,7 @@ def test_a_cached_computed_still_reports_its_shared_sources(preferences: Prefere
             runs.append(1)
             return preferences.theme.upper()
 
+        @override
         def render(self) -> Text:
             return Text(self.label)
 
@@ -112,6 +117,7 @@ def test_a_read_outside_a_render_records_no_dependency(preferences: Preferences)
 
 def test_a_write_during_a_render_raises(preferences: Preferences) -> None:
     class Writes(Component[DiscordTarget]):
+        @override
         def render(self) -> Text:
             preferences.theme = "dark"
             return Text("never")
@@ -127,6 +133,7 @@ def test_an_unaddressed_write_during_a_render_raises_and_tears_no_further() -> N
     class Torn(Component[DiscordTarget]):
         n: int = state(0)
 
+        @override
         def render(self) -> Text:
             self.n = 1
             return Text(str(self.n))
@@ -148,10 +155,12 @@ def test_a_component_built_inside_a_parent_render_may_assign_its_own_state() -> 
         def __init__(self, label: str) -> None:
             self.label = label
 
+        @override
         def render(self) -> Text:
             return Text(self.label)
 
     class Parent(Component[DiscordTarget]):
+        @override
         def render(self) -> Boundary:
             return self.boundary(Child("hi"), key="child")
 
@@ -167,11 +176,13 @@ def test_a_component_born_this_render_still_raises_once_its_own_render_runs() ->
     class TornChild(Component[DiscordTarget]):
         n: int = state(0)
 
+        @override
         def render(self) -> Text:
             self.n = 1
             return Text(str(self.n))
 
     class Parent(Component[DiscordTarget]):
+        @override
         def render(self) -> Boundary:
             return self.boundary(TornChild(), key="child")
 
@@ -197,6 +208,7 @@ def test_addresses_sees_through_a_computed(preferences: Preferences) -> None:
         def label(self) -> str:
             return preferences.locale.upper()
 
+        @override
         def render(self):
             return Text(self.label)
 
@@ -208,6 +220,7 @@ def test_addresses_refuses_a_thunk_that_reaches_no_shared_cell() -> None:
     class Local(Component[DiscordTarget]):
         count: int = state(0)
 
+        @override
         def render(self) -> Text:
             return Text(str(self.count))
 

@@ -1,5 +1,7 @@
 """Engine pagination and ModalSpec tests."""
 
+from typing import override
+
 import discord
 import pytest
 from discord.state import ConnectionState
@@ -165,6 +167,7 @@ def _total_text(solved) -> int:
 
 
 class Browser(Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         body = "\n".join(f"entry {index:04d}" for index in range(2000))
         return [Heading("Entries"), Code(body, overflow=Paginate(key="entries"))]
@@ -174,6 +177,7 @@ class TwoBrowsers(Component[sl.ComponentsV2Target]):
     def __init__(self) -> None:
         self.left_version = "old"
 
+    @override
     def render(self):
         left = tuple(f"{self.left_version} left {index}" for index in range(30))
         right = tuple(f"right {index}" for index in range(30))
@@ -189,6 +193,7 @@ class Catalog(Component[sl.ComponentsV2Target]):
     def __init__(self) -> None:
         self.lead: tuple[str, ...] = ()
 
+    @override
     def render(self):
         keys = (*self.lead, *(str(index) for index in range(36)))
         return [

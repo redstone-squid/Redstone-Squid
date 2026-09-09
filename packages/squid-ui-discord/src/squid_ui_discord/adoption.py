@@ -15,7 +15,7 @@ the legacy object a second writer raises `AdoptionError` instead of being quietl
 """
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Any, cast, overload
+from typing import Any, cast, overload, override
 from typing import Never as TypingNever
 from urllib.parse import urlsplit
 
@@ -218,6 +218,7 @@ class _AdoptedView(Component[Any]):
         self._asset_by_name, self._asset_by_reference = _index_assets(self._assets)
         self._render_keys: dict[int, str] | None = None
 
+    @override
     def render(self) -> list[Node] | Document[ComponentsV2Target]:
         if isinstance(self._view, discord.ui.LayoutView):
             key_map = self._layout_key_map()

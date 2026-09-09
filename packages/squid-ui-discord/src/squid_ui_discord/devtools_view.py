@@ -12,7 +12,7 @@ catalogue would improve.
 
 import pprint
 from collections.abc import Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 import squid_ui as sl
 
@@ -57,6 +57,7 @@ class MessageRootInspector(sl.Component):
         self.focus = focus
         self._manager = manager
 
+    @override
     def render(self) -> Sequence[sl.LayoutNode]:
         # Both are explicit invalidation tokens for process state that is not itself
         # reactive. Observe them even when an empty manager makes their usual branches
@@ -224,6 +225,7 @@ class OperationalInspector(sl.Component):
     def __init__(self, runtime: DevToolsRuntime) -> None:
         self._devtools_runtime = runtime
 
+    @override
     def render(self) -> Sequence[sl.LayoutNode]:
         snapshot = self._devtools_runtime.snapshot()
         if self.section == "roots":

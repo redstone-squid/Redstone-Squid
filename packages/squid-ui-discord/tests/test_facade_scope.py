@@ -1,6 +1,6 @@
 """Owner identity and lifetime for the explicit Discord facade."""
 
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -18,6 +18,7 @@ class Owner:
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return sl.heading("Panel")
 
