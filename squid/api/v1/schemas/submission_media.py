@@ -4,13 +4,14 @@ from enum import StrEnum
 from typing import Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from squid.api.schema import ApiSchema
 from squid.media.application.jobs import MediaArtifactRole, MediaJobSnapshot, MediaJobStatus
 from squid.media.domain import MediaKind, MediaLimits
 
 
-class StrictSchema(BaseModel):
+class StrictSchema(ApiSchema):
     """Reject fields unknown to the published media contract."""
 
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)

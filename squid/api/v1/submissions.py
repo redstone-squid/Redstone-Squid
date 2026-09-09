@@ -410,7 +410,7 @@ async def create_draft(
 @router.get(
     "/drafts/{draft_id}",
     response_model=StoredDraftResponse,
-    responses=responses(401, 403, 404, 422, 503),
+    responses=responses(401, 403, 404, 409, 422, 503),
     operation_id="submission_draft_get",
     openapi_extra=contract(
         security=[WEB, DEVICE, MINECRAFT],
@@ -490,7 +490,7 @@ async def submit_draft(
 @router.get(
     "/drafts/{draft_id}/submission",
     response_model=SubmissionFinalizationResponse,
-    responses=responses(401, 403, 404, 422, 503),
+    responses=responses(401, 403, 404, 409, 422, 503),
     operation_id="submission_finalization_get",
     openapi_extra=contract(
         security=[WEB, DEVICE, MINECRAFT],
@@ -502,7 +502,7 @@ async def get_draft_submission(
     finalization: Finalization,
     account_id: AccountId,
 ) -> SubmissionFinalizationResponse:
-    """Return the owned draft's retained finalization state; 404 when it was never submitted."""
+    """Return the owned draft's retained finalization state; 404 when it was never submitted, 409 once expired."""
     snapshot = await finalization.status(draft_id, account_id)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
@@ -512,7 +512,7 @@ async def get_draft_submission(
 @router.delete(
     "/drafts/{draft_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(401, 403, 404, 422, 503),
+    responses=responses(401, 403, 404, 409, 422, 503),
     operation_id="submission_draft_delete",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE, MINECRAFT],

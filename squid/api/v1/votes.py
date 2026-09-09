@@ -3,12 +3,13 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import CurrentCaller, VoteMembers, Votes
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
+from squid.api.schema import ApiSchema
 from squid.api.security import Caller, require_consented_account, requires
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.errors import AuthorizationError, ConflictError, ValidationError
@@ -20,7 +21,7 @@ router = APIRouter(prefix="/vote-sessions", tags=["vote sessions"])
 UserVoter = Annotated[Caller, Depends(requires(VOTE_POLL_CAST))]
 
 
-class VoteInput(BaseModel):
+class VoteInput(ApiSchema):
     """A stable option selection in one Discord guild."""
 
     model_config = ConfigDict(extra="forbid")

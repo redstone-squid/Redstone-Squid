@@ -2,15 +2,16 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from squid.api.schema import ApiSchema
 from squid.api.v1.schemas.builds import BuildSummary
 from squid.core.errors import ValidationError
 from squid.search.application.fields import FieldDefinition
 from squid.search.domain import MetadataSearchHit, RecordSearchHit
 
 
-class SearchField(BaseModel):
+class SearchField(ApiSchema):
     """One query field supported by the public search grammar."""
 
     model_config = ConfigDict(extra="forbid")
@@ -32,7 +33,7 @@ class SearchField(BaseModel):
         )
 
 
-class SearchSuggestions(BaseModel):
+class SearchSuggestions(ApiSchema):
     """Indexed terms completing a partial query."""
 
     model_config = ConfigDict(extra="forbid")
@@ -42,7 +43,7 @@ class SearchSuggestions(BaseModel):
     )
 
 
-class RecordSearchEntry(BaseModel):
+class RecordSearchEntry(ApiSchema):
     """Projection facts for a matched computed record.
 
     Every field here is derived by record computation rather than submitted by a user, so unlike
@@ -81,7 +82,7 @@ class RecordSearchEntry(BaseModel):
         )
 
 
-class MetadataSearchEntry(BaseModel):
+class MetadataSearchEntry(ApiSchema):
     """A matched taxonomy or version entry."""
 
     model_config = ConfigDict(extra="forbid")
@@ -106,7 +107,7 @@ class MetadataSearchEntry(BaseModel):
         )
 
 
-class BuildSearchResult(BaseModel):
+class BuildSearchResult(ApiSchema):
     """A build match, hydrated from the authoritative record."""
 
     model_config = ConfigDict(extra="forbid")
@@ -119,7 +120,7 @@ class BuildSearchResult(BaseModel):
     build: BuildSummary
 
 
-class RecordSearchResult(BaseModel):
+class RecordSearchResult(ApiSchema):
     """A computed record match."""
 
     model_config = ConfigDict(extra="forbid")
@@ -132,7 +133,7 @@ class RecordSearchResult(BaseModel):
     record: RecordSearchEntry
 
 
-class MetadataSearchResult(BaseModel):
+class MetadataSearchResult(ApiSchema):
     """A taxonomy or version match."""
 
     model_config = ConfigDict(extra="forbid")

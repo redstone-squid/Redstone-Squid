@@ -100,7 +100,7 @@ async def grant_consent(
 @router.patch(
     "/profile",
     response_model=ProfileDetail,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
     operation_id="account_profile_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -135,7 +135,7 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Identi
 @router.put(
     "/identities/{identity_id}/visibility",
     response_model=IdentityDetail,
-    responses=responses(401, 403, 404, 422, 503),
+    responses=responses(401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="account_identity_visibility_set",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -178,7 +178,7 @@ async def unlink_identity(identity_id: int, accounts: Accounts, caller: ManageCa
 @router.post(
     "/merge-code",
     response_model=MergeCodeDetail,
-    responses=responses(401, 403, 404, 503),
+    responses=responses(401, 403, 404, 409, 503),
     dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
     operation_id="account_merge_code_create",
     openapi_extra=contract(
@@ -201,7 +201,7 @@ async def create_merge_code(accounts: Accounts, caller: ManageCaller) -> MergeCo
 @router.post(
     "/merge/preview",
     response_model=MergePreviewDetail,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
     operation_id="account_merge_preview",
     openapi_extra=contract(
@@ -219,7 +219,7 @@ async def preview_merge(body: MergeRequest, accounts: Accounts, caller: ManageCa
 @router.post(
     "/merge",
     response_model=AccountMergeDetail,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
     operation_id="account_merge_complete",
     openapi_extra=contract(
@@ -272,7 +272,7 @@ async def refresh_minecraft_identity_for(account_id: int, accounts: Accounts) ->
 @accounts_router.delete(
     "/{account_id}/profile",
     response_model=ProfileDetail,
-    responses=responses(401, 403, 404, 422, 503),
+    responses=responses(401, 403, 404, 409, 422, 503),
     dependencies=[
         Depends(requires(ACCOUNT_PROFILE_MODERATE)),
         Depends(enforce_request_idempotency),

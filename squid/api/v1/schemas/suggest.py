@@ -1,7 +1,8 @@
 """Public representations of typeahead suggestions."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from squid.api.schema import ApiSchema
 from squid.suggestions.application import SuggestionSource
 from squid.suggestions.domain import (
     ReplacementSpan,
@@ -12,7 +13,7 @@ from squid.suggestions.domain import (
 )
 
 
-class SuggestionItem(BaseModel):
+class SuggestionItem(ApiSchema):
     """One candidate completion.
 
     `value` is what a client submits and `label` is what it shows. They differ wherever a command
@@ -38,7 +39,7 @@ class SuggestionItem(BaseModel):
         )
 
 
-class SuggestionReplacement(BaseModel):
+class SuggestionReplacement(ApiSchema):
     """The half-open range of the submitted query a value replaces.
 
     Splice the chosen `value` over it rather than clobbering the whole input.
@@ -54,7 +55,7 @@ class SuggestionReplacement(BaseModel):
         return cls(start=span.start, end=span.end)
 
 
-class SuggestionPage(BaseModel):
+class SuggestionPage(ApiSchema):
     """Ranked completions for one partially typed value."""
 
     model_config = ConfigDict(extra="forbid")
@@ -79,7 +80,7 @@ class SuggestionPage(BaseModel):
         )
 
 
-class SuggestionSourceInfo(BaseModel):
+class SuggestionSourceInfo(ApiSchema):
     """What a client needs to know to drive one source without hardcoding it."""
 
     model_config = ConfigDict(extra="forbid")

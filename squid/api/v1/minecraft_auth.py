@@ -34,6 +34,7 @@ from squid.minecraft_auth.domain import (
     IssuedInstallationCredential,
     IssuedPlayerChallenge,
     IssuedPlayerGrant,
+    OwnedPaperInstallation,
     PaperInstallation,
     PlayerAuthorizationChallenge,
     PublicServerProfile,
@@ -62,7 +63,7 @@ class PaperInstallationHttpService(Protocol):
         """
         ...
 
-    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+    async def list_owned(self, owner_account_id: int) -> tuple[OwnedPaperInstallation, ...]:
         """The account's installations, revoked ones included, without secret digests."""
         ...
 
@@ -281,7 +282,7 @@ router = APIRouter(
     "/paper/installations",
     response_model=IssuedInstallationResponse,
     status_code=status.HTTP_201_CREATED,
-    responses=responses(400, 401, 403, 422, 503),
+    responses=responses(400, 401, 403, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="paper_installation_create",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -327,7 +328,7 @@ async def list_installations(
 @router.post(
     "/paper/installations/{installation_id}/rotate",
     response_model=IssuedInstallationResponse,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="paper_installation_rotate",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -347,7 +348,7 @@ async def rotate_installation(
 @router.put(
     "/paper/installations/{installation_id}/profile",
     response_model=InstallationResponse,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="paper_installation_profile_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -374,7 +375,7 @@ async def update_installation_profile(
 @router.delete(
     "/paper/installations/{installation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="paper_installation_revoke",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -501,7 +502,7 @@ async def approve_challenge(
 @router.delete(
     "/grants/{grant_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="minecraft_grant_revoke",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),

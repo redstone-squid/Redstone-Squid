@@ -356,7 +356,7 @@ async def list_devices(
 @router.delete(
     "/devices/{device_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="cli_device_revoke",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -375,7 +375,7 @@ async def revoke_device(
 @router.delete(
     "/sessions/current",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(400, 401, 403, 503),
+    responses=responses(400, 401, 403, 409, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="cli_session_revoke",
     openapi_extra=contract(

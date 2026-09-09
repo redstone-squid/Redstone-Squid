@@ -1,9 +1,11 @@
 """Strict browser-session transport schemas."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from squid.api.schema import ApiSchema
 
 
-class CsrfTokenResponse(BaseModel):
+class CsrfTokenResponse(ApiSchema):
     """A session-bound double-submit token, never a session credential."""
 
     model_config = ConfigDict(extra="forbid")

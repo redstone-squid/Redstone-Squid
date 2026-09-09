@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import Annotated, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, TypeAdapter, model_validator
+from pydantic import ConfigDict, Field, JsonValue, TypeAdapter, model_validator
 
+from squid.api.schema import ApiSchema
 from squid.core.errors import JSONValue
 from squid.submissions.application import FinalizationJobSnapshot, FormOptionSet, StoredDraft
 from squid.submissions.domain import (
@@ -62,7 +63,7 @@ IdempotencyKey = Annotated[
 _JSON_VALUE = TypeAdapter(JsonValue)
 
 
-class StrictSchema(BaseModel):
+class StrictSchema(ApiSchema):
     """Base model which rejects contract fields unknown to this server."""
 
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)

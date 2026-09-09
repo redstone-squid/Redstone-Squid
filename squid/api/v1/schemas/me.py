@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 from whenever import Instant
 
 from squid.accounts.domain import (
@@ -18,9 +18,10 @@ from squid.accounts.domain import (
     avatar_url_for,
 )
 from squid.accounts.domain.profiles import UNSET
+from squid.api.schema import ApiSchema
 
 
-class ProfileLinkDetail(BaseModel):
+class ProfileLinkDetail(ApiSchema):
     """One external link published on a creator profile."""
 
     model_config = ConfigDict(extra="forbid")
@@ -33,7 +34,7 @@ class ProfileLinkDetail(BaseModel):
         return cls(label=link.label, url=link.url)
 
 
-class AvatarDetail(BaseModel):
+class AvatarDetail(ApiSchema):
     """The linked identity a profile's avatar is rendered from."""
 
     model_config = ConfigDict(extra="forbid")
@@ -46,7 +47,7 @@ class AvatarDetail(BaseModel):
     )
 
 
-class IdentityDetail(BaseModel):
+class IdentityDetail(ApiSchema):
     """One identity linked to the caller's own account.
 
     Carries the internal `id` because that is the handle every write takes: an account can hold
@@ -76,7 +77,7 @@ class IdentityDetail(BaseModel):
         )
 
 
-class ProfileDetail(BaseModel):
+class ProfileDetail(ApiSchema):
     """The caller's own profile, including anything it has chosen to hide."""
 
     model_config = ConfigDict(extra="forbid")
@@ -113,7 +114,7 @@ class ProfileDetail(BaseModel):
         )
 
 
-class UserMe(BaseModel):
+class UserMe(ApiSchema):
     """The caller's own account: who they are, how they sign in, and what they publish.
 
     Provider-neutral: every linked identity is an entry in `identities`, however many an account
@@ -159,7 +160,7 @@ class UserMe(BaseModel):
         )
 
 
-class ProfileUpdateRequest(BaseModel):
+class ProfileUpdateRequest(ApiSchema):
     """A partial profile edit.
 
     Omitting a field leaves it alone; sending null clears it. `hidden` is the exception: null there
@@ -193,7 +194,7 @@ class ProfileUpdateRequest(BaseModel):
         )
 
 
-class IdentityVisibilityRequest(BaseModel):
+class IdentityVisibilityRequest(ApiSchema):
     """Whether one linked identity appears on the public creator profile."""
 
     model_config = ConfigDict(extra="forbid")
@@ -201,7 +202,7 @@ class IdentityVisibilityRequest(BaseModel):
     public: bool
 
 
-class MinecraftIdentityRefresh(BaseModel):
+class MinecraftIdentityRefresh(ApiSchema):
     """What re-reading the linked Minecraft name changed."""
 
     model_config = ConfigDict(extra="forbid")
@@ -235,7 +236,7 @@ class MinecraftIdentityRefresh(BaseModel):
         )
 
 
-class MergeCodeDetail(BaseModel):
+class MergeCodeDetail(ApiSchema):
     """A freshly minted, single-use merge code.
 
     The plaintext appears here and nowhere else: persistence keeps only a digest, so a lost code
@@ -248,7 +249,7 @@ class MergeCodeDetail(BaseModel):
     expires_at: Instant
 
 
-class MergeRequest(BaseModel):
+class MergeRequest(ApiSchema):
     """A merge code, redeemed by the account that will survive."""
 
     model_config = ConfigDict(extra="forbid")
@@ -256,7 +257,7 @@ class MergeRequest(BaseModel):
     code: str
 
 
-class MergePreviewDetail(BaseModel):
+class MergePreviewDetail(ApiSchema):
     """What completing a merge would move, shown before the irreversible call."""
 
     model_config = ConfigDict(extra="forbid")
@@ -279,7 +280,7 @@ class MergePreviewDetail(BaseModel):
         )
 
 
-class AccountMergeDetail(BaseModel):
+class AccountMergeDetail(ApiSchema):
     """The stable identities left behind by a completed merge."""
 
     model_config = ConfigDict(extra="forbid")

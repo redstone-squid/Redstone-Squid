@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 from whenever import Instant
 
 from squid.accounts.domain import (
@@ -13,9 +13,10 @@ from squid.accounts.domain import (
     PublicCreatorProfile,
     PublicIdentity,
 )
+from squid.api.schema import ApiSchema
 
 
-class CreatorAliasDetail(BaseModel):
+class CreatorAliasDetail(ApiSchema):
     """A public creator credit with no linked account information."""
 
     model_config = ConfigDict(extra="forbid")
@@ -31,7 +32,7 @@ class CreatorAliasDetail(BaseModel):
         return cls(name=alias.name, claimed=alias.is_claimed, creator_id=alias.public_creator_id)
 
 
-class CreditedAliasDetail(BaseModel):
+class CreditedAliasDetail(ApiSchema):
     """One creator name held by this creator, and how many builds carry it."""
 
     model_config = ConfigDict(extra="forbid")
@@ -44,7 +45,7 @@ class CreditedAliasDetail(BaseModel):
         return cls(name=alias.name, build_count=alias.build_count)
 
 
-class PublicIdentityDetail(BaseModel):
+class PublicIdentityDetail(ApiSchema):
     """A linked identity the creator has chosen to publish.
 
     Carries no verification timestamp and no internal id: when it was verified is nobody else's
@@ -65,7 +66,7 @@ class PublicIdentityDetail(BaseModel):
         return cls(provider=identity.provider, subject=identity.subject, display_name=identity.display_name)
 
 
-class ProfileLinkDetail(BaseModel):
+class ProfileLinkDetail(ApiSchema):
     """One external link published on a creator profile."""
 
     model_config = ConfigDict(extra="forbid")
@@ -78,7 +79,7 @@ class ProfileLinkDetail(BaseModel):
         return cls(label=link.label, url=link.url)
 
 
-class CreatorProfileDetail(BaseModel):
+class CreatorProfileDetail(ApiSchema):
     """A creator's public page.
 
     `hidden` is the shape switch: a hidden profile still serves `id`, `canonical_id` and

@@ -47,7 +47,7 @@ async def get_preferences(notifications: Notifications, caller: UserCaller) -> N
 @router.patch(
     "/preferences",
     response_model=NotificationPreferencesDetail,
-    responses=responses(400, 401, 403, 503),
+    responses=responses(400, 401, 403, 409, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="notification_preferences_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),

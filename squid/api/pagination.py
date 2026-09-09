@@ -8,8 +8,9 @@ from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import ConfigDict
 
+from squid.api.schema import ApiSchema
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageSelector
 from squid.core.pagination import Page as ResultPage
@@ -30,7 +31,7 @@ BeforeIdParam = Annotated[
 ]
 
 
-class PageAnchor(BaseModel):
+class PageAnchor(ApiSchema):
     """Query-parameter values addressing an adjacent page. Exactly one field is set."""
 
     model_config = ConfigDict(extra="forbid")
@@ -40,7 +41,7 @@ class PageAnchor(BaseModel):
     before_id: int | None = None
 
 
-class Page[ItemT](BaseModel):
+class Page[ItemT](ApiSchema):
     """One page of resource summaries and the parameters addressing its neighbours."""
 
     model_config = ConfigDict(extra="forbid")

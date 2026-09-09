@@ -7,7 +7,6 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
 from squid.api.contract import (
     ANONYMOUS,
@@ -28,6 +27,7 @@ from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateRespon
 from squid.api.rate_limit import RateLimitMiddleware, create_rate_limiter, enforce_route_rate_limits
 from squid.api.request_body import BoundedRequestBodyMiddleware
 from squid.api.request_context import RequestContextMiddleware
+from squid.api.schema import ApiSchema
 from squid.api.security import Caller, requires
 from squid.api.v1 import TAGS_METADATA
 from squid.api.v1 import router as v1_router
@@ -81,7 +81,7 @@ async def ready(request: Request, response: Response) -> dict[str, str]:
     return {"status": "ready"}
 
 
-class User(BaseModel):
+class User(ApiSchema):
     """Verification request body: the player's Java (Minecraft) account UUID."""
 
     uuid: UUID

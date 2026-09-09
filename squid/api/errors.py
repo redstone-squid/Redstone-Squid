@@ -5,12 +5,13 @@ from collections.abc import Mapping
 from http import HTTPStatus
 from typing import Any, Protocol, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.requests import Request
 from starlette.responses import Response
 
 from squid.api.i18n import locale_for_request
+from squid.api.schema import ApiSchema
 from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import (
     AuthenticationError,
@@ -86,7 +87,7 @@ async def _capture(request: Request, error: Exception, request_id: str) -> None:
         logger.exception("Could not capture an HTTP failure [request_id=%s]", request_id)
 
 
-class ProblemDetail(BaseModel):
+class ProblemDetail(ApiSchema):
     """RFC 9457 problem detail response with application extensions."""
 
     model_config = ConfigDict(extra="forbid")

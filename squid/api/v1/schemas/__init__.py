@@ -3,10 +3,10 @@
 from abc import abstractmethod
 from typing import Self
 
-from pydantic import BaseModel
+from squid.api.schema import ApiSchema
 
 
-class FromDomain[DomainT](BaseModel):
+class FromDomain[DomainT](ApiSchema):
     """A representation built from exactly one domain value.
 
     Implement it only where the mapping is total (every domain value has a representation) and

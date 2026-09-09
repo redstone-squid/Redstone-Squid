@@ -1,11 +1,12 @@
 """Public Minecraft-version representations."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from squid.api.schema import ApiSchema
 from squid.versions.domain import MinecraftVersion
 
 
-class VersionDetail(BaseModel):
+class VersionDetail(ApiSchema):
     """One recognized Minecraft release."""
 
     model_config = ConfigDict(extra="forbid")

@@ -81,6 +81,26 @@ def test_every_mutating_operation_accepts_an_idempotency_key() -> None:
             ), f"{method.upper()} {path} does not declare Idempotency-Key"
 
 
+# `enforce_request_idempotency` answers a reused key with `IdempotencyConflictError` and a still-running
+# equivalent request with `IdempotencyInProgressError`, both of which map to 409. An operation that
+# advertises the header therefore owes clients that status whether or not it has a conflict of its own.
+def test_every_operation_accepting_an_idempotency_key_declares_409() -> None:
+    document = _app.openapi()
+
+    for path, path_item in document["paths"].items():
+        for method in ("post", "put", "patch", "delete"):
+            operation = path_item.get(method)
+            if operation is None:
+                continue
+            parameters = [*path_item.get("parameters", []), *operation.get("parameters", [])]
+            if not any(
+                parameter.get("in") == "header" and parameter.get("name") == "Idempotency-Key"
+                for parameter in parameters
+            ):
+                continue
+            assert "409" in operation["responses"], f"{method.upper()} {path} accepts a key without declaring 409"
+
+
 def test_committed_openapi_document_matches_application() -> None:
     committed = json.loads(OPENAPI_DOCUMENT.read_text(encoding="utf-8"))
 

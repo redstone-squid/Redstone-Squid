@@ -83,7 +83,7 @@ async def get_error_report(reference: ReferenceParam, error_reports: ErrorReport
 @router.delete(
     "",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(401, 403, 422),
+    responses=responses(401, 403, 409, 422),
     dependencies=[Depends(requires(DIAGNOSTICS_ERROR_CLEAR)), Depends(enforce_request_idempotency)],
     operation_id="diagnostics_errors_clear",
     openapi_extra=contract(

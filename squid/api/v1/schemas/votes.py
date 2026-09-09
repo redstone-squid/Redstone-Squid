@@ -2,8 +2,9 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from squid.api.schema import ApiSchema
 from squid.voting.domain import (
     BuildVoteTarget,
     PollScope,
@@ -17,7 +18,7 @@ from squid.voting.domain import (
 )
 
 
-class VoteOptionSummary(BaseModel):
+class VoteOptionSummary(ApiSchema):
     """A stable vote option without Discord-specific reaction aliases."""
 
     model_config = ConfigDict(extra="forbid")
@@ -38,7 +39,7 @@ class VoteOptionSummary(BaseModel):
         return cls(id=option.identifier, label=option.label, choice=option.choice.value, position=option.position)
 
 
-class VoteTallies(BaseModel):
+class VoteTallies(ApiSchema):
     """Aggregate results which cannot identify individual voters."""
 
     model_config = ConfigDict(extra="forbid")
@@ -50,7 +51,7 @@ class VoteTallies(BaseModel):
     net: float = Field(description="`upvotes` minus `downvotes`, the score a threshold vote closes on.")
 
 
-class VotePollSummary(BaseModel):
+class VotePollSummary(ApiSchema):
     """Public generic-poll metadata."""
 
     model_config = ConfigDict(extra="forbid")
@@ -66,7 +67,7 @@ class VotePollSummary(BaseModel):
     deadline: datetime = Field(description="When the poll closes itself; a generic poll never closes on a score.")
 
 
-class OwnVoteSelection(BaseModel):
+class OwnVoteSelection(ApiSchema):
     """The authenticated caller's own ballot selection."""
 
     model_config = ConfigDict(extra="forbid")
@@ -78,7 +79,7 @@ class OwnVoteSelection(BaseModel):
         return cls(option_id=selection.option_id)
 
 
-class VoteSessionDetail(BaseModel):
+class VoteSessionDetail(ApiSchema):
     """A vote session with aggregate-only ballot data."""
 
     model_config = ConfigDict(extra="forbid")

@@ -5,8 +5,9 @@ from typing import Annotated
 from urllib.parse import urlencode
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
+from pydantic import AnyHttpUrl, ConfigDict, Field
 
+from squid.api.schema import ApiSchema
 from squid.cli_auth.application import decode_urlsafe_bytes, public_key_fingerprint
 from squid.cli_auth.domain import CliDevice, CliDeviceEnrollment, IssuedCliEnrollment, IssuedCliSession
 
@@ -49,7 +50,7 @@ Signature = Annotated[
 ]
 
 
-class StrictSchema(BaseModel):
+class StrictSchema(ApiSchema):
     """Reject fields outside the pinned CLI authorization contract."""
 
     model_config = ConfigDict(extra="forbid")

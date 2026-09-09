@@ -4,8 +4,9 @@ from datetime import datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
+from squid.api.schema import ApiSchema
 from squid.notifications import (
     InboxNotification,
     NotificationPreferences,
@@ -16,7 +17,7 @@ from squid.notifications import (
 )
 
 
-class NotificationPreferencesDetail(BaseModel):
+class NotificationPreferencesDetail(ApiSchema):
     """Independent channel switches, and whether the account may use them yet."""
 
     model_config = ConfigDict(extra="forbid")
@@ -42,7 +43,7 @@ class NotificationPreferencesDetail(BaseModel):
         )
 
 
-class NotificationPreferenceUpdate(BaseModel):
+class NotificationPreferenceUpdate(ApiSchema):
     """A complete pair of independently configurable notification channels.
 
     Both switches are replaced, so an omitted one defaults to false and turns that channel off.
@@ -54,7 +55,7 @@ class NotificationPreferenceUpdate(BaseModel):
     dm_enabled: bool = False
 
 
-class TagPredicateInput(BaseModel):
+class TagPredicateInput(ApiSchema):
     """A required tag presence or exact typed value."""
 
     model_config = ConfigDict(extra="forbid")
@@ -78,7 +79,7 @@ class TagPredicateInput(BaseModel):
         return TagPredicate(tag_id=self.tag_id, operator=self.operator, value=self.value)
 
 
-class RecordFilterInput(BaseModel):
+class RecordFilterInput(ApiSchema):
     """Broad structured predicates for record-gain subscriptions.
 
     An empty set is a wildcard over that facet, but at least one of the four must be non-empty. A
@@ -108,7 +109,7 @@ class RecordFilterInput(BaseModel):
         )
 
 
-class NotificationSubscriptionCreate(BaseModel):
+class NotificationSubscriptionCreate(ApiSchema):
     """A creator, exact-record, or record-filter subscription request.
 
     `subject_id` and `filter` are mutually exclusive: `creator` and `record` require the former,
@@ -138,7 +139,7 @@ class NotificationSubscriptionCreate(BaseModel):
         return self
 
 
-class NotificationSubscriptionDetail(BaseModel):
+class NotificationSubscriptionDetail(ApiSchema):
     """One enabled caller-owned subscription."""
 
     model_config = ConfigDict(extra="forbid")
@@ -160,7 +161,7 @@ class NotificationSubscriptionDetail(BaseModel):
         )
 
 
-class InboxNotificationDetail(BaseModel):
+class InboxNotificationDetail(ApiSchema):
     """One web inbox item."""
 
     model_config = ConfigDict(extra="forbid")

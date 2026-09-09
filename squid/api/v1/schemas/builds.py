@@ -7,8 +7,9 @@ from enum import StrEnum
 from typing import Annotated, ClassVar, Literal, Self, cast, override
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
+from pydantic import AnyHttpUrl, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
+from squid.api.schema import ApiSchema
 from squid.api.v1.schemas import FromDomain
 from squid.builds.domain import Build, DoorBuild, ExtenderBuild, Status
 
@@ -28,7 +29,7 @@ class BuildStatusFilter(StrEnum):
         return Status[self.name]
 
 
-class DoorSubmission(BaseModel):
+class DoorSubmission(ApiSchema):
     """A user-authored door build submission."""
 
     model_config = ConfigDict(extra="forbid")
@@ -72,7 +73,7 @@ class DoorSubmission(BaseModel):
         return self
 
 
-class DoorPatch(BaseModel):
+class DoorPatch(ApiSchema):
     """A partial edit of the facts only a door has.
 
     Omitting a field leaves it alone; sending null clears it, except for `door_dimensions` and
@@ -117,7 +118,7 @@ class DoorPatch(BaseModel):
         return {self._EDIT_FIELDS[name]: value for name, value in supplied.items()}
 
 
-class BuildPatch(BaseModel):
+class BuildPatch(ApiSchema):
     """A partial build edit which preserves omitted versus explicitly cleared fields.
 
     Omitting a field leaves it alone; sending null clears it. `dimensions`, `door`, `locationality`,
@@ -197,7 +198,7 @@ class BuildPatch(BaseModel):
         return attributes
 
 
-class Dimensions(BaseModel):
+class Dimensions(ApiSchema):
     """A three-dimensional build measurement in blocks. An axis is null when it was never recorded."""
 
     model_config = ConfigDict(extra="forbid")
@@ -210,7 +211,7 @@ class Dimensions(BaseModel):
 # The internal `build_tag_assignments.provenance` column keeps its name: renaming it reaches the
 # tags repository, the builds mapping, the taxonomy backfill and a migration, for a word no client
 # ever sees.
-class BuildTag(BaseModel):
+class BuildTag(ApiSchema):
     """A tag on a build, without who applied it or how.
 
     A build carries at most one tag per `key`. Look `key` up in `/v1/tags` for the tag's declared
@@ -227,7 +228,7 @@ class BuildTag(BaseModel):
     unit: str | None = Field(description="Unit `value` is expressed in; null when the tag declares none.")
 
 
-class BuildPreview(BaseModel):
+class BuildPreview(ApiSchema):
     """The preferred HTTPS image for a build card."""
 
     model_config = ConfigDict(extra="forbid")
@@ -303,7 +304,7 @@ class BuildSummary(FromDomain[Build]):
         )
 
 
-class BuildLinks(BaseModel):
+class BuildLinks(ApiSchema):
     """Allowlisted public media links attached to a build."""
 
     model_config = ConfigDict(extra="forbid")
@@ -315,7 +316,7 @@ class BuildLinks(BaseModel):
     renders: list[str]
 
 
-class BuildSponsor(BaseModel):
+class BuildSponsor(ApiSchema):
     """Immutable public sponsor metadata captured when the build was finalized."""
 
     model_config = ConfigDict(extra="forbid")
@@ -327,7 +328,7 @@ class BuildSponsor(BaseModel):
     website_url: AnyHttpUrl | None
 
 
-class DoorDetails(BaseModel):
+class DoorDetails(ApiSchema):
     """Facts owned by doors.
 
     The headline `opening_time` and `closing_time` stay on the summary and are not repeated here.
@@ -343,7 +344,7 @@ class DoorDetails(BaseModel):
     visible_closing_time: int | None = Field(description="Visible closing time in game ticks; null if unknown.")
 
 
-class ExtenderDetails(BaseModel):
+class ExtenderDetails(ApiSchema):
     """Facts owned by piston extenders."""
 
     model_config = ConfigDict(extra="forbid")
@@ -355,7 +356,7 @@ class ExtenderDetails(BaseModel):
     extender_type: str | None
 
 
-class GeneralDetails(BaseModel):
+class GeneralDetails(ApiSchema):
     """The categories that add no facts beyond the shared ones."""
 
     model_config = ConfigDict(extra="forbid")

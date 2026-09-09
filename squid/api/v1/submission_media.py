@@ -259,7 +259,7 @@ async def upload_draft_media(
 @router.get(
     "",
     response_model=DraftMediaListResponse,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_media_list",
     openapi_extra=contract(
         security=[WEB, DEVICE, MINECRAFT],
@@ -274,7 +274,10 @@ async def list_draft_media(
     drafts: Drafts,
     account_id: AccountId,
 ) -> DraftMediaListResponse:
-    """List every upload retained for an owned draft in creation order, discarded and failed ones included."""
+    """List every upload retained for an owned draft in creation order, discarded and failed ones included.
+
+    409 once the draft has expired.
+    """
     await drafts.get_owned(draft_id, account_id)
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
@@ -289,7 +292,7 @@ async def list_draft_media(
 @router.get(
     "/{upload_id}",
     response_model=DraftMediaResponse,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_media_get",
     openapi_extra=contract(
         security=[WEB, DEVICE, MINECRAFT],
@@ -305,7 +308,10 @@ async def get_draft_media(
     drafts: Drafts,
     account_id: AccountId,
 ) -> DraftMediaResponse:
-    """Return one upload; 404 when it is unknown or belongs to a different draft than `draft_id`."""
+    """Return one upload, 409 once the draft has expired.
+
+    404 when the upload is unknown or belongs to a different draft than `draft_id`.
+    """
     await drafts.get_owned(draft_id, account_id)
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
@@ -318,7 +324,7 @@ async def get_draft_media(
 @router.delete(
     "/{upload_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses=responses(400, 401, 403, 404, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="submission_media_discard",
     openapi_extra=contract(
@@ -336,7 +342,8 @@ async def discard_draft_media(
 ) -> Response:
     """Withdraw one upload, invalidating any live normalization claim; the discarded row itself is retained.
 
-    Idempotent while the upload still belongs to `draft_id`; 404 once it does not.
+    Idempotent while the upload still belongs to `draft_id`; 404 once it does not, 409 once the draft has
+    expired or is no longer editable.
     """
     await drafts.get_owned(draft_id, account_id)
     _require_query_names(request, frozenset())

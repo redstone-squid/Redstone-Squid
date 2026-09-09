@@ -5,15 +5,16 @@ from typing import Annotated, Self
 from urllib.parse import urlencode
 from uuid import UUID
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AnyHttpUrl, ConfigDict, Field, model_validator
 
+from squid.api.schema import ApiSchema
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.minecraft_auth.domain import (
     IssuedInstallationCredential,
     IssuedPlayerChallenge,
     IssuedPlayerGrant,
     MinecraftClientOrigin,
-    PaperInstallation,
+    OwnedPaperInstallation,
     PlayerAuthorizationChallenge,
     PublicServerProfile,
 )
@@ -33,10 +34,11 @@ DeviceCode = Annotated[
 UserCode = Annotated[
     str,
     Field(
-        min_length=8,
-        max_length=32,
-        pattern=r"^[A-Za-z2-7a-z-]+$",
-        description="The code displayed to the player, as issued: base32 in dash-separated groups of four.",
+        min_length=16,
+        max_length=19,
+        pattern=r"^[A-Za-z2-7]{4}(?:-?[A-Za-z2-7]{4}){3}$",
+        description="The code displayed to the player: sixteen RFC 4648 base32 characters, issued in "
+        "dash-separated groups of four. Case is ignored and the dashes may be omitted.",
     ),
 ]
 PkceS256Challenge = Annotated[
@@ -58,7 +60,7 @@ PkceVerifier = Annotated[
 ]
 
 
-class StrictSchema(BaseModel):
+class StrictSchema(ApiSchema):
     """Reject fields outside the pinned Minecraft authorization contract."""
 
     model_config = ConfigDict(extra="forbid")
@@ -143,7 +145,7 @@ class InstallationResponse(StrictSchema):
     revoked_at: datetime | None = Field(description="Null while the installation may still authenticate.")
 
     @classmethod
-    def from_domain(cls, installation: PaperInstallation) -> InstallationResponse:
+    def from_domain(cls, installation: OwnedPaperInstallation) -> InstallationResponse:
         return cls(
             id=installation.id,
             label=installation.label,

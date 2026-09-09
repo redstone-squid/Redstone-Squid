@@ -2,13 +2,14 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
 
+from squid.api.schema import ApiSchema
 from squid.core.errors import ErrorCode, JSONValue
 from squid.diagnostics.domain import ErrorReport
 
 
-class ErrorReportSummary(BaseModel):
+class ErrorReportSummary(ApiSchema):
     """One stored failure, without its traceback or logs."""
 
     model_config = ConfigDict(extra="forbid")

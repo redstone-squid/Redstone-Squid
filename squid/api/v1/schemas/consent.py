@@ -1,9 +1,11 @@
 """The published privacy notice, as served to any client that has to display it."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+
+from squid.api.schema import ApiSchema
 
 
-class PrivacyNoticeDetail(BaseModel):
+class PrivacyNoticeDetail(ApiSchema):
     """The current notice, its version, and the locale it was rendered in."""
 
     model_config = ConfigDict(extra="forbid")
@@ -20,7 +22,7 @@ class PrivacyNoticeDetail(BaseModel):
     )
 
 
-class ConsentGrantRequest(BaseModel):
+class ConsentGrantRequest(ApiSchema):
     """Which notice version the client actually displayed before asking."""
 
     model_config = ConfigDict(extra="forbid")

@@ -2,12 +2,13 @@
 
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from squid.api.capabilities import RendererControl
+from squid.api.schema import ApiSchema
 
 
-class ProtocolInterval(BaseModel):
+class ProtocolInterval(ApiSchema):
     """Inclusive versions accepted for one independently versioned protocol."""
 
     model_config = ConfigDict(frozen=True)
@@ -27,7 +28,7 @@ class ProtocolInterval(BaseModel):
         return self.minimum <= version <= self.maximum
 
 
-class ApiVersionCapabilities(BaseModel):
+class ApiVersionCapabilities(ApiSchema):
     """Version of the public HTTP API, independent of payload protocols."""
 
     model_config = ConfigDict(frozen=True)
@@ -35,7 +36,7 @@ class ApiVersionCapabilities(BaseModel):
     semantic_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
 
 
-class ApiFeatureCapabilities(BaseModel):
+class ApiFeatureCapabilities(ApiSchema):
     """Stable feature identifiers understood by this API deployment.
 
     They name what this server can do, not what any client supports. An operation's
@@ -47,7 +48,7 @@ class ApiFeatureCapabilities(BaseModel):
     identifiers: tuple[str, ...] = Field(description="Sorted ascending, so two deployments compare directly.")
 
 
-class ProtocolCapabilities(BaseModel):
+class ProtocolCapabilities(ApiSchema):
     """Compatibility intervals for protocols outside HTTP API SemVer."""
 
     model_config = ConfigDict(frozen=True)
@@ -58,7 +59,7 @@ class ProtocolCapabilities(BaseModel):
     )
 
 
-class UploadCapabilities(BaseModel):
+class UploadCapabilities(ApiSchema):
     """Upload, aggregate, and decoder-work limits enforced by the backend.
 
     Exceeding any of them is rejected server-side; a client that checks first spares the upload.
@@ -77,7 +78,7 @@ class UploadCapabilities(BaseModel):
     )
 
 
-class RendererCapabilities(BaseModel):
+class RendererCapabilities(ApiSchema):
     """Form controls and optional renderer features emitted by the API."""
 
     model_config = ConfigDict(frozen=True)
@@ -90,7 +91,7 @@ class RendererCapabilities(BaseModel):
     )
 
 
-class SanitizationCapabilities(BaseModel):
+class SanitizationCapabilities(ApiSchema):
     """Artifact transformations whose availability is compatibility-relevant.
 
     Both values are fixed for this deployment: uploaded media is re-encoded before publication, and
@@ -103,7 +104,7 @@ class SanitizationCapabilities(BaseModel):
     schematics: Literal["unavailable"] = "unavailable"
 
 
-class ApiCapabilities(BaseModel):
+class ApiCapabilities(ApiSchema):
     """Namespaced compatibility facts for generated and handwritten clients."""
 
     model_config = ConfigDict(frozen=True)
