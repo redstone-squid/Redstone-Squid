@@ -15,6 +15,7 @@ from squid.core.errors import ConfigurationError
 from squid.logging_config import (
     build_logging_config,
     configure_api_logging,
+    configure_bot_logging,
     configure_service_worker_logging,
     configure_worker_logging,
     prepare_log_path,
@@ -249,6 +250,48 @@ class TestBuildLoggingConfig:
         assert json.loads(stream.getvalue())["service_name"] == "redstone-squid-schematic-worker"
 
 
+class TestConfigureBotLogging:
+    """SQUID_LOG_LEVEL reaches `squid.*` loggers, not just the handlers behind them."""
+
+    @pytest.fixture(autouse=True)
+    def _restore_logging(self) -> Iterator[None]:
+        yield
+        logging.config.dictConfig({"version": 1, "disable_existing_loggers": False})
+
+    def _config(self, tmp_path: Path, level: str) -> LoggingConfig:
+        return LoggingConfig(
+            level=level,
+            root_level="WARNING",
+            directory=tmp_path,
+            log_file="discord.log",
+            access_log_file=None,
+        )
+
+    def test_a_configured_debug_level_reaches_a_squid_logger(self, tmp_path: Path) -> None:
+        listener = configure_bot_logging(self._config(tmp_path, "DEBUG"))
+        try:
+            logging.getLogger("squid.builds").debug("a detail worth seeing")
+        finally:
+            listener.stop()  # Draining the queue is what makes the file readable here.
+
+        assert logging.getLogger("squid").level == logging.DEBUG
+        assert "a detail worth seeing" in (tmp_path / "discord.log").read_text(encoding="utf-8")
+
+    def test_a_debug_level_leaves_the_discord_library_at_info(self, tmp_path: Path) -> None:
+        """Gateway DEBUG records outnumber application ones by orders of magnitude."""
+        listener = configure_bot_logging(self._config(tmp_path, "DEBUG"))
+        listener.stop()
+
+        assert logging.getLogger("discord").level == logging.INFO
+
+    def test_raising_the_level_quiets_the_discord_library_too(self, tmp_path: Path) -> None:
+        listener = configure_bot_logging(self._config(tmp_path, "WARNING"))
+        listener.stop()
+
+        assert logging.getLogger("squid").level == logging.WARNING
+        assert logging.getLogger("discord").level == logging.WARNING
+
+
 class TestConfigureWorkerLogging:
     """The schematic worker child's stderr-only configuration."""
 
@@ -264,7 +307,7 @@ class TestConfigureWorkerLogging:
         assert isinstance(handler, logging.StreamHandler)
         assert handler.level == logging.WARNING
         assert logging.getLogger().level == logging.ERROR
-        assert logging.getLogger("squid").level == logging.INFO
+        assert logging.getLogger("squid").level == logging.WARNING
 
     def test_defaults_match_the_project_wide_levels(self) -> None:
         configure_worker_logging()
@@ -283,14 +326,24 @@ class TestConfigureApiAndWorkerLogging:
         yield
         logging.config.dictConfig({"version": 1, "disable_existing_loggers": False})
 
-    def _logging_config(self, tmp_path: Path) -> LoggingConfig:
+    def _logging_config(self, tmp_path: Path, level: str = "INFO") -> LoggingConfig:
         return LoggingConfig(
-            level="INFO",
+            level=level,
             root_level="WARNING",
             directory=tmp_path,
             log_file=None,
             access_log_file=None,
         )
+
+    def test_api_logging_gives_the_squid_logger_the_configured_level(self, tmp_path: Path) -> None:
+        configure_api_logging(self._logging_config(tmp_path, "DEBUG"))
+
+        assert logging.getLogger("squid").level == logging.DEBUG
+
+    def test_service_worker_logging_gives_the_squid_logger_the_configured_level(self, tmp_path: Path) -> None:
+        configure_service_worker_logging(self._logging_config(tmp_path, "DEBUG"))
+
+        assert logging.getLogger("squid").level == logging.DEBUG
 
     def test_api_logging_defaults_to_json(self, tmp_path: Path) -> None:
         configure_api_logging(self._logging_config(tmp_path))

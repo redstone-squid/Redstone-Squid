@@ -1,7 +1,5 @@
 """SQLAlchemy models for rule-driven record computation."""
 
-from __future__ import annotations
-
 import uuid
 
 from sqlalchemy import (

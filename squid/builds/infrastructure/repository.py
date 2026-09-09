@@ -1,7 +1,5 @@
 """Persistence and high-level operations for the Build domain object."""
 
-from __future__ import annotations
-
 import logging
 import uuid
 from collections.abc import Sequence

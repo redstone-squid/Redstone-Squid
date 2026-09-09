@@ -1,7 +1,5 @@
 """SQLAlchemy models for indexed search projections."""
 
-from __future__ import annotations
-
 import uuid
 from decimal import Decimal
 

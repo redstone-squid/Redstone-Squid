@@ -12,14 +12,10 @@ from squid.core.errors import ConfigurationError
 from squid.observability import CORRELATION_BUFFER_HANDLER, install_trace_context_log_filter
 
 DEFAULT_LOG_LEVEL = "INFO"
-"""Level pinned on the `squid` and `discord` loggers; SQUID_LOG_LEVEL sets handler levels only."""
+"""Level the `discord` logger never drops below, and the schematic worker's fallback level."""
 
 DEFAULT_ROOT_LOG_LEVEL = "WARNING"
 """Root level a schematic worker child uses when the supervising process names none."""
-
-DEFAULT_LOG_DIR_NAME = "logs"
-
-DEFAULT_DISCORD_LOG_FILE = "discord.log"
 
 DEFAULT_MAX_BYTES = 32 * 1024 * 1024
 """Maximum log file size in bytes before rotation."""
@@ -70,6 +66,20 @@ def resolve_level(level_name: str) -> int:
         msg = f"Invalid log level: {level_name}"
         raise ConfigurationError(msg, context={"log_level": level_name})
     return level
+
+
+def _discord_log_level(level: str) -> str:
+    """Return the level the `discord` logger takes when the application runs at `level`.
+
+    Raising `level` above `DEFAULT_LOG_LEVEL` raises the library logger with it, so quieting the
+    process quiets the whole process. Lowering it does not: `discord.gateway` emits a record per
+    heartbeat and per raw event at DEBUG, which buries the application records that a lowered
+    level was set to reveal.
+
+    Raises:
+        ConfigurationError: `level` is not a registered logging level.
+    """
+    return level if resolve_level(level) > resolve_level(DEFAULT_LOG_LEVEL) else DEFAULT_LOG_LEVEL
 
 
 def prepare_log_path(log_dir: Path, path_str: str | None) -> Path | None:
@@ -263,13 +273,15 @@ def configure_bot_logging(config: LoggingConfig, *, dev_mode: bool = False) -> Q
     The caller owns the returned listener and stops it on shutdown; until then every record
     leaves the event loop thread through the queue.
 
+    The `squid` logger takes `config.level`; the `discord` logger takes `_discord_log_level`.
+
     Raises:
         ConfigurationError: A configured level is not a logging level.
         TypeError: dictConfig produced no queue handler or no listener behind it.
     """
     named_logger_levels = {
-        "discord": DEFAULT_LOG_LEVEL,
-        "squid": DEFAULT_LOG_LEVEL,
+        "discord": _discord_log_level(config.level),
+        "squid": config.level,
     }
 
     if dev_mode:
@@ -300,11 +312,15 @@ def configure_bot_logging(config: LoggingConfig, *, dev_mode: bool = False) -> Q
 
 
 def configure_api_logging(config: LoggingConfig, *, dev_mode: bool = False) -> None:
-    """Configure logging for the FastAPI and uvicorn process."""
+    """Configure logging for the FastAPI and uvicorn process.
+
+    Raises:
+        ConfigurationError: A configured level is not a logging level.
+    """
     logging.config.dictConfig(
         build_logging_config(
             config=config,
-            named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
+            named_logger_levels={"squid": config.level},
             include_uvicorn_loggers=True,
             development_mode=dev_mode,
             service_name="redstone-squid-api",
@@ -317,11 +333,15 @@ def configure_api_logging(config: LoggingConfig, *, dev_mode: bool = False) -> N
 
 
 def configure_service_worker_logging(config: LoggingConfig, *, dev_mode: bool = False) -> None:
-    """Configure logging for the long-lived database worker process, not the schematic child."""
+    """Configure logging for the long-lived database worker process, not the schematic child.
+
+    Raises:
+        ConfigurationError: A configured level is not a logging level.
+    """
     logging.config.dictConfig(
         build_logging_config(
             config=config,
-            named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
+            named_logger_levels={"squid": config.level},
             development_mode=dev_mode,
             service_name="redstone-squid-worker",
             log_tail_records=config.tail_records,
@@ -333,9 +353,12 @@ def configure_service_worker_logging(config: LoggingConfig, *, dev_mode: bool = 
 def configure_worker_logging(*, level: str = DEFAULT_LOG_LEVEL, root_level: str = DEFAULT_ROOT_LOG_LEVEL) -> None:
     """Configure JSON logging to stderr for a schematic worker child.
 
-    The handler and root levels come from the supervising process, because every record the child
-    emits is serialised, piped, parsed and rebuilt by the parent: a record the parent would
-    discard is work nobody asked for. The `squid` logger stays at `DEFAULT_LOG_LEVEL`.
+    The handler, `squid` logger and root levels come from the supervising process, because every
+    record the child emits is serialised, piped, parsed and rebuilt by the parent: a record the
+    parent would discard is work nobody asked for.
+
+    Raises:
+        ConfigurationError: `level` or `root_level` is not a registered logging level.
     """
     logging.config.dictConfig(
         {
@@ -358,7 +381,7 @@ def configure_worker_logging(*, level: str = DEFAULT_LOG_LEVEL, root_level: str 
             },
             "loggers": {
                 "squid": {
-                    "level": resolve_level(DEFAULT_LOG_LEVEL),
+                    "level": resolve_level(level),
                     "handlers": ["stderr"],
                     "propagate": False,
                 }

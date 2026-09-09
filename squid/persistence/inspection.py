@@ -1,7 +1,5 @@
 """Database schema inspection and consistency checks."""
 
-from __future__ import annotations
-
 import logging
 from typing import Any, cast
 
@@ -49,13 +47,12 @@ class DatabaseSchema:
             self.columns[table] = {c["name"]: c for c in inspector.get_columns(table)}
 
 
-def check_relationship_property(
+def has_relationship_errors(
     column_prop: RelationshipProperty, schema: DatabaseSchema, klass: type[DeclarativeBase], engine: Engine
 ) -> bool:
     """Return whether the relationship's target or secondary table is missing, logging each one.
 
-    True means a mismatch was found; a relationship that does not resolve to a `Table` is skipped
-    rather than reported.
+    A relationship that does not resolve to a `Table` is skipped rather than reported.
     """
     errors = False
 
@@ -96,13 +93,10 @@ def check_relationship_property(
     return errors
 
 
-def check_column_property(
+def has_column_errors(
     column_prop: ColumnProperty, schema: DatabaseSchema, klass: type[DeclarativeBase], engine: Engine
 ) -> bool:
-    """Return whether the column's existence, type, nullability or foreign keys mismatch, logging each.
-
-    True means a mismatch was found.
-    """
+    """Return whether the column's existence, type, nullability or foreign keys mismatch, logging each."""
     # TODO: unique constraints
     errors = False
 
@@ -262,10 +256,10 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
         try:  # If any error occurs during inspection, it will be caught, and errors will be set to True
             for column_prop in mapper.attrs:
                 if isinstance(column_prop, RelationshipProperty):
-                    if check_relationship_property(column_prop, schema, klass, engine):
+                    if has_relationship_errors(column_prop, schema, klass, engine):
                         errors = True
                 elif isinstance(column_prop, ColumnProperty):
-                    if check_column_property(column_prop, schema, klass, engine):
+                    if has_column_errors(column_prop, schema, klass, engine):
                         errors = True
                 else:
                     logger.info(

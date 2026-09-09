@@ -1,7 +1,5 @@
 """SQLAlchemy build and taxonomy models."""
 
-from __future__ import annotations
-
 import uuid
 from typing import TYPE_CHECKING
 

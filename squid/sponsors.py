@@ -12,11 +12,15 @@ _HTTP_URL = TypeAdapter(AnyHttpUrl)
 class PublicSponsor:
     """Allowlisted public snapshot of one sponsoring Paper installation.
 
+    Construction strips surrounding whitespace from every text field and replaces the website URL
+    with its canonical form. `PublicServerProfile`, which supplies these values, accepts a padded
+    string, so rejecting one here would silently drop the whole attribution.
+
     Raises:
-        ValueError: From construction, when the installation ID is nil, a text field is empty,
-            surrounded by whitespace or over its length limit (80 for the display name, 255 for
-            the address, 500 for the description, 2048 for the URL), or the website URL is not
-            an HTTP(S) URL free of whitespace and embedded credentials.
+        ValueError: From construction, when the installation ID is nil, a text field is blank or
+            over its length limit once stripped (80 for the display name, 255 for the address,
+            500 for the description, 2048 for the URL), or the website URL holds interior
+            whitespace or a control character, is not an HTTP(S) URL, or embeds credentials.
     """
 
     installation_id: UUID
@@ -39,16 +43,13 @@ class PublicSponsor:
             if value is None:
                 continue
             normalized = value.strip()
-            if (
-                not normalized
-                or normalized != value
-                or len(normalized) > maximum
-                or (
-                    any(character.isspace() or ord(character) < 32 or ord(character) == 127 for character in normalized)
-                    and attribute == "website_url"
-                )
-            ):
+            if not normalized or len(normalized) > maximum:
                 msg = f"Sponsor {label} must contain 1 to {maximum} characters."
+                raise ValueError(msg)
+            if attribute == "website_url" and any(
+                character.isspace() or ord(character) < 32 or ord(character) == 127 for character in normalized
+            ):
+                msg = "Sponsor website URL must not contain whitespace or control characters."
                 raise ValueError(msg)
             object.__setattr__(self, attribute, normalized)
         if self.website_url is not None:

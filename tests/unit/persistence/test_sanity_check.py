@@ -31,10 +31,20 @@ from sqlalchemy import (
 from sqlalchemy.exc import NoSuchTableError
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
+from sqlalchemy.orm import (
+    ColumnProperty,
+    DeclarativeBase,
+    Mapped,
+    Mapper,
+    RelationshipProperty,
+    Session,
+    mapped_column,
+    relationship,
+    sessionmaker,
+)
 from sqlalchemy.sql.type_api import TypeEngine
 
-from squid.persistence.inspection import is_sane_database
+from squid.persistence.inspection import DatabaseSchema, has_column_errors, has_relationship_errors, is_sane_database
 
 
 # TODO: Think about what kind of tests are missing
@@ -177,6 +187,32 @@ def test_sanity_check_passes_with_valid_tables(
 
     with fresh_schema(db_engine, Base):
         assert is_sane_database(Base, db_engine) is True, "Database should be considered sane with valid tables"
+
+
+def test_the_property_predicates_return_true_only_on_a_mismatch(
+    db_engine: Engine,
+    base_and_sane_relation_models: tuple[type[DeclarativeBase], type[DeclarativeBase], type[DeclarativeBase]],
+):
+    """They are named `has_*_errors` because True means broken; nothing may read them as "is valid"."""
+    Base, _RelationTestModel, RelationTestModel2 = base_and_sane_relation_models
+
+    with fresh_schema(db_engine, Base):
+        mapper = sqlalchemy.inspect(RelationTestModel2)
+        assert isinstance(mapper, Mapper)
+        relationship_prop = mapper.attrs["test_relationship"]
+        column_prop = mapper.attrs["id"]
+        assert isinstance(relationship_prop, RelationshipProperty)
+        assert isinstance(column_prop, ColumnProperty)
+
+        schema = DatabaseSchema(sqlalchemy.inspect(db_engine))
+        assert has_relationship_errors(relationship_prop, schema, RelationTestModel2, db_engine) is False
+        assert has_column_errors(column_prop, schema, RelationTestModel2, db_engine) is False
+
+        schema.tables.remove("sanity_check_test_1")
+        assert has_relationship_errors(relationship_prop, schema, RelationTestModel2, db_engine) is True
+
+        del schema.columns["sanity_check_test_2"]["id"]
+        assert has_column_errors(column_prop, schema, RelationTestModel2, db_engine) is True
 
 
 def test_sanity_check_fails_with_missing_table(
