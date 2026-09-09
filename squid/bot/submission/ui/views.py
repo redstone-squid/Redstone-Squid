@@ -1,7 +1,7 @@
 """Semantic submission and build-edit workspaces."""
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from typing import Any, cast
+from typing import Any, cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -311,6 +311,7 @@ class BuildEditScreen(sd.Screen):
         """Recheck whether the actor may currently edit this build."""
         return await self._authorize()
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         from squid.bot.submission.ui.controls import build_edit_recovery
 

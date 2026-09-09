@@ -8,7 +8,7 @@ PAGE_CHARS constant), and author lock, expiry, and error routing belong to the m
 import dataclasses
 import io
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Protocol
+from typing import Protocol, override
 
 import discord
 
@@ -85,6 +85,7 @@ class ErrorReportScreen(sd.Screen):
             confirm_label=tr(t"Delete reports"),
         )
 
+    @override
     async def on_load(self) -> None:
         """Load the requested report or the current diagnostic window after delivery wins."""
         if self._reference is not None:
@@ -111,6 +112,7 @@ class ErrorReportScreen(sd.Screen):
         """The reports the list offers."""
         return self._reports
 
+    @override
     def render(self) -> sl.Document[sl.ComponentsV2Target]:
         if self.cleared_count is not None:
             count = self.cleared_count

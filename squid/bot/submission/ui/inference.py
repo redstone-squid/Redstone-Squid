@@ -1,5 +1,6 @@
 """Private recovery and explicit category selection for retained inferred candidates."""
 
+from typing import override
 from uuid import UUID
 
 import squid_ui as sl
@@ -39,6 +40,7 @@ class InferenceCandidatesScreen(sd.Screen):
     def page_count(self) -> int:
         return max(1, (len(self.candidates) + 24) // 25)
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(

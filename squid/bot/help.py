@@ -108,6 +108,7 @@ class HelpScreen(sd.Screen):
             else None,
         )
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._needle is not None and self._focused is None:
             needle = self._needle

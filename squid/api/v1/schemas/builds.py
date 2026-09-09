@@ -194,6 +194,7 @@ class BuildSummary(FromDomain[Build]):
     updated_at: datetime | None
 
     @classmethod
+    @override
     def from_domain(cls, build: Build, /) -> Self:
         """Render allowlisted public build fields."""
         if build.id is None:

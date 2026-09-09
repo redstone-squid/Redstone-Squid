@@ -1,6 +1,6 @@
 """Root route group, router lifecycle hooks, and process-wide middleware."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 import discord
 
@@ -45,6 +45,7 @@ def _feature_route(
 class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
     """Trace every routed interaction without recording user-controlled route values."""
 
+    @override
     async def dispatch(self, request: sd.routing.RouteRequest[BotT], proceed: sd.routing.RouteProceed) -> None:
         attributes: dict[str, SpanAttribute] = {
             "squid.surface": TraceSurface.DISCORD_ROUTE,

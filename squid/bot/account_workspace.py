@@ -1,7 +1,7 @@
 """Canonical account workflow combining identity, consent, claims, and merge operations."""
 
 from collections.abc import Awaitable, Callable
-from typing import cast
+from typing import cast, override
 
 import discord
 
@@ -60,6 +60,7 @@ class AccountWorkspace(sd.Screen):
         self._merge_code: str | None = None
         self._merge_decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         await self._rebuild()
 
@@ -97,6 +98,7 @@ class AccountWorkspace(sd.Screen):
             tabs.append(sp.Tab("review", tr(t"Review claims"), self._claims))
         self._tabs = sp.Tabs(tabs, key="account-tabs", title=tr(t"Account")).build_component()
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._merge_code is not None and self._merge_decision is not None:
             return (self.boundary(self._merge_decision, key="merge-decision"),)

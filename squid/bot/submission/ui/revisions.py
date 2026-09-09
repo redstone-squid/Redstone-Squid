@@ -1,5 +1,6 @@
 """Private review of persisted recalculation candidates."""
 
+from typing import override
 from uuid import UUID
 
 import squid_ui as sl
@@ -23,6 +24,7 @@ class RevisionProposalScreen(sd.Screen):
         self.proposal = proposal
         self.targets = targets
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         proposal = self.proposal
         if proposal.applied_revision is not None:

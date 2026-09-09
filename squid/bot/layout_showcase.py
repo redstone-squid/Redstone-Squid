@@ -10,7 +10,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from functools import partial
-from typing import TYPE_CHECKING, Literal, Never
+from typing import TYPE_CHECKING, Literal, Never, override
 
 from discord import app_commands
 from discord.ext import commands
@@ -298,6 +298,7 @@ class DemoCounter(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, label: sl.TextLike) -> None:
         self.label = label
 
+    @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         count = self.count
         return sl.primitives.Panel(
@@ -350,6 +351,7 @@ class FeedbackForm(sl.forms.Form):
         super().__init__(**prefill)
         self._on_recorded = on_recorded
 
+    @override
     def validate(self) -> Iterable[sl.forms.FormIssue]:
         # Cross-field validation runs only once every field has parsed, so these are the typed
         # values rather than the strings the reader typed.
@@ -357,6 +359,7 @@ class FeedbackForm(sl.forms.Form):
             return (sl.forms.FieldError("detail", tr(t"A low score needs a sentence saying why.")),)
         return ()
 
+    @override
     async def on_submit(self, event: sl.SubmitEvent) -> None:
         # The submitted values are already bound to this instance, so the handler reads them as
         # declared attributes instead of unpacking `event.values` by key.
@@ -414,6 +417,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         clicks = self.clicks
         return tr(t"Redrawn {clicks} times, and each press rebuilt this whole message.")
 
+    @override
     def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         controls = (
             sl.primitives.SelectMenu(
@@ -1110,6 +1114,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             case sl.operations.Cancelled(progress):
                 return f"{identity} \N{MIDDLE DOT} cancelled \N{MIDDLE DOT} {progress}"
 
+    @override
     def on_unmount(self) -> None:
         self.local_replication_scope.close()
         self.peer_replication_scope.close()
@@ -1151,6 +1156,7 @@ class AppearanceControls(sl.Component[sl.ComponentsV2Target]):
 
     history: sl.runtime.History = sl.runtime.history(limit=5)
 
+    @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         appearance = self.inject(APPEARANCE)
         density = appearance.density
@@ -1201,6 +1207,7 @@ class AppearancePanel(sl.Component[sl.ComponentsV2Target]):
         self.session = session
         self.controls = AppearanceControls()
 
+    @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         self.provide(APPEARANCE, self.appearance)
         focus = self.session.focus
@@ -1227,6 +1234,7 @@ class PreviewPanel(sl.Component[sl.ComponentsV2Target]):
         self.appearance = appearance
         self.session = session
 
+    @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         density = self.appearance.density
         focus = self.session.focus
@@ -1264,6 +1272,7 @@ class Lobby(sd.Screen):
     def __init__(self, host_id: int) -> None:
         self.host_id = host_id
 
+    @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         session = self._session()
         members = frozenset({self.host_id}) if session is None else session.members
