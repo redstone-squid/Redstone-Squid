@@ -12,7 +12,7 @@ application's data layer, not here.
 
 import logging
 from collections.abc import Callable
-from typing import Any, ClassVar
+from typing import Any, ClassVar, override
 
 from squid_reactivity.core import StateOwner, _Computed, _State
 from squid_reactivity.topics import Address, CellAddress, TopicBus
@@ -116,6 +116,7 @@ class SharedState[ScopeT = None](StateOwner):
         for descriptor in type(self)._state_descriptors.values():
             descriptor.cell(self)
 
+    @override
     def __setattr__(self, name: str, value: Any) -> None:
         if name not in type(self)._state_descriptors and name not in _RESERVED and not name.startswith("_"):
             message = (
@@ -125,6 +126,7 @@ class SharedState[ScopeT = None](StateOwner):
             raise AttributeError(message)
         super().__setattr__(name, value)
 
+    @override
     def __delattr__(self, name: str) -> None:
         """Refuse removal of declared state; a namespace field is reset by assigning it.
 
@@ -141,9 +143,11 @@ class SharedState[ScopeT = None](StateOwner):
             raise AttributeError(message)
         super().__delattr__(name)
 
+    @override
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.scope!r})" if self.scope is not None else f"{type(self).__name__}()"
 
+    @override
     def _state_changed(self, names: frozenset[str]) -> None:
         """Publish the addresses of the state fields that actually moved.
 
@@ -159,6 +163,7 @@ class SharedState[ScopeT = None](StateOwner):
             except Exception:
                 _logger.exception("a shared-state commit listener failed")
 
+    @override
     def _state_rolled_back(self) -> None:
         """Nothing to undo: a shared write stages, so a rolled-back one was never published."""
 

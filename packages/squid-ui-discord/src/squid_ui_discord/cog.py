@@ -1,6 +1,6 @@
 """A cog that owns a UI scope and registers its declared context menus."""
 
-from typing import Self, cast
+from typing import Self, cast, override
 
 import discord
 from discord import app_commands
@@ -44,6 +44,7 @@ class Cog[BotT: commands.Bot](commands.Cog):
     async def ui_unload(self) -> None:
         """Run application-specific work before facade declarations are removed."""
 
+    @override
     async def cog_load(self) -> None:
         """Register declarations and roll them back if application loading fails."""
         try:
@@ -54,6 +55,7 @@ class Cog[BotT: commands.Bot](commands.Cog):
             await self.ui.close()
             raise
 
+    @override
     async def cog_unload(self) -> None:
         """Run application teardown, unregister declarations, and close the scope."""
         try:

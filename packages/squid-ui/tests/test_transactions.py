@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 import pytest
 
@@ -38,6 +38,7 @@ class Panel(Component[DiscordTarget]):
         self.handles = [service]
         self.undeclared = "before"
 
+    @override
     def render(self):
         return Text(str(self.declared))
 
@@ -201,6 +202,7 @@ class TestStaging:
             def doubled(self) -> int:
                 return self.count * 2
 
+            @override
             def render(self):
                 return Text(str(self.doubled))
 
@@ -218,6 +220,7 @@ class TestStaging:
             def doubled(self) -> int:
                 return self.count * 2
 
+            @override
             def render(self):
                 return Text(str(self.doubled))
 
@@ -242,6 +245,7 @@ class TestStateWithoutAnInitialValue:
                 if assign:
                     self.value = 1
 
+            @override
             def render(self):
                 return Text("")
 
@@ -258,6 +262,7 @@ class TestStateWithoutAnInitialValue:
             def __init__(self) -> None:
                 self.marker = True
 
+            @override
             def render(self):
                 return Text("")
 
@@ -273,6 +278,7 @@ class TestStateWithoutAnInitialValue:
             def __init__(self) -> None:
                 self.ready = True
 
+            @override
             def render(self):
                 return Text("")
 
@@ -288,6 +294,7 @@ class TestStateWithoutAnInitialValue:
         class Late(Component[DiscordTarget]):
             value: int = state()
 
+            @override
             def render(self):
                 return Text("")
 
@@ -301,6 +308,7 @@ class TestStateWithoutAnInitialValue:
             def __init__(self, value: int) -> None:
                 self.value = value
 
+            @override
             def render(self):
                 return Text("")
 
@@ -316,6 +324,7 @@ class TestStateWithoutAnInitialValue:
             def __init__(self) -> None:
                 self.value = 1
 
+            @override
             def render(self):
                 return Text("")
 
@@ -400,6 +409,7 @@ class TestAbstractBases:
                 super().__init__(name)
                 self.profile = "loaded"
 
+            @override
             def render(self):
                 return Text(self.profile)
 
@@ -414,6 +424,7 @@ class TestAbstractBases:
             @abstractmethod
             def title(self) -> str: ...
 
+            @override
             def render(self):
                 return Text(self.profile)
 
@@ -421,12 +432,14 @@ class TestAbstractBases:
             def __init__(self) -> None:
                 self.profile = "loaded"
 
+            @override
             def title(self) -> str:
                 return "t"
 
         assert Panel().profile == "loaded"
 
         class Forgetful(BasePanel):
+            @override
             def title(self) -> str:
                 return "t"
 
@@ -438,6 +451,7 @@ class TestAbstractBases:
             profile: str = state()
 
         class Panel(BasePanel):
+            @override
             def render(self):
                 return Text(self.profile)
 
@@ -516,6 +530,7 @@ class Watched(Panel):
         self.notified: list[frozenset[str]] = []
         super().__init__(service)
 
+    @override
     def _state_changed(self, names: frozenset[str]) -> None:
         self.notified.append(names)
         super()._state_changed(names)

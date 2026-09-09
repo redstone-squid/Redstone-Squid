@@ -1,6 +1,7 @@
 """A toggle is one boolean identity with explicit state ownership."""
 
 from collections.abc import Awaitable, Callable
+from typing import override
 
 import squid_ui as sl
 from squid_ui import scene
@@ -122,6 +123,7 @@ def test_toggle_lowering_uses_one_toned_button_and_custom_labels() -> None:
 
 def test_toggle_key_is_prefixed_through_embed() -> None:
     class Child(sl.Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return sl.toggle("Web", key="web")
 
@@ -129,6 +131,7 @@ def test_toggle_key_is_prefixed_through_embed() -> None:
         def __init__(self) -> None:
             self.child = Child()
 
+        @override
         def render(self):
             return self.boundary(self.child, key="settings")
 

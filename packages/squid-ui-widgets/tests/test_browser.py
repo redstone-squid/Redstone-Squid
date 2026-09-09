@@ -1,6 +1,7 @@
 """Resource-backed master-detail browsing."""
 
 from dataclasses import dataclass
+from typing import override
 
 import squid_ui as sl
 import squid_ui_widgets as sp
@@ -30,6 +31,7 @@ async def test_opening_builds_one_detail_component_per_entry_and_back_closes_it(
         def __init__(self, entry: Entry) -> None:
             self.entry = entry
 
+        @override
         def render(self) -> sl.LayoutNode:
             return sl.paragraph(self.entry.label)
 

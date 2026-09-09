@@ -1,6 +1,7 @@
 """Resource-backed master-detail browsing."""
 
 from collections.abc import Awaitable, Callable, Sequence
+from typing import override
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
@@ -181,6 +182,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         """Open the next item in the visible window."""
         await self._adjacent(event, 1)
 
+    @override
     def render(self) -> DocumentLike[RenderTargetT]:
         """Render ready, pending, or failed source state."""
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.

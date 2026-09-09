@@ -1,6 +1,6 @@
 """Declarative Screen policy presented only through owner-scoped facades."""
 
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -39,6 +39,7 @@ def _ui(*, bus: LocalTopicBus | None = None) -> tuple[sd.Scope[Owner], FakeClien
 class BasicScreen(sd.Screen[Owner]):
     session = sd.SessionSpec("basic")
 
+    @override
     def render(self):
         return sl.heading("Basic")
 
@@ -61,6 +62,7 @@ def test_screen_compiles_its_class_policy_once() -> None:
         expiry = sd.PauseUpdates(10)
         chrome = CHROME
 
+        @override
         def render(self):
             return sl.heading("Declared")
 
@@ -91,11 +93,13 @@ async def test_facade_sets_opening_and_loads_before_first_render() -> None:
             order.append(f"construct:{label}")
             self.label = label
 
+        @override
         async def on_load(self) -> None:
             assert self.opening.source is context
             assert self.opening.owner is ui.owner
             order.append("load")
 
+        @override
         def render(self):
             order.append("render")
             return sl.heading(self.label)
@@ -118,10 +122,12 @@ async def test_rejected_session_delivers_notice_without_loading_component() -> N
             admission=AdmissionSpec(collision=Reject(notice=Message("Already open"))),
         )
 
+        @override
         async def on_load(self) -> None:
             nonlocal loads
             loads += 1
 
+        @override
         def render(self):
             return sl.heading("Exclusive")
 
@@ -165,6 +171,7 @@ async def test_renew_ephemeral_degrades_without_scheduler() -> None:
         session = sd.SessionSpec("renewable")
         expiry = sd.RenewEphemeral(45)
 
+        @override
         def render(self):
             return sl.heading("Renewable")
 
@@ -181,6 +188,7 @@ async def test_follow_topics_selects_installed_scheduler() -> None:
         session = sd.SessionSpec("following")
         follow_topics = True
 
+        @override
         def render(self):
             return sl.heading("Following")
 
@@ -199,6 +207,7 @@ async def test_sessionless_screen_uses_personal_invoker_mount() -> None:
     class Plain(sd.Screen[Owner]):
         timeout = None
 
+        @override
         def render(self):
             return sl.heading("Plain")
 

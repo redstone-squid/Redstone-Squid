@@ -1,5 +1,6 @@
 import gc
 import weakref
+from typing import override
 
 import discord
 
@@ -156,6 +157,7 @@ async def test_message_root_reuses_a_revisited_scene_program() -> None:
     class Switching(Component[sl.ComponentsV2Target]):
         value: str = state("first")
 
+        @override
         def render(self) -> Text:
             return Text(self.value)
 
@@ -176,6 +178,7 @@ async def test_message_root_reuses_a_revisited_scene_program() -> None:
 
 async def test_explicit_render_cache_shares_programs_without_sharing_frontend_objects() -> None:
     class Static(Component[sl.ComponentsV2Target]):
+        @override
         def render(self) -> Text:
             return Text("shared")
 

@@ -4,7 +4,7 @@ import asyncio
 import json
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any, cast, override
 
 import pytest
 
@@ -662,6 +662,7 @@ def test_operation_recorder_expires_with_its_dynamic_scope() -> None:
 
 def test_noop_profiler_does_not_inspect_inputs() -> None:
     class ExplodingMapping(dict[str, str]):
+        @override
         def items(self):  # pragma: no cover
             raise AssertionError("no-op profiler should not inspect attributes")
 

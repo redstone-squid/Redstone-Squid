@@ -1,4 +1,5 @@
 import asyncio
+from typing import override
 
 import anyio
 import pytest
@@ -26,6 +27,7 @@ class Source(StateOwner):
     def __init__(self) -> None:
         self.invalidations = 0
 
+    @override
     def invalidate(self) -> None:
         self.invalidations += 1
 
@@ -157,6 +159,7 @@ async def test_an_abandoned_load_does_not_subscribe_the_live_value_to_its_reads(
         def __init__(self) -> None:
             self.attempt = 0
 
+        @override
         def invalidate(self) -> None:
             pass
 
@@ -193,6 +196,7 @@ class _Checkpointed(StateOwner):
         self.finished: list[int] = []
         self.released = asyncio.Event()
 
+    @override
     def invalidate(self) -> None:
         pass
 

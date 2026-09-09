@@ -7,7 +7,7 @@ namespace's scope is typed by its parameter, and unparameterised means `SharedSt
 
 from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
-from typing import Any, assert_type
+from typing import Any, assert_type, override
 
 from squid_ui import Component, ContextKey, paragraph, resource, state
 from squid_ui.runtime import (
@@ -72,6 +72,7 @@ class ResourceTypes(Component):
     async def visible(self) -> int:
         return 1
 
+    @override
     def render(self) -> Paragraph:
         return paragraph("resources")
 
@@ -88,6 +89,7 @@ text_context = ContextKey[str]("text")
 
 
 class ContextTypes(Component):
+    @override
     def render(self):
         assert_type(self.inject(text_context), str)
         assert_type(self.inject(text_context, "fallback"), str)
