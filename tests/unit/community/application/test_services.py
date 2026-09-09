@@ -95,18 +95,18 @@ def test_welcome_relay_resolves_both_event_orders(message_first: bool) -> None:
         WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1),
         random_source=Random(0),
     )
-    message = {
-        "channel_id": 1,
-        "is_new_member_message": True,
-        "system_content": "Welcome Alice!",
-    }
+
+    # A closure rather than a `**kwargs` dict: the dict erases to `int | bool | str`
+    # across its values, so nothing checks the arguments against the signature.
+    def record_message():
+        return service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!")
 
     if message_first:
-        assert service.record_message(**message) is None
+        assert record_message() is None
         decision = service.record_join(2, "Alice")
     else:
         assert service.record_join(2, "Alice") is None
-        decision = service.record_message(**message)
+        decision = record_message()
 
     assert decision == WelcomeRelayDecision(2, "Alice", "Welcome Alice!")
 
