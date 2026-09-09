@@ -18,7 +18,7 @@ def _mapped_models() -> list[type[DeclarativeBase]]:
         for mapper in Base.registry.mappers
         # Single-table inheritance maps several classes onto one table; the base carries
         # the columns, so mapping over every class would double-count them.
-        if mapper.local_table is not None
+        if mapper.local_table is not None  # pyright: ignore[reportUnnecessaryComparison]
     ]
 
 
