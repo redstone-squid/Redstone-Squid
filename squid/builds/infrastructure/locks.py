@@ -19,7 +19,6 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, or_, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from whenever import Instant
 
 from squid.builds.errors import BuildBusyError
 from squid.builds.infrastructure.models import Build
@@ -199,7 +198,7 @@ class BuildLockRepository:
         finally:
             await self.release(build_id)
 
-    async def clean_stale(self, *, older_than: Instant) -> None:
+    async def clean_stale(self) -> None:
         """Reclaim every persisted lock whose expiry has passed and forget the leases naming them."""
         async with self._session_factory() as session:
             result = await session.execute(

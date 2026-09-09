@@ -44,5 +44,9 @@ class SuggestionAuthorizer(Protocol):
     """
 
     async def allows(self, node: str) -> bool:
-        """Return whether the caller holds `node`. A raise here propagates out of `SuggestionService.suggest`."""
+        """Return whether the caller holds `node`.
+
+        A raise is treated as a refusal: `SuggestionService.suggest` logs it and answers with an
+        empty result rather than propagating it into a half-typed word.
+        """
         ...

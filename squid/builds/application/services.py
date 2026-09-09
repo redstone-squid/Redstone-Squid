@@ -4,8 +4,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import UUID
 
-from whenever import Instant
-
 from squid.builds.application.commands import DoorSubmissionInput
 from squid.builds.application.editing import BuildEditLease, BuildEditPatch
 from squid.builds.application.ports import (
@@ -122,9 +120,9 @@ class BuildService:
         await self._persist(build)
         return build
 
-    async def clean_stale_locks(self, *, older_than: Instant) -> None:
-        """Reclaim persisted build locks that have expired."""
-        await self._locks.clean_stale(older_than=older_than)
+    async def clean_stale_locks(self) -> None:
+        """Reclaim persisted build locks whose stored expiry has passed."""
+        await self._locks.clean_stale()
 
     async def classify_restrictions[BuildT: (Build, BuildDraft)](
         self, build: BuildT, restrictions: Sequence[str]

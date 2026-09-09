@@ -95,6 +95,33 @@ async def test_vote_overwrite_and_exact_emoji_withdrawal(
     assert state.entry.raw_count == 0
 
 
+async def test_first_render_stamps_first_posted_at_and_later_renders_keep_it(
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repo = await repository(async_session_factory)
+    created = await repo.create(StarboardConfig(0, 10, 20, "main", (StarboardEmoji("⭐", "up"),), required=1))
+    origin = OriginMessage(100, 10, 30, 40, author_is_bot=False, posted_at=Instant.now())
+    await repo.record_votes(origin, 50, (PendingVote(created, "⭐", "up", 1),))
+
+    before = await repo.entry_state(created.id, origin.id)
+    assert before is not None
+    assert before.entry.first_posted_at is None
+
+    await repo.mark_rendered(created.id, origin.id, 1.0)
+    first = await repo.entry_state(created.id, origin.id)
+    assert first is not None
+    assert first.entry.first_posted_at is not None
+
+    await repo.mark_rendered(created.id, origin.id, 2.0)
+    second = await repo.entry_state(created.id, origin.id)
+    assert second is not None
+    assert second.entry.first_posted_at == first.entry.first_posted_at
+    assert second.entry.last_rendered_score == 2.0
+    # The second render did write the row, so an unchanged first_posted_at is the coalesce
+    # working rather than the update having been skipped.
+    assert second.entry.updated_at != first.entry.updated_at
+
+
 async def test_whole_guild_and_channel_sources_do_not_duplicate_configs(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:

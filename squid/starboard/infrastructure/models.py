@@ -210,7 +210,7 @@ class StarboardEntry(Base, kw_only=True):
     last_rendered_score: Mapped[float | None] = mapped_column(Float, nullable=True, default=None)
     """Score the live post shows; a difference from score is what marks the entry as needing a re-render."""
     first_posted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
-    """When the entry first reached the board. No code writes it, so rows created now stay null."""
+    """When the entry was first rendered onto the board; null until then, and never rewritten after."""
     updated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     """When last_rendered_score was last written."""
 

@@ -57,7 +57,11 @@ class SchematicAnalyzer(Protocol):
         preset: FingerprintPreset,
         timeout_seconds: float | None = None,
     ) -> SchematicComparison:
-        """Compare two files, optionally under a stricter caller-owned deadline."""
+        """Compare two files, optionally under a stricter caller-owned deadline.
+
+        The subprocess pool honours `timeout_seconds`; the in-process analyzer, which cannot
+        cancel a thread, rejects it with `SchematicSupportUnavailableError` rather than ignore it.
+        """
         ...
 
     async def render(self, data: bytes, *, request: RenderRequest, resource_pack: bytes | None = None) -> bytes:

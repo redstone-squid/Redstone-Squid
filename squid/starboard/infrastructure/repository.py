@@ -240,7 +240,13 @@ class PostgresStarboardRepository:
                     StarboardEntryRow.starboard_id == starboard_id,
                     StarboardEntryRow.origin_message_id == origin_message_id,
                 )
-                .values(last_rendered_score=score, updated_at=func.now())
+                .values(
+                    last_rendered_score=score,
+                    updated_at=func.now(),
+                    # The first render is what puts the entry on the board; coalesce keeps that
+                    # timestamp across every later re-render.
+                    first_posted_at=func.coalesce(StarboardEntryRow.first_posted_at, func.now()),
+                )
             )
 
     async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState | None:

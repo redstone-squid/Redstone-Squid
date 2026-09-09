@@ -1,8 +1,9 @@
 """The suggestion application service.
 
 Every caller is a keystroke, which drives two rules the rest of the application does not have. A
-provider failure resolves to an empty dropdown rather than an error under a half-typed word, and
-every provider call is bounded in time, because a late suggestion is worse than none.
+provider or authorizer failure resolves to an empty dropdown rather than an error under a
+half-typed word, and every provider call is bounded in time, because a late suggestion is worse
+than none.
 """
 
 import hashlib
@@ -58,22 +59,23 @@ class SuggestionService:
         """Return ranked completions for a partially typed value.
 
         Raises `UnknownSuggestionSourceError` for an unregistered source, because that is a caller
-        bug rather than a transient failure. A provider that fails or times out, a caller the
-        authorizer refuses, and a request missing required context all resolve to an empty result.
+        bug rather than a transient failure. Everything else resolves to an empty result: a
+        provider that fails or times out, an authorizer that refuses or itself raises, and a
+        request missing required context.
         """
         source = self._registry.resolve(request.source)
         normalized = _normalize(request)
         with trace_span("suggestions.suggest", {"squid.suggestion.source": source.id}) as span:
-            if not await self._permitted(source, normalized, authorizer):
-                add_counter("suggestions.denied", attributes={"squid.suggestion.source": source.id})
-                return SuggestionResult()
-            if missing := source.context_keys - normalized.context.keys():
-                logger.warning(
-                    "Suggestion request missing required context",
-                    extra={"source": source.id, "missing": sorted(missing)},
-                )
-                return SuggestionResult()
             try:
+                if not await self._permitted(source, normalized, authorizer):
+                    add_counter("suggestions.denied", attributes={"squid.suggestion.source": source.id})
+                    return SuggestionResult()
+                if missing := source.context_keys - normalized.context.keys():
+                    logger.warning(
+                        "Suggestion request missing required context",
+                        extra={"source": source.id, "missing": sorted(missing)},
+                    )
+                    return SuggestionResult()
                 with anyio.fail_after(self._timeout_seconds):
                     return await self._produce(source, normalized)
             except TimeoutError:

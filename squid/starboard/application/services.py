@@ -163,7 +163,10 @@ class StarboardService:
         return await self._repository.entry_state(starboard_id, origin_message_id)
 
     async def mark_rendered(self, starboard_id: int, origin_message_id: int, score: float) -> None:
-        """Record the score a post now shows, so an unchanged entry is not re-edited."""
+        """Record the score a post now shows, so an unchanged entry is not re-edited.
+
+        The first such call also stamps the entry's `first_posted_at`.
+        """
         await self._repository.mark_rendered(starboard_id, origin_message_id, score)
 
     async def disable_channel(self, channel_id: int) -> None:

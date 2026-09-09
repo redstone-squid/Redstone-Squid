@@ -338,7 +338,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
     async def _detect_lattice(self, event: sl.PressEvent) -> None:
         if not await self._may(event, BUILD_SCHEMATIC_DETECT_LATTICE) or await self._primary(event) is None:
             return
-        lattice = await self._schematics.detect_lattice(self._build_id)
+        lattice = await self._schematics.lattice_for_build(self._build_id)
         self._schematic_result = (
             tr(t"No repeating lattice was detected in this schematic.")
             if lattice is None

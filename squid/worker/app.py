@@ -284,7 +284,7 @@ class DatabaseWorker:
 
     async def _clean_stale_build_locks(self) -> None:
         with trace_span("squid.worker.stale_build_locks", {"squid.surface": "background_loop"}):
-            await self._services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
+            await self._services.builds.clean_stale_locks()
 
     async def _cleanup_schematic_jobs(self) -> None:
         with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": "background_loop"}):

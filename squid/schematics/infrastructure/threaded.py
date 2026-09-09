@@ -8,7 +8,8 @@ developer a one-line way to bypass the supervisor while debugging the adapter it
 
 `render` and `simulate` deliberately refuse. Those are the two operations whose failure modes
 motivated process isolation in the first place: wgpu keeps process-global state that is not
-fork-safe, and the simulator can spin unboundedly.
+fork-safe, and the simulator can spin unboundedly. `compare` refuses a `timeout_seconds` for the
+same reason: a caller that needs a deadline needs the subprocess pool.
 """
 
 import asyncio
@@ -36,7 +37,8 @@ class ThreadedSchematicAnalyzer:
     """Run engine calls on the default executor, in-process.
 
     `render` raises `SchematicRenderUnavailableError` and `simulate` raises
-    `SchematicSupportUnavailableError`; neither is ever attempted here.
+    `SchematicSupportUnavailableError`; neither is ever attempted here. `compare` raises
+    `SchematicSupportUnavailableError` when given a `timeout_seconds`, which no thread can enforce.
     """
 
     def __init__(self, config: SchematicConfig) -> None:
@@ -93,10 +95,15 @@ class ThreadedSchematicAnalyzer:
         preset: FingerprintPreset,
         timeout_seconds: float | None = None,
     ) -> SchematicComparison:
+        # Threads cannot be safely cancelled, so a deadline here could only be pretended at.
+        # Refusing sends a caller that needs one to the subprocess pool instead.
+        if timeout_seconds is not None:
+            msg = "The in-process schematic analyzer cannot honour a compare deadline."
+            raise SchematicSupportUnavailableError(
+                msg, developer_action="Use the subprocess pool; a thread running the engine cannot be cancelled."
+            )
         from squid.schematics.infrastructure import nucleation_adapter as engine
 
-        # Threads cannot be safely cancelled, so `timeout_seconds` is ignored here. Only the
-        # subprocess pool enforces the caller's deadline.
         return await asyncio.to_thread(engine.compare, left, right, preset=preset)
 
     async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes:

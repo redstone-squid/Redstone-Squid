@@ -94,7 +94,7 @@ class VoteSession(Base, kw_only=True):
 
 
 class VoteSessionOption(Base, kw_only=True):
-    """A reaction option configured for one vote session."""
+    """Ordered reaction options and positive weight multipliers captured for each vote session."""
 
     __tablename__ = "vote_session_options"
     __table_args__ = (
@@ -107,7 +107,6 @@ class VoteSessionOption(Base, kw_only=True):
             name="vote_session_options_multiplier_check",
         ),
         CheckConstraint("position >= 0", name="vote_session_options_position_check"),
-        {"comment": "Ordered reaction options and positive weight multipliers captured for each vote session."},
     )
 
     vote_session_id: Mapped[int] = mapped_column(

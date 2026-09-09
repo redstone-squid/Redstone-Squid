@@ -66,6 +66,13 @@ class AllowingAuthorizer:
         return self.allowed
 
 
+class FailingAuthorizer:
+    async def allows(self, node: str) -> bool:
+        del node
+        msg = "the permission backend is down"
+        raise RuntimeError(msg)
+
+
 def service_for(source: SuggestionSource, *, timeout_seconds: float = 2.0) -> SuggestionService:
     return SuggestionService(SuggestionRegistry.of((source,)), timeout_seconds=timeout_seconds)
 
@@ -129,6 +136,12 @@ async def test_gated_source_is_refused_when_the_authorizer_denies() -> None:
     result = await service_for(source).suggest(SuggestionRequest(source="restrictions"), authorizer=authorizer)
     assert result.items == ()
     assert authorizer.nodes == ["build.submission.view_pending"]
+
+
+async def test_gated_source_returns_empty_when_the_authorizer_raises() -> None:
+    source = gated_source()
+    result = await service_for(source).suggest(SuggestionRequest(source="restrictions"), authorizer=FailingAuthorizer())
+    assert result == SuggestionResult()
 
 
 async def test_gated_source_is_served_when_the_authorizer_allows() -> None:

@@ -97,7 +97,10 @@ class StarboardRepository(Protocol):
         ...
 
     async def mark_rendered(self, starboard_id: int, origin_message_id: int, score: float) -> None:
-        """Record the score a post now shows, so an unchanged entry stops being returned as changed."""
+        """Record the score a post now shows, so an unchanged entry stops being returned as changed.
+
+        The first such call also stamps `first_posted_at`; later calls leave it as it is.
+        """
         ...
 
     async def disable_channel(self, channel_id: int) -> None:

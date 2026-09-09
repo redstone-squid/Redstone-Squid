@@ -7,7 +7,6 @@ from typing import Literal, cast
 from uuid import UUID
 
 import pytest
-from whenever import Instant
 
 from squid.builds.application import BuildEditPatch, DoorSubmissionInput, RestrictionDefinition
 from squid.builds.application.services import (
@@ -77,7 +76,7 @@ class FakeBuildLocks:
         self.acquire_result = True
         self.acquisitions: list[tuple[int, bool, float]] = []
         self.releases: list[int] = []
-        self.cleanups: list[Instant] = []
+        self.cleanups = 0
 
     async def acquire(self, build_id: int, *, blocking: bool = True, timeout: float = -1) -> bool:
         self.acquisitions.append((build_id, blocking, timeout))
@@ -86,8 +85,8 @@ class FakeBuildLocks:
     async def release(self, build_id: int) -> None:
         self.releases.append(build_id)
 
-    async def clean_stale(self, *, older_than: Instant) -> None:
-        self.cleanups.append(older_than)
+    async def clean_stale(self) -> None:
+        self.cleanups += 1
 
     @asynccontextmanager
     async def locked(self, build_id: int, *, timeout: float = 30) -> AsyncGenerator[None]:
@@ -367,17 +366,16 @@ async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorB
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
     service = build_service(repository, locks)
-    cutoff = Instant.from_utc(2026, 7, 29)
 
     await service.confirm(42)
     await service.deny(42)
-    await service.clean_stale_locks(older_than=cutoff)
+    await service.clean_stale_locks()
 
     assert repository.confirmed == [existing_build]
     assert repository.denied == [existing_build]
     assert len(locks.acquisitions) == 2
     assert locks.releases == [42, 42]
-    assert locks.cleanups == [cutoff]
+    assert locks.cleanups == 1
 
 
 async def test_submit_door_maps_input_and_saves() -> None:

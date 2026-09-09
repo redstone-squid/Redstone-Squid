@@ -6,8 +6,6 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 from uuid import UUID
 
-from whenever import Instant
-
 from squid.builds.domain import Build
 
 
@@ -99,8 +97,11 @@ class BuildLockManager(Protocol):
         """
         ...
 
-    async def clean_stale(self, *, older_than: Instant) -> None:
-        """Reclaim expired persisted locks and forget the process-local leases that named them."""
+    async def clean_stale(self) -> None:
+        """Reclaim persisted locks whose stored expiry has passed and forget the leases naming them.
+
+        The expiry column is the only cutoff; callers do not choose one.
+        """
         ...
 
 

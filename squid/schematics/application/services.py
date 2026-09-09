@@ -682,11 +682,11 @@ class SchematicService:
 
         return await self._analyzer.convert(data, target=request.target_format, data_version=data_version)
 
-    async def detect_lattice(self, build_id: int) -> AutostackLattice | None:
+    async def lattice_for_build(self, build_id: int) -> AutostackLattice | None:
         """Return the repeating unit detected at ingest, or `None` when none was found.
 
-        Reads the stored analysis; it never re-runs detection. Raises `SchematicNotFoundError`
-        when the build has no primary attachment.
+        A read of the stored analysis; detection itself runs once, during ingest. Raises
+        `SchematicNotFoundError` when the build has no primary attachment.
         """
         self._require_available()
         stored = await self._store.get_primary(build_id)

@@ -673,7 +673,7 @@ async def test_measure_timing_persists_evidence_without_editing_a_build() -> Non
     assert store.simulations[1] is result
 
 
-async def test_detect_lattice_returns_the_persisted_highest_coverage_candidate() -> None:
+async def test_lattice_for_build_returns_the_persisted_highest_coverage_candidate() -> None:
     lattice = AutostackLattice(
         mode="1d",
         vectors=((0, 3, 0),),
@@ -686,4 +686,4 @@ async def test_detect_lattice_returns_the_persisted_highest_coverage_candidate()
     schematics, _, _ = service(FakeSchematicAnalyzer(make_analysis(lattice=lattice)))
     await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
 
-    assert await schematics.detect_lattice(7) == lattice
+    assert await schematics.lattice_for_build(7) == lattice
