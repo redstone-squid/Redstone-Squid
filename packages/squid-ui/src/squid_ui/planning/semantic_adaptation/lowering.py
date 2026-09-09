@@ -400,10 +400,12 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Nod
                         footer=None if caption is None else CardFooter(_resolve(caption, context)),
                     )
                 ]
-            children: list[Node] = [Gallery((GalleryItem(media.url, media.description, media.spoiler),))]
+            # Not `children`: that name is a match capture throughout this function, and
+            # declaring it here would impose `list[Node]` on every other branch's binding.
+            gallery: list[Node] = [Gallery((GalleryItem(media.url, media.description, media.spoiler),))]
             if caption is not None:
-                children.append(Footer(_resolve(caption, context)))
-            return children
+                gallery.append(Footer(_resolve(caption, context)))
+            return gallery
         case Media():
             return _media(node, path, context)
         case Details():
