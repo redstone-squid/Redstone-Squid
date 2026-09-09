@@ -1,5 +1,7 @@
 """Unit and property tests for the concrete-layout evaluator."""
 
+from typing import cast
+
 import discord
 import pytest
 from hypothesis import given
@@ -11,6 +13,8 @@ from squid_ui.planning import (
     SolveNoteCode,
     measure,
 )
+from squid_ui.planning.layout_measurement.model import MeasuredText
+from squid_ui.planning.layout_measurement.solver import MeasuredLayout
 from squid_ui.primitives import (
     Budget,
     Code,
@@ -43,6 +47,25 @@ from squid_ui_discord.testing import assert_within_limits
 
 def _text_of(view: discord.ui.LayoutView) -> str:
     return "\n".join(sd.payload_texts(view))
+
+
+def _content_of(child: object) -> str:
+    """The text one measured child carries.
+
+    `children` is typed as `Realized`, which spans every node kind, and only `MeasuredText`
+    holds `content`. Stating that expectation once here beats repeating a suppression at
+    every assertion.
+    """
+    return cast(MeasuredText, child).content
+
+
+def _contents(solved: MeasuredLayout) -> list[str]:
+    """The text of every measured child.
+
+    Only for cases whose children are all text: a layout holding a `RawItem` raises here,
+    which is why the single-child assertions below index first and convert after.
+    """
+    return [_content_of(child) for child in solved.children]
 
 
 class TestFitting:
@@ -83,7 +106,7 @@ class TestFitting:
         body = Text("b" * 3900)
         footer = Footer("f" * 400)
         solved = measure([body, footer])
-        rendered = [child.content for child in solved.children]  # pyrefly: ignore
+        rendered = _contents(solved)
         assert rendered[0] == "b" * 3900
         assert len(rendered[1]) <= LIMITS.total_text - 3900
 
@@ -91,7 +114,7 @@ class TestFitting:
         first = Text("a" * 6000)
         second = Text("b" * 2000)
         solved = measure([first, second])
-        lengths = [len(child.content) for child in solved.children]  # pyrefly: ignore
+        lengths = [len(content) for content in _contents(solved)]
         assert sum(lengths) <= LIMITS.total_text
         # Need ratio is 3:1, so the later node keeps ~1000 chars instead of starving at 0.
         assert lengths[1] >= 900
@@ -101,14 +124,14 @@ class TestFitting:
         keeper = Text("k" * 3999)
         dropper = Text("d" * 500, overflow=Drop(), priority=-1)
         solved = measure([keeper, dropper])
-        assert [child.content for child in solved.children] == ["k" * 3999]  # pyrefly: ignore
+        assert _contents(solved) == ["k" * 3999]
         assert any(note.code is SolveNoteCode.NODE_DROPPED for note in solved.notes)
 
     def test_never_wins_over_higher_priority_flexible_nodes(self):
         pinned = Text("p" * 3500, overflow=Never(), priority=-100)
         flexible = Text("f" * 3500, priority=100)
         solved = measure([pinned, flexible])
-        contents = [child.content for child in solved.children]  # pyrefly: ignore
+        contents = _contents(solved)
         assert contents[0] == "p" * 3500
         assert len(contents[1]) == LIMITS.total_text - 3500
 
@@ -127,7 +150,7 @@ class TestFitting:
 
     def test_unsatisfiable_never_clamps_outside_strict_mode(self):
         solved = measure([Text("x" * 5000, overflow=Never())])
-        assert len(solved.children[0].content) <= LIMITS.total_text  # pyrefly: ignore
+        assert len(_content_of(solved.children[0])) <= LIMITS.total_text
         assert solved.failures[0].code is SolveNoteCode.NEVER_BUDGET
         assert isinstance(solved.failures[0].code, str)
 
@@ -160,7 +183,7 @@ class TestFitting:
     def test_raw_item_text_cost_reserves_budget(self):
         raw = RawItem(factory=lambda: discord.ui.TextDisplay("r" * 100), text_cost=100)
         solved = measure([Text("x" * 4000), raw])
-        assert len(solved.children[0].content) <= LIMITS.total_text - 100  # pyrefly: ignore
+        assert len(_content_of(solved.children[0])) <= LIMITS.total_text - 100
 
     def test_a_budget_region_leaves_its_unbudgeted_siblings_alone(self):
         """A capped region is a sibling, not a claim on everything the document has."""
@@ -168,7 +191,7 @@ class TestFitting:
         capped = Budget((Text("x" * 2000, overflow=Truncate()),), 120, 320)
         footer = Footer("also kept")
         solved = measure([heading, capped, footer])
-        contents = [child.content for child in solved.children]  # pyrefly: ignore
+        contents = _contents(solved)
 
         assert contents[0] == "## Kept"
         assert len(contents[1]) <= 320, "the region is still held to its own ceiling"
