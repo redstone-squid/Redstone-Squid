@@ -1175,7 +1175,7 @@ _COLUMN_COMMENTS: tuple[tuple[str, str, str | None, str | None], ...] = (
     (
         "starboard_entries",
         "first_posted_at",
-        "When the entry first reached the board. No code writes it, so rows created now stay null.",
+        "When the entry was first rendered onto the board; null until then, and never rewritten after.",
         None,
     ),
     (
