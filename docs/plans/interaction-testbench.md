@@ -43,9 +43,14 @@ One development-only extension, `squid.bot.testbench`, added to `DEVELOPMENT_EXT
 ### Route group
 
 ```
-r:bench:{name}           button  -> run probe `name`
+r:bench:{name}           button  -> run probe `name` from the index
+r:bench:{name}:seed      button  -> run probe `name` from a message it leased
 r:bench:{name}:pick      select  -> run probe `name` with the chosen values
 ```
+
+Two button routes rather than one because the bench keeps no state: whether a press came
+from the index or from the probe's own message is the one fact `lease` needs, and the
+custom id is the only place it can live.
 
 Defined through `_feature_group("bench")` / `_feature_route` like every other feature, so a
 reload keeps the identities. An `OwnerOnly` middleware on the group answers a non-owner
@@ -81,11 +86,14 @@ Initial probes, chosen because each reaches a path nothing offline can:
 | `personal` | `app_ui.respond(..., audience="personal")` on a raw interaction |
 | `locale` | echoes what `sd.request(interaction)` resolves for this member and guild |
 | `form` | opens a modal through `Request`; the submit arrives as its own real interaction |
-| `consent` | `open_consent_prompt(interaction)` — the full ephemeral consent flow |
-| `editor` | `open_build_editor` for a fixed build id, the same way the routed card does |
 | `echo` | replies with `values`; exists so the select route has something to show |
-| `poll` | click one leases a real poll card; click two runs `close_poll` on it |
+| `lease` | leases a static message from the index; its seed re-leases in place |
 | `finish` | leases a live component with a Close button; pressing it finishes the mount and the seed must come back |
+
+Not probes, because a button already reaches them: the consent prompt and every other
+zero-parameter route are in the index's *Routes* section, and `/tests r:builds:<id>:edit`
+opens the real build editor. A poll card is owned by the post reconciler, so it cannot be
+leased; `/poll` creates one from a real interaction already.
 
 ### The `/tests` command
 
@@ -144,6 +152,10 @@ custom id, and edits with the bot's own authority — the finished card stays ex
 mount left it, only the seed is live again. A hook registered on an already-finished root
 never fires, so `lease` checks `root.finished` after registering and revives at once if so.
 
+Not intercepted: a probe that leases live content *from its leased message* mounts a fresh
+root over one that may still be live, and the old root's timeout would later disable the
+new content. `finish` therefore does nothing on its own seed beyond proving it came back.
+
 Not done instead: teaching `_disable_all` to skip routed controls, or a per-node
 survives-finish flag. A poll card's routed Close button *should* die with the poll, so the
 engine default is right and a flag would be library API for one consumer. It remains the
@@ -152,7 +164,7 @@ fallback if the hook proves fragile.
 ## What it does not do
 
 - Replace fixtures for free. A probe that needs its own card leases the bench and draws
-  it, or posts a separate real card (`editor`, `consent`); probes are fixture factories.
+  it, or posts a separate real card; probes are fixture factories.
 - Generate slash-command, context-menu or autocomplete interactions. Those are commands;
   the owner invokes them directly.
 - Produce an interaction from a different user. That needs a second account.
