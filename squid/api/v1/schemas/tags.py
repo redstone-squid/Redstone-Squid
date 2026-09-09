@@ -1,7 +1,7 @@
 """Public tag-definition representations."""
 
 from decimal import Decimal
-from typing import Self
+from typing import Self, override
 
 from pydantic import ConfigDict
 
@@ -28,6 +28,7 @@ class TagDetail(FromDomain[TagDefinition]):
     numeric_step: Decimal | None
 
     @classmethod
+    @override
     def from_domain(cls, definition: TagDefinition, /) -> Self:
         return cls(
             id=definition.id,

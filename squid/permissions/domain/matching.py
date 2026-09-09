@@ -23,7 +23,7 @@ future node sharing the prefix.
 
 import re
 from dataclasses import dataclass
-from typing import Self
+from typing import Self, override
 
 from squid.permissions.domain.models import InvalidPatternError, PermissionNode, Tag
 
@@ -56,6 +56,7 @@ class Pattern:
     segments: tuple[str, ...] = ()
     tag: Tag | None = None
 
+    @override
     def __str__(self) -> str:
         return self.raw
 

@@ -20,7 +20,7 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, Any, override
 
 try:
     import resource
@@ -55,6 +55,7 @@ class _RequestContextFilter(logging.Filter):
         super().__init__()
         self.fields: dict[str, Any] = {}
 
+    @override
     def filter(self, record: logging.LogRecord) -> bool:
         for key, value in self.fields.items():
             if not hasattr(record, key):

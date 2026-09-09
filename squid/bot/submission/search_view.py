@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from discord.utils import escape_markdown
 
@@ -88,6 +88,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
         self._load_build = load_build
         self._render_build = render_build
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         detail = self._build_node or sl.section(
             sl.heading(_detail_title(self.hit)),
@@ -226,6 +227,7 @@ class SearchScreen(sd.Screen):
             return ()
         return sl.note("\n".join(f"⚠ {escape_markdown(item)}" for item in warnings))
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
             return (

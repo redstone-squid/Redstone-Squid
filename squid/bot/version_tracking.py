@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast, override
 
 import discord
 from discord import app_commands
@@ -60,6 +60,7 @@ class VersionScreen(sd.Screen):
         self._authorize_create = authorize_create
         self._browser: sp.Browser[VersionItem, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
@@ -84,6 +85,7 @@ class VersionScreen(sd.Screen):
             empty=tr(t"No Minecraft versions are recognized yet."),
         )
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.status(tr(t"Loading versions."))

@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, override
 
 import discord
 
@@ -134,6 +134,7 @@ class SettingsPanel(sd.Screen):
     def weight_for(self, role_id: int) -> float | None:
         return next((weight.multiplier for weight in self._weights if weight.role_id == role_id), None)
 
+    @override
     async def on_load(self) -> None:
         """Open the first page allowed by the caller.
 
@@ -159,6 +160,7 @@ class SettingsPanel(sd.Screen):
         self.confirming_reset = False
         self.page = "voting"
 
+    @override
     def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         if self.page == "voting":
             return self._voting_nodes()

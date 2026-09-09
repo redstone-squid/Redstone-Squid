@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import cast
+from typing import cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -126,6 +126,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
             raise LookupError(message)
         return build, await self._render_build(build)
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         state = self.projection.status
         if not isinstance(state, sl.resources.Ready) and state.previous is None:
@@ -407,6 +408,7 @@ class BuildBrowseScreen(sd.Screen):
         self._selected: _BuildDetail | None = None
         self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         if self._initial_id is not None:
             await self._select(self._initial_id)
@@ -419,6 +421,7 @@ class BuildBrowseScreen(sd.Screen):
             title=tr(t"Builds"),
         ).build_component()
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._selected is not None:
             return (

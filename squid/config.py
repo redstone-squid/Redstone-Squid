@@ -1012,10 +1012,12 @@ def _projection_type[ConfigT: BaseSettings](config_type: type[ConfigT]) -> type[
     """
 
     class _Projection(config_type):  # pyright: ignore[reportUntypedBaseClass]  # pyrefly: ignore[invalid-inheritance]
-        # No `@override`: the base is a type variable here, so neither checker can see the method
-        # it overrides.
+        # No `@override`: the base is a type variable, so Pyrefly cannot see the method this
+        # overrides and rejects the decorator outright. BasedPyright resolves it through the
+        # `BaseSettings` bound and asks for the decorator, so its request is suppressed rather
+        # than answered.
         @classmethod
-        def settings_customise_sources(
+        def settings_customise_sources(  # pyright: ignore[reportImplicitOverride]
             cls,
             settings_cls: type[BaseSettings],
             init_settings: PydanticBaseSettingsSource,
