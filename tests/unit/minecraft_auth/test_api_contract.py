@@ -34,6 +34,7 @@ from squid.minecraft_auth.domain import (
     IssuedPlayerChallenge,
     IssuedPlayerGrant,
     MinecraftClientOrigin,
+    OwnedPaperInstallation,
     PaperInstallation,
     PlayerAuthorizationChallenge,
     PlayerGrant,
@@ -41,6 +42,7 @@ from squid.minecraft_auth.domain import (
 )
 from squid.minecraft_auth.errors import AuthorizationPendingError
 from tests.unit.api.fakes import TEST_CONFIG
+from tests.unit.minecraft_auth.fakes import owned
 
 pytestmark = pytest.mark.asyncio
 
@@ -117,9 +119,9 @@ class FakeInstallations(InstallationCredentialService):
             f"sqpi_{self.current.id.hex}_{INSTALLATION_SECRET}",
         )
 
-    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+    async def list_owned(self, owner_account_id: int) -> tuple[OwnedPaperInstallation, ...]:
         self.owner_ids.append(owner_account_id)
-        return (self.current,)
+        return (owned(self.current),)
 
     async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
         assert installation_id == self.current.id

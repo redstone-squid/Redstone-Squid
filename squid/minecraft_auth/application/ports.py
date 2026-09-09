@@ -9,6 +9,7 @@ from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     MinecraftClientOrigin,
     MinecraftPlayerContext,
+    OwnedPaperInstallation,
     PaperInstallation,
     PlayerAuthorizationChallenge,
     PlayerGrant,
@@ -40,8 +41,12 @@ class MinecraftAuthorizationRepository(Protocol):
         """Return one installation, revoked ones included."""
         ...
 
-    async def list_installations(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
-        """List one account's installations, revoked ones included, oldest first."""
+    async def list_installations(self, owner_account_id: int) -> tuple[OwnedPaperInstallation, ...]:
+        """List one account's installations, revoked ones included, oldest first, without digests.
+
+        Listing is administration, not authentication, so the credential digest is never read into
+        the result.
+        """
         ...
 
     async def list_public_servers(self) -> tuple[PublishedPaperServer, ...]:

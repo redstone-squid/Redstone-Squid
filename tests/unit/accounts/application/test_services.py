@@ -194,7 +194,8 @@ class FakeAccountRepository:
         return updated
 
     async def clear_profile(self, account_id: int) -> AccountProfile:
-        cleared = AccountProfile.empty(account_id)
+        current = self.profiles.get(account_id)
+        cleared = replace(AccountProfile.empty(account_id), hidden=current is not None and current.hidden)
         self.profiles[account_id] = cleared
         return cleared
 
@@ -782,7 +783,8 @@ class TestProfiles:
         with pytest.raises(AccountNotFoundError):
             await service(FakeAccountRepository()).update_profile(404, ProfileUpdate(bio="hi"))
 
-    async def test_clear_profile_resets_content_and_leaves_it_visible(self) -> None:
+    async def test_clear_profile_erases_content_but_keeps_the_owners_visibility(self) -> None:
+        """Staff clear away abuse; republishing a profile its owner hid is not part of that."""
         repository = FakeAccountRepository()
         account = repository.seed_account(1, consent=CONSENT)
         assert account.id is not None
@@ -792,6 +794,17 @@ class TestProfiles:
         cleared = await accounts.clear_profile(account.id)
 
         assert cleared.display_name is None
+        assert cleared.hidden
+
+    async def test_clear_profile_leaves_a_visible_profile_visible(self) -> None:
+        repository = FakeAccountRepository()
+        account = repository.seed_account(1, consent=CONSENT)
+        assert account.id is not None
+        accounts = service(repository)
+        await accounts.update_profile(account.id, ProfileUpdate(display_name="Spam"))
+
+        cleared = await accounts.clear_profile(account.id)
+
         assert not cleared.hidden
 
     async def test_public_profile_applies_visibility(self) -> None:

@@ -18,7 +18,7 @@ from squid.search.domain import (
 def test_search_page_preserves_discriminated_hits() -> None:
     page = SearchPage(
         hits=(
-            RecordSearchHit("r1", "Fastest Door", None, 1, "Door", "fastest", "all-time"),
+            RecordSearchHit("r1", "Fastest Door", None, 1, "Door", "fastest", "all_time"),
             BuildSearchHit("b1", "Door", "confirmed"),
             MetadataSearchHit("m1", "Seamless", "restriction"),
         ),

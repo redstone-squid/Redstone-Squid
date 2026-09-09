@@ -428,20 +428,19 @@ def _to_hit(document: SearchDocument, score: float | None) -> SearchHit:
     data = document.document_data
     tags = tuple(document.tags)
     if document.resource_kind == "record":
-        metrics = data.get("metrics", {})
-        if not isinstance(metrics, dict):
-            metrics = {}
         return RecordSearchHit(
             source_id=document.source_key,
             title=document.title,
             subtitle=document.subtitle,
-            build_id=_integer(data, "build_id"),
-            build_title=_string(data, "build_title", document.title),
+            build_id=_top_holder_build_id(data),
+            # The projection titles a record document after its top-ranked holder, so the document
+            # title is that build's title; there is no second title to read.
+            build_title=document.title,
             record_class=_string(data, "record_class", "unknown"),
-            version_scope=_string(data, "version_scope", "all-time"),
+            version_scope=_string(data, "version_scope", "all_time"),
             score=score,
             tags=tags,
-            metrics=cast(dict[str, str | int | float | bool], metrics),
+            metrics=_metric_values(data),
         )
     if document.resource_kind == "build":
         return BuildSearchHit(
@@ -471,6 +470,38 @@ def _string(data: dict[str, object], key: str, default: str) -> str:
     return value if isinstance(value, str) else default
 
 
-def _integer(data: dict[str, object], key: str) -> int:
-    value = data.get(key)
-    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+def _top_holder_build_id(data: dict[str, object]) -> int:
+    """Return the first of the record's rank-ordered `holder_build_ids`, or 0 when it holds none.
+
+    A record whose competition stayed unresolved names no holder, and no build has id 0, so 0 is
+    the "no build to open" answer rather than a build reference.
+    """
+    holders = data.get("holder_build_ids")
+    if not isinstance(holders, list | tuple):
+        return 0
+    first = next(iter(cast(list[object] | tuple[object, ...], holders)), None)
+    return first if isinstance(first, int) and not isinstance(first, bool) else 0
+
+
+def _metric_values(data: dict[str, object]) -> dict[str, str | int | float | bool]:
+    """Flatten the top holder's `metric` snapshot into the scalars a hit exposes.
+
+    The snapshot holds what the record compared: a volume, an ISO completion instant, or a timing
+    variant's per-stage tick values. A measurement the computation could not establish is absent
+    rather than null, and a stage list is rendered as comma-separated ticks with `?` for a stage
+    that stayed unknown.
+    """
+    metric = data.get("metric")
+    if not isinstance(metric, dict):
+        return {}
+    values: dict[str, str | int | float | bool] = {}
+    for key, value in cast(dict[str, object], metric).items():
+        match value:
+            case str() | bool() | int() | float():
+                values[str(key)] = value
+            case list() | tuple() if value:
+                stages = cast(list[object] | tuple[object, ...], value)
+                values[str(key)] = ", ".join("?" if stage is None else str(stage) for stage in stages)
+            case _:
+                continue
+    return values

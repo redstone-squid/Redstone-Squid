@@ -377,9 +377,10 @@ class AccountRepository:
             return _to_profile(model)
 
     async def clear_profile(self, account_id: int) -> AccountProfile:
-        """Reset a profile to the state a new account starts with, `hidden` included.
+        """Erase everything a profile says, leaving `hidden` as its owner set it.
 
-        A cleared profile is therefore public again, whatever its owner had chosen.
+        Visibility is the owner's choice, not content staff can abuse; clearing the text must not
+        republish a profile its owner hid.
 
         Raises:
             AccountNotFoundError: no account has that id.
@@ -396,7 +397,6 @@ class AccountRepository:
             model.bio = None
             model.pronouns = None
             model.links = []
-            model.hidden = False
             model.avatar_identity_id = None
             model.updated_at = _now()
             await session.flush()

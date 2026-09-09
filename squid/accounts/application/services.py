@@ -396,9 +396,10 @@ class AccountService:
         return await self._repository.upsert_profile(account_id, update.validated())
 
     async def clear_profile(self, account_id: int) -> AccountProfile:
-        """Reset a profile to its empty state, for staff handling abuse.
+        """Erase a profile's content, for staff handling abuse.
 
-        Resets `hidden` too, so a cleared profile is public again.
+        `hidden` stays as its owner set it: a clear removes what the account published, and does not
+        publish what it chose to hide.
         """
         return await self._repository.clear_profile(account_id)
 

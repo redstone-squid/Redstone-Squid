@@ -43,14 +43,17 @@ class PublicServerProfile:
             raise ValidationError(tr(t"Sponsor opt-in requires an enabled public server profile."))
 
 
-@dataclass(frozen=True, slots=True)
-class PaperInstallation:
-    """An account-owned Paper server without a recoverable secret."""
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OwnedPaperInstallation:
+    """An account-owned Paper server as its owner administers it, carrying no credential material.
+
+    This is what listing an account's installations yields. Only credential verification needs the
+    digest, and only that path loads `PaperInstallation`.
+    """
 
     id: UUID
     owner_account_id: int
     label: str
-    secret_hash: bytes
     credential_version: int
     profile: PublicServerProfile
     created_at: Instant
@@ -60,6 +63,16 @@ class PaperInstallation:
     def is_active_at(self, _instant: Instant) -> bool:
         """Return whether this installation has not been revoked."""
         return self.revoked_at is None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PaperInstallation(OwnedPaperInstallation):
+    """An owned Paper server together with the digest its credential authenticates against.
+
+    The secret itself is disclosed once at registration or rotation and is not recoverable.
+    """
+
+    secret_hash: bytes
 
 
 @dataclass(frozen=True, slots=True)

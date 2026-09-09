@@ -17,6 +17,7 @@ from squid.minecraft_auth.domain import (
     IssuedPlayerGrant,
     MinecraftClientOrigin,
     MinecraftPlayerContext,
+    OwnedPaperInstallation,
     PaperInstallation,
     PlayerAuthorizationChallenge,
     PlayerGrant,
@@ -128,8 +129,12 @@ class InstallationCredentialService:
             raise InstallationUnavailableError
         return installation
 
-    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
-        """List an account's installations, revoked ones included, oldest first."""
+    async def list_owned(self, owner_account_id: int) -> tuple[OwnedPaperInstallation, ...]:
+        """List an account's installations, revoked ones included, oldest first.
+
+        The credential digest is not part of the answer: an owner administering their servers has
+        no use for it, and only `authenticate` compares against it.
+        """
         return await self._repository.list_installations(owner_account_id)
 
     async def update_profile(

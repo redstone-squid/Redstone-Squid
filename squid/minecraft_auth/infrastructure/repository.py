@@ -12,6 +12,7 @@ from whenever import Instant
 
 from squid.minecraft_auth.domain import (
     MinecraftClientOrigin,
+    OwnedPaperInstallation,
     PaperInstallation,
     PlayerAuthorizationChallenge,
     PlayerGrant,
@@ -42,6 +43,19 @@ def _profile(record: PaperInstallationRecord) -> PublicServerProfile:
         description=record.public_description,
         website_url=record.public_website_url,
         sponsor_opt_in=record.sponsor_opt_in,
+    )
+
+
+def _owned_installation(record: PaperInstallationRecord) -> OwnedPaperInstallation:
+    return OwnedPaperInstallation(
+        id=record.id,
+        owner_account_id=record.owner_account_id,
+        label=record.label,
+        credential_version=record.credential_version,
+        profile=_profile(record),
+        created_at=record.created_at,
+        rotated_at=record.rotated_at,
+        revoked_at=record.revoked_at,
     )
 
 
@@ -127,7 +141,7 @@ class PostgresMinecraftAuthorizationRepository:
             record = await session.get(PaperInstallationRecord, installation_id)
             return None if record is None else _installation(record)
 
-    async def list_installations(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+    async def list_installations(self, owner_account_id: int) -> tuple[OwnedPaperInstallation, ...]:
         async with self._session_factory() as session:
             records = (
                 await session.scalars(
@@ -136,7 +150,7 @@ class PostgresMinecraftAuthorizationRepository:
                     .order_by(PaperInstallationRecord.created_at, PaperInstallationRecord.id)
                 )
             ).all()
-        return tuple(_installation(record) for record in records)
+        return tuple(_owned_installation(record) for record in records)
 
     async def list_public_servers(self) -> tuple[PublishedPaperServer, ...]:
         async with self._session_factory() as session:

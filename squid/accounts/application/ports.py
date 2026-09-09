@@ -126,7 +126,7 @@ class AccountRepository(Protocol):
         ...
 
     async def clear_profile(self, account_id: int) -> AccountProfile:
-        """Reset the profile to its empty state, `hidden` included, raising `AccountNotFoundError`."""
+        """Erase the profile's content, keeping the owner's `hidden` flag, raising `AccountNotFoundError`."""
         ...
 
     async def replace_merge_ticket(self, account_id: int, code: str, ttl_seconds: int) -> MergeTicket:

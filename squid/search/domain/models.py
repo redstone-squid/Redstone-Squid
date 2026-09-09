@@ -84,7 +84,13 @@ class SearchRequest:
 
 @dataclass(frozen=True, slots=True)
 class RecordSearchHit:
-    """A computed record search result, titled after its top-ranked holder."""
+    """A computed record search result, titled after its top-ranked holder.
+
+    `build_title` repeats `title`: the index stores one title per document and takes it from that
+    holder. `build_id` names the same holder, and is 0 for a record whose competition named none —
+    no build has that id. `metrics` carries the holder's measurements as scalars, keyed by metric
+    name, and is empty when the record indexed none.
+    """
 
     source_id: str
     title: str

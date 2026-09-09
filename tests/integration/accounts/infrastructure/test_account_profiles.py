@@ -127,7 +127,9 @@ class TestProfileWrites:
         await repository.upsert_profile(account.id, ProfileUpdate(hidden=True).validated())
         assert (await repository.get_profile(account.id)).hidden  # type: ignore[union-attr]
 
-    async def test_clear_profile_resets_content_but_leaves_it_visible(self, repository: AccountRepository) -> None:
+    async def test_clear_profile_erases_content_but_keeps_the_owners_visibility(
+        self, repository: AccountRepository
+    ) -> None:
         account = await _account(repository)
         assert account.id is not None
         await repository.upsert_profile(
@@ -140,6 +142,15 @@ class TestProfileWrites:
         assert cleared.display_name is None
         assert cleared.bio is None
         assert cleared.links == ()
+        assert cleared.hidden
+        assert (await repository.get_profile(account.id)).hidden  # type: ignore[union-attr]
+
+    async def test_clear_profile_leaves_a_visible_profile_visible(self, repository: AccountRepository) -> None:
+        account = await _account(repository)
+        assert account.id is not None
+        await repository.upsert_profile(account.id, ProfileUpdate(display_name="Spam").validated())
+        cleared = await repository.clear_profile(account.id)
+        assert cleared.display_name is None
         assert not cleared.hidden
 
     async def test_database_refuses_an_overlong_display_name(

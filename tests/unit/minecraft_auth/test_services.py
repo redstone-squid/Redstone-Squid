@@ -142,6 +142,21 @@ async def test_public_listing_is_an_explicit_secret_free_projection() -> None:
     assert await installations.get_public_server(private.installation.id) is None
 
 
+async def test_an_owners_listing_is_a_secret_free_projection() -> None:
+    """Administering servers needs their labels and state, never the digest they authenticate by."""
+    _, _, _, installations, _ = services()
+    issued = await installations.register(owner_account_id=ACCOUNT_ID, label="Private")
+    await installations.revoke(installation_id=issued.installation.id, owner_account_id=ACCOUNT_ID)
+
+    (listed,) = await installations.list_owned(ACCOUNT_ID)
+
+    assert listed.id == issued.installation.id
+    assert listed.label == "Private"
+    assert not listed.is_active_at(NOW)
+    assert not hasattr(listed, "secret_hash")
+    assert await installations.list_owned(OTHER_ACCOUNT_ID) == ()
+
+
 async def test_rotation_invalidates_old_secret_and_increments_fence() -> None:
     _, _, _, installations, _ = services()
     first = await installations.register(owner_account_id=ACCOUNT_ID, label="Server")

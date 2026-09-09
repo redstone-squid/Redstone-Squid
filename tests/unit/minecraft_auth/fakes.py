@@ -7,6 +7,7 @@ from whenever import Instant
 
 from squid.minecraft_auth.domain import (
     MinecraftClientOrigin,
+    OwnedPaperInstallation,
     PaperInstallation,
     PlayerAuthorizationChallenge,
     PlayerGrant,
@@ -22,6 +23,20 @@ from squid.minecraft_auth.errors import (
     InvalidInstallationCredentialError,
     TooManyActiveChallengesError,
 )
+
+
+def owned(installation: PaperInstallation) -> OwnedPaperInstallation:
+    """Project an installation the way the repository's listing does: everything but the digest."""
+    return OwnedPaperInstallation(
+        id=installation.id,
+        owner_account_id=installation.owner_account_id,
+        label=installation.label,
+        credential_version=installation.credential_version,
+        profile=installation.profile,
+        created_at=installation.created_at,
+        rotated_at=installation.rotated_at,
+        revoked_at=installation.revoked_at,
+    )
 
 
 class FakeAccounts:
@@ -53,9 +68,9 @@ class FakeMinecraftAuthorizationRepository:
     async def get_installation(self, installation_id: UUID) -> PaperInstallation | None:
         return self.installations.get(installation_id)
 
-    async def list_installations(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+    async def list_installations(self, owner_account_id: int) -> tuple[OwnedPaperInstallation, ...]:
         return tuple(
-            installation
+            owned(installation)
             for installation in self.installations.values()
             if installation.owner_account_id == owner_account_id
         )
