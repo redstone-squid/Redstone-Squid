@@ -63,7 +63,7 @@ class _Candidate[RenderTargetT: DiscordTarget]:
     """One staged render generation, which becomes the mount's state only when committed."""
 
     view: AnyMountedView
-    rendered: RenderedMessage[Any]
+    rendered: RenderedMessage[Any, Any]
     tree: ComponentTree[RenderTargetT]
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
@@ -165,7 +165,7 @@ class _LifecycleCandidate:
     """A framework-owned visible generation that commits no component runtime state."""
 
     view: AnyMountedView
-    rendered: RenderedMessage[Any]
+    rendered: RenderedMessage[Any, Any]
     handlers: dict[str, ActionBinding]
     generation: int
 

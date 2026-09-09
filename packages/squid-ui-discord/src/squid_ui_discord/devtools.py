@@ -96,7 +96,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
 
     @override
     # pyrefly: ignore[bad-override]  # MaybeCoro[bool] covers a coroutine; pyrefly drops the parameter
-    async def cog_check(self, ctx: Context[BotT]) -> bool:
+    async def cog_check(self, ctx: Context[BotT]) -> bool:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Authorize every command through the single injected gate."""
         return await self._check(ctx)
 
@@ -439,10 +439,11 @@ def _json_default(value: object) -> object:
         return value
     if isinstance(value, (bytes, bytearray)):
         return value.hex()
+    # Both guarded by `hasattr`, which pyright does not narrow through.
     if hasattr(value, "value"):
-        return value.value
+        return value.value  # pyright: ignore[reportAttributeAccessIssue]
     if hasattr(value, "isoformat"):
-        return value.isoformat()
+        return value.isoformat()  # pyright: ignore[reportAttributeAccessIssue]
     return repr(value)
 
 

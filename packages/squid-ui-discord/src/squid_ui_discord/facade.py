@@ -14,7 +14,7 @@ from squid_ui_discord.access import AccessPolicy, Owner
 from squid_ui_discord.audience import Audience
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, ResponseSource, SendDestination
 from squid_ui_discord.delivery import Abandoned as DeliveryAbandoned
-from squid_ui_discord.delivery import DeliveryResult, edit_to, no_mentions, send_to
+from squid_ui_discord.delivery import DeliveryResult, MessageDestination, edit_to, no_mentions, send_to
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import PauseUpdates, RenewEphemeral
@@ -142,7 +142,10 @@ class Scope[OwnerT = Any]:
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult: ...
 
-    async def respond(
+    # BasedPyright infers `Presented`'s parameter from a frozen dataclass field as if the field
+    # were writable, so `ResponseResult[ComponentT]` is not a `ResponseResult`. The first overload
+    # is the reason this ladder exists: it is what gives a component response its own type back.
+    async def respond(  # pyright: ignore[reportInconsistentOverload]
         self,
         source: ResponseSource,
         content: FacadeContent | Response[Any],
@@ -234,7 +237,7 @@ class Scope[OwnerT = Any]:
         self,
         content: FacadeContent,
         *,
-        destination,
+        destination: MessageDestination,
         policy: ResponseSpec,
         localization: Localization,
         source: ResponseSource | None,

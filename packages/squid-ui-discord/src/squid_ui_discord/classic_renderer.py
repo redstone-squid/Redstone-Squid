@@ -155,7 +155,9 @@ class ClassicRenderer:
             program = stored
         embeds = tuple(self._embed(embed, index) for index, embed in enumerate(program.embeds))
         view = self._view(program, plan=plan, wire=wire)
-        assets = () if plan is None else attachment_assets(plan)
+        # `attachment_assets` reads a plan without caring which body it resolved to, but
+        # BasedPyright infers `PlanResult`'s frozen field as writable, hence invariant.
+        assets = () if plan is None else attachment_assets(plan)  # pyright: ignore[reportArgumentType]
         payload = MessagePayload.classic(
             content=program.content,
             embeds=embeds,
@@ -270,7 +272,7 @@ class ClassicRenderer:
         self,
         program: _ClassicProgram,
         *,
-        plan: PlanResult | None,
+        plan: PlanResult[scene.ClassicMessage] | None,
         wire: Wire | None,
     ) -> discord.ui.View | None:
         if not program.rows and not self.always_view:
@@ -295,7 +297,7 @@ class ClassicRenderer:
         instruction: _ClassicControlInstruction,
         row: int,
         *,
-        plan: PlanResult | None,
+        plan: PlanResult[scene.ClassicMessage] | None,
         wire: Wire | None,
     ) -> discord.ui.Item[Any]:
         match instruction:

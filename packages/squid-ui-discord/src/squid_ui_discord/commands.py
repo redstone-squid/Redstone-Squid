@@ -254,12 +254,20 @@ async def _run_pending(req: Request[Any], card: PendingCard, work: Callable[[], 
     re-raised afterwards so discord.py's error handling still sees it.
     """
     errors = req.runtime.config.errors
-    initial = paragraph(card) if isinstance(card, str) else card
-    render_error = None if errors.render is None else (lambda error: errors.render(req, error))
+    # `_ManagedResult` is declared for portable content, and `Renderable` is contravariant in its
+    # render target, so Components V2 content is not portable content. Sound here and nowhere else:
+    # this result is only ever mounted into the V2 message `req.respond` below delivers.
+    initial = paragraph(card) if isinstance(card, str) else cast(DocumentLike, card)
+    # Bound once rather than read inside the lambda: `ErrorPolicy` is frozen, so this is the same
+    # callable either way, and only the local form survives the None check into the closure.
+    render = errors.render
+    render_error = None if render is None else (lambda error: cast(DocumentLike, render(req, error)))
     component = _ManagedResult(
-        cast(Callable[[], Awaitable[DocumentLike]], work),
+        # `| None` because `work` wraps a command handler, and a handler that returns nothing is
+        # exactly what the `value is None` arm below leaves showing the pending card.
+        cast(Callable[[], Awaitable[DocumentLike | None]], work),
         initial=initial,
-        render_success=lambda value: initial if value is None else cast(DocumentLike, value),
+        render_success=lambda value: initial if value is None else value,
         render_error=render_error,
     )
     outcome = await req.respond(component, access=Everyone())
@@ -403,7 +411,7 @@ class Group(app_commands.Group):
         )
 
     @override
-    def command(  # pyrefly: ignore[bad-override]  # squid callbacks, not discord.py's; same native kwargs
+    def command(  # pyright: ignore[reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         self,
         *,
         pending: PendingCard | None = None,
@@ -430,7 +438,7 @@ class HybridGroup(commands.HybridGroup[Any, ..., Any]):
         self.policy = policy
 
     @override
-    def command(  # pyrefly: ignore[bad-override]  # squid callbacks, not discord.py's; same native kwargs
+    def command(  # pyright: ignore[reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
         self,
         *,
         pending: PendingCard | None = None,

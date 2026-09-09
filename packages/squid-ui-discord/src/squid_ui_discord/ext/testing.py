@@ -68,7 +68,7 @@ class StagedForm:
             elif isinstance(item, discord.ui.Select):
                 item._values = [str(entry) for entry in _sequence(value)]  # pyrefly: ignore[missing-attribute]
             else:
-                item._values = list(_sequence(value))  # pyrefly: ignore[missing-attribute]
+                item._values = list(_sequence(value))  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
         if remaining:
             names = ", ".join(sorted(remaining))
             message = f"staged form has no fields: {names}"

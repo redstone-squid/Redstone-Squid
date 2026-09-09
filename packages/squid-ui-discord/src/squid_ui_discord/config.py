@@ -41,7 +41,9 @@ class ErrorPolicy:
 class DiscordUIConfig:
     """Process-wide rendering services and response defaults."""
 
-    defaults: MessageRootDefaults = field(default_factory=MessageRootDefaults)
+    # `default_factory=MessageRootDefaults` leaves both parameters unsolved instead of falling
+    # back to their PEP 696 defaults; calling the class applies them.
+    defaults: MessageRootDefaults = field(default_factory=lambda: MessageRootDefaults())
     responses: ResponseSpec = field(default_factory=_response_spec)
     localization: LocalizationResolver | None = None
     bus: TopicBus | None = None
