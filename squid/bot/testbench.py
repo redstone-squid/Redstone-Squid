@@ -1,7 +1,8 @@
 """Owner-only interaction bench: durable routed buttons that hand a raw interaction to a named probe.
 
-Development-only. `/tests` posts the index; each of its buttons is a seed under
-`r:bench:{name}` that the durable router dispatches to the probe registered as `name`. See
+Development-only. `/tests` posts a stepper that walks every probe, every zero-parameter
+route and the gone id; each step's Run button carries the real custom id, and a probe's is
+`r:bench:{name}`, which the durable router dispatches to the probe registered as `name`. See
 `docs/plans/interaction-testbench.md`.
 """
 
@@ -20,8 +21,8 @@ from discord.ext.commands import Context
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.routes._root import _feature_group, _feature_route, router
-from squid.bot.ui import DISCORD_YELLOW, text_node
-from squid_ui.primitives import ActionStyle, ControlGroup, Option, RoutedButton, RoutedSelect, Row, Text
+from squid.bot.ui import DISCORD_YELLOW, render_payload, text_node
+from squid_ui.primitives import ActionStyle, Option, RoutedButton, RoutedSelect, Row, Text
 from squid_ui_discord.message_root import AnyMessageRoot
 from squid_ui_discord.response import AccessSetting, ResponseOverrides
 
@@ -32,14 +33,16 @@ logger = logging.getLogger(__name__)
 
 bench, _bench_created = _feature_group("bench")
 probe_button = _feature_route(bench, "{name}")
-"""The index's seed: `r:bench:{name}` runs the probe from a message it does not hold."""
+"""The stepper's seed: `r:bench:{name}` runs the probe from a message it does not hold."""
 probe_seed = _feature_route(bench, "{name}:seed")
 """The seed on a leased message: `r:bench:{name}:seed` runs the probe from its own message."""
 probe_select = _feature_route(bench, "{name}:pick")
-"""The select form of the index seed; the chosen values reach the probe as `bench.values`."""
+"""The select form of the stepper's seed; the chosen values reach the probe as `bench.values`."""
+step_route = _feature_route(bench, "step:{index:int}")
+"""Redraw the stepper at `index`; past the end wraps to the first step."""
 
 GONE_CUSTOM_ID = "r:gone:bench"
-"""An id in the router's namespace that nothing owns, so the index can press the gone hook."""
+"""An id in the router's namespace that nothing owns, so the stepper can press the gone hook."""
 
 
 class OwnerOnly[BotT: commands.Bot](sd.routing.Middleware[BotT]):
@@ -89,7 +92,7 @@ class Bench:
     ) -> sd.ResponseResult:
         """Make `content` plus this probe's seed row the probe's message.
 
-        From the index the message is posted, from a leased message it is edited in place. Live
+        From the stepper the message is posted, from a leased message it is edited in place. Live
         content is wrapped in `BenchFrame` and mounted under `access` (this owner alone by
         default); when that mount finishes, the seed is re-enabled by a bot-authority edit of
         the message the mount left behind. Editing live content over a mount that is still live
@@ -225,8 +228,11 @@ async def run_probe(
 
 
 @bench.route(probe_button)
-async def press_index_seed(interaction: Interaction[RedstoneSquid], name: str) -> None:
-    await run_probe(interaction, name)
+async def press_step_seed(interaction: Interaction[RedstoneSquid], name: str) -> None:
+    try:
+        await run_probe(interaction, name)
+    finally:
+        await advance_after(interaction, probe_button.id(name=name))
 
 
 @bench.route(probe_seed)
@@ -235,8 +241,19 @@ async def press_leased_seed(interaction: Interaction[RedstoneSquid], name: str) 
 
 
 @bench.select(probe_select)
-async def pick_index_seed(interaction: Interaction[RedstoneSquid], values: tuple[str, ...], name: str) -> None:
-    await run_probe(interaction, name, values)
+async def pick_step_seed(interaction: Interaction[RedstoneSquid], values: tuple[str, ...], name: str) -> None:
+    try:
+        await run_probe(interaction, name, values)
+    finally:
+        await advance_after(interaction, probe_select.id(name=name))
+
+
+@bench.route(step_route)
+async def show_step(interaction: Interaction[RedstoneSquid], index: int) -> None:
+    """Redraw the stepper at `index` as this press's answer."""
+    handle = sd.delivery.handle_from(interaction)
+    if handle is not None:
+        await handle.write(render_payload(step_nodes(index)))
 
 
 # --- Probes -------------------------------------------------------------------------------------
@@ -287,7 +304,7 @@ async def echo_values(interaction: Interaction[RedstoneSquid], bench: Bench) -> 
 
 @probe("lease", "Lease a static message; the seed on it re-leases in place.")
 async def lease_static(interaction: Interaction[RedstoneSquid], bench: Bench) -> None:
-    origin = "the leased message" if bench.leased else "the index"
+    origin = "the leased message" if bench.leased else "the stepper"
     await bench.lease(Text(f"Leased at <t:{int(time.time())}:T> from {origin}."))
 
 
@@ -316,30 +333,92 @@ async def lease_live(interaction: Interaction[RedstoneSquid], bench: Bench) -> N
 # --- The command --------------------------------------------------------------------------------
 
 
-def index_nodes() -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-    """The index: one seed per probe, the select over them, every zero-parameter route, and the gone id."""
+@dataclass(frozen=True, slots=True)
+class Step:
+    """One thing the stepper can press; `control` carries the real custom id."""
+
+    label: str
+    purpose: str
+    control: RoutedButton | RoutedSelect
+
+    @property
+    def custom_id(self) -> str:
+        return self.control.route_id
+
+
+def steps() -> tuple[Step, ...]:
+    """Every probe, the select over them, every zero-parameter button route, and the gone id, in that order.
+
+    Built at press time, so a probe or route added since the message was posted is reached
+    by pressing Next.
+    """
     probes = tuple(PROBES.values())
-    nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
-        Text("## Interaction bench\n### Probes\n" + "\n".join(f"`{p.name}` — {p.purpose}" for p in probes)),
-        ControlGroup(tuple(RoutedButton(p.name, probe_button.id(name=p.name)) for p in probes)),
-        RoutedSelect(
-            tuple(Option(p.name, p.name, description=p.purpose[:100]) for p in probes),
-            probe_select.id(name="echo"),
-            placeholder="Pick values for echo",
-            max_values=len(probes),
-        ),
+    listed = [
+        Step(p.name, p.purpose, RoutedButton("Run", probe_button.id(name=p.name), style=ActionStyle.PRIMARY))
+        for p in probes
     ]
-    plain = tuple(
-        description.format
-        for description in router.describe()
-        if not description.params and description.component is sd.routing.RouteComponent.BUTTON
+    if "echo" in PROBES:
+        listed.append(
+            Step(
+                "echo (select)",
+                "Pick any values; the select route hands them to echo.",
+                RoutedSelect(
+                    tuple(Option(p.name, p.name, description=p.purpose[:100]) for p in probes),
+                    probe_select.id(name="echo"),
+                    placeholder="Pick values for echo",
+                    max_values=len(probes),
+                ),
+            )
+        )
+    listed.extend(
+        Step(
+            d.format,
+            "A zero-parameter route, pressed from a message that is not its card.",
+            RoutedButton("Run", sd.routing.Route(d.format).id(), style=ActionStyle.PRIMARY),
+        )
+        for d in router.describe()
+        if not d.params and d.component is sd.routing.RouteComponent.BUTTON and d.group_prefix != bench.prefix
     )
-    if plain:
-        nodes.append(Text("### Routes\nZero-parameter handlers, pressed from a message that is not their card."))
-        nodes.append(ControlGroup(tuple(RoutedButton(format, sd.routing.Route(format).id()) for format in plain)))
-    nodes.append(Text("### Gone\nAn id nothing owns."))
-    nodes.append(Row((RoutedButton(GONE_CUSTOM_ID, GONE_CUSTOM_ID, style=ActionStyle.DANGER),)))
+    listed.append(
+        Step(GONE_CUSTOM_ID, "An id nothing owns.", RoutedButton("Run", GONE_CUSTOM_ID, style=ActionStyle.DANGER))
+    )
+    return tuple(listed)
+
+
+def step_nodes(index: int) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    """The stepper at `index`, wrapped into range; the Run control, then Next and Restart."""
+    listed = steps()
+    index %= len(listed)
+    step = listed[index]
+    nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        Text(f"## Interaction bench\nStep {index + 1}/{len(listed)} — `{step.label}`\n{step.purpose}")
+    ]
+    buttons: list[RoutedButton] = []
+    if isinstance(step.control, RoutedButton):
+        buttons.append(step.control)
+    else:
+        nodes.append(step.control)
+    buttons.append(RoutedButton("Next", step_route.id(index=index + 1), emoji="\N{BLACK RIGHT-POINTING TRIANGLE}"))
+    buttons.append(RoutedButton("Restart", step_route.id(index=0)))
+    nodes.append(Row(tuple(buttons)))
     return tuple(nodes)
+
+
+async def advance_after(interaction: Interaction[Any], custom_id: str) -> None:
+    """Redraw the stepper one past the step whose control is `custom_id`, with the bot's own authority.
+
+    Runs after a probe whether it returned or raised, so the press that produced the error
+    card still moves on. A failed edit is logged: it must not mask what the probe raised.
+    """
+    message = interaction.message
+    listed = steps()
+    index = next((i for i, step in enumerate(listed) if step.custom_id == custom_id), None)
+    if message is None or index is None:
+        return
+    try:
+        await sd.delivery.handle_for(message).write(render_payload(step_nodes(index + 1)))
+    except discord.HTTPException:
+        logger.exception("bench: could not advance the stepper on message %s", message.id)
 
 
 def custom_id_nodes(custom_id: str) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
@@ -348,17 +427,17 @@ def custom_id_nodes(custom_id: str) -> tuple[sl.LayoutNode[sl.ComponentsV2Target
 
 
 class BenchCog[BotT: RedstoneSquid](sd.Cog[BotT]):
-    """`/tests`: post the bench index, or one button with a chosen custom id."""
+    """`/tests`: post the stepper, or one button with a chosen custom id."""
 
     # pyrefly: ignore[bad-override]  # MaybeCoro[bool] covers a coroutine; pyrefly drops the parameter
     async def cog_check(self, ctx: Context[BotT]) -> bool:
         return ctx.bot.development_mode and await ctx.bot.is_owner(ctx.author)
 
     @commands.hybrid_command(name="tests")
-    @app_commands.describe(custom_id="A custom id to put on one button instead of the index.")
+    @app_commands.describe(custom_id="A custom id to put on one button instead of the stepper.")
     async def tests(self, ctx: Context[BotT], custom_id: str | None = None) -> None:
         """Post the interaction bench (owner only)."""
-        nodes = index_nodes() if custom_id is None else custom_id_nodes(custom_id)
+        nodes = step_nodes(0) if custom_id is None else custom_id_nodes(custom_id)
         # Public on purpose: an ephemeral message dies with the client session, and the
         # bench is meant to be pressed after restarts.
         await self.ui.respond(ctx, nodes)

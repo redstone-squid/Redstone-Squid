@@ -97,14 +97,15 @@ async def test_unknown_probe_is_reported_not_raised(bot: Any) -> None:
     assert "No probe named `vanished`" in str(harness.sends[0].kwargs["view"].to_components())
 
 
-async def test_static_lease_from_the_index_posts_with_the_seed_row_last(bot: Any) -> None:
+async def test_static_lease_from_the_stepper_posts_with_the_seed_row_last(bot: Any) -> None:
     harness = _press(bot)
 
     await router.dispatch(harness.source, "r:bench:lease")
 
     send = harness.channel.send  # pyright: ignore[reportAttributeAccessIssue]
     send.assert_awaited_once()
-    assert harness.message_harness.edits == []
+    # The only edit of the source message is the stepper advancing, not the lease.
+    assert all("Step" in _step_text(edit.kwargs["view"]) for edit in harness.message_harness.edits)
     components = send.await_args.kwargs["view"].to_components()
     assert components[-1]["components"][0]["custom_id"] == "r:bench:lease:seed"
 
@@ -223,14 +224,58 @@ def test_enable_item_reports_whether_it_found_the_seed() -> None:
     assert _buttons(view)[0]["disabled"] is False
 
 
-def test_index_lists_every_probe_and_the_gone_id() -> None:
+def _step_text(view: discord.ui.LayoutView) -> str:
+    return next(c["content"] for c in view.to_components() if c["type"] == 10)
+
+
+def test_steps_cover_every_probe_the_select_the_plain_routes_and_the_gone_id() -> None:
+    import squid.bot.submission.consent_banner  # noqa: F401  # registers a zero-parameter route
+
+    ids = [step.custom_id for step in testbench.steps()]
+
+    assert ids[: len(testbench.PROBES)] == [f"r:bench:{name}" for name in testbench.PROBES]
+    assert "r:bench:echo:pick" in ids
+    assert "r:build-log-consents:new" in ids
+    assert ids[-1] == testbench.GONE_CUSTOM_ID
+    assert not any(step_id.startswith("r:bench:step:") for step_id in ids)
+
+
+def test_step_nodes_wrap_past_the_end() -> None:
     from squid.bot.ui import render_payload
 
-    view = render_payload(testbench.index_nodes(), strict=True).view
+    count = len(testbench.steps())
+    view = render_payload(testbench.step_nodes(count), strict=True).view
     assert isinstance(view, discord.ui.LayoutView)
-    ids = {button["custom_id"] for button in _buttons(view)}
 
-    assert {f"r:bench:{name}" for name in testbench.PROBES} <= ids
-    assert testbench.GONE_CUSTOM_ID in ids
-    selects = [c for row in view.to_components() if row["type"] == 1 for c in row["components"] if c["type"] == 3]
-    assert [s["custom_id"] for s in selects] == ["r:bench:echo:pick"]
+    assert f"Step 1/{count}" in _step_text(view)
+    assert [b["custom_id"] for b in _buttons(view)] == ["r:bench:raise", "r:bench:step:1", "r:bench:step:0"]
+
+
+async def test_step_route_redraws_the_stepper_as_the_answer(bot: Any) -> None:
+    harness = _press(bot)
+
+    await router.dispatch(harness.source, "r:bench:step:2")
+
+    (edit,) = harness.response.edit_message.records
+    assert "Step 3/" in _step_text(edit.kwargs["view"])
+    assert harness.message_harness.edits == []
+
+
+async def test_a_raising_probe_still_advances_the_stepper(bot: Any) -> None:
+    harness = _press(bot)
+
+    await router.dispatch(harness.source, "r:bench:raise")
+
+    (edit,) = harness.message_harness.edits
+    assert "Step 2/" in _step_text(edit.kwargs["view"])
+
+
+async def test_the_select_step_advances_and_the_leased_seed_does_not(bot: Any) -> None:
+    picked = _press(bot)
+    await router.dispatch(picked.source, "r:bench:echo:pick", component=sd.routing.RouteComponent.SELECT, values=("a",))
+    leased = _press(bot, message_id=200)
+    await router.dispatch(leased.source, "r:bench:lease:seed")
+
+    select_index = [step.custom_id for step in testbench.steps()].index("r:bench:echo:pick")
+    assert f"Step {select_index + 2}/" in _step_text(picked.message_harness.edits[-1].kwargs["view"])
+    assert "Step" not in str(leased.message_harness.edits[-1].kwargs["view"].to_components())

@@ -43,13 +43,14 @@ One development-only extension, `squid.bot.testbench`, added to `DEVELOPMENT_EXT
 ### Route group
 
 ```
-r:bench:{name}           button  -> run probe `name` from the index
+r:bench:{name}           button  -> run probe `name` from the stepper
 r:bench:{name}:seed      button  -> run probe `name` from a message it leased
 r:bench:{name}:pick      select  -> run probe `name` with the chosen values
+r:bench:step:{index:int} button  -> redraw the stepper at `index`
 ```
 
 Two button routes rather than one because the bench keeps no state: whether a press came
-from the index or from the probe's own message is the one fact `lease` needs, and the
+from the stepper or from the probe's own message is the one fact `lease` needs, and the
 custom id is the only place it can live.
 
 Defined through `_feature_group("bench")` / `_feature_route` like every other feature, so a
@@ -87,11 +88,11 @@ Initial probes, chosen because each reaches a path nothing offline can:
 | `locale` | echoes what `sd.request(interaction)` resolves for this member and guild |
 | `form` | opens a modal through `Request`; the submit arrives as its own real interaction |
 | `echo` | replies with `values`; exists so the select route has something to show |
-| `lease` | leases a static message from the index; its seed re-leases in place |
+| `lease` | leases a static message from the stepper; its seed re-leases in place |
 | `finish` | leases a live component with a Close button; pressing it finishes the mount and the seed must come back |
 
 Not probes, because a button already reaches them: the consent prompt and every other
-zero-parameter route are in the index's *Routes* section, and `/tests r:builds:<id>:edit`
+zero-parameter route are steps of the stepper, and `/tests r:builds:<id>:edit`
 opens the real build editor. A poll card is owned by the post reconciler, so it cannot be
 leased; `/poll` creates one from a real interaction already.
 
@@ -100,16 +101,28 @@ leased; `/poll` creates one from a real interaction already.
 A hybrid command, `/tests [custom_id]`, checked by `is_owner` (and `cog_check` refusing
 outside development mode, as `squid.bot.devtools` does).
 
-- **No argument**: posts one static message via `render_payload` + `sd.send_to`, the way
-  the consent banner is posted. Sections:
-  1. *Probes* — a `RoutedButton` per registered probe, labelled by name, and one routed
-     string select over the probe names for the `pick` route.
-  2. *Routes* — a `RoutedButton` per zero-parameter route in `router.describe()`, id
-     built by `Route(format).id()`. This is the "click the real handler from a message
-     that is not its card" section: `r:polls:close` from here hits the not-found branch,
-     which is a branch worth having a button for.
-  3. *Gone* — one button with an owned-by-nobody id in the namespace (`r:gone:bench`), so
-     the gone hook has a button too.
+- **No argument**: posts a **stepper** — one static message showing one step at a time:
+
+  ```
+  Step 3/11 — `form`
+  Open a modal; the submit arrives as its own interaction.
+  [Run]  [▶ Next]  [Restart]
+  ```
+
+  The step list is built at press time, so it is whatever exists: every probe, one
+  string select routed to `echo`'s `pick` route, every zero-parameter button route in
+  `router.describe()` outside the bench (`r:polls:close` from here hits the not-found
+  branch, a branch worth having a button for), and last an owned-by-nobody id in the
+  namespace (`r:gone:bench`) for the gone hook. *Run* carries the step's real custom id;
+  it is the production button, not a proxy, so a route step goes through its own
+  middleware. *Next* and *Restart* are `r:bench:step:{i}`, answered by redrawing the
+  message in place; an index past the end wraps.
+
+  A probe step advances by itself: the bench owns that handler, so after the probe
+  returns or raises it redraws the message one step on with the bot's own authority,
+  and the press that produced the error card still moves on. Route steps cannot, since
+  their handlers are not ours — they take Run, then Next. The asymmetry is honest and
+  kept.
 - **With `custom_id`**: posts one button carrying that id verbatim. Autocomplete lists
   route formats from `router.describe()`; the owner fills in the parameters. This is how
   `r:builds:123:edit` and legacy aliases get exercised.
@@ -131,8 +144,8 @@ await bench.lease(content)  # the probe's message becomes `content` + the seed r
 `lease` accepts what `app_ui.edit` accepts — a document or a live component — and appends
 one action row holding the seed button (two component slots, marked `overflow=Never` so
 planning cuts the probe's content before the row). Where it goes depends on where the click
-came from: from the index, `lease` **posts** a new message, which is now the probe's; from a
-leased message, it **edits** that message in place. The index is never leased, so it stays a
+came from: from the stepper, `lease` **posts** a new message, which is now the probe's; from a
+leased message, it **edits** that message in place. The stepper is never leased, so it stays a
 permanent launcher and every probe can hold a lease at once. For a live component `lease`
 wraps it in a `BenchFrame` whose render is `(self.boundary(child), seed_row)`, so the row
 is redrawn by the mount rather than fighting it.
@@ -178,8 +191,10 @@ fallback if the hook proves fragile.
   unanswered probe gets the summary reply and an answered one does not; an unknown name is
   reported, not raised; a static lease's payload ends with the seed row and a live lease's
   `BenchFrame` renders it after the child; a document that overfills the message loses its
-  own content and keeps the row; a lease from the index posts and a lease from a leased
-  message edits; finishing a leased mount leaves the seed enabled and everything else
+  own content and keeps the row; a lease from the stepper posts and a lease from a leased
+  message edits; the step list covers every probe, the select, the plain routes and the
+  gone id; a step index past the end wraps; the step route redraws as its answer; a
+  raising probe and the select step advance the stepper and a leased seed does not; finishing a leased mount leaves the seed enabled and everything else
   disabled, including when the root finished before the hook was registered.
 - `test_extension_loading.py`: the module joins `LOADABLE` automatically. The
   `test_production_chat_input_taxonomy` filter that excludes `squid.bot.layout_showcase`
