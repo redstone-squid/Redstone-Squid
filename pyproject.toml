@@ -367,7 +367,9 @@ files.glob = "**/config.py,pyproject.toml"
 pythonVersion = "3.14"
 pythonPlatform = "All"
 typeCheckingMode = "standard"
-exclude = ["**/node_modules", "**/__pycache__", "**/.*", "scripts/migrations"]
+# `site` is the generated documentation build, not source: it holds copies of the
+# Python under docs/ and was being checked twice.
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", "scripts/migrations", "site"]
 
 strictListInference = true
 strictDictionaryInference = true
