@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from functools import partial
+from typing import override
 
 import discord
 
@@ -156,6 +157,7 @@ class _ButtonRow(sl.Component):
         self.size = size
         self.renders = 0
 
+    @override
     def render(self) -> Row:
         self.renders += 1
         return Row(
@@ -179,6 +181,7 @@ class _ButtonRoot(sl.Component):
         self.rows = tuple(rows)
         self.renders = 0
 
+    @override
     def render(self):
         self.renders += 1
         return tuple(self.boundary(row, key=str(index)) for index, row in enumerate(self.rows))

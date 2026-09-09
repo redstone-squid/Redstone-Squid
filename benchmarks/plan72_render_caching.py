@@ -10,7 +10,7 @@ import gc
 import json
 import time
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, override
 
 import squid_ui as sl
 from squid_ui import Component, computed, state
@@ -31,6 +31,7 @@ class _Leaf(Component):
     def even(self) -> bool:
         return self.source % 2 == 0
 
+    @override
     def render(self):
         self.renders += 1
         return Text(str(self.even)) if self.observed else ()
@@ -41,6 +42,7 @@ class _Root(Component):
         self.leaves = tuple(_Leaf(observed=index == 0) for index in range(components))
         self.renders = 0
 
+    @override
     def render(self):
         self.renders += 1
         return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
@@ -217,6 +219,7 @@ class _ValueLeaf(Component):
         self.visible = visible
         self.renders = 0
 
+    @override
     def render(self):
         self.renders += 1
         return Text(str(self.value)) if self.visible else ()
@@ -227,6 +230,7 @@ class _ValueRoot(Component):
         self.leaves = tuple(_ValueLeaf(visible=index < visible) for index in range(components))
         self.renders = 0
 
+    @override
     def render(self):
         self.renders += 1
         return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
@@ -238,6 +242,7 @@ class _BranchLeaf(Component):
     def __init__(self) -> None:
         self.renders = 0
 
+    @override
     def render(self):
         self.renders += 1
         if self.alternate:
@@ -251,6 +256,7 @@ class _TextLeaf(Component):
     def __init__(self) -> None:
         self.renders = 0
 
+    @override
     def render(self) -> Text:
         self.renders += 1
         return Text("x" * (4_500 if self.long else 2_000))
@@ -261,12 +267,15 @@ class _MountedChild(Component):
         self.mounts = 0
         self.unmounts = 0
 
+    @override
     def render(self) -> Text:
         return Text("mounted")
 
+    @override
     def on_mount(self) -> None:
         self.mounts += 1
 
+    @override
     def on_unmount(self) -> None:
         self.unmounts += 1
 
@@ -278,6 +287,7 @@ class _MountingLeaf(Component):
         self.child = _MountedChild()
         self.renders = 0
 
+    @override
     def render(self):
         self.renders += 1
         return self.boundary(self.child, key="child") if self.mounted else Text("unmounted")
@@ -295,6 +305,7 @@ class _ResourceLeaf(Component):
         self.loads += 1
         return f"resource:{self.key}"
 
+    @override
     def render(self) -> Text:
         self.renders += 1
         status = self.value.status
