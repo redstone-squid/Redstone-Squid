@@ -1,7 +1,7 @@
 """The semantic review workspace for creator credit claims."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import cast
+from typing import cast, override
 
 import squid_ui as sl
 from squid.accounts.application import AccountService
@@ -52,6 +52,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
     def selected(self) -> AliasClaim | None:
         return next((claim for claim in self._claims if claim.id == self.selected_id), None)
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
             return (

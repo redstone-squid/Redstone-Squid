@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, override
 
 import anyio
 
@@ -98,6 +98,7 @@ class ConsentPrompt(sd.Screen):
     def notice_version(self) -> str:
         return CURRENT_CONSENT_VERSION
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         card_fields = tuple(sl.field(field.name, field.value) for field in self._fields)
         return (
@@ -139,6 +140,7 @@ class ConsentPrompt(sd.Screen):
         if self._on_answer is not None:
             await self._on_answer(event, consent)
 
+    @override
     def on_unmount(self) -> None:
         self._done.set()
 

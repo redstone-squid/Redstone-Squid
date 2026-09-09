@@ -1,6 +1,6 @@
 """Private manifest-driven editing of persisted submission drafts."""
 
-from typing import Any, cast
+from typing import Any, cast, override
 from uuid import UUID, uuid4
 
 import squid_ui as sl
@@ -61,6 +61,7 @@ class DraftEditorScreen(sd.Screen):
     def field(self) -> FormField | None:
         return next((field for field in self.fields if field.id == self.selected), None)
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         state = self.projection.status
         if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:

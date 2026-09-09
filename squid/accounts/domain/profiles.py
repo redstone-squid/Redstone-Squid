@@ -10,7 +10,7 @@ authority is `present_public_profile`: everything else stores flags.
 
 import unicodedata
 from dataclasses import dataclass, replace
-from typing import Final
+from typing import Final, override
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -143,6 +143,7 @@ class _Unset:
 
     __slots__ = ()
 
+    @override
     def __repr__(self) -> str:
         return "UNSET"
 
