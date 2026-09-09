@@ -7,7 +7,7 @@ read still reaches the render that used the value.
 """
 
 import asyncio
-from typing import Any
+from typing import Any, override
 
 import discord
 
@@ -38,6 +38,7 @@ class Watcher(Component[sl.ComponentsV2Target]):
         sl.runtime.watch(*(self._topics if self._topics is not None else (self.topic,)))
         return await self._load()
 
+    @override
     def render(self):
         match self.value.status:
             case sl.resources.Ready(value=value):
@@ -98,6 +99,7 @@ async def test_a_topic_watched_in_render_is_followed_too() -> None:
     """`watch` is a tracked read, so the render's own consumer collects it directly."""
 
     class Direct(Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             sl.runtime.watch(BUILD)
             return Text("x")

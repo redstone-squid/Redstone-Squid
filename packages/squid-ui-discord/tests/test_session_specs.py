@@ -1,7 +1,7 @@
 """Reusable per-open Discord session recipe."""
 
 from collections.abc import Callable
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
 import pytest
@@ -25,6 +25,7 @@ from squid_ui_discord.testing import ContextHarness, interaction_harness, messag
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return [Heading("Panel")]
 

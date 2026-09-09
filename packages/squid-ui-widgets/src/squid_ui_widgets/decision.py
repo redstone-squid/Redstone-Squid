@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Collection, Iterable
 from dataclasses import dataclass
+from typing import override
 
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, stack, status
@@ -153,6 +154,7 @@ class _Confirmation[RenderTargetT: RenderTarget = RenderTarget](Decision[RenderT
         self.confirm_label = confirm_label
         self.cancel_label = cancel_label
 
+    @override
     def _options(self, controls: MachineControls[DecisionState, RenderTargetT]) -> tuple[DecisionOption, ...]:
         """Bind confirm and cancel options to their configured callbacks."""
         return (

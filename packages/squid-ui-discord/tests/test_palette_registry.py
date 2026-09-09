@@ -1,10 +1,13 @@
 """Palette registry behavior at the live-mount boundary."""
 
+from typing import override
+
 import squid_ui as sl
 from squid_ui_discord import MessageRoot, Owner
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self) -> tuple[sl.LayoutNode, ...]:
         return (sl.section(sl.heading("Panel")),)
 

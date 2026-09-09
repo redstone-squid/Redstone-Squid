@@ -4,6 +4,7 @@ import json
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import override
 
 import anyio
 import pytest
@@ -46,6 +47,7 @@ from squid_ui_discord.testing import delivered_to, message_harness
 class Counter(sl.Component[sl.ComponentsV2Target]):
     count: int = sl.state(0)
 
+    @override
     def render(self):
         return Text(f"count {self.count}")
 
@@ -53,6 +55,7 @@ class Counter(sl.Component[sl.ComponentsV2Target]):
 class HiddenDraft(sl.Component[sl.ComponentsV2Target]):
     advanced: bool = sl.state(default=False)
 
+    @override
     def render(self):
         return Text("Draft")
 

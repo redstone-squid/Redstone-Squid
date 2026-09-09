@@ -1,6 +1,7 @@
 """Contract tests for the reactive persistence bridge."""
 
 from collections.abc import Mapping
+from typing import override
 
 import anyio
 import pytest
@@ -63,6 +64,7 @@ async def test_store_failures_are_reported_without_failing_the_action(
     slot: Slot[str, Mapping[str, object]],
 ) -> None:
     class BrokenStore(MemoryScopedStore):
+        @override
         async def put(self, *args: object, **kwargs: object) -> None:
             raise OSError("offline")
 

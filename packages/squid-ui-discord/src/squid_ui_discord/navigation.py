@@ -7,6 +7,8 @@ rewriting subclass constructors to keep controls in order. It is an ordinary con
 their parent rather than through a mount reference the navigator hands out.
 """
 
+from typing import override
+
 from squid_ui.chrome import CHROME_CONTEXT
 from squid_ui.interactions import PressEvent
 from squid_ui.primitives.nodes import Button, Row
@@ -49,6 +51,7 @@ class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target](Com
             del self._stack[1:]
             self.invalidate()
 
+    @override
     def render(self) -> list[LayoutNode[ComponentsV2Target]]:
         """Render the current child followed by its navigation controls."""
         # Keyed by depth: each screen owns its control namespace, so pushing the same child

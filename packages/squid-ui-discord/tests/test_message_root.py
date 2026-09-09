@@ -6,7 +6,7 @@ import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
 import anyio
@@ -155,6 +155,7 @@ class _AcknowledgementRecorder:
 class Counter(Component[sl.ComponentsV2Target]):
     count: int = state(0)
 
+    @override
     def render(self):
         return [
             Heading("Counter"),
@@ -171,6 +172,7 @@ async def test_dispatch_and_submit_bind_root_localization_inside_the_handler_tas
     seen: list[str | None] = []
 
     class Inspect(Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return Row((Button(label="Inspect", on_click=self.inspect, key="inspect"),))
 
@@ -305,6 +307,7 @@ class TestEphemeralRenewal:
             def __init__(self) -> None:
                 self.renders = 0
 
+            @override
             def render(self):
                 self.renders += 1
                 return Text(f"render {self.renders}")
@@ -399,6 +402,7 @@ class TestEphemeralRenewal:
             def __init__(self) -> None:
                 self.renders = 0
 
+            @override
             def render(self):
                 self.renders += 1
                 return Text(f"render {self.renders}")
@@ -445,6 +449,7 @@ class TestEphemeralRenewal:
 
 
 class RootToolbar(Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return Document[sl.ComponentsV2Target](
             (ControlGroup(tuple(Button(str(index), self.click, f"b{index}") for index in range(41))),),
@@ -458,9 +463,11 @@ class Child(Component[sl.ComponentsV2Target]):
     def __init__(self, mounted: list[str]) -> None:
         self.mounted = mounted
 
+    @override
     def render(self):
         return Text("child")
 
+    @override
     def on_mount(self) -> None:
         self.mounted.append("child")
 
@@ -474,6 +481,7 @@ class Panel(Component[sl.ComponentsV2Target]):
     def __init__(self, mounted: list[str]) -> None:
         self.child = Child(mounted)
 
+    @override
     def render(self):
         nodes: list[LayoutNode[sl.ComponentsV2Target]] = [
             Lines(self.entries, overflow=Paginate(key="entries", per=2)),
@@ -619,6 +627,7 @@ class TestDispatchProfiling:
         assert not stale.generation.rebased
 
         class Rebased(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return Row((Button("run", self.run, "run", mode=ActionMode.REBASE),))
 
@@ -639,6 +648,7 @@ class TestDispatchProfiling:
 
     async def test_short_circuit_and_recovered_handler_failure_remain_visible(self) -> None:
         class Stop(ActionMiddleware):
+            @override
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None: ...
 
         stopped_profiler = MemoryProfiler()
@@ -657,11 +667,13 @@ class TestDispatchProfiling:
         assert stopped_result.action is ActionStatus.SHORT_CIRCUITED
 
         class Broken(Counter):
+            @override
             async def increment(self, event: PressEvent) -> None:
                 self.count = 1
                 raise RuntimeError("caught")
 
         class Catch(ActionMiddleware):
+            @override
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
                 with pytest.raises(RuntimeError):
                     await proceed()
@@ -687,6 +699,7 @@ class TestDispatchProfiling:
 
     async def test_action_and_delivery_failures_have_different_dispositions(self, monkeypatch) -> None:
         class Broken(Counter):
+            @override
             async def increment(self, event: PressEvent) -> None:
                 raise RuntimeError("action failed")
 
@@ -724,6 +737,7 @@ class TestDispatchProfiling:
         release = anyio.Event()
 
         class Slow(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return Row((Button("slow", self.slow, "slow"),))
 
@@ -810,6 +824,7 @@ class TestRenderAndWire:
         seen: list[PressEvent] = []
 
         class Inspect(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return Row((Button(label="inspect", on_click=self.inspect, key="inspect"),))
 
@@ -828,6 +843,7 @@ class TestRenderAndWire:
         seen: list[PressEvent] = []
 
         class Inspect(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return Row((Button(label="inspect", on_click=self.inspect, key="inspect"),))
 
@@ -843,6 +859,7 @@ class TestRenderAndWire:
 
     def test_localize_retranslates_content_chrome_and_runtime_context(self):
         class Localized(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return [
                     Paragraph(Message("Hello")),
@@ -868,6 +885,7 @@ class TestRenderAndWire:
 
     async def test_notice_resolves_deferred_text_with_message_root_localization(self):
         class Notify(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return Row((Button(label="notify", on_click=self.notify, key="notify"),))
 
@@ -887,6 +905,7 @@ class TestRenderAndWire:
 
     async def test_clean_dispatch_defers_instead_of_editing(self):
         class Static(Counter):
+            @override
             async def increment(self, event: PressEvent) -> None:
                 pass  # no state change
 
@@ -913,6 +932,7 @@ class TestRenderAndWire:
         release = anyio.Event()
 
         class Slow(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return Row((Button("slow", self.slow, "slow"),))
 
@@ -1290,6 +1310,7 @@ class TestActionPolicy:
         class Rebased(Component[sl.ComponentsV2Target]):
             current = False
 
+            @override
             def render(self):
                 handler = self.new if self.current else self.old
                 return Row((Button("run", handler, "run", mode=ActionMode.REBASE),))
@@ -1318,6 +1339,7 @@ class TestActionPolicy:
         class Rebased(Component[sl.ComponentsV2Target]):
             current = False
 
+            @override
             def render(self):
                 handler = self.new if self.current else self.old
                 return sl_form("Rename", spec, key="rename", on_submit=handler, mode=ActionMode.REBASE)
@@ -1354,6 +1376,7 @@ class TestActionPolicy:
             history: sl.runtime.History = sl.runtime.history()
             name: str = state("old")
 
+            @override
             def render(self):
                 return sl_form(
                     "Rename",
@@ -1392,6 +1415,7 @@ class TestActionPolicy:
         spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
 
         class Trigger(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return sl_form("Rename", spec, key="rename", on_submit=self.submit, mode=ActionMode.REBASE)
 
@@ -1423,6 +1447,7 @@ class TestActionPolicy:
         reshaped = FormSpec("Rename", (TextField(key="title", label="Title"),))
 
         class Reshaped(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return sl_form("Rename", reshaped, key="rename", on_submit=self.new, mode=ActionMode.REBASE)
 
@@ -1472,6 +1497,7 @@ class TestActionPolicy:
         maximum = 0
 
         class Serialized(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return Row((Button("run", self.run, "run"),))
 
@@ -1498,6 +1524,7 @@ class TestActionPolicy:
         class Reader(Component[sl.ComponentsV2Target]):
             count: int = state(0)
 
+            @override
             def render(self):
                 return Row((Button("read", self.read, "read", mode=ActionMode.PARALLEL_READ),))
 
@@ -1528,12 +1555,14 @@ class TestActionMiddleware:
             def __init__(self, name: str) -> None:
                 self.name = name
 
+            @override
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
                 seen.append(f"{self.name}:before")
                 await proceed()
                 seen.append(f"{self.name}:after")
 
         class Subject(Counter):
+            @override
             async def increment(self, event: PressEvent) -> None:
                 seen.append("handler")
                 await super().increment(event)
@@ -1553,6 +1582,7 @@ class TestActionMiddleware:
 
     async def test_short_circuit_skips_the_handler_and_still_acknowledges(self) -> None:
         class Stop(ActionMiddleware):
+            @override
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None: ...
 
         component = Counter()
@@ -1569,6 +1599,7 @@ class TestActionMiddleware:
         class Broken(Component[sl.ComponentsV2Target]):
             count: int = state(0)
 
+            @override
             def render(self):
                 return Row((Button("break", self.break_, "break"),))
 
@@ -1579,6 +1610,7 @@ class TestActionMiddleware:
         seen: list[str] = []
 
         class Catch(ActionMiddleware):
+            @override
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
                 try:
                     await proceed()
@@ -1600,6 +1632,7 @@ class TestActionMiddleware:
         error = RuntimeError("policy service unavailable")
 
         class Fail(ActionMiddleware):
+            @override
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
                 raise error
 
@@ -1616,6 +1649,7 @@ class TestActionMiddleware:
         saved: list[ActionProceed] = []
 
         class SaveAndRepeat(ActionMiddleware):
+            @override
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
                 saved.append(proceed)
                 await proceed()
@@ -1640,6 +1674,7 @@ class TestActionMiddleware:
         requests: list[ActionRequest] = []
 
         class Capture(ActionMiddleware):
+            @override
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
                 requests.append(request)
                 await proceed()
@@ -1647,6 +1682,7 @@ class TestActionMiddleware:
         class Rebased(Component[sl.ComponentsV2Target]):
             current = False
 
+            @override
             def render(self):
                 handler = self.new if self.current else self.old
                 return Row((Button("run", handler, "run", mode=ActionMode.REBASE),))
@@ -1682,6 +1718,7 @@ class TestActionMiddleware:
         entered = False
 
         class Capture(ActionMiddleware):
+            @override
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
                 nonlocal entered
                 entered = True
@@ -1700,11 +1737,13 @@ class TestActionMiddleware:
         kinds: list[InteractionKind] = []
 
         class Capture(ActionMiddleware):
+            @override
             async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
                 kinds.append(request.kind)
                 await proceed()
 
         class Picker(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return SelectMenu((Option("A", "a"),), self.pick, "pick")
 
@@ -1726,6 +1765,7 @@ class TestActionMiddleware:
 class TestErrors:
     async def test_handler_error_goes_to_hook(self):
         class Boom(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return [Row((Button(label="x", on_click=self.explode, key="x"),))]
 
@@ -1749,6 +1789,7 @@ class TestErrors:
 
         @dataclass(frozen=True, slots=True)
         class Broken(FormField[str]):
+            @override
             def parse(self, raw: object) -> str | None:
                 return raw.no_such_attribute  # type: ignore[attr-defined]
 
@@ -1768,6 +1809,7 @@ class TestErrors:
             count: int = state(0)
             entries: tuple[str, ...] = state(())
 
+            @override
             def render(self):
                 return [Row((Button(label="x", on_click=self.explode, key="x"),))]
 
@@ -1794,6 +1836,7 @@ class TestSelect:
         picked: list[str] = []
 
         class Picker(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return [
                     SelectMenu(
@@ -1831,6 +1874,7 @@ class TestLifecycle:
 
     async def test_timeout_can_leave_only_stateless_recovery_routes_enabled(self) -> None:
         class Recoverable(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return sl.action_controls(
                     sl.action_control("Mounted action", self.press, key="mounted"),
@@ -1882,9 +1926,11 @@ class TestLifecycle:
             def __init__(self) -> None:
                 self.loads = 0
 
+            @override
             async def on_load(self) -> None:
                 self.loads += 1
 
+            @override
             def render(self):
                 return Text("loaded")
 
@@ -2098,6 +2144,7 @@ class TestDeliveryAtomicity:
         class ImmediatePanel(Component[sl.ComponentsV2Target]):
             count: int = state(0)
 
+            @override
             def render(self):
                 return Row(
                     (
@@ -2206,6 +2253,7 @@ class _Destination:
 class Report(Component[sl.ComponentsV2Target]):
     """A component carrying one inline asset, so a send has files to hand over."""
 
+    @override
     def render(self):
         return Document[sl.ComponentsV2Target](
             (Text("summary"),),
@@ -2217,6 +2265,7 @@ class MutableReport(Component[sl.ComponentsV2Target]):
     def __init__(self) -> None:
         self.contents = b"first"
 
+    @override
     def render(self):
         return Document[sl.ComponentsV2Target](
             (Text("summary"),),
@@ -2392,6 +2441,7 @@ class TestSend:
             version = 0
             invoked: list[int] = []
 
+            @override
             def render(self):
                 version = self.version
 
@@ -2444,6 +2494,7 @@ class TestSend:
             async def click(self, event: ActionEvent) -> None:
                 self.invoked += 1
 
+            @override
             def render(self):
                 return sl.action_controls(
                     sl.action_control(
@@ -2513,6 +2564,7 @@ class TestStateDescriptor:
         class Collection(Component[sl.ComponentsV2Target]):
             entries: tuple[str, ...] = state(factory=tuple)
 
+            @override
             def render(self):
                 return Text(str(self.entries))
 
@@ -2538,6 +2590,7 @@ class TestStateDescriptor:
                 self.calls += 1
                 return self.count * 2
 
+            @override
             def render(self):
                 return Text(str(self.doubled))
 
@@ -2560,6 +2613,7 @@ class TestStateDescriptor:
         class Source(Component[sl.ComponentsV2Target]):
             count: int = state(1)
 
+            @override
             def render(self):
                 return Text(str(self.count))
 
@@ -2571,6 +2625,7 @@ class TestStateDescriptor:
             def doubled(self) -> int:
                 return self.source.count * 2
 
+            @override
             def render(self):
                 return Text(str(self.doubled))
 
@@ -2598,6 +2653,7 @@ class TestStateDescriptor:
                 self.calls += 1
                 return f"query:{self.normalized}"
 
+            @override
             def render(self):
                 return Text(self.label)
 
@@ -2625,6 +2681,7 @@ class TestStateDescriptor:
             def second(self) -> int:
                 return self.first
 
+            @override
             def render(self):
                 return Text("")
 
@@ -2641,10 +2698,12 @@ class TestStateDescriptor:
             def __init__(self) -> None:
                 self.invalidations = 0
 
+            @override
             def invalidate(self) -> None:
                 self.invalidations += 1
                 super().invalidate()
 
+            @override
             def render(self):
                 return Text(f"{self.left}:{self.right}")
 
@@ -2660,6 +2719,7 @@ class TestStateDescriptor:
             name: str = state("before")
             values: tuple[int, ...] = state(())
 
+            @override
             def render(self):
                 return Text(self.name)
 
@@ -2678,6 +2738,7 @@ class Notifier(Component[sl.ComponentsV2Target]):
 
     count: int = state(0)
 
+    @override
     def render(self):
         return [Text(f"count: {self.count}"), Row((Button(label="go", on_click=self.go, key="go"),))]
 
@@ -3027,6 +3088,7 @@ class VisibleResourcePanel(Component[sl.ComponentsV2Target]):
     async def change(self, event: PressEvent) -> None:
         self.key = "second"
 
+    @override
     def render(self):
         match self.value.status:
             case Pending(previous=previous):
@@ -3046,6 +3108,7 @@ class AtomicResourcePanel(Component[sl.ComponentsV2Target]):
     async def value(self) -> str:
         return await self._load()
 
+    @override
     def render(self):
         match self.value.status:
             case Failed(error=error):
@@ -3073,6 +3136,7 @@ class CheckpointedResourcePanel(Component[sl.ComponentsV2Target]):
         self.finished.append(attempt)
         return f"attempt-{attempt}"
 
+    @override
     def render(self):
         match self.value.status:
             case Failed(error=error):
@@ -3090,6 +3154,7 @@ class OperationPanel(Component[sl.ComponentsV2Target]):
         progress.report("publishing")
         return 42
 
+    @override
     def render(self):
         match self.publication.status:
             case sl.operations.Pending(progress=progress):
@@ -3177,6 +3242,7 @@ class TestResourceLoading:
             async def value(self) -> str:
                 return "loaded"
 
+            @override
             def render(self):
                 _ = self.value.status
                 return Text("constant")
@@ -3220,6 +3286,7 @@ class TestResourceLoading:
                 self.loads += 1
                 return f"value:{self.key}"
 
+            @override
             def render(self) -> Text:
                 self.renders += 1
                 status = self.value.status
@@ -3257,6 +3324,7 @@ class TestResourceLoading:
                 self.loads += 1
                 return self.key
 
+            @override
             def render(self) -> Text:
                 status = self.value.status
                 assert isinstance(status, Ready)
@@ -3268,6 +3336,7 @@ class TestResourceLoading:
             def __init__(self) -> None:
                 self.child = Child()
 
+            @override
             def render(self):
                 return self.boundary(self.child, key="child") if self.visible else Text("removed")
 
@@ -3292,6 +3361,7 @@ class TestResourceLoading:
             async def value(self) -> int:
                 return self.key
 
+            @override
             def render(self) -> Text:
                 self.renders += 1
                 status = self.value.status
@@ -3302,6 +3372,7 @@ class TestResourceLoading:
             def __init__(self) -> None:
                 self.children = (Child(), Child())
 
+            @override
             def render(self):
                 return tuple(self.boundary(child, key=str(index)) for index, child in enumerate(self.children))
 
@@ -3336,6 +3407,7 @@ class TestResourceLoading:
             async def value(self) -> int:
                 return self.key
 
+            @override
             def render(self) -> Text:
                 self.renders += 1
                 status = self.value.status
@@ -3400,6 +3472,7 @@ class TestResourceLoading:
                 await started.wait()
                 return "second"
 
+            @override
             def render(self):
                 return Text(f"{type(self.first.status).__name__}:{type(self.second.status).__name__}")
 
@@ -3421,6 +3494,7 @@ class TestResourceLoading:
                 loads.append("child")
                 return "child loaded"
 
+            @override
             def render(self):
                 return Text(f"child:{type(self.value.status).__name__}")
 
@@ -3433,6 +3507,7 @@ class TestResourceLoading:
                 loads.append("parent")
                 return "parent loaded"
 
+            @override
             def render(self):
                 match self.value.status:
                     case Pending():
@@ -3463,6 +3538,7 @@ class TestResourceLoading:
                 loads.append("load")
                 return "loaded"
 
+            @override
             def render(self):
                 return Text(type(self.value.status).__name__) if self.shown else Text("hidden")
 
@@ -3564,10 +3640,12 @@ class Leaf(Component[sl.ComponentsV2Target]):
         self.log = log
         self.name = name
 
+    @override
     async def on_load(self) -> None:
         self.log.append(f"load:{self.name}")
         self.label = f"{self.name} loaded"
 
+    @override
     def render(self):
         self.log.append(f"render:{self.name}")
         return Text(self.label)
@@ -3582,10 +3660,12 @@ class Host(Component[sl.ComponentsV2Target]):
         self.log = log
         self.child = child
 
+    @override
     async def on_load(self) -> None:
         self.log.append("load:host")
         self.ready = True
 
+    @override
     def render(self):
         self.log.append("render:host")
         nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Text("host")]
@@ -3657,10 +3737,12 @@ class Nested(Component[sl.ComponentsV2Target]):
         self.log = log
         self.child = Leaf(log, "child")
 
+    @override
     async def on_load(self) -> None:
         self.log.append("load:parent")
         self.ready = True
 
+    @override
     def render(self):
         self.log.append("render:parent")
         nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Text("parent")]
@@ -3683,6 +3765,7 @@ class Siblings(Component[sl.ComponentsV2Target]):
         self.first = first
         self.second = second
 
+    @override
     def render(self):
         return [self.boundary(self.first, key="first"), self.boundary(self.second, key="second")]
 
@@ -3719,11 +3802,13 @@ class TestLoading:
         started = anyio.Event()
 
         class Slow(Leaf):
+            @override
             async def on_load(self) -> None:
                 started.set()
                 await super().on_load()
 
         class Waits(Leaf):
+            @override
             async def on_load(self) -> None:
                 # Deadlocks unless the sibling is genuinely in flight at the same time.
                 await started.wait()
@@ -3750,6 +3835,7 @@ class TestLoading:
             def __init__(self) -> None:
                 self.child = Leaf(log, "child")
 
+            @override
             def render(self):
                 nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Row((Button("open", self.reveal, "open"),))]
                 if self.open:
@@ -3775,6 +3861,7 @@ class TestLoading:
         class Flaky(Component[sl.ComponentsV2Target]):
             label: str = state("")
 
+            @override
             async def on_load(self) -> None:
                 attempts.append(1)
                 if len(attempts) == 1:
@@ -3782,6 +3869,7 @@ class TestLoading:
                     raise RuntimeError(message)
                 self.label = "loaded"
 
+            @override
             def render(self):
                 return Text(self.label)
 
@@ -3803,6 +3891,7 @@ class TestLoading:
         """Error routing downstream of a mount is isinstance-based, not `except*`-based."""
 
         class Boom(Leaf):
+            @override
             async def on_load(self) -> None:
                 message = "no such account"
                 raise LookupError(message)
@@ -3816,6 +3905,7 @@ class TestLoading:
 
     async def test_several_failures_at_once_stay_a_group(self):
         class Boom(Leaf):
+            @override
             async def on_load(self) -> None:
                 await anyio.sleep(0)
                 message = f"{self.name} failed"
@@ -3873,6 +3963,7 @@ class TestLoading:
         class Plain(Component[sl.ComponentsV2Target]):
             count: int = state(0)
 
+            @override
             def render(self):
                 renders.append(self.count)
                 return Text(f"count: {self.count}")
@@ -3890,11 +3981,13 @@ class TestLoading:
         class Reader(Component[sl.ComponentsV2Target]):
             label: str = state("")
 
+            @override
             async def on_load(self) -> None:
                 seen.append(_CURRENT.get() is not None)
                 self.untracked = "a plain attribute, written with nothing watching"
                 self.label = "loaded"
 
+            @override
             def render(self):
                 return Text(self.label)
 
@@ -3910,10 +4003,12 @@ class TestLoading:
             def __init__(self) -> None:
                 self.child: Endless | None = None
 
+            @override
             async def on_load(self) -> None:
                 self.child = Endless()
                 self.child.depth = self.depth + 1
 
+            @override
             def render(self):
                 nodes: list[LayoutNode[sl.ComponentsV2Target]] = [Text(f"depth {self.depth}")]
                 if self.child is not None:
@@ -3944,6 +4039,7 @@ class _GuardedPanel(Component[sl.ComponentsV2Target]):
         self.mode = mode
         self.run = run
 
+    @override
     def render(self):
         return sl.action_controls(
             sl.action_control(
@@ -4049,6 +4145,7 @@ class TestGuards:
                 self.mode = mode
                 self.presses: list[str] = []
 
+            @override
             def render(self):
                 return sl.action_controls(
                     sl.action_control("Go", self.go, key="go", guard=sl.guards.once(), mode=self.mode),
@@ -4083,6 +4180,7 @@ class TestGuards:
         class Crowd(Component[sl.ComponentsV2Target]):
             pressed: int = state(0)
 
+            @override
             def render(self):
                 return sl.action_controls(
                     *(
@@ -4114,6 +4212,7 @@ class TestGuards:
         class Panel(Component[sl.ComponentsV2Target]):
             seen: int = state(0)
 
+            @override
             def render(self):
                 return sl_form("Rename", spec, key="rename", on_submit=submitted, guard=sl.guards.once())
 
@@ -4186,6 +4285,7 @@ class TestBusyFeedback:
         release_handler = asyncio.Event()
 
         class Idle(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return sl.action_controls(
                     sl.action_control("Go", self.go, key="go", busy=sl.interactions.BusySpec(pending="Working…")),
@@ -4302,6 +4402,7 @@ class TestBusyFeedback:
         ran: list[bool] = []
 
         class Idle(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return sl.action_controls(
                     sl.action_control("Go", self.go, key="go", busy=sl.interactions.BusySpec()), key="panel"

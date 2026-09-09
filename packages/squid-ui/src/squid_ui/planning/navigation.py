@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from typing import override
 
 from squid_ui.chrome import Chrome
 from squid_ui.interactions import SelectionEvent
@@ -33,6 +34,7 @@ SEEK_OPTION_LIMIT = 25
 class _SeekSelection(GeneratedHandler[SelectionEvent]):
     seek: Callable[[int], Awaitable[None]]
 
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         if event.values:
             await self.seek(int(event.values[0]))

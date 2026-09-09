@@ -1,7 +1,7 @@
 """Composable components: embedding, key namespacing, and where invalidation travels."""
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, override
 
 import discord
 import pytest
@@ -55,6 +55,7 @@ class Counter(Component[sl.ComponentsV2Target]):
     def __init__(self, name: str) -> None:
         self.name = name
 
+    @override
     def render(self):
         return [
             Text(f"{self.name}: {self.count}"),
@@ -79,6 +80,7 @@ class Pair(Component[sl.ComponentsV2Target]):
         self.left = Counter("left")
         self.right = Counter("right")
 
+    @override
     def render(self):
         return [Heading("Pair"), self.boundary(self.left, key="left"), self.boundary(self.right, key="right")]
 
@@ -135,6 +137,7 @@ class TestRenderCaching:
             def __init__(self, value: int) -> None:
                 self.value = value
 
+            @override
             def __eq__(self, other: object) -> bool:
                 return isinstance(other, EqualService)
 
@@ -142,6 +145,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.services: list[object] = []
 
+            @override
             def render(self) -> Text:
                 service = self.inject(service_key)
                 self.services.append(service)
@@ -154,6 +158,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.child = Child()
 
+            @override
             def render(self):
                 self.provide(service_key, EqualService(self.value))
                 return self.boundary(self.child, key="child")
@@ -182,6 +187,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.renders = 0
 
+            @override
             def render(self) -> Text:
                 self.renders += 1
                 return Text(str(self.inject(service_key).version))
@@ -193,6 +199,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.child = Child()
 
+            @override
             def render(self):
                 _ = self.unrelated
                 self.provide(service_key, Service(self.service_version))
@@ -234,6 +241,7 @@ class TestRenderCaching:
         changes: list[tuple[int, int, bool, bool]],
     ) -> None:
         class Child(Component[sl.ComponentsV2Target]):
+            @override
             def render(self) -> Text:
                 return Text("child")
 
@@ -248,6 +256,7 @@ class TestRenderCaching:
             async def press(self, _event: PressEvent) -> None:
                 pass
 
+            @override
             def render(self):
                 value = Text(str(self.value))
                 body = Panel(children=(value,)) if self.wrapped else value
@@ -259,6 +268,7 @@ class TestRenderCaching:
                 self.leaves = tuple(Leaf() for _ in range(4))
                 self.asset = Asset("evidence", "evidence.txt", "text/plain", InlineAsset(b"evidence"))
 
+            @override
             def render(self) -> Document[sl.ComponentsV2Target]:
                 children = tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
                 return Document(children, (self.asset,), key="oracle")
@@ -296,6 +306,7 @@ class TestRenderCaching:
         class Leaf(Component[sl.ComponentsV2Target]):
             value: int = state(0)
 
+            @override
             def render(self) -> Text:
                 return Text(str(self.value))
 
@@ -303,6 +314,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.leaves = tuple(Leaf() for _ in range(1_000))
 
+            @override
             def render(self):
                 return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
 
@@ -330,6 +342,7 @@ class TestRenderCaching:
         class Leaf(Component[sl.ComponentsV2Target]):
             value: int = state(0)
 
+            @override
             def render(self) -> Text:
                 return Text(str(self.value))
 
@@ -337,6 +350,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.leaves = tuple(Leaf() for _ in range(100))
 
+            @override
             def render(self):
                 return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
 
@@ -361,12 +375,15 @@ class TestRenderCaching:
                 self.mounts = 0
                 self.unmounts = 0
 
+            @override
             def render(self) -> Text:
                 return Text("child")
 
+            @override
             def on_mount(self) -> None:
                 self.mounts += 1
 
+            @override
             def on_unmount(self) -> None:
                 self.unmounts += 1
 
@@ -376,6 +393,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.child = Child()
 
+            @override
             def render(self):
                 return self.boundary(self.child, key="child") if self.visible else Text("empty")
 
@@ -383,6 +401,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.leaves = tuple(Leaf() for _ in range(100))
 
+            @override
             def render(self):
                 return tuple(self.boundary(leaf, key=str(index)) for index, leaf in enumerate(self.leaves))
 
@@ -419,6 +438,7 @@ class TestRenderCaching:
         class Leaf(Component[sl.ComponentsV2Target]):
             value: int = state(0)
 
+            @override
             def render(self) -> Text:
                 return Text(str(self.value))
 
@@ -426,6 +446,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.leaf = Leaf()
 
+            @override
             def render(self) -> Panel:
                 return Panel(children=(Text("before"), self.boundary(self.leaf, key="leaf"), Text("after")))
 
@@ -433,6 +454,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.middle = Middle()
 
+            @override
             def render(self):
                 return self.boundary(self.middle, key="middle")
 
@@ -464,6 +486,7 @@ class TestRenderCaching:
                 self.label = label
                 self.renders = 0
 
+            @override
             def render(self) -> Text:
                 self.renders += 1
                 return Text(f"{self.label}:{self.value}")
@@ -474,6 +497,7 @@ class TestRenderCaching:
                 self.right = Counting("right")
                 self.renders = 0
 
+            @override
             def render(self):
                 self.renders += 1
                 return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
@@ -502,6 +526,7 @@ class TestRenderCaching:
             def even(self) -> bool:
                 return self.source % 2 == 0
 
+            @override
             def render(self) -> Text:
                 self.renders += 1
                 return Text(str(self.even))
@@ -531,6 +556,7 @@ class TestRenderCaching:
             def even(self) -> bool:
                 return values.value % 2 == 0
 
+            @override
             def render(self) -> Text:
                 self.renders += 1
                 return Text(str(self.even))
@@ -572,6 +598,7 @@ class TestRenderCaching:
             def value(self) -> int:
                 return values.b if values.use_b else values.a
 
+            @override
             def render(self) -> Text:
                 self.renders += 1
                 return Text(str(self.value))
@@ -614,6 +641,7 @@ class TestRenderCaching:
                 self.name = name
                 self.renders = 0
 
+            @override
             def render(self) -> Text:
                 self.renders += 1
                 return Text(str(getattr(values, self.name)))
@@ -624,6 +652,7 @@ class TestRenderCaching:
                 self.right = Value("right")
                 self.renders = 0
 
+            @override
             def render(self):
                 self.renders += 1
                 return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
@@ -648,6 +677,7 @@ class TestRenderCaching:
                 self.value = "first"
                 self.renders = 0
 
+            @override
             def render(self) -> Text:
                 self.renders += 1
                 return Text(self.value)
@@ -673,6 +703,7 @@ class TestRenderCaching:
         class Stable(Component[sl.ComponentsV2Target]):
             value: int = state(0)
 
+            @override
             def render(self) -> Text:
                 return Text(str(self.value))
 
@@ -680,6 +711,7 @@ class TestRenderCaching:
             def __init__(self) -> None:
                 self.stable = Stable()
 
+            @override
             def render(self):
                 return (
                     self.boundary(Inline("inline", events), key="inline"),
@@ -714,6 +746,7 @@ def test_boundaries_expand_and_namespace_inside_every_primitive_child_container(
     child = Counter("nested")
 
     class Parent(Component[Any]):
+        @override
         def render(self) -> Node:
             return wrap((self.boundary(child, key="child"),))
 
@@ -727,6 +760,7 @@ def test_boundaries_expand_and_namespace_inside_every_primitive_child_container(
 
 def test_component_expansion_preserves_container_metadata() -> None:
     class Parent(Component[sl.ComponentsV2Target]):
+        @override
         def render(self) -> Panel:
             return Panel((Text("body"),), accent=0x123456, spoiler=True)
 
@@ -743,6 +777,7 @@ class Nest(Component[sl.ComponentsV2Target]):
         self.depth = depth
         self.child = Nest(depth - 1) if depth else None
 
+    @override
     def render(self):
         nodes: list[Node | Boundary] = [Row((Button(label="x", on_click=self._click, key="click"),))]
         if self.child is not None:
@@ -765,6 +800,7 @@ def test_nested_embeds_stay_addressable(depth):
 
 
 class PagedChild(Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return Lines(tuple(f"entry {index}" for index in range(6)), overflow=Paginate(key="items", per=2))
 
@@ -774,6 +810,7 @@ class PagedPair(Component[sl.ComponentsV2Target]):
         self.left = PagedChild()
         self.right = PagedChild()
 
+    @override
     def render(self):
         return [self.boundary(self.left, key="left"), self.boundary(self.right, key="right")]
 
@@ -792,6 +829,7 @@ def test_embed_namespaces_pager_state_and_controls() -> None:
 
 def test_duplicate_sibling_embed_keys_are_rejected() -> None:
     class Duplicate(Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return [self.boundary(Counter("one"), key="same"), self.boundary(Counter("two"), key="same")]
 
@@ -803,6 +841,7 @@ def test_one_component_instance_cannot_occupy_two_paths() -> None:
     child = Counter("shared")
 
     class Duplicate(Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return [self.boundary(child, key="one"), self.boundary(child, key="two")]
 
@@ -812,6 +851,7 @@ def test_one_component_instance_cannot_occupy_two_paths() -> None:
 
 def test_component_embedding_cycles_are_rejected() -> None:
     class Cycle(Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return self.boundary(self, key="self")
 
@@ -824,12 +864,15 @@ class Tracked(Component[sl.ComponentsV2Target]):
         self.name = name
         self.events = events
 
+    @override
     def render(self) -> Text | Boundary:
         return Text(self.name)
 
+    @override
     def on_mount(self) -> None:
         self.events.append(f"mount:{self.name}")
 
+    @override
     def on_unmount(self) -> None:
         self.events.append(f"unmount:{self.name}")
 
@@ -842,6 +885,7 @@ async def test_keyed_component_lifecycle_tracks_replacement_and_finish() -> None
             super().__init__("parent", events)
             self.child = Tracked("first", events)
 
+        @override
         def render(self):
             return self.boundary(self.child, key="child")
 
@@ -863,6 +907,7 @@ def test_typed_context_flows_to_descendants_without_entering_component_state() -
     greeting = ContextKey[str]("greeting")
 
     class Child(Component[sl.ComponentsV2Target]):
+        @override
         def render(self) -> Text:
             return Text(self.inject(greeting))
 
@@ -870,6 +915,7 @@ def test_typed_context_flows_to_descendants_without_entering_component_state() -
         def __init__(self) -> None:
             self.child = Child()
 
+        @override
         def render(self):
             self.provide(greeting, "hello from context")
             return self.boundary(self.child, key="child")
@@ -883,6 +929,7 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
     async def run(_event) -> None: ...
 
     class Child(Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return ActionControls((ActionControl("run", "Run", run),), key="toolbar")
 
@@ -891,6 +938,7 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
             self.left = Child()
             self.right = Child()
 
+        @override
         def render(self):
             return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
 
@@ -904,6 +952,7 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
     async def change(_event) -> None: ...
 
     class Child(Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return Group(
                 (
@@ -925,6 +974,7 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
             self.left = Child()
             self.right = Child()
 
+        @override
         def render(self):
             return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
 

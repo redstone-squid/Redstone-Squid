@@ -1,6 +1,6 @@
 """One request per Discord event: resolution, memoization, and the response ledger."""
 
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -21,6 +21,7 @@ class Owner:
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return sl.heading("Panel")
 

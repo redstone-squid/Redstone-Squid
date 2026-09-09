@@ -23,7 +23,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from typing import Any, ClassVar, Protocol, Self, overload
+from typing import Any, ClassVar, Protocol, Self, overload, override
 
 from squid_reactivity.actions import (
     ActionCommit,
@@ -2023,6 +2023,7 @@ class StateOwner:
         note_born(instance)
         return instance
 
+    @override
     def __setattr__(self, name: str, value: Any) -> None:
         if (
             _active() is not None

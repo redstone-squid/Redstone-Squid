@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol, overload, runtime_checkable
+from typing import Literal, Protocol, overload, override, runtime_checkable
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike
@@ -190,6 +190,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
         self.handlers = dict(handlers or {})
         self.finish_actions = frozenset(finish_actions)
 
+    @override
     def render(self) -> DocumentLike[RenderTargetT]:
         """Render the current machine state with mounted controls."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)

@@ -1,5 +1,7 @@
 """Squid regions contributed to a host-owned Components V2 view."""
 
+from typing import override
+
 import discord
 import pytest
 
@@ -101,6 +103,7 @@ class TestPreflight:
                 super().__init__(timeout=None)
                 self.armed = False
 
+            @override
             def add_item(self, item):
                 if self.armed:
                     message = "no"

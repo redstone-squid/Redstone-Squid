@@ -6,6 +6,7 @@ node lives in `primitives`, the adapter that prepares it in `planning`, and
 """
 
 from dataclasses import dataclass
+from typing import override
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,5 +25,6 @@ class ExtensionKind[PayloadT = object, ResourceT = object]:
 
     name: str
 
+    @override
     def __str__(self) -> str:
         return self.name

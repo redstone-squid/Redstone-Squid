@@ -1,6 +1,6 @@
 """Matrix tables and exact or adaptive selectable grids."""
 
-from typing import cast
+from typing import cast, override
 
 import pytest
 
@@ -165,6 +165,7 @@ def test_grid_authoring_rejects_empty_duplicate_and_nonpositive_shapes() -> None
 
 def test_semantic_grid_namespaces_its_key_inside_a_component_boundary() -> None:
     class Child(sl.Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return sl.grid(*_cells(2), key="board", columns=2, on_pick=_pick)
 
@@ -172,6 +173,7 @@ def test_semantic_grid_namespaces_its_key_inside_a_component_boundary() -> None:
         def __init__(self) -> None:
             self.child = Child()
 
+        @override
         def render(self):
             return self.boundary(self.child, key="child")
 

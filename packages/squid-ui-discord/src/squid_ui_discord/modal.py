@@ -8,7 +8,7 @@ crash — a `default` joined from user data fails at `send_modal` time with HTTP
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any, ClassVar, override
 
 import discord
 
@@ -61,6 +61,7 @@ class EntityField(ExtensionField[object]):
     placeholder: TextLike | None = None
     capability: ClassVar[str] = Capability.FORMS_DISCORD_ENTITY
 
+    @override
     def parse(self, raw: object) -> object | None:
         values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
         if not values:
@@ -79,6 +80,7 @@ class FileField(ExtensionField[object]):
     maximum: int = 1
     capability: ClassVar[str] = Capability.FORMS_DISCORD_FILE
 
+    @override
     def parse(self, raw: object) -> UploadedFile | tuple[UploadedFile, ...] | None:
         values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
         if not values:
@@ -113,10 +115,12 @@ class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
             raise ValueError(message)
         self._portable_field()
 
+    @override
     def parse(self, raw: object) -> tuple[ValueT, ...]:
         """Parse selected keys with the portable multi-choice contract."""
         return self._portable_field().parse(raw)
 
+    @override
     def format(self, value: object) -> tuple[str, ...]:
         """Format a prefill with the portable multi-choice contract."""
         return self._portable_field().format(value)
@@ -186,6 +190,7 @@ class _SpecModal(discord.ui.Modal):
                 discord.ui.Label(text=_resolve(label.text, NEUTRAL), description=description, component=text_input)
             )
 
+    @override
     async def on_submit(self, interaction: discord.Interaction) -> None:
         if self._handler is None:
             return
@@ -216,6 +221,7 @@ class _FormModal(discord.ui.Modal):
             self._readers[field.key] = reader
             self.add_item(discord.ui.Label(text=label, description=description, component=component))
 
+    @override
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await self._handler(interaction, {key: reader() for key, reader in self._readers.items()})
 

@@ -2,6 +2,7 @@
 
 import hashlib
 from collections.abc import Sequence
+from typing import override
 from urllib.parse import urlsplit
 
 from slack_sdk.errors import SlackObjectFormationError
@@ -552,6 +553,7 @@ class MessageRenderer(Renderer[scene.SlackMessage, MessagePayload]):
         self.adapter = adapter
         self.asset_resolver = asset_resolver
 
+    @override
     def draw(
         self,
         document: scene.Scene[scene.SlackMessage],
@@ -586,6 +588,7 @@ class ModalRenderer(Renderer[scene.SlackModalView, View]):
     def __init__(self, *, adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER) -> None:
         self.adapter = adapter
 
+    @override
     def draw(
         self,
         document: scene.Scene[scene.SlackModalView],
@@ -621,6 +624,7 @@ class HomeRenderer(Renderer[scene.SlackHomeView, View]):
     def __init__(self, *, adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER) -> None:
         self.adapter = adapter
 
+    @override
     def draw(
         self,
         document: scene.Scene[scene.SlackHomeView],

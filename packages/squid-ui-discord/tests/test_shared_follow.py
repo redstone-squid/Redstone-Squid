@@ -4,7 +4,7 @@ import asyncio
 import gc
 import weakref
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 import anyio
 import discord
@@ -36,6 +36,7 @@ class Panel(Component[sl.ComponentsV2Target]):
     def __init__(self, workspace: Workspace) -> None:
         self.workspace = workspace
 
+    @override
     def render(self):
         text = (
             f"{self.workspace.selected} {self.workspace.detail}" if self.show_detail else str(self.workspace.selected)
@@ -54,6 +55,7 @@ class Writer(Component[sl.ComponentsV2Target]):
         self.run = run
         self.busy = busy
 
+    @override
     def render(self):
         return [
             Text(str(self.workspace.selected)),
@@ -92,6 +94,7 @@ class Swapper(Component[sl.ComponentsV2Target]):
     def __init__(self, workspace: Workspace) -> None:
         self.workspace = workspace
 
+    @override
     def render(self):
         text = self.workspace.detail if self.other else str(self.workspace.selected)
         return [
@@ -159,6 +162,7 @@ async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(mon
         def even(self) -> bool:
             return (workspace.selected or 0) % 2 == 0
 
+        @override
         def render(self) -> Text:
             self.renders += 1
             return Text(str(self.even))
@@ -204,6 +208,7 @@ async def test_equal_computed_value_switches_the_mounts_followed_branch() -> Non
         def value(self) -> int:
             return values.b if values.use_b else values.a
 
+        @override
         def render(self) -> Text:
             self.renders += 1
             return Text(str(self.value))
@@ -244,6 +249,7 @@ async def test_explicit_scheduler_request_resamples_opaque_component_inputs() ->
             self.value = "first"
             self.renders = 0
 
+        @override
         def render(self) -> Text:
             self.renders += 1
             return Text(self.value)

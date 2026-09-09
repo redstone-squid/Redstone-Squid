@@ -1,7 +1,7 @@
 """The factory layer: what it normalizes, and what it refuses to guess."""
 
 from datetime import UTC, datetime
-from typing import cast
+from typing import cast, override
 
 import pytest
 
@@ -81,6 +81,7 @@ class TestRefusals:
 
     def test_a_component_is_pointed_at_a_boundary(self) -> None:
         class Child(sl.Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return sl.paragraph("child")
 
