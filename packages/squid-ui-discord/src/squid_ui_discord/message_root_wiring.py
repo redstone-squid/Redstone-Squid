@@ -272,4 +272,5 @@ def _disable_all(view: discord.ui.LayoutView | discord.ui.View) -> None:
     for item in children:
         target = item.item if isinstance(item, discord.ui.DynamicItem) else item
         if isinstance(target, discord.ui.Button | discord.ui.Select) or hasattr(target, "disabled"):
-            target.disabled = True  # pyrefly: ignore  # guarded by hasattr
+            # Guarded by `hasattr`, which neither checker narrows through.
+            target.disabled = True  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore

@@ -307,7 +307,9 @@ class V2Renderer:
         """
         return MessagePayload.components_v2(
             self.view(document, plan=plan, wire=wire),
-            assets=() if plan is None else attachment_assets(plan),
+            # `attachment_assets` is body-agnostic; BasedPyright infers `PlanResult`'s frozen
+            # field as writable, hence invariant, and rejects the narrower plan.
+            assets=() if plan is None else attachment_assets(plan),  # pyright: ignore[reportArgumentType]
         )
 
     def view(

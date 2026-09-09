@@ -102,7 +102,7 @@ class AttachedClassicContribution:
     """
 
     payload: MessagePayload
-    plan: PlanResult
+    plan: PlanResult[scene.ClassicMessage]
     view: discord.ui.View | None
     items: tuple[discord.ui.Item[Any], ...]
     """Exactly the items inserted, by identity, so `remove` cannot take a lookalike."""
