@@ -40,7 +40,7 @@ UserCaller = Annotated[Caller, Depends(requires(ACCOUNT_SELF_READ))]
     openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def get_preferences(notifications: Notifications, caller: UserCaller) -> NotificationPreferencesDetail:
-    """Return disabled defaults before the notification notice has been accepted."""
+    """Return the caller's channel preferences; an account with none stored reads back as both channels off."""
     return NotificationPreferencesDetail.from_domain(await notifications.preferences(_account_id(caller)))
 
 
@@ -57,7 +57,7 @@ async def update_preferences(
     notifications: Notifications,
     caller: UserCaller,
 ) -> NotificationPreferencesDetail:
-    """Update web and DM channels independently after consent."""
+    """Set the web and DM channels independently; 400 until the account accepts the current privacy notice."""
     preferences = await notifications.set_preferences(
         _account_id(caller),
         web_enabled=request.web_enabled,
@@ -96,7 +96,12 @@ async def create_subscription(
     notifications: Notifications,
     caller: UserCaller,
 ) -> NotificationSubscriptionDetail:
-    """Subscribe to a public creator, record competition, or structured filter."""
+    """Subscribe to a public creator, record competition, or structured filter.
+
+    Idempotent: an equivalent existing subscription is returned rather than duplicated. 400 until the account
+    accepts the current privacy notice, or when `subject_id` and `filter` do not match `kind`; 404 when no
+    creator or record competition has `subject_id`.
+    """
     subscription = await notifications.subscribe(
         _account_id(caller),
         kind=request.kind,
@@ -119,7 +124,7 @@ async def delete_subscription(
     notifications: Notifications,
     caller: UserCaller,
 ) -> Response:
-    """Remove one caller-owned subscription."""
+    """Remove one caller-owned subscription; 404 when it is not the caller's, including after a first delete."""
     await notifications.unsubscribe(_account_id(caller), subscription_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -140,12 +145,13 @@ async def list_inbox(
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[InboxNotificationDetail]:
-    """List the caller's web-visible inbox, hiding staff items after access revocation."""
+    """List one newest-first page of the caller's web-visible inbox.
+
+    Staff items appear only while the caller holds `build.submission.view_pending`.
+    """
     account_id = _account_id(caller)
-    # Staff notifications are *about* pending submissions, so the node that governs
-    # reading those governs reading these. Credential-bounded, so a leaked API key
-    # without the node cannot read staff items -- which the old config allowlist,
-    # keyed on a snowflake rather than on a credential, could not express.
+    # Staff notifications are *about* pending submissions, so the node governing those reads governs
+    # these. Credential-bounded, so a leaked API key without the node cannot read staff items.
     include_staff = await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING)
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await notifications.inbox(
@@ -171,11 +177,13 @@ async def mark_read(
     permissions: Permissions,
     caller: UserCaller,
 ) -> Response:
-    """Mark one visible inbox item as read."""
-    # Staff notifications are *about* pending submissions, so the node that governs
-    # reading those governs reading these. Credential-bounded, so a leaked API key
-    # without the node cannot read staff items -- which the old config allowlist,
-    # keyed on a snowflake rather than on a credential, could not express.
+    """Mark one visible inbox item as read; re-reading keeps the original `read_at`.
+
+    404 when the item is not visible to the caller, which covers a staff item without
+    `build.submission.view_pending`.
+    """
+    # Staff notifications are *about* pending submissions, so the node governing those reads governs
+    # these. Credential-bounded, so a leaked API key without the node cannot read staff items.
     include_staff = await caller_allows(permissions, caller, BUILD_SUBMISSION_VIEW_PENDING)
     await notifications.mark_read(_account_id(caller), notification_id, include_staff=include_staff)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

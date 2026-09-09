@@ -51,28 +51,57 @@ _STREAMING_REQUEST_BODY = {
 
 
 class DraftMediaJobs(Protocol):
-    """Media operations needed by the owner-only HTTP transport."""
+    """Media operations needed by the owner-only HTTP transport; `discard` withdraws an upload for good."""
 
     @property
-    def limits(self) -> MediaLimits: ...
+    def limits(self) -> MediaLimits:
+        """The source-byte and per-draft bounds every upload is checked against."""
+        ...
 
-    async def submit_staged(self, submission: StagedMediaUploadSubmission) -> UUID: ...
+    async def submit_staged(self, submission: StagedMediaUploadSubmission) -> UUID:
+        """Hash a staged file from disk and enqueue normalization; the same `upload_id` and bytes is a no-op.
 
-    async def get(self, upload_id: UUID) -> MediaJobSnapshot | None: ...
+        Raises `MediaUploadConflictError` when `upload_id` already exists with different metadata, and
+        `MediaDraftNotFoundError`, `MediaDraftStateConflictError` or `MediaLimitExceededError` when the
+        draft is gone, not editable, or already at its media limit.
+        """
+        ...
 
-    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]: ...
+    async def get(self, upload_id: UUID) -> MediaJobSnapshot | None:
+        """Current state and persisted artifacts, or `None` for an unknown upload."""
+        ...
 
-    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool: ...
+    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]:
+        """Every upload for the draft in creation order, terminal ones included."""
+        ...
+
+    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
+        """Mark the upload discarded, invalidating any live claim; idempotent.
+
+        Returns `False` when the upload does not belong to `draft_id`. Raises `MediaDraftNotFoundError` or
+        `MediaDraftStateConflictError` when the draft is gone or not editable.
+        """
+        ...
 
 
 class DraftOwnership(Protocol):
     """Owner check required before an upload body is accepted."""
 
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
+    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
+        """One draft the account owns.
+
+        Raises `DraftNotFoundError`, `DraftAccessDeniedError` for another account's draft, and
+        `DraftStateConflictError` once expired.
+        """
+        ...
 
 
 class SubmissionMediaApiServices(Protocol):
-    """Narrow runtime bundle consumed by this isolated router."""
+    """Narrow runtime bundle consumed by this isolated router.
+
+    `media_jobs` is `None` on a process without media normalization configured, which every route here
+    answers 503 for.
+    """
 
     media_jobs: MediaNormalizationJobService | None
     submission_drafts: DraftOwnership
@@ -176,7 +205,15 @@ async def upload_draft_media(
     strip_audio: StripAudio = False,
     upload_id: UploadId = None,
 ) -> DraftMediaResponse:
-    """Stream one owned-draft upload through a private bounded staging file."""
+    """Stream one owned-draft upload through a private bounded staging file and answer 202 with its job.
+
+    The raw request body is the file's exact byte sequence, not a multipart part. `Content-Type` must be
+    given exactly once and match `kind`; `Content-Length` must be given exactly once and match the bytes
+    sent; `Transfer-Encoding` and any `Content-Encoding` other than `identity` are refused with 400, as is
+    any query parameter besides `strip_audio` and `upload_id`. Retry with the same `upload_id` to make a
+    repeated upload a no-op; a reused `upload_id` carrying different bytes answers 409. 400 once the source
+    exceeds the bound this router publishes in its `Squid-Max-Upload-Bytes` response header.
+    """
     await drafts.get_owned(draft_id, account_id)
     _require_query_names(request, _UPLOAD_QUERY_NAMES)
     _require_non_nil(draft_id, reason="nil_draft_id")
@@ -237,7 +274,7 @@ async def list_draft_media(
     drafts: Drafts,
     account_id: AccountId,
 ) -> DraftMediaListResponse:
-    """List all retained states and safe normalized facts for an owned draft."""
+    """List every upload retained for an owned draft in creation order, discarded and failed ones included."""
     await drafts.get_owned(draft_id, account_id)
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
@@ -268,7 +305,7 @@ async def get_draft_media(
     drafts: Drafts,
     account_id: AccountId,
 ) -> DraftMediaResponse:
-    """Return one upload after enforcing both draft ownership and association."""
+    """Return one upload; 404 when it is unknown or belongs to a different draft than `draft_id`."""
     await drafts.get_owned(draft_id, account_id)
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
@@ -297,7 +334,10 @@ async def discard_draft_media(
     drafts: Drafts,
     account_id: AccountId,
 ) -> Response:
-    """Withdraw one upload while retaining a stable discarded state."""
+    """Withdraw one upload, invalidating any live normalization claim; the discarded row itself is retained.
+
+    Idempotent while the upload still belongs to `draft_id`; 404 once it does not.
+    """
     await drafts.get_owned(draft_id, account_id)
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")

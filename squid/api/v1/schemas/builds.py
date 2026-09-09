@@ -34,15 +34,26 @@ class DoorSubmission(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     category: str = "door"
-    door_size: InputDimensions
+    door_size: InputDimensions = Field(
+        description="Door opening as [width, height, depth] in blocks. An axis may be null when unknown; any "
+        "supplied value must be positive. A null width is stored as 1 and a null height as 2."
+    )
     pattern: list[str] = Field(default_factory=lambda: ["Regular"], max_length=50)
     door_type: Literal["Door", "Skydoor", "Trapdoor"] = "Door"
-    build_size: InputDimensions = (None, None, None)
-    works_in: str | None = Field(default=None, max_length=500)
+    build_size: InputDimensions = Field(
+        default=(None, None, None),
+        description="Whole build as [width, height, depth] in blocks, under the same rules as `door_size`.",
+    )
+    works_in: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Version spec the build works in, such as `1.20`, `1.20+`, `1.19-1.20` or a comma-separated "
+        "list of those. Prefix with `Bedrock` for that edition; Java is assumed otherwise.",
+    )
     restrictions: list[str] = Field(default_factory=list, max_length=100)
     information_about_build: str | None = Field(default=None, max_length=10_000)
-    normal_closing_time: int | None = Field(default=None, ge=0)
-    normal_opening_time: int | None = Field(default=None, ge=0)
+    normal_closing_time: int | None = Field(default=None, ge=0, description="Closing time in game ticks.")
+    normal_opening_time: int | None = Field(default=None, ge=0, description="Opening time in game ticks.")
     date_of_creation: str | None = Field(default=None, max_length=100)
     creators: list[str] = Field(default_factory=list, max_length=100)
     locationality: Literal["Locational", "Locational with fixes", "Not locational"] | None = None
@@ -64,17 +75,20 @@ class DoorSubmission(BaseModel):
 class DoorPatch(BaseModel):
     """A partial edit of the facts only a door has.
 
-    Sending this for a build of another category is rejected: the category is
-    structural, so there is no field to set.
+    Omitting a field leaves it alone; sending null clears it, except for `door_dimensions` and
+    `patterns`, which reject null. Every field but `patterns` is rejected on a build of another
+    category: the category is structural, so there is no field to set.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    door_dimensions: InputDimensions | None = None
+    door_dimensions: InputDimensions | None = Field(
+        default=None, description="Door opening as [width, height, depth] in blocks; any supplied axis is positive."
+    )
     orientation: str | None = Field(default=None, max_length=100)
     patterns: list[str] | None = Field(default=None, max_length=50)
-    opening_time: int | None = Field(default=None, ge=0)
-    closing_time: int | None = Field(default=None, ge=0)
+    opening_time: int | None = Field(default=None, ge=0, description="Opening time in game ticks.")
+    closing_time: int | None = Field(default=None, ge=0, description="Closing time in game ticks.")
 
     # Wire name -> BuildEditPatch field name.
     _EDIT_FIELDS: ClassVar[Mapping[str, str]] = {
@@ -104,13 +118,27 @@ class DoorPatch(BaseModel):
 
 
 class BuildPatch(BaseModel):
-    """A partial build edit which preserves omitted versus explicitly cleared fields."""
+    """A partial build edit which preserves omitted versus explicitly cleared fields.
+
+    Omitting a field leaves it alone; sending null clears it. `dimensions`, `door`, `locationality`,
+    `directionality`, the four restriction lists, `creators_ign` and the five URL lists reject null;
+    empty a list by sending `[]`.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    version_spec: str | None = Field(default=None, max_length=500)
-    dimensions: InputDimensions | None = None
-    door: DoorPatch | None = None
+    version_spec: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Versions the build works in, such as `1.20`, `1.20+`, `1.19-1.20` or a comma-separated list of "
+        "those. Prefix with `Bedrock` for that edition; Java is assumed otherwise.",
+    )
+    dimensions: InputDimensions | None = Field(
+        default=None, description="Whole build as [width, height, depth] in blocks; any supplied axis is positive."
+    )
+    door: DoorPatch | None = Field(
+        default=None, description="Door-only fields. All but `patterns` are rejected on a build of another category."
+    )
     wiring_placement_restrictions: list[str] | None = Field(default=None, max_length=100)
     animated_restrictions: list[str] | None = Field(default=None, max_length=100)
     component_restrictions: list[str] | None = Field(default=None, max_length=100)
@@ -170,7 +198,7 @@ class BuildPatch(BaseModel):
 
 
 class Dimensions(BaseModel):
-    """A three-dimensional build measurement."""
+    """A three-dimensional build measurement in blocks. An axis is null when it was never recorded."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -179,19 +207,24 @@ class Dimensions(BaseModel):
     depth: int | None
 
 
-# The internal `build_tag_assignments.provenance` column keeps its name for now:
-# renaming it reaches the tags repository, the builds mapping, the taxonomy
-# backfill, and a migration, for a word no client ever sees. `source` is the
-# replacement if the ban is meant repo-wide, and that is its own commit.
+# The internal `build_tag_assignments.provenance` column keeps its name: renaming it reaches the
+# tags repository, the builds mapping, the taxonomy backfill and a migration, for a word no client
+# ever sees.
 class BuildTag(BaseModel):
-    """A tag on a build, without who applied it or how."""
+    """A tag on a build, without who applied it or how.
+
+    A build carries at most one tag per `key`. Look `key` up in `/v1/tags` for the tag's declared
+    value type and record semantics.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    key: str
+    key: str = Field(description="Stable tag identifier; the display `name` is not stable.")
     name: str
-    value: Decimal | str | bool | None
-    unit: str | None
+    value: Decimal | str | bool | None = Field(
+        description="Typed per the tag definition's `value_type`, and null for a `none` tag, which is a bare label."
+    )
+    unit: str | None = Field(description="Unit `value` is expressed in; null when the tag declares none.")
 
 
 class BuildPreview(BaseModel):
@@ -199,7 +232,9 @@ class BuildPreview(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["render", "image"]
+    kind: Literal["render", "image"] = Field(
+        description="`render` for a generated image and `image` for a submitted screenshot. Renders are preferred."
+    )
     url: str
 
 
@@ -209,25 +244,34 @@ class BuildSummary(FromDomain[Build]):
     model_config = ConfigDict(extra="forbid")
 
     id: int
-    revision: int
+    revision: int = Field(
+        description='Increments on every accepted edit. The response ETag is `"build-{id}-r{revision}"`, which an '
+        "edit must echo in `If-Match`."
+    )
     title: str
     display_name: str | None
-    status: str
-    category: str
+    status: str = Field(description="One of `pending`, `confirmed`, `denied`, or `unknown` when unrecorded.")
+    category: str = Field(
+        description="One of `Door`, `Extender`, `Utility`, `Entrance`, `Other`, or `unknown` when unrecorded."
+    )
     dimensions: Dimensions
-    creators: list[str]
+    creators: list[str] = Field(description="Minecraft in-game names, credited but not necessarily claimed.")
     tags: list[BuildTag]
-    preview: BuildPreview | None
-    version_spec: str | None
-    versions: list[str]
-    opening_time: int | None
-    closing_time: int | None
+    preview: BuildPreview | None = Field(description="Null when the build has no HTTPS render or image.")
+    version_spec: str | None = Field(description="The submitted version range, such as `1.19-1.20`.")
+    versions: list[str] = Field(description="Every known version `version_spec` expands to, as `Java 1.20.1`.")
+    opening_time: int | None = Field(description="Door opening time in game ticks; null for a non-door or if unknown.")
+    closing_time: int | None = Field(description="Door closing time in game ticks; null for a non-door or if unknown.")
     created_at: datetime | None
     updated_at: datetime | None
 
     @classmethod
     def from_domain(cls, build: Build, /) -> Self:
-        """Render allowlisted public build fields."""
+        """Render allowlisted public build fields.
+
+        Raises:
+            ValueError: If `build` has no identifier, meaning it was never persisted.
+        """
         if build.id is None:
             msg = "persisted build is missing its identifier"
             raise ValueError(msg)
@@ -286,19 +330,17 @@ class BuildSponsor(BaseModel):
 class DoorDetails(BaseModel):
     """Facts owned by doors.
 
-    The headline ``opening_time`` and ``closing_time`` stay on the summary: the
-    card projection and the search grammar both already name them there, so
-    repeating them here would give one value two addresses in one payload.
+    The headline `opening_time` and `closing_time` stay on the summary and are not repeated here.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     category: Literal["Door"] = "Door"
-    door_dimensions: Dimensions
-    orientation: str
+    door_dimensions: Dimensions = Field(description="The hallway opening, not the build built around it.")
+    orientation: str = Field(description="One of `Door`, `Skydoor` or `Trapdoor`.")
     patterns: list[str]
-    visible_opening_time: int | None
-    visible_closing_time: int | None
+    visible_opening_time: int | None = Field(description="Visible opening time in game ticks; null if unknown.")
+    visible_closing_time: int | None = Field(description="Visible closing time in game ticks; null if unknown.")
 
 
 class ExtenderDetails(BaseModel):
@@ -325,7 +367,6 @@ type BuildDetails = Annotated[DoorDetails | ExtenderDetails | GeneralDetails, Fi
 
 
 def _details(build: Build) -> BuildDetails:
-    """Project the category-specific facts, keyed by the build's own category."""
     match build:
         case DoorBuild():
             return DoorDetails(
@@ -349,21 +390,30 @@ def _details(build: Build) -> BuildDetails:
 class BuildDetail(BuildSummary):
     """Stable item representation with build-specific facts.
 
-    Category-specific facts live under ``details``, a union discriminated by
-    ``category``, so a client reads a door's opening size from a door and never
-    from a nullable field on a utility.
+    Category-specific facts live under `details`, a union discriminated by its own `category`, so a
+    client reads a door's opening size from a door and never from a nullable field on a utility.
     """
 
     details: BuildDetails
-    restrictions: dict[str, list[str]]
+    restrictions: dict[str, list[str]] = Field(
+        description="Restriction names under the four bucket keys `wiring_placement_restrictions`, "
+        "`animated_restrictions`, `component_restrictions` and `miscellaneous_restrictions`. Every bucket is "
+        "always present and may be empty."
+    )
     description: str | None
     links: BuildLinks
-    sponsor: BuildSponsor | None = None
+    sponsor: BuildSponsor | None = Field(
+        default=None, description="Null unless the build was submitted through a sponsor-opted-in Paper installation."
+    )
 
     @classmethod
     @override
     def from_domain(cls, build: Build, /) -> Self:
-        """Render public detail without raw extra_info or account identifiers."""
+        """Render public detail without raw extra_info or account identifiers.
+
+        Raises:
+            ValueError: If `build` has no identifier, meaning it was never persisted.
+        """
         summary = BuildSummary.from_domain(build)
         return cls(
             **summary.model_dump(),

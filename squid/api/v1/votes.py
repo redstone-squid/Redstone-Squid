@@ -41,7 +41,10 @@ async def get_vote_session(
     votes: Votes,
     caller: CurrentCaller,
 ) -> VoteSessionDetail:
-    """Return aggregate vote state without exposing ballot identities."""
+    """Return aggregate vote state; no other voter's ballot is exposed, only the caller's own selection.
+
+    `tallies` is null while the session hides them.
+    """
     session = await votes.get_session_by_id(vote_session_id)
     if session is None:
         raise VoteSessionNotFoundError(vote_session_id)
@@ -63,7 +66,11 @@ async def cast_vote(
     vote_members: VoteMembers,
     caller: UserVoter,
 ) -> VoteSessionDetail:
-    """Cast the authenticated Discord member's weighted vote."""
+    """Cast the caller's weighted vote in one Discord guild; requires `vote.poll.cast` and accepted consent.
+
+    403 when the caller is not an eligible member of `guild_id` for this session's kind, 409 when the session
+    is closed, 400 when the option is not offered in that guild.
+    """
     account_id = require_consented_account(caller)
     session = await votes.get_session_by_id(vote_session_id)
     if session is None:
@@ -80,6 +87,7 @@ async def cast_vote(
 
 
 def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:
+    """Raise the domain error matching `result.rejection`; return when the ballot was accepted."""
     match result.rejection:
         case None:
             return

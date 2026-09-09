@@ -36,7 +36,10 @@ _SORT_FIELDS = frozenset({"id"})
     openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def get_record(record_id: int, records: Records, build_queries: BuildQueries) -> RecordDetail:
-    """Return one result only while its computation run is active."""
+    """Return one result; 404 unless an active computation run still publishes that id.
+
+    500 when the published record cites a holder build the public catalogue cannot serve.
+    """
     record = await records.get(record_id)
     if record is None:
         raise RecordNotFoundError(record_id)
@@ -75,7 +78,7 @@ async def list_records(
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[RecordSummary]:
-    """List authoritative published record results."""
+    """List authoritative published record results; `sort` accepts only `id` or `-id` and defaults to `-id`."""
     _, descending = parse_page_sort(sort, allowed=_SORT_FIELDS, default="-id")
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await records.list_page(selector=selector, descending=descending, page_size=page_size)

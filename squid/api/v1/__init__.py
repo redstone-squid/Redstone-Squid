@@ -1,4 +1,7 @@
-"""Version 1 REST router assembly."""
+"""Version 1 REST router assembly.
+
+Every route mounted here inherits the shared rate-limit dependency and declares a 429 problem response.
+"""
 
 from fastapi import APIRouter, Depends
 

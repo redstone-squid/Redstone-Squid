@@ -33,7 +33,9 @@ from squid.submissions.domain import DraftChange, FormManifest, SubmissionOrigin
 class SubmissionFormReader(Protocol):
     """Form reads needed by the HTTP transport."""
 
-    def manifest(self, *, locale: str | None) -> FormManifest: ...
+    def manifest(self, *, locale: str | None) -> FormManifest:
+        """The current form localized for `locale`, carrying revisioned references to its option sources."""
+        ...
 
     async def manifest_revision(
         self,
@@ -41,9 +43,13 @@ class SubmissionFormReader(Protocol):
         revision: int,
         *,
         locale: str | None,
-    ) -> FormManifest | None: ...
+    ) -> FormManifest | None:
+        """One pinned immutable revision, or `None` when this deployment can no longer serve it."""
+        ...
 
-    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet: ...
+    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
+        """The approved options one source offers for `category`, with the revision they were read at."""
+        ...
 
 
 class SubmissionDraftCommands(Protocol):
@@ -58,11 +64,27 @@ class SubmissionDraftCommands(Protocol):
         client_capabilities: frozenset[str],
         locale: str | None,
         source_installation_id: UUID | None = None,
-    ) -> StoredDraft: ...
+    ) -> StoredDraft:
+        """Create an empty draft pinned to the current schema revision.
 
-    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]: ...
+        Raises:
+            ValidationError: `source_installation_id` is present without a Paper origin, or absent with one.
+            DraftCapacityExceededError: The account already holds its limit of active drafts.
+            DraftSchemaUnsupportedError: `client_capabilities` cannot render every required field.
+        """
+        ...
 
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
+    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
+        """At most `limit` of the account's unexpired active drafts, newest first."""
+        ...
+
+    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
+        """One draft the account owns; a draft past its retention reads as expired before the sweeper runs.
+
+        Raises `DraftNotFoundError`, `DraftAccessDeniedError` for another account's draft, and
+        `DraftStateConflictError` once expired.
+        """
+        ...
 
     async def apply_change(
         self,
@@ -71,9 +93,22 @@ class SubmissionDraftCommands(Protocol):
         change: DraftChange,
         *,
         locale: str | None,
-    ) -> AppliedDraftChange: ...
+    ) -> AppliedDraftChange:
+        """Validate field ids and types, then atomically persist one optimistic edit.
 
-    async def delete(self, draft_id: UUID, account_id: int) -> None: ...
+        Required fields may still be missing; completeness is enforced only at finalization. Raises what
+        `get_owned` raises, plus `DraftSchemaUnsupportedError`, `DraftIncompleteError` for an unknown or
+        invalid value, and `DraftRevisionConflictError` for an edit based on a stale revision.
+        """
+        ...
+
+    async def delete(self, draft_id: UUID, account_id: int) -> None:
+        """Delete an owned draft while it is still user-editable.
+
+        Raises what `get_owned` raises, plus `DraftStateConflictError` once the draft has left an editable
+        state.
+        """
+        ...
 
 
 class SubmissionFinalizationCommands(Protocol):
@@ -85,9 +120,17 @@ class SubmissionFinalizationCommands(Protocol):
         account_id: int,
         *,
         locale: str | None,
-    ) -> FinalizationJobSnapshot: ...
+    ) -> FinalizationJobSnapshot:
+        """Start idempotent finalization, or retain the preparation issues that block it against the draft.
 
-    async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None: ...
+        Resubmitting a draft that is already processing or submitted returns its existing job. Raises what
+        `SubmissionDraftCommands.get_owned` raises.
+        """
+        ...
+
+    async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None:
+        """The retained finalization job, or `None` when the owned draft was never submitted."""
+        ...
 
 
 class SubmissionApiServices(Protocol):
@@ -143,7 +186,11 @@ class SubmissionFormRevisionNotFoundError(NotFoundError):
 async def authenticated_account(
     caller: Annotated[Caller, Depends(current_caller)],
 ) -> int:
-    """Require a current human or player-bound account for draft access."""
+    """The account id behind a web, CLI, or player-bound credential.
+
+    Raises `AuthenticationError` for any other caller kind or incomplete provenance, and
+    `ConsentRequiredError` until the account accepts the current privacy notice.
+    """
     return _submission_actor(caller).account_id
 
 
@@ -161,7 +208,10 @@ class AuthenticatedSubmissionActor:
 async def authenticated_submission_actor(
     caller: Annotated[Caller, Depends(current_caller)],
 ) -> AuthenticatedSubmissionActor:
-    """Resolve submission provenance without trusting a request-body origin."""
+    """Derive submission provenance from the credential, never from a request-body origin.
+
+    Raises the same errors as `authenticated_account`.
+    """
     return _submission_actor(caller)
 
 
@@ -266,7 +316,7 @@ _DRAFT_DELETE_LINKS = {
     ),
 )
 async def list_drafts(drafts: Drafts, account_id: AccountId) -> DraftListResponse:
-    """Return at most ten compact active drafts owned by the signed-in account."""
+    """Return at most ten of the caller's unexpired active drafts, newest first."""
     return DraftListResponse.from_domain(await drafts.list_active(account_id))
 
 
@@ -296,7 +346,7 @@ async def pinned_form(
     request: Request,
     forms: Forms,
 ) -> FormManifestResponse:
-    """Return an exact immutable schema revision retained for an unexpired draft."""
+    """Return one immutable schema revision; 404 once this deployment can no longer validate it."""
     manifest = await forms.manifest_revision(schema_id, revision, locale=locale_for_request(request))
     if manifest is None:
         raise SubmissionFormRevisionNotFoundError
@@ -339,7 +389,11 @@ async def create_draft(
     drafts: Drafts,
     actor: SubmissionActor,
 ) -> StoredDraftResponse:
-    """Create an empty synchronized draft owned by the signed-in account."""
+    """Create an empty synchronized draft pinned to the current schema revision.
+
+    `origin` in the body must match the one the credential implies (403 otherwise). 409 at the account's
+    active-draft limit; 400 when `client_capabilities` cannot render every required field of `category`.
+    """
     if payload.origin is not actor.origin:
         raise AuthorizationError
     draft = await drafts.create(
@@ -364,7 +418,7 @@ async def create_draft(
     ),
 )
 async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> StoredDraftResponse:
-    """Return one synchronized draft after enforcing caller ownership."""
+    """Return one synchronized draft the caller owns; 403 for another account's draft, 409 once expired."""
     return StoredDraftResponse.from_domain(await drafts.get_owned(draft_id, account_id))
 
 
@@ -386,7 +440,13 @@ async def change_draft(
     drafts: Drafts,
     account_id: AccountId,
 ) -> DraftChangeResponse:
-    """Atomically apply a retry-safe optimistic edit to an owned draft."""
+    """Atomically apply one optimistic edit to an owned draft.
+
+    409 when the change is based on a stale revision; 400 for an unknown field or an invalid value.
+    Required fields may still be left missing, since completeness is enforced only at finalization.
+    `replayed` is true when the body's `idempotency_key` had already been applied, and the earlier outcome
+    is returned unchanged.
+    """
     result = await drafts.apply_change(
         draft_id,
         account_id,
@@ -414,7 +474,11 @@ async def submit_draft(
     finalization: Finalization,
     account_id: AccountId,
 ) -> SubmissionFinalizationResponse:
-    """Validate an owned draft and start retry-safe durable finalization."""
+    """Validate an owned draft and start durable finalization.
+
+    Idempotent: a draft already processing or submitted answers 202 with its existing job. A draft that
+    fails preparation also answers 202, with the blocking issues on the returned job rather than an error.
+    """
     snapshot = await finalization.submit(
         draft_id,
         account_id,
@@ -438,7 +502,7 @@ async def get_draft_submission(
     finalization: Finalization,
     account_id: AccountId,
 ) -> SubmissionFinalizationResponse:
-    """Return retained finalization state after rechecking draft ownership."""
+    """Return the owned draft's retained finalization state; 404 when it was never submitted."""
     snapshot = await finalization.status(draft_id, account_id)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
@@ -457,6 +521,6 @@ async def get_draft_submission(
     ),
 )
 async def delete_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> Response:
-    """Immediately delete one caller-owned synchronized draft."""
+    """Delete one caller-owned draft; 409 once it has left an editable state, 404 after the first delete."""
     await drafts.delete(draft_id, account_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

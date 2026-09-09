@@ -117,7 +117,7 @@
           "users"
         ],
         "summary": "Get Verification Code",
-        "description": "Generate a verification code for a user.",
+        "description": "Mint a ten-digit verification code for the Java account; 404 when Mojang does not know the UUID.",
         "operationId": "verification_create",
         "security": [
           {
@@ -333,7 +333,7 @@
     "/verify": {
       "post": {
         "summary": "Get Verification Code",
-        "description": "Generate a verification code for a user.",
+        "description": "Mint a ten-digit verification code for the Java account; 404 when Mojang does not know the UUID.",
         "operationId": "verification_create_compatibility",
         "security": [
           {
@@ -553,7 +553,7 @@
           "authentication"
         ],
         "summary": "Csrf Token",
-        "description": "Return the session-bound write token to a credentialed CORS frontend.",
+        "description": "Return the `squid_csrf` cookie value for a cross-origin frontend that cannot read it; 401 without an account session.",
         "operationId": "browser_csrf_get",
         "responses": {
           "200": {
@@ -815,7 +815,7 @@
           "authentication"
         ],
         "summary": "Browser Authorization Start",
-        "description": "Begin authorization with PKCE and durable one-time state.",
+        "description": "Redirect to the provider with PKCE and one-time state; 400 unless `redirect_to` is local or an allowed CORS origin.",
         "operationId": "browser_authorization_start",
         "security": [
           {}
@@ -965,7 +965,7 @@
           "authentication"
         ],
         "summary": "Browser Authorization Callback",
-        "description": "Exchange an authorization code and set a revocable opaque session cookie.",
+        "description": "Exchange the authorization code, set the `__Host-squid_session` and `squid_csrf` cookies, and redirect.",
         "operationId": "browser_authorization_callback",
         "security": [
           {}
@@ -1140,7 +1140,7 @@
           "builds"
         ],
         "summary": "Submit Build",
-        "description": "Submit a door build for Discord moderation.",
+        "description": "Submit a door build for moderation; 400 for any `category` other than `door`.",
         "operationId": "builds_create",
         "security": [
           {
@@ -1347,7 +1347,7 @@
           "builds"
         ],
         "summary": "List Builds",
-        "description": "Search public builds, or list one authoritative moderation-status view.",
+        "description": "Search public builds with `q`, or list one moderation-status view.\n\n`q` and `status` are mutually exclusive (400). Ranked results page by `offset` only; a non-confirmed\n`status` requires `build.submission.view_pending` (401 anonymous, 403 otherwise).",
         "operationId": "builds_list",
         "security": [
           {},
@@ -1633,7 +1633,7 @@
           "builds"
         ],
         "summary": "Edit Build",
-        "description": "Edit an owned pending build, or any build with `build.submission.edit`.",
+        "description": "Edit an owned pending build, or any build with `build.submission.edit`.\n\n`If-Match` must carry the build's current ETag: 428 when absent, 412 when it names another build or revision.",
         "operationId": "builds_update",
         "security": [
           {
@@ -1925,7 +1925,7 @@
           "builds"
         ],
         "summary": "Get Build",
-        "description": "Return one confirmed public build.\n\nA pending build answers 404, not 403: a submission's existence is private\nuntil it is confirmed, so \"not published\" and \"not there\" have to be\nindistinguishable to a caller without `build.submission.view_pending`.",
+        "description": "Return one confirmed public build.\n\nA pending build answers 404, not 403: its existence is private until confirmed, so \"not published\" and\n\"not there\" are indistinguishable without `build.submission.view_pending`.",
         "operationId": "builds_get",
         "security": [
           {}
@@ -2049,7 +2049,7 @@
           "capabilities"
         ],
         "summary": "Capabilities",
-        "description": "Publish independently versioned client compatibility and safety limits.",
+        "description": "Publish the API version, feature identifiers, protocol range, upload limits and renderer controls.",
         "operationId": "capabilities_get",
         "responses": {
           "200": {
@@ -2102,7 +2102,7 @@
           "cli-authentication"
         ],
         "summary": "Start Enrollment",
-        "description": "Start browser approval for a client-held Ed25519 public key.",
+        "description": "Start browser approval for a client-held Ed25519 public key; 429 when the client has too many live enrollments.",
         "operationId": "cli_enrollment_start",
         "security": [
           {}
@@ -2273,7 +2273,7 @@
           "cli-authentication"
         ],
         "summary": "Exchange Enrollment",
-        "description": "Exchange browser approval after proving possession of the enrolled key.",
+        "description": "Exchange an approved enrollment and key proof for a device and session; 409 while approval is still pending.",
         "operationId": "cli_enrollment_exchange",
         "security": [
           {}
@@ -2626,7 +2626,7 @@
           "cli-authentication"
         ],
         "summary": "Approve Enrollment",
-        "description": "Approve the previewed CLI device as the signed-in browser account.",
+        "description": "Approve the previewed CLI device as the signed-in browser account; 403 when another account already did.",
         "operationId": "cli_enrollment_approve",
         "security": [
           {
@@ -2835,7 +2835,7 @@
           "cli-authentication"
         ],
         "summary": "Start Session Challenge",
-        "description": "Issue a one-time nonce for an enrolled device to sign.",
+        "description": "Issue a one-time nonce for an enrolled device to sign; 404 for an unknown or revoked device.",
         "operationId": "cli_session_challenge_start",
         "security": [
           {}
@@ -3342,7 +3342,7 @@
           "cli-authentication"
         ],
         "summary": "Revoke Device",
-        "description": "Revoke an account-owned device and every session issued beneath it.",
+        "description": "Revoke an account-owned device and every session beneath it; 404 for a device owned by another account.",
         "operationId": "cli_device_revoke",
         "security": [
           {
@@ -3544,7 +3544,7 @@
           "cli-authentication"
         ],
         "summary": "Revoke Current Session",
-        "description": "Revoke the exact CLI bearer session authenticating this request.",
+        "description": "Revoke the CLI bearer session authenticating this request; 401 when the session is not on the caller's device.",
         "operationId": "cli_session_revoke",
         "security": [
           {
@@ -3715,7 +3715,7 @@
           "users"
         ],
         "summary": "Get Notice",
-        "description": "Return the notice a client must display before recording consent to it.\n\nOne msgid shared with the Discord prompt, so the version a receipt names refers to a single\npiece of text however the reader met it.",
+        "description": "Return the notice a client must display before recording consent to it, in the negotiated locale.\n\nThe text is the same msgid the Discord prompt shows, so a consent version names one text regardless of\nwhere it was read.",
         "operationId": "consent_notice_get",
         "responses": {
           "200": {
@@ -3788,7 +3788,7 @@
           "diagnostics"
         ],
         "summary": "List Error Reports",
-        "description": "List the most recent unexpired error reports, newest first.\n\nMost reports are failures something recovered from, because capture follows the logs. Set\n`work_lost` to see only the ones that permanently abandoned work.",
+        "description": "List the most recent unexpired error reports, newest first; `work_lost` keeps only those that abandoned work.",
         "operationId": "diagnostics_errors_list",
         "security": [
           {}
@@ -3933,7 +3933,7 @@
           "diagnostics"
         ],
         "summary": "Clear Error Reports",
-        "description": "Delete every stored error report, expired or not.\n\nDenied by default to everyone but the bot owner: `diagnostics.error.clear` is tagged\ndestructive, which both built-in admin roles explicitly exclude.",
+        "description": "Delete every stored error report, expired or not.\n\n`diagnostics.error.clear` is tagged destructive and excluded from both built-in admin roles, so by default\nonly the bot owner holds it.",
         "operationId": "diagnostics_errors_clear",
         "security": [
           {}
@@ -4068,7 +4068,7 @@
           "diagnostics"
         ],
         "summary": "Get Error Report",
-        "description": "Resolve a quoted reference to the failure behind it.\n\nAccepts either width: the short form a Discord error card shows, and the full correlation ID\nthat appears in logs and in the `Request-Id` response header.",
+        "description": "Resolve a reference, either the short form a Discord error card shows or a full `Request-Id`, to its report.",
         "operationId": "diagnostics_error_get",
         "security": [
           {}
@@ -4222,7 +4222,7 @@
           "users"
         ],
         "summary": "Get Me",
-        "description": "Return the authenticated user's own linked account.\n\nKeyed on `account_id`, not `discord_id`: a CLI device and a Minecraft player both carry a\nperfectly good account and no Discord identity, and used to be refused their own account.",
+        "description": "Return the caller's own account; any credential kind with an `account_id` qualifies, Discord identity or not.",
         "operationId": "account_get",
         "responses": {
           "200": {
@@ -4357,7 +4357,7 @@
           "users"
         ],
         "summary": "Grant Consent",
-        "description": "Accept the current privacy notice for future writes.\n\nA client that names the version it displayed is held to it: consent recorded against text the\nuser never saw is the failure that versioning the notice exists to prevent.",
+        "description": "Accept the current privacy notice; 409 when the body names a `version` other than the current one.",
         "operationId": "account_consent_grant",
         "security": [
           {
@@ -4568,7 +4568,7 @@
           "users"
         ],
         "summary": "Update Profile",
-        "description": "Edit the caller's own public profile.\n\nPartial: an omitted field is left alone and an explicit `null` clears it, so a client that\nonly knows about some fields cannot wipe the ones it has never heard of.",
+        "description": "Edit the caller's own public profile; an omitted field is left alone and an explicit `null` clears it.",
         "operationId": "account_profile_update",
         "security": [
           {
@@ -4777,7 +4777,7 @@
           "users"
         ],
         "summary": "List Identities",
-        "description": "List every identity linked to the caller's account, hidden ones included.\n\nUnfiltered by visibility on purpose: you can only unhide what you can see listed.",
+        "description": "List every identity linked to the caller's account, hidden ones included.",
         "operationId": "account_identity_list",
         "responses": {
           "200": {
@@ -5114,7 +5114,7 @@
           "users"
         ],
         "summary": "Unlink Identity",
-        "description": "Unlink one identity from the caller's account.\n\nRefuses the last one with 409: every sign-in path resolves an account from a provider\nsubject, so an account with no identities is one nobody can reach again. Creator credit is\nuntouched — attribution is a fact about a build, not about how its author signs in.",
+        "description": "Unlink one identity from the caller's account; creator credit is untouched.\n\n409 for the last identity: every sign-in path resolves an account from a provider subject, so an account\nwith none is unreachable.",
         "operationId": "account_identity_unlink",
         "security": [
           {
@@ -5328,7 +5328,7 @@
           "users"
         ],
         "summary": "Create Merge Code",
-        "description": "Offer this account up to be absorbed by another one you hold.\n\nRun this as the account you are giving up: it loses its public creator id to a permanent\nredirect, so minting the code is that side's consent. Redeem it as the account you are\nkeeping. The code is shown once and replaces any previous one.",
+        "description": "Mint a code that lets another account of yours absorb this one.\n\nCall as the account you are giving up (its creator id becomes a permanent redirect) and redeem as the\naccount you keep. The code is shown once and replaces any previous one.",
         "operationId": "account_merge_code_create",
         "security": [
           {
@@ -5508,7 +5508,7 @@
           "users"
         ],
         "summary": "Preview Merge",
-        "description": "Describe what redeeming a merge code would move, without spending it.\n\nA merge cannot be undone, so this exists to be shown before the irreversible call.",
+        "description": "Describe what redeeming a merge code would move, without spending it.",
         "operationId": "account_merge_preview",
         "security": [
           {
@@ -5938,7 +5938,7 @@
           "users"
         ],
         "summary": "Refresh Minecraft Identity",
-        "description": "Re-read the caller's linked Minecraft name and reconcile the creator credit.\n\nRate limited and idempotency-gated because it reaches Mojang on every call.",
+        "description": "Re-read the caller's linked Minecraft name from Mojang and reconcile the creator credit.",
         "operationId": "account_minecraft_refresh",
         "security": [
           {}
@@ -6132,7 +6132,7 @@
           "users"
         ],
         "summary": "List My Builds",
-        "description": "List the caller's own submissions, including the ones still awaiting review.\n\nThis is the authoritative counterpart to `GET /v1/builds`: submitters need to see their own\npending and denied builds, which the public search path deliberately cannot return.",
+        "description": "List the caller's own submissions in every status, including pending and denied ones `GET /v1/builds` hides.",
         "operationId": "account_builds_list",
         "security": [
           {
@@ -6580,7 +6580,7 @@
           "users"
         ],
         "summary": "Clear Profile",
-        "description": "Reset another account's profile to empty, for staff handling abuse.\n\nDeliberately leaves the profile visible: `hidden` belongs to its owner, and a takedown that\nalso flipped it would take that decision away from them.",
+        "description": "Reset another account's profile to empty, for staff handling abuse; `hidden` stays as the owner set it.",
         "operationId": "account_profile_clear",
         "security": [
           {
@@ -6955,7 +6955,7 @@
           "minecraft-authentication"
         ],
         "summary": "List Installations",
-        "description": "List only the signed-in account's Paper installations, without secrets or digests.",
+        "description": "List the signed-in account's Paper installations, revoked ones included, without secrets.",
         "operationId": "paper_installations_list",
         "security": [
           {
@@ -7090,7 +7090,7 @@
           "minecraft-authentication"
         ],
         "summary": "Rotate Installation",
-        "description": "Fence an owned installation's old credentials and return one replacement secret.",
+        "description": "Replace an owned installation's secret and return it once; every challenge and grant of the old one is revoked.",
         "operationId": "paper_installation_rotate",
         "security": [
           {
@@ -7299,7 +7299,7 @@
           "minecraft-authentication"
         ],
         "summary": "Update Installation Profile",
-        "description": "Replace an owned server's explicit public-listing and sponsorship preferences.",
+        "description": "Replace an owned server's public-listing and sponsorship profile; credentials are untouched.",
         "operationId": "paper_installation_profile_update",
         "security": [
           {
@@ -7720,7 +7720,7 @@
           "minecraft-authentication"
         ],
         "summary": "Start Paper Challenge",
-        "description": "Start player authorization bound to the authenticated Paper credential generation.",
+        "description": "Start player authorization bound to the installation's current credential; 429 past the per-player cap.",
         "operationId": "paper_challenge_start",
         "security": [
           {
@@ -7941,7 +7941,7 @@
           "minecraft-authentication"
         ],
         "summary": "Exchange Paper Challenge",
-        "description": "Exchange one approved Paper challenge on the same authenticated installation.",
+        "description": "Exchange an approved Paper challenge for a player token; 409 while approval is pending or after a rotation.",
         "operationId": "paper_challenge_exchange",
         "security": [
           {
@@ -8905,7 +8905,7 @@
           "notifications"
         ],
         "summary": "Get Preferences",
-        "description": "Return disabled defaults before the notification notice has been accepted.",
+        "description": "Return the caller's channel preferences; an account with none stored reads back as both channels off.",
         "operationId": "notification_preferences_get",
         "security": [
           {
@@ -9018,7 +9018,7 @@
           "notifications"
         ],
         "summary": "Update Preferences",
-        "description": "Update web and DM channels independently after consent.",
+        "description": "Set the web and DM channels independently; 400 until the account accepts the current privacy notice.",
         "operationId": "notification_preferences_update",
         "security": [
           {
@@ -9319,7 +9319,7 @@
           "notifications"
         ],
         "summary": "Create Subscription",
-        "description": "Subscribe to a public creator, record competition, or structured filter.",
+        "description": "Subscribe to a public creator, record competition, or structured filter.\n\nIdempotent: an equivalent existing subscription is returned rather than duplicated. 400 until the account\naccepts the current privacy notice, or when `subject_id` and `filter` do not match `kind`; 404 when no\ncreator or record competition has `subject_id`.",
         "operationId": "notification_subscription_create",
         "security": [
           {
@@ -9548,7 +9548,7 @@
           "notifications"
         ],
         "summary": "Delete Subscription",
-        "description": "Remove one caller-owned subscription.",
+        "description": "Remove one caller-owned subscription; 404 when it is not the caller's, including after a first delete.",
         "operationId": "notification_subscription_delete",
         "security": [
           {
@@ -9744,7 +9744,7 @@
           "notifications"
         ],
         "summary": "List Inbox",
-        "description": "List the caller's web-visible inbox, hiding staff items after access revocation.",
+        "description": "List one newest-first page of the caller's web-visible inbox.\n\nStaff items appear only while the caller holds `build.submission.view_pending`.",
         "operationId": "notification_inbox_list",
         "security": [
           {
@@ -9968,7 +9968,7 @@
           "notifications"
         ],
         "summary": "Mark Read",
-        "description": "Mark one visible inbox item as read.",
+        "description": "Mark one visible inbox item as read; re-reading keeps the original `read_at`.\n\n404 when the item is not visible to the caller, which covers a staff item without\n`build.submission.view_pending`.",
         "operationId": "notification_inbox_mark_read",
         "security": [
           {
@@ -10164,7 +10164,7 @@
           "records"
         ],
         "summary": "Get Record",
-        "description": "Return one result only while its computation run is active.",
+        "description": "Return one result; 404 unless an active computation run still publishes that id.\n\n500 when the published record cites a holder build the public catalogue cannot serve.",
         "operationId": "records_get",
         "security": [
           {}
@@ -10308,7 +10308,7 @@
           "records"
         ],
         "summary": "List Records",
-        "description": "List authoritative published record results.",
+        "description": "List authoritative published record results; `sort` accepts only `id` or `-id` and defaults to `-id`.",
         "operationId": "records_list",
         "security": [
           {}
@@ -10690,7 +10690,7 @@
           "schematics"
         ],
         "summary": "Get Schematic Content",
-        "description": "Download explicitly published sanitized bytes from a confirmed build.",
+        "description": "Download explicitly published sanitized bytes from a confirmed build.\n\nThe response is an attachment whose extension names the stored container format, and its `Link`\nheader carries the schematic's license with `rel=\"license\"`.",
         "operationId": "build_schematic_content_get",
         "security": [
           {}
@@ -10820,7 +10820,7 @@
           "schematics"
         ],
         "summary": "Render Build Schematic",
-        "description": "Render a confirmed build's primary schematic and answer with the PNG.\n\nEvery camera parameter is optional and defaults to the deployment's own framing, so a\ncaller who wants \"the picture of this build\" gets the same recipe the durable queue\nrenders, served from its stored artifact. Anything else is rendered on the spot, which\ntakes as long as the engine takes.",
+        "description": "Render a confirmed build's primary schematic and answer with the PNG.\n\nEvery camera parameter is optional; omitting all of them asks for the deployment's default framing,\nwhich is served from the durable queue's stored artifact. Any other combination is rendered on the\nspot and takes as long as the engine takes. The `ETag` is the recipe hash over the file, the resource\npack and the framing.",
         "operationId": "build_schematic_render_get",
         "security": [
           {}
@@ -11385,7 +11385,7 @@
           "search"
         ],
         "summary": "Search",
-        "description": "Match builds, computed records, and taxonomy entries in one ranked page.",
+        "description": "Match builds, computed records, and taxonomy entries in one ranked page.\n\nOnly confirmed builds are matched, whatever the query says, and pages are anchored by `offset` only.\n400 for a query the grammar rejects or a `sort` naming a field `GET /v1/search/fields` does not\npublish as sortable.",
         "operationId": "search_execute",
         "security": [
           {}
@@ -11570,7 +11570,7 @@
           "submissions"
         ],
         "summary": "List Drafts",
-        "description": "Return at most ten compact active drafts owned by the signed-in account.",
+        "description": "Return at most ten of the caller's unexpired active drafts, newest first.",
         "operationId": "submission_drafts_list",
         "security": [
           {
@@ -11732,7 +11732,7 @@
           "submissions"
         ],
         "summary": "Create Draft",
-        "description": "Create an empty synchronized draft owned by the signed-in account.",
+        "description": "Create an empty synchronized draft pinned to the current schema revision.\n\n`origin` in the body must match the one the credential implies (403 otherwise). 409 at the account's\nactive-draft limit; 400 when `client_capabilities` cannot render every required field of `category`.",
         "operationId": "submission_draft_create",
         "security": [
           {
@@ -12089,7 +12089,7 @@
           "submissions"
         ],
         "summary": "Pinned Form",
-        "description": "Return an exact immutable schema revision retained for an unexpired draft.",
+        "description": "Return one immutable schema revision; 404 once this deployment can no longer validate it.",
         "operationId": "submission_form_revision_get",
         "security": [
           {}
@@ -12421,7 +12421,7 @@
           "submissions"
         ],
         "summary": "Get Draft",
-        "description": "Return one synchronized draft after enforcing caller ownership.",
+        "description": "Return one synchronized draft the caller owns; 403 for another account's draft, 409 once expired.",
         "operationId": "submission_draft_get",
         "security": [
           {
@@ -12618,7 +12618,7 @@
           "submissions"
         ],
         "summary": "Delete Draft",
-        "description": "Immediately delete one caller-owned synchronized draft.",
+        "description": "Delete one caller-owned draft; 409 once it has left an editable state, 404 after the first delete.",
         "operationId": "submission_draft_delete",
         "security": [
           {
@@ -12820,7 +12820,7 @@
           "submissions"
         ],
         "summary": "Change Draft",
-        "description": "Atomically apply a retry-safe optimistic edit to an owned draft.",
+        "description": "Atomically apply one optimistic edit to an owned draft.\n\n409 when the change is based on a stale revision; 400 for an unknown field or an invalid value.\nRequired fields may still be left missing, since completeness is enforced only at finalization.\n`replayed` is true when the body's `idempotency_key` had already been applied, and the earlier outcome\nis returned unchanged.",
         "operationId": "submission_draft_change",
         "security": [
           {
@@ -13084,7 +13084,7 @@
           "submissions"
         ],
         "summary": "Submit Draft",
-        "description": "Validate an owned draft and start retry-safe durable finalization.",
+        "description": "Validate an owned draft and start durable finalization.\n\nIdempotent: a draft already processing or submitted answers 202 with its existing job. A draft that\nfails preparation also answers 202, with the blocking issues on the returned job rather than an error.",
         "operationId": "submission_finalization_start",
         "security": [
           {
@@ -13336,7 +13336,7 @@
           "submissions"
         ],
         "summary": "Get Draft Submission",
-        "description": "Return retained finalization state after rechecking draft ownership.",
+        "description": "Return the owned draft's retained finalization state; 404 when it was never submitted.",
         "operationId": "submission_finalization_get",
         "security": [
           {
@@ -13535,7 +13535,7 @@
           "submissions"
         ],
         "summary": "Upload Draft Media",
-        "description": "Stream one owned-draft upload through a private bounded staging file.",
+        "description": "Stream one owned-draft upload through a private bounded staging file and answer 202 with its job.\n\nThe raw request body is the file's exact byte sequence, not a multipart part. `Content-Type` must be\ngiven exactly once and match `kind`; `Content-Length` must be given exactly once and match the bytes\nsent; `Transfer-Encoding` and any `Content-Encoding` other than `identity` are refused with 400, as is\nany query parameter besides `strip_audio` and `upload_id`. Retry with the same `upload_id` to make a\nrepeated upload a no-op; a reused `upload_id` carrying different bytes answers 409. 400 once the source\nexceeds the bound this router publishes in its `Squid-Max-Upload-Bytes` response header.",
         "operationId": "submission_media_upload",
         "security": [
           {
@@ -13810,7 +13810,7 @@
           "submissions"
         ],
         "summary": "List Draft Media",
-        "description": "List all retained states and safe normalized facts for an owned draft.",
+        "description": "List every upload retained for an owned draft in creation order, discarded and failed ones included.",
         "operationId": "submission_media_list",
         "security": [
           {
@@ -14008,7 +14008,7 @@
           "submissions"
         ],
         "summary": "Get Draft Media",
-        "description": "Return one upload after enforcing both draft ownership and association.",
+        "description": "Return one upload; 404 when it is unknown or belongs to a different draft than `draft_id`.",
         "operationId": "submission_media_get",
         "security": [
           {
@@ -14214,7 +14214,7 @@
           "submissions"
         ],
         "summary": "Discard Draft Media",
-        "description": "Withdraw one upload while retaining a stable discarded state.",
+        "description": "Withdraw one upload, invalidating any live normalization claim; the discarded row itself is retained.\n\nIdempotent while the upload still belongs to `draft_id`; 404 once it does not.",
         "operationId": "submission_media_discard",
         "security": [
           {
@@ -14514,7 +14514,7 @@
           "suggest"
         ],
         "summary": "Suggest",
-        "description": "Return ranked completions for a partially typed value.\n\nAn unknown source is a 404, because that is a bad URL. Anything else — a gated source the\ncaller cannot read, a provider that failed — is an empty list, matching what the other\nsurfaces do: a dropdown with nothing in it, not an error under a half-typed word.",
+        "description": "Return ranked completions for a partially typed value.\n\nAn unknown source answers 404, since that is a bad URL. Every other failure — a gated source the\ncaller may not read, a provider that errored — answers 200 with an empty list. An enumerable source\nalso sets a private `ETag` and a 30-second `Cache-Control`.",
         "operationId": "suggestions_get",
         "security": [
           {}
@@ -15094,7 +15094,7 @@
           "creators"
         ],
         "summary": "Get Creator Profile",
-        "description": "Return a creator's public page, following permanent merge redirects.\n\nVisibility is applied in the domain, not here: `present_public_profile` is the one authority\non what a stranger sees, so this route cannot accidentally disagree with the bot about it.",
+        "description": "Return a creator's public page, following permanent merge redirects.\n\nField visibility is decided by `present_public_profile` in the domain, so this route and the bot agree.",
         "operationId": "creator_profile_get",
         "security": [
           {}
@@ -15368,7 +15368,7 @@
           "vote sessions"
         ],
         "summary": "Get Vote Session",
-        "description": "Return aggregate vote state without exposing ballot identities.",
+        "description": "Return aggregate vote state; no other voter's ballot is exposed, only the caller's own selection.\n\n`tallies` is null while the session hides them.",
         "operationId": "vote_session_get",
         "security": [
           {},
@@ -15501,7 +15501,7 @@
           "vote sessions"
         ],
         "summary": "Cast Vote",
-        "description": "Cast the authenticated Discord member's weighted vote.",
+        "description": "Cast the caller's weighted vote in one Discord guild; requires `vote.poll.cast` and accepted consent.\n\n403 when the caller is not an eligible member of `guild_id` for this session's kind, 409 when the session\nis closed, 400 when the option is not offered in that guild.",
         "operationId": "vote_cast",
         "security": [
           {
@@ -15793,7 +15793,8 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Identifiers"
+            "title": "Identifiers",
+            "description": "Sorted ascending, so two deployments compare directly."
           }
         },
         "type": "object",
@@ -15801,7 +15802,7 @@
           "identifiers"
         ],
         "title": "ApiFeatureCapabilities",
-        "description": "Stable feature identifiers understood by this API deployment."
+        "description": "Stable feature identifiers understood by this API deployment.\n\nThey name what this server can do, not what any client supports. An operation's\n`x-squid-cli.required_api_features` names the identifiers it needs."
       },
       "ApiVersionCapabilities": {
         "properties": {
@@ -15857,7 +15858,8 @@
           },
           "revision": {
             "type": "integer",
-            "title": "Revision"
+            "title": "Revision",
+            "description": "Increments on every accepted edit. The response ETag is `\"build-{id}-r{revision}\"`, which an edit must echo in `If-Match`."
           },
           "title": {
             "type": "string",
@@ -15876,11 +15878,13 @@
           },
           "status": {
             "type": "string",
-            "title": "Status"
+            "title": "Status",
+            "description": "One of `pending`, `confirmed`, `denied`, or `unknown` when unrecorded."
           },
           "category": {
             "type": "string",
-            "title": "Category"
+            "title": "Category",
+            "description": "One of `Door`, `Extender`, `Utility`, `Entrance`, `Other`, or `unknown` when unrecorded."
           },
           "dimensions": {
             "$ref": "#/components/schemas/Dimensions"
@@ -15890,7 +15894,8 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Creators"
+            "title": "Creators",
+            "description": "Minecraft in-game names, credited but not necessarily claimed."
           },
           "tags": {
             "items": {
@@ -15907,7 +15912,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Null when the build has no HTTPS render or image."
           },
           "version_spec": {
             "anyOf": [
@@ -15918,14 +15924,16 @@
                 "type": "null"
               }
             ],
-            "title": "Version Spec"
+            "title": "Version Spec",
+            "description": "The submitted version range, such as `1.19-1.20`."
           },
           "versions": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Versions"
+            "title": "Versions",
+            "description": "Every known version `version_spec` expands to, as `Java 1.20.1`."
           },
           "opening_time": {
             "anyOf": [
@@ -15936,7 +15944,8 @@
                 "type": "null"
               }
             ],
-            "title": "Opening Time"
+            "title": "Opening Time",
+            "description": "Door opening time in game ticks; null for a non-door or if unknown."
           },
           "closing_time": {
             "anyOf": [
@@ -15947,7 +15956,8 @@
                 "type": "null"
               }
             ],
-            "title": "Closing Time"
+            "title": "Closing Time",
+            "description": "Door closing time in game ticks; null for a non-door or if unknown."
           },
           "created_at": {
             "anyOf": [
@@ -15984,7 +15994,8 @@
               "type": "array"
             },
             "type": "object",
-            "title": "Restrictions"
+            "title": "Restrictions",
+            "description": "Restriction names under the four bucket keys `wiring_placement_restrictions`, `animated_restrictions`, `component_restrictions` and `miscellaneous_restrictions`. Every bucket is always present and may be empty."
           },
           "description": {
             "anyOf": [
@@ -16008,7 +16019,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Null unless the build was submitted through a sponsor-opted-in Paper installation."
           }
         },
         "additionalProperties": false,
@@ -16036,7 +16048,7 @@
           "links"
         ],
         "title": "BuildDetail",
-        "description": "Stable item representation with build-specific facts.\n\nCategory-specific facts live under ``details``, a union discriminated by\n``category``, so a client reads a door's opening size from a door and never\nfrom a nullable field on a utility."
+        "description": "Stable item representation with build-specific facts.\n\nCategory-specific facts live under `details`, a union discriminated by its own `category`, so a\nclient reads a door's opening size from a door and never from a nullable field on a utility."
       },
       "BuildDetails": {
         "oneOf": [
@@ -16123,7 +16135,8 @@
                 "type": "null"
               }
             ],
-            "title": "Version Spec"
+            "title": "Version Spec",
+            "description": "Versions the build works in, such as `1.20`, `1.20+`, `1.19-1.20` or a comma-separated list of those. Prefix with `Bedrock` for that edition; Java is assumed otherwise."
           },
           "dimensions": {
             "anyOf": [
@@ -16133,7 +16146,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Whole build as [width, height, depth] in blocks; any supplied axis is positive."
           },
           "door": {
             "anyOf": [
@@ -16143,7 +16157,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Door-only fields. All but `patterns` are rejected on a build of another category."
           },
           "wiring_placement_restrictions": {
             "anyOf": [
@@ -16383,7 +16398,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "BuildPatch",
-        "description": "A partial build edit which preserves omitted versus explicitly cleared fields."
+        "description": "A partial build edit which preserves omitted versus explicitly cleared fields.\n\nOmitting a field leaves it alone; sending null clears it. `dimensions`, `door`, `locationality`,\n`directionality`, the four restriction lists, `creators_ign` and the five URL lists reject null;\nempty a list by sending `[]`."
       },
       "BuildPreview": {
         "properties": {
@@ -16393,7 +16408,8 @@
               "render",
               "image"
             ],
-            "title": "Kind"
+            "title": "Kind",
+            "description": "`render` for a generated image and `image` for a submitted screenshot. Renders are preferred."
           },
           "url": {
             "type": "string",
@@ -16525,7 +16541,8 @@
           },
           "revision": {
             "type": "integer",
-            "title": "Revision"
+            "title": "Revision",
+            "description": "Increments on every accepted edit. The response ETag is `\"build-{id}-r{revision}\"`, which an edit must echo in `If-Match`."
           },
           "title": {
             "type": "string",
@@ -16544,11 +16561,13 @@
           },
           "status": {
             "type": "string",
-            "title": "Status"
+            "title": "Status",
+            "description": "One of `pending`, `confirmed`, `denied`, or `unknown` when unrecorded."
           },
           "category": {
             "type": "string",
-            "title": "Category"
+            "title": "Category",
+            "description": "One of `Door`, `Extender`, `Utility`, `Entrance`, `Other`, or `unknown` when unrecorded."
           },
           "dimensions": {
             "$ref": "#/components/schemas/Dimensions"
@@ -16558,7 +16577,8 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Creators"
+            "title": "Creators",
+            "description": "Minecraft in-game names, credited but not necessarily claimed."
           },
           "tags": {
             "items": {
@@ -16575,7 +16595,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Null when the build has no HTTPS render or image."
           },
           "version_spec": {
             "anyOf": [
@@ -16586,14 +16607,16 @@
                 "type": "null"
               }
             ],
-            "title": "Version Spec"
+            "title": "Version Spec",
+            "description": "The submitted version range, such as `1.19-1.20`."
           },
           "versions": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Versions"
+            "title": "Versions",
+            "description": "Every known version `version_spec` expands to, as `Java 1.20.1`."
           },
           "opening_time": {
             "anyOf": [
@@ -16604,7 +16627,8 @@
                 "type": "null"
               }
             ],
-            "title": "Opening Time"
+            "title": "Opening Time",
+            "description": "Door opening time in game ticks; null for a non-door or if unknown."
           },
           "closing_time": {
             "anyOf": [
@@ -16615,7 +16639,8 @@
                 "type": "null"
               }
             ],
-            "title": "Closing Time"
+            "title": "Closing Time",
+            "description": "Door closing time in game ticks; null for a non-door or if unknown."
           },
           "created_at": {
             "anyOf": [
@@ -16669,7 +16694,8 @@
         "properties": {
           "key": {
             "type": "string",
-            "title": "Key"
+            "title": "Key",
+            "description": "Stable tag identifier; the display `name` is not stable."
           },
           "name": {
             "type": "string",
@@ -16691,7 +16717,8 @@
                 "type": "null"
               }
             ],
-            "title": "Value"
+            "title": "Value",
+            "description": "Typed per the tag definition's `value_type`, and null for a `none` tag, which is a bare label."
           },
           "unit": {
             "anyOf": [
@@ -16702,7 +16729,8 @@
                 "type": "null"
               }
             ],
-            "title": "Unit"
+            "title": "Unit",
+            "description": "Unit `value` is expressed in; null when the tag declares none."
           }
         },
         "additionalProperties": false,
@@ -16714,7 +16742,7 @@
           "unit"
         ],
         "title": "BuildTag",
-        "description": "A tag on a build, without who applied it or how."
+        "description": "A tag on a build, without who applied it or how.\n\nA build carries at most one tag per `key`. Look `key` up in `/v1/tags` for the tag's declared\nvalue type and record semantics."
       },
       "CategoryFormResponse": {
         "properties": {
@@ -17470,7 +17498,7 @@
           "depth"
         ],
         "title": "Dimensions",
-        "description": "A three-dimensional build measurement."
+        "description": "A three-dimensional build measurement in blocks. An axis is null when it was never recorded."
       },
       "DoorDetails": {
         "properties": {
@@ -17481,11 +17509,13 @@
             "default": "Door"
           },
           "door_dimensions": {
-            "$ref": "#/components/schemas/Dimensions"
+            "$ref": "#/components/schemas/Dimensions",
+            "description": "The hallway opening, not the build built around it."
           },
           "orientation": {
             "type": "string",
-            "title": "Orientation"
+            "title": "Orientation",
+            "description": "One of `Door`, `Skydoor` or `Trapdoor`."
           },
           "patterns": {
             "items": {
@@ -17503,7 +17533,8 @@
                 "type": "null"
               }
             ],
-            "title": "Visible Opening Time"
+            "title": "Visible Opening Time",
+            "description": "Visible opening time in game ticks; null if unknown."
           },
           "visible_closing_time": {
             "anyOf": [
@@ -17514,7 +17545,8 @@
                 "type": "null"
               }
             ],
-            "title": "Visible Closing Time"
+            "title": "Visible Closing Time",
+            "description": "Visible closing time in game ticks; null if unknown."
           }
         },
         "additionalProperties": false,
@@ -17527,7 +17559,7 @@
           "visible_closing_time"
         ],
         "title": "DoorDetails",
-        "description": "Facts owned by doors.\n\nThe headline ``opening_time`` and ``closing_time`` stay on the summary: the\ncard projection and the search grammar both already name them there, so\nrepeating them here would give one value two addresses in one payload."
+        "description": "Facts owned by doors.\n\nThe headline `opening_time` and `closing_time` stay on the summary and are not repeated here."
       },
       "DoorPatch": {
         "properties": {
@@ -17539,7 +17571,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Door opening as [width, height, depth] in blocks; any supplied axis is positive."
           },
           "orientation": {
             "anyOf": [
@@ -17578,7 +17611,8 @@
                 "type": "null"
               }
             ],
-            "title": "Opening Time"
+            "title": "Opening Time",
+            "description": "Opening time in game ticks."
           },
           "closing_time": {
             "anyOf": [
@@ -17590,13 +17624,14 @@
                 "type": "null"
               }
             ],
-            "title": "Closing Time"
+            "title": "Closing Time",
+            "description": "Closing time in game ticks."
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "DoorPatch",
-        "description": "A partial edit of the facts only a door has.\n\nSending this for a build of another category is rejected: the category is\nstructural, so there is no field to set."
+        "description": "A partial edit of the facts only a door has.\n\nOmitting a field leaves it alone; sending null clears it, except for `door_dimensions` and\n`patterns`, which reject null. Every field but `patterns` is rejected on a build of another\ncategory: the category is structural, so there is no field to set."
       },
       "DoorSubmission": {
         "properties": {
@@ -17606,7 +17641,8 @@
             "default": "door"
           },
           "door_size": {
-            "$ref": "#/components/schemas/InputDimensions"
+            "$ref": "#/components/schemas/InputDimensions",
+            "description": "Door opening as [width, height, depth] in blocks. An axis may be null when unknown; any supplied value must be positive. A null width is stored as 1 and a null height as 2."
           },
           "pattern": {
             "items": {
@@ -17628,6 +17664,7 @@
           },
           "build_size": {
             "$ref": "#/components/schemas/InputDimensions",
+            "description": "Whole build as [width, height, depth] in blocks, under the same rules as `door_size`.",
             "default": [
               null,
               null,
@@ -17644,7 +17681,8 @@
                 "type": "null"
               }
             ],
-            "title": "Works In"
+            "title": "Works In",
+            "description": "Version spec the build works in, such as `1.20`, `1.20+`, `1.19-1.20` or a comma-separated list of those. Prefix with `Bedrock` for that edition; Java is assumed otherwise."
           },
           "restrictions": {
             "items": {
@@ -17676,7 +17714,8 @@
                 "type": "null"
               }
             ],
-            "title": "Normal Closing Time"
+            "title": "Normal Closing Time",
+            "description": "Closing time in game ticks."
           },
           "normal_opening_time": {
             "anyOf": [
@@ -17688,7 +17727,8 @@
                 "type": "null"
               }
             ],
-            "title": "Normal Opening Time"
+            "title": "Normal Opening Time",
+            "description": "Opening time in game ticks."
           },
           "date_of_creation": {
             "anyOf": [
@@ -20353,12 +20393,13 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ProfileUpdateRequest",
-        "description": "A partial profile edit.\n\nOmitting a field leaves it alone; sending `null` clears it. Pydantic cannot express that\ndifference in the annotation alone, so `to_domain` reads `model_fields_set` — which is also\nwhy every field defaults to `None` rather than to a sentinel clients would have to send."
+        "description": "A partial profile edit.\n\nOmitting a field leaves it alone; sending null clears it. `hidden` is the exception: null there\nsets the profile visible. `avatar_identity_id` takes an `id` from this account's `identities`."
       },
       "ProtocolCapabilities": {
         "properties": {
           "submission": {
-            "$ref": "#/components/schemas/ProtocolInterval"
+            "$ref": "#/components/schemas/ProtocolInterval",
+            "description": "Submission form protocol versions this server serves; compare against a form manifest's `minimum_protocol` and `maximum_protocol`."
           }
         },
         "type": "object",
@@ -20759,14 +20800,16 @@
               "$ref": "#/components/schemas/RendererControl"
             },
             "type": "array",
-            "title": "Controls"
+            "title": "Controls",
+            "description": "Every `control` a form field may carry, so a client can refuse a manifest it cannot draw."
           },
           "capability_identifiers": {
             "items": {
               "type": "string"
             },
             "type": "array",
-            "title": "Capability Identifiers"
+            "title": "Capability Identifiers",
+            "description": "Optional renderer behaviours a form field may require through `required_capability`."
           }
         },
         "type": "object",
@@ -20805,7 +20848,7 @@
         },
         "type": "object",
         "title": "SanitizationCapabilities",
-        "description": "Artifact transformations whose availability is compatibility-relevant."
+        "description": "Artifact transformations whose availability is compatibility-relevant.\n\nBoth values are fixed for this deployment: uploaded media is re-encoded before publication, and\nno schematic sanitizer runs."
       },
       "SchematicSize": {
         "properties": {
@@ -21289,8 +21332,7 @@
           "record",
           "record_filter"
         ],
-        "title": "SubscriptionKind",
-        "description": "Durable subject types an account may follow."
+        "title": "SubscriptionKind"
       },
       "SuggestionItem": {
         "properties": {
@@ -21607,37 +21649,44 @@
           "max_images": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
-            "title": "Max Images"
+            "title": "Max Images",
+            "description": "Images per draft."
           },
           "max_videos": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
-            "title": "Max Videos"
+            "title": "Max Videos",
+            "description": "Videos per draft."
           },
           "max_duration_milliseconds": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
-            "title": "Max Duration Milliseconds"
+            "title": "Max Duration Milliseconds",
+            "description": "Longest accepted video, per file."
           },
           "max_source_bytes": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
-            "title": "Max Source Bytes"
+            "title": "Max Source Bytes",
+            "description": "Total uploaded bytes across a draft, not one file."
           },
           "max_output_bytes": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
-            "title": "Max Output Bytes"
+            "title": "Max Output Bytes",
+            "description": "Total normalized bytes across a draft, not one file."
           },
           "max_pixels_per_frame": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
-            "title": "Max Pixels Per Frame"
+            "title": "Max Pixels Per Frame",
+            "description": "Width times height of one decoded frame, per file."
           },
           "max_decoded_pixels_per_second": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
-            "title": "Max Decoded Pixels Per Second"
+            "title": "Max Decoded Pixels Per Second",
+            "description": "Pixels per frame times frame rate, per video file. Images are exempt."
           }
         },
         "type": "object",
@@ -21651,7 +21700,7 @@
           "max_decoded_pixels_per_second"
         ],
         "title": "UploadCapabilities",
-        "description": "Upload, aggregate, and decoder-work limits enforced by the backend."
+        "description": "Upload, aggregate, and decoder-work limits enforced by the backend.\n\nExceeding any of them is rejected server-side; a client that checks first spares the upload."
       },
       "User": {
         "properties": {
@@ -21666,7 +21715,7 @@
           "uuid"
         ],
         "title": "User",
-        "description": "A user model."
+        "description": "Verification request body: the player's Java (Minecraft) account UUID."
       },
       "UserMe": {
         "properties": {
@@ -21728,7 +21777,7 @@
           "profile"
         ],
         "title": "UserMe",
-        "description": "The caller's own account: who they are, how they sign in, and what they publish.\n\nProvider-neutral on purpose. The previous shape flattened one Discord identity and one Java\nidentity into four top-level fields, which could not describe a caller with two of either and\nimplied Discord by omission for callers that have none."
+        "description": "The caller's own account: who they are, how they sign in, and what they publish.\n\nProvider-neutral: every linked identity is an entry in `identities`, however many an account\nholds from one provider, and an account may hold none."
       },
       "ValidationError": {
         "properties": {

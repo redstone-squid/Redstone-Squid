@@ -36,11 +36,15 @@ class ApiVersionCapabilities(BaseModel):
 
 
 class ApiFeatureCapabilities(BaseModel):
-    """Stable feature identifiers understood by this API deployment."""
+    """Stable feature identifiers understood by this API deployment.
+
+    They name what this server can do, not what any client supports. An operation's
+    `x-squid-cli.required_api_features` names the identifiers it needs.
+    """
 
     model_config = ConfigDict(frozen=True)
 
-    identifiers: tuple[str, ...]
+    identifiers: tuple[str, ...] = Field(description="Sorted ascending, so two deployments compare directly.")
 
 
 class ProtocolCapabilities(BaseModel):
@@ -48,21 +52,29 @@ class ProtocolCapabilities(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    submission: ProtocolInterval
+    submission: ProtocolInterval = Field(
+        description="Submission form protocol versions this server serves; compare against a form manifest's "
+        "`minimum_protocol` and `maximum_protocol`."
+    )
 
 
 class UploadCapabilities(BaseModel):
-    """Upload, aggregate, and decoder-work limits enforced by the backend."""
+    """Upload, aggregate, and decoder-work limits enforced by the backend.
+
+    Exceeding any of them is rejected server-side; a client that checks first spares the upload.
+    """
 
     model_config = ConfigDict(frozen=True)
 
-    max_images: int = Field(gt=0)
-    max_videos: int = Field(gt=0)
-    max_duration_milliseconds: int = Field(gt=0)
-    max_source_bytes: int = Field(gt=0)
-    max_output_bytes: int = Field(gt=0)
-    max_pixels_per_frame: int = Field(gt=0)
-    max_decoded_pixels_per_second: int = Field(gt=0)
+    max_images: int = Field(gt=0, description="Images per draft.")
+    max_videos: int = Field(gt=0, description="Videos per draft.")
+    max_duration_milliseconds: int = Field(gt=0, description="Longest accepted video, per file.")
+    max_source_bytes: int = Field(gt=0, description="Total uploaded bytes across a draft, not one file.")
+    max_output_bytes: int = Field(gt=0, description="Total normalized bytes across a draft, not one file.")
+    max_pixels_per_frame: int = Field(gt=0, description="Width times height of one decoded frame, per file.")
+    max_decoded_pixels_per_second: int = Field(
+        gt=0, description="Pixels per frame times frame rate, per video file. Images are exempt."
+    )
 
 
 class RendererCapabilities(BaseModel):
@@ -70,12 +82,20 @@ class RendererCapabilities(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    controls: tuple[RendererControl, ...]
-    capability_identifiers: tuple[str, ...]
+    controls: tuple[RendererControl, ...] = Field(
+        description="Every `control` a form field may carry, so a client can refuse a manifest it cannot draw."
+    )
+    capability_identifiers: tuple[str, ...] = Field(
+        description="Optional renderer behaviours a form field may require through `required_capability`."
+    )
 
 
 class SanitizationCapabilities(BaseModel):
-    """Artifact transformations whose availability is compatibility-relevant."""
+    """Artifact transformations whose availability is compatibility-relevant.
+
+    Both values are fixed for this deployment: uploaded media is re-encoded before publication, and
+    no schematic sanitizer runs.
+    """
 
     model_config = ConfigDict(frozen=True)
 

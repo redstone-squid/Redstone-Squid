@@ -1,7 +1,7 @@
 """Stable API capability identifiers and compatibility bounds.
 
-The identifiers name what the server can do, not what any one client supports, so
-a CLI, the web SDK, and a Minecraft plugin negotiate against the same list.
+The identifiers name what the server can do, not what any one client supports; every client
+negotiates against this one list.
 """
 
 from typing import Final, Literal

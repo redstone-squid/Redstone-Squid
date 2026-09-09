@@ -59,12 +59,15 @@ async def get_schematic_content(
     build_queries: BuildQueries,
     schematics: Schematics,
 ) -> Response:
-    """Download explicitly published sanitized bytes from a confirmed build."""
+    """Download explicitly published sanitized bytes from a confirmed build.
+
+    The response is an attachment whose extension names the stored container format, and its `Link`
+    header carries the schematic's license with `rel="license"`.
+    """
     await build_queries.get_public(build_id)
     download = await schematics.public_download(build_id, schematic_id)
-    # The stem stays server-generated so no user-supplied filename reaches a response
-    # header; only the extension follows the stored container, which used to be `.schem`
-    # for all five formats.
+    # The stem stays server-generated so no user-supplied filename reaches a response header; only
+    # the extension follows the stored container.
     filename = f"build-{build_id}-schematic-{schematic_id}.{download.source_format.value}"
     return Response(
         content=download.content,
@@ -110,10 +113,10 @@ async def render_build_schematic(
 ) -> Response:
     """Render a confirmed build's primary schematic and answer with the PNG.
 
-    Every camera parameter is optional and defaults to the deployment's own framing, so a
-    caller who wants "the picture of this build" gets the same recipe the durable queue
-    renders, served from its stored artifact. Anything else is rendered on the spot, which
-    takes as long as the engine takes.
+    Every camera parameter is optional; omitting all of them asks for the deployment's default framing,
+    which is served from the durable queue's stored artifact. Any other combination is rendered on the
+    spot and takes as long as the engine takes. The `ETag` is the recipe hash over the file, the resource
+    pack and the framing.
     """
     await build_queries.get_public(build_id)
     rendered = await schematics.render_now(
@@ -124,9 +127,8 @@ async def render_build_schematic(
         content=rendered.png,
         media_type="image/png",
         headers={
-            # The recipe hash covers the file, the pack, and the framing, so it changes
-            # whenever the image would; the max-age stays short because the same URL starts
-            # answering with a different image as soon as the build's primary attachment does.
+            # The max-age stays short because this URL is not content-addressed: it starts answering
+            # with a different image as soon as the build's primary attachment changes.
             "ETag": f'"{rendered.recipe_hash}"',
             "Cache-Control": "public, max-age=300",
             "X-Content-Type-Options": "nosniff",

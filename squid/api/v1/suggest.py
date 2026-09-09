@@ -1,8 +1,7 @@
 """Typeahead completions for any registered suggestion source.
 
-One endpoint rather than a discovery route per entity: the web catalogue, the Minecraft plugin and
-any future client all complete values by naming a source, so adding a source makes it reachable
-everywhere without a new route, a new schema, or a new SDK method.
+One endpoint rather than a discovery route per entity: a client completes values by naming a source, so
+registering a source makes it reachable without a new route, schema, or SDK method.
 """
 
 from typing import Annotated
@@ -58,9 +57,9 @@ async def suggest(
 ) -> SuggestionPage:
     """Return ranked completions for a partially typed value.
 
-    An unknown source is a 404, because that is a bad URL. Anything else — a gated source the
-    caller cannot read, a provider that failed — is an empty list, matching what the other
-    surfaces do: a dropdown with nothing in it, not an error under a half-typed word.
+    An unknown source answers 404, since that is a bad URL. Every other failure — a gated source the
+    caller may not read, a provider that errored — answers 200 with an empty list. An enumerable source
+    also sets a private `ETag` and a 30-second `Cache-Control`.
     """
     definition = suggestions.registry.resolve(source)
     result = await suggestions.suggest(

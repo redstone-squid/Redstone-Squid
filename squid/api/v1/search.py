@@ -78,7 +78,12 @@ async def search(
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
 ) -> Page[SearchResult]:
-    """Match builds, computed records, and taxonomy entries in one ranked page."""
+    """Match builds, computed records, and taxonomy entries in one ranked page.
+
+    Only confirmed builds are matched, whatever the query says, and pages are anchored by `offset` only.
+    400 for a query the grammar rejects or a `sort` naming a field `GET /v1/search/fields` does not
+    publish as sortable.
+    """
     result = await search_service.search(
         SearchRequest(
             query=q,
@@ -115,11 +120,8 @@ async def search(
 def build_hit_id(source_id: str) -> int:
     """Parse the build identifier a build projection is keyed by.
 
-    An unparsable projection key is the index lying about itself, not a bad
-    request: the caller supplied a query, and nothing they could send would fix
-    this. It used to raise `ValidationError`, so a stale index blamed the caller
-    with a 400. `hydrate_builds` already logs the milder version of the same
-    drift, where the key parses but the build is gone.
+    Raises `DataIntegrityError`, not `ValidationError`: an unparsable projection key is the index lying
+    about itself, and nothing the caller could send would fix it.
     """
     try:
         return int(source_id)
@@ -131,8 +133,9 @@ def build_hit_id(source_id: str) -> int:
 async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[SearchHit]) -> dict[int, BuildSummary]:
     """Load authoritative builds for build hits, logging any the projection outlived.
 
-    Build projections carry a description that falls back to submitter free text and drift from
-    the canonical build row, so build matches are always rendered from `BuildSummary` instead.
+    Build matches are rendered from `BuildSummary` rather than the projection, whose description falls
+    back to submitter free text and drifts from the canonical build row. Raises `DataIntegrityError`
+    through `build_hit_id` on an unparsable projection key.
     """
     hit_ids = [build_hit_id(hit.source_id) for hit in hits if hit.resource_kind == "build"]
     if not hit_ids:

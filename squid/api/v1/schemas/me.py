@@ -115,9 +115,8 @@ class ProfileDetail(BaseModel):
 class UserMe(BaseModel):
     """The caller's own account: who they are, how they sign in, and what they publish.
 
-    Provider-neutral on purpose. The previous shape flattened one Discord identity and one Java
-    identity into four top-level fields, which could not describe a caller with two of either and
-    implied Discord by omission for callers that have none.
+    Provider-neutral: every linked identity is an entry in `identities`, however many an account
+    holds from one provider, and an account may hold none.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -128,7 +127,12 @@ class UserMe(BaseModel):
 
     created_at: Instant | None
     consent_version: str | None
+    """Version of the privacy notice this account last consented to; null if it never has."""
+
     consent_pending: bool
+    """Whether the account still owes the current privacy notice. While true every write fails with 400 until
+    `/v1/users/me/consent` is posted."""
+
     identities: list[IdentityDetail]
     profile: ProfileDetail
 
@@ -156,9 +160,8 @@ class UserMe(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     """A partial profile edit.
 
-    Omitting a field leaves it alone; sending `null` clears it. Pydantic cannot express that
-    difference in the annotation alone, so `to_domain` reads `model_fields_set` — which is also
-    why every field defaults to `None` rather than to a sentinel clients would have to send.
+    Omitting a field leaves it alone; sending null clears it. `hidden` is the exception: null there
+    sets the profile visible. `avatar_identity_id` takes an `id` from this account's `identities`.
     """
 
     model_config = ConfigDict(extra="forbid")
