@@ -39,9 +39,12 @@ from squid_reactivity.topics import Address
 
 
 class ResourceOwner(ReactiveOwner, Protocol):
-    """The behaviour a bound resource needs from whatever declared it."""
+    """The behaviour a bound resource needs from whatever declared it.
 
-    __dict__: dict[str, Any]
+    The instance dictionary the descriptor caches into is reached through `vars()`, not
+    declared here: see `squid_ui.runtime.histories.HistoryOwner` for why declaring it
+    excludes every owner with a metaclass.
+    """
 
     def invalidate(self) -> None: ...
 
