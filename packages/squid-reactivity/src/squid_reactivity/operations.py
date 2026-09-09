@@ -25,9 +25,11 @@ from squid_reactivity.resources import AsyncBinding, PendingMode, _observe
 
 
 class OperationOwner(Protocol):
-    """The behaviour a bound operation definition needs from its declaring owner."""
+    """The behaviour a bound operation definition needs from its declaring owner.
 
-    __dict__: dict[str, Any]
+    The instance dictionary is reached through `vars()`; see
+    `squid_ui.runtime.histories.HistoryOwner`.
+    """
 
     def invalidate(self) -> None: ...
 
