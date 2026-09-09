@@ -178,7 +178,7 @@ class TestRequires:
         """The taxonomy test reads this rather than a predicate's name."""
         decorated = requires("settings.server.edit", mode="all")
 
-        assert decorated.predicate.__squid_nodes__ == ("settings.server.edit",)  # pyrefly: ignore[missing-attribute]
+        assert decorated.predicate.__squid_nodes__ == ("settings.server.edit",)  # pyrefly: ignore[missing-attribute]  # pyright: ignore[reportFunctionMemberAccess]
 
     def test_an_unknown_node_fails_at_import_time(self) -> None:
         from squid.permissions.domain import UnknownPermissionNodeError

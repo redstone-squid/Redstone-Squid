@@ -444,17 +444,19 @@ class TestLobby:
         guild_id: int = 5,
         host_id: int = 7,
     ) -> tuple[Any, Lobby]:
-        bot = make_layout_bot() if bot is None else bot
+        # A new name, not a rebind: the parameter's declared type keeps `None` in the
+        # union no matter what is assigned back to it.
+        host = make_layout_bot() if bot is None else bot
         context = ContextHarness(
             message=MessageHarness(message_id=guild_id),
-            bot=bot,
+            bot=host,
             user_id=host_id,
         )
         context.guild = Guild(id=guild_id)
         panel = Lobby(host_id)
-        outcome = await bot.app_ui.respond(cast(Any, context), panel)
+        outcome = await host.app_ui.respond(cast(Any, context), panel)
         assert isinstance(outcome, sd.Presented)
-        return bot, panel
+        return host, panel
 
     async def test_the_host_opens_as_the_only_member(self) -> None:
         bot, panel = await self.opened()

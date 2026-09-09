@@ -508,7 +508,7 @@ async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
 
     # The unresolvable name moved into extra_info before anything was saved,
     # and the typed field was canonicalized, so save→load stays the identity.
-    assert build.extra_info["unknown_restrictions"] == {"component_restrictions": ["Imaginary Component"]}
+    assert build.extra_info.get("unknown_restrictions") == {"component_restrictions": ["Imaginary Component"]}
     assert build.component_restrictions == []
 
     await repository.save(build)
@@ -534,7 +534,7 @@ async def test_ambiguous_restriction_is_recorded_as_unknown(
     loaded = await repository.get_by_id(build.id)
     assert loaded is not None
     assert loaded.component_restrictions == []
-    assert loaded.extra_info["unknown_restrictions"] == {"component_restrictions": [AMBIGUOUS_ALIAS]}
+    assert loaded.extra_info.get("unknown_restrictions") == {"component_restrictions": [AMBIGUOUS_ALIAS]}
 
 
 async def test_save_persists_tags_verbatim_without_mutating_input(
