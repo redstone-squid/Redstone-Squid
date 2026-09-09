@@ -389,7 +389,8 @@ class _AdoptedView(Component[Any]):
                         self._unsupported(child, _layout_path((*path, index)), expected="TextDisplay")
                 walk(item.accessory, (*path, len(item.children)))
             elif isinstance(item, discord.ui.Item) and hasattr(item, "children"):
-                for index, child in enumerate(item.children):
+                # pyright has no `hasattr` narrowing, so the guard above buys it nothing.
+                for index, child in enumerate(item.children):  # pyright: ignore[reportAttributeAccessIssue]
                     walk(child, (*path, index))
 
         for index, child in enumerate(self._view.children):
@@ -596,7 +597,7 @@ class _AdoptedView(Component[Any]):
                 if values is not None:
                     # Never the item discord.py dispatched -- Squid built the control that was clicked --
                     # so `values` reaches the legacy select through the same field discord.py fills.
-                    item._values = values  # pyrefly: ignore[missing-attribute]
+                    item._values = values  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
                 await item.callback(cast(Any, proxy))
             except Exception as error:
                 if not _overrides(view, "on_error"):

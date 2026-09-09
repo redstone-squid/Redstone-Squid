@@ -26,7 +26,7 @@ from squid_ui.planning.limits import LIMITS, Axis, V2Limits
 from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.resources import ResourceCost
 from squid_ui.planning.target import Target
-from squid_ui.scene.model import PlanReport, PlanResult
+from squid_ui.scene.model import ComponentsV2, PlanReport, PlanResult
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.attachments import files_for
@@ -49,7 +49,7 @@ class AttachedFragment:
 
     items: tuple[discord.ui.Item[Any], ...]
     view: discord.ui.LayoutView
-    plan: PlanResult
+    plan: PlanResult[ComponentsV2]
     assets: tuple[Asset, ...]
     fingerprint: str
 
@@ -90,7 +90,7 @@ class Fragment:
     """A planned, drawn, sessionless Squid region waiting to be placed."""
 
     items: tuple[discord.ui.Item[Any], ...]
-    plan: PlanResult
+    plan: PlanResult[ComponentsV2]
     assets: tuple[Asset, ...]
     reservation: MessageReservation
     followed_by: tuple[discord.ui.Item[Any], ...] = ()
