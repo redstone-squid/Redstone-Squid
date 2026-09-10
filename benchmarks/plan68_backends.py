@@ -6,8 +6,8 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from squid_replicated.backends.loro import LoroTextEngine, LoroTextOperation
-from squid_replicated.backends.pycrdt import PycrdtTextEngine, PycrdtTextOperation
+from squid_replication.backends.loro import LoroTextEngine, LoroTextOperation
+from squid_replication.backends.pycrdt import PycrdtTextEngine, PycrdtTextOperation
 
 
 def _median(operation: Callable[[], Any], iterations: int) -> int:
