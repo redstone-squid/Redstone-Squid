@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 import anyio
 
 from squid.artifacts import ArtifactStore
-from squid.core.errors import NotFoundError, ValidationError
+from squid.core.errors import InvalidStateError, NotFoundError, ValidationError
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.submissions.application.drafts import DraftActor, StoredDraft, SubmissionDraftService, draft_actor_id
 from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
@@ -46,7 +46,7 @@ class DraftSchematicService:
     ) -> None:
         if not 0 < max_bytes <= SCHEMATIC_FILE_SCHEMA_MAX_BYTES:
             message = "Schematic upload limit exceeds the supported range."
-            raise ValueError(message)
+            raise InvalidStateError(message)
         self._drafts = drafts
         self._repository = repository
         self._artifacts = artifacts
