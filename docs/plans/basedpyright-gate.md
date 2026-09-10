@@ -78,6 +78,51 @@ both checkers verify a declared variance against usage, so an unsound claim beco
 error rather than a silent lie. Doing this at the four declarations would remove the whole
 class of divergence and several of the suppressions added to work around it.
 
+## Fixed while measuring: a bare RoutedButton could not be planned
+
+`RoutedButton` is public and documented, and the planner rejected it. Measurement passed
+through `File | Sep | Thumbnail | PremiumButton | Button | LinkButton` and let a routed
+button fall to the catch-all, which raises "must be normalized before measuring" — while
+`control_validation.py:73` accepted a bare one and both dialects knew how to convert one.
+Validation passed, and measurement then blamed the caller for skipping a step it had not
+skipped.
+
+The surroundings made this an omission rather than a design decision: `_clamp_button`
+already accepted `RoutedButton`, one inside a `Row` was already clamped and passed
+through, `MeasuredSection.accessory` already included one, and its sibling `RoutedSelect`
+was already in `Realized`.
+
+Fixed by adding the top-level pass-through arm and the `Realized` entry, which also made
+the `case RoutedButton()` arms in both planners reachable, so their dead-code suppressions
+are gone. Verified end to end through `plan()` against both the ComponentsV2 and classic
+Discord targets. `packages/squid-ui/tests/test_top_level_controls_measure.py` covers every
+control the dialects convert, and was confirmed to fail on the previous behaviour.
+
+## Dead files found while measuring — still open
+
+Five files import modules that do not exist, so they raise `ImportError` before running a
+line. This is rot, not a typing complaint, and it is left for a decision rather than
+quietly excluded or renamed. These are the only remaining BasedPyright errors.
+
+| File | Unresolvable import |
+|---|---|
+| `benchmarks/plan68.py` | `squid_reactive` (the package is `squid_reactivity`) |
+| `benchmarks/plan68_backends.py` | `squid_replicated.backends.{loro,pycrdt}` |
+| `benchmarks/plan68_backend_actions.py` | `squid_replicated.backends.{loro,pycrdt}` |
+| `benchmarks/plan68_fake_replication.py` | `squid_replicated.fake` |
+| `scripts/populate_db_with_logs_historical_messages.py` | `squid.bot.submission.media` |
+
+`squid_replicated` is now `squid_replication`, and that rename fixes the two `backends`
+imports, but `squid_replicated.fake` has no successor. The script additionally imports
+three names that no longer exist (`create_application_runtime`, `BUILD_LOG_CHANNEL_IDS`,
+`ApplicationServices`) and passes two parameters (`mirror`, `dry_run`) that no signature
+accepts, so it needs more than a rename. Deleting these or repairing them is a judgement
+call about whether the plan-68 benchmarks and the backfill script are still wanted.
+
+Separately, `DraftLifecycleStateMachine` in `tests/fuzz/api/draft_lifecycle.py` is
+referenced nowhere outside its own definition, so its `configure` is never called and
+`initialize_scenario` would raise on every run.
+
 ## Caveats
 
 - The two checkers genuinely disagree in places. `_Projection.settings_customise_sources`
