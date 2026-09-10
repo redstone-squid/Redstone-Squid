@@ -38,7 +38,7 @@ type AsyncHandler = Callable[..., Awaitable[object]]
 type PendingCard = DocumentContent | str
 """What a command shows while it runs; a string becomes one paragraph."""
 
-_OUTCOMES = (Sent, Presented, Rejected, Abandoned)
+_SETTLED_RESULTS = (Sent, Presented, Rejected, Abandoned)
 _MENU_TYPES = (discord.AppCommandType.message, discord.AppCommandType.user)
 
 
@@ -236,7 +236,7 @@ def _group_policy(req: Request[Any]) -> CommandPolicy:
 
 async def present_return(req: Request[Any], result: CommandResult) -> ResponseResult | None:
     """Present one supported handler return through its request."""
-    if result is None or isinstance(result, _OUTCOMES):
+    if result is None or isinstance(result, _SETTLED_RESULTS):
         return result
     if req.responded:
         message = "a handler explicitly responded and also returned response content"
@@ -270,13 +270,13 @@ async def _run_pending(req: Request[Any], card: PendingCard, work: Callable[[], 
         render_success=lambda value: initial if value is None else value,
         render_error=render_error,
     )
-    outcome = await req.respond(component, access=Everyone())
+    result = await req.respond(component, access=Everyone())
     match component.execution.status:
         case Succeeded():
             return
         case Failed(error=error):
             if errors.observe is not None:
-                delivery = outcome.delivery if isinstance(outcome, Presented) else None
+                delivery = result.delivery if isinstance(result, Presented) else None
                 await errors.observe(req, error, delivery)
             raise error
         case Cancelled():
