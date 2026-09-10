@@ -193,11 +193,13 @@ class GuardLedger:
         """Where one guard kind's value lives for this action, scoped as `per` says."""
         return GuardKey(f"{key or self.action}|{kind.name}|{actor if per is GuardScope.ACTOR else '*'}")
 
-    @overload
-    def read[ValueT](self, key: GuardKey[ValueT], default: ValueT) -> ValueT: ...
-
+    # The `None` case comes first because it is the narrower one: `default: ValueT` also admits
+    # `None` whenever the key's value type does, which would make this second overload dead.
     @overload
     def read[ValueT](self, key: GuardKey[ValueT], default: None) -> ValueT | None: ...
+
+    @overload
+    def read[ValueT](self, key: GuardKey[ValueT], default: ValueT) -> ValueT: ...
 
     def read[ValueT](self, key: GuardKey[ValueT], default: ValueT | None) -> ValueT | None:
         """The value stored under `key`, or `default` when nothing is stored.

@@ -6,7 +6,7 @@ import secrets
 import threading
 import time
 from collections import deque
-from collections.abc import Callable, Container, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import AbstractContextManager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
@@ -821,7 +821,10 @@ class MemoryProfiler:
         self,
         size: int,
         constructor: Callable[[bytes], IdT],
-        used: Container[IdT] | None = None,
+        # `Collection`, not `Container`: `Container`'s type parameter appears in none of its
+        # members, so a checker cannot recover `IdT` from the argument and gives up on the
+        # constrained solve, silently typing every identifier this returns as `Any`.
+        used: Collection[IdT] | None = None,
     ) -> IdT:
         for _ in range(3):
             value = self._id_source(size)

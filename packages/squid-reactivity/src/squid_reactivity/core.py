@@ -94,6 +94,7 @@ class TransactionParticipant[PreparedT](Protocol):
         Raise to abort the action: every participant is aborted, component state is
         restored, and the error reaches whoever called the handler.
         """
+        ...
 
     def apply(self, prepared: PreparedT) -> None:
         """Publish what `prepare` returned. Synchronous, and past the point of failure."""
@@ -1833,7 +1834,9 @@ def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
     exact rather than over-declared, and nothing has to be named twice. A computed nobody
     reads is never evaluated, and one that raises does so where its value is used.
     """
-    return _Computed(function)  # pyrefly: ignore[bad-return]
+    # The declared return type describes what reading the attribute yields, not what the
+    # decorator hands back: the descriptor below is what actually gets bound to the class.
+    return _Computed(function)  # pyright: ignore[reportReturnType]  # pyrefly: ignore[bad-return]
 
 
 @dataclass(slots=True)

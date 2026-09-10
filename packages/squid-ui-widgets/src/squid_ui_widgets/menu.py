@@ -100,8 +100,14 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget]:
         return ComponentDriver(self, initial=initial, finish_actions=("close",))
 
     @staticmethod
-    def _validate_entries(entries: tuple[MenuEntry[RenderTargetT], ...], *, where: str) -> None:
-        """Require unique sibling keys throughout the menu tree."""
+    def _validate_entries[EntryTargetT: RenderTarget](
+        entries: tuple[MenuEntry[EntryTargetT], ...], *, where: str
+    ) -> None:
+        """Require unique sibling keys throughout the menu tree.
+
+        The target parameter belongs to the method, not to `Menu`: a static method has no
+        instance to read `Menu`'s own parameter from, and the check reads only keys anyway.
+        """
         keys = [entry.key for entry in entries]
         if len(set(keys)) != len(keys):
             message = f"{where} keys must be unique: {keys!r}"
