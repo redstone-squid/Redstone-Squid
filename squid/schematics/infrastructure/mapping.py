@@ -217,10 +217,15 @@ def _simulation_from_json(payload: object | None) -> SimulationResult | None:
         input_position=(
             None if input_position is None else _vector(input_position, field="simulation_evidence.input_position")
         ),
+        # Cast for the same reason as `lattice.mode` above: `_literal` validates the value against
+        # its options at runtime, but the checker widens the type variable back to `str`.
         input_source=(
             None
             if source is None
-            else _literal(source, ("insign", "heuristic", "manual"), field="simulation_evidence.input_source")
+            else cast(
+                Literal["insign", "heuristic", "manual"],
+                _literal(source, ("insign", "heuristic", "manual"), field="simulation_evidence.input_source"),
+            )
         ),
         last_piston_tick=(
             None

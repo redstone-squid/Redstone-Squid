@@ -206,7 +206,7 @@ class BuildSummary(FromDomain[Build]):
             title=build.title,
             display_name=build.display_name,
             status=_status_name(build.submission_status),
-            category=build.category.value if build.category is not None else "unknown",
+            category=build.category.value,
             dimensions=Dimensions(width=build.width, height=build.height, depth=build.depth),
             creators=list(build.creators_ign),
             tags=[
@@ -378,7 +378,10 @@ class BuildDetail(BuildSummary):
                     display_name=build.sponsor.display_name,
                     address=build.sponsor.address,
                     description=build.sponsor.description,
-                    website_url=build.sponsor.website_url,
+                    # PublicSponsor validates and normalizes this into an AnyHttpUrl string on
+                    # construction, and pydantic validates it again here; only the synthesized
+                    # __init__ signature insists on the parsed field type.
+                    website_url=build.sponsor.website_url,  # pyright: ignore[reportArgumentType]
                 )
             ),
         )

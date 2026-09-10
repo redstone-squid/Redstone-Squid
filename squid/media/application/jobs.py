@@ -17,7 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 from uuid import UUID, uuid4
 
-import anyio
+import anyio.to_thread
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore

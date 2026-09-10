@@ -85,7 +85,8 @@ def suggests(
 
     # Stamped so the wiring test can read which source a command actually asks for. discord.py
     # validates that the parameter exists; nothing else would catch a source id that does not.
-    autocomplete.__squid_source__ = source  # pyrefly: ignore[missing-attribute]
+    # Both checkers type a function object as FunctionType, which has no room for the attribute.
+    autocomplete.__squid_source__ = source  # pyrefly: ignore[missing-attribute]  # pyright: ignore[reportFunctionMemberAccess]
     return autocomplete
 
 

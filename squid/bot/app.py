@@ -217,7 +217,9 @@ class RedstoneSquid(Bot):
         }
         if ctx.guild is not None:
             attributes["squid.guild.id"] = ctx.guild.id
-        if ctx.channel is not None:
+        # A real Context always has a channel, but Context doubles built in tests (and any
+        # partially constructed context) do not, and this attribute is not worth crashing over.
+        if ctx.channel is not None:  # pyright: ignore[reportUnnecessaryComparison]
             attributes["squid.channel.id"] = ctx.channel.id
         with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
             request = await sd.request(ctx)

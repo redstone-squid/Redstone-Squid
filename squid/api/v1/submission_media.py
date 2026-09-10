@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-import anyio
+import anyio.to_thread
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
