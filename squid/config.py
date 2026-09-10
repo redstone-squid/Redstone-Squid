@@ -1037,7 +1037,9 @@ def _project[ConfigT: BaseSettings](config_type: type[ConfigT], values: Mapping[
     Validation still runs in full; only the environment lookups are dropped, because these values
     have already been through them once.
     """
-    return _projection_type(config_type)(**values)
+    # `@cache` replaces the generic function with a wrapper whose result type has ConfigT
+    # already solved, so the checker cannot tie the projection back to this call's argument.
+    return _projection_type(config_type)(**values)  # pyright: ignore[reportReturnType]
 
 
 class _ProcessSettings(BaseSettings):

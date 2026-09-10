@@ -206,9 +206,10 @@ def requires(
         )
 
     # Stamped on the predicate so the taxonomy test can read a command's real
-    # contract instead of guessing it from a check's name.
-    predicate.__squid_nodes__ = tuple(node.name for node in resolved)  # pyrefly: ignore[missing-attribute]
-    predicate.__squid_mode__ = mode  # pyrefly: ignore[missing-attribute]
+    # contract instead of guessing it from a check's name. Both checkers type a function object
+    # as FunctionType, which has no room for an extra attribute even though Python does.
+    predicate.__squid_nodes__ = tuple(node.name for node in resolved)  # pyrefly: ignore[missing-attribute]  # pyright: ignore[reportFunctionMemberAccess]
+    predicate.__squid_mode__ = mode  # pyrefly: ignore[missing-attribute]  # pyright: ignore[reportFunctionMemberAccess]
     return check(predicate)
 
 

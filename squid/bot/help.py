@@ -96,7 +96,9 @@ class HelpScreen(sd.Screen):
         description = (
             getattr(command, "help", None) or getattr(command, "description", None) or tr(t"No details provided")
         )
-        children = tuple(getattr(command, "commands", ()))
+        # Only the group variants of this union carry subcommands; the annotation keeps the
+        # duck-typed lookup from collapsing to an empty tuple type.
+        children: tuple[AnyCommand, ...] = tuple(getattr(command, "commands", ()))
         return sl.section(
             sl.heading(heading),
             sl.truncate(sl.paragraph(description)),

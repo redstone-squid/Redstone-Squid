@@ -54,7 +54,7 @@ async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) ->
         ["Regular"] if build.category in {BuildCategory.DOOR, BuildCategory.EXTENDER} else []
     )
     resolution = await resolver.resolve_official(
-        build_kind=build.category.value if build.category is not None else None,
+        build_kind=build.category.value,
         restrictions=restrictions,
         patterns=patterns,
     )
