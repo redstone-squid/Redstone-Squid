@@ -7,13 +7,20 @@ from io import StringIO
 import psycopg2
 import pytest
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
 
 from alembic import command
+from scripts import migration_history
 from squid.persistence.alembic_entities import alembic_util_entities
+from squid.persistence.migration_history import (
+    HISTORY_TABLE,
+    divergent_revisions,
+    script_digest,
+)
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.submissions.payload_integrity import submission_payload_digest
 from squid.worker.queue_health import QUEUE_HEALTH_STATEMENT
@@ -1243,5 +1250,93 @@ def test_inferred_capacity_migration_preserves_provenance(
             connection.execute(text("UPDATE submission_drafts SET inferred = false"))
         command.downgrade(config, "d7f1b4c9e2a5")
         command.upgrade(config, "e8a2c5d0f3b6")
+    finally:
+        engine.dispose()
+
+
+def test_migration_history_records_the_chain_and_guards_edited_scripts(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The ledger records every applied step and refuses a chain whose scripts have changed.
+
+    Fused into one test for the reason `test_migrations_create_schema_without_drift` gives:
+    every assertion below needs a database at head, and reaching head costs a full run of the
+    chain. Digests are corrupted in the table rather than by editing a revision on disk, because
+    an edit left behind by a failing assertion would be a change to the migration chain itself.
+    """
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    # BuildConfig requires the pair, which is what the image supplies.
+    monkeypatch.setenv("SQUID_BUILD_COMMIT_HASH", "0123456789abcdef")
+    monkeypatch.setenv("SQUID_BUILD_COMMIT_MESSAGE", "record the migration chain")
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    script_directory = ScriptDirectory.from_config(config)
+    scripts = {script.revision: script for script in script_directory.walk_revisions()}
+    corrupt = text(f"UPDATE {HISTORY_TABLE} SET script_sha256 = repeat('0', 64) WHERE revision = :revision")
+
+    command.upgrade(config, "head")
+
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.connect() as connection:
+            recorded = connection.execute(
+                text(
+                    "SELECT revision, direction, script_sha256, release_version, applied_at "
+                    f"FROM {HISTORY_TABLE} ORDER BY id"
+                )
+            ).all()
+
+        assert {row.revision for row in recorded} == set(scripts)
+        assert {row.direction for row in recorded} == {"upgrade"}
+        assert {row.release_version for row in recorded} == {"0123456789abcdef"}
+        assert all(row.script_sha256 == script_digest(scripts[row.revision]) for row in recorded)
+        # now() is the transaction timestamp and the whole chain shares one transaction, so it
+        # would date every step of a release to the same instant.
+        assert len({row.applied_at for row in recorded}) > 1
+
+        command.downgrade(config, f"{DYNAMIC_VOTING_REVISION}-1")
+        with engine.connect() as connection:
+            directions = connection.execute(
+                text(f"SELECT direction FROM {HISTORY_TABLE} WHERE revision = :revision ORDER BY id"),
+                {"revision": DYNAMIC_VOTING_REVISION},
+            ).scalars()
+            assert list(directions) == ["upgrade", "downgrade"]
+
+        # A revision the database has left contributes no DDL to it, so an edit to that revision
+        # is legitimate and must not block the next deploy.
+        with engine.begin() as connection:
+            connection.execute(corrupt, {"revision": DYNAMIC_VOTING_REVISION})
+        command.upgrade(config, "head")
+
+        # A database older than the ledger has applied revisions and no digests at all, which is
+        # absence of evidence and must not be read as an edit.
+        with engine.begin() as connection:
+            connection.execute(text(f"TRUNCATE {HISTORY_TABLE}"))
+        command.upgrade(config, "head")
+
+        migration_history.main(["adopt"])
+        assert "Adopted" in capsys.readouterr().out
+        with engine.connect() as connection:
+            rows = connection.execute(text(f"SELECT revision, script_sha256 FROM {HISTORY_TABLE}")).all()
+        assert {row.revision: row.script_sha256 for row in rows} == {
+            revision: script_digest(script) for revision, script in scripts.items()
+        }
+
+        head_revision = script_directory.get_current_head()
+        assert head_revision is not None
+        with engine.begin() as connection:
+            connection.execute(corrupt, {"revision": head_revision})
+        # A no-op upgrade still verifies, so the guard does not need a pending step to fire.
+        with pytest.raises(CommandError, match="have been edited since this database ran them"):
+            command.upgrade(config, "head")
+
+        # Through the operator entry point rather than the function it wraps, so the recipe the
+        # failure message names is known to resolve its own config and database URL.
+        migration_history.main(["repair"])
+        assert head_revision in capsys.readouterr().out
+        with engine.connect() as connection:
+            assert divergent_revisions(connection, script_directory) == {}
+        command.upgrade(config, "head")
     finally:
         engine.dispose()
