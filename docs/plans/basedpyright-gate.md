@@ -46,35 +46,44 @@ declaration typing every match capture in its function (12), and scope alignment
   `__all__` with no static binding, which a `TYPE_CHECKING` import in the package
   `__init__` would fix globally.
 
-## The variance divergence
+## The variance divergence, and `__replace__`
 
-The largest single source of disagreement between the two checkers. For a PEP 695
-parameter on a frozen dataclass, BasedPyright infers **invariance**; Pyrefly infers
-**covariance**. Verified with a standalone repro:
+The largest single source of disagreement. For a PEP 695 parameter on a frozen dataclass,
+BasedPyright infers **invariance**; Pyrefly infers **covariance**.
 
-```python
-@dataclass(frozen=True, slots=True)
-class Box[T]:
-    value: T
+The mechanism is `__replace__`, not field mutability. Since 3.13 a dataclass generates
+`__replace__(self, *, value: T) -> Self`, which puts `T` in a **contravariant** position,
+so auto-variance correctly concludes invariant. BasedPyright is right about the class as
+declared; Pyrefly is the one ignoring a generated member. An earlier revision of this
+document had that backwards.
 
-def takes(x: Box[object]) -> None: ...
-def check(b: Box[int]) -> None:
-    takes(b)          # BasedPyright: "T@Box is invariant". Pyrefly: clean.
-```
-
-Pyrefly is right: a frozen field is read-only, which is exactly when covariance is sound.
-BasedPyright is being conservative about dataclass fields.
-
-Four classes hit this and accounted for roughly twenty errors across eleven files:
+Four classes hit it, accounting for roughly twenty errors across eleven files:
 `AdapterProfile` (`squid_ui/planning/adapter.py`), `PlanResult` (`squid_ui/scene/model.py`),
 `Document` (`squid_ui/document.py`) and `Presented` (`squid_ui_discord/response.py`).
 
-PEP 695 has no syntax for explicit variance, so the portable fix is the pre-695 form:
-`TypeVar("T_co", covariant=True)`. `squid_ui.planning.target.Target` already does exactly
-this, and its docstring argues for covariance on the same grounds. Declaring it is safe —
-both checkers verify a declared variance against usage, so an unsound claim becomes an
-error rather than a silent lie. Doing this at the four declarations would remove the whole
-class of divergence and several of the suppressions added to work around it.
+### The fix to apply later
+
+Upstream's answer is `__replace__ = None` in the class body, which disables the member and
+should restore covariance inference. Tracked at
+[basedpyright#1589](https://github.com/DetachHead/basedpyright/issues/1589) and in the
+[typing discussion](https://discuss.python.org/t/make-replace-stop-interfering-with-variance-inference/96092/17).
+
+Two things were measured here rather than assumed:
+
+- **It does not work yet.** Verified on BasedPyright 1.39.9 (CI's pin) and 1.40.0: adding
+  `__replace__ = None` changes nothing, both still report invariance. Applying it now
+  would add four inert lines and keep every suppression.
+- **It is runtime-safe for this repository, when the time comes.** `__replace__` is
+  consulted by `copy.replace`, not by `dataclasses.replace`. This codebase calls
+  `dataclasses.replace` at 98 sites in squid-ui alone and `copy.replace` **zero** times,
+  so disabling it costs nothing. Confirmed directly: with `__replace__ = None` applied,
+  `dataclasses.replace(PlanResult(...))` still works while `copy.replace` raises
+  `TypeError`, and the full suite ran with no new failures.
+
+So this is a one-line-per-class change to make once BasedPyright ships the support, and it
+removes the suppressions rather than adding any. The pre-695 `TypeVar(..., covariant=True)`
+form remains the alternative if that never lands, though it would be declaring covariance
+for a class that genuinely is not covariant while `__replace__` exists.
 
 ## Fixed while measuring: a bare RoutedButton could not be planned
 
