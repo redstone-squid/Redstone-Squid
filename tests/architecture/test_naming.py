@@ -135,7 +135,6 @@ RETIRED_CLASS_NAMES = frozenset(
         "Navigator",
         "Opener",
         "OpeningRequest",
-        "Scope",
         "ScreenOptionsResolver",
         "ScreenSpec",
         "SessionPolicy",
@@ -146,6 +145,11 @@ RETIRED_CLASS_NAMES = frozenset(
 
 These cannot join `RETIRED_IDENTIFIER_WORDS`: words such as ``action``, ``scope``, and
 ``mount`` remain valid verbs or domain words even though the ambiguous class names retired.
+
+`Screen` and `Scope` left this set the same way, by being reclaimed on purpose rather than
+drifting back: `sd.Screen` is the declarative product API, and `sd.Scope` is the lifetime of
+what one owner opened. `Scope` names no session scoping -- that is `ScopeKind` and the
+`SessionScope` family, and the two never meet in a signature.
 """
 
 RETIRED_PACKAGE_IMPORTS = frozenset(
@@ -196,6 +200,7 @@ AGENT_NOUNS = {
     "Adapter": "adapt",
     "Browser": "browse",
     "Converter": "convert",
+    "Decorator": "decorate",
     "Driver": "drive",
     "Editor": "edit",
     "Holder": "hold",
@@ -291,7 +296,12 @@ SAME_CONCEPT_TWO_LAYERS = {
 }
 """Shared names that are deliberate: the same concept at two layers, or a namespaced form."""
 
-UNRELATED_CONCEPTS_SHARING_A_WORD: set[str] = set()
+UNRELATED_CONCEPTS_SHARING_A_WORD = {
+    # `sd.Group` absorbs `app_commands.Group`, so discord.py picks the word: a cog writing
+    # `class Admin(sd.Group)` is reading discord.py's docs, not this suite's vocabulary.
+    # `sl.Group` is the layout node. Neither package's users ever see the other's.
+    "Group",
+}
 """Real collisions, recorded rather than renamed.
 
 `Destination`, `ProgressReporter`, and `ActionKind` used to be here. They were settled by renaming the semantic
