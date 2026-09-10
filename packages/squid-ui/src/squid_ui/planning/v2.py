@@ -179,16 +179,7 @@ class _V2Converter:
                 )
             case RawItem():
                 return self.accessory(node, path)
-            # `Realized` omits `RoutedButton`, because `realization.py` has no pass-through arm
-            # for one, so a bare routed button raises "must be normalized before measuring" and
-            # never reaches here. The alternative stays so that fixing realization is a one-file
-            # change rather than a three-file one.
-            case (
-                LinkButton()
-                | PremiumButton()
-                | RoutedButton()  # pyright: ignore[reportUnnecessaryComparison]
-                | Button()
-            ):
+            case LinkButton() | PremiumButton() | RoutedButton() | Button():
                 return self.accessory(node, path)
         message = f"{path}: {type(node).__name__} cannot appear in a Components V2 scene"
         raise LayoutInvariantError(message)
