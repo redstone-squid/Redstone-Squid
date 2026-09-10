@@ -1553,6 +1553,23 @@ def load_database_config(*, dotenv_path: Path | None = None) -> DatabaseConfig:
     return settings.database
 
 
+def load_build_config(*, dotenv_path: Path | None = None) -> BuildConfig:
+    """Load only the build metadata needed to attribute a migration run to a release."""
+
+    class BuildSettings(BaseSettings):
+        model_config = _ProcessSettings.model_config
+        build: BuildConfig = BuildConfig()
+        strict_unknown_keys: bool = False
+
+    resolved = DEFAULT_DOTENV_PATH if dotenv_path is None else dotenv_path
+    try:
+        settings = BuildSettings(_env_file=resolved)  # type: ignore[call-arg]
+    except (ValidationError, SettingsError) as exc:
+        raise _configuration_error(exc) from None
+    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys, dotenv_path=resolved)
+    return settings.build
+
+
 def load_worker_observability_config(*, dotenv_path: Path | None = None) -> ObservabilityConfig:
     """Load only inherited observability settings in a schematic worker child."""
 
