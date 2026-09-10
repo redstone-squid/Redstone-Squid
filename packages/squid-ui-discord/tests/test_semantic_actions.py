@@ -179,7 +179,7 @@ def test_degraded_global_fit_prefers_less_loss_before_display_preference() -> No
 
     assert result.report.events[0].code == "actions.grouped"
     assert "compact details" not in {
-        node.content for node in result.scene.components_v2.children if hasattr(node, "content")
+        node.content for node in result.scene.components_v2.children if isinstance(node, scene.Text)
     }
     assert result.metrics.states_explored == 4
 

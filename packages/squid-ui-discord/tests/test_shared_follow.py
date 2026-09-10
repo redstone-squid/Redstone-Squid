@@ -139,7 +139,7 @@ async def test_two_mounts_react_once_each_to_one_commit() -> None:
 
             return refresh
 
-        message_root.refresh = counted()  # pyrefly: ignore
+        message_root.refresh = counted()  # pyright: ignore[reportAttributeAccessIssue]  # a stub for the one `refresh(links=...)` call the scheduler makes  # pyrefly: ignore
 
     with transaction():
         workspace.selected = 3
@@ -328,7 +328,7 @@ async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() 
         nonlocal refreshes
         refreshes += 1
 
-    message_root.refresh = refresh  # pyrefly: ignore
+    message_root.refresh = refresh  # pyright: ignore[reportAttributeAccessIssue]  # a stub for the one `refresh(links=...)` call the scheduler makes  # pyrefly: ignore
     with transaction():
         workspace.selected = 3
     await sd.drain(scheduler)
@@ -512,7 +512,8 @@ class TestSelfWrites:
             tasks.start_soon(message_root.refresh)
             await started.wait()
             tasks.start_soon(dispatch)
-            while workspace.selected != 7:
+            # pyright narrows `selected` to the 3 assigned above; the dispatch task is what writes 7.
+            while workspace.selected != 7:  # pyright: ignore[reportUnnecessaryComparison]
                 await asyncio.sleep(0)
             release.set()
 

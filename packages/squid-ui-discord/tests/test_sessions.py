@@ -9,6 +9,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord
+import squid_ui_discord.message_root_contracts
 from squid_ui.primitives import Button, Heading, Row
 from squid_ui.text import Message
 from squid_ui_discord import Everyone, MessageRootDefaults, SessionKey, SessionManager

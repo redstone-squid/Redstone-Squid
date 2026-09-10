@@ -152,13 +152,13 @@ class TestGating:
     def test_a_v2_container_has_no_classic_form_and_says_so(self) -> None:
         for node in (Panel(children=(Text("x"),)), Gallery(("https://example.invalid/a.png",))):
             with pytest.raises(LayoutInvariantError, match="no classic form"):
-                plan(node, target=DISCORD_V1_DPY27)  # pyrefly: ignore[bad-argument-type]
+                plan(node, target=DISCORD_V1_DPY27)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
     def test_a_section_is_never_silently_reinterpreted_as_a_card(self) -> None:
         section = Section((Text("x"),), accessory=Thumbnail("https://example.invalid/a.png"))
 
         with pytest.raises(LayoutInvariantError, match="no classic form"):
-            plan(section, target=DISCORD_V1_DPY27)  # pyrefly: ignore[bad-argument-type]
+            plan(section, target=DISCORD_V1_DPY27)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 
 class TestLocalCaps:
@@ -272,4 +272,7 @@ class TestDiscordPyCrossChecks:
         """Every per-value cap is server-only, which is why Squid audits the payload itself."""
         embed = discord.Embed(title="x" * 500, description="y" * 5000)
 
-        assert len(embed.to_dict()["title"]) == 500
+        payload = embed.to_dict()
+
+        assert "title" in payload
+        assert len(payload["title"]) == 500

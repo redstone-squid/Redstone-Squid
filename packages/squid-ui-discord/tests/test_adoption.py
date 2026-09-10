@@ -109,7 +109,7 @@ async def test_the_message_convention_still_refuses_as_a_second_signal() -> None
     view = Paginator()
     # An uninitialised `Message` is enough: the check is an isinstance, so that a view whose own
     # button callback happens to be named `message` is not mistaken for a sent one.
-    view.message = discord.Message.__new__(discord.Message)  # pyrefly: ignore[missing-attribute]
+    view.message = discord.Message.__new__(discord.Message)  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
 
     with pytest.raises(AdoptionError, match="already holds a message"):
         adopt(view)
@@ -196,9 +196,9 @@ def test_layout_view_resolves_http_files_through_stored_asset_metadata() -> None
 
     assert isinstance(document, Document)
     file = document.children[0]
-    assert file.asset_key == "report"  # pyrefly: ignore[missing-attribute]
-    assert file.name == "report.txt"  # pyrefly: ignore[missing-attribute]
-    assert file.media_type == "text/plain"  # pyrefly: ignore[missing-attribute]
+    assert file.asset_key == "report"  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
+    assert file.name == "report.txt"  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
+    assert file.media_type == "text/plain"  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
 
 
 def test_layout_view_uses_structural_keys_for_nested_controls() -> None:
@@ -376,7 +376,12 @@ async def test_keys_override_both_defaults() -> None:
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(label="one", custom_id="ignored"))
 
-    row = cast(list[Node], adopt(view, keys=lambda item: f"by-label-{item.label}").render())[0]
+    def by_label(item: discord.ui.Item[Any]) -> str:
+        # `KeyFactory` is handed the base `Item`; only the labelled subclasses carry a label.
+        assert isinstance(item, discord.ui.Button)
+        return f"by-label-{item.label}"
+
+    row = cast(list[Node], adopt(view, keys=by_label).render())[0]
 
     assert isinstance(row, Row)
     assert isinstance(row.items[0], Button)

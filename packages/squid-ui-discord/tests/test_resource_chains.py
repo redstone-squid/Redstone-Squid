@@ -216,8 +216,9 @@ async def test_two_independent_resources_still_settle_together() -> None:
         def render(self):
             left = self.left.status
             right = self.right.status
-            ready = isinstance(left, sl.resources.Ready) and isinstance(right, sl.resources.Ready)
-            return sl.paragraph(f"{left.value}{right.value}" if ready else "loading")
+            if isinstance(left, sl.resources.Ready) and isinstance(right, sl.resources.Ready):
+                return sl.paragraph(f"{left.value}{right.value}")
+            return sl.paragraph("loading")
 
     message_root = MessageRoot(Pair(), access=Everyone(), timeout=None)
     message: Any = message_harness()
