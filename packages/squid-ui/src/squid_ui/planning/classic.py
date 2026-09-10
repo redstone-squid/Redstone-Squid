@@ -294,16 +294,7 @@ class _ClassicConverter:
                             )
                         )
                     )
-                # `Realized` omits `RoutedButton`, because `realization.py` has no pass-through
-                # arm for one, so a bare routed button raises "must be normalized before
-                # measuring" and never reaches here. The alternative stays so that fixing
-                # realization is a one-file change rather than a three-file one.
-                case (
-                    LinkButton()
-                    | RoutedButton()  # pyright: ignore[reportUnnecessaryComparison]
-                    | Button()
-                    | RawItem()
-                ):
+                case LinkButton() | RoutedButton() | Button() | RawItem():
                     # A bare control at the root gets its own row rather than being merged
                     # with a neighbour: merging is a layout decision, and lowering made it.
                     self.rows.append(scene.ClassicRow((_as_control(self.bindings.control(child, here), here),)))
