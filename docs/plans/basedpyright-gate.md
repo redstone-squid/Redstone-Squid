@@ -1,7 +1,6 @@
 # Restore the BasedPyright gate
 
-Status: cleared. 723 errors to 13, all of them in files that cannot run. Recorded and
-completed 2026-09-09.
+Status: cleared. 723 errors to 0. Recorded 2026-09-09, completed 2026-09-10.
 
 ## Why this exists
 
@@ -20,10 +19,9 @@ reports accumulates silently. The `@override` sweep is done; this plan covers th
 | | errors |
 |---|---|
 | Before | 723 |
-| After | 13 |
+| After | 0 |
 
-All 13 survivors are in the five dead files listed below; every error in code that runs is
-gone. Pyrefly holds at zero, 5334 tests pass with the same 11 pre-existing failures a
+Pyrefly holds at zero, 5334 tests pass with the same 11 pre-existing failures a
 clean tree gives, and Ruff and format are clean.
 
 `--pythonpath .venv/bin/python` changed nothing before or after, so none of this was venv
@@ -98,30 +96,28 @@ are gone. Verified end to end through `plan()` against both the ComponentsV2 and
 Discord targets. `packages/squid-ui/tests/test_top_level_controls_measure.py` covers every
 control the dialects convert, and was confirmed to fail on the previous behaviour.
 
-## Dead files found while measuring — still open
+## The "dead" files were mostly renames
 
-Five files import modules that do not exist, so they raise `ImportError` before running a
-line. This is rot, not a typing complaint, and it is left for a decision rather than
-quietly excluded or renamed. These are the only remaining BasedPyright errors.
+Five files raised `ImportError` before running a line. Four were not rot at all — every
+unresolvable import was a rename nobody had followed:
 
-| File | Unresolvable import |
+| Was | Is |
 |---|---|
-| `benchmarks/plan68.py` | `squid_reactive` (the package is `squid_reactivity`) |
-| `benchmarks/plan68_backends.py` | `squid_replicated.backends.{loro,pycrdt}` |
-| `benchmarks/plan68_backend_actions.py` | `squid_replicated.backends.{loro,pycrdt}` |
-| `benchmarks/plan68_fake_replication.py` | `squid_replicated.fake` |
-| `scripts/populate_db_with_logs_historical_messages.py` | `squid.bot.submission.media` |
+| `squid_reactive` | `squid_reactivity` |
+| `squid_replicated` | `squid_replication` |
+| `squid_replicated.fake` | `squid_replication.reference` |
+| `add_action_outcome_sink` | `add_action_result_sink` |
 
-`squid_replicated` is now `squid_replication`, and that rename fixes the two `backends`
-imports, but `squid_replicated.fake` has no successor. The script additionally imports
-three names that no longer exist (`create_application_runtime`, `BUILD_LOG_CHANNEL_IDS`,
-`ApplicationServices`) and passes two parameters (`mirror`, `dry_run`) that no signature
-accepts, so it needs more than a rename. Deleting these or repairing them is a judgement
-call about whether the plan-68 benchmarks and the backfill script are still wanted.
+All four plan-68 benchmarks now type-check and run, verified by executing two of them end
+to end. Excluding them from type checking, which was the first instinct, would have
+preserved them in exactly the broken state that hid this.
 
-Separately, `DraftLifecycleStateMachine` in `tests/fuzz/api/draft_lifecycle.py` is
-referenced nowhere outside its own definition, so its `configure` is never called and
-`initialize_scenario` would raise on every run.
+`scripts/populate_db_with_logs_historical_messages.py` is the one genuine casualty. It
+depends on capabilities `11808b7a` removed rather than renamed, so it carries a per-file
+pragma and a docstring saying what it would take to revive it.
+
+The lesson generalizes: reach for an exclusion only after checking whether the thing is
+broken or merely stale. Four of five here were stale.
 
 ## Caveats
 
