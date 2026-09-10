@@ -120,7 +120,7 @@ class PycrdtTextEngine:
         item = module.StackItem(
             # pycrdt's stub names the Rust `Doc`, but the runtime takes the Python wrapper --
             # see tests/test_real_backends.py::test_pycrdt_stack_item_groups_multiple_container_types.
-            branch.doc,  # pyrefly: ignore[bad-argument-type]
+            branch.doc,  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
             module.IdSet.decode(token.deletions),
             module.IdSet.decode(token.insertions),
         )
