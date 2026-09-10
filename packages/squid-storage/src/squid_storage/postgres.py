@@ -254,7 +254,14 @@ class PostgresSessionStore:
                 reservation.owner,
                 reservation._fence,
             )
-            if valid is not True or not await self._retirement_is_valid(connection, reservation.scope, key, victims):
+            # asyncpg builds `PoolConnectionProxy`'s query methods with a metaclass, so nothing
+            # static records that the object a pool yields is a `Connection`.
+            if valid is not True or not await self._retirement_is_valid(
+                connection,  # pyright: ignore[reportArgumentType]  # asyncpg's pool proxy is untyped
+                reservation.scope,
+                key,
+                victims,
+            ):
                 return None
             if victims:
                 await connection.execute(

@@ -25,6 +25,12 @@ from squid_ui.target_types import (
 )
 from squid_ui_slack.adapter import SLACK_SDK_343_ADAPTER
 
+# The verified default, widened to the family every implementation below accepts. `AdapterProfile`
+# is frozen, so a profile for a narrower family really is a profile for a wider one; BasedPyright
+# infers a dataclass type parameter as invariant even when the dataclass is frozen, while Pyrefly
+# reads the same declaration as covariant. Naming the default once keeps that to one crossing.
+_DEFAULT_ADAPTER: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER  # pyright: ignore[reportAssignmentType]
+
 
 @overload
 def message(
@@ -40,7 +46,7 @@ def message[ProfileT: SlackSdkAdapter](
 
 def message(
     *,
-    adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER,
+    adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER,
     limits: SlackMessageLimits = SLACK_MESSAGE_LIMITS,
 ) -> Target[SlackMessageLimits, scene.SlackMessage, SlackMessageTarget, SlackSdkAdapter]:
     """A Slack Block Kit message target realized by the Slack SDK."""
@@ -61,7 +67,7 @@ def modal[ProfileT: SlackSdkAdapter](
 
 def modal(
     *,
-    adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER,
+    adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER,
     limits: SlackModalLimits = SLACK_MODAL_LIMITS,
 ) -> Target[SlackModalLimits, scene.SlackModalView, SlackModalTarget, SlackSdkAdapter]:
     """A Slack Block Kit modal target realized by the Slack SDK."""
@@ -82,7 +88,7 @@ def home[ProfileT: SlackSdkAdapter](
 
 def home(
     *,
-    adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER,
+    adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER,
     limits: SlackHomeLimits = SLACK_HOME_LIMITS,
 ) -> Target[SlackHomeLimits, scene.SlackHomeView, SlackHomeTarget, SlackSdkAdapter]:
     """A Slack App Home target realized by the Slack SDK."""

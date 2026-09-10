@@ -795,7 +795,7 @@ def resource[OwnerT: ResourceOwner, ValueT](
 
 
 def resource(
-    loader: Callable[[ResourceOwner], Awaitable[Any]] | None = None,
+    loader: Callable[[Any], Awaitable[Any]] | None = None,
     /,
     *,
     pending: PendingMode = PendingMode.EXPLICIT,
@@ -807,7 +807,7 @@ def resource(
     """
 
     def decorate(
-        function: Callable[[ResourceOwner], Awaitable[Any]],
+        function: Callable[[Any], Awaitable[Any]],
     ) -> _ResourceDescriptor[ResourceOwner, Any] | _AtomicResourceDescriptor[ResourceOwner, Any]:
         descriptor = _AtomicResourceDescriptor if pending is PendingMode.ATOMIC else _ResourceDescriptor
         return descriptor(function, pending_mode=pending)

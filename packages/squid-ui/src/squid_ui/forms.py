@@ -737,10 +737,13 @@ class FormSpec:
             if not isinstance(field, ExtensionField) or field.capability in capabilities:
                 adapted.append(field)
                 continue
-            if field.fallback is None:
+            # `FormField` is also the `Form` descriptor, so BasedPyright runs `__get__` over this
+            # field's declared type; the slot on a frozen slotted dataclass holds a plain value.
+            declared: FormField[Any] | None = field.fallback  # pyright: ignore[reportAttributeAccessIssue]
+            if declared is None:
                 message = f"form field {field.key!r} requires unsupported capability {field.capability!r}"
                 raise LayoutInvariantError(message)
-            fallback = field.fallback.bind(field.key)
+            fallback = declared.bind(field.key)
             adapted.append(
                 replace(
                     fallback,

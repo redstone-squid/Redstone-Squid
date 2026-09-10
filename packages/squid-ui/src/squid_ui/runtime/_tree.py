@@ -119,7 +119,7 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget](
             | Break(children=children)
             | Card(children=children)
         ):
-            return replace(node, children=many(children, path, "children"))  # pyrefly: ignore[bad-argument-type]
+            return replace(node, children=many(children, path, "children"))  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
         case Items(items=items):
             return replace(
                 node,
@@ -165,7 +165,7 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget](
             return replace(
                 node,
                 fallback=one(  # pyrefly: ignore[bad-argument-type]
-                    fallback,  # pyrefly: ignore[bad-argument-type]
+                    fallback,  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
                     f"{path}.fallback",
                     (*route, _FieldStep("fallback")),
                 ),
@@ -177,11 +177,11 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget](
                     replace(
                         variant,
                         nodes=_map_many_at(  # pyrefly: ignore[bad-argument-type]
-                            variant.nodes,
+                            variant.nodes,  # pyright: ignore[reportArgumentType]
                             f"{path}.variant.{index}",
                             (*route, _IndexStep("variants", index)),
                             "nodes",
-                            transform,  # pyrefly: ignore[bad-argument-type]
+                            transform,  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
                         ),
                     )
                     for index, variant in enumerate(variants)
