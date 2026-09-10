@@ -96,16 +96,16 @@ async def test_prefix_invoke_establishes_localization_scope(mocker: MockerFixtur
 
 async def test_failed_prefix_command_marks_its_invocation_span(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
-    scope = mocker.Mock()
-    scope.resolve = mocker.AsyncMock(return_value=mocker.Mock(localization=Localization(locale="en-GB")))
-    bot.ui = mocker.Mock()
-    bot.ui.scope.return_value = scope
-    context = mocker.Mock(
-        command=mocker.Mock(qualified_name="admin sync"),
-        command_failed=True,
-        guild=None,
-        channel=None,
+    runtime = sd.install(
+        cast(discord.Client, bot),
+        localization=lambda _source: _localization("en-GB"),
     )
+    bot.ui = cast(Any, runtime)
+    context = cast(Context[Any], ContextHarness(message=MessageHarness(), bot=bot, user_id=7).source)
+    context.command = mocker.Mock(qualified_name="admin sync")
+    context.guild = None
+    context.channel = None  # type: ignore[assignment]
+    context.command_failed = True
     mocker.patch.object(Bot, "invoke", new=mocker.AsyncMock())
     span = mocker.Mock()
     span_context = mocker.MagicMock()
@@ -113,6 +113,7 @@ async def test_failed_prefix_command_marks_its_invocation_span(mocker: MockerFix
     trace = mocker.patch.object(bot_app, "trace_span", return_value=span_context)
 
     await bot_app.RedstoneSquid.invoke(bot, context)
+    await runtime.close()
 
     assert trace.call_args.args[0] == "discord.command admin sync"
     span.set_error.assert_called_once_with()
