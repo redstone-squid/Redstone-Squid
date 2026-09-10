@@ -34,7 +34,7 @@ async def test_push_pop_and_controls_render_last():
     assert "## child" in sd.payload_texts(pushed)
 
     await message_root.dispatch("__nav_back", interaction_harness())
-    assert navigator.current.name == "root"  # pyrefly: ignore
+    assert navigator.current.name == "root"  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore
 
 
 async def test_home_appears_only_when_deep():

@@ -130,7 +130,7 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
         def __init__(self, query: str) -> None:
             self.query = query
 
-        async def fetch(self, position: sl.sources.Position, _extent: int) -> sl.sources.Window[Entry]:
+        async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Entry]:
             entered[self.query].set()
             await release[self.query].wait()
             return sl.sources.Window(

@@ -18,6 +18,6 @@ class RequiredArguments(Screen):
 
 async def construction_and_presentation(ui: DiscordUI[object], source: Any) -> None:
     await ui.respond(source, RequiredArguments("ready", count=2))
-    await ui.respond(source, RequiredArguments(2, count="wrong"))  # pyrefly: ignore[bad-argument-type]
-    await ui.respond(source, RequiredArguments("missing"))  # pyrefly: ignore[missing-argument]
-    await ui.respond(source, RequiredArguments("ready", count=2), None)  # pyrefly: ignore[no-matching-overload]
+    await ui.respond(source, RequiredArguments(2, count="wrong"))  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+    await ui.respond(source, RequiredArguments("missing"))  # pyright: ignore[reportCallIssue]  # pyrefly: ignore[missing-argument]
+    await ui.respond(source, RequiredArguments("ready", count=2), None)  # pyright: ignore[reportCallIssue]  # pyrefly: ignore[no-matching-overload]

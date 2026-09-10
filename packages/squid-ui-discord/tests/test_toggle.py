@@ -46,7 +46,7 @@ def _event(responder: _Responder | None = None) -> PressEvent:
     return PressEvent(Actor("7"), responder or _Responder())
 
 
-def _button(result: sl.scene.PlanResult) -> scene.Button:
+def _button(result: sl.scene.PlanResult[scene.ComponentsV2]) -> scene.Button:
     row = next(node for node in result.scene.components_v2.children if isinstance(node, scene.Row))
     button = row.items[0]
     assert isinstance(button, scene.Button)

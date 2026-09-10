@@ -59,4 +59,4 @@ accepts_either_mounted(ClassicRenderer())
 # The HTML renderer draws scenes but has no mount to wire controls to, so it is deliberately
 # not a `MountedRenderer`. If this stops being an error, `wire` has gone optional in a way
 # that lets an unwireable renderer into a live message root.
-accepts_mounted_v2(HtmlRenderer())  # pyrefly: ignore[bad-argument-type]
+accepts_mounted_v2(HtmlRenderer())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]

@@ -135,7 +135,7 @@ def test_a_factory_may_construct_another_scope(bus: LocalTopicBus) -> None:
 
 def test_a_wrong_namespace_type_is_refused_without_becoming_active(bus: LocalTopicBus) -> None:
     def make(pool_bus: TopicBus, scope: UserScope) -> Preferences:
-        return Anonymous(pool_bus)  # pyrefly: ignore[bad-return]
+        return Anonymous(pool_bus)  # pyright: ignore[reportReturnType]  # pyrefly: ignore[bad-return]
 
     pool = SharedStatePool(Preferences, bus, factory=make)
 
@@ -184,7 +184,7 @@ def test_drop_retires_a_handle_that_stays_usable_while_a_new_generation_starts(b
     assert second is not first
     # The retired generation is untouched: still readable, still writable, still reactive.
     seen: list[object] = []
-    bus.subscribe(type(first).theme.address(first), seen.append)  # pyrefly: ignore[missing-attribute]
+    bus.subscribe(type(first).theme.address(first), seen.append)  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
     first.theme = "light"
     assert first.theme == "light"
     assert second.theme == "dark"
@@ -235,7 +235,7 @@ def test_a_snapshot_cannot_mutate_the_pool(bus: LocalTopicBus) -> None:
     snapshot = pool.active()
 
     with pytest.raises(TypeError):
-        snapshot[UserScope(2)] = Preferences(bus, UserScope(2))  # pyrefly: ignore[unsupported-operation]
+        snapshot[UserScope(2)] = Preferences(bus, UserScope(2))  # pyright: ignore[reportIndexIssue]  # pyrefly: ignore[unsupported-operation]
 
 
 def test_a_mutable_by_convention_but_hashable_scope_works(bus: LocalTopicBus) -> None:
@@ -258,10 +258,10 @@ def test_an_unhashable_pool_key_raises_the_normal_type_error(bus: LocalTopicBus)
     pool: SharedStatePool[Hashable, Loose] = SharedStatePool(Loose, bus)
 
     with pytest.raises(TypeError, match="unhashable"):
-        pool.get(["guild", 7])  # pyrefly: ignore[bad-argument-type]
+        pool.get(["guild", 7])  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
     # ... while a direct namespace with the same scope is still fine, per 40's model.
-    assert Loose(bus, ["guild", 7]).scope == ["guild", 7]  # pyrefly: ignore[bad-argument-type]
+    assert Loose(bus, ["guild", 7]).scope == ["guild", 7]  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 
 def test_an_unscoped_namespace_pools_on_none(bus: LocalTopicBus) -> None:
@@ -297,4 +297,4 @@ def test_a_scope_is_matched_by_equality_not_identity(bus: LocalTopicBus) -> None
     pool = SharedStatePool(Preferences, bus)
 
     assert pool.get(UserScope(1)) is pool.get(UserScope(1))
-    assert pool.get_existing(GuildScope(1)) is None  # pyrefly: ignore[bad-argument-type]
+    assert pool.get_existing(GuildScope(1)) is None  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]

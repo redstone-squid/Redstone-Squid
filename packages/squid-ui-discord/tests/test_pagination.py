@@ -515,7 +515,7 @@ class TestBuildModal:
 
         spec = ModalSpec(title="T", items=(LabelSpec(text="Name", input=TextInputSpec(label="n", key="name")),))
         modal = build_modal(spec, on_submit=on_submit)
-        next(iter(modal._inputs.values()))._value = "steve"  # pyrefly: ignore
+        next(iter(modal._inputs.values()))._value = "steve"  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore
 
         await modal.on_submit(interaction_harness())
 

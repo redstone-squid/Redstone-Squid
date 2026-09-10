@@ -8,6 +8,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord
+import squid_ui_discord.durability
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import Target
 from squid_ui.planning.adapter import (

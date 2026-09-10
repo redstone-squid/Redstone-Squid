@@ -33,7 +33,7 @@ assert_type(state({"a"}), AbstractSet[str])
 assert_type(state(factory=lambda: {"a": 1}), Mapping[str, int])
 assert_type(state(factory=lambda: ["a"]), Sequence[str])
 assert_type(state(factory=lambda: {"a"}), AbstractSet[str])
-assert_type(state(("a",)), tuple[str])
+assert_type(state(("a",)), tuple[str])  # pyright: ignore[reportAssertTypeFailure]  # pyright keeps the element literal here; pyrefly widens it
 assert_type(state(frozenset({"a"})), frozenset[str])
 assert_type(state(0), int)
 assert_type(state(factory=int), int)
@@ -44,7 +44,7 @@ assert_type(state({"a"}), AbstractSet[str])
 assert_type(state(factory=lambda: {"a": 1}), Mapping[str, int])
 assert_type(state(factory=lambda: ["a"]), Sequence[str])
 assert_type(state(factory=lambda: {"a"}), AbstractSet[str])
-assert_type(state(("a",)), tuple[str])
+assert_type(state(("a",)), tuple[str])  # pyright: ignore[reportAssertTypeFailure]  # pyright keeps the element literal here; pyrefly widens it
 assert_type(state(0), int)
 assert_type(state(factory=int), int)
 

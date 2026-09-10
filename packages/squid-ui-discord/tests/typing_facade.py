@@ -78,4 +78,4 @@ async def facade_inference(
     assert_type(click, sd.Request[Any])
     assert_type(click.root, sd.MessageRoot | None)
 
-    runtime.respond(interaction, "wrong owner")  # pyrefly: ignore[missing-attribute]
+    runtime.respond(interaction, "wrong owner")  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
