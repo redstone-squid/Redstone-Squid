@@ -700,6 +700,10 @@ def default_render_cache_dir(*, working_directory: Path | None = None) -> Path:
     return base / ".cache" / "redstone-squid" / "schematics"
 
 
+_RGBA_CHANNELS = ("red", "green", "blue", "alpha")
+"""Channel order shared by the JSON array form and the dumped dataclass form."""
+
+
 class SchematicConfig(_FrozenModel):
     """Schematic engine resource budgets and worker supervision settings.
 
@@ -801,6 +805,14 @@ class SchematicConfig(_FrozenModel):
     def _decode_render_background(cls, value: object) -> RgbaColor:
         if isinstance(value, RgbaColor):
             return value
+        if isinstance(value, Mapping):
+            # `RgbaColor` is a dataclass, so `model_dump` lowers it to its four channel keys and a
+            # process projection hands that dump straight back to this validator.
+            missing = [channel for channel in _RGBA_CHANNELS if channel not in value]
+            if missing:
+                msg = f"Render background is missing the {', '.join(missing)} channel(s)."
+                raise TypeError(msg)
+            return RgbaColor.from_channels([value[channel] for channel in _RGBA_CHANNELS])
         if not isinstance(value, list | tuple):
             msg = "Render background must be a four-channel JSON array."
             raise TypeError(msg)
