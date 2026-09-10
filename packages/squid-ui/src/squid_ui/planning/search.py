@@ -144,7 +144,7 @@ def iter_assignments(axes: tuple[StrategyAxis, ...]) -> Iterator[StrategyAssignm
     )
     initial = (0,) * len(axes)
     frontier: list[tuple[CostVector, tuple[int, ...], StrategyAssignment]] = []
-    seen = {initial}
+    seen: set[tuple[int, ...]] = {initial}
 
     def assignment(indices: tuple[int, ...]) -> StrategyAssignment:
         ranked_choices = tuple(candidates[index] for candidates, index in zip(ranked, indices, strict=True))
