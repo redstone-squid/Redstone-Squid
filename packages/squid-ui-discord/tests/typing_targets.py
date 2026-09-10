@@ -41,7 +41,7 @@ def accepts_classic(value: Renderable[ClassicTarget]) -> None:
 
 
 accepts_classic(Portable())
-accepts_classic(V2Only())  # pyrefly: ignore[bad-argument-type]
+accepts_classic(V2Only())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 discord_py = AdapterProfile(DiscordPyAdapter, "discord.py-custom", ">=2.8,<3")
 discord_py_27 = AdapterProfile(DiscordPy27Adapter, "discord.py", ">=2.7,<2.8")
@@ -70,18 +70,18 @@ assert_type(plan(Text("v2"), target=v2()), PlanResult[scene.ComponentsV2])
 assert_type(plan(Text("classic"), target=classic()), PlanResult[scene.ClassicMessage])
 assert_type(plan(Paragraph("portable"), target=v2()), PlanResult[scene.ComponentsV2])
 assert_type(plan(Paragraph("html"), target=html.target()), PlanResult[scene.HtmlBody])
-plan(Text("primitive"), target=html.target())  # pyrefly: ignore[bad-argument-type]
+plan(Text("primitive"), target=html.target())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 html_cache = PlanCache[scene.HtmlBody]()
 html_memo = PlanMemo[scene.HtmlBody]()
 plan(Paragraph("html"), target=html.target(), cache=html_cache, memo=html_memo)
-plan(Paragraph("discord"), target=v2(), cache=html_cache)  # pyrefly: ignore[bad-argument-type]
-plan(Paragraph("discord"), target=v2(), memo=html_memo)  # pyrefly: ignore[bad-argument-type]
+plan(Paragraph("discord"), target=v2(), cache=html_cache)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+plan(Paragraph("discord"), target=v2(), memo=html_memo)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 v2_only = Panel((Text("v2"),))
 classic_only = Card(children=(Text("classic"),))
-plan(v2_only, target=classic())  # pyrefly: ignore[no-matching-overload, bad-argument-type]
-plan(classic_only, target=v2())  # pyrefly: ignore[no-matching-overload, bad-argument-type]
+plan(v2_only, target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[no-matching-overload, bad-argument-type]
+plan(classic_only, target=v2())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[no-matching-overload, bad-argument-type]
 
 assert_type(
     fallback(v2_only, classic_only),

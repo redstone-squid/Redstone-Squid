@@ -220,7 +220,7 @@ def test_a_review_state_still_routes_through_the_stateless_shell() -> None:
     state = _answer(wizard, state, "kind", "basic")
     routes: list[sp.TransitionRoute[sp.WizardState]] = []
 
-    sp.RouteDriver(lambda request: (routes.append(request), "route")[1]).render(wizard, state)
+    sp.RouteDriver[sp.WizardState](lambda request: (routes.append(request), "route")[1]).render(wizard, state)
 
     assert any(request.action == "goto:name" and request.state.reviewing for request in routes)
     assert any(request.action == "finish" for request in routes)

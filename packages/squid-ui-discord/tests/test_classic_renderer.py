@@ -80,7 +80,7 @@ class TestMalformedScenes:
         wrong = scene.Scene(scene.Codec.protocol, "discord.components-v1", 1, scene.ComponentsV2((scene.Text("x"),)))
 
         with pytest.raises(DrawInvariantError, match="cannot draw a ComponentsV2 body"):
-            ClassicRenderer().draw(wrong)  # pyrefly: ignore[bad-argument-type]
+            ClassicRenderer().draw(wrong)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
     def test_the_v2_target_id_is_refused(self) -> None:
         wrong = scene.Scene(scene.Codec.protocol, "discord.components-v2", 1, scene.ClassicMessage())

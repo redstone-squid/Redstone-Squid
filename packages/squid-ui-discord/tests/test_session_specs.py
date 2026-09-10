@@ -116,6 +116,7 @@ def test_session_spec_options_are_defensively_copied_and_read_only() -> None:
     spec = SessionSpec("panel", options=source)
     source["timeout"] = None
 
+    assert "timeout" in spec.options
     assert spec.options["timeout"] == 20
 
     options = cast(dict[str, object], spec.options)

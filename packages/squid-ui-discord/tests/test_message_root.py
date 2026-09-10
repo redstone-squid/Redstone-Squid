@@ -16,6 +16,7 @@ from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 
 import squid_ui as sl
 import squid_ui_discord
+import squid_ui_discord.message_root_contracts
 from squid_reactivity import ActionLedger, add_action_result_sink
 from squid_ui import (
     ActionEvent,
@@ -504,7 +505,7 @@ class _RefusingHandle:
     """An edit handle Discord rejects for a reason that is not staleness."""
 
     permanent = False
-    expires_at = None
+    expires_at: datetime | None = None
     mode = squid_ui_discord.MessageMode.COMPONENTS_V2
 
     def expired(self) -> bool:
@@ -2932,7 +2933,7 @@ class TestEditHandles:
     async def test_a_stale_handle_is_dropped_rather_than_reused(self):
         class _Stale:
             permanent = False
-            expires_at = None
+            expires_at: datetime | None = None
             mode = squid_ui_discord.MessageMode.COMPONENTS_V2
             writes = 0
 
@@ -3174,7 +3175,9 @@ class ProgressiveOperationPanel(OperationPanel):
         super().__init__()
 
     @sl.operation(initial="starting")
-    async def _publication(self, progress: sl.operations.ProgressReporter[str]) -> int:
+    # The operation descriptor is invariant in its owner, so redeclaring one in a subclass
+    # reads as a conflicting override even though that is what subclassing it is for.
+    async def _publication(self, progress: sl.operations.ProgressReporter[str]) -> int:  # pyright: ignore[reportIncompatibleVariableOverride]
         progress.report("publishing")
         self.progressed.set()
         await self.resume.wait()

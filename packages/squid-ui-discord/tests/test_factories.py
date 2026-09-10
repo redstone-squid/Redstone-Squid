@@ -207,7 +207,8 @@ class TestDrift:
 
     def test_every_semantic_node_has_a_root_level_factory(self) -> None:
         for member in SemanticNode.__value__.__args__:
-            name = self._ALIASES.get(member.__name__, member.__name__.lower())
+            member_name: str = member.__name__
+            name = self._ALIASES.get(member_name, member_name.lower())
             assert callable(getattr(sl, name))
 
 

@@ -125,7 +125,7 @@ async def test_one_publish_refreshes_a_watching_message_root_exactly_once() -> N
         nonlocal refreshes
         refreshes += 1
 
-    message_root.refresh = refresh  # pyrefly: ignore
+    message_root.refresh = refresh  # pyright: ignore[reportAttributeAccessIssue]  # a stub for the one `refresh(links=...)` call the scheduler makes  # pyrefly: ignore
 
     bus.publish(BUILD)
     await sd.drain(scheduler)
