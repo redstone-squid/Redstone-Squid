@@ -307,7 +307,7 @@ class Builder:
             case RawItem(text_cost=text_cost):
                 self.charge(text_cost)
                 return node
-            case File() | Sep() | Thumbnail() | PremiumButton() | Button() | LinkButton():
+            case File() | Sep() | Thumbnail() | PremiumButton() | Button() | LinkButton() | RoutedButton():
                 return node
             case Boundary():
                 message = "Boundary must be expanded before solving"
