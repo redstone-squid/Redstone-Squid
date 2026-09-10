@@ -433,7 +433,11 @@ class ReactionRouter:
             attributes={"squid.reaction.kind": item.kind},
         )
         await run_all(
-            functools.partial(self._run_recovery, callback, item.kind, item.event) for callback in item.recoveries
+            # `_QueuedEvent` is a union of two `_QueuedReaction` instantiations, so the checker cannot
+            # rebind EventT across the union even though each queued item pairs its own event type with
+            # its own callbacks -- which is exactly what the generic dataclass guarantees.
+            functools.partial(self._run_recovery, callback, item.kind, item.event)  # pyright: ignore[reportArgumentType]
+            for callback in item.recoveries
         )
 
     @staticmethod
@@ -509,7 +513,9 @@ class ReactionRouter:
                 accepted_at = item.accepted_at or item.created_at
                 record_histogram("squid.reaction.queue_latency", time.monotonic() - accepted_at, attributes=attributes)
                 await run_all(
-                    functools.partial(self._run_callback, callback, item.kind, item.event)
+                    # See `_recover_unadmitted`: the union of `_QueuedReaction` instantiations hides the
+                    # event/callback pairing the dataclass guarantees.
+                    functools.partial(self._run_callback, callback, item.kind, item.event)  # pyright: ignore[reportArgumentType]
                     for callback in item.callbacks
                 )
             except anyio.get_cancelled_exc_class():

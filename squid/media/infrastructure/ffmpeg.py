@@ -646,7 +646,9 @@ def _frame_duration_milliseconds(probe: MediaProbe) -> int:
 
 async def _terminate(process: asyncio.subprocess.Process) -> None:
     try:
-        if os.name == "posix" and process.pid is not None:
+        # typeshed spells Process.pid as int, but it is whatever the transport's get_pid()
+        # returned, and that is None until the transport has actually spawned the child.
+        if os.name == "posix" and process.pid is not None:  # pyright: ignore[reportUnnecessaryComparison]
             os.killpg(process.pid, signal.SIGKILL)
         else:  # pragma: no cover - exercised on Windows CI
             process.kill()

@@ -4,7 +4,8 @@ import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from types import UnionType
+from typing import TYPE_CHECKING, Any
 
 from beartype.door import is_bearable
 
@@ -17,6 +18,17 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+def _accepts(value: object, value_type: type[Any] | UnionType) -> bool:
+    """Whether a runtime type hint accepts a value.
+
+    A field's ``value_type`` is a runtime hint rather than a class -- ``str | None`` is a
+    ``UnionType`` -- which is exactly what beartype takes, but neither checker's signature for
+    ``is_bearable`` spells a union of the two. The suppression lives here rather than at every
+    call site; ``squid.bot.submission.parse`` carries the same one at the same boundary.
+    """
+    return is_bearable(value, value_type)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 
 class FieldDisplay(StrEnum):
@@ -36,7 +48,7 @@ class BuildFieldSpec[ValueT]:
     formatter: Callable[[ValueT], str]
     reader: Callable[[Build], ValueT]
     patch: Callable[[ValueT], BuildEditPatch]
-    value_type: type[ValueT]
+    value_type: type[ValueT] | UnionType
     placeholder: str
     required: bool = False
     minimum: int | None = None
@@ -48,7 +60,7 @@ class BuildFieldSpec[ValueT]:
     def typed(
         cls,
         key: str,
-        value_type: type[ValueT],
+        value_type: type[ValueT] | UnionType,
         placeholder: str,
         *,
         reader: Callable[[Build], ValueT],
@@ -62,7 +74,10 @@ class BuildFieldSpec[ValueT]:
         parser: Callable[[str], ValueT] | None = None,
     ) -> BuildFieldSpec[ValueT]:
         """Build a specification from the shared formatter/parser registry."""
-        formatter, default_parser = get_formatter_and_parser_for_type(value_type)
+        formatter, default_parser = get_formatter_and_parser_for_type(
+            # Same runtime-hint boundary as `_accepts`: the registry dispatches on hints, not classes.
+            value_type  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+        )
         return cls(
             key,
             label or key.replace("_", " ").title(),
@@ -72,7 +87,7 @@ class BuildFieldSpec[ValueT]:
             patch,
             value_type,
             placeholder,
-            required=not is_bearable(None, value_type) if required is None else required,
+            required=not _accepts(None, value_type) if required is None else required,
             minimum=minimum,
             maximum=maximum,
             display=display,
@@ -86,7 +101,7 @@ class BuildFieldSpec[ValueT]:
     def bind(self, build: Build) -> BoundBuildField[ValueT]:
         """Read this field from a build into a mutable editor value."""
         value = self.reader(build)
-        if not is_bearable(value, self.value_type):
+        if not _accepts(value, self.value_type):
             logger.error("Invalid hint for %s: %s", self.key, type(value))
         text = "" if value is None else self.formatter(value)
         return BoundBuildField(self, value, text)
@@ -131,7 +146,7 @@ class BoundBuildField[ValueT]:
 
 def field_spec[ValueT](
     key: str,
-    value_type: type[ValueT],
+    value_type: type[ValueT] | UnionType,
     placeholder: str,
     *,
     reader: Callable[[Build], ValueT],

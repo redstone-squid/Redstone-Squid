@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from time import monotonic
 from typing import Any, Protocol, override
 
@@ -44,7 +44,10 @@ class DiscordMemberClient(Protocol):
     discord.py exposes.
     """
 
-    async def get_member(self, guild_id: int, member_id: int) -> Any: ...
+    # Returns an awaitable rather than being declared `async`: discord.py's `HTTPClient.get_member`
+    # is a plain method handing back the coroutine `request` produced, which satisfies this
+    # structurally but not the stricter `CoroutineType` an `async def` in a protocol asks for.
+    def get_member(self, guild_id: int, member_id: int) -> Awaitable[Any]: ...
 
     async def close(self) -> None: ...
 

@@ -167,7 +167,9 @@ def classify_supplied_file(filename: str, content_type: str | None) -> str:
     suffix = Path(filename.lower()).suffix
     mime = (
         content_type
-        if content_type not in {None, "application/octet-stream"}
+        # Spelled out rather than `not in {None, "application/octet-stream"}` so the None is
+        # narrowed away: membership in a set of mixed literals leaves `mime` optional.
+        if content_type is not None and content_type != "application/octet-stream"
         else mimetypes.guess_type(filename)[0] or ""
     )
     return (
