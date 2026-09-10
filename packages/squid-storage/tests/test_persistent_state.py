@@ -145,11 +145,14 @@ async def test_a_commit_after_close_is_reported_rather_than_dropped(
     pool = PersistentStatePool(
         Preferences, LocalTopicBus(), store=MemoryScopedStore(), slot=slot, on_error=errors.append
     )
+    preferences: Preferences | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(pool.run)
         preferences = await pool.load("guild")
         await pool.close()
+
+    assert preferences is not None, "the pool must have handed out a handle before closing"
 
     with transaction():
         preferences.theme = "light"

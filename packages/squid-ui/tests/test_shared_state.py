@@ -78,7 +78,7 @@ def test_scope_is_whatever_the_host_gave_it(bus: LocalTopicBus, here: Member) ->
 
 def test_an_unhashable_or_mutable_scope_is_accepted(bus: LocalTopicBus) -> None:
     mutable = ["guild", 7]
-    assert Anonymous(bus, mutable).scope is mutable  # pyrefly: ignore[bad-argument-type]
+    assert Anonymous(bus, mutable).scope is mutable  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 
 def test_repr_names_the_class_and_the_scope(bus: LocalTopicBus, here: Member) -> None:
@@ -249,7 +249,7 @@ async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus
     """
 
     class Draft(SharedState):
-        body: list[str] = state(factory=list, opaque=True)  # pyrefly: ignore[bad-assignment]
+        body: list[str] = state(factory=list, opaque=True)  # pyright: ignore[reportAssignmentType]  # pyrefly: ignore[bad-assignment]
 
     draft = Draft(bus)
     seen: list[object] = []

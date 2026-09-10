@@ -14,6 +14,7 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_discord
+import squid_ui_discord.durability
 from squid_ui.assets import Asset, InlineAsset
 from squid_ui.errors import LimitViolationError
 from squid_ui.planning.limits import LIMITS
