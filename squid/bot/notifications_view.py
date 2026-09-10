@@ -416,7 +416,9 @@ class NotificationScreen(sd.Screen):
                 return tr(t"Record gained")
             case "staff_build_submitted":
                 return tr(t"Build awaiting review")
-            case _:
+            # The cases above cover NotificationKind exhaustively today; the default is what a
+            # kind added to the enum later renders as instead of falling off the end.
+            case _:  # pyright: ignore[reportUnnecessaryComparison]
                 return tr(t"Build notification")
 
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:

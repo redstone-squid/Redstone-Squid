@@ -120,7 +120,11 @@ class BuildMapper:
     async def _load_cross_context(session: AsyncSession, sql_builds: Sequence[SQLBuild]) -> _CrossContextValues:
         build_ids = [sql_build.id for sql_build in sql_builds]
         account_ids = {
-            sql_build.submitter_account_id for sql_build in sql_builds if sql_build.submitter_account_id is not None
+            sql_build.submitter_account_id
+            for sql_build in sql_builds
+            # `builds.submitter_account_id` is NOT NULL, but `Mapped[int]` also covers instances that
+            # have not been flushed yet, where SQLAlchemy reads an unset attribute back as None.
+            if sql_build.submitter_account_id is not None  # pyright: ignore[reportUnnecessaryComparison]
         }
 
         creators: dict[int, list[str]] = {build_id: [] for build_id in build_ids}
@@ -173,7 +177,8 @@ class BuildMapper:
 
         submitter_discord_id = (
             None
-            if sql_build.submitter_account_id is None
+            # See `_load_cross_context`: NOT NULL in the database, but None on an unflushed instance.
+            if sql_build.submitter_account_id is None  # pyright: ignore[reportUnnecessaryComparison]
             else values.submitter_discord_ids.get(sql_build.submitter_account_id)
         )
         source_messages = tuple(values.source_messages.get(sql_build.id, ()))

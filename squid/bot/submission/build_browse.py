@@ -399,7 +399,11 @@ class BuildBrowseScreen(sd.Screen):
             key="builds",
             identity=lambda build: str(build.id),
             label=lambda build: f"#{build.id} {build.title}",
-            summary=lambda build: f"{build.category} · {build.submission_status.name.lower()}",
+            # `_BuildSource` filters on `submission_status`, so every listed build carries one; the
+            # domain type stays optional only for a build that has not been submitted yet.
+            summary=lambda build: (
+                f"{build.category} · {build.submission_status.name.lower()}"  # pyright: ignore[reportOptionalMemberAccess]
+            ),
             detail=self._detail,
             page_size=15,
             title=tr(t"Build catalogue"),

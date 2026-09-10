@@ -465,6 +465,9 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             if await ensure_consented_account(request, self.bot.services.accounts) is None:
                 return None
             return sd.Response(text_node(tr(t"Thanks. Run `/poll` again to open the editor.")), audience="personal")
+        # Bound out here because `publish` runs later: a narrowing of `account.id` does not survive
+        # into a closure, and the identity the poll is attributed to is fixed at command time.
+        author_account_id = account.id
         allow_network = isinstance(actor, discord.Member) and await self.publisher.may_create_network(actor)
         guild = request.guild
         channel = request.channel
@@ -481,7 +484,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             ):
                 raise InvalidVoteConfigurationError(tr(t"You may no longer publish a poll to every server."))
             publication = await self.publisher.create_and_publish(
-                author_account_id=account.id,
+                author_account_id=author_account_id,
                 channel=cast(GuildMessageable, channel),
                 question=draft.question,
                 visibility=draft.visibility,
