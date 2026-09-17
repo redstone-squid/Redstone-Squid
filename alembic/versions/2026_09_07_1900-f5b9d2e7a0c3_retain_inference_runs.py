@@ -28,7 +28,9 @@ def upgrade() -> None:
         sa.Column("claim_token", postgresql.UUID(as_uuid=True)),
         sa.Column("claim_expires_at", sa.DateTime(timezone=True)),
         sa.Column("candidates", postgresql.JSONB(), nullable=False),
-        sa.CheckConstraint("state IN ('processing', 'failed', 'completed')", name="submission_inference_runs_state_check"),
+        sa.CheckConstraint(
+            "state IN ('processing', 'failed', 'completed')", name="submission_inference_runs_state_check"
+        ),
         comment="Exact private inference inputs and retained candidate facts under a renewable claim.",
     )
     op.create_index("ix_submission_inference_runs_owner_account_id", "submission_inference_runs", ["owner_account_id"])
