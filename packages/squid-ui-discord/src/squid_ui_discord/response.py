@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import TypedDict, Unpack
+from typing import TypedDict, Unpack, override
 
 import discord
 
@@ -31,6 +31,7 @@ type Setting[T] = T | _Unset
 
 
 class _InvokerOnly:
+    @override
     def __repr__(self) -> str:
         return "invoker_only"
 
@@ -102,6 +103,7 @@ class Response[ContentT: FacadeContent = FacadeContent]:
         self.content = content
         self.overrides = overrides
 
+    @override
     def __repr__(self) -> str:
         return f"Response({self.content!r}, {self.overrides!r})"
 

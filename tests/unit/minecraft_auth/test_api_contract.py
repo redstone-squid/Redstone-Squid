@@ -1,6 +1,7 @@
 """Isolated tests for the strict Minecraft authorization HTTP contract."""
 
 from dataclasses import dataclass, replace
+from typing import override
 from uuid import UUID, uuid4
 
 import pytest
@@ -102,6 +103,7 @@ class FakeInstallations(InstallationCredentialService):
         self.authenticated_token: str | None = None
         self.owner_ids: list[int] = []
 
+    @override
     async def register(
         self,
         *,
@@ -116,22 +118,26 @@ class FakeInstallations(InstallationCredentialService):
             f"sqpi_{self.current.id.hex}_{INSTALLATION_SECRET}",
         )
 
+    @override
     async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
         self.owner_ids.append(owner_account_id)
         return (self.current,)
 
+    @override
     async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
         assert installation_id == self.current.id
         self.owner_ids.append(owner_account_id)
         self.current = replace(self.current, credential_version=2, rotated_at=NOW)
         return IssuedInstallationCredential(self.current, f"sqpi_{self.current.id.hex}_{ROTATED_SECRET}")
 
+    @override
     async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation:
         assert installation_id == self.current.id
         self.owner_ids.append(owner_account_id)
         self.current = replace(self.current, revoked_at=NOW)
         return self.current
 
+    @override
     async def update_profile(
         self,
         *,
@@ -144,6 +150,7 @@ class FakeInstallations(InstallationCredentialService):
         self.current = replace(self.current, profile=profile)
         return self.current
 
+    @override
     async def authenticate(self, token: str) -> AuthenticatedPaperInstallation:
         self.authenticated_token = token
         return AuthenticatedPaperInstallation(
@@ -152,6 +159,7 @@ class FakeInstallations(InstallationCredentialService):
             credential_version=self.current.credential_version,
         )
 
+    @override
     async def authenticate_headers(
         self,
         installation_id: str | None,
@@ -176,6 +184,7 @@ class FakePlayers(PlayerAuthorizationService):
         self.revoked_as: tuple[UUID, int] | None = None
         self.fabric_error: Exception | None = None
 
+    @override
     async def start_paper_challenge(
         self,
         *,
@@ -186,6 +195,7 @@ class FakePlayers(PlayerAuthorizationService):
         self.paper_installation = installation
         return challenge(origin=MinecraftClientOrigin.PAPER)
 
+    @override
     async def start_fabric_challenge(
         self,
         *,
@@ -195,6 +205,7 @@ class FakePlayers(PlayerAuthorizationService):
         self.fabric_proof = (java_uuid, pkce_s256_challenge)
         return challenge(origin=MinecraftClientOrigin.FABRIC)
 
+    @override
     async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge:
         assert user_code == USER_CODE
         self.approved_as = account_id
@@ -211,6 +222,7 @@ class FakePlayers(PlayerAuthorizationService):
             approved_at=NOW,
         )
 
+    @override
     async def exchange_paper(
         self,
         *,
@@ -221,12 +233,14 @@ class FakePlayers(PlayerAuthorizationService):
         self.paper_installation = installation
         return grant(origin=MinecraftClientOrigin.PAPER, installation_id=installation.id)
 
+    @override
     async def exchange_fabric(self, *, device_code: str, pkce_verifier: str) -> IssuedPlayerGrant:
         if self.fabric_error is not None:
             raise self.fabric_error
         assert (device_code, pkce_verifier) == (DEVICE_CODE, PKCE_VERIFIER)
         return grant(origin=MinecraftClientOrigin.FABRIC)
 
+    @override
     async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool:
         self.revoked_as = (grant_id, account_id)
         return True

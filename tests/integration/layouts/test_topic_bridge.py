@@ -2,6 +2,7 @@
 
 import uuid
 from functools import partial
+from typing import Any, cast
 
 import anyio
 import asyncpg
@@ -113,7 +114,7 @@ async def test_transaction_publish_is_commit_ordered_and_self_delivered(
                 await listening_there.wait()
 
                 async with here_pool.acquire() as connection, connection.transaction():
-                    await bridge_here.publish_in(connection, committed)
+                    await bridge_here.publish_in(cast(Any, connection), committed)
                     assert seen_here == []
                     assert seen_there == []
 
@@ -122,7 +123,7 @@ async def test_transaction_publish_is_commit_ordered_and_self_delivered(
 
                 async def rollback() -> None:
                     async with here_pool.acquire() as connection, connection.transaction():
-                        await bridge_here.publish_in(connection, rolled_back)
+                        await bridge_here.publish_in(cast(Any, connection), rolled_back)
                         raise RuntimeError("rollback")
 
                 with pytest.raises(RuntimeError, match="rollback"):

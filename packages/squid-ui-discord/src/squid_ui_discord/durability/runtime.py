@@ -10,6 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import override
 from uuid import uuid4
 
 import anyio
@@ -159,6 +160,7 @@ class DurableSession(Session):
             return DurabilityHealth.CLAIM_LOST
         return self._durable_runtime.health_for(self)
 
+    @override
     async def attach(
         self,
         message_root: MessageRoot,
@@ -193,6 +195,7 @@ class DurableSession(Session):
             return Rejected((self.snapshot,), RejectionReason.NOT_DURABLE)
         return result
 
+    @override
     async def join(
         self,
         user_id: int,
@@ -203,6 +206,7 @@ class DurableSession(Session):
         """Admit `user_id` and checkpoint the new membership."""
         return await self._durably(await super().join(user_id, when=when, expect=expect))
 
+    @override
     async def leave(self, user_id: int, *, expect: frozenset[int] | None = None) -> MembershipResult:
         """Remove `user_id` and checkpoint the new membership."""
         return await self._durably(await super().leave(user_id, expect=expect))

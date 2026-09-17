@@ -24,7 +24,8 @@ from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
-from squid_ui.planning.target import ResourceCost
+from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.target import Target
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
 from squid_ui.scene.model import PlanReport, PlanResult
@@ -46,7 +47,7 @@ from squid_ui_discord.inspection import (
 )
 from squid_ui_discord.message_payload import MessageMode, MessageModeError, MessagePayload
 from squid_ui_discord.rendering import RenderedMessage
-from squid_ui_discord.target import DISCORD_V1_DPY27, Target
+from squid_ui_discord.target import DISCORD_V1_DPY27
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ class AttachedClassicContribution:
     """
 
     payload: MessagePayload
-    plan: PlanResult
+    plan: PlanResult[scene.ClassicMessage]
     view: discord.ui.View | None
     items: tuple[discord.ui.Item[Any], ...]
     """Exactly the items inserted, by identity, so `remove` cannot take a lookalike."""

@@ -1,7 +1,7 @@
 """Canonical tag catalogue, contribution, and moderation workspace."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -74,6 +74,7 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target]):
         self._actions = tuple(actions)
         self._request = request
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         return (
             _tag_fields(self._tag),
@@ -121,6 +122,7 @@ class TagsScreen(sd.Screen):
         self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
         self._pending_action: tuple[TagDefinition, str] | None = None
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
@@ -178,6 +180,7 @@ class TagsScreen(sd.Screen):
             tabs.append(sp.Tab("aliases", tr(t"Restriction aliases"), self._alias_nodes()))
         self._tabs = sp.Tabs(tabs, key="tag-tabs", title=tr(t"Build tags")).build_component()
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._pending_action is not None and self._decision is not None:
             tag, action = self._pending_action

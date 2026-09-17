@@ -19,11 +19,11 @@ class DiscordPost(Base, kw_only=True):
     __tablename__ = "discord_posts"
     __table_args__ = (
         CheckConstraint(
-            "resource_kind IN ('build', 'vote_session', 'starboard_entry')",
+            "resource_kind IN ('build', 'vote_session', 'starboard_entry', 'inference_run', 'submission_draft')",
             name="discord_posts_resource_kind_check",
         ),
         CheckConstraint(
-            "surface IN ('build_card', 'build_review', 'vote_card', 'starboard_entry')",
+            "surface IN ('build_card', 'build_review', 'vote_card', 'starboard_entry', 'submission_status')",
             name="discord_posts_surface_check",
         ),
         CheckConstraint("applied_revision >= 0", name="discord_posts_applied_revision_check"),

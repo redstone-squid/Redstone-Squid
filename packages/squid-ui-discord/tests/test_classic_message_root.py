@@ -5,7 +5,7 @@ targets rather than copied, because a target that needed its own copy of `access
 `stale generation` would mean the lifecycle had forked, which is the thing this must not do.
 """
 
-from typing import Any
+from typing import Any, override
 
 import discord
 import pytest
@@ -32,6 +32,7 @@ TARGETS = [pytest.param(DISCORD_V2_DPY27, id="v2"), pytest.param(DISCORD_V1_DPY2
 class Screen(Component[sl.ClassicTarget]):
     presses: int = sl.state(0)
 
+    @override
     def render(self):
         async def press(event: ActionEvent) -> None:
             self.presses += 1

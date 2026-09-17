@@ -9,7 +9,7 @@ the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
-from typing import Protocol, cast
+from typing import Protocol, cast, override
 
 import discord
 
@@ -123,6 +123,7 @@ class AccountScreen(sd.Screen):
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
@@ -149,6 +150,7 @@ class AccountScreen(sd.Screen):
     def page_hidden(self) -> bool:
         return self._profile.hidden
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
             return (sl.section(sl.heading(tr(t"Account controls closed"))),)

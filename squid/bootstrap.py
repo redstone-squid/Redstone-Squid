@@ -108,13 +108,22 @@ from squid.submissions.application import (
     SubmissionFormService,
     SubmissionPreparation,
 )
+from squid.submissions.application.inference_runs import SubmissionInferenceRuns
+from squid.submissions.application.intake import SubmissionAttachmentIntake
+from squid.submissions.application.revisions import RevisionProposalService
+from squid.submissions.application.schematics import DraftSchematicService
 from squid.submissions.infrastructure.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
-    FailClosedDraftSchematicReader,
 )
-from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
+from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
+from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.submissions.infrastructure.inference_codec import PydanticInferenceRunCodec
+from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
+from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
+from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
 from squid.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
 from squid.suggestions.application import SuggestionService
@@ -428,7 +437,46 @@ class _ServiceGraph:
         return SubmissionDraftService(
             PostgresDraftRepository(self.db.async_session),
             self.submission_manifests,
+            inferred_capacity=self.config.submissions.inferred_draft_capacity,
+            permissions=self.permissions,
         )
+
+    @cached_property
+    def submission_inference(self) -> SubmissionInferenceRuns:
+        return SubmissionInferenceRuns(
+            PostgresInferenceRuns(self.db.async_session),
+            self.build_inference,
+            self.artifacts,
+            PydanticInferenceRunCodec(),
+            capacity=self.config.submissions.inferred_draft_capacity,
+            permissions=self.permissions,
+        )
+
+    @cached_property
+    def submission_intake_repository(self) -> PostgresAttachmentIntake:
+        return PostgresAttachmentIntake(self.db.async_session)
+
+    @cached_property
+    def submission_intake(self) -> SubmissionAttachmentIntake:
+        return SubmissionAttachmentIntake(
+            self.submission_drafts, self.submission_intake_repository, self.submission_schematics, self.media_jobs
+        )
+
+    @cached_property
+    def submission_revisions(self) -> RevisionProposalService:
+        return RevisionProposalService(
+            PostgresRevisionProposals(self.db.async_session, self.build_repository, self.builds),
+            self.builds,
+            self.permissions,
+        )
+
+    @cached_property
+    def submission_schematic_repository(self) -> PostgresDraftSchematics:
+        return PostgresDraftSchematics(self.db.async_session)
+
+    @cached_property
+    def submission_schematics(self) -> DraftSchematicService:
+        return DraftSchematicService(self.submission_drafts, self.submission_schematic_repository, self.artifacts)
 
     @cached_property
     def submission_finalization_jobs(self) -> PostgresFinalizationJobRepository:
@@ -438,7 +486,8 @@ class _ServiceGraph:
     def submission_finalization(self) -> SubmissionFinalizationService:
         readiness = AuthoritativeDraftArtifactReadiness(
             self.media_repository,
-            FailClosedDraftSchematicReader(),
+            self.submission_schematic_repository,
+            intake=self.submission_intake_repository,
             media_limits=MediaLimits(),
         )
         sponsors = (
@@ -456,7 +505,13 @@ class _ServiceGraph:
     def submission_finalization_worker(self) -> SubmissionFinalizationWorker:
         return SubmissionFinalizationWorker(
             self.submission_finalization_jobs,
-            CanonicalBuildSubmissionWriter(self.builds, self.tags, self.version_service),
+            PostgresSubmissionExecutor(
+                self.db.async_session,
+                self.build_repository,
+                SubmissionBuildPreparation(self.builds, self.tags, self.version_service),
+                drafts=self.submission_drafts,
+            ),
+            preparation=self.submission_finalization,
         )
 
     @cached_property
@@ -669,6 +724,10 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_forms=graph.submission_forms,
         submission_drafts=graph.submission_drafts,
         submission_finalization=graph.submission_finalization,
+        submission_schematics=graph.submission_schematics,
+        submission_revisions=graph.submission_revisions,
+        submission_intake=graph.submission_intake,
+        submission_inference=graph.submission_inference,
         suggestions=graph.suggestions,
         media_jobs=graph.media_jobs,
         minecraft_installations=graph.minecraft_installations,
@@ -687,6 +746,13 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         builds=graph.builds,
         error_reports=graph.error_reports,
         build_inference=graph.build_inference,
+        submission_forms=graph.submission_forms,
+        submission_drafts=graph.submission_drafts,
+        submission_finalization=graph.submission_finalization,
+        submission_schematics=graph.submission_schematics,
+        submission_revisions=graph.submission_revisions,
+        submission_intake=graph.submission_intake,
+        submission_inference=graph.submission_inference,
         restrictions=RestrictionService(graph.restriction_repository),
         build_queries=graph.build_queries,
         messages=MessageService(MessageRepository(db.async_session)),
@@ -751,6 +817,8 @@ def create_worker_services(
         record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,
         purge_idempotency=idempotency.purge_expired,
         expire_submission_drafts=graph.submission_drafts.expire_due,
+        cleanup_submission_schematics=graph.submission_schematics.cleanup,
+        cleanup_submission_inference=graph.submission_inference.cleanup,
     )
 
 

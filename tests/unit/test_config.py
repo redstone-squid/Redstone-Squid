@@ -1008,3 +1008,14 @@ def test_render_cache_dir_treats_an_empty_xdg_cache_home_as_unset(
     cache_dir = default_render_cache_dir(working_directory=tmp_path)
 
     assert cache_dir == tmp_path / ".cache" / "redstone-squid" / "schematics"
+
+
+def test_submission_capacity_reaches_the_runtime_projection(monkeypatch: pytest.MonkeyPatch, dotenv: Path) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_API_SECRET="api-secret",
+        SQUID_SUBMISSIONS_INFERRED_DRAFT_CAPACITY="17",
+    )
+    config = load_application_config(dotenv_path=dotenv)
+    assert config.runtime.submissions.inferred_draft_capacity == 17

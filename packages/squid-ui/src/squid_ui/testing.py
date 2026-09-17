@@ -17,7 +17,7 @@ import sys
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields, is_dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, override
 
 from squid_ui.forms import FormIssue, FormLike, SubmitHandler
 from squid_ui.interactions import (
@@ -423,6 +423,7 @@ def _isolated_import(imports: Sequence[str], *blocked: str) -> None:
     roots = {name.split(".", 1)[0] for name in blocked}
 
     class BlockImports(importlib.abc.MetaPathFinder):
+        @override
         def find_spec(
             self, fullname: str, path: Sequence[str] | None = None, target: object = None
         ) -> importlib.machinery.ModuleSpec | None:

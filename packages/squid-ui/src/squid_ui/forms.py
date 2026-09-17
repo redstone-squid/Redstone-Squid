@@ -12,7 +12,7 @@ from datetime import datetime as DateTimeValue
 from datetime import time as TimeValue
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, Self, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, Self, cast, overload, override
 
 from squid_ui.emoji import EmojiLike, normalize_emoji
 from squid_ui.errors import LayoutInvariantError, SquidUiError
@@ -181,6 +181,7 @@ class TextField(FormField[str]):
     maximum: int | None = None
     strip: bool = True
 
+    @override
     def parse(self, raw: object) -> str | None:
         if self._optional(raw):
             return None
@@ -209,6 +210,7 @@ class IntField(FormField[int]):
     maximum: int | None = None
     placeholder: TextLike | None = None
 
+    @override
     def parse(self, raw: object) -> int | None:
         if self._optional(raw):
             return None
@@ -231,6 +233,7 @@ class FloatField(FormField[float]):
     maximum: float | None = None
     placeholder: TextLike | None = None
 
+    @override
     def parse(self, raw: object) -> float | None:
         if self._optional(raw):
             return None
@@ -261,6 +264,7 @@ class DurationField(FormField[int]):
     parser: Callable[[str], int] | None = dataclass_field(default=None, repr=False, compare=False)
     """Replaces the compact-duration grammar; signals bad input with `ValueError`."""
 
+    @override
     def parse(self, raw: object) -> int | None:
         if self._optional(raw):
             return None
@@ -283,6 +287,7 @@ class DurationField(FormField[int]):
             _invalid(f"Enter a duration no longer than {self.maximum} seconds.")
         return value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         if not isinstance(value, int):
             return _prefill(value)
@@ -300,6 +305,7 @@ class DateField(FormField[date]):
     maximum: date | None = None
     placeholder: TextLike | None = "YYYY-MM-DD"
 
+    @override
     def parse(self, raw: object) -> date | None:
         if self._optional(raw):
             return None
@@ -313,6 +319,7 @@ class DateField(FormField[date]):
             _invalid(f"Enter a date on or before {self.maximum.isoformat()}.")
         return value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         return value.isoformat() if isinstance(value, date) else _prefill(value)
 
@@ -325,6 +332,7 @@ class TimeField(FormField[TimeValue]):
     maximum: TimeValue | None = None
     placeholder: TextLike | None = "HH:MM"
 
+    @override
     def parse(self, raw: object) -> TimeValue | None:
         if self._optional(raw):
             return None
@@ -338,6 +346,7 @@ class TimeField(FormField[TimeValue]):
             _invalid(f"Enter a time at or before {self.maximum.isoformat()}.")
         return value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         return value.isoformat() if isinstance(value, TimeValue) else _prefill(value)
 
@@ -369,6 +378,7 @@ class DateTimeField(FormField[DateTimeValue]):
                 message = f"DateTimeField {name} must be aware"
                 raise ValueError(message)
 
+    @override
     def parse(self, raw: object) -> DateTimeValue | None:
         if self._optional(raw):
             return None
@@ -393,6 +403,7 @@ class DateTimeField(FormField[DateTimeValue]):
             _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
         return value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         return value.isoformat() if isinstance(value, DateTimeValue) else _prefill(value)
 
@@ -421,6 +432,7 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
                 message = f"ZonedDateTimeField {name} must be aware"
                 raise ValueError(message)
 
+    @override
     def parse(self, raw: object) -> ZonedDateTime | None:
         if self._optional(raw):
             return None
@@ -451,6 +463,7 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
             _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
         return value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         if not isinstance(value, ZonedDateTime):
             return _prefill(value)
@@ -485,6 +498,7 @@ class ScaleField(FormField[int]):
         named = None if self.labels is None else self.labels.get(value)
         return str(value) if named is None else named
 
+    @override
     def parse(self, raw: object) -> int | None:
         if self._optional(raw):
             return None
@@ -496,6 +510,7 @@ class ScaleField(FormField[int]):
             _invalid(f"Choose a value from {self.minimum} to {self.maximum}.")
         return value
 
+    @override
     def format(self, value: object) -> str | None:
         # A string either way: it is the radio option's value and the text input's default.
         return None if value is None else str(value)
@@ -527,6 +542,7 @@ class ChoiceField[ValueT](FormField[ValueT]):
             message = f"ChoiceField option keys must be unique: {keys!r}"
             raise ValueError(message)
 
+    @override
     def parse(self, raw: object) -> ValueT | None:
         if self._optional(raw):
             return None
@@ -536,6 +552,7 @@ class ChoiceField[ValueT](FormField[ValueT]):
             _invalid("Choose one of the available options.")
         return option.value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         option = next((option for option in self.options if option.value == value or option.key == value), None)
         return option.key if option is not None else _prefill(value)
@@ -559,6 +576,7 @@ class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
             message = "MultiChoiceField bounds must satisfy 0 <= minimum <= maximum <= len(options)"
             raise ValueError(message)
 
+    @override
     def parse(self, raw: object) -> tuple[ValueT, ...]:
         if self._missing(raw):
             if self.required:
@@ -577,6 +595,7 @@ class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
             _invalid(f"Choose no more than {maximum} options.")
         return values
 
+    @override
     def format(self, value: object) -> tuple[str, ...]:
         submitted = tuple(value) if isinstance(value, list | tuple | set | frozenset) else (value,)
         return tuple(
@@ -601,6 +620,7 @@ class UploadedFile:
 class BoolField(FormField[bool]):
     """A boolean checkbox."""
 
+    @override
     def parse(self, raw: object) -> bool:
         if isinstance(raw, bool):
             return raw
@@ -717,10 +737,13 @@ class FormSpec:
             if not isinstance(field, ExtensionField) or field.capability in capabilities:
                 adapted.append(field)
                 continue
-            if field.fallback is None:
+            # `FormField` is also the `Form` descriptor, so BasedPyright runs `__get__` over this
+            # field's declared type; the slot on a frozen slotted dataclass holds a plain value.
+            declared: FormField[Any] | None = field.fallback  # pyright: ignore[reportAttributeAccessIssue]
+            if declared is None:
                 message = f"form field {field.key!r} requires unsupported capability {field.capability!r}"
                 raise LayoutInvariantError(message)
-            fallback = field.fallback.bind(field.key)
+            fallback = declared.bind(field.key)
             adapted.append(
                 replace(
                     fallback,

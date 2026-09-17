@@ -7,7 +7,7 @@ namespace's scope is typed by its parameter, and unparameterised means `SharedSt
 
 from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
-from typing import Any, assert_type
+from typing import Any, assert_type, override
 
 from squid_ui import Component, ContextKey, paragraph, resource, state
 from squid_ui.runtime import (
@@ -33,7 +33,7 @@ assert_type(state({"a"}), AbstractSet[str])
 assert_type(state(factory=lambda: {"a": 1}), Mapping[str, int])
 assert_type(state(factory=lambda: ["a"]), Sequence[str])
 assert_type(state(factory=lambda: {"a"}), AbstractSet[str])
-assert_type(state(("a",)), tuple[str])
+assert_type(state(("a",)), tuple[str])  # pyright: ignore[reportAssertTypeFailure]  # pyright keeps the element literal here; pyrefly widens it
 assert_type(state(frozenset({"a"})), frozenset[str])
 assert_type(state(0), int)
 assert_type(state(factory=int), int)
@@ -44,7 +44,7 @@ assert_type(state({"a"}), AbstractSet[str])
 assert_type(state(factory=lambda: {"a": 1}), Mapping[str, int])
 assert_type(state(factory=lambda: ["a"]), Sequence[str])
 assert_type(state(factory=lambda: {"a"}), AbstractSet[str])
-assert_type(state(("a",)), tuple[str])
+assert_type(state(("a",)), tuple[str])  # pyright: ignore[reportAssertTypeFailure]  # pyright keeps the element literal here; pyrefly widens it
 assert_type(state(0), int)
 assert_type(state(factory=int), int)
 
@@ -72,6 +72,7 @@ class ResourceTypes(Component):
     async def visible(self) -> int:
         return 1
 
+    @override
     def render(self) -> Paragraph:
         return paragraph("resources")
 
@@ -88,6 +89,7 @@ text_context = ContextKey[str]("text")
 
 
 class ContextTypes(Component):
+    @override
     def render(self):
         assert_type(self.inject(text_context), str)
         assert_type(self.inject(text_context, "fallback"), str)

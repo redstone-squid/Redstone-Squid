@@ -700,6 +700,10 @@ def default_render_cache_dir(*, working_directory: Path | None = None) -> Path:
     return base / ".cache" / "redstone-squid" / "schematics"
 
 
+_RGBA_CHANNELS = ("red", "green", "blue", "alpha")
+"""Channel order shared by the JSON array form and the dumped dataclass form."""
+
+
 class SchematicConfig(_FrozenModel):
     """Schematic engine resource budgets and worker supervision settings.
 
@@ -801,6 +805,14 @@ class SchematicConfig(_FrozenModel):
     def _decode_render_background(cls, value: object) -> RgbaColor:
         if isinstance(value, RgbaColor):
             return value
+        if isinstance(value, Mapping):
+            # `RgbaColor` is a dataclass, so `model_dump` lowers it to its four channel keys and a
+            # process projection hands that dump straight back to this validator.
+            missing = [channel for channel in _RGBA_CHANNELS if channel not in value]
+            if missing:
+                msg = f"Render background is missing the {', '.join(missing)} channel(s)."
+                raise TypeError(msg)
+            return RgbaColor.from_channels([value[channel] for channel in _RGBA_CHANNELS])
         if not isinstance(value, list | tuple):
             msg = "Render background must be a four-channel JSON array."
             raise TypeError(msg)
@@ -915,6 +927,12 @@ class BuildConfig(_FrozenModel):
         return self
 
 
+class SubmissionConfig(_FrozenModel):
+    """Capacity for durable inferred submission intake."""
+
+    inferred_draft_capacity: int = Field(default=1_000, ge=1)
+
+
 class NotificationConfig(_FrozenModel):
     """User notification links and retention policy."""
 
@@ -944,6 +962,7 @@ class RuntimeConfig(_FrozenModel):
     schematics: SchematicConfig
     object_storage: ObjectStorageConfig
     media: MediaConfig = MediaConfig()
+    submissions: SubmissionConfig = SubmissionConfig()
     minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
     cli_auth: CliAuthConfig = CliAuthConfig()
     community: CommunityConfig
@@ -1005,10 +1024,12 @@ def _projection_type[ConfigT: BaseSettings](config_type: type[ConfigT]) -> type[
     """
 
     class _Projection(config_type):  # pyright: ignore[reportUntypedBaseClass]  # pyrefly: ignore[invalid-inheritance]
-        # No `@override`: the base is a type variable here, so neither checker can see the method
-        # it overrides.
+        # No `@override`: the base is a type variable, so Pyrefly cannot see the method this
+        # overrides and rejects the decorator outright. BasedPyright resolves it through the
+        # `BaseSettings` bound and asks for the decorator, so its request is suppressed rather
+        # than answered.
         @classmethod
-        def settings_customise_sources(
+        def settings_customise_sources(  # pyright: ignore[reportImplicitOverride]
             cls,
             settings_cls: type[BaseSettings],
             init_settings: PydanticBaseSettingsSource,
@@ -1028,7 +1049,9 @@ def _project[ConfigT: BaseSettings](config_type: type[ConfigT], values: Mapping[
     Validation still runs in full; only the environment lookups are dropped, because these values
     have already been through them once.
     """
-    return _projection_type(config_type)(**values)
+    # `@cache` replaces the generic function with a wrapper whose result type has ConfigT
+    # already solved, so the checker cannot tie the projection back to this call's argument.
+    return _projection_type(config_type)(**values)  # pyright: ignore[reportReturnType]
 
 
 class _ProcessSettings(BaseSettings):
@@ -1049,6 +1072,7 @@ class _ProcessSettings(BaseSettings):
     embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
     storage: ObjectStorageConfig = ObjectStorageConfig()
     media: MediaConfig = MediaConfig()
+    submissions: SubmissionConfig = SubmissionConfig()
     minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
     cli_auth: CliAuthConfig = CliAuthConfig()
     schematic: SchematicConfig = SchematicConfig()
@@ -1095,6 +1119,7 @@ class _ProcessSettings(BaseSettings):
             schematics=self.schematic,
             object_storage=self.storage,
             media=self.media,
+            submissions=self.submissions,
             minecraft_auth=self.minecraft_auth,
             cli_auth=self.cli_auth,
             community=self.community,
@@ -1538,6 +1563,23 @@ def load_database_config(*, dotenv_path: Path | None = None) -> DatabaseConfig:
         raise _configuration_error(exc) from None
     _audit_unknown_environment_keys(strict=settings.strict_unknown_keys, dotenv_path=resolved)
     return settings.database
+
+
+def load_build_config(*, dotenv_path: Path | None = None) -> BuildConfig:
+    """Load only the build metadata needed to attribute a migration run to a release."""
+
+    class BuildSettings(BaseSettings):
+        model_config = _ProcessSettings.model_config
+        build: BuildConfig = BuildConfig()
+        strict_unknown_keys: bool = False
+
+    resolved = DEFAULT_DOTENV_PATH if dotenv_path is None else dotenv_path
+    try:
+        settings = BuildSettings(_env_file=resolved)  # type: ignore[call-arg]
+    except (ValidationError, SettingsError) as exc:
+        raise _configuration_error(exc) from None
+    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys, dotenv_path=resolved)
+    return settings.build
 
 
 def load_worker_observability_config(*, dotenv_path: Path | None = None) -> ObservabilityConfig:

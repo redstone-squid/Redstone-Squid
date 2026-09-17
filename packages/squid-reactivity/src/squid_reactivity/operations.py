@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable, Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Protocol, overload
+from typing import Any, Protocol, overload, override
 
 from squid_reactivity.actions import (
     DEFAULT_REDACTION,
@@ -25,9 +25,11 @@ from squid_reactivity.resources import AsyncBinding, PendingMode, _observe
 
 
 class OperationOwner(Protocol):
-    """The behaviour a bound operation definition needs from its declaring owner."""
+    """The behaviour a bound operation definition needs from its declaring owner.
 
-    __dict__: dict[str, Any]
+    The instance dictionary is reached through `vars()`; see
+    `squid_ui.runtime.histories.HistoryOwner`.
+    """
 
     def invalidate(self) -> None: ...
 
@@ -119,6 +121,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
         return self._status
 
     @property
+    @override
     def pending(self) -> bool:
         """Whether this execution still requests its one settlement attempt."""
         return isinstance(self._status, Pending)
@@ -149,6 +152,7 @@ class OperationExecution[ValueT, ProgressT](AsyncBinding):
                 message = f"operation {self.context.name!r} did not settle"
                 raise RuntimeError(message)
 
+    @override
     async def _load(self) -> OperationStatus[ValueT, ProgressT]:
         if self._started:
             if not self._completion.done:

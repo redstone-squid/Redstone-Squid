@@ -115,6 +115,7 @@ type Realized = (
     | PremiumButton
     | SelectMenu
     | EntitySelect
+    | RoutedButton
     | RoutedSelect
     | Thumbnail
     | Gallery

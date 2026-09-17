@@ -1,19 +1,18 @@
 """Discord form presentation, submission funnel, and validation retry."""
 
-from typing import cast
+from typing import cast, override
 from unittest.mock import AsyncMock, Mock
 
 import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui.entity import EntityKind, EntityRef
+from squid_ui.entity import EntityKind, EntityRef, EntityType
 from squid_ui.forms import FormText
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.modal import (
     CheckboxGroupField,
     EntityField,
-    EntityType,
     FileField,
     _entity_defaults,
     build_form_modal,
@@ -241,6 +240,7 @@ class DurationPanel(sl.Component[sl.ComponentsV2Target]):
             validation=validation,
         )
 
+    @override
     def render(self) -> sl.LayoutNode:
         return sl.form("Duration", self.spec, key="duration", on_submit=self.submitted)
 

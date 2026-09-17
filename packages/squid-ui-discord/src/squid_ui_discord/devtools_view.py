@@ -12,7 +12,7 @@ catalogue would improve.
 
 import pprint
 from collections.abc import Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 import squid_ui as sl
 
@@ -57,6 +57,7 @@ class MessageRootInspector(sl.Component):
         self.focus = focus
         self._manager = manager
 
+    @override
     def render(self) -> Sequence[sl.LayoutNode]:
         # Both are explicit invalidation tokens for process state that is not itself
         # reactive. Observe them even when an empty manager makes their usual branches
@@ -105,7 +106,7 @@ class MessageRootInspector(sl.Component):
         nodes.append(self._controls(back=False))
         return nodes
 
-    def _row(self, snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
+    def _row(self, snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
         mine = " *(this panel)*" if snapshot.id == self.own_id else ""
         key = self._session_key(snapshot.id)
         session = "" if key is None else f" · session `{key!r}`"
@@ -131,7 +132,7 @@ class MessageRootInspector(sl.Component):
     # --- Detail -------------------------------------------------------------------------
 
     def _detail(
-        self, snapshot: squid_ui_discord.message_root.MessageRootSnapshot, message_root: squid_ui_discord.MessageRoot
+        self, snapshot: squid_ui_discord.MessageRootSnapshot, message_root: squid_ui_discord.MessageRoot
     ) -> Sequence[sl.LayoutNode]:
         children: list[sl.LayoutNode] = [sl.bullets(*_summary(snapshot), key="summary")]
         if snapshot.handler_keys:
@@ -169,7 +170,7 @@ class MessageRootInspector(sl.Component):
             self._controls(back=True),
         ]
 
-    def _plan_section(self, snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> Iterable[sl.LayoutNode]:
+    def _plan_section(self, snapshot: squid_ui_discord.MessageRootSnapshot) -> Iterable[sl.LayoutNode]:
         if snapshot.report is None or snapshot.metrics is None:
             yield sl.section(sl.heading("Plan"), sl.note("nothing has been committed yet"))
             return
@@ -224,6 +225,7 @@ class OperationalInspector(sl.Component):
     def __init__(self, runtime: DevToolsRuntime) -> None:
         self._devtools_runtime = runtime
 
+    @override
     def render(self) -> Sequence[sl.LayoutNode]:
         snapshot = self._devtools_runtime.snapshot()
         if self.section == "roots":
@@ -478,7 +480,7 @@ class OperationalInspector(sl.Component):
         await event.finish()
 
 
-def scene_attachment(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> sl.document.Asset | None:
+def scene_attachment(snapshot: squid_ui_discord.MessageRootSnapshot) -> sl.document.Asset | None:
     """The message root's committed scene as the protocol JSON, for reading outside Discord."""
     if snapshot.scene is None:
         return None
@@ -490,7 +492,7 @@ def scene_attachment(snapshot: squid_ui_discord.message_root.MessageRootSnapshot
     )
 
 
-def plan_text(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
+def plan_text(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
     """Render the retained plan report, grouping adaptations by severity."""
     report = snapshot.report
     if report is None:
@@ -512,7 +514,7 @@ def plan_text(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> st
     return "\n".join(lines)
 
 
-def metrics_text(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
+def metrics_text(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
     """Render the planner work and cache disposition retained by a message root."""
     metrics = snapshot.metrics
     if metrics is None:
@@ -526,7 +528,7 @@ def metrics_text(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) ->
     )
 
 
-def _summary(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> list[str]:
+def _summary(snapshot: squid_ui_discord.MessageRootSnapshot) -> list[str]:
     entries = [
         f"**Component**\n`{snapshot.component}`",
         f"**Generation**\n{snapshot.generation} · {_flags(snapshot)} · {snapshot.suppressed} suppressed",
@@ -557,13 +559,13 @@ def _access_text(access: squid_ui_discord.AccessPolicy) -> str:
     return type(access).__name__
 
 
-def _option_description(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
+def _option_description(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
     return f"gen {snapshot.generation} · idle {_duration(snapshot.idle)} · {_expiry(snapshot)}"
 
 
-def _flags(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
+def _flags(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
     flags = []
-    if snapshot.lifecycle is squid_ui_discord.message_root.MessageRootStatus.RENEWAL_ARMED:
+    if snapshot.lifecycle is squid_ui_discord.MessageRootStatus.RENEWAL_ARMED:
         flags.append("renewal armed")
     if snapshot.pending:
         flags.append("dirty")
@@ -574,7 +576,7 @@ def _flags(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
     return " ".join(flags) if flags else "clean"
 
 
-def _expiry(snapshot: squid_ui_discord.message_root.MessageRootSnapshot) -> str:
+def _expiry(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
     timeout = "no timeout" if snapshot.expires_in is None else f"timeout in {_duration(snapshot.expires_in)}"
     if snapshot.handle_expires_in is None:
         return timeout

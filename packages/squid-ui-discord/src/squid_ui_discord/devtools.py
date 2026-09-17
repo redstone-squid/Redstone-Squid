@@ -5,7 +5,7 @@ import io
 import json
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 import discord
 from discord.ext import commands
@@ -88,13 +88,15 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         if self._owns_action_ledger:
             add_action_result_sink(self._action_ledger)
 
+    @override
     async def cog_unload(self) -> None:
         """Close the DevTools-owned action ledger when Discord unloads this cog."""
         if self._owns_action_ledger:
             self._action_ledger.close()
 
+    @override
     # pyrefly: ignore[bad-override]  # MaybeCoro[bool] covers a coroutine; pyrefly drops the parameter
-    async def cog_check(self, ctx: Context[BotT]) -> bool:
+    async def cog_check(self, ctx: Context[BotT]) -> bool:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Authorize every command through the single injected gate."""
         return await self._check(ctx)
 
@@ -437,10 +439,11 @@ def _json_default(value: object) -> object:
         return value
     if isinstance(value, (bytes, bytearray)):
         return value.hex()
+    # Both guarded by `hasattr`, which pyright does not narrow through.
     if hasattr(value, "value"):
-        return value.value
+        return value.value  # pyright: ignore[reportAttributeAccessIssue]
     if hasattr(value, "isoformat"):
-        return value.isoformat()
+        return value.isoformat()  # pyright: ignore[reportAttributeAccessIssue]
     return repr(value)
 
 

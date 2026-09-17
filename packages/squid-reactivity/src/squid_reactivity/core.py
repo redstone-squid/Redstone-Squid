@@ -23,7 +23,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from typing import Any, ClassVar, Protocol, Self, overload
+from typing import Any, ClassVar, Protocol, Self, overload, override
 
 from squid_reactivity.actions import (
     ActionCommit,
@@ -54,7 +54,11 @@ _MISSING = object()
 
 
 class ReactiveOwner(Protocol):
-    __dict__: dict[str, Any]
+    """The behaviour reactive state needs from its declaring owner.
+
+    The instance dictionary is reached through `vars()`; see
+    `squid_ui.runtime.histories.HistoryOwner`.
+    """
 
     def _state_changed(self, names: frozenset[str]) -> None: ...
 
@@ -90,6 +94,7 @@ class TransactionParticipant[PreparedT](Protocol):
         Raise to abort the action: every participant is aborted, component state is
         restored, and the error reaches whoever called the handler.
         """
+        ...
 
     def apply(self, prepared: PreparedT) -> None:
         """Publish what `prepare` returned. Synchronous, and past the point of failure."""
@@ -1829,7 +1834,9 @@ def computed[ValueT](function: Callable[[Any], ValueT]) -> ValueT:
     exact rather than over-declared, and nothing has to be named twice. A computed nobody
     reads is never evaluated, and one that raises does so where its value is used.
     """
-    return _Computed(function)  # pyrefly: ignore[bad-return]
+    # The declared return type describes what reading the attribute yields, not what the
+    # decorator hands back: the descriptor below is what actually gets bound to the class.
+    return _Computed(function)  # pyright: ignore[reportReturnType]  # pyrefly: ignore[bad-return]
 
 
 @dataclass(slots=True)
@@ -2023,6 +2030,7 @@ class StateOwner:
         note_born(instance)
         return instance
 
+    @override
     def __setattr__(self, name: str, value: Any) -> None:
         if (
             _active() is not None

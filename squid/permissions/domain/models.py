@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
-from typing import Self
+from typing import Self, override
 
 from squid.core.errors import ConfigurationError, InvalidStateError, ValidationError
 from squid.core.i18n import tr
@@ -70,6 +70,7 @@ class PermissionNode:
     default: Default = Default.DENY
     tags: frozenset[Tag] = field(default_factory=frozenset)
 
+    @override
     def __str__(self) -> str:
         return self.name
 

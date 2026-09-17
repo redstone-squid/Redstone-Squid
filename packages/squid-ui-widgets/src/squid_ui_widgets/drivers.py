@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol, overload, runtime_checkable
+from typing import Literal, Protocol, overload, override, runtime_checkable
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike
@@ -190,10 +190,14 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
         self.handlers = dict(handlers or {})
         self.finish_actions = frozenset(finish_actions)
 
+    @override
     def render(self) -> DocumentLike[RenderTargetT]:
         """Render the current machine state with mounted controls."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
-        return self.machine.render(self.machine_state, _ComponentControls(self, chrome))
+        # `MachineControls` never mentions `StateT` in a member, so BasedPyright cannot solve it
+        # while matching a control object structurally and leaves it unbound. Pyrefly solves it.
+        controls = _ComponentControls(self, chrome)
+        return self.machine.render(self.machine_state, controls)  # pyright: ignore[reportArgumentType]
 
     async def _dispatch(
         self,
@@ -307,7 +311,10 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
 
     def render(self, machine: StateMachine[StateT, RenderTargetT], state: StateT) -> DocumentLike[RenderTargetT]:
         """Render `state` with route-backed controls."""
-        return machine.render(state, _RoutedControls(machine, state, self.route, self.chrome))
+        # As in `ComponentDriver.render`: `MachineControls`'s unused `StateT` is unsolvable for
+        # BasedPyright when it matches a control object structurally.
+        controls = _RoutedControls(machine, state, self.route, self.chrome)
+        return machine.render(state, controls)  # pyright: ignore[reportArgumentType]
 
     def transition(
         self,

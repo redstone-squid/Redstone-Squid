@@ -1,4 +1,18 @@
-"""Import historical build-log message bundles as pending AI-generated builds."""
+# This script no longer runs, and is retained as a record of how the historical backfill
+# was driven. Type checking is off for the file rather than for the directory, so the
+# rest of scripts/ stays checked and this exemption is visible to whoever opens it.
+# pyright: reportMissingImports=false, reportAttributeAccessIssue=false, reportCallIssue=false
+"""Import historical build-log message bundles as pending AI-generated builds.
+
+Superseded and no longer runnable. `11808b7a` converged inferred intake on persisted
+drafts and removed what this depends on: `CatboxMirror`/`MediaMirror`, the
+`BUILD_LOG_CHANNEL_IDS` list, and `ingest_message_bundle`'s `mirror` and `dry_run`
+options. `create_application_runtime` and `ApplicationServices` also split per process
+into `create_bot_runtime` and `BotServices`.
+
+Those are removed capabilities rather than renames, so reviving this means rebuilding it
+against the draft-based intake in `squid/submissions/`, not repointing its imports.
+"""
 
 import argparse
 import asyncio
@@ -14,10 +28,10 @@ if __package__ in {None, ""}:
 
 import discord
 from discord import Message, TextChannel
+from squid.bot.submission.media import CatboxMirror, MediaMirror
 
 from squid.bootstrap import create_application_runtime
 from squid.bot.submission.ingestion import ingest_message_bundle
-from squid.bot.submission.media import CatboxMirror, MediaMirror
 from squid.bot.submission.message_context import BUILD_LOG_CHANNEL_IDS, group_messages
 from squid.config import load_bot_process_config
 from squid.runtime import ApplicationServices

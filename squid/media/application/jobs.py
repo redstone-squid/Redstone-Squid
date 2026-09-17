@@ -17,7 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 from uuid import UUID, uuid4
 
-import anyio
+import anyio.to_thread
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
@@ -293,6 +293,8 @@ class MediaJobRepository(Protocol):
 
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool: ...
 
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, limits: MediaLimits) -> bool: ...
+
     async def claim(self, *, limit: int) -> Sequence[ClaimedMediaJob]: ...
 
     async def heartbeat(self, job: ClaimedMediaJob) -> bool: ...
@@ -480,6 +482,10 @@ class MediaNormalizationJobService:
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
         """Withdraw one upload and schedule any remaining raw source for cleanup."""
         return await self._repository.discard(draft_id, upload_id)
+
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID) -> bool:
+        """Share an existing normalization job under the repository's ownership fence."""
+        return await self._repository.attach(source_id, target_id, upload_id, self._limits)
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedMediaJob]:
         if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:

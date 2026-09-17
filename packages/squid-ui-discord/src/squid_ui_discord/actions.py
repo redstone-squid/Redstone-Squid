@@ -1,7 +1,7 @@
 """Discord adapter for portable component action events."""
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 import discord
 
@@ -205,6 +205,7 @@ class _RetryButton(discord.ui.Button[discord.ui.LayoutView]):
         self.owner_id = owner_id
         self.modal = modal
 
+    @override
     async def callback(self, interaction: discord.Interaction) -> None:
         if interaction.user.id != self.owner_id:
             await deliver.respond_text(interaction, "This form attempt belongs to another member.", ephemeral=True)

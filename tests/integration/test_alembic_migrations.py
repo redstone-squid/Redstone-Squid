@@ -1,19 +1,28 @@
 """Integration coverage for the portable Alembic migration chain."""
 
+import json
 from collections.abc import Iterator
 from io import StringIO
 
 import psycopg2
 import pytest
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
 
 from alembic import command
+from scripts import migration_history
 from squid.persistence.alembic_entities import alembic_util_entities
+from squid.persistence.migration_history import (
+    HISTORY_TABLE,
+    divergent_revisions,
+    script_digest,
+)
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
+from squid.submissions.payload_integrity import submission_payload_digest
 from squid.worker.queue_health import QUEUE_HEALTH_STATEMENT
 
 MIGRATION_DATABASE = "redstone_squid_migrations"
@@ -28,6 +37,7 @@ SCHEMATIC_RENDER_PROJECTION_REVISION = "e1f2a3b4c5d6"
 SCHEMATIC_PUBLICATION_REVISION = "f8b9c0d1e2f3"
 NOTIFICATION_DELIVERY_OWNER_REVISION = "b5d9f2a7c0e3"
 NOTIFICATION_DELIVERY_OWNER_PARENT_REVISION = "a4c8e1f6b9d2"
+IMMUTABLE_FINALIZATION_INPUT_REVISION = "c8e2a5b0d3f6"
 
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
@@ -821,6 +831,86 @@ def test_finalization_result_metadata_migration_expands_and_downgrades(
         engine.dispose()
 
 
+def test_finalization_input_migration_backfills_and_rejects_updates(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Existing job inputs survive the split and the retained copy cannot be edited."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, f"{IMMUTABLE_FINALIZATION_INPUT_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    draft_id = "44444444-4444-4444-8444-444444444444"
+    job_id = "55555555-5555-4555-8555-555555555555"
+    payload: dict[str, object] = {"payload_schema": 2, "target": "door"}
+    payload_sha256 = submission_payload_digest(payload)
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts ("
+                    "id, owner_account_id, schema_id, schema_revision, category, answers, origin, expires_at"
+                    ") VALUES ("
+                    ":draft_id, :account_id, 'test', 1, 'door', '{}'::jsonb, 'web', now() + interval '1 day'"
+                    ")"
+                ),
+                {"draft_id": draft_id, "account_id": account_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs ("
+                    "id, draft_id, draft_revision, payload, payload_sha256, status, attention_issues"
+                    ") VALUES ("
+                    ":job_id, :draft_id, 0, CAST(:payload AS jsonb), :payload_sha256, 'pending', '[]'::jsonb"
+                    ")"
+                ),
+                {
+                    "job_id": job_id,
+                    "draft_id": draft_id,
+                    "payload": json.dumps(payload),
+                    "payload_sha256": payload_sha256,
+                },
+            )
+
+        command.upgrade(config, IMMUTABLE_FINALIZATION_INPUT_REVISION)
+        with engine.connect() as connection:
+            retained = connection.execute(
+                text("SELECT payload, payload_sha256 FROM submission_finalization_inputs WHERE job_id = :job_id"),
+                {"job_id": job_id},
+            ).one()
+            assert retained.payload == payload
+            assert retained.payload_sha256 == payload_sha256
+
+        with (
+            pytest.raises(DBAPIError, match="submission finalization inputs are immutable"),
+            engine.begin() as connection,
+        ):
+            connection.execute(
+                text(
+                    "UPDATE submission_finalization_inputs "
+                    "SET payload = '{\"payload_schema\": 3}'::jsonb WHERE job_id = :job_id"
+                ),
+                {"job_id": job_id},
+            )
+
+        command.downgrade(config, f"{IMMUTABLE_FINALIZATION_INPUT_REVISION}-1")
+        with engine.connect() as connection:
+            assert (
+                connection.execute(
+                    text("SELECT payload FROM submission_finalization_jobs WHERE id = :job_id"),
+                    {"job_id": job_id},
+                ).scalar_one()
+                == payload
+            )
+            assert (
+                connection.execute(text("SELECT to_regclass('public.submission_finalization_inputs')")).scalar_one()
+                is None
+            )
+    finally:
+        engine.dispose()
+
+
 def test_sponsor_migration_refuses_to_discard_retained_provenance(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
@@ -1061,3 +1151,192 @@ def test_taxonomy_cutover_refuses_unimported_legacy_rows(
 
     with pytest.raises(DBAPIError, match="restriction definitions are not fully imported"):
         command.upgrade(config, "head")
+
+
+def test_finalization_attempt_migration_preserves_history_and_refuses_lossy_downgrade(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Retained jobs keep their identity and payload when the one-job bound is removed."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "b5d9f2a7c0e3")
+    engine = create_engine(migration_database_url)
+    draft_id = "88888888-8888-4888-8888-888888888888"
+    job_id = "99999999-9999-4999-8999-999999999999"
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts (id, owner_account_id, schema_id, schema_revision, category, "
+                    "answers, origin, expires_at) VALUES "
+                    "(:draft_id, :account_id, 'test', 1, 'other', '{}'::jsonb, 'web', now() + interval '1 day')"
+                ),
+                {"draft_id": draft_id, "account_id": account_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs "
+                    "(id, draft_id, draft_revision, payload, status, attention_at, attention_issues) "
+                    'VALUES (:job_id, :draft_id, 0, \'{"description": "retained"}\'::jsonb, '
+                    '\'needs_attention\', now(), \'[{"field_id": "schematic", '
+                    '"reason": "schematic_required"}]\'::jsonb)'
+                ),
+                {"job_id": job_id, "draft_id": draft_id},
+            )
+        command.upgrade(config, "c6e0a3b8d1f4")
+        with engine.begin() as connection:
+            retained = connection.execute(
+                text("SELECT id::text, attempt_number, payload FROM submission_finalization_jobs")
+            ).one()
+            assert retained == (job_id, 1, {"description": "retained"})
+        command.downgrade(config, "b5d9f2a7c0e3")
+        command.upgrade(config, "c6e0a3b8d1f4")
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs "
+                    "(id, draft_id, draft_revision, attempt_number, status, attention_at, attention_issues) "
+                    "SELECT gen_random_uuid(), draft_id, draft_revision, 2, status, attention_at, attention_issues "
+                    "FROM submission_finalization_jobs WHERE id = :job_id"
+                ),
+                {"job_id": job_id},
+            )
+        with pytest.raises(RuntimeError, match="Cannot downgrade while multiple finalization attempts exist"):
+            command.downgrade(config, "b5d9f2a7c0e3")
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM submission_finalization_jobs")) == 2
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE submission_drafts SET status = 'needs_attention'"))
+        command.upgrade(config, "d7f1b4c9e2a5")
+        with engine.connect() as connection:
+            issues = connection.scalar(text("SELECT preparation_issues FROM submission_drafts"))
+            assert issues == [{"field_id": "schematic", "reason": "schematic_required"}]
+            assert connection.scalar(text("SELECT count(*) FROM submission_finalization_jobs")) == 2
+        with pytest.raises(RuntimeError, match="Cannot downgrade while draft preparation state is retained"):
+            command.downgrade(config, "c6e0a3b8d1f4")
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE submission_drafts SET preparation_issues = '[]'::jsonb"))
+        command.downgrade(config, "c6e0a3b8d1f4")
+    finally:
+        engine.dispose()
+
+
+def test_inferred_capacity_migration_preserves_provenance(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "e8a2c5d0f3b6")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts (id, owner_account_id, schema_id, schema_revision, category, "
+                    "answers, origin, expires_at) VALUES "
+                    "(gen_random_uuid(), :owner, 'test', 1, 'other', '{}'::jsonb, 'discord', now() + interval '7 days')"
+                ),
+                {"owner": account_id},
+            )
+            assert connection.scalar(text("SELECT inferred FROM submission_drafts")) is False
+            connection.execute(text("UPDATE submission_drafts SET inferred = true"))
+        with pytest.raises(RuntimeError, match="Cannot downgrade while inferred drafts are retained"):
+            command.downgrade(config, "d7f1b4c9e2a5")
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE submission_drafts SET inferred = false"))
+        command.downgrade(config, "d7f1b4c9e2a5")
+        command.upgrade(config, "e8a2c5d0f3b6")
+    finally:
+        engine.dispose()
+
+
+def test_migration_history_records_the_chain_and_guards_edited_scripts(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The ledger records every applied step and refuses a chain whose scripts have changed.
+
+    Fused into one test for the reason `test_migrations_create_schema_without_drift` gives:
+    every assertion below needs a database at head, and reaching head costs a full run of the
+    chain. Digests are corrupted in the table rather than by editing a revision on disk, because
+    an edit left behind by a failing assertion would be a change to the migration chain itself.
+    """
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    # BuildConfig requires the pair, which is what the image supplies.
+    monkeypatch.setenv("SQUID_BUILD_COMMIT_HASH", "0123456789abcdef")
+    monkeypatch.setenv("SQUID_BUILD_COMMIT_MESSAGE", "record the migration chain")
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    script_directory = ScriptDirectory.from_config(config)
+    scripts = {script.revision: script for script in script_directory.walk_revisions()}
+    corrupt = text(f"UPDATE {HISTORY_TABLE} SET script_sha256 = repeat('0', 64) WHERE revision = :revision")
+
+    command.upgrade(config, "head")
+
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.connect() as connection:
+            recorded = connection.execute(
+                text(
+                    "SELECT revision, direction, script_sha256, release_version, applied_at "
+                    f"FROM {HISTORY_TABLE} ORDER BY id"
+                )
+            ).all()
+
+        assert {row.revision for row in recorded} == set(scripts)
+        assert {row.direction for row in recorded} == {"upgrade"}
+        assert {row.release_version for row in recorded} == {"0123456789abcdef"}
+        assert all(row.script_sha256 == script_digest(scripts[row.revision]) for row in recorded)
+        # now() is the transaction timestamp and the whole chain shares one transaction, so it
+        # would date every step of a release to the same instant.
+        assert len({row.applied_at for row in recorded}) > 1
+
+        command.downgrade(config, f"{DYNAMIC_VOTING_REVISION}-1")
+        with engine.connect() as connection:
+            directions = connection.execute(
+                text(f"SELECT direction FROM {HISTORY_TABLE} WHERE revision = :revision ORDER BY id"),
+                {"revision": DYNAMIC_VOTING_REVISION},
+            ).scalars()
+            assert list(directions) == ["upgrade", "downgrade"]
+
+        # A revision the database has left contributes no DDL to it, so an edit to that revision
+        # is legitimate and must not block the next deploy.
+        with engine.begin() as connection:
+            connection.execute(corrupt, {"revision": DYNAMIC_VOTING_REVISION})
+        command.upgrade(config, "head")
+
+        # A database older than the ledger has applied revisions and no digests at all, which is
+        # absence of evidence and must not be read as an edit.
+        with engine.begin() as connection:
+            connection.execute(text(f"TRUNCATE {HISTORY_TABLE}"))
+        command.upgrade(config, "head")
+
+        migration_history.main(["adopt"])
+        assert "Adopted" in capsys.readouterr().out
+        with engine.connect() as connection:
+            rows = connection.execute(text(f"SELECT revision, script_sha256 FROM {HISTORY_TABLE}")).all()
+        assert {row.revision: row.script_sha256 for row in rows} == {
+            revision: script_digest(script) for revision, script in scripts.items()
+        }
+
+        head_revision = script_directory.get_current_head()
+        assert head_revision is not None
+        with engine.begin() as connection:
+            connection.execute(corrupt, {"revision": head_revision})
+        # A no-op upgrade still verifies, so the guard does not need a pending step to fire.
+        with pytest.raises(CommandError, match="have been edited since this database ran them"):
+            command.upgrade(config, "head")
+
+        # Through the operator entry point rather than the function it wraps, so the recipe the
+        # failure message names is known to resolve its own config and database URL.
+        migration_history.main(["repair"])
+        assert head_revision in capsys.readouterr().out
+        with engine.connect() as connection:
+            assert divergent_revisions(connection, script_directory) == {}
+        command.upgrade(config, "head")
+    finally:
+        engine.dispose()

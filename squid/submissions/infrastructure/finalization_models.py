@@ -81,7 +81,19 @@ class SubmissionFinalizationJob(Base, kw_only=True):
 
     __tablename__ = "submission_finalization_jobs"
     __table_args__ = (
-        UniqueConstraint("draft_id", name="submission_finalization_jobs_draft_id_key"),
+        UniqueConstraint("draft_id", "attempt_number", name="submission_finalization_jobs_draft_attempt_key"),
+        Index(
+            "submission_finalization_jobs_actor_idx",
+            "requested_by_account_id",
+            postgresql_where=text("requested_by_account_id IS NOT NULL"),
+        ),
+        CheckConstraint("attempt_number > 0", name="submission_finalization_jobs_attempt_number_positive"),
+        Index(
+            "submission_finalization_jobs_one_active_attempt",
+            "draft_id",
+            unique=True,
+            postgresql_where=text("status IN ('pending', 'claimed')"),
+        ),
         CheckConstraint("draft_revision >= 0", name="submission_finalization_jobs_revision_nonnegative"),
         CheckConstraint("attempts >= 0", name="submission_finalization_jobs_attempts_nonnegative"),
         CheckConstraint(
@@ -117,6 +129,12 @@ class SubmissionFinalizationJob(Base, kw_only=True):
         UUID(as_uuid=True),
         ForeignKey("submission_drafts.id", name="submission_finalization_jobs_draft_id_fkey", ondelete="CASCADE"),
         nullable=False,
+    )
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
+    requested_by_account_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", ondelete="RESTRICT"),
+        default=None,
     )
     draft_revision: Mapped[int] = mapped_column(Integer, nullable=False)
     payload: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
@@ -166,6 +184,54 @@ class SubmissionFinalizationResult(Base, kw_only=True):
     _legacy_target_key: Mapped[str | None] = mapped_column("target_key", Text, default=None, deferred=True)
     _legacy_provenance: Mapped[dict[str, object] | None] = mapped_column(
         "provenance", JSONB, default=None, deferred=True
+    )
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )
+
+
+class SubmissionFinalizationInput(Base, kw_only=True):
+    """Original normalized input retained independently of mutable execution state."""
+
+    __tablename__ = "submission_finalization_inputs"
+    __table_args__ = (
+        CheckConstraint(
+            "payload_sha256 ~ '^[0-9a-f]{64}$'",
+            name="submission_finalization_inputs_payload_sha256_check",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(payload) = 'object'",
+            name="submission_finalization_inputs_payload_object_check",
+        ),
+    )
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submission_finalization_jobs.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    payload_sha256: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    )
+
+
+class SubmissionReceiptMedia(Base, kw_only=True):
+    """Normalized uploads retained by a committed submission receipt."""
+
+    __tablename__ = "submission_receipt_media"
+    __table_args__ = (Index("submission_receipt_media_upload_idx", "upload_id"),)
+
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("submission_finalization_results.job_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    upload_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("media_uploads.id", ondelete="RESTRICT"),
+        primary_key=True,
     )
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now

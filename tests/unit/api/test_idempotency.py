@@ -24,7 +24,14 @@ from squid.core.errors import ErrorCode
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
 from squid.idempotency.application import IdempotencyRepository
 from squid.idempotency.domain import ExistingRequest, IdempotencyInProgressError, Reservation, UnsafeHttpMethod
-from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, TEST_UUID, MockDatabaseManager, build_app
+from tests.unit.api.fakes import (
+    TEST_CONFIG,
+    TEST_SYNERGY_SECRET,
+    TEST_UUID,
+    MockAccountManager,
+    MockDatabaseManager,
+    build_app,
+)
 
 
 class MemoryIdempotencyRepository(IdempotencyRepository):
@@ -68,11 +75,14 @@ class MemoryIdempotencyRepository(IdempotencyRepository):
         return 0
 
 
-class CountingAccounts:
+class CountingAccounts(MockAccountManager):
+    """Counts verification codes issued, to prove a replay never mints a second one."""
+
     def __init__(self) -> None:
         self.calls = 0
 
-    async def generate_verification_code(self, _minecraft_uuid: UUID) -> int:
+    @override
+    async def generate_verification_code(self, minecraft_uuid: UUID) -> int:
         self.calls += 1
         return 100_000 + self.calls
 

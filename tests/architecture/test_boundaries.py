@@ -464,7 +464,7 @@ def test_localized_messages_are_present_in_the_catalog_template() -> None:
     msgids = {
         extracted
         for message in catalog
-        for extracted in (message.id if isinstance(message.id, tuple) else (message.id,))
+        for extracted in (message.id if isinstance(message.id, list | tuple) else (message.id,))
     }
     authored = {
         extracted

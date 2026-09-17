@@ -1,9 +1,10 @@
 """Root route group, router lifecycle hooks, and process-wide middleware."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 import discord
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.observability import SpanAttribute, TraceSurface, correlation_scope, trace_span
 
@@ -15,7 +16,7 @@ routes: sd.routing.RouteGroup[RedstoneSquid] = sd.routing.RouteGroup("r")
 """The ordinary root group reserving the bot's durable ``r:`` namespace."""
 
 _FEATURE_GROUPS: dict[str, sd.routing.RouteGroup[RedstoneSquid]] = {}
-_FEATURE_ROUTES: dict[tuple[str, str], sd.routing.Route] = {}
+_FEATURE_ROUTES: dict[tuple[str, str], sl.routing.Route] = {}
 
 
 def _feature_group(prefix: str) -> tuple[sd.routing.RouteGroup[RedstoneSquid], bool]:
@@ -29,7 +30,7 @@ def _feature_group(prefix: str) -> tuple[sd.routing.RouteGroup[RedstoneSquid], b
 
 def _feature_route(
     group: sd.routing.RouteGroup[RedstoneSquid], format: str, *, aliases: tuple[str, ...] = ()
-) -> sd.routing.Route:
+) -> sl.routing.Route:
     """Define an identity once while allowing discord.py to reload its handler module."""
     key = (group.prefix, format)
     if route := _FEATURE_ROUTES.get(key):
@@ -45,6 +46,7 @@ def _feature_route(
 class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
     """Trace every routed interaction without recording user-controlled route values."""
 
+    @override
     async def dispatch(self, request: sd.routing.RouteRequest[BotT], proceed: sd.routing.RouteProceed) -> None:
         attributes: dict[str, SpanAttribute] = {
             "squid.surface": TraceSurface.DISCORD_ROUTE,

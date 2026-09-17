@@ -37,8 +37,8 @@ One app command, `/build submit`, that is both the quick path and the guided pat
 - **`submit-full` is deleted**, along with its `SubmitDoorFlags` converter class. Fields it had
   that the new options do not (locationality, directionality, opening/closing times, creation
   date, explicit URL lists) stay reachable through the workspace's details modal and
-  `/build edit`; they did not earn a slot in the primary form. `BuildService.submit_door`
-  stays — the REST API is its remaining caller.
+  `/build edit`; they did not earn a slot in the primary form. The remaining REST-only
+  `BuildService.submit_door` path was removed with `POST /v1/builds` on 2026-09-07.
 
 ### Option order (the tab order is the form)
 

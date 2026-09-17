@@ -39,6 +39,8 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
         "record_queue_health",
         "purge_idempotency",
         "expire_submission_drafts",
+        "cleanup_submission_schematics",
+        "cleanup_submission_inference",
         # Shared with the API and bot bundles rather than owned: all three capture failures, and
         # the worker is only the one that sweeps expired reports.
         "error_reports",

@@ -52,7 +52,7 @@ assert_type(preferences.delete(UserGuildScope(1, 2)), Preferences | None)
 # A `UserScope` handed to a user-guild pool is a type error, not a runtime miss. This is the
 # assertion the whole signature exists for; if the ignore below ever goes unused, inference has
 # regressed to `Any` and the pin has stopped meaning anything.
-preferences.get(UserScope(1))  # pyrefly: ignore[bad-argument-type]
+preferences.get(UserScope(1))  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 # An annotated factory carries the scope just as well as the class does. A bare lambda does not:
 # it takes its parameter types from the expected type, which still holds the unsolved scope.

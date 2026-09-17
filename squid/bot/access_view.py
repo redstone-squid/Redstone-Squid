@@ -1,7 +1,7 @@
 """Canonical permission and internal-role administration workspace."""
 
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import Any, cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -62,6 +62,7 @@ class AccessScreen(sd.Screen):
         self._pending_delete: str | None = None
         self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
@@ -102,6 +103,7 @@ class AccessScreen(sd.Screen):
     def _may_manage_roles(self) -> bool:
         return ROLE_DEFINITION_MANAGE_GUILD in self._capabilities or ROLE_DEFINITION_MANAGE in self._capabilities
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._pending_delete is not None and self._decision is not None:
             slug = self._pending_delete

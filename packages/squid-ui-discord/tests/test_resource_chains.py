@@ -5,7 +5,7 @@ did not work: an async value derived from another async value, which before this
 fused into one loader returning a tuple.
 """
 
-from typing import Any
+from typing import Any, override
 
 import discord
 
@@ -40,6 +40,7 @@ class Chain(sl.Component[sl.ComponentsV2Target]):
         self.seen.append(value)
         return f"card({value})"
 
+    @override
     def render(self):
         match self.node.status:
             case sl.resources.Ready(value=value):
@@ -94,6 +95,7 @@ async def test_a_computed_reading_a_resource_rederives_when_it_reloads() -> None
         def shouted(self) -> str:
             return self.loaded.value.upper()
 
+        @override
         def render(self):
             return sl.paragraph("x")
 
@@ -140,6 +142,7 @@ async def test_a_failed_load_moves_the_version_too() -> None:
                 raise RuntimeError(message)
             return "ok"
 
+        @override
         def render(self):
             return sl.paragraph("x")
 
@@ -209,11 +212,13 @@ async def test_two_independent_resources_still_settle_together() -> None:
         async def right(self) -> str:
             return "R"
 
+        @override
         def render(self):
             left = self.left.status
             right = self.right.status
-            ready = isinstance(left, sl.resources.Ready) and isinstance(right, sl.resources.Ready)
-            return sl.paragraph(f"{left.value}{right.value}" if ready else "loading")
+            if isinstance(left, sl.resources.Ready) and isinstance(right, sl.resources.Ready):
+                return sl.paragraph(f"{left.value}{right.value}")
+            return sl.paragraph("loading")
 
     message_root = MessageRoot(Pair(), access=Everyone(), timeout=None)
     message: Any = message_harness()
@@ -231,6 +236,7 @@ async def test_a_resource_that_awaits_itself_names_itself() -> None:
         async def value(self) -> int:
             return await self.value + 1
 
+        @override
         def render(self):
             return sl.paragraph("x")
 
@@ -255,6 +261,7 @@ async def test_a_mutual_cycle_names_the_whole_path_not_the_link_that_closed_it()
         async def right(self) -> int:
             return await self.left + 1
 
+        @override
         def render(self):
             return sl.paragraph("x")
 
@@ -283,6 +290,7 @@ async def test_a_cycle_reports_the_ring_without_the_run_up_to_it() -> None:
         async def b(self) -> int:
             return await self.a
 
+        @override
         def render(self):
             return sl.paragraph("x")
 
@@ -320,6 +328,7 @@ async def test_two_resources_awaiting_one_shared_input_is_not_a_cycle() -> None:
         async def total(self) -> int:
             return await self.left + await self.right
 
+        @override
         def render(self):
             return sl.paragraph("x")
 
@@ -342,6 +351,7 @@ async def test_a_cycle_through_a_computed_is_named_across_both_kinds() -> None:
         def doubled(self) -> int:
             return self.loaded.value * 2
 
+        @override
         def render(self):
             return sl.paragraph("x")
 

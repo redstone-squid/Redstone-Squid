@@ -7,11 +7,11 @@ and these pins are what keeps them saying it: if a bare name ever becomes assign
 non-default render target, the alias has stopped being load-bearing and the defaults have changed
 meaning underneath it.
 
-Every `pyrefly: ignore` below is an assertion that the line *is* an error. If one goes unused,
-the guarantee it protects has changed.
+Every `pyrefly: ignore` and `pyright: ignore` below is an assertion that the line *is* an error.
+If one goes unused, the guarantee it protects has changed.
 """
 
-from typing import assert_type
+from typing import assert_type, override
 
 import discord
 
@@ -28,11 +28,13 @@ from squid_ui_discord.target import classic, v2
 
 
 class ClassicPanel(sl.Component[ClassicTarget]):
+    @override
     def render(self) -> DocumentLike[ClassicTarget]:
         return sl.stack(sl.heading("title"))
 
 
 class V2Panel(sl.Component[ComponentsV2Target]):
+    @override
     def render(self) -> DocumentLike[ComponentsV2Target]:
         return sl.stack(sl.heading("title"))
 
@@ -43,11 +45,11 @@ classic_mount = MessageRoot(ClassicPanel(), access=Everyone(), target=classic())
 v2_mount = MessageRoot(V2Panel(), access=Everyone())
 
 # The mount target is part of the component contract, not an independent runtime option.
-MessageRoot(ClassicPanel(), access=Everyone())  # pyrefly: ignore[bad-argument-type]
-MessageRoot(V2Panel(), access=Everyone(), target=classic())  # pyrefly: ignore[no-matching-overload]
-MessageRoot(ClassicPanel(), access=Everyone(), target=v2())  # pyrefly: ignore[no-matching-overload]
+MessageRoot(ClassicPanel(), access=Everyone())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+MessageRoot(V2Panel(), access=Everyone(), target=classic())  # pyright: ignore[reportCallIssue, reportArgumentType]  # pyrefly: ignore[no-matching-overload]
+MessageRoot(ClassicPanel(), access=Everyone(), target=v2())  # pyright: ignore[reportCallIssue, reportArgumentType]  # pyrefly: ignore[no-matching-overload]
 owner_message_root(V2Panel(), 7)
-owner_message_root(ClassicPanel(), 7)  # pyrefly: ignore[bad-argument-type]
+owner_message_root(ClassicPanel(), 7)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 
 def takes_any_mount(mount: AnyMessageRoot) -> None: ...
@@ -71,8 +73,8 @@ def takes_bare_mount(mount: MessageRoot) -> None: ...
 def takes_bare_component(component: sl.Component) -> None: ...
 
 
-takes_bare_mount(classic_mount)  # pyrefly: ignore[bad-argument-type]
-takes_bare_component(ClassicPanel())  # pyrefly: ignore[bad-argument-type]
+takes_bare_mount(classic_mount)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+takes_bare_component(ClassicPanel())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 
 # --- a resource cost is keyed by the axis enum, not by whatever string ---------------------
@@ -81,8 +83,8 @@ cost = ResourceCost({Axis.COMPONENTS: 3, Axis.DISPLAY_TEXT: 120})
 assert_type(cost.get(Axis.COMPONENTS), int)
 assert_type(cost.axes, tuple[Axis, ...])
 
-ResourceCost({"components": 3})  # pyrefly: ignore[bad-assignment]
-cost.get("components")  # pyrefly: ignore[bad-argument-type]
+ResourceCost({"components": 3})  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-assignment]
+cost.get("components")  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 # The limits side already spoke `Axis`; this is the hand-off that used to be untypeable.
 assert not list(cost.over(LIMITS.capacities))

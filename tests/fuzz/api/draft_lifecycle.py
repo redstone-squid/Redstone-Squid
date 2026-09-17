@@ -162,6 +162,7 @@ class DraftLifecycleClient(Protocol):
 
     def send(self, request: DraftRequest) -> DraftResponse:
         """Send one request and return bounded response facts."""
+        ...
 
 
 @dataclass(slots=True)
@@ -253,7 +254,6 @@ class DraftLifecycleScenario:
         _expect_field(body, "draft_id", self._draft_id())
         _expect_field(body, "draft_revision", self.state.revision)
         _expect_field(body, "status", "needs_attention")
-        _expect_field(body, "build_id", None)
         issues = body.get("issues")
         if not isinstance(issues, list) or not issues:
             msg = "Expected incomplete draft submission to return at least one attention issue."
@@ -305,12 +305,21 @@ class DraftLifecycleScenario:
         return self.state.draft_id
 
 
+@dataclass(frozen=True, slots=True)
+class _ScenarioFactories:
+    """The process-local collaborators one state-machine run builds its scenario from."""
+
+    client: Callable[[], DraftLifecycleClient]
+    auth: Callable[[], DraftWebAuth]
+    reset: Callable[[], None]
+
+
 class DraftLifecycleStateMachine(RuleBasedStateMachine):
     """Hypothesis-compatible wrapper around the deterministic draft lifecycle scenario."""
 
-    client_factory: ClassVar[Callable[[], DraftLifecycleClient] | None] = None
-    auth_factory: ClassVar[Callable[[], DraftWebAuth] | None] = None
-    reset_callback: ClassVar[Callable[[], None] | None] = None
+    # Held together on one instance rather than as three class attributes: a callable in
+    # a class attribute is read as a method and binds its first argument on access.
+    factories: ClassVar[_ScenarioFactories | None] = None
 
     def __init__(self) -> None:
         super().__init__()
@@ -325,18 +334,17 @@ class DraftLifecycleStateMachine(RuleBasedStateMachine):
         reset_callback: Callable[[], None],
     ) -> None:
         """Configure process-local factories before Hypothesis constructs an instance."""
-        cls.client_factory = client_factory
-        cls.auth_factory = auth_factory
-        cls.reset_callback = reset_callback
+        cls.factories = _ScenarioFactories(client_factory, auth_factory, reset_callback)
 
     @initialize()
     def initialize_scenario(self) -> None:
         """Reset the external environment and create a fresh scenario model."""
-        if self.client_factory is None or self.auth_factory is None or self.reset_callback is None:
+        factories = self.factories
+        if factories is None:
             msg = "Draft lifecycle state machine factories are not configured."
             raise RuntimeError(msg)
-        self.reset_callback()
-        self.scenario = DraftLifecycleScenario(self.client_factory(), self.auth_factory())
+        factories.reset()
+        self.scenario = DraftLifecycleScenario(factories.client(), factories.auth())
 
     @precondition(lambda self: self._has_stage(DraftStage.NEW))
     @rule()
@@ -477,7 +485,7 @@ def submit_draft_request(auth: DraftWebAuth, draft_id: str) -> DraftRequest:
     return DraftRequest(
         operation_id="submission_finalization_start",
         method="POST",
-        path=f"/v1/submissions/drafts/{draft_id}/submission",
+        path=f"/v1/submissions/drafts/{draft_id}/attempts",
         headers=auth.write_headers,
         cookies=auth.cookies,
     )
@@ -488,7 +496,7 @@ def get_finalization_request(auth: DraftWebAuth, draft_id: str) -> DraftRequest:
     return DraftRequest(
         operation_id="submission_finalization_get",
         method="GET",
-        path=f"/v1/submissions/drafts/{draft_id}/submission",
+        path=f"/v1/submissions/drafts/{draft_id}/status",
         cookies=auth.cookies,
     )
 

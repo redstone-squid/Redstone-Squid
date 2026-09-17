@@ -12,9 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.infrastructure.models import Account
+from squid.builds.domain import SourceMessage
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.domain import MediaKind
-from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.infrastructure.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
     DraftChange,
@@ -27,6 +28,7 @@ from squid.submissions.domain import (
     FinalizationJobStatus,
     SubmissionOrigin,
 )
+from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import DraftStateConflictError
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.models import (
@@ -46,6 +48,7 @@ _TABLES = (
     cast(Table, SubmissionFinalizationJob.__table__),
     cast(Table, MediaUploadRecord.__table__),
     cast(Table, MediaNormalizationJobRecord.__table__),
+    cast(Table, MediaDraftReference.__table__),
 )
 
 
@@ -297,20 +300,22 @@ async def test_expiry_fences_finalization_and_discards_media(
     await repository.create(stored)
     upload_id = UUID("00000000-0000-4000-8000-000000000205")
     async with async_session_factory.begin() as session:
-        session.add(
-            SubmissionFinalizationJob(
-                draft_id=DRAFT_ID,
-                draft_revision=0,
-                payload=None,
-                payload_sha256=None,
-                status=FinalizationJobStatus.NEEDS_ATTENTION,
-                available_at=NOW,
-                attention_at=NOW,
-                attention_issues=[{"field_id": "schematic", "reason": "schematic_required"}],
-                created_at=NOW,
-                updated_at=NOW,
+        for attempt_number in (1, 2):
+            session.add(
+                SubmissionFinalizationJob(
+                    draft_id=DRAFT_ID,
+                    attempt_number=attempt_number,
+                    draft_revision=0,
+                    payload=None,
+                    payload_sha256=None,
+                    status=FinalizationJobStatus.NEEDS_ATTENTION,
+                    available_at=NOW,
+                    attention_at=NOW,
+                    attention_issues=[{"field_id": "schematic", "reason": "schematic_required"}],
+                    created_at=NOW,
+                    updated_at=NOW,
+                )
             )
-        )
         session.add(
             MediaUploadRecord(
                 id=upload_id,
@@ -378,3 +383,129 @@ async def test_delete_owned_accepts_needs_attention(
 
     assert await repository.delete_owned(DRAFT_ID, account_id) is True
     assert await repository.get(DRAFT_ID) is None
+
+
+@pytest.mark.parametrize("inferred", [False, True])
+async def test_concurrent_creation_respects_capacity_and_replays_stable_sources(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    inferred: bool,
+) -> None:
+    from anyio import create_task_group
+
+    from squid.submissions.errors import DraftCapacityExceededError
+
+    repository = PostgresDraftRepository(async_session_factory)
+    now = Instant.now()
+    template = replace(
+        _stored(account_id, origin=SubmissionOrigin.DISCORD),
+        inferred=inferred,
+        created_at=now,
+        updated_at=now,
+        expires_at=now.add(days=7, days_assumed_24h_ok=True),
+    )
+    accepted: list[StoredDraft] = []
+    rejected: list[DraftCapacityExceededError] = []
+
+    async def create(identifier: int) -> None:
+        draft = replace(template, snapshot=replace(template.snapshot, id=UUID(int=identifier)))
+        try:
+            accepted.append(await repository.create(draft, capacity=1))
+        except DraftCapacityExceededError as error:
+            rejected.append(error)
+
+    async with create_task_group() as tasks:
+        tasks.start_soon(create, 800)
+        tasks.start_soon(create, 801)
+    assert len(accepted) == 1
+    assert len(rejected) == 1
+    replayed = await repository.create(accepted[0], capacity=1)
+    assert replayed.snapshot.id == accepted[0].snapshot.id
+
+    other_pool = replace(template, inferred=not inferred, snapshot=replace(template.snapshot, id=UUID(int=802)))
+    assert (await repository.create(other_pool, capacity=1)).inferred is not inferred
+
+
+async def test_stable_draft_identity_rejects_changed_inference_provenance(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresDraftRepository(async_session_factory)
+    source = SubmissionSourceFile(
+        UUID(int=804),
+        "source.png",
+        "image/png",
+        "https://cdn.discordapp.com/attachments/source.png",
+        4,
+    )
+    retained = replace(
+        _stored(account_id, origin=SubmissionOrigin.DISCORD),
+        inferred=True,
+        source_messages=(SourceMessage(40, content="original"),),
+        source_files=(source,),
+        inference_run_id=UUID(int=805),
+    )
+    await repository.create(retained)
+
+    with pytest.raises(DraftStateConflictError):
+        await repository.create(replace(retained, source_messages=(SourceMessage(40, content="changed"),)))
+    with pytest.raises(DraftStateConflictError):
+        await repository.create(replace(retained, inference_run_id=UUID(int=806)))
+
+
+async def test_inferred_capacity_is_global_and_expiry_releases_it(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from squid.submissions.errors import DraftCapacityExceededError
+
+    repository = PostgresDraftRepository(async_session_factory)
+    async with async_session_factory.begin() as session:
+        other = Account()
+        session.add(other)
+        await session.flush()
+        other_id = other.id
+    now = Instant.now()
+    first = replace(
+        _stored(account_id, origin=SubmissionOrigin.DISCORD),
+        inferred=True,
+        created_at=now,
+        updated_at=now,
+        expires_at=now.add(days=7, days_assumed_24h_ok=True),
+    )
+    await repository.create(first, capacity=1)
+    second = replace(first, snapshot=replace(first.snapshot, id=UUID(int=803), owner_account_id=other_id))
+    with pytest.raises(DraftCapacityExceededError):
+        await repository.create(second, capacity=1)
+    await repository.expire_due(now=first.expires_at)
+    assert (await repository.create(second, capacity=1)).snapshot.owner_account_id == other_id
+
+
+async def test_staff_edit_retains_owner_and_records_actual_actor(
+    account_id: int,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with async_session_factory.begin() as session:
+        staff = Account()
+        session.add(staff)
+        await session.flush()
+        staff_id = staff.id
+    drafts = PostgresDraftRepository(async_session_factory)
+    stored = replace(
+        _stored(account_id), snapshot=replace(_stored(account_id).snapshot, status=DraftStatus.NEEDS_ATTENTION)
+    )
+    await drafts.create(stored)
+    assert [draft.snapshot.id for draft in await drafts.list_attention(after=None, limit=1, now=NOW)] == [DRAFT_ID]
+    assert await drafts.list_attention(after=DRAFT_ID, limit=1, now=NOW) == ()
+    changed = await drafts.apply_change(
+        DRAFT_ID,
+        account_id,
+        _change(key="staff-correction", operation_id="00000000-0000-4000-8000-000000000299"),
+        updated_at=NOW,
+        expires_at=stored.expires_at,
+        actor_account_id=staff_id,
+    )
+    assert changed.draft.snapshot.owner_account_id == account_id
+    async with async_session_factory() as session:
+        assert await session.scalar(select(SubmissionDraftChange.actor_account_id)) == staff_id
+    assert await drafts.list_attention(after=None, limit=1, now=NOW) == ()

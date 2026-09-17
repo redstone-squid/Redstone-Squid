@@ -18,7 +18,7 @@ from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
     DraftCreateRequest,
     FormManifestResponse,
-    SubmissionFinalizationResponse,
+    SubmissionAttemptResponse,
 )
 from squid.api.v1.submissions import (
     AuthenticatedSubmissionActor,
@@ -146,13 +146,23 @@ class FakeDrafts(SubmissionDraftCommands):
         return self.current
 
     @override
+    async def attention_inbox(
+        self,
+        actor: int,
+        *,
+        after: UUID | None = None,
+        limit: int = 20,
+    ) -> tuple[StoredDraft, ...]:
+        return ()
+
+    @override
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
         assert account_id == ACCOUNT_ID
         assert limit == 10
         return (self.current,)
 
     @override
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
         assert account_id == ACCOUNT_ID
         return self.current
@@ -233,6 +243,19 @@ class FakeFinalization(SubmissionFinalizationCommands):
     async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None:
         self.status_calls.append((draft_id, account_id))
         return self.snapshot
+
+    @override
+    async def attempt(self, draft_id: UUID, account_id: int, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+        assert account_id == ACCOUNT_ID
+        return self.snapshot if draft_id == self.snapshot.draft_id and attempt_id == self.snapshot.job_id else None
+
+    @override
+    async def attempts(
+        self, draft_id: UUID, account_id: int, *, before: int | None = None, limit: int = 20
+    ) -> tuple[FinalizationJobSnapshot, ...]:
+        assert account_id == ACCOUNT_ID
+        assert draft_id == self.snapshot.draft_id
+        return (self.snapshot,)[:limit] if before is None or before > self.snapshot.attempt_number else ()
 
 
 def test_manifest_dto_is_stable_strict_and_json_safe() -> None:
@@ -393,8 +416,12 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         )
         list_response = await client.get("/submissions/drafts")
         get_response = await client.get(f"/submissions/drafts/{draft_id}")
-        submit_response = await client.post(f"/submissions/drafts/{draft_id}/submission")
-        submission_response = await client.get(f"/submissions/drafts/{draft_id}/submission")
+        submit_response = await client.post(f"/submissions/drafts/{draft_id}/attempts")
+        submission_response = await client.get(f"/submissions/drafts/{draft_id}/status")
+        history_response = await client.get(f"/submissions/drafts/{draft_id}/attempts")
+        detail_response = await client.get(f"/submissions/drafts/{draft_id}/attempts/{finalization.snapshot.job_id}")
+        empty_history = await client.get(f"/submissions/drafts/{draft_id}/attempts?before=1")
+        invalid_limit = await client.get(f"/submissions/drafts/{draft_id}/attempts?limit=101")
         delete_response = await client.delete(f"/submissions/drafts/{draft_id}")
 
     assert manifest_response.status_code == 200
@@ -431,6 +458,8 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         "drafts": [
             {
                 "id": draft_id,
+                "owner_account_id": ACCOUNT_ID,
+                "inferred": False,
                 "schema_id": "build_submission.v1",
                 "schema_revision": 2,
                 "category": "door",
@@ -448,12 +477,19 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert submit_response.status_code == 202
     assert submit_response.json() == {
         "draft_id": draft_id,
+        "attempt_id": str(finalization.snapshot.job_id),
+        "attempt_number": 1,
+        "input_sha256": None,
         "draft_revision": 1,
         "status": "needs_attention",
         "issues": [{"field_id": "schematic", "reason": "schematic_processing"}],
         "build_id": None,
     }
     assert submission_response.json() == submit_response.json()
+    assert history_response.json() == [submit_response.json()]
+    assert detail_response.json() == submit_response.json()
+    assert empty_history.json() == []
+    assert invalid_limit.status_code == 422
     assert finalization.submit_calls == [(UUID(draft_id), ACCOUNT_ID, "en")]
     assert finalization.status_calls == [(UUID(draft_id), ACCOUNT_ID)]
     assert delete_response.status_code == 204
@@ -532,11 +568,13 @@ def test_finalization_response_does_not_expose_worker_or_target_internals() -> N
         completed_at=NOW,
         last_error="private worker detail",
         result=FinalizedBuild(91),
+        input_sha256="a" * 64,
     )
 
-    payload = SubmissionFinalizationResponse.from_domain(snapshot).model_dump(mode="json")
+    payload = SubmissionAttemptResponse.from_domain(snapshot).model_dump(mode="json")
 
     assert payload["build_id"] == 91
+    assert payload["input_sha256"] == "a" * 64
     assert "job_id" not in payload
     assert "attempts" not in payload
     assert "last_error" not in payload

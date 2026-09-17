@@ -7,7 +7,7 @@ looking at it and removing it belong to the same message (audit C5's retyping ha
 """
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, override
 from uuid import UUID
 
 import squid_ui as sl
@@ -75,6 +75,7 @@ class NotificationScreen(sd.Screen):
         self._visibility = visibility
         self._visibility_resolver = visibility_resolver
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
@@ -112,6 +113,7 @@ class NotificationScreen(sd.Screen):
     def subscriptions(self) -> tuple[NotificationSubscription, ...]:
         return self._subscriptions[:MAX_LISTED]
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
             return (sl.section(sl.heading(tr(t"Notifications closed"))),)
@@ -414,7 +416,9 @@ class NotificationScreen(sd.Screen):
                 return tr(t"Record gained")
             case "staff_build_submitted":
                 return tr(t"Build awaiting review")
-            case _:
+            # The cases above cover NotificationKind exhaustively today; the default is what a
+            # kind added to the enum later renders as instead of falling off the end.
+            case _:  # pyright: ignore[reportUnnecessaryComparison]
                 return tr(t"Build notification")
 
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:

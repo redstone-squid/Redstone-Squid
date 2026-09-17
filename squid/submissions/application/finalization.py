@@ -1,52 +1,42 @@
 """Durable submission finalization, driven the same way by the bot and the API."""
 
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import Protocol
 from uuid import UUID
 
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue
 from squid.core.i18n import tr
-from squid.sponsors import PublicSponsor
 from squid.submissions.application.drafts import (
     DEFAULT_DRAFT_RETENTION_DAYS,
+    DraftActor,
     StoredDraft,
     SubmissionDraftService,
-    ValidatedDraft,
+    draft_actor_id,
 )
-from squid.submissions.domain import DraftStatus, SubmissionOrigin
+from squid.submissions.application.preparation import PreparationRejected, PreparationWaiting, SubmissionPreparation
+from squid.submissions.domain import DraftRevisionConflictError, DraftStatus
 from squid.submissions.domain.finalization import (
     BuildSubmissionRejected,
     BuildSubmissionResult,
-    DoorOrientation,
-    DoorSubmissionDetails,
-    DoorTiming,
-    ExtenderOrientation,
-    ExtenderSubmissionDetails,
-    ExtenderTiming,
     FinalizationJobStatus,
     FinalizedBuild,
-    GeneralSubmissionDetails,
     NormalizedSubmission,
-    SchematicArtifactState,
-    SchematicRightsPolicy,
-    SubmissionArtifactReadiness,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
-    SubmissionCategory,
-    SubmissionDimensions,
-    SubmissionSchematicLicense,
-    SubmissionSchematicVisibility,
-    SubmissionTaxonomy,
 )
-from squid.submissions.errors import DraftSchemaUnsupportedError, DraftValidationError
+from squid.submissions.errors import (
+    DraftAccessDeniedError,
+    DraftNotFoundError,
+    DraftSchemaUnsupportedError,
+    DraftStateConflictError,
+    DraftValidationError,
+)
 
 MAX_FINALIZATION_JOB_CLAIM = 32
 DEFAULT_FINALIZATION_ATTEMPTS = 3
-_STABLE_KEY = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,6 +50,7 @@ class ClaimedFinalizationJob:
     attempts: int
     claimed_at: Instant
     claim_token: UUID
+    requested_by_account_id: int | None = None
 
     def __post_init__(self) -> None:
         if self.job_id.int == 0 or self.claim_token.int == 0 or self.attempts < 1:
@@ -85,6 +76,8 @@ class FinalizationJobSnapshot:
     last_error: str | None = None
     issues: tuple[SubmissionAttentionIssue, ...] = ()
     result: FinalizedBuild | None = None
+    attempt_number: int = 1
+    input_sha256: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,102 +89,43 @@ class FinalizationFailureOutcome:
 
 
 @dataclass(frozen=True, slots=True)
-class PreparedSubmission:
-    """A validated submission ready for durable finalization."""
+class DraftPreparationSnapshot:
+    """Draft issues recorded before an executable attempt exists."""
 
-    value: NormalizedSubmission
-
-
-@dataclass(frozen=True, slots=True)
-class PreparationRejected:
-    """Owner-repair issues found while preparing a validated draft."""
-
+    draft_id: UUID
+    draft_revision: int
     issues: tuple[SubmissionAttentionIssue, ...]
+    waiting_for_artifacts: bool = False
 
-    def __post_init__(self) -> None:
-        if not self.issues:
-            msg = tr(t"rejected submission preparation requires at least one issue")
-            raise InvalidStateError(msg)
-
-
-type PreparationResult = PreparedSubmission | PreparationRejected
+    @property
+    def status(self) -> DraftStatus:
+        return DraftStatus.NEEDS_ATTENTION
 
 
-class DraftArtifactReadiness(Protocol):
-    """Read backend-owned artifact state for one draft.
-
-    Implementations must inspect every associated upload. They may expose media UUIDs
-    only after normalization and a schematic UUID only after sanitization; pending or
-    rejected uploads must be represented by stable attention issues.
-    """
-
-    async def assess(self, draft_id: UUID) -> SubmissionArtifactReadiness: ...
+type SubmissionRequestResult = FinalizationJobSnapshot | DraftPreparationSnapshot
 
 
-class SubmissionSponsorResolver(Protocol):
-    """Resolve only an installation's currently authorized public sponsor projection."""
+class SubmissionExecutor(Protocol):
+    """Commit build, artifacts, and receipt under the claim fence before returning success."""
 
-    async def resolve(self, installation_id: UUID) -> PublicSponsor | None: ...
-
-
-class SubmissionPreparation:
-    """Combine validated answers with authoritative sponsor and attachment facts."""
-
-    def __init__(
+    async def execute(
         self,
-        artifacts: DraftArtifactReadiness,
-        sponsors: SubmissionSponsorResolver | None = None,
-    ) -> None:
-        self._artifacts = artifacts
-        self._sponsors = sponsors
-
-    async def prepare(self, validated: ValidatedDraft) -> PreparationResult:
-        """Return a normalized submission or deterministic owner-repair issues."""
-        draft = validated.draft
-        answers = validated.normalized_answers
-        sponsor, sponsor_issues = await self._resolve_sponsor(draft, answers)
-        assessment = await self._artifacts.assess(draft.snapshot.id)
-        issues = _unique_issues(
-            (
-                *_artifact_issues(draft.origin, assessment),
-                *_taxonomy_issues(answers, draft.snapshot.category),
-                *sponsor_issues,
-            )
-        )
-        if issues:
-            return PreparationRejected(issues)
-        return PreparedSubmission(_normalize(draft, answers, assessment, sponsor))
-
-    async def _resolve_sponsor(
-        self,
-        draft: StoredDraft,
-        answers: Mapping[str, JSONValue],
-    ) -> tuple[PublicSponsor | None, tuple[SubmissionAttentionIssue, ...]]:
-        requested = draft.origin is SubmissionOrigin.PAPER and _required_bool(answers, "sponsor_attribution")
-        if not requested:
-            return None, ()
-        if draft.source_installation_id is None or self._sponsors is None:
-            return None, (_sponsor_unavailable(),)
-        sponsor = await self._sponsors.resolve(draft.source_installation_id)
-        if sponsor is None or sponsor.installation_id != draft.source_installation_id:
-            return None, (_sponsor_unavailable(),)
-        return sponsor, ()
-
-
-class BuildSubmissionWriter(Protocol):
-    """Create or find a build using the source draft UUID as its idempotency key.
-
-    Implementations must return the previously-created result when called again for the
-    same ``source_draft_id``, including after the first call committed and the worker crashed.
-    """
-
-    async def create_or_get(self, submission: NormalizedSubmission) -> BuildSubmissionResult: ...
+        job: ClaimedFinalizationJob,
+        *,
+        now: Instant,
+    ) -> BuildSubmissionResult | None: ...
 
 
 class FinalizationJobRepository(Protocol):
     """Atomic draft transitions and durable claim-token-fenced queue operations."""
 
     async def get(self, draft_id: UUID) -> FinalizationJobSnapshot | None: ...
+
+    async def get_attempt(self, draft_id: UUID, attempt_id: UUID) -> FinalizationJobSnapshot | None: ...
+
+    async def list_attempts(
+        self, draft_id: UUID, *, before: int | None, limit: int
+    ) -> tuple[FinalizationJobSnapshot, ...]: ...
 
     async def enqueue(
         self,
@@ -200,6 +134,7 @@ class FinalizationJobRepository(Protocol):
         *,
         now: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> FinalizationJobSnapshot: ...
 
     async def record_preparation_attention(
@@ -209,7 +144,11 @@ class FinalizationJobRepository(Protocol):
         *,
         now: Instant,
         expires_at: Instant,
-    ) -> FinalizationJobSnapshot: ...
+        waiting_for_artifacts: bool = False,
+        actor_account_id: int | None = None,
+    ) -> SubmissionRequestResult: ...
+
+    async def reserve_preparations(self, *, now: Instant, limit: int) -> tuple[StoredDraft, ...]: ...
 
     async def claim(self, *, now: Instant, limit: int) -> Sequence[ClaimedFinalizationJob]: ...
 
@@ -264,13 +203,19 @@ class SubmissionFinalizationService:
     async def submit(
         self,
         draft_id: UUID,
-        account_id: int,
+        account_id: DraftActor,
         *,
         locale: str | None,
         now: Instant | None = None,
-    ) -> FinalizationJobSnapshot:
+    ) -> SubmissionRequestResult:
         """Start idempotent processing or persist actionable preparation issues."""
-        current = await self._drafts.get_owned(draft_id, account_id)
+        current = await self._drafts.get_accessible(draft_id, account_id)
+        return await self._submit(current, account_id, locale=locale, now=now or Instant.now(), refresh_retention=True)
+
+    async def _submit(
+        self, current: StoredDraft, account_id: DraftActor, *, locale: str | None, now: Instant, refresh_retention: bool
+    ) -> SubmissionRequestResult:
+        draft_id = current.snapshot.id
         if current.snapshot.status is DraftStatus.PROCESSING:
             existing = await self._jobs.get(draft_id)
             if existing is not None and existing.status in {
@@ -287,10 +232,18 @@ class SubmissionFinalizationService:
                 raise InvalidStateError(msg)
             return existing
 
-        touched_at = now or Instant.now()
-        expires_at = touched_at.add(days=self._retention_days, days_assumed_24h_ok=True)
+        touched_at = now
+        expires_at = (
+            touched_at.add(days=self._retention_days, days_assumed_24h_ok=True)
+            if refresh_retention
+            else current.expires_at
+        )
         try:
             validated = await self._drafts.validate_for_finalization(draft_id, account_id, locale=locale)
+            if validated.draft.snapshot.revision != current.snapshot.revision:
+                raise DraftRevisionConflictError(
+                    expected=current.snapshot.revision, actual=validated.draft.snapshot.revision
+                )
         except DraftValidationError as error:
             issues = _manifest_issues(error.public_context)
             return await self._jobs.record_preparation_attention(
@@ -298,6 +251,7 @@ class SubmissionFinalizationService:
                 issues,
                 now=touched_at,
                 expires_at=expires_at,
+                actor_account_id=draft_actor_id(account_id),
             )
         except DraftSchemaUnsupportedError:
             return await self._jobs.record_preparation_attention(
@@ -305,27 +259,73 @@ class SubmissionFinalizationService:
                 (SubmissionAttentionIssue("submission", SubmissionAttentionReason.SCHEMA_UNSUPPORTED),),
                 now=touched_at,
                 expires_at=expires_at,
+                actor_account_id=draft_actor_id(account_id),
             )
 
         preparation = await self._preparation.prepare(validated)
-        if isinstance(preparation, PreparationRejected):
+        if isinstance(preparation, PreparationRejected | PreparationWaiting):
             return await self._jobs.record_preparation_attention(
                 validated.draft,
                 preparation.issues,
                 now=touched_at,
                 expires_at=expires_at,
+                waiting_for_artifacts=isinstance(preparation, PreparationWaiting),
+                actor_account_id=draft_actor_id(account_id),
             )
         return await self._jobs.enqueue(
             validated.draft,
             preparation.value,
             now=touched_at,
             expires_at=expires_at,
+            actor_account_id=draft_actor_id(account_id),
         )
 
-    async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None:
+    async def resume_waiting(self, *, now: Instant, limit: int = 8) -> None:
+        """Recheck reserved attachment waits without renewing their retention period."""
+        for draft in await self._jobs.reserve_preparations(now=now, limit=limit):
+            try:
+                await self._submit(
+                    draft,
+                    draft.submission_actor_account_id or draft.snapshot.owner_account_id,
+                    locale=None,
+                    now=now,
+                    refresh_retention=False,
+                )
+            except DraftAccessDeniedError:
+                await self._jobs.record_preparation_attention(
+                    draft,
+                    (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),),
+                    now=now,
+                    expires_at=draft.expires_at,
+                    actor_account_id=draft.submission_actor_account_id,
+                )
+            except DraftRevisionConflictError, DraftNotFoundError, DraftStateConflictError:
+                # Edits, deletion, expiry, or account merges invalidate this reservation.
+                continue
+
+    async def status(self, draft_id: UUID, account_id: DraftActor) -> SubmissionRequestResult | None:
         """Return retained finalization state after rechecking draft ownership."""
-        await self._drafts.get_owned(draft_id, account_id)
+        draft = await self._drafts.get_accessible(draft_id, account_id)
+        if draft.preparation_issues:
+            return DraftPreparationSnapshot(
+                draft_id, draft.snapshot.revision, draft.preparation_issues, draft.preparation_retry_at is not None
+            )
         return await self._jobs.get(draft_id)
+
+    async def attempt(self, draft_id: UUID, account_id: DraftActor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+        """Read a retained attempt only within its accessible parent draft."""
+        await self._drafts.get_accessible(draft_id, account_id)
+        return await self._jobs.get_attempt(draft_id, attempt_id)
+
+    async def attempts(
+        self, draft_id: UUID, account_id: DraftActor, *, before: int | None = None, limit: int = 20
+    ) -> tuple[FinalizationJobSnapshot, ...]:
+        """Read newest-first history with a stable exclusive attempt-number cursor."""
+        if not 1 <= limit <= 100 or (before is not None and before < 1):
+            message = "Invalid attempt history cursor or limit."
+            raise InvalidStateError(message)
+        await self._drafts.get_accessible(draft_id, account_id)
+        return await self._jobs.list_attempts(draft_id, before=before, limit=limit)
 
 
 class SubmissionFinalizationWorker:
@@ -334,18 +334,20 @@ class SubmissionFinalizationWorker:
     def __init__(
         self,
         jobs: FinalizationJobRepository,
-        writer: BuildSubmissionWriter,
+        executor: SubmissionExecutor,
         *,
         max_attempts: int = DEFAULT_FINALIZATION_ATTEMPTS,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
+        preparation: SubmissionFinalizationService | None = None,
     ) -> None:
         if max_attempts < 1 or retention_days < 1:
             msg = tr(t"finalization retry and retention limits must be positive")
             raise InvalidStateError(msg)
         self._jobs = jobs
-        self._writer = writer
+        self._executor = executor
         self._max_attempts = max_attempts
         self._retention_days = retention_days
+        self._preparation = preparation
 
     async def process_batch(self, *, limit: int = 8, now: Instant | None = None) -> None:
         """Claim and process at most ``limit`` jobs sequentially."""
@@ -353,13 +355,15 @@ class SubmissionFinalizationWorker:
             maximum = MAX_FINALIZATION_JOB_CLAIM
             raise InvalidStateError(tr(t"finalization claim limit must be between 1 and {maximum}"))
         claimed_at = now or Instant.now()
+        if self._preparation is not None:
+            await self._preparation.resume_waiting(now=claimed_at, limit=limit)
         for job in await self._jobs.claim(now=claimed_at, limit=limit):
             await self._process(job, now=claimed_at)
 
     async def _process(self, job: ClaimedFinalizationJob, *, now: Instant) -> None:
         expires_at = now.add(days=self._retention_days, days_assumed_24h_ok=True)
         try:
-            result = await self._writer.create_or_get(job.payload)
+            result = await self._executor.execute(job, now=now)
         except Exception as error:
             retry_at = now.add(seconds=_retry_delay(job.attempts))
             await self._jobs.fail(
@@ -380,7 +384,6 @@ class SubmissionFinalizationWorker:
                 expires_at=expires_at,
             )
             return
-        await self._jobs.complete(job, result, now=now)
 
 
 def _manifest_issues(context: Mapping[str, JSONValue]) -> tuple[SubmissionAttentionIssue, ...]:
@@ -396,190 +399,6 @@ def _manifest_issues(context: Mapping[str, JSONValue]) -> tuple[SubmissionAttent
         except ValueError:
             issues.append(SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED))
     return tuple(issues) or (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
-
-
-def _artifact_issues(
-    origin: SubmissionOrigin,
-    readiness: SubmissionArtifactReadiness,
-) -> tuple[SubmissionAttentionIssue, ...]:
-    issues = list(readiness.issues)
-    match readiness.schematic_state:
-        case SchematicArtifactState.ABSENT:
-            if origin in {SubmissionOrigin.PAPER, SubmissionOrigin.FABRIC}:
-                issues.append(SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_REQUIRED))
-        case SchematicArtifactState.PROCESSING:
-            issues.append(SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING))
-        case SchematicArtifactState.REJECTED:
-            issues.append(SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_REJECTED))
-        case SchematicArtifactState.SANITIZED:
-            pass
-    return _unique_issues(issues)
-
-
-def _taxonomy_issues(
-    answers: Mapping[str, JSONValue],
-    category: str,
-) -> tuple[SubmissionAttentionIssue, ...]:
-    fields = ["restrictions", "showcase_tags"]
-    if category in {SubmissionCategory.DOOR.value, SubmissionCategory.EXTENDER.value}:
-        fields.append("patterns")
-    issues: list[SubmissionAttentionIssue] = []
-    for field_id in fields:
-        value = answers.get(field_id, ())
-        if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-            values = [item for item in value if isinstance(item, str)]
-            if len(values) != len(set(values)) or any(_STABLE_KEY.fullmatch(item) is None for item in values):
-                issues.append(SubmissionAttentionIssue(field_id, SubmissionAttentionReason.UNKNOWN_OPTION))
-    return tuple(issues)
-
-
-def _normalize(
-    draft: StoredDraft,
-    answers: Mapping[str, JSONValue],
-    readiness: SubmissionArtifactReadiness,
-    sponsor: PublicSponsor | None,
-) -> NormalizedSubmission:
-    category = SubmissionCategory(draft.snapshot.category)
-    visibility = SubmissionSchematicVisibility(_required_str(answers, "schematic_visibility"))
-    public = visibility is SubmissionSchematicVisibility.PUBLIC_DOWNLOAD
-    license_value = _optional_str(answers, "schematic_license") if public else None
-    policy = SchematicRightsPolicy(
-        visibility=visibility,
-        license=SubmissionSchematicLicense(license_value) if license_value is not None else None,
-        rights_attested=_required_bool(answers, "rights_attestation") if public else False,
-        include_inventories=_required_bool(answers, "include_inventories"),
-        include_free_text=_required_bool(answers, "include_free_text"),
-    )
-    details: DoorSubmissionDetails | ExtenderSubmissionDetails | GeneralSubmissionDetails
-    if category is SubmissionCategory.DOOR:
-        details = DoorSubmissionDetails(
-            opening=SubmissionDimensions(
-                _required_int(answers, "opening_width"),
-                _required_int(answers, "opening_height"),
-                _required_int(answers, "opening_depth"),
-            ),
-            orientation=DoorOrientation(_required_str(answers, "door_orientation")),
-            pattern_keys=_string_tuple(answers, "patterns"),
-            pattern_proposals=_string_tuple(answers, "pattern_proposals"),
-            timing=DoorTiming(
-                _optional_int(answers, "opening_time"),
-                _optional_int(answers, "visible_opening_time"),
-                _optional_int(answers, "closing_time"),
-                _optional_int(answers, "visible_closing_time"),
-            ),
-        )
-    elif category is SubmissionCategory.EXTENDER:
-        details = ExtenderSubmissionDetails(
-            orientation=ExtenderOrientation(_required_str(answers, "movement_orientation")),
-            extension_length=_required_int(answers, "extension_length"),
-            pattern_keys=_string_tuple(answers, "patterns"),
-            pattern_proposals=_string_tuple(answers, "pattern_proposals"),
-            timing=ExtenderTiming(
-                _optional_int(answers, "extension_time"),
-                _optional_int(answers, "retraction_time"),
-            ),
-        )
-    else:
-        details = GeneralSubmissionDetails()
-    return NormalizedSubmission(
-        source_draft_id=draft.snapshot.id,
-        owner_account_id=draft.snapshot.owner_account_id,
-        origin=draft.origin,
-        schema_id=draft.snapshot.schema_id,
-        schema_revision=draft.snapshot.schema_revision,
-        category=category,
-        display_name=_optional_nonblank_str(answers, "display_name"),
-        description=_optional_str(answers, "description"),
-        creators=_string_tuple(answers, "creators"),
-        capture_dimensions=SubmissionDimensions(
-            _required_int(answers, "capture_width"),
-            _required_int(answers, "capture_height"),
-            _required_int(answers, "capture_depth"),
-        ),
-        source_version=_required_str(answers, "source_version"),
-        version_compatibility=_optional_str(answers, "version_compatibility"),
-        taxonomy=SubmissionTaxonomy(
-            restriction_keys=_string_tuple(answers, "restrictions"),
-            restriction_proposals=_string_tuple(answers, "restriction_proposals"),
-            showcase_tag_keys=_string_tuple(answers, "showcase_tags"),
-        ),
-        schematic_policy=policy,
-        completion=_optional_str(answers, "completion"),
-        ai_generated=_required_bool(answers, "ai_generated"),
-        sponsor_attribution=(
-            _required_bool(answers, "sponsor_attribution") if draft.origin is SubmissionOrigin.PAPER else False
-        ),
-        artifacts=readiness.artifacts,
-        details=details,
-        source_installation_id=draft.source_installation_id,
-        sponsor=sponsor,
-    )
-
-
-def _sponsor_unavailable() -> SubmissionAttentionIssue:
-    return SubmissionAttentionIssue("sponsor_attribution", SubmissionAttentionReason.SPONSOR_UNAVAILABLE)
-
-
-def _required_str(answers: Mapping[str, JSONValue], field_id: str) -> str:
-    value = answers.get(field_id)
-    if not isinstance(value, str):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a string"))
-    return value
-
-
-def _optional_str(answers: Mapping[str, JSONValue], field_id: str) -> str | None:
-    value = answers.get(field_id)
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a string"))
-    return value
-
-
-def _optional_nonblank_str(answers: Mapping[str, JSONValue], field_id: str) -> str | None:
-    value = _optional_str(answers, field_id)
-    if value is None:
-        return None
-    normalized = value.strip()
-    return normalized or None
-
-
-def _required_int(answers: Mapping[str, JSONValue], field_id: str) -> int:
-    value = answers.get(field_id)
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise InvalidStateError(tr(t"validated field {field_id} is not an integer"))
-    return value
-
-
-def _optional_int(answers: Mapping[str, JSONValue], field_id: str) -> int | None:
-    value = answers.get(field_id)
-    if value is None:
-        return None
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise InvalidStateError(tr(t"validated field {field_id} is not an integer"))
-    return value
-
-
-def _required_bool(answers: Mapping[str, JSONValue], field_id: str) -> bool:
-    value = answers.get(field_id)
-    if not isinstance(value, bool):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a boolean"))
-    return value
-
-
-def _string_tuple(answers: Mapping[str, JSONValue], field_id: str) -> tuple[str, ...]:
-    value = answers.get(field_id, ())
-    if (
-        not isinstance(value, Sequence)
-        or isinstance(value, str | bytes)
-        or not all(isinstance(item, str) for item in value)
-    ):
-        raise InvalidStateError(tr(t"validated field {field_id} is not a string list"))
-    return tuple(cast(Sequence[str], value))
-
-
-def _unique_issues(issues: Sequence[SubmissionAttentionIssue]) -> tuple[SubmissionAttentionIssue, ...]:
-    return tuple(dict.fromkeys(issues))
 
 
 def _retry_delay(attempts: int) -> int:

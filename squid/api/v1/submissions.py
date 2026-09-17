@@ -19,21 +19,25 @@ from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
     DraftChangeResponse,
     DraftCreateRequest,
+    DraftInboxResponse,
     DraftListResponse,
     DraftManifestUpgradeRequest,
     DraftManifestUpgradeResponse,
+    DraftPreparationResponse,
     FormManifestResponse,
     FormOptionSetResponse,
     StoredDraftResponse,
-    SubmissionFinalizationResponse,
+    SubmissionAttemptResponse,
 )
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
 from squid.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
+    DraftPreparationSnapshot,
     FinalizationJobSnapshot,
     FormOptionSet,
     StoredDraft,
+    SubmissionRequestResult,
 )
 from squid.submissions.domain import DraftChange, FormManifest, SubmissionOrigin
 
@@ -70,7 +74,15 @@ class SubmissionDraftCommands(Protocol):
 
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]: ...
 
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
+    async def attention_inbox(
+        self,
+        actor: int,
+        *,
+        after: UUID | None = None,
+        limit: int = 20,
+    ) -> tuple[StoredDraft, ...]: ...
+
+    async def get_accessible(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
 
     async def apply_change(
         self,
@@ -103,9 +115,15 @@ class SubmissionFinalizationCommands(Protocol):
         account_id: int,
         *,
         locale: str | None,
-    ) -> FinalizationJobSnapshot: ...
+    ) -> SubmissionRequestResult: ...
 
-    async def status(self, draft_id: UUID, account_id: int) -> FinalizationJobSnapshot | None: ...
+    async def status(self, draft_id: UUID, account_id: int) -> SubmissionRequestResult | None: ...
+
+    async def attempt(self, draft_id: UUID, account_id: int, attempt_id: UUID) -> FinalizationJobSnapshot | None: ...
+
+    async def attempts(
+        self, draft_id: UUID, account_id: int, *, before: int | None = None, limit: int = 20
+    ) -> tuple[FinalizationJobSnapshot, ...]: ...
 
 
 class SubmissionApiServices(Protocol):
@@ -274,6 +292,23 @@ _DRAFT_DELETE_LINKS = {
 
 
 @router.get(
+    "/inbox",
+    response_model=DraftInboxResponse,
+    responses=responses(401, 403, 422, 503),
+    operation_id="submission_correction_inbox",
+    openapi_extra=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+)
+async def list_correction_inbox(
+    drafts: Drafts,
+    account_id: AccountId,
+    after: UUID | None = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> DraftInboxResponse:
+    """List drafts needing staff correction, excluding attachment processing waits."""
+    return DraftInboxResponse.from_domain(await drafts.attention_inbox(account_id, after=after, limit=limit))
+
+
+@router.get(
     "/drafts",
     response_model=DraftListResponse,
     responses=responses(401, 403, 503),
@@ -383,7 +418,7 @@ async def create_draft(
 )
 async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> StoredDraftResponse:
     """Return one draft after enforcing caller ownership."""
-    return StoredDraftResponse.from_domain(await drafts.get_owned(draft_id, account_id))
+    return StoredDraftResponse.from_domain(await drafts.get_accessible(draft_id, account_id))
 
 
 @router.post(
@@ -443,8 +478,8 @@ async def upgrade_draft_manifest(
 
 
 @router.post(
-    "/drafts/{draft_id}/submission",
-    response_model=SubmissionFinalizationResponse,
+    "/drafts/{draft_id}/attempts",
+    response_model=SubmissionAttemptResponse | DraftPreparationResponse,
     status_code=status.HTTP_202_ACCEPTED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_finalization_start",
@@ -459,19 +494,21 @@ async def submit_draft(
     request: Request,
     finalization: Finalization,
     account_id: AccountId,
-) -> SubmissionFinalizationResponse:
+) -> SubmissionAttemptResponse | DraftPreparationResponse:
     """Validate an owned draft and start retry-safe durable finalization."""
     snapshot = await finalization.submit(
         draft_id,
         account_id,
         locale=locale_for_request(request),
     )
-    return SubmissionFinalizationResponse.from_domain(snapshot)
+    if isinstance(snapshot, DraftPreparationSnapshot):
+        return DraftPreparationResponse.from_domain(snapshot)
+    return SubmissionAttemptResponse.from_domain(snapshot)
 
 
 @router.get(
-    "/drafts/{draft_id}/submission",
-    response_model=SubmissionFinalizationResponse,
+    "/drafts/{draft_id}/status",
+    response_model=SubmissionAttemptResponse | DraftPreparationResponse,
     responses=responses(401, 403, 404, 422, 503),
     operation_id="submission_finalization_get",
     openapi_extra=contract(
@@ -483,12 +520,53 @@ async def get_draft_submission(
     draft_id: UUID,
     finalization: Finalization,
     account_id: AccountId,
-) -> SubmissionFinalizationResponse:
+) -> SubmissionAttemptResponse | DraftPreparationResponse:
     """Return retained finalization state after rechecking draft ownership."""
     snapshot = await finalization.status(draft_id, account_id)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
-    return SubmissionFinalizationResponse.from_domain(snapshot)
+    if isinstance(snapshot, DraftPreparationSnapshot):
+        return DraftPreparationResponse.from_domain(snapshot)
+    return SubmissionAttemptResponse.from_domain(snapshot)
+
+
+@router.get(
+    "/drafts/{draft_id}/attempts",
+    response_model=list[SubmissionAttemptResponse],
+    responses=responses(401, 403, 404, 409, 422, 503),
+    operation_id="submission_attempts_list",
+    openapi_extra=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+)
+async def list_draft_attempts(
+    draft_id: UUID,
+    finalization: Finalization,
+    account_id: AccountId,
+    before: Annotated[int | None, Query(ge=1)] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> list[SubmissionAttemptResponse]:
+    """List retained attempts newest first; use the last attempt number as the next cursor."""
+    snapshots = await finalization.attempts(draft_id, account_id, before=before, limit=limit)
+    return [SubmissionAttemptResponse.from_domain(snapshot) for snapshot in snapshots]
+
+
+@router.get(
+    "/drafts/{draft_id}/attempts/{attempt_id}",
+    response_model=SubmissionAttemptResponse,
+    responses=responses(401, 403, 404, 409, 422, 503),
+    operation_id="submission_attempt_get",
+    openapi_extra=contract(security=[WEB, DEVICE, MINECRAFT], cli=transport_only()),
+)
+async def get_draft_attempt(
+    draft_id: UUID,
+    attempt_id: UUID,
+    finalization: Finalization,
+    account_id: AccountId,
+) -> SubmissionAttemptResponse:
+    """Read one attempt without exposing execution credentials or its private payload."""
+    snapshot = await finalization.attempt(draft_id, account_id, attempt_id)
+    if snapshot is None:
+        raise SubmissionFinalizationNotFoundError
+    return SubmissionAttemptResponse.from_domain(snapshot)
 
 
 @router.delete(

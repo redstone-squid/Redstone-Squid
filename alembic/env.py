@@ -14,6 +14,12 @@ from alembic import context
 from squid.config import load_database_config
 from squid.persistence.alembic_entities import alembic_util_entities
 from squid.persistence.base import Base
+from squid.persistence.migration_history import (
+    HISTORY_TABLE,
+    MigrationStepRecorder,
+    create_history_table,
+    verify_script_digests,
+)
 
 config = context.config
 if config.config_file_name is not None:
@@ -25,6 +31,9 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 MANAGED_ENTITY_NAMES = {f"{entity.schema}.{entity.signature}" for entity in alembic_util_entities()}
 MANAGED_ENTITY_TYPES = {type(entity) for entity in alembic_util_entities()}
+BOOKKEEPING_TABLES = frozenset({"alembic_version", HISTORY_TABLE})
+"""Alembic's own state, which no model declares and autogenerate must therefore not compare."""
+
 ALEMBIC_UTIL_ENTITY_TYPE_NAMES = {
     "extension",
     "function",
@@ -51,8 +60,8 @@ def include_object(
     _reflected: bool,
     _compare_to: SchemaItem | None,
 ) -> bool:
-    """Exclude Alembic's bookkeeping table from application-schema drift checks."""
-    return not (type_ == "table" and name == "alembic_version")
+    """Exclude Alembic's bookkeeping tables from application-schema drift checks."""
+    return not (type_ == "table" and name in BOOKKEEPING_TABLES)
 
 
 def include_name(
@@ -73,8 +82,12 @@ def include_name(
 
 def configure_context(connection: Connection | None = None) -> None:
     """Configure schema comparison consistently for online and offline operation."""
+    # The recorder is built per run so it can time each step against the previous one, and is
+    # registered even offline: it declines to write there itself, which keeps that decision in
+    # one place rather than splitting it across two configure calls.
     context.configure(
         connection=connection,
+        on_version_apply=MigrationStepRecorder(),
         url=None if connection is not None else database_url(),
         target_metadata=target_metadata,
         include_object=include_object,
@@ -104,6 +117,11 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         configure_context(connection)
         with context.begin_transaction():
+            # Inside the transaction Alembic owns, so a failed run leaves the ledger exactly as
+            # it found it. The order matters: verification reads a table that a database seeing
+            # this code for the first time does not have yet.
+            create_history_table(connection)
+            verify_script_digests(connection, context.script)
             context.run_migrations()
 
 

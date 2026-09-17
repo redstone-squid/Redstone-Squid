@@ -1,5 +1,6 @@
 import gc
 import weakref
+from typing import override
 
 import discord
 
@@ -39,7 +40,7 @@ def test_v2_program_hits_return_fresh_discord_objects_and_skip_certified_audit(m
     renderer = V2Renderer(cache=cache)
     result = _text_plan("hello")
     audits = 0
-    conform = renderer_module.conform
+    conform = renderer_module.conform  # pyright: ignore[reportPrivateImportUsage]  # monkeypatch target: the caller resolves it here
 
     def counted(*args, **kwargs):
         nonlocal audits
@@ -85,7 +86,7 @@ def test_custom_v2_factory_keeps_final_audits_on_program_hits(monkeypatch) -> No
     renderer = V2Renderer(cache=cache, view_factory=lambda: StaticView())
     result = _text_plan("custom")
     audits = 0
-    conform = renderer_module.conform
+    conform = renderer_module.conform  # pyright: ignore[reportPrivateImportUsage]  # monkeypatch target: the caller resolves it here
 
     def counted(*args, **kwargs):
         nonlocal audits
@@ -130,7 +131,7 @@ def test_classic_program_hits_return_fresh_objects_and_skip_certified_audit(monk
     renderer = ClassicRenderer(always_view=True, cache=cache)
     document = _classic_document("hello")
     audits = 0
-    audit = classic_renderer_module.audit_classic_payload
+    audit = classic_renderer_module.audit_classic_payload  # pyright: ignore[reportPrivateImportUsage]  # monkeypatch target: the caller resolves it here
 
     def counted(*args, **kwargs):
         nonlocal audits
@@ -156,6 +157,7 @@ async def test_message_root_reuses_a_revisited_scene_program() -> None:
     class Switching(Component[sl.ComponentsV2Target]):
         value: str = state("first")
 
+        @override
         def render(self) -> Text:
             return Text(self.value)
 
@@ -176,6 +178,7 @@ async def test_message_root_reuses_a_revisited_scene_program() -> None:
 
 async def test_explicit_render_cache_shares_programs_without_sharing_frontend_objects() -> None:
     class Static(Component[sl.ComponentsV2Target]):
+        @override
         def render(self) -> Text:
             return Text("shared")
 

@@ -400,10 +400,12 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Nod
                         footer=None if caption is None else CardFooter(_resolve(caption, context)),
                     )
                 ]
-            children: list[Node] = [Gallery((GalleryItem(media.url, media.description, media.spoiler),))]
+            # Not `children`: that name is a match capture throughout this function, and
+            # declaring it here would impose `list[Node]` on every other branch's binding.
+            gallery: list[Node] = [Gallery((GalleryItem(media.url, media.description, media.spoiler),))]
             if caption is not None:
-                children.append(Footer(_resolve(caption, context)))
-            return children
+                gallery.append(Footer(_resolve(caption, context)))
+            return gallery
         case Media():
             return _media(node, path, context)
         case Details():
@@ -520,7 +522,7 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Nod
             # `Panel` is claimed above because its children may carry semantic nodes to lower,
             # so this arm must stay after it.
             return [_primitive(node, context)]
-        case _ as unreachable:
+        case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
             assert_never(unreachable)
 
 
@@ -658,7 +660,7 @@ def _primitive(node: Node, context: _Context) -> Node:
             # Nothing on these carries author text; stated by name so a new primitive that
             # does carry some cannot slip through unresolved.
             return node
-        case _ as unreachable:
+        case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
             assert_never(unreachable)
 
 

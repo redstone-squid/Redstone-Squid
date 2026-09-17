@@ -20,6 +20,7 @@ from squid.bot._types import MessageableChannel
 from squid.bot.errors import COMMAND_ERRORS, SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
+from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
@@ -153,7 +154,12 @@ class RedstoneSquid(Bot):
         self.reactions = ReactionRouter(self, self.background_tasks)
         self.post_reconciler = PostReconciler(
             self,
-            [BuildCardRenderer(self), VoteSessionRenderer(self), StarboardEntryRenderer(self)],
+            [
+                BuildCardRenderer(self),
+                VoteSessionRenderer(self),
+                StarboardEntryRenderer(self),
+                SubmissionStatusRenderer(self),
+            ],
         )
         self.catbox = CatboxClient(catbox_config)
         self.media_previews = MediaPreviewClient()
@@ -211,7 +217,9 @@ class RedstoneSquid(Bot):
         }
         if ctx.guild is not None:
             attributes["squid.guild.id"] = ctx.guild.id
-        if ctx.channel is not None:
+        # A real Context always has a channel, but Context doubles built in tests (and any
+        # partially constructed context) do not, and this attribute is not worth crashing over.
+        if ctx.channel is not None:  # pyright: ignore[reportUnnecessaryComparison]
             attributes["squid.channel.id"] = ctx.channel.id
         with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
             request = await sd.request(ctx)

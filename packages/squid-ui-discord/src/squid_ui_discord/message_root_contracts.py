@@ -19,6 +19,7 @@ from squid_ui.guards import Challenge
 from squid_ui.interactions import ActionMiddleware
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.navigation import NavFactory
+from squid_ui.planning.target import Target
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.topics import Address, TopicBus
 from squid_ui.scene.model import PlanMetrics, PlanReport
@@ -31,7 +32,7 @@ from squid_ui.target_types import (
 from squid_ui.text import NEUTRAL, Localization, TextLike
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
-from squid_ui_discord.target import DISCORD_V2_DPY27, Target
+from squid_ui_discord.target import DISCORD_V2_DPY27
 
 if TYPE_CHECKING:
     from squid_ui_discord.message_root import AnyMessageRoot

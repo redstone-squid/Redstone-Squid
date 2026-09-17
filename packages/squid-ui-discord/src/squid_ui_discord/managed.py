@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import cast, overload
+from typing import cast, overload, override
 
 from squid_reactivity.operations import (
     Cancelled,
@@ -41,6 +41,7 @@ class _Scene(Component):
     def __init__(self, scene: DocumentLike) -> None:
         self._scene = scene
 
+    @override
     def render(self) -> DocumentLike:
         return self._scene
 
@@ -74,6 +75,7 @@ class _ManagedResult[ValueT](Component):
         """Return the optional failure renderer."""
         return self._render_error
 
+    @override
     def render(self) -> DocumentLike:
         """Render the pending or terminal result."""
         match self.execution.status:

@@ -54,12 +54,12 @@ def _rendered(solved) -> str:
     return "\n".join(parts)
 
 
-def _planned(nodes: Sequence[Renderable[ComponentsV2Target]], **options) -> PlanResult:
+def _planned(nodes: Sequence[Renderable[ComponentsV2Target]], **options) -> PlanResult[scene.ComponentsV2]:
     """Ladders are planner decisions, so structural behaviour is observed through plan()."""
     return plan(nodes, target=DISCORD_V2_DPY27, **options)
 
 
-def _text(result: PlanResult) -> str:
+def _text(result: PlanResult[scene.ComponentsV2]) -> str:
     parts: list[str] = []
 
     def walk(children: Sequence[scene.Node]) -> None:
@@ -75,7 +75,7 @@ def _text(result: PlanResult) -> str:
     return "\n".join(parts)
 
 
-def _components(result: PlanResult) -> int:
+def _components(result: PlanResult[scene.ComponentsV2]) -> int:
     """What the drawn view will hold, counted the same way the planner budgets it."""
 
     def count(children: Sequence[scene.Node]) -> int:
@@ -97,7 +97,7 @@ def _components(result: PlanResult) -> int:
     return count(result.scene.components_v2.children)
 
 
-def _step_events(result: PlanResult) -> list[str]:
+def _step_events(result: PlanResult[scene.ComponentsV2]) -> list[str]:
     return [event.message for event in result.report.events if event.code == f"layout.{SolveNoteCode.VARIANT_STEP}"]
 
 

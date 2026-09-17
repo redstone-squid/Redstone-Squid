@@ -6,13 +6,13 @@ import secrets
 import threading
 import time
 from collections import deque
-from collections.abc import Callable, Container, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from contextlib import AbstractContextManager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from itertools import pairwise
-from typing import Protocol, Self
+from typing import Protocol, Self, override
 
 from squid_ui.profiling.model import (
     ActiveSpanSnapshot,
@@ -218,9 +218,11 @@ class _WindowSlice:
 
 
 class _NoOpSpan(AbstractContextManager[SpanRecorder]):
+    @override
     def __enter__(self) -> SpanRecorder:
         return self
 
+    @override
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
@@ -245,9 +247,11 @@ class _NoOpOperation(AbstractContextManager[OperationRecorder], OperationRecorde
     could not honour.
     """
 
+    @override
     def __enter__(self) -> OperationRecorder:
         return self
 
+    @override
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
@@ -256,6 +260,7 @@ class _NoOpOperation(AbstractContextManager[OperationRecorder], OperationRecorde
     ) -> None:
         return None
 
+    @override
     def span(
         self,
         name: str,
@@ -265,15 +270,19 @@ class _NoOpOperation(AbstractContextManager[OperationRecorder], OperationRecorde
     ) -> AbstractContextManager[SpanRecorder]:
         return _NOOP_SPAN
 
+    @override
     def set_result(self, result: TraceResult) -> None:
         pass
 
+    @override
     def mark_deadline_missed(self) -> None:
         pass
 
+    @override
     def increment(self, name: str, amount: int = 1) -> None:
         pass
 
+    @override
     def start_span(
         self,
         name: str,
@@ -283,6 +292,7 @@ class _NoOpOperation(AbstractContextManager[OperationRecorder], OperationRecorde
     ) -> DetachedSpanRecorder:
         return _NOOP_DETACHED
 
+    @override
     def record_span(
         self,
         name: str,
@@ -298,6 +308,7 @@ class _NoOpOperation(AbstractContextManager[OperationRecorder], OperationRecorde
 class _NoOpDetachedSpan(_NoOpSpan, DetachedSpanRecorder):
     """A detached no-op span whose inert lifetime ends when ``finish`` is called."""
 
+    @override
     def finish(self, status: TraceStatus = TraceStatus.COMPLETED) -> None:
         pass
 
@@ -368,6 +379,7 @@ class _SpanScope(AbstractContextManager[SpanRecorder], SpanRecorder):
         self._token: Token[_Current | None] | None = None
         self._fallback = False
 
+    @override
     def __enter__(self) -> SpanRecorder:
         try:
             self._span = self._profiler._start_span(
@@ -383,6 +395,7 @@ class _SpanScope(AbstractContextManager[SpanRecorder], SpanRecorder):
             self._profiler._note_internal_failure()
         return self
 
+    @override
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
@@ -396,10 +409,12 @@ class _SpanScope(AbstractContextManager[SpanRecorder], SpanRecorder):
         self._profiler._finish_span(self._trace, self._span, status)
         return
 
+    @override
     def set_status(self, status: TraceStatus) -> None:
         if self._span is not None:
             self._span.status = status
 
+    @override
     def set_attribute(self, key: str, value: AttributeValue) -> None:
         if self._span is not None:
             self._profiler._set_span_attribute(self._trace, self._span, key, value)
@@ -433,6 +448,7 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         self._token: Token[_Current | None] | None = None
         self._fallback = False
 
+    @override
     def __enter__(self) -> OperationRecorder:
         try:
             self._trace = self._profiler._start_trace(
@@ -448,6 +464,7 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
             self._profiler._note_internal_failure()
         return self
 
+    @override
     def __exit__(
         self,
         exc_type: type[BaseException] | None,
@@ -470,6 +487,7 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         self._profiler._finish_trace(self._trace, result)
         return
 
+    @override
     def span(
         self,
         name: str,
@@ -487,18 +505,22 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
         )
         return _SpanScope(self._profiler, self._trace, parent, name, attributes, links)
 
+    @override
     def set_result(self, result: TraceResult) -> None:
         if self._trace is not None and not self._trace.closed:
             self._trace.result = result
 
+    @override
     def mark_deadline_missed(self) -> None:
         if self._trace is not None and not self._trace.closed:
             self._trace.deadline_missed = True
 
+    @override
     def increment(self, name: str, amount: int = 1) -> None:
         if self._trace is not None and not self._fallback and not self._trace.closed:
             self._profiler._increment_counter(self._trace, name, amount)
 
+    @override
     def start_span(
         self,
         name: str,
@@ -521,6 +543,7 @@ class _OperationScope(AbstractContextManager[OperationRecorder], OperationRecord
             return _NOOP_DETACHED
         return _DetachedSpan(self._profiler, self._trace, span)
 
+    @override
     def record_span(
         self,
         name: str,
@@ -558,14 +581,17 @@ class _DetachedSpan(DetachedSpanRecorder):
         self._span = span
         self._finished = False
 
+    @override
     def set_status(self, status: TraceStatus) -> None:
         if not self._finished and not self._trace.closed:
             self._span.status = status
 
+    @override
     def set_attribute(self, key: str, value: AttributeValue) -> None:
         if not self._finished:
             self._profiler._set_span_attribute(self._trace, self._span, key, value)
 
+    @override
     def finish(self, status: TraceStatus = TraceStatus.COMPLETED) -> None:
         if self._finished or self._trace.closed:
             return
@@ -795,7 +821,10 @@ class MemoryProfiler:
         self,
         size: int,
         constructor: Callable[[bytes], IdT],
-        used: Container[IdT] | None = None,
+        # `Collection`, not `Container`: `Container`'s type parameter appears in none of its
+        # members, so a checker cannot recover `IdT` from the argument and gives up on the
+        # constrained solve, silently typing every identifier this returns as `Any`.
+        used: Collection[IdT] | None = None,
     ) -> IdT:
         for _ in range(3):
             value = self._id_source(size)

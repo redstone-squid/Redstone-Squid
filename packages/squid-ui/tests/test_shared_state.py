@@ -5,7 +5,7 @@ import gc
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 import pytest
 
@@ -78,7 +78,7 @@ def test_scope_is_whatever_the_host_gave_it(bus: LocalTopicBus, here: Member) ->
 
 def test_an_unhashable_or_mutable_scope_is_accepted(bus: LocalTopicBus) -> None:
     mutable = ["guild", 7]
-    assert Anonymous(bus, mutable).scope is mutable  # pyrefly: ignore[bad-argument-type]
+    assert Anonymous(bus, mutable).scope is mutable  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 
 def test_repr_names_the_class_and_the_scope(bus: LocalTopicBus, here: Member) -> None:
@@ -109,6 +109,7 @@ def test_one_declaration_serves_both_owners(bus: LocalTopicBus, here: Member) ->
     class Panel(Component[DiscordTarget]):
         value: int = state(0)
 
+        @override
         def render(self):
             return Text(str(self.value))
 
@@ -129,6 +130,7 @@ def test_only_a_namespace_gives_its_state_an_address(bus: LocalTopicBus, here: M
     class Panel(Component[DiscordTarget]):
         value: int = state(0)
 
+        @override
         def render(self):
             return Text(str(self.value))
 
@@ -185,6 +187,7 @@ def test_an_equal_write_changes_nothing(bus: LocalTopicBus, here: Member) -> Non
 class Held:
     """A collaborator: real, and its `__eq__` is the author's code, not a settle check."""
 
+    @override
     def __eq__(self, other: object) -> bool:
         message = "an opaque cell compared by value"
         raise AssertionError(message)
@@ -246,7 +249,7 @@ async def test_an_in_place_mutation_publishes_with_its_action(bus: LocalTopicBus
     """
 
     class Draft(SharedState):
-        body: list[str] = state(factory=list, opaque=True)  # pyrefly: ignore[bad-assignment]
+        body: list[str] = state(factory=list, opaque=True)  # pyright: ignore[reportAssignmentType]  # pyrefly: ignore[bad-assignment]
 
     draft = Draft(bus)
     seen: list[object] = []
@@ -404,6 +407,7 @@ def test_local_state_rolls_back_with_a_conflict(bus: LocalTopicBus, here: Member
     class Panel(Component[DiscordTarget]):
         open: bool = state(default=False)
 
+        @override
         def render(self):
             return Text(str(self.open))
 
@@ -439,6 +443,7 @@ def test_a_computed_recomputes_when_another_owner_writes(bus: LocalTopicBus, her
             runs.append(1)
             return f"build {self.workspace.selected}"
 
+        @override
         def render(self):
             return Text(self.title)
 

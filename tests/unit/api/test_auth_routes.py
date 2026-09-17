@@ -5,6 +5,8 @@
 working byte-identically.
 """
 
+from typing import override
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -20,15 +22,18 @@ class WebAuthRecorder(WebSessionService):
         self.callbacks: list[tuple[str, str, str, str | None]] = []
 
     @property
+    @override
     def configured(self) -> bool:
         return True
 
+    @override
     async def authorize_url(self, slug: str, redirect_to: str | None) -> str:
         self.authorizations.append((slug, redirect_to))
         if self.authorize_error is not None:
             raise self.authorize_error
         return "https://discord.example/authorize?state=abc"
 
+    @override
     async def callback(self, slug: str, code: str, state: str, *, user_agent: str | None) -> tuple[str, str | None]:
         self.callbacks.append((slug, code, state, user_agent))
         return "session-token", "/account"

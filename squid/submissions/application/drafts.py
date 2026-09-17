@@ -7,8 +7,11 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
+from squid.builds.domain import SourceMessage
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
+from squid.permissions.domain import PermissionNode, Subject
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.submissions.application.forms import FormManifestRegistry
 from squid.submissions.domain import (
     DraftChange,
@@ -18,9 +21,10 @@ from squid.submissions.domain import (
     FormManifest,
     SubmissionOrigin,
 )
+from squid.submissions.domain.finalization import SubmissionAttentionIssue
+from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import (
     DraftAccessDeniedError,
-    DraftCapacityExceededError,
     DraftNotFoundError,
     DraftSchemaUnsupportedError,
     DraftStateConflictError,
@@ -29,6 +33,23 @@ from squid.submissions.errors import (
 
 DEFAULT_DRAFT_RETENTION_DAYS = 7
 DEFAULT_ACCOUNT_DRAFT_CAPACITY = 10
+DEFAULT_INFERRED_DRAFT_CAPACITY = 1_000
+
+type DraftActor = int | Subject
+
+
+def draft_actor_id(actor: DraftActor) -> int:
+    """Require an identified actor independently of how permission context was supplied."""
+    identifier = actor if isinstance(actor, int) else actor.account_id
+    if identifier is None or identifier < 1:
+        raise DraftAccessDeniedError
+    return identifier
+
+
+class DraftPermissions(Protocol):
+    """Live permission checks used for staff correction of account-owned drafts."""
+
+    async def allows(self, subject: Subject, node: PermissionNode) -> bool: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +62,14 @@ class StoredDraft:
     updated_at: Instant
     expires_at: Instant
     source_installation_id: UUID | None = None
+    preparation_issues: tuple[SubmissionAttentionIssue, ...] = ()
+    preparation_retry_at: Instant | None = None
+    inferred: bool = False
+    submission_actor_account_id: int | None = None
+    source_messages: tuple[SourceMessage, ...] = ()
+    source_files: tuple[SubmissionSourceFile, ...] = ()
+    source_issues: tuple[str, ...] = ()
+    inference_run_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
@@ -77,6 +106,8 @@ class DraftRepository(Protocol):
 
     async def count_active_for_account(self, account_id: int) -> int: ...
 
+    async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]: ...
+
     async def list_active_for_account(
         self,
         account_id: int,
@@ -85,7 +116,7 @@ class DraftRepository(Protocol):
         limit: int,
     ) -> tuple[StoredDraft, ...]: ...
 
-    async def create(self, draft: StoredDraft) -> StoredDraft: ...
+    async def create(self, draft: StoredDraft, *, capacity: int = DEFAULT_ACCOUNT_DRAFT_CAPACITY) -> StoredDraft: ...
 
     async def get(self, draft_id: UUID) -> StoredDraft | None: ...
 
@@ -104,6 +135,7 @@ class DraftRepository(Protocol):
         *,
         updated_at: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> AppliedDraftChange: ...
 
     async def transition(
@@ -207,8 +239,10 @@ class SubmissionDraftService:
         *,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
         now: Callable[[], Instant] = Instant.now,
+        inferred_capacity: int = DEFAULT_INFERRED_DRAFT_CAPACITY,
+        permissions: DraftPermissions | None = None,
     ) -> None:
-        if retention_days < 1:
+        if retention_days < 1 or inferred_capacity < 1:
             msg = tr(t"draft retention must be positive")
             raise InvalidStateError(msg)
         self._repository = repository
@@ -217,6 +251,8 @@ class SubmissionDraftService:
         self._revision_migration = revision_migration or CheckedInFormRevisionMigration()
         self._retention_days = retention_days
         self._now = now
+        self._inferred_capacity = inferred_capacity
+        self._permissions = permissions
 
     async def create(
         self,
@@ -229,14 +265,20 @@ class SubmissionDraftService:
         source_installation_id: UUID | None = None,
         now: Instant | None = None,
         draft_id: UUID | None = None,
+        inferred: bool = False,
+        source_messages: tuple[SourceMessage, ...] = (),
+        source_files: tuple[SubmissionSourceFile, ...] = (),
+        source_issues: tuple[str, ...] = (),
+        inference_run_id: UUID | None = None,
     ) -> StoredDraft:
         """Create an empty draft pinned to the current schema revision."""
         if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
             msg = tr(t"Paper drafts require server-derived installation provenance.")
             raise ValidationError(msg)
-        limit = await self._capacity.limit_for(owner_account_id)
-        if await self._repository.count_active_for_account(owner_account_id) >= limit:
-            raise DraftCapacityExceededError(limit)
+        if inferred and origin is not SubmissionOrigin.DISCORD:
+            message = "Inferred drafts require Discord source provenance."
+            raise ValidationError(message)
+        limit = self._inferred_capacity if inferred else await self._capacity.limit_for(owner_account_id)
         manifest = await self._manifests.current(locale=locale)
         manifest.category(category)
         missing = manifest.unsupported_required_capabilities(category, client_capabilities, origin)
@@ -256,8 +298,13 @@ class SubmissionDraftService:
             updated_at=created_at,
             expires_at=created_at.add(days=self._retention_days, days_assumed_24h_ok=True),
             source_installation_id=source_installation_id,
+            inferred=inferred,
+            source_messages=source_messages,
+            source_files=source_files,
+            source_issues=source_issues,
+            inference_run_id=inference_run_id,
         )
-        return await self._repository.create(stored)
+        return await self._repository.create(stored, capacity=limit)
 
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
         """List a bounded newest-first view of one account's unexpired active drafts."""
@@ -266,12 +313,39 @@ class SubmissionDraftService:
             raise InvalidStateError(tr(t"draft discovery limit must be between 1 and {maximum}"))
         return await self._repository.list_active_for_account(account_id, now=self._now(), limit=limit)
 
+    async def attention_inbox(
+        self,
+        actor: DraftActor,
+        *,
+        after: UUID | None = None,
+        limit: int = 20,
+    ) -> tuple[StoredDraft, ...]:
+        """Page correction work by stable ID after checking current staff permission."""
+        draft_actor_id(actor)
+        subject = Subject(account_id=actor) if isinstance(actor, int) else actor
+        if self._permissions is None or not await self._permissions.allows(subject, BUILD_SUBMISSION_EDIT):
+            raise DraftAccessDeniedError
+        if not 1 <= limit <= 100:
+            message = "Draft inbox limit must be between 1 and 100."
+            raise InvalidStateError(message)
+        return await self._repository.list_attention(after=after, limit=limit, now=self._now())
+
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
-        """Return one draft after enforcing its v1 single-owner boundary."""
+        """Return one unexpired draft under strict owner authority."""
+        draft = await self.get_accessible(draft_id, account_id)
+        self._require_owner(draft, account_id)
+        return draft
+
+    async def get_accessible(self, draft_id: UUID, actor: DraftActor) -> StoredDraft:
+        """Return one unexpired draft after checking owner or current staff authority."""
         draft = await self._repository.get(draft_id)
         if draft is None:
             raise DraftNotFoundError(draft_id)
-        self._require_owner(draft, account_id)
+        account_id = draft_actor_id(actor)
+        if draft.snapshot.owner_account_id != account_id:
+            subject = Subject(account_id=actor) if isinstance(actor, int) else actor
+            if self._permissions is None or not await self._permissions.allows(subject, BUILD_SUBMISSION_EDIT):
+                raise DraftAccessDeniedError
         if draft.snapshot.status is DraftStatus.EXPIRED or (
             draft.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
             and draft.expires_at <= self._now()
@@ -297,15 +371,16 @@ class SubmissionDraftService:
     async def apply_change(
         self,
         draft_id: UUID,
-        account_id: int,
+        account_id: DraftActor,
         change: DraftChange,
         *,
         locale: str | None,
         now: Instant | None = None,
     ) -> AppliedDraftChange:
         """Validate field IDs/types and atomically persist one optimistic edit."""
-        current = await self.get_owned(draft_id, account_id)
-        replayed = await self._repository.replayed_change(draft_id, account_id, change.idempotency_key)
+        current = await self.get_accessible(draft_id, account_id)
+        owner_id = current.snapshot.owner_account_id
+        replayed = await self._repository.replayed_change(draft_id, owner_id, change.idempotency_key)
         if replayed is not None:
             return replayed
         manifest = await self._pinned_manifest(current, locale)
@@ -319,12 +394,14 @@ class SubmissionDraftService:
         if errors:
             raise DraftValidationError(errors)
         touched_at = now or self._now()
+        await self.get_accessible(draft_id, account_id)
         return await self._repository.apply_change(
             draft_id,
-            account_id,
+            owner_id,
             change,
             updated_at=touched_at,
             expires_at=touched_at.add(days=self._retention_days, days_assumed_24h_ok=True),
+            actor_account_id=draft_actor_id(account_id),
         )
 
     async def upgrade_manifest(
@@ -362,7 +439,7 @@ class SubmissionDraftService:
     async def validate_for_finalization(
         self,
         draft_id: UUID,
-        account_id: int,
+        account_id: DraftActor,
         *,
         locale: str | None,
     ) -> ValidatedDraft:
@@ -371,7 +448,7 @@ class SubmissionDraftService:
         The finalization service performs backend-owned artifact checks and atomically
         changes the draft state while enqueuing its durable job.
         """
-        current = await self.get_owned(draft_id, account_id)
+        current = await self.get_accessible(draft_id, account_id)
         manifest = await self._pinned_manifest(current, locale)
         errors = manifest.validate_answers(
             current.snapshot.category,

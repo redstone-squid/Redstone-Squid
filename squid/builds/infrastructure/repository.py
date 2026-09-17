@@ -13,7 +13,6 @@ from typing import Any, cast
 from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import raiseload, selectinload
 from sqlalchemy.orm.exc import StaleDataError
@@ -21,7 +20,6 @@ from whenever import Instant
 
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.infrastructure.models import Account, CreatorAlias
-from squid.builds.application.ports import SourceSubmissionBuildWrite
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort, PublicBuildSummary, PublicBuildTag
 from squid.builds.domain import (
     BUILD_CLASS_BY_CATEGORY,
@@ -243,6 +241,7 @@ class BuildRepository:
         """
         if not build_ids:
             return ()
+        builds = SQLBuild.__table__
         door = SQLDoor.__table__
         extender = SQLExtender.__table__
         async with self._session_factory() as session:
@@ -250,20 +249,20 @@ class BuildRepository:
                 (
                     await session.execute(
                         select(
-                            SQLBuild.id.label("id"),
-                            SQLBuild.revision.label("revision"),
-                            SQLBuild.submission_status.label("submission_status"),
-                            SQLBuild.category.label("category"),
-                            SQLBuild.width.label("width"),
-                            SQLBuild.height.label("height"),
-                            SQLBuild.depth.label("depth"),
-                            SQLBuild.display_name.label("display_name"),
-                            SQLBuild.version_spec.label("version_spec"),
-                            SQLBuild.submission_time.label("submission_time"),
-                            SQLBuild.edited_time.label("edited_time"),
-                            SQLBuild.ai_generated.label("ai_generated"),
-                            SQLBuild.extra_info["unknown_restrictions"].label("unknown_restrictions"),
-                            SQLBuild.extra_info["unknown_patterns"].label("unknown_patterns"),
+                            builds.c.id.label("id"),
+                            builds.c.revision.label("revision"),
+                            builds.c.submission_status.label("submission_status"),
+                            builds.c.category.label("category"),
+                            builds.c.width.label("width"),
+                            builds.c.height.label("height"),
+                            builds.c.depth.label("depth"),
+                            builds.c.display_name.label("display_name"),
+                            builds.c.version_spec.label("version_spec"),
+                            builds.c.submission_time.label("submission_time"),
+                            builds.c.edited_time.label("edited_time"),
+                            builds.c.ai_generated.label("ai_generated"),
+                            builds.c.extra_info["unknown_restrictions"].label("unknown_restrictions"),
+                            builds.c.extra_info["unknown_patterns"].label("unknown_patterns"),
                             door.c.orientation.label("door_orientation"),
                             door.c.door_width.label("door_width"),
                             door.c.door_height.label("door_height"),
@@ -274,10 +273,10 @@ class BuildRepository:
                             extender.c.extension_length.label("extension_length"),
                             extender.c.extender_type.label("extender_type"),
                         )
-                        .select_from(SQLBuild)
-                        .outerjoin(door, door.c.build_id == SQLBuild.id)
-                        .outerjoin(extender, extender.c.build_id == SQLBuild.id)
-                        .where(SQLBuild.id.in_(build_ids), SQLBuild.submission_status == Status.CONFIRMED)
+                        .select_from(builds)
+                        .outerjoin(door, door.c.build_id == builds.c.id)
+                        .outerjoin(extender, extender.c.build_id == builds.c.id)
+                        .where(builds.c.id.in_(build_ids), builds.c.submission_status == Status.CONFIRMED)
                     )
                 )
                 .mappings()
@@ -393,12 +392,16 @@ class BuildRepository:
     async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:
         """Load the build already created from a synchronized submission draft."""
         async with self._session_factory() as session:
-            sql_build = await session.scalar(
-                select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id).options(*_mapper_load_options())
-            )
-            if sql_build is None:
-                return None
-            return await self._mapper.to_domain(session, sql_build)
+            return await self.source_in_session(session, draft_id)
+
+    async def source_in_session(self, session: AsyncSession, draft_id: uuid.UUID) -> Build | None:
+        """Read a source-draft build within a submission transaction."""
+        sql_build = await session.scalar(
+            select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id).options(*_mapper_load_options())
+        )
+        if sql_build is None:
+            return None
+        return await self._mapper.to_domain(session, sql_build)
 
     async def list_page(
         self,
@@ -491,39 +494,37 @@ class BuildRepository:
 
         if build.id is None:
             async with self._session_factory() as session:
-                submitter_account_id = await self._resolve_submitter_account_id(session, build)
-                sql_build = self._new_model(build, submitter_account_id)
-                session.add(sql_build)
-                # Mirror _update_existing: taxonomy and version lookups issue SELECTs, and
-                # letting them autoflush while tag assignments are wired to a not-yet-added
-                # build row raises SAWarning through TagDefinition.assignments.
-                with session.no_autoflush:
-                    await self._setup_relationships(build, session, sql_build)
-                await session.flush()
-                build.id = sql_build.id
-                await self._sync_source_messages(build, session)
+                await self.insert_in_session(session, build)
                 await session.commit()
-                build.revision = sql_build.revision
         else:
             await self._update_existing(build)
 
-    async def save_for_source_submission(self, build: Build) -> SourceSubmissionBuildWrite:
-        """Insert once by source draft, or return the transaction winner after a collision."""
-        draft_id = build.source_submission_draft_id
-        if build.id is not None or draft_id is None:
-            msg = "Source-submission creation requires a new build with a source draft ID."
-            raise InvalidStateError(msg)
-        try:
-            await self.save(build)
-        except IntegrityError:
-            existing = await self.get_by_source_submission_draft_id(draft_id)
-            if existing is None:
-                raise
-            return SourceSubmissionBuildWrite(existing, created=False)
-        return SourceSubmissionBuildWrite(build, created=True)
+    async def insert_in_session(self, session: AsyncSession, build: Build) -> None:
+        """Insert a prepared build within the caller's transaction, including its database events."""
+        if build.id is not None:
+            message = "Transactional insertion requires a new build."
+            raise InvalidStateError(message)
+        build.edited_time = now()
+        submitter_account_id = await self._resolve_submitter_account_id(session, build)
+        sql_build = self._new_model(build, submitter_account_id)
+        session.add(sql_build)
+        # Mirror _update_existing: taxonomy and version lookups issue SELECTs, and
+        # letting them autoflush while tag assignments are wired to a not-yet-added
+        # build row raises SAWarning through TagDefinition.assignments.
+        with session.no_autoflush:
+            await self._setup_relationships(build, session, sql_build)
+        await session.flush()
+        build.id = sql_build.id
+        await self._sync_source_messages(build, session)
+        build.revision = sql_build.revision
 
     async def _update_existing(self, build: Build) -> None:
         """Persist an existing build while its repository lease is held."""
+        async with self._session_factory.begin() as session:
+            await self.update_in_session(session, build)
+
+    async def update_in_session(self, session: AsyncSession, build: Build) -> None:
+        """Update a prepared build and its events within the caller's transaction."""
         assert build.id is not None
         if build.submission_status is None:
             msg = "Submission status must be set for existing builds."
@@ -532,61 +533,64 @@ class BuildRepository:
             msg = "Submitter account ID must be set for existing builds."
             raise InvalidStateError(msg, context={"build_id": build.id})
 
-        async with self._session_factory() as session:
-            statement = select(SQLBuild).where(SQLBuild.id == build.id).options(*_write_load_options())
-            sql_build = (await session.execute(statement)).scalar_one()
-            if sql_build.revision != build.revision:
-                raise BuildRevisionMismatchError(
-                    build.id,
-                    expected_revision=build.revision,
-                    current_revision=sql_build.revision,
-                )
-            submitter_account_id = await self._resolve_submitter_account_id(session, build)
-            try:
-                sql_build.submission_status = build.submission_status
-                sql_build.width = build.width
-                sql_build.height = build.height
-                sql_build.depth = build.depth
-                sql_build.completion_time = build.completion_time
-                sql_build.completion_at = build.completion_at
-                sql_build.completion_evidence = build.completion_evidence
-                sql_build.description = build.description
-                sql_build.display_name = _normalize_display_name(build.display_name)
-                if (
-                    sql_build.source_submission_draft_id is not None
-                    and build.source_submission_draft_id != sql_build.source_submission_draft_id
-                ):
-                    msg = "A build's source submission draft cannot be changed."
-                    raise InvalidStateError(msg, context={"build_id": build.id})
-                sql_build.source_submission_draft_id = build.source_submission_draft_id
-                if _sponsor_columns(sql_build) != _sponsor_values(build):
-                    msg = "A build's sponsor attribution cannot be changed."
-                    raise InvalidStateError(msg, context={"build_id": build.id})
-                sql_build.submitter_account_id = submitter_account_id
-                sql_build.version_spec = build.version_spec
-                sql_build.ai_generated = build.ai_generated or False
-                sql_build.embedding = build.embedding
-                # Never None: `save` stamps it before dispatching here, and the column is NOT NULL.
-                sql_build.edited_time = build.edited_time if build.edited_time is not None else now()
+        statement = (
+            select(SQLBuild)
+            .where(SQLBuild.id == build.id)
+            .options(*_write_load_options())
+            .with_for_update(of=SQLBuild.id)
+        )
+        sql_build = (await session.execute(statement)).scalar_one()
+        if sql_build.revision != build.revision:
+            raise BuildRevisionMismatchError(
+                build.id,
+                expected_revision=build.revision,
+                current_revision=sql_build.revision,
+            )
+        submitter_account_id = await self._resolve_submitter_account_id(session, build)
+        try:
+            sql_build.submission_status = build.submission_status
+            sql_build.width = build.width
+            sql_build.height = build.height
+            sql_build.depth = build.depth
+            sql_build.completion_time = build.completion_time
+            sql_build.completion_at = build.completion_at
+            sql_build.completion_evidence = build.completion_evidence
+            sql_build.description = build.description
+            sql_build.display_name = _normalize_display_name(build.display_name)
+            if (
+                sql_build.source_submission_draft_id is not None
+                and build.source_submission_draft_id != sql_build.source_submission_draft_id
+            ):
+                msg = "A build's source submission draft cannot be changed."
+                raise InvalidStateError(msg, context={"build_id": build.id})
+            sql_build.source_submission_draft_id = build.source_submission_draft_id
+            if _sponsor_columns(sql_build) != _sponsor_values(build):
+                msg = "A build's sponsor attribution cannot be changed."
+                raise InvalidStateError(msg, context={"build_id": build.id})
+            sql_build.submitter_account_id = submitter_account_id
+            sql_build.version_spec = build.version_spec
+            sql_build.ai_generated = build.ai_generated or False
+            sql_build.embedding = build.embedding
+            # Never None: `save` stamps it before dispatching here, and the column is NOT NULL.
+            sql_build.edited_time = build.edited_time if build.edited_time is not None else now()
 
-                self._update_category_fields(build, sql_build)
+            self._update_category_fields(build, sql_build)
 
-                # Taxonomy and version lookups issue SELECTs. Keep them from autoflushing a
-                # half-rebuilt graph, which would both expose an intermediate state to hooks
-                # and consume more than one optimistic revision for this logical edit.
-                with session.no_autoflush:
-                    sql_build.build_creators.clear()
-                    sql_build.build_versions.clear()
-                    sql_build.tag_assignments.clear()
-                    sql_build.links.clear()
-                    await self._setup_relationships(build, session, sql_build)
-                    sql_build.extra_info = build.extra_info
-                await self._sync_source_messages(build, session)
-                await session.commit()
-            except StaleDataError as error:
-                await session.rollback()
-                raise BuildRevisionMismatchError(build.id, expected_revision=build.revision) from error
-            build.revision = sql_build.revision
+            # Taxonomy and version lookups issue SELECTs. Keep them from autoflushing a
+            # half-rebuilt graph, which would both expose an intermediate state to hooks
+            # and consume more than one optimistic revision for this logical edit.
+            with session.no_autoflush:
+                sql_build.build_creators.clear()
+                sql_build.build_versions.clear()
+                sql_build.tag_assignments.clear()
+                sql_build.links.clear()
+                await self._setup_relationships(build, session, sql_build)
+                sql_build.extra_info = build.extra_info
+            await self._sync_source_messages(build, session)
+            await session.flush()
+        except StaleDataError as error:
+            raise BuildRevisionMismatchError(build.id, expected_revision=build.revision) from error
+        build.revision = sql_build.revision
 
     @staticmethod
     def _new_model(build: Build, submitter_account_id: int) -> SQLBuild:

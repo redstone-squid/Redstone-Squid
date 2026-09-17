@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any, cast, override
 
 from squid.builds.application import BuildService
 from squid.diagnostics.application import ErrorReportService
@@ -54,6 +54,7 @@ class MediaCleanupRecorder(MediaStorageCleanup):
     def __init__(self) -> None:
         self.processed = 0
 
+    @override
     async def process_batch(self, *, limit: int = 100) -> None:
         self.processed += 1
 
@@ -74,6 +75,12 @@ class MaintenanceRecorder:
     async def purge_idempotency(self) -> int:
         self.purge_calls += 1
         return self.purge_result
+
+    async def cleanup_submission_schematics(self) -> None:
+        pass
+
+    async def cleanup_submission_inference(self) -> None:
+        pass
 
     async def expire_submission_drafts(self) -> int:
         self.expiry_calls += 1
@@ -100,9 +107,11 @@ class SupervisorRecorder(BackgroundTaskSupervisor):
     captured_errors: ErrorReportService | None = None
     healthy: bool = True
 
+    @override
     def capture_failures_into(self, service: ErrorReportService | None) -> None:
         self.captured_errors = service
 
+    @override
     def start_periodic(
         self,
         operation: Callable[[], Awaitable[None]],
@@ -114,6 +123,7 @@ class SupervisorRecorder(BackgroundTaskSupervisor):
         self.jobs.append(ScheduledJob(operation, name, interval, run_immediately))
         return cast(JobHandle, object())
 
+    @override
     def is_healthy(self, required: Collection[str], *, max_age_seconds: float) -> bool:
         self.readiness_queries.append(frozenset(required))
         self.readiness_max_ages.append(max_age_seconds)
@@ -151,5 +161,7 @@ def worker_services(
         refresh_search_index=cast(Any, object()),
         record_queue_health=maintenance.record_queue_health,
         purge_idempotency=maintenance.purge_idempotency,
+        cleanup_submission_schematics=maintenance.cleanup_submission_schematics,
+        cleanup_submission_inference=maintenance.cleanup_submission_inference,
         expire_submission_drafts=maintenance.expire_submission_drafts,
     )

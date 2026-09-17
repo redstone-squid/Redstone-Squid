@@ -88,10 +88,12 @@ class UndoMode(Enum):
 
 
 class HistoryOwner(Protocol):
-    __dict__: dict[str, Any]
-    """Declared because `_HistoryField` writes its stack straight into it.
+    """`_HistoryField` writes its stack into the owner's instance dictionary.
 
-    `squid_reactivity.resources.ResourceOwner` declares the same member for the same reason.
+    That is reached through `vars()` rather than declared here as `__dict__`. Declaring it
+    makes the protocol unsatisfiable for any owner with a metaclass: BasedPyright resolves
+    `__dict__` through the metaclass to `MappingProxyType`, which is not assignable to
+    `dict`, so every `Component` subclass -- `Component` inherits `ABC` -- was rejected.
     """
 
     def invalidate(self) -> None: ...

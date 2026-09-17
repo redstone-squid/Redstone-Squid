@@ -310,7 +310,10 @@ class Request[OwnerT = Any]:
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult: ...
 
-    async def respond(
+    # BasedPyright infers `Presented`'s parameter from a frozen dataclass field as if the field
+    # were writable, so `ResponseResult[ComponentT]` is not a `ResponseResult`. The first overload
+    # is the reason this ladder exists: it is what gives a component response its own type back.
+    async def respond(  # pyright: ignore[reportInconsistentOverload]
         self,
         content: FacadeContent | Response[Any],
         *,
@@ -323,15 +326,18 @@ class Request[OwnerT = Any]:
         if self._form_opened:
             message = "a form response cannot be followed by message content in the same dispatch"
             raise RuntimeError(message)
+        resolved: FacadeContent
         if isinstance(content, Response):
             overrides = {**content.overrides, **overrides}
-            content = content.content
-        if hasattr(type(content), "__response_spec__"):
-            if content.__dict__.get("_screen_presented", False):
-                message = f"{type(content).__name__} has already been presented"
+            resolved = content.content
+        else:
+            resolved = content
+        if hasattr(type(resolved), "__response_spec__"):
+            if resolved.__dict__.get("_screen_presented", False):
+                message = f"{type(resolved).__name__} has already been presented"
                 raise RuntimeError(message)
-            object.__setattr__(content, "_screen_opening", self)
-            object.__setattr__(content, "_screen_presented", True)
+            object.__setattr__(resolved, "_screen_opening", self)
+            object.__setattr__(resolved, "_screen_presented", True)
         explicit = overrides.get("audience")
         if self._deferred is not None:
             compatible = explicit in (None, "personal") or isinstance(explicit, Private)
@@ -350,7 +356,7 @@ class Request[OwnerT = Any]:
                 raise RuntimeError(message)
         return await self.scope._respond_resolved(
             self,
-            content,
+            resolved,
             overrides=overrides,
             files=files,
             parent=parent,

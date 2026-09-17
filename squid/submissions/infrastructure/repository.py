@@ -4,14 +4,22 @@ from collections.abc import Mapping, Sequence
 from typing import cast, override
 from uuid import UUID
 
+from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.builds.domain import SourceMessage
 from squid.core.errors import JSONValue
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
-from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
+from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
+from squid.persistence.advisory_locks import (
+    SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE,
+    AdvisoryLockNamespace,
+    lock_key,
+    lock_uuid,
+)
 from squid.submissions.application import AppliedDraftChange, AppliedDraftUpgrade, DraftRepository, StoredDraft
 from squid.submissions.domain import (
     DraftChange,
@@ -22,8 +30,15 @@ from squid.submissions.domain import (
     FieldOperation,
     FieldOperationKind,
 )
-from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError, DraftStateConflictError
+from squid.submissions.domain.source_files import SubmissionSourceFile
+from squid.submissions.errors import (
+    DraftAccessDeniedError,
+    DraftCapacityExceededError,
+    DraftNotFoundError,
+    DraftStateConflictError,
+)
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
+from squid.submissions.infrastructure.issues import decode_issues, encode_issues
 from squid.submissions.infrastructure.models import (
     SubmissionDraft,
     SubmissionDraftAccess,
@@ -40,6 +55,23 @@ class PostgresDraftRepository(DraftRepository):
         self._session_factory = session_factory
 
     @override
+    async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
+        statement = (
+            select(SubmissionDraft)
+            .where(
+                SubmissionDraft.status == DraftStatus.NEEDS_ATTENTION,
+                SubmissionDraft.preparation_retry_at.is_(None),
+                SubmissionDraft.expires_at > now,
+            )
+            .order_by(SubmissionDraft.id)
+            .limit(limit)
+        )
+        if after is not None:
+            statement = statement.where(SubmissionDraft.id > after)
+        async with self._session_factory() as session:
+            return tuple(_to_stored(model) for model in await session.scalars(statement))
+
+    @override
     async def count_active_for_account(self, account_id: int) -> int:
         async with self._session_factory() as session:
             count = await session.scalar(
@@ -47,6 +79,7 @@ class PostgresDraftRepository(DraftRepository):
                 .select_from(SubmissionDraft)
                 .where(
                     SubmissionDraft.owner_account_id == account_id,
+                    SubmissionDraft.inferred.is_(False),
                     SubmissionDraft.status.in_(_ACTIVE_STATUSES),
                     SubmissionDraft.expires_at > func.now(),
                 )
@@ -82,9 +115,58 @@ class PostgresDraftRepository(DraftRepository):
         return tuple(_to_stored(model) for model in models)
 
     @override
-    async def create(self, draft: StoredDraft) -> StoredDraft:
+    async def create(self, draft: StoredDraft, *, capacity: int = 10) -> StoredDraft:
+        """Serialize quota checks and creation; stable source IDs replay before consuming capacity."""
+        if capacity < 1:
+            message = "Draft capacity must be positive."
+            raise ValueError(message)
         model = _to_model(draft)
         async with self._session_factory.begin() as session:
+            await lock_key(
+                session,
+                "inferred" if draft.inferred else f"account:{draft.snapshot.owner_account_id}",
+                namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_CAPACITY,
+            )
+            existing = await session.get(SubmissionDraft, model.id)
+            if existing is not None:
+                if existing.owner_account_id != model.owner_account_id:
+                    raise DraftAccessDeniedError
+                if (
+                    existing.schema_id,
+                    existing.schema_revision,
+                    existing.origin,
+                    existing.inferred,
+                    existing.category,
+                    existing.source_installation_id,
+                    existing.source_messages,
+                    existing.source_files,
+                    existing.inference_run_id,
+                ) != (
+                    model.schema_id,
+                    model.schema_revision,
+                    model.origin,
+                    model.inferred,
+                    model.category,
+                    model.source_installation_id,
+                    model.source_messages,
+                    model.source_files,
+                    model.inference_run_id,
+                ):
+                    raise DraftStateConflictError(existing.status.value, operation="create")
+                return _to_stored(existing)
+            count_query = (
+                select(func.count())
+                .select_from(SubmissionDraft)
+                .where(
+                    SubmissionDraft.status.in_(_ACTIVE_STATUSES),
+                    SubmissionDraft.expires_at > func.now(),
+                    SubmissionDraft.inferred.is_(draft.inferred),
+                )
+            )
+            if not draft.inferred:
+                count_query = count_query.where(SubmissionDraft.owner_account_id == draft.snapshot.owner_account_id)
+            if (await session.scalar(count_query) or 0) >= capacity:
+                raise DraftCapacityExceededError(capacity)
             session.add(model)
             session.add(
                 SubmissionDraftAccess(
@@ -133,6 +215,7 @@ class PostgresDraftRepository(DraftRepository):
         *,
         updated_at: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> AppliedDraftChange:
         async with self._session_factory.begin() as session:
             model = await self._locked(session, draft_id)
@@ -149,13 +232,20 @@ class PostgresDraftRepository(DraftRepository):
             candidate = _to_stored(model).snapshot.apply(change)
             model.revision = candidate.revision
             model.status = candidate.status
+            model.preparation_issues = []
+            model.preparation_retry_at = None
+            model.source_issues = [
+                issue
+                for issue in model.source_issues
+                if issue not in {operation.field_id for operation in change.operations}
+            ]
             model.answers = _json_object(candidate.answers)
             model.updated_at = updated_at
             model.expires_at = expires_at
             session.add(
                 SubmissionDraftChange(
                     draft_id=draft_id,
-                    actor_account_id=account_id,
+                    actor_account_id=account_id if actor_account_id is None else actor_account_id,
                     base_revision=change.base_revision,
                     resulting_revision=candidate.revision,
                     client_instance_id=change.client_instance_id,
@@ -215,6 +305,8 @@ class PostgresDraftRepository(DraftRepository):
                 raise ValueError(msg)
             model.schema_revision = target_schema_revision
             model.revision += 1
+            model.preparation_issues = []
+            model.preparation_retry_at = None
             model.answers = _json_object(answers)
             model.updated_at = updated_at
             model.expires_at = expires_at
@@ -240,7 +332,7 @@ class PostgresDraftRepository(DraftRepository):
                 update(MediaNormalizationJobRecord)
                 .where(
                     MediaNormalizationJobRecord.upload_id.in_(
-                        select(MediaUploadRecord.id).where(MediaUploadRecord.draft_id == draft_id)
+                        select(MediaUploadRecord.id).where(media_for_draft(draft_id), ~retained_elsewhere(draft_id))
                     ),
                     MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
                 )
@@ -257,6 +349,7 @@ class PostgresDraftRepository(DraftRepository):
             await session.delete(model)
         return True
 
+    @override
     async def expire_due(self, *, now: Instant, limit: int = 100) -> int:
         """Expire a fenced batch and cancel every unfinished artifact workflow."""
         if not 1 <= limit <= 1_000:
@@ -293,13 +386,13 @@ class PostgresDraftRepository(DraftRepository):
                 await session.execute(
                     update(SubmissionDraft)
                     .where(SubmissionDraft.id == draft_id)
-                    .values(status=DraftStatus.EXPIRED, updated_at=now)
+                    .values(status=DraftStatus.EXPIRED, updated_at=now, preparation_retry_at=None)
                 )
                 await session.execute(
                     update(MediaNormalizationJobRecord)
                     .where(
                         MediaNormalizationJobRecord.upload_id.in_(
-                            select(MediaUploadRecord.id).where(MediaUploadRecord.draft_id == draft_id)
+                            select(MediaUploadRecord.id).where(media_for_draft(draft_id), ~retained_elsewhere(draft_id))
                         ),
                         MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
                     )
@@ -340,8 +433,16 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
         revision=snapshot.revision,
         status=snapshot.status,
         answers=_json_object(snapshot.answers),
+        preparation_issues=encode_issues(draft.preparation_issues),
+        preparation_retry_at=draft.preparation_retry_at,
+        inferred=draft.inferred,
+        submission_actor_account_id=draft.submission_actor_account_id,
         origin=draft.origin,
         source_installation_id=draft.source_installation_id,
+        source_messages=TypeAdapter(tuple[SourceMessage, ...]).dump_python(draft.source_messages, mode="json"),
+        source_files=TypeAdapter(tuple[SubmissionSourceFile, ...]).dump_python(draft.source_files, mode="json"),
+        source_issues=list(draft.source_issues),
+        inference_run_id=draft.inference_run_id,
         created_at=draft.created_at,
         updated_at=draft.updated_at,
         expires_at=draft.expires_at,
@@ -365,6 +466,14 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
         updated_at=model.updated_at,
         expires_at=model.expires_at,
         source_installation_id=model.source_installation_id,
+        source_messages=TypeAdapter(tuple[SourceMessage, ...]).validate_python(model.source_messages),
+        source_files=TypeAdapter(tuple[SubmissionSourceFile, ...]).validate_python(model.source_files),
+        source_issues=tuple(model.source_issues),
+        inference_run_id=model.inference_run_id,
+        preparation_issues=decode_issues(model.preparation_issues),
+        preparation_retry_at=model.preparation_retry_at,
+        inferred=model.inferred,
+        submission_actor_account_id=model.submission_actor_account_id,
     )
 
 

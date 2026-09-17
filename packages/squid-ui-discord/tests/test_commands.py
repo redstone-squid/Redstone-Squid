@@ -1,6 +1,6 @@
 """Command decorators that inject a request and return discord.py's own objects."""
 
-from typing import Any, Self, cast
+from typing import Any, Self, cast, override
 
 import discord
 import pytest
@@ -313,6 +313,7 @@ async def test_context_menu_is_registered_invoked_and_removed_with_cog() -> None
 
 async def test_failed_load_rolls_back_menu_and_scope() -> None:
     class Broken(Menus):
+        @override
         async def ui_load(self) -> None:
             raise RuntimeError("broken")
 
@@ -330,6 +331,7 @@ def test_native_lifecycle_hooks_cannot_bypass_scope_cleanup() -> None:
     with pytest.raises(TypeError, match="ui_load/ui_unload"):
 
         class Unsafe(sd.Cog[commands.Bot]):
+            @override
             async def cog_unload(self) -> None:
                 pass
 

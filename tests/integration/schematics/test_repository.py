@@ -8,7 +8,7 @@ fingerprint indexes — are all database semantics rather than Python ones.
 import hashlib
 from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import cast
+from typing import cast, override
 
 import anyio
 import pytest
@@ -469,15 +469,18 @@ async def test_cached_preview_that_disappears_during_publication_is_retried(
             self._delegate = delegate
             self._stat_calls = 0
 
+        @override
         async def put(self, key: str, data: bytes, *, content_type: str) -> ArtifactMetadata:
             return await self._delegate.put(key, data, content_type=content_type)
 
+        @override
         async def stat(self, key: str) -> ArtifactMetadata | None:
             self._stat_calls += 1
             if self._stat_calls == 2:
                 await self._delegate.delete(key)
             return await self._delegate.stat(key)
 
+        @override
         async def delete(self, key: str) -> None:
             await self._delegate.delete(key)
 

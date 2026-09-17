@@ -6,6 +6,7 @@ the shells rather than about any machine.
 """
 
 from collections.abc import Mapping
+from typing import override
 
 import pytest
 
@@ -24,6 +25,7 @@ def _form() -> sl.forms.FormSpec:
 class Echo(sl.Component[sl.ComponentsV2Target]):
     """A component a machine may embed in its content."""
 
+    @override
     def render(self) -> sl.LayoutNode:
         return sl.paragraph("embedded")
 

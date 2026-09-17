@@ -7,7 +7,7 @@ from uuid import UUID
 
 import pytest
 
-from squid.builds.domain import Build, BuildCategory, DoorBuild, ExtenderBuild, OtherBuild
+from squid.builds.domain import Build, BuildCategory, DoorBuild, ExtenderBuild
 from squid.builds.errors import InvalidBuildError
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain import (
@@ -18,7 +18,6 @@ from squid.submissions.domain import (
     ExtenderOrientation,
     ExtenderSubmissionDetails,
     ExtenderTiming,
-    FinalizedBuild,
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicRightsPolicy,
@@ -31,7 +30,7 @@ from squid.submissions.domain import (
     SubmissionTaxonomy,
     VerifiedSubmissionArtifacts,
 )
-from squid.submissions.infrastructure.build_target import CanonicalBuildSubmissionWriter
+from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
 from squid.tags.domain import (
     TagAuthority,
     TagDefinition,
@@ -56,21 +55,32 @@ class FakeBuilds:
     async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
         return self.created.get(draft_id)
 
-    async def submit_for_account(self, build: Build, **kwargs: object) -> Build:
-        self.calls.append((build, kwargs))
+    async def prepare_for_account(
+        self,
+        build: Build,
+        *,
+        submitter_account_id: int,
+        source_submission_draft_id: UUID,
+        display_name: str | None,
+        ai_generated: bool,
+    ) -> Build:
         if self.error is not None:
             raise self.error
-        draft_id = kwargs["source_submission_draft_id"]
-        assert isinstance(draft_id, UUID)
-        if draft_id in self.created:
-            return self.created[draft_id]
-        build.id = 41
-        account_id = kwargs["submitter_account_id"]
-        assert isinstance(account_id, int)
-        build.submitter_account_id = account_id
-        build.source_submission_draft_id = draft_id
-        build.display_name = kwargs["display_name"] if isinstance(kwargs["display_name"], str) else None
-        self.created[draft_id] = build
+        self.calls.append(
+            (
+                build,
+                {
+                    "submitter_account_id": submitter_account_id,
+                    "source_submission_draft_id": source_submission_draft_id,
+                    "display_name": display_name,
+                    "ai_generated": ai_generated,
+                },
+            )
+        )
+        build.submitter_account_id = submitter_account_id
+        build.source_submission_draft_id = source_submission_draft_id
+        build.display_name = display_name
+        build.ai_generated = ai_generated
         return build
 
 
@@ -162,13 +172,13 @@ async def test_adapter_creates_every_category_with_direct_account_ownership(
 ) -> None:
     builds = FakeBuilds()
 
-    result = await CanonicalBuildSubmissionWriter(builds, FakeTags(), FakeVersions()).create_or_get(
+    result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(
         _submission(submission_category)
     )
 
     build, arguments = builds.calls[0]
-    assert isinstance(result, FinalizedBuild)
-    assert result.build_id == 41
+    assert isinstance(result, Build)
+    assert result.id is None
     assert arguments["submitter_account_id"] == 17
     assert arguments["source_submission_draft_id"] == DRAFT_ID
     assert build.submitter_discord_id is None
@@ -201,11 +211,11 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_pro
     )
     builds = FakeBuilds()
 
-    result = await CanonicalBuildSubmissionWriter(
+    result = await SubmissionBuildPreparation(
         builds,
         FakeTags((restriction, pattern, showcase)),
         FakeVersions(),
-    ).create_or_get(submission)
+    ).prepare(submission)
 
     build = builds.calls[0][0]
     assert isinstance(build, DoorBuild)
@@ -249,7 +259,7 @@ async def test_adapter_persists_the_verified_public_sponsor_snapshot() -> None:
     )
     builds = FakeBuilds()
 
-    result = await CanonicalBuildSubmissionWriter(builds, FakeTags(), FakeVersions()).create_or_get(submission)
+    result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(submission)
 
     build = builds.calls[0][0]
     provenance = cast(Mapping[str, object], build.extra_info)["submission_provenance"]
@@ -275,40 +285,16 @@ async def test_retry_rejects_a_sponsor_snapshot_that_differs_from_the_existing_b
         sponsor=sponsor,
     )
     builds = FakeBuilds()
-    target = CanonicalBuildSubmissionWriter(builds, FakeTags(), FakeVersions())
-    await target.create_or_get(submission)
+    target = SubmissionBuildPreparation(builds, FakeTags(), FakeVersions())
+    first = await target.prepare(submission)
+    assert isinstance(first, Build)
+    builds.created[DRAFT_ID] = first
 
     changed = replace(
         submission,
         sponsor=PublicSponsor(INSTALLATION_ID, display_name="Changed server"),
     )
-    result = await target.create_or_get(changed)
-
-    assert result == BuildSubmissionRejected(
-        (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
-    )
-
-
-async def test_retry_race_rejects_a_persisted_build_with_different_sponsor_provenance() -> None:
-    sponsor = PublicSponsor(INSTALLATION_ID, display_name="Expected server")
-    submission = replace(
-        _submission(SubmissionCategory.OTHER),
-        origin=SubmissionOrigin.PAPER,
-        sponsor_attribution=True,
-        source_installation_id=INSTALLATION_ID,
-        sponsor=sponsor,
-    )
-
-    class RacingBuilds(FakeBuilds):
-        async def submit_for_account(self, build: Build, **kwargs: object) -> Build:
-            return OtherBuild(
-                id=41,
-                submitter_account_id=17,
-                source_submission_draft_id=DRAFT_ID,
-                sponsor=None,
-            )
-
-    result = await CanonicalBuildSubmissionWriter(RacingBuilds(), FakeTags(), FakeVersions()).create_or_get(submission)
+    result = await target.prepare(changed)
 
     assert result == BuildSubmissionRejected(
         (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
@@ -326,7 +312,7 @@ async def test_extender_timing_is_retained_when_the_legacy_build_columns_have_no
     )
     builds = FakeBuilds()
 
-    await CanonicalBuildSubmissionWriter(builds, FakeTags(), FakeVersions()).create_or_get(submission)
+    await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(submission)
 
     build = builds.calls[0][0]
     assert isinstance(build, ExtenderBuild)
@@ -339,11 +325,13 @@ async def test_extender_timing_is_retained_when_the_legacy_build_columns_have_no
 
 async def test_retries_delegate_the_source_draft_key_and_return_the_existing_build() -> None:
     builds = FakeBuilds()
-    target = CanonicalBuildSubmissionWriter(builds, FakeTags(), FakeVersions())
+    target = SubmissionBuildPreparation(builds, FakeTags(), FakeVersions())
     submission = _submission(SubmissionCategory.OTHER)
 
-    first = await target.create_or_get(submission)
-    second = await target.create_or_get(submission)
+    first = await target.prepare(submission)
+    assert isinstance(first, Build)
+    builds.created[DRAFT_ID] = first
+    second = await target.prepare(submission)
 
     assert first == second
     assert len(builds.created) == 1
@@ -363,12 +351,14 @@ async def test_retry_returns_existing_build_after_a_taxonomy_option_is_retired()
     builds = FakeBuilds()
     tags = FakeTags((pattern,))
     versions = FakeVersions()
-    target = CanonicalBuildSubmissionWriter(builds, tags, versions)
-    first = await target.create_or_get(submission)
+    target = SubmissionBuildPreparation(builds, tags, versions)
+    first = await target.prepare(submission)
+    assert isinstance(first, Build)
+    builds.created[DRAFT_ID] = first
     tags.definitions = ()
     versions.versions = ()
 
-    second = await target.create_or_get(submission)
+    second = await target.prepare(submission)
 
     assert second == first
     assert len(builds.calls) == 1
@@ -378,7 +368,7 @@ async def test_unknown_source_version_is_actionable_and_never_delegated_to_persi
     builds = FakeBuilds()
     submission = replace(_submission(SubmissionCategory.OTHER), source_version="Java 26.1.20")
 
-    result = await CanonicalBuildSubmissionWriter(builds, FakeTags(), FakeVersions()).create_or_get(submission)
+    result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(submission)
 
     assert result == BuildSubmissionRejected(
         (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
@@ -410,20 +400,20 @@ async def test_user_repairable_validation_failures_become_stable_attention_issue
     submission: NormalizedSubmission,
     expected_issue: SubmissionAttentionIssue,
 ) -> None:
-    result = await CanonicalBuildSubmissionWriter(FakeBuilds(), FakeTags(), FakeVersions()).create_or_get(submission)
+    result = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(submission)
 
     assert isinstance(result, BuildSubmissionRejected)
     assert expected_issue in result.issues
 
 
 async def test_structured_build_rejection_becomes_target_attention() -> None:
-    target = CanonicalBuildSubmissionWriter(
+    target = SubmissionBuildPreparation(
         FakeBuilds(error=InvalidBuildError("invalid")),
         FakeTags(),
         FakeVersions(),
     )
 
-    result = await target.create_or_get(_submission(SubmissionCategory.UTILITY))
+    result = await target.prepare(_submission(SubmissionCategory.UTILITY))
 
     assert result == BuildSubmissionRejected(
         (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)

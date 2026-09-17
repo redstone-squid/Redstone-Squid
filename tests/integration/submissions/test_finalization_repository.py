@@ -15,12 +15,16 @@ from squid.accounts.infrastructure.models import Account
 from squid.core.errors import DataIntegrityError
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.domain import MediaKind
-from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.infrastructure.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.base import Base
-from squid.submissions.application import StoredDraft
+from squid.submissions.application import DraftPreparationSnapshot, StoredDraft
 from squid.submissions.domain import (
+    DraftChange,
+    DraftChangeKey,
     DraftSnapshot,
     DraftStatus,
+    FieldOperation,
+    FieldOperationKind,
     FinalizationJobStatus,
     FinalizedBuild,
     GeneralSubmissionDetails,
@@ -37,6 +41,7 @@ from squid.submissions.domain import (
 )
 from squid.submissions.errors import DraftArtifactsChangedError, DraftNotFoundError, DraftStateConflictError
 from squid.submissions.infrastructure.finalization_models import (
+    SubmissionFinalizationInput,
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
 )
@@ -59,7 +64,9 @@ _TABLES: tuple[Table, ...] = (
     cast(Table, SubmissionDraftChange.__table__),
     cast(Table, MediaUploadRecord.__table__),
     cast(Table, MediaNormalizationJobRecord.__table__),
+    cast(Table, MediaDraftReference.__table__),
     cast(Table, SubmissionFinalizationJob.__table__),
+    cast(Table, SubmissionFinalizationInput.__table__),
     cast(Table, SubmissionFinalizationResult.__table__),
 )
 
@@ -160,53 +167,10 @@ async def test_enqueue_claim_fence_and_completion_are_atomic(
     assert completed.result == result
     async with async_session_factory() as session:
         draft_status = await session.scalar(select(SubmissionDraft.status).where(SubmissionDraft.id == DRAFT_ID))
-        legacy_result = (
-            await session.execute(
-                select(
-                    SubmissionFinalizationResult._legacy_target_key,
-                    SubmissionFinalizationResult._legacy_provenance,
-                ).where(SubmissionFinalizationResult.job_id == first.job_id)
-            )
-        ).one()
+        receipt = await session.get(SubmissionFinalizationResult, first.job_id)
     assert draft_status == DraftStatus.SUBMITTED.value
-    assert legacy_result[0] == "postgres_builds"
-    assert legacy_result[1] == {
-        "source_draft_id": str(DRAFT_ID),
-        "owner_account_id": stored_draft.snapshot.owner_account_id,
-        "origin": "web",
-        "schema_id": "build_submission.v1",
-        "schema_revision": 1,
-        "source_installation_id": None,
-        "sponsor_installation_id": None,
-        "normalized_media_upload_ids": [],
-        "sanitized_schematic_id": None,
-    }
-
-
-async def test_build_only_reader_accepts_a_legacy_writer_result(
-    stored_draft: StoredDraft,
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    repository = PostgresFinalizationJobRepository(async_session_factory)
-    expires_at = NOW.add(days=7, days_assumed_24h_ok=True)
-    pending = await repository.enqueue(stored_draft, _payload(stored_draft), now=NOW, expires_at=expires_at)
-    (claim,) = await repository.claim(now=NOW, limit=1)
-    assert await repository.complete(claim, FinalizedBuild(41), now=NOW) is True
-
-    async with async_session_factory.begin() as session:
-        await session.execute(
-            update(SubmissionFinalizationResult)
-            .where(SubmissionFinalizationResult.job_id == pending.job_id)
-            .values(
-                target_key="legacy_postgres_builds",
-                provenance={"source_draft_id": str(DRAFT_ID), "legacy_only": True},
-            )
-        )
-
-    snapshot = await repository.get(DRAFT_ID)
-
-    assert snapshot is not None
-    assert snapshot.result == FinalizedBuild(41)
+    assert receipt is not None
+    assert receipt.build_id == 41
 
 
 async def test_claim_refuses_a_payload_with_a_conflicting_digest(
@@ -384,11 +348,78 @@ async def test_preparation_attention_can_be_repaired_without_changing_revision(
         expires_at=expires_at.add(seconds=1),
     )
 
-    assert attention.status is FinalizationJobStatus.NEEDS_ATTENTION
+    assert isinstance(attention, DraftPreparationSnapshot)
     assert attention.issues == (issue,)
-    assert pending.job_id == attention.job_id
     assert pending.status is FinalizationJobStatus.PENDING
     assert pending.issues == ()
+    assert pending.attempt_number == 1
+    current = await PostgresDraftRepository(async_session_factory).get(DRAFT_ID)
+    assert current is not None
+    assert current.preparation_issues == ()
+    assert current.preparation_retry_at is None
+
+
+async def test_retry_retains_failed_payload_and_rejects_its_stale_completion(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresFinalizationJobRepository(async_session_factory)
+    expiry = NOW.add(days=7, days_assumed_24h_ok=True)
+    payload = _payload(stored_draft)
+    first = await repository.enqueue(stored_draft, payload, now=NOW, expires_at=expiry)
+    (claim,) = await repository.claim(now=NOW, limit=1)
+    issue = SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION)
+    await repository.needs_attention(claim, (issue,), now=NOW, expires_at=expiry)
+
+    repaired = replace(stored_draft, snapshot=replace(stored_draft.snapshot, status=DraftStatus.NEEDS_ATTENTION))
+    second = await repository.enqueue(repaired, replace(payload, description="corrected"), now=NOW, expires_at=expiry)
+
+    assert second.job_id != first.job_id
+    assert await repository.complete(claim, FinalizedBuild(41), now=NOW) is False
+    latest = await repository.get(DRAFT_ID)
+    assert latest is not None
+    assert latest.job_id == second.job_id
+    history = await repository.list_attempts(DRAFT_ID, before=None, limit=1)
+    assert [item.job_id for item in history] == [second.job_id]
+    older = await repository.list_attempts(DRAFT_ID, before=history[-1].attempt_number, limit=1)
+    assert [item.job_id for item in older] == [first.job_id]
+    retained = await repository.get_attempt(DRAFT_ID, first.job_id)
+    assert retained is not None
+    assert retained.issues == (issue,)
+    assert await repository.get_attempt(UUID(int=1), first.job_id) is None
+    async with async_session_factory() as session:
+        previous = await session.get(SubmissionFinalizationJob, first.job_id)
+        current = await session.get(SubmissionFinalizationJob, second.job_id)
+        previous_input = await session.get(SubmissionFinalizationInput, first.job_id)
+        current_input = await session.get(SubmissionFinalizationInput, second.job_id)
+        assert previous is not None
+        assert current is not None
+        assert previous_input is not None
+        assert current_input is not None
+        assert previous.status is FinalizationJobStatus.NEEDS_ATTENTION
+        assert previous.payload is not None
+        assert current.payload is not None
+        assert previous.payload["description"] == payload.description
+        assert current.payload["description"] == "corrected"
+        assert previous_input.payload == previous.payload
+        assert current_input.payload == current.payload
+        assert previous_input.payload_sha256 == first.input_sha256
+        assert current_input.payload_sha256 == second.input_sha256
+        assert (previous.attempt_number, current.attempt_number) == (1, 2)
+
+
+async def test_repeated_preparation_issue_does_not_append_history(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository = PostgresFinalizationJobRepository(async_session_factory)
+    expiry = NOW.add(days=7, days_assumed_24h_ok=True)
+    issues = (SubmissionAttentionIssue("creators", SubmissionAttentionReason.REQUIRED),)
+    first = await repository.record_preparation_attention(stored_draft, issues, now=NOW, expires_at=expiry)
+    second = await repository.record_preparation_attention(stored_draft, issues, now=NOW, expires_at=expiry)
+
+    assert first == second
+    assert await repository.list_attempts(DRAFT_ID, before=None, limit=10) == ()
 
 
 async def test_status_translates_malformed_attention_entries_to_data_integrity_error(
@@ -404,13 +435,11 @@ async def test_status_translates_malformed_attention_entries_to_data_integrity_e
     )
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(SubmissionFinalizationJob)
-            .where(SubmissionFinalizationJob.draft_id == DRAFT_ID)
-            .values(attention_issues=[42])
+            update(SubmissionDraft).where(SubmissionDraft.id == DRAFT_ID).values(preparation_issues=[42])
         )
 
     with pytest.raises(DataIntegrityError, match="attention issues"):
-        await repository.get(DRAFT_ID)
+        await PostgresDraftRepository(async_session_factory).get(DRAFT_ID)
 
 
 async def test_unexpected_failures_dead_letter_without_deleting_draft(
@@ -451,3 +480,42 @@ async def test_unexpected_failures_dead_letter_without_deleting_draft(
         draft = await session.get(SubmissionDraft, DRAFT_ID)
     assert draft is not None
     assert draft.status is DraftStatus.NEEDS_ATTENTION
+
+
+async def test_attachment_wait_reservation_recovers_and_never_creates_an_attempt(
+    stored_draft: StoredDraft,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    jobs = PostgresFinalizationJobRepository(async_session_factory)
+    await jobs.record_preparation_attention(
+        stored_draft,
+        (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
+        now=NOW,
+        expires_at=stored_draft.expires_at,
+        waiting_for_artifacts=True,
+    )
+    assert await jobs.reserve_preparations(now=NOW, limit=1) == ()
+    (reserved,) = await jobs.reserve_preparations(now=NOW.add(seconds=30), limit=1)
+    assert reserved.snapshot.id == DRAFT_ID
+    assert reserved.preparation_retry_at == NOW.add(seconds=60)
+    assert reserved.expires_at == stored_draft.expires_at
+    assert await jobs.reserve_preparations(now=NOW.add(seconds=30), limit=1) == ()
+    recovered = await jobs.reserve_preparations(now=NOW.add(seconds=60), limit=1)
+    assert len(recovered) == 1
+    assert await jobs.list_attempts(DRAFT_ID, before=None, limit=10) == ()
+    changed = await PostgresDraftRepository(async_session_factory).apply_change(
+        DRAFT_ID,
+        stored_draft.snapshot.owner_account_id,
+        DraftChange(
+            base_revision=0,
+            client_instance_id="test",
+            idempotency_key=DraftChangeKey("edit-waiting-draft"),
+            operations=(FieldOperation(UUID(int=10), "source_version", FieldOperationKind.SET, "26.1.2"),),
+        ),
+        updated_at=NOW.add(seconds=61),
+        expires_at=stored_draft.expires_at,
+    )
+    assert changed.draft.preparation_retry_at is None
+    assert changed.draft.preparation_issues == ()
+    assert await jobs.reserve_preparations(now=NOW.add(seconds=90), limit=1) == ()
+    assert await jobs.reserve_preparations(now=stored_draft.expires_at, limit=1) == ()

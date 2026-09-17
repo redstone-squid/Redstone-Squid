@@ -90,6 +90,7 @@ class DraftSchematicSnapshot:
 
     state: SchematicArtifactState
     sanitized: SanitizerIssuedSchematic | None = None
+    issues: tuple[SubmissionAttentionIssue, ...] = ()
 
     def __post_init__(self) -> None:
         if (self.state is SchematicArtifactState.SANITIZED) != (self.sanitized is not None):
@@ -109,7 +110,7 @@ class DraftSchematicReader(Protocol):
     filenames, extensions, object keys, hashes, serialization, or format conversion.
 
     The Nucleation-backed implementation should implement this exact port once
-    Schem-at/Nucleation#10 ships a released format-aware sanitizer.
+    Schem-at/Nucleation#39 ships a deterministic and idempotent sanitizer release.
     """
 
     async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot: ...
@@ -122,11 +123,11 @@ class DraftSchematicPresenceReader(Protocol):
 
 
 class FailClosedDraftSchematicReader:
-    """Reject quarantined schematics while Nucleation#10 is unavailable.
+    """Keep quarantined schematics pending while Nucleation#39 remains unresolved.
 
     With no quarantine reader, the only truthful result is ``ABSENT``. If backend
-    quarantine reports that bytes were supplied, they are ``REJECTED`` because this
-    implementation has no sanitizer and deliberately has no ``SANITIZED`` path.
+    quarantine reports that bytes were supplied, they remain ``PROCESSING`` until a
+    working sanitizer is available. This implementation has no ``SANITIZED`` path.
     """
 
     def __init__(self, presence: DraftSchematicPresenceReader | None = None) -> None:
@@ -134,8 +135,14 @@ class FailClosedDraftSchematicReader:
 
     async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot:
         if self._presence is not None and await self._presence.has_supplied_schematic(draft_id):
-            return DraftSchematicSnapshot(SchematicArtifactState.REJECTED)
+            return DraftSchematicSnapshot(SchematicArtifactState.PROCESSING)
         return DraftSchematicSnapshot(SchematicArtifactState.ABSENT)
+
+
+class DraftIntakeReader(Protocol):
+    """Read unresolved supplied-file requirements before accepting artifact absence."""
+
+    async def issues_for_draft(self, draft_id: UUID) -> tuple[SubmissionAttentionIssue, ...]: ...
 
 
 class AuthoritativeDraftArtifactReadiness:
@@ -147,7 +154,9 @@ class AuthoritativeDraftArtifactReadiness:
         schematics: DraftSchematicReader,
         *,
         media_limits: MediaLimits | None = None,
+        intake: DraftIntakeReader | None = None,
     ) -> None:
+        self._intake = intake
         self._media = media
         self._schematics = schematics
         self._media_limits = media_limits or MediaLimits()
@@ -157,11 +166,12 @@ class AuthoritativeDraftArtifactReadiness:
         jobs = await self._media.list_for_draft(draft_id)
         schematic = await self._schematics.read_for_draft(draft_id)
         media_ids, issues = _assess_media(draft_id, jobs, self._media_limits)
+        intake_issues = await self._intake.issues_for_draft(draft_id) if self._intake is not None else ()
         return SubmissionArtifactReadiness(
             schematic_state=schematic.state,
             sanitized_schematic_id=(schematic.sanitized.artifact_id if schematic.sanitized is not None else None),
             normalized_media_upload_ids=media_ids,
-            issues=issues,
+            issues=(*issues, *schematic.issues, *intake_issues),
         )
 
 

@@ -54,6 +54,10 @@ from squid.submissions.application import (
     SubmissionFinalizationWorker,
     SubmissionFormService,
 )
+from squid.submissions.application.inference_runs import SubmissionInferenceRuns
+from squid.submissions.application.intake import SubmissionAttachmentIntake
+from squid.submissions.application.revisions import RevisionProposalService
+from squid.submissions.application.schematics import DraftSchematicService
 from squid.suggestions.application import SuggestionService
 from squid.sync import DiscordReconciliationService
 from squid.tags.application import TagService
@@ -89,6 +93,10 @@ class ApiServices:
     submission_forms: SubmissionFormService
     submission_drafts: SubmissionDraftService
     submission_finalization: SubmissionFinalizationService
+    submission_schematics: DraftSchematicService
+    submission_revisions: RevisionProposalService
+    submission_intake: SubmissionAttachmentIntake
+    submission_inference: SubmissionInferenceRuns
     suggestions: SuggestionService
     media_jobs: MediaNormalizationJobService | None
     minecraft_installations: InstallationCredentialService | None
@@ -106,6 +114,13 @@ class BotServices:
     builds: BuildService
     error_reports: ErrorReportService
     build_inference: BuildInferenceService
+    submission_forms: SubmissionFormService
+    submission_drafts: SubmissionDraftService
+    submission_finalization: SubmissionFinalizationService
+    submission_schematics: DraftSchematicService
+    submission_revisions: RevisionProposalService
+    submission_intake: SubmissionAttachmentIntake
+    submission_inference: SubmissionInferenceRuns
     restrictions: RestrictionService
     build_queries: BuildQueryService
     messages: MessageService
@@ -154,6 +169,8 @@ class WorkerServices:
     record_queue_health: Callable[[], Awaitable[None]]
     purge_idempotency: Callable[[], Awaitable[int]]
     expire_submission_drafts: Callable[[], Awaitable[int]]
+    cleanup_submission_schematics: Callable[[], Awaitable[None]]
+    cleanup_submission_inference: Callable[[], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)

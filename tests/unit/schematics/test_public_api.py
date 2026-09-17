@@ -1,6 +1,7 @@
 """Public schematic routes are attachment-scoped and publication-safe."""
 
 from dataclasses import replace
+from typing import override
 
 import pytest
 from fastapi import FastAPI, Request
@@ -61,6 +62,7 @@ class ConfirmedBuilds(BuildQueryService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_public(self, build_id: int) -> Build:
         if build_id != 7:
             raise BuildNotFoundError(build_id)
@@ -89,6 +91,7 @@ class PublicSchematics(SchematicService):
         )
         self.items = tuple(replace(self.stored, id=self.stored.id + offset) for offset in range(count))
 
+    @override
     async def list_public_page(
         self,
         build_id: int,
@@ -99,6 +102,7 @@ class PublicSchematics(SchematicService):
         items = self.items if build_id == 7 else ()
         return offset_page(items, offset=selector.offset, page_size=page_size)
 
+    @override
     async def public_download(self, build_id: int, schematic_id: int) -> PublicSchematicDownload:
         assert (build_id, schematic_id) == (7, 3)
         assert self.stored.publication.license is not None
@@ -119,6 +123,7 @@ class RenderingSchematics(PublicSchematics):
         self.rendered: list[RenderRequest] = []
         self._refusal = refusal
 
+    @override
     def render_recipe(
         self,
         *,
@@ -138,6 +143,7 @@ class RenderingSchematics(PublicSchematics):
             zoom=base.zoom if zoom is None else zoom,
         )
 
+    @override
     async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
         assert build_id == 7
         if self._refusal is not None:

@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
-from typing import Any, Generic, Protocol, TypeVar, cast, overload
+from typing import Any, Generic, Protocol, TypeVar, cast, overload, override
 
 from squid_reactivity.core import (
     Observation,
@@ -228,6 +228,7 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
         {"_runtime", "_parent", "_loaded", "_state_revision", "_dependency_invalidation"}
     )
 
+    @override
     def _state_changed(self, names: frozenset[str]) -> None:
         """React to committed writes to these state slots.
 
@@ -236,14 +237,15 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
         needs drawing again. `names` is for a subclass that wants to know which fields moved.
         """
         del names
-        self.__dict__["_dependency_invalidation"] = True
+        vars(self)["_dependency_invalidation"] = True
         try:
             self.invalidate()
         finally:
-            self.__dict__.pop("_dependency_invalidation", None)
+            vars(self).pop("_dependency_invalidation", None)
 
+    @override
     def on_state_rollback(self) -> None:
-        self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
+        vars(self)["_state_revision"] = vars(self).get("_state_revision", 0) + 1
 
     @abstractmethod
     def render(self) -> DocumentLike[RenderTargetT]:
@@ -283,11 +285,12 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
     def on_unmount(self) -> None:
         """Run after this component leaves a successfully drawn tree."""
 
+    @override
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
-        dependency = self.__dict__.get("_dependency_invalidation", False)
+        dependency = vars(self).get("_dependency_invalidation", False)
         if not dependency:
-            self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
+            vars(self)["_state_revision"] = vars(self).get("_state_revision", 0) + 1
         if self._runtime is not None:
             self._runtime.invalidate(self, check_dependencies=dependency)
         elif self._parent is not None:
@@ -476,7 +479,7 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         incremental = self.incremental
         render_cache = incremental.render_cache
         cached = render_cache.get(component)
-        revision = component.__dict__.get("_state_revision", 0)
+        revision = vars(component).get("_state_revision", 0)
         dependency_check = component in incremental.dirty and component not in incremental.forced
         if (
             cached is not None
@@ -818,17 +821,9 @@ def _splice_nodes[RenderTargetT: RenderTarget](
     return rewrite(nodes, splice.route)
 
 
-@overload
 def _namespace[RenderTargetT: RenderTarget](
     nodes: list[LayoutNode[RenderTargetT]], prefix: str
-) -> list[LayoutNode[RenderTargetT]]: ...
-
-
-@overload
-def _namespace(nodes: list[AnyLayoutNode], prefix: str) -> list[AnyLayoutNode]: ...
-
-
-def _namespace(nodes: list[AnyLayoutNode], prefix: str) -> list[AnyLayoutNode]:
+) -> list[LayoutNode[RenderTargetT]]:
     """Rewrite an embedded subtree's control keys under ``prefix``.
 
     Explicit control keys are scoped under the embed path, so inserting a sibling cannot
@@ -903,4 +898,7 @@ def _namespace(nodes: list[AnyLayoutNode], prefix: str) -> list[AnyLayoutNode]:
             case _:
                 return map_layout_children(node, "$", lambda child, _path: (rewrite(child),))
 
-    return [rewrite(node) for node in nodes]
+    # `rewrite` is written over the erased union: it matches on primitive shapes, none of which
+    # carry a target, and returns the same nodes rekeyed. That costs the local walker's
+    # precision, not the caller's, so the target the caller passed in is what comes back.
+    return cast(list[LayoutNode[RenderTargetT]], [rewrite(node) for node in nodes])

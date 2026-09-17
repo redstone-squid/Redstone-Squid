@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from math import inf, nan
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -359,6 +359,7 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
         def __init__(self) -> None:
             self.created: dict[str, object] = {}
 
+        @override
         async def create_generic_poll(
             self,
             *,
@@ -401,6 +402,7 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
         services: Services
 
     class PublisherRecorder(DiscordPollPublisher):
+        @override
         async def attach(self, vote_session_id: int, channel: Any) -> PollPublication:
             assert vote_session_id == 7
             return PollPublication(vote_session_id, cast(discord.Message, object()))

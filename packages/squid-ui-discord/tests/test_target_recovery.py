@@ -2,12 +2,13 @@
 
 import json
 import re
-from typing import Any
+from typing import Any, override
 
 import pytest
 
 import squid_ui as sl
 import squid_ui_discord
+import squid_ui_discord.durability
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import Target
 from squid_ui.planning.adapter import (
@@ -25,6 +26,7 @@ from squid_ui_discord.testing import commit_classic_render, commit_render
 class Screen(sl.Component[sl.RenderTarget]):
     count: int = sl.state(0)
 
+    @override
     def render(self):
         return sl.paragraph(f"count {self.count}")
 

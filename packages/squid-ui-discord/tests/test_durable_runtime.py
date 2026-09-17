@@ -4,6 +4,7 @@ import json
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import override
 
 import anyio
 import pytest
@@ -46,6 +47,7 @@ from squid_ui_discord.testing import delivered_to, message_harness
 class Counter(sl.Component[sl.ComponentsV2Target]):
     count: int = sl.state(0)
 
+    @override
     def render(self):
         return Text(f"count {self.count}")
 
@@ -53,6 +55,7 @@ class Counter(sl.Component[sl.ComponentsV2Target]):
 class HiddenDraft(sl.Component[sl.ComponentsV2Target]):
     advanced: bool = sl.state(default=False)
 
+    @override
     def render(self):
         return Text("Draft")
 
@@ -383,6 +386,7 @@ async def test_remote_summaries_participate_in_distributed_cardinality() -> None
 async def test_corrupt_record_does_not_block_healthy_recovery() -> None:
     store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
+    broken_id: str | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(first_runtime.run)
@@ -392,6 +396,8 @@ async def test_corrupt_record_does_not_block_healthy_recovery() -> None:
         assert isinstance(broken, Opened)
         broken_id = broken.session.id
         tasks.cancel_scope.cancel()
+
+    assert broken_id is not None, "the first runtime must have opened both sessions"
 
     stored = await store.load(broken_id)
     assert stored is not None
@@ -413,6 +419,7 @@ async def test_corrupt_record_does_not_block_healthy_recovery() -> None:
 async def test_missing_root_is_reported_and_deleted() -> None:
     store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
+    record_id: str | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(first_runtime.run)
@@ -420,6 +427,8 @@ async def test_missing_root_is_reported_and_deleted() -> None:
         assert isinstance(opened, Opened)
         record_id = opened.session.id
         tasks.cancel_scope.cancel()
+
+    assert record_id is not None, "the first runtime must have opened the session"
 
     second_runtime = runtime(store, FakeFrontend(missing_ids=frozenset({"root"})))
     async with anyio.create_task_group() as tasks:
@@ -433,6 +442,8 @@ async def test_missing_root_is_reported_and_deleted() -> None:
 async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
     store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
+    child_id: str | None = None
+    record_id: str | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(first_runtime.run)
@@ -452,6 +463,8 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
         record_id = opened.session.id
         tasks.cancel_scope.cancel()
 
+    assert child_id is not None and record_id is not None, "the first runtime must have attached the child"
+
     second_runtime = runtime(store, FakeFrontend(missing_ids=frozenset({child_id})))
     async with anyio.create_task_group() as tasks:
         report = await tasks.start(second_runtime.run)
@@ -470,6 +483,7 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
 async def test_expired_record_is_deleted_before_reconnection() -> None:
     store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend(), clock=lambda: 0.0)
+    record_id: str | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(first_runtime.run)
@@ -477,6 +491,8 @@ async def test_expired_record_is_deleted_before_reconnection() -> None:
         assert isinstance(opened, Opened)
         record_id = opened.session.id
         tasks.cancel_scope.cancel()
+
+    assert record_id is not None, "the first runtime must have opened the session"
 
     second_runtime = runtime(store, FakeFrontend(), clock=lambda: 11.0)
     async with anyio.create_task_group() as tasks:
@@ -490,6 +506,7 @@ async def test_expired_record_is_deleted_before_reconnection() -> None:
 async def test_unreachable_record_is_retained_and_released() -> None:
     store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
+    record_id: str | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(first_runtime.run)
@@ -497,6 +514,8 @@ async def test_unreachable_record_is_retained_and_released() -> None:
         assert isinstance(opened, Opened)
         record_id = opened.session.id
         tasks.cancel_scope.cancel()
+
+    assert record_id is not None, "the first runtime must have opened the session"
 
     second_runtime = runtime(store, FakeFrontend(unreachable_ids=frozenset({"root"})))
     async with anyio.create_task_group() as tasks:

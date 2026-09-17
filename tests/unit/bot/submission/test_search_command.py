@@ -1,7 +1,7 @@
 """How `/search` turns its typed options into a search request."""
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 
 import pytest
 
@@ -20,6 +20,7 @@ class RecordingSearch(SearchService):
     def __init__(self) -> None:
         self.requests: list[SearchRequest] = []
 
+    @override
     async def search(self, request: SearchRequest) -> SearchPage:
         self.requests.append(request)
         return SearchPage(hits=(), total=0, next=None, prev=None)
@@ -29,6 +30,7 @@ class BuildQueryRecorder(BuildQueryService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get(self, build_id: int) -> Build | None:
         return None
 
@@ -37,6 +39,7 @@ class SettingsRecorder(SettingsService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
 

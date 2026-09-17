@@ -6,7 +6,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from squid_replicated.fake import ReferenceEngine
+from squid_replication.reference import ReferenceEngine
 
 
 def _median(operation: Callable[[], Any], iterations: int) -> int:

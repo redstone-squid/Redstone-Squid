@@ -4,6 +4,7 @@ import uuid
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     ForeignKey,
     Identity,
@@ -27,9 +28,27 @@ class SubmissionDraft(Base, kw_only=True):
     """The compact current state of an account-owned submission draft."""
 
     __tablename__ = "submission_drafts"
+    source_messages: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, default_factory=list, server_default=text("'[]'::jsonb")
+    )
+    source_files: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, default_factory=list, server_default=text("'[]'::jsonb")
+    )
+    source_issues: Mapped[list[str]] = mapped_column(JSONB, default_factory=list, server_default=text("'[]'::jsonb"))
+    inference_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None, index=True)
     __table_args__ = (
         CheckConstraint("schema_revision > 0", name="submission_drafts_schema_revision_positive"),
         CheckConstraint("revision >= 0", name="submission_drafts_revision_nonnegative"),
+        CheckConstraint("NOT inferred OR origin = 'discord'", name="submission_drafts_inference_origin_check"),
+        Index("submission_drafts_inferred_expiry_idx", "expires_at", postgresql_where=text("inferred")),
+        CheckConstraint(
+            "jsonb_typeof(preparation_issues) = 'array'", name="submission_drafts_preparation_issues_array"
+        ),
+        Index(
+            "submission_drafts_preparation_ready_idx",
+            "preparation_retry_at",
+            postgresql_where=text("preparation_retry_at IS NOT NULL"),
+        ),
         CheckConstraint(
             "origin IN ('discord', 'web', 'cli', 'paper', 'fabric')",
             name="submission_drafts_origin_check",
@@ -44,6 +63,11 @@ class SubmissionDraft(Base, kw_only=True):
         ),
         CheckConstraint("expires_at > created_at", name="submission_drafts_expiry_after_creation"),
         Index("submission_drafts_owner_updated_idx", "owner_account_id", "updated_at"),
+        Index(
+            "submission_drafts_actor_idx",
+            "submission_actor_account_id",
+            postgresql_where=text("submission_actor_account_id IS NOT NULL"),
+        ),
         Index(
             "submission_drafts_expiry_idx",
             "expires_at",
@@ -73,7 +97,17 @@ class SubmissionDraft(Base, kw_only=True):
         default=DraftStatus.EDITING,
     )
     answers: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
+    preparation_issues: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False, default_factory=list, server_default=text("'[]'::jsonb")
+    )
+    preparation_retry_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    submission_actor_account_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("accounts.id", ondelete="RESTRICT"),
+        default=None,
+    )
     origin: Mapped[SubmissionOrigin] = mapped_column(StrEnumText(SubmissionOrigin), nullable=False)
+    inferred: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     source_installation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         default=None,

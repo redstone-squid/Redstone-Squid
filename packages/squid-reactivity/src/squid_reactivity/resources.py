@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from types import TracebackType
-from typing import Any, Literal, Protocol, overload
+from typing import Any, Literal, Protocol, overload, override
 
 from squid_reactivity.actions import (
     DEFAULT_REDACTION,
@@ -39,9 +39,12 @@ from squid_reactivity.topics import Address
 
 
 class ResourceOwner(ReactiveOwner, Protocol):
-    """The behaviour a bound resource needs from whatever declared it."""
+    """The behaviour a bound resource needs from whatever declared it.
 
-    __dict__: dict[str, Any]
+    The instance dictionary the descriptor caches into is reached through `vars()`, not
+    declared here: see `squid_ui.runtime.histories.HistoryOwner` for why declaring it
+    excludes every owner with a metaclass.
+    """
 
     def invalidate(self) -> None: ...
 
@@ -445,6 +448,7 @@ class Resource[ValueT](AsyncBinding):
         raise ResourceNotReadyError(message)
 
     @property
+    @override
     def pending(self) -> bool:
         """Whether this resource currently requests settlement."""
         return isinstance(self.status, Pending)
@@ -525,6 +529,7 @@ class Resource[ValueT](AsyncBinding):
         self._invalidate(notify=True)
         return await self._load()
 
+    @override
     async def _load(self) -> ResourceStatus[ValueT]:
         """Settle the current pending generation, sharing an identical in-flight load.
 
@@ -646,6 +651,7 @@ class AtomicResource[ValueT](Resource[ValueT]):
     """
 
     @property
+    @override
     def status(self) -> AtomicResourceStatus[ValueT]:
         status = super().status
         if isinstance(status, Pending):
@@ -655,6 +661,7 @@ class AtomicResource[ValueT](Resource[ValueT]):
         return status
 
     @property
+    @override
     def pending(self) -> bool:
         """Whether this resource still needs settlement without exposing pending state."""
         staged = self._staged()
@@ -663,6 +670,7 @@ class AtomicResource[ValueT](Resource[ValueT]):
         self._recheck()
         return isinstance(self._status, Pending)
 
+    @override
     async def reload(self) -> AtomicResourceStatus[ValueT]:
         self._invalidate(notify=True)
         status = await self._load()
@@ -731,6 +739,7 @@ class _AtomicResourceDescriptor[OwnerT: ResourceOwner, ValueT](_ResourceDescript
     @overload
     def __get__(self, instance: OwnerT, owner: type | None = None) -> AtomicResource[ValueT]: ...
 
+    @override
     def __get__(
         self, instance: OwnerT | None, owner: type | None = None
     ) -> _AtomicResourceDescriptor[OwnerT, ValueT] | AtomicResource[ValueT]:
@@ -786,7 +795,7 @@ def resource[OwnerT: ResourceOwner, ValueT](
 
 
 def resource(
-    loader: Callable[[ResourceOwner], Awaitable[Any]] | None = None,
+    loader: Callable[[Any], Awaitable[Any]] | None = None,
     /,
     *,
     pending: PendingMode = PendingMode.EXPLICIT,
@@ -798,7 +807,7 @@ def resource(
     """
 
     def decorate(
-        function: Callable[[ResourceOwner], Awaitable[Any]],
+        function: Callable[[Any], Awaitable[Any]],
     ) -> _ResourceDescriptor[ResourceOwner, Any] | _AtomicResourceDescriptor[ResourceOwner, Any]:
         descriptor = _AtomicResourceDescriptor if pending is PendingMode.ATOMIC else _ResourceDescriptor
         return descriptor(function, pending_mode=pending)

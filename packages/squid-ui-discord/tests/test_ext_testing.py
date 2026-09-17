@@ -1,6 +1,6 @@
 """Facade-level staging and command invocation helpers."""
 
-from typing import Self, cast
+from typing import Self, cast, override
 
 import discord
 from discord.ext import commands
@@ -17,6 +17,7 @@ class Editor(sd.Screen[object]):
     count: int = sl.state(0)
     name: str = sl.state("Old")
 
+    @override
     def render(self) -> sl.LayoutNode:
         form = sl.forms.FormSpec("Rename", (sl.forms.TextField(key="name", label="Name"),))
         return sl.stack(

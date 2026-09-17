@@ -70,7 +70,7 @@ class ContainerExpectation:
         if not 1 <= self.container_port <= 65535:
             msg = "Expected Docker container ports must be between 1 and 65535."
             raise ValueError(msg)
-        if set(self.tmpfs_options) != self.tmpfs_targets:
+        if set(self.tmpfs_options) != self.tmpfs_targets:  # pyright: ignore[reportUnnecessaryComparison]  # set == frozenset compares by members
             msg = "Expected Docker tmpfs targets and options must describe the same destinations."
             raise ValueError(msg)
         if self.memory_bytes <= 0 or self.nano_cpus <= 0 or self.pids_limit <= 0:
