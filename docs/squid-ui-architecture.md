@@ -1001,6 +1001,7 @@ no longer "which layer does this belong in?" but:
 | | a session | a graph of message roots |
 | | an `EditHandle` | temporary or permanent write authority |
 | Async | the caller | a resource's or operation's execution |
+| | a component or explicit `ServiceOwner` | one active lifetime per owned service |
 | | a supervisor | long-running infrastructure tasks |
 | Durability | a store | bytes |
 | | a runtime | claims and leases |
@@ -1016,6 +1017,166 @@ them is what made `notice()` clobber the panel before plan 07.
 through one named method, and refuses to acquire a task as a side effect of a read.
 `PersistentStatePool` acquired one inside `load()` and released it inside `close()`, which anyio
 refuses across tasks — the ordinary case, and no test reached it.
+
+### Component-owned services
+
+Choose the primitive by what it does:
+
+| API | Responsibility |
+|---|---|
+| `SharedState` | Share reactive data between consumers. |
+| `resource` | Derive an async value from dependencies; safe to cancel and restart. |
+| `operation` | Represent an explicitly started execution and its outcome. |
+| `ManagedService` | Run activity under an explicit owner until it ends. |
+
+A service can publish shared state, but it need not have any. Ordinary async queries belong
+in resources; explicit submissions belong in operations. `SharedStatePool` retains handles,
+and removing a handle does not run cleanup. `provide()` and `inject()` share access without
+establishing ownership of activity.
+
+For subscriptions or ongoing work that should stop with a panel, declare a `ManagedService`
+with `self.own(service)` before the component's first render. Construction and registration
+are inert. Only a successful delivery and component mount start `run()`. Ownership is
+exclusive and permanent, while any number of consumers may borrow the same service.
+
+For example, an editor can subscribe to build changes and let its children display a notice.
+Fetching the updated preview can remain a resource; the service only owns the subscription:
+
+```python
+import anyio
+from anyio.abc import TaskStatus
+
+from squid_ui import Component, ComponentsV2Target, DocumentLike, state
+from squid_ui.primitives import Text
+from squid_ui.runtime import ContextKey, ManagedService, SharedState, Topic, TopicBus
+
+
+class UpdateState(SharedState):
+    changed: bool = state(default=False)
+
+
+class BuildUpdates(ManagedService):
+    def __init__(self, bus: TopicBus, build_id: int) -> None:
+        self.bus = bus
+        self.topic = Topic("build", str(build_id))
+        self.state = UpdateState(bus)
+
+    async def run(self, *, task_status: TaskStatus[None]) -> None:
+        def changed(_: Topic) -> None:
+            self.state.changed = True
+
+        unsubscribe = self.bus.subscribe(self.topic, changed)
+        try:
+            task_status.started()
+            await anyio.sleep_forever()
+        finally:
+            unsubscribe()
+
+
+UPDATES = ContextKey[BuildUpdates]("build-updates")
+
+
+class ChangeNotice(Component[ComponentsV2Target]):
+    def render(self) -> Text:
+        updates = self.inject(UPDATES)
+        return Text("Build changed; refresh the preview." if updates.state.changed else "Build is up to date.")
+
+
+class BuildEditor(Component[ComponentsV2Target]):
+    def __init__(self, bus: TopicBus, build_id: int) -> None:
+        self.updates = self.own(BuildUpdates(bus, build_id))
+        self.notice = ChangeNotice()
+
+    def render(self) -> DocumentLike[ComponentsV2Target]:
+        self.provide(UPDATES, self.updates)
+        return self.boundary(self.notice, key="notice")
+```
+
+A toolbar can inject the same `UPDATES`. Removing a consumer leaves the subscription active;
+removing the editor unsubscribes. A panel borrowing an application-owned service stores and
+provides it without calling `own()`.
+
+`run()` contains the whole activation: acquisition, readiness, work and cleanup. Signal
+readiness exactly once with AnyIO's `task_status.started()` convention, after required setup.
+Returning without signalling readiness is an error. Returning after readiness completes the
+activation normally; rerendering does not restart it. Render initial/loading state until
+setup completes. Data required before first delivery belongs in `on_load()` or an atomic resource.
+
+Use lexical context managers and AnyIO task groups for more involved activity:
+
+```python
+class LivePreview(ManagedService):
+    async def run(self, *, task_status: TaskStatus[None]) -> None:
+        async with open_preview_client() as client:
+            async with anyio.create_task_group() as tasks:
+                await tasks.start(client.follow_updates)
+                task_status.started()
+                await anyio.sleep_forever()
+```
+
+Here `open_preview_client()` is an application context manager, and `follow_updates` signals
+its readiness through `task_status`. Workers stop before the enclosing client exits, including
+clients that internally own task groups or cancellation scopes. Entry and exit stay in the
+same task, and normal Python exception propagation applies.
+
+The service and its context managers are responsible for cancellation-safe cleanup. Shield
+awaited cleanup with `anyio.CancelScope(shield=True)`; bound external cleanup with its own
+timeout when appropriate. Use nested `finally` blocks or `ExitStack`/`AsyncExitStack` when
+independent cleanups must all be attempted despite an earlier failure. Shield an async stack's
+exit, not the whole running service. Stack cleanup uses Python's exception chaining; Squid
+reports the resulting failure rather than replacing it with its own cleanup protocol.
+
+Unmount requests cancellation immediately, and the frontend awaits complete `run()` exit
+outside the delivery lock. A stuck cleanup delays shutdown; Squid never detaches it or reports
+completion early. Repeated shutdown callers observe the same completion. Remount preserves
+the service object and its passive state, but starts a fresh run only after the previous run
+has fully exited. Acquire subscriptions, queues and other temporary resources afresh each run.
+
+Failed rendering/delivery starts nothing. A startup or worker failure unwinds the service's
+contexts before reporting the error. Discord finishes the affected message root; other roots
+remain live. Expected recoverable failures belong in service state. There is no automatic retry.
+Holding a service reference retains its passive data, not its execution. Arbitrary methods are
+not intercepted: methods requiring an active connection must enforce that contract themselves.
+Service activity cannot await its own owner's shutdown or close its own host.
+
+For frontend and application integration, `ServiceHost` supervises execution and `ServiceOwner`
+declares which services start and stop together. Component authors normally need neither.
+The portable engine has no mandatory AnyIO dependency: install `squid-ui[services]` for execution.
+`squid-ui-discord` includes that extra, and `DiscordUIRuntime.run()` supervises the host alongside
+the scheduler and challenge runner. Hosts supervising those jobs individually must also run
+`runtime.services.run()`. Construction starts no tasks. Service runs inherit the host runner's
+context, not the interaction that activates them: request transactions must not leak into
+background work. Pass request-specific inputs explicitly when constructing a service.
+
+Standalone frontends pass a running `ServiceHost` to `ComponentRuntime(service_host=...)`.
+After commit/removal or `finish()`, await `runtime.wait_services()` outside delivery locks.
+Frontends whose service cleanup can re-enter delivery use `allow_reentry=True`: a call from
+retiring activity returns instead of waiting on itself, while its outer caller or host still
+awaits completion. Every other caller waits normally.
+Use `runtime.wait_services_ready()` to await the currently committed activations, also outside
+locks. Supply `on_service_error` for the frontend's failure policy. Components declaring services
+without a running host are rejected before delivery.
+
+Application and session code can own services without a dummy component:
+
+```python
+owner = ServiceOwner()
+updates = owner.own(BuildUpdates(bus, build_id))
+owner.activate(host, on_error=report_failure)  # host.run() is already supervised
+await owner.wait_ready()
+# Pass updates to borrowers. At the application's/session's shutdown boundary:
+owner.cancel()
+await owner.wait()
+```
+
+`ServiceOwner` freezes declarations on first activation and supports later reactivation.
+`wait_ready()` observes setup concurrently; failure or cancellation of that wait does not cancel
+services. The owner or frontend failure handler chooses that policy. `cancel()` requests shutdown;
+`wait()` awaits all requested shutdowns, collecting failures without skipping other services.
+`ServiceHost.close()` ends all remaining activations and awaits cleanup and failure reporting.
+
+Component ownership is unrelated to `SharedState.scope` (a diagnostic label), pool keys, and
+Discord access policies. Work that must outlive a panel belongs to an application/session owner.
 
 ### Lifecycle verbs
 

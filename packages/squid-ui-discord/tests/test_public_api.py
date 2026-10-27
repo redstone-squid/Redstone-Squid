@@ -91,7 +91,7 @@ def test_package_metadata_keeps_its_base_and_optional_dependencies() -> None:
     project = metadata["project"]
     assert project["version"] == "0.1.0a1"
     assert project["dependencies"] == [
-        "squid-ui==0.1.0a1",
+        "squid-ui[services]==0.1.0a1",
         "squid-reactivity==0.1.0a1",
         "discord-py>=2.7,<3",
         "anyio>=4.14,<5",

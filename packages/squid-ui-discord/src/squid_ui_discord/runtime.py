@@ -21,10 +21,12 @@ from typing import TYPE_CHECKING, Any, Never, Unpack, cast, overload
 
 import anyio
 import discord
+from anyio.abc import TaskStatus
 
 from squid_ui.errors import SquidUiError
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
+from squid_ui.runtime.services import ServiceHost
 from squid_ui.runtime.topics import TopicBus
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import AccessPolicy
@@ -103,6 +105,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         self.localization = localization
         self.response_defaults = response_defaults
         self.config = config
+        self.services = sessions.defaults.service_host
         self._scopes: list[Scope[Any]] = []
         self._scope_roots: dict[int, set[MessageRoot]] = {}
 
@@ -133,33 +136,38 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         """
         return self.defaults.mount(component, access=access, **overrides)
 
-    async def run(self) -> None:
-        """Serve this host's scheduler and challenge runner until the caller cancels.
+    async def run(self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED) -> None:
+        """Run the scheduler, challenges, and service host until the caller cancels.
 
-        A convenience for a host content to supervise one job. A host wanting per-job health
-        granularity starts `scheduler.run()` and `challenges.run()` separately instead; the
-        package still starts nothing on its own either way.
+        Use ``await tasks.start(runtime.run)`` to wait until services can be mounted.
+        Applications that track each job's health can start ``scheduler.run()``,
+        ``challenges.run()``, and ``services.run()`` separately instead.
         """
-        # A task group rather than gather: a failing job must cancel the other one rather
-        # than leave a half-served host running.
         async with anyio.create_task_group() as tasks:
             if self.scheduler is not None:
                 tasks.start_soon(self.scheduler.run)
             tasks.start_soon(self.challenges.run)
+            if self.services is not None:
+                await tasks.start(self.services.run)
+            task_status.started()
 
     async def close(self) -> None:
-        """Finish every session, then stop answering :meth:`of` for this client.
+        """Finish the sessions, close the service host, and unregister this runtime.
 
-        Does not cancel `run()`: the task belongs to whoever started it, and a supervisor
-        that owns the job is the thing entitled to end it.
+        The application's task group still owns ``run()``. Cancel it there when the
+        application is ready to stop the scheduler and challenge runner too.
         """
         try:
             for scope in tuple(self._scopes):
                 await scope.close()
             await self.sessions.close_all()
         finally:
-            if _INSTALLED.get(self.client) is self:
-                del _INSTALLED[self.client]
+            try:
+                if self.services is not None:
+                    await self.services.close()
+            finally:
+                if _INSTALLED.get(self.client) is self:
+                    del _INSTALLED[self.client]
 
     @classmethod
     def of(cls, source: RuntimeSource) -> DiscordUIRuntime[Any]:
@@ -279,6 +287,8 @@ def install[ClientT: discord.Client](
         localization=localization,
     )
     defaults = selected.defaults
+    if defaults.service_host is None:
+        defaults = defaults.replace(service_host=ServiceHost())
     bus = selected.bus
     profiler = selected.profiler
     localization = selected.localization

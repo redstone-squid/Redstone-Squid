@@ -11,8 +11,8 @@ import logging
 import secrets
 import time
 import weakref
-from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager, nullcontext
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping, Sequence
+from contextlib import asynccontextmanager, contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
@@ -441,6 +441,8 @@ class MessageRoot[
         self.runtime = ComponentRuntime(
             component,
             on_invalidate=self._mark_dirty,
+            service_host=config.service_host,
+            on_service_error=self._service_failed,
             context={
                 CHROME_CONTEXT: self.chrome,
                 LOCALIZATION_CONTEXT: localization,
@@ -573,7 +575,7 @@ class MessageRoot[
             RuntimeError: The mount has already finished.
             StaleHandleError: The supplied handle is already expired.
         """
-        async with self._render_lock:
+        async with self._rendering():
             if self._finished:
                 message = f"mount {self.id} has already finished"
                 raise RuntimeError(message)
@@ -1103,7 +1105,7 @@ class MessageRoot[
         restore. Either way the component tree is untouched, which is the point — the handler
         is mid-transaction and a re-render would observe half-written state.
         """
-        async with self._render_lock:
+        async with self._rendering():
             if self._finished or self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
                 return None
             plan = self._plan
@@ -1573,9 +1575,7 @@ class MessageRoot[
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
         with self.profiler.operation(OperationKind.SEND, name=name, attributes={"message_root_id": self.id}) as profile:
-            with profile.span("render_lock"):
-                await self._render_lock.acquire()
-            try:
+            async with self._rendering(profile):
                 if self._finished:
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return deliver.Abandoned()
@@ -1618,8 +1618,6 @@ class MessageRoot[
                 profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
                 settled = all(not binding.pending for binding in candidate.tree.async_bindings)
                 return deliver.Delivered(result, settled=settled)
-            finally:
-                self._render_lock.release()
 
     def _swap_view(self, view: AnyMountedView) -> None:
         if self._view is not None and self._view is not view:
@@ -1806,9 +1804,7 @@ class MessageRoot[
         source = deliver.handle_from(interaction)
         acknowledge = False
         failure: Exception | None = None
-        with profile.operation.span("render_lock"):
-            await self._render_lock.acquire()
-        try:
+        async with self._rendering(profile.operation):
             if (
                 source is None
                 or source.expired()
@@ -1843,8 +1839,6 @@ class MessageRoot[
                         if wrote is source:
                             profile.acknowledge("interaction_write")
                         acknowledge = wrote is not source
-        finally:
-            self._render_lock.release()
         if failure is not None:
             profile.presentation = PresentationStatus.FAILED
             await self.handle_error(interaction, failure, "renewal")
@@ -2550,9 +2544,7 @@ class MessageRoot[
     ) -> PresentationStatus:
         acknowledge = False
         presentation = PresentationStatus.NO_CHANGE
-        with operation.span("render_lock"):
-            await self._render_lock.acquire()
-        try:
+        async with self._rendering(operation):
             if self._finished:
                 return PresentationStatus.ABANDONED
             if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
@@ -2596,8 +2588,6 @@ class MessageRoot[
                         # it. Delivery through the standing handle leaves the click unanswered,
                         # and Discord shows the user "This interaction failed" three seconds later.
                         acknowledge = wrote is not source
-        finally:
-            self._render_lock.release()
         if acknowledge:
             await self._acknowledge(interaction, profile=dispatch, source="flush")
             if presentation is PresentationStatus.NO_CHANGE:
@@ -2608,18 +2598,19 @@ class MessageRoot[
         """End this message root through an interaction edit, as a Close button needs."""
         run_hooks = False
         try:
-            async with self._render_lock:
+            async with self._rendering():
                 if self._finished:
                     return
                 # Marked before delivery: a failed disable-edit must not resurrect the mount.
                 self._finished = True
-                candidate = (
-                    self._draw_renewal(disabled=True)
-                    if self._lifecycle is MessageRootStatus.RENEWAL_ARMED
-                    else self._stage(disabled=True)
-                )
-                source = deliver.handle_from(interaction)
+                candidate: _Candidate[RenderTargetT] | _LifecycleCandidate | None = None
                 try:
+                    candidate = (
+                        self._draw_renewal(disabled=True)
+                        if self._lifecycle is MessageRootStatus.RENEWAL_ARMED
+                        else self._stage(disabled=True)
+                    )
+                    source = deliver.handle_from(interaction)
                     wrote = await self._deliver(candidate, through=source, files=False)
                     # Editing through the interaction's own handle answers the click; nothing else
                     # does, whether it delivered through the standing handle or not at all.
@@ -2631,7 +2622,8 @@ class MessageRoot[
                     raise
                 finally:
                     # The terminal tree is never committed, so `finish` unmounts the live one once.
-                    candidate.view.stop()
+                    if candidate is not None:
+                        candidate.view.stop()
                     self._teardown()
                     # In the `finally` rather than after it: a raising disable-edit propagates past
                     # this block, and the mount is finished and torn down either way. An observer
@@ -2692,9 +2684,7 @@ class MessageRoot[
         with self.profiler.operation(
             OperationKind.REFRESH, name=name, attributes={"message_root_id": self.id}, links=links
         ) as profile:
-            with profile.span("render_lock"):
-                await self._render_lock.acquire()
-            try:
+            async with self._rendering(profile):
                 if self._finished:
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return PresentationStatus.ABANDONED
@@ -2742,8 +2732,6 @@ class MessageRoot[
                 await self._settle_visible(candidate, profile=profile)
                 profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
                 return PresentationStatus.WRITTEN
-            finally:
-                self._render_lock.release()
 
     def on_presented(self, callback: PresentedHook) -> None:
         """Synchronously observe future generations after delivery and commit succeed.
@@ -2779,7 +2767,7 @@ class MessageRoot[
         """End this message root and stop dispatch, optionally retaining stateless routes."""
         run_hooks = False
         try:
-            async with self._render_lock:
+            async with self._rendering():
                 if self._finished:
                     return
                 self._finished = True
@@ -2829,7 +2817,7 @@ class MessageRoot[
         """Delete the delivered message and finish this mount."""
         run_hooks = False
         try:
-            async with self._render_lock:
+            async with self._rendering():
                 if self._finished:
                     return
                 self._finished = True
@@ -2848,17 +2836,49 @@ class MessageRoot[
 
     def _teardown(self) -> None:
         """Stop the live view and unmount the committed tree, once."""
+        cleanup: list[Callable[[], object]] = []
         if self._unwatch_expiry is not None:
-            self._unwatch_expiry()
+            cleanup.append(self._unwatch_expiry)
             self._unwatch_expiry = None
         if self._view is not None:
-            self._view.stop()
+            cleanup.append(self._view.stop)
             self._view = None
-        self._subscriptions.close()
         self._expiry_arm_requested = None
-        self.runtime.finish()
+        cleanup.extend((self._subscriptions.close, self.runtime.finish))
         if self._owns_render_cache:
-            self.render_cache.clear()
+            cleanup.append(self.render_cache.clear)
+        for callback in cleanup:
+            try:
+                callback()
+            except Exception:
+                logger.exception("teardown callback failed for mount %s", self.id)
+
+    @asynccontextmanager
+    async def _rendering(self, profile: OperationRecorder | None = None) -> AsyncIterator[None]:
+        """Hold the render lock for delivery, then wait for service cleanup.
+
+        Cleanup can render again, so release the lock before waiting for it.
+        """
+        with profile.span("render_lock") if profile is not None else nullcontext():
+            await self._render_lock.acquire()
+        try:
+            yield
+        finally:
+            self._render_lock.release()
+            await self._wait_services()
+
+    async def _wait_services(self) -> None:
+        """Give service cleanup time to finish, even when this operation is cancelled."""
+        with anyio.CancelScope(shield=True):
+            try:
+                await self.runtime.wait_services(allow_reentry=True)
+            except Exception:
+                logger.exception("service cleanup failed for mount %s", self.id)
+
+    async def _service_failed(self, error: Exception) -> None:
+        """Finish the message root when one of its services fails."""
+        logger.error("owned service failed for mount %s", self.id, exc_info=error)
+        await self.finish()
 
     async def handle_timeout(self) -> None:
         await self.finish(disable=True, retain_routed=self.retain_routed_on_timeout)

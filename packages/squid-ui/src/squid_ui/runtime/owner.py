@@ -17,6 +17,7 @@ from squid_ui.runtime.component import (
 from squid_ui.runtime.context import ContextKey
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.runtime.resources import AsyncBinding, PendingMode
+from squid_ui.runtime.services import ServiceFailure, ServiceHost, _ServiceLifecycle
 from squid_ui.runtime.topics import Address
 from squid_ui.target_types import RenderTarget
 
@@ -32,8 +33,12 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         on_invalidate: Callable[[], None] | None = None,
         context: Mapping[ContextKey[Any], object] | None = None,
         plan_cache: PlanCache | None = None,
+        service_host: ServiceHost | None = None,
+        on_service_error: ServiceFailure | None = None,
     ) -> None:
         self.root = root
+        self._services = _ServiceLifecycle(service_host, on_service_error)
+        self._hook_errors: list[Exception] = []
         root._runtime = self
         self.presentation = presentation if presentation is not None else PresentationState()
         self.on_invalidate = on_invalidate
@@ -149,14 +154,17 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             self._force_all = True
             self._candidate_tree = None
         if reuse_committed and self._candidate_tree is not None and self._candidate_revision == self.revision:
+            self._validate_service_host(self._candidate_tree)
             return self._candidate_tree
         if reuse_committed and not self.dirty and self._committed_tree is not None:
+            self._validate_service_host(self._committed_tree)
             return self._committed_tree
         if reuse_committed and self._backdated_to_committed():
             committed = self._committed_tree
             if committed is None:
                 message = "backdating succeeded without a committed tree"
                 raise AssertionError(message)
+            self._validate_service_host(committed)
             return committed
         tree = render_component_tree(
             self.root,
@@ -173,6 +181,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 component_paths=self._component_paths,
             ),
         )
+        self._validate_service_host(tree)
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree
         self._clear_render_invalidations()
@@ -180,6 +189,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             self._candidate_tree = tree
             self._candidate_revision = self.revision
         return tree
+
+    def _validate_service_host(self, tree: ComponentTree[RenderTargetT]) -> None:
+        # A host can close between renders, including while a candidate waits for delivery.
+        if any(component._owned_services is not None for component in tree.components.values()):
+            self._services.validate()
 
     def _backdated_to_committed(self) -> bool:
         """Whether every attributed invalidation settled to its committed render value."""
@@ -283,7 +297,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 key=lambda item: depth(item[0]),
                 reverse=True,
             ):
-                component.on_unmount()
+                self._unmount(component)
                 component._runtime = None
                 if path != "$":
                     component._parent = None
@@ -293,7 +307,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             for path, component in sorted(tree._added_components, key=lambda item: depth(item[0])):
                 self.components[path] = component
                 self._component_paths[component] = path
-                component.on_mount()
+                self._mount(component)
             for path, component in tree._removed_components:
                 if component not in self._component_paths:
                     self._render_cache.pop(component, None)
@@ -305,6 +319,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 self._candidate_tree = tree
                 self._candidate_revision = self.revision
             self.dirty = rendered_revision is not None and self.revision != rendered_revision
+            self._raise_hook_errors()
             return
 
         removed = [
@@ -318,12 +333,12 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             if self.components.get(path) is not component
         ]
         for path, component in sorted(removed, key=lambda item: depth(item[0]), reverse=True):
-            component.on_unmount()
+            self._unmount(component)
             component._runtime = None
             if path != "$":
                 component._parent = None
         for _, component in sorted(added, key=lambda item: depth(item[0])):
-            component.on_mount()
+            self._mount(component)
         self.components = dict(tree.components)
         self._component_paths = {component: path for path, component in tree.components.items()}
         self._committed_tree = tree
@@ -340,15 +355,67 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             if tree.components.get(path) is snapshot.component
         }
         self.dirty = rendered_revision is not None and self.revision != rendered_revision
+        self._raise_hook_errors()
+
+    def _mount(self, component: AnyComponent) -> None:
+        owner = component._owned_services
+        try:
+            if owner is not None:
+                self._services.activate(owner)
+            component.on_mount()
+        except Exception as error:
+            if owner is not None:
+                self._services.cancel(owner)
+            self._hook_errors.append(error)
+
+    def _unmount(self, component: AnyComponent) -> None:
+        # Cancel first so services start shutting down even if the unmount hook raises.
+        if (owner := component._owned_services) is not None:
+            self._services.cancel(owner)
+        try:
+            component.on_unmount()
+        except Exception as error:
+            self._hook_errors.append(error)
+
+    def _raise_hook_errors(self) -> None:
+        if self._hook_errors:
+            errors, self._hook_errors = self._hook_errors, []
+            msg = "component lifecycle hooks failed"
+            raise ExceptionGroup(msg, errors)
+
+    async def wait_services_ready(self) -> None:
+        """Wait for the mounted services to finish setup.
+
+        This covers the runs mounted when the call begins. If setup fails, the error is
+        raised and the remaining services keep running. Call this outside delivery locks
+        so setup can use the frontend while you wait.
+        """
+        await self._services.wait_ready()
+
+    async def wait_services(self, *, allow_reentry: bool = False) -> None:
+        """Wait for services removed from the tree to finish cleaning up.
+
+        Call this outside delivery locks: cleanup may need to use the frontend too.
+
+        Args:
+            allow_reentry: Let a service call this during its own cleanup and return
+                immediately. Frontends use this when cleanup triggers another frontend
+                operation; the outer caller or host waits for the service to finish.
+                The default raises an error if a service tries to wait for itself.
+        """
+        await self._services.wait(allow_reentry=allow_reentry)
 
     def finish(self) -> None:
-        """Unmount the current tree from leaves to root."""
+        """Unmount the tree and ask its services to stop.
+
+        Call ``await runtime.wait_services()`` afterwards to wait for cleanup.
+        """
         for _path, component in sorted(
             self.components.items(),
             key=lambda item: 0 if item[0] == "$" else item[0].count(".") + 1,
             reverse=True,
         ):
-            component.on_unmount()
+            self._unmount(component)
             component._runtime = None
             component._parent = None
         self.components.clear()
@@ -362,3 +429,4 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self._committed_tree = None
         self.plan_memo.clear()
         self.root._runtime = None
+        self._raise_hook_errors()

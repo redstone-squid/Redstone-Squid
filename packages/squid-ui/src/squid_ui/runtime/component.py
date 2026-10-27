@@ -52,6 +52,7 @@ from squid_ui.runtime.resources import (
     observe_async_bindings,
     unique_async_bindings,
 )
+from squid_ui.runtime.services import ManagedService, ServiceOwner
 from squid_ui.runtime.topics import Address
 from squid_ui.semantic import (
     ActionControl as SemanticActionControl,
@@ -222,6 +223,7 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
 
     _runtime: RuntimeOwner | None = None
     _parent: AnyComponent | None = None
+    _owned_services: ServiceOwner | None = None
     _loaded: bool = False
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
     _reactive_internal_attributes = frozenset(
@@ -284,6 +286,24 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
 
     def on_unmount(self) -> None:
         """Run after this component leaves a successfully drawn tree."""
+
+    def own[ServiceT: ManagedService](self, service: ServiceT) -> ServiceT:
+        """Give this component a service to run while it's mounted.
+
+        Call this during setup, before the first render. It returns the same instance,
+        ready to store on the component and share through ``provide``. The service
+        starts after a successful delivery and stops when the component unmounts.
+
+        Remounting uses the same instance and starts a fresh run after cleanup finishes.
+        """
+        if vars(self).get("_ownership_sealed", False):
+            msg = "component service ownership must be declared before rendering"
+            raise RuntimeError(msg)
+        owner = self._owned_services
+        if owner is None:
+            owner = ServiceOwner()
+            vars(self)["_owned_services"] = owner
+        return owner.own(service)
 
     @override
     def invalidate(self) -> None:
@@ -476,6 +496,9 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         inherited_context: dict[ContextKey[Any], object],
     ) -> _ComponentRender[RenderTargetT]:
         """This component's render snapshot, reused when nothing it read has moved."""
+        vars(component)["_ownership_sealed"] = True
+        if (owner := component._owned_services) is not None:
+            owner.seal()
         incremental = self.incremental
         render_cache = incremental.render_cache
         cached = render_cache.get(component)

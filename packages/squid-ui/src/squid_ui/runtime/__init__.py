@@ -104,6 +104,7 @@ from squid_ui.runtime.resources import (
     ResourceStatus,
     resource,
 )
+from squid_ui.runtime.services import ManagedService, ServiceHost, ServiceOwner
 from squid_ui.runtime.shared import SharedState, SharedStateFactory, SharedStatePool
 from squid_ui.runtime.topics import (
     Address,
@@ -182,6 +183,7 @@ __all__ = [
     "HistorySnapshot",
     "KindKeyCodec",
     "LocalTopicBus",
+    "ManagedService",
     "MemoryCompensationOutbox",
     "Observation",
     "Pending",
@@ -197,6 +199,8 @@ __all__ = [
     "ResourceStatus",
     "RollbackReason",
     "SelectionState",
+    "ServiceHost",
+    "ServiceOwner",
     "SessionUpdate",
     "SharedState",
     "SharedStateFactory",

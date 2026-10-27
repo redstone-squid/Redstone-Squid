@@ -53,6 +53,12 @@ Install the package directly when you are writing a renderer or portable compone
 pip install squid-ui==0.1.0a1
 ```
 
+For component-owned subscriptions and background work, install `squid-ui[services]`.
+`Component.own(ManagedService(...))` declares ownership; a supervised `ServiceHost` activates it on
+committed mount and awaits cleanup on unmount. Define activity and lexical cleanup in `run()`.
+Ordinary state and rendering do not require this optional AnyIO backend. The Discord package
+includes and integrates it automatically.
+
 Most Discord applications should install `squid-ui-discord`, which brings this package with it
 and provides owner-scoped `DiscordUI`, `DiscordRequest`, and `Screen` entry points.
 Applications compiling Block Kit should install `squid-ui-slack`, which adds Slack SDK drawing
