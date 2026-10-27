@@ -1,5 +1,6 @@
 import ast
 import re
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -866,9 +867,29 @@ def test_the_engine_needs_no_transport_install() -> None:
             else:
                 continue
             if found := imported & blocked:
+                # Owned services are an optional execution extra. Its runner imports AnyIO
+                # lazily; ordinary authoring and rendering must still import without it.
+                if path == root / "runtime" / "services.py" and found == {"anyio"}:
+                    continue
                 violations.append(f"{path}:{node.lineno}: {sorted(found)}")
 
     assert violations == []
+
+
+def test_service_execution_is_optional_for_engine_imports() -> None:
+    """Importing the portable engine must not import its optional AnyIO service backend."""
+    script = """
+import sys
+class BlockAnyIO:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'anyio' or fullname.startswith('anyio.'):
+            raise ImportError('AnyIO is not installed')
+sys.meta_path.insert(0, BlockAnyIO())
+import squid_ui
+from squid_ui.runtime import ManagedService, ServiceHost, ServiceOwner
+assert 'anyio' not in sys.modules
+"""
+    subprocess.run([sys.executable, "-c", script], check=True, capture_output=True, text=True)
 
 
 def _irrefutable(pattern: ast.pattern) -> bool:

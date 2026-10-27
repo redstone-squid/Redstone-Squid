@@ -1,0 +1,1037 @@
+"""Services start on commit and finish cleaning up when their owner removes them."""
+
+import asyncio
+from collections.abc import AsyncIterator, Iterator
+from contextlib import AsyncExitStack, ExitStack, asynccontextmanager, contextmanager
+from typing import override
+
+import anyio
+import pytest
+from anyio.abc import TaskGroup, TaskStatus
+
+from squid_ui import Component, ComponentsV2Target, DocumentLike, state
+from squid_ui.primitives import Text
+from squid_ui.runtime import (
+    ComponentRuntime,
+    ContextKey,
+    LocalTopicBus,
+    ManagedService,
+    ServiceHost,
+    ServiceOwner,
+    SharedState,
+    Topic,
+)
+
+
+@asynccontextmanager
+async def running_host() -> AsyncIterator[ServiceHost]:
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as tasks:
+            host = ServiceHost()
+            await tasks.start(host.run)
+            try:
+                yield host
+            finally:
+                await host.close()
+
+
+class Recorder(ManagedService):
+    def __init__(self) -> None:
+        self.events: list[str] = []
+        self.task_groups: list[TaskGroup] = []
+        self.stopped = asyncio.Event()
+
+    @override
+    async def run(self, *, task_status: TaskStatus[None]) -> None:
+        self.events.append("activate")
+        with ExitStack() as cleanup:
+            cleanup.callback(self.events.append, "unsubscribe")
+            try:
+                async with anyio.create_task_group() as tasks:
+                    self.task_groups.append(tasks)
+                    await tasks.start(self.worker)
+                    await self.setup()
+                    task_status.started()
+                    await anyio.sleep_forever()
+            finally:
+                with anyio.CancelScope(shield=True):
+                    await self.cleanup()
+
+    async def setup(self) -> None:
+        pass
+
+    async def cleanup(self) -> None:
+        await anyio.sleep(0)
+        self.events.append("cleanup")
+        self.stopped.set()
+
+    async def worker(self, *, task_status: TaskStatus[None]) -> None:
+        try:
+            self.events.append("work")
+            task_status.started()
+            await anyio.sleep_forever()
+        finally:
+            self.events.append("cancel")
+
+
+async def test_ownerless_registration_and_exclusive_ownership() -> None:
+    async with running_host() as host:
+        service = Recorder()
+        owner = ServiceOwner()
+        assert owner.own(service) is service
+        assert owner.own(service) is service
+        assert service.events == []
+        with pytest.raises(RuntimeError, match="another owner"):
+            ServiceOwner().own(service)
+        owner.activate(host)
+        await owner.wait_ready()
+        with pytest.raises(RuntimeError, match="sealed"):
+            owner.own(Recorder())
+        owner.cancel()
+        await owner.wait()
+        await owner.wait()
+        assert service.events == ["activate", "work", "cancel", "cleanup", "unsubscribe"]
+        with pytest.raises(RuntimeError, match="not active"):
+            service.task_groups[0].start_soon(anyio.sleep_forever)
+
+
+async def test_remount_uses_fresh_run_and_waits_for_previous_cleanup() -> None:
+    async with running_host() as host:
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        class Slow(Recorder):
+            @override
+            async def cleanup(self) -> None:
+                entered.set()
+                await release.wait()
+                await super().cleanup()
+
+        owner = ServiceOwner()
+        service = owner.own(Slow())
+        owner.activate(host)
+        await owner.wait_ready()
+        owner.cancel()
+        owner.activate(host)
+        await entered.wait()
+        # An intermediate activation cancelled before startup must still wait for the
+        # first one's cleanup; a third activation cannot overtake either of them.
+        owner.cancel()
+        owner.activate(host)
+        await anyio.sleep(0)
+        assert len(service.task_groups) == 1
+        release.set()
+        await owner.wait_ready()
+        assert len(service.task_groups) == 2
+        assert service.task_groups[0] is not service.task_groups[1]
+        with pytest.raises(RuntimeError, match="not active"):
+            service.task_groups[0].start_soon(anyio.sleep_forever)
+        owner.cancel()
+        await owner.wait()
+
+
+async def test_partial_activation_failure_and_cleanup_failures_all_settle() -> None:
+    async with running_host() as host:
+        events: list[str] = []
+        reported = asyncio.Event()
+
+        async def report(error: Exception) -> None:
+            assert isinstance(error, ExceptionGroup)
+            reported.set()
+
+        def fail_cleanup() -> None:
+            events.append("broken cleanup")
+            raise ValueError("cleanup failed")
+
+        class Broken(ManagedService):
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                with ExitStack() as cleanup:
+                    cleanup.callback(events.append, "last cleanup")
+                    cleanup.callback(fail_cleanup)
+                    raise ValueError("setup failed")
+
+        owner = ServiceOwner()
+        owner.own(Broken())
+        good = owner.own(Recorder())
+        owner.activate(host, on_error=report)
+        await reported.wait()
+        owner.cancel()
+        with pytest.raises(ExceptionGroup):
+            await owner.wait()
+        assert events == ["broken cleanup", "last cleanup"]
+        assert good.stopped.is_set() or not good.events
+        with pytest.raises(ExceptionGroup):
+            await owner.wait()
+
+
+async def test_task_failure_cancels_siblings_and_reports_after_cleanup() -> None:
+    async with running_host() as host:
+        trigger = asyncio.Event()
+        reported = asyncio.Event()
+        service = Recorder()
+
+        async def broken() -> None:
+            await trigger.wait()
+            raise ValueError("worker failed")
+
+        async def report(error: Exception) -> None:
+            assert service.stopped.is_set()
+            reported.set()
+
+        owner = ServiceOwner()
+        owner.own(service)
+        owner.activate(host, on_error=report)
+        await owner.wait_ready()
+        service.task_groups[0].start_soon(broken)
+        trigger.set()
+        await reported.wait()
+        assert service.events[-3:] == ["cancel", "cleanup", "unsubscribe"]
+
+
+async def test_contexts_and_async_callbacks_exit_in_reverse_order() -> None:
+    async with running_host() as host:
+        events: list[str] = []
+
+        @contextmanager
+        def sync_resource() -> Iterator[str]:
+            try:
+                yield "sync"
+            finally:
+                events.append("sync")
+
+        @asynccontextmanager
+        async def async_resource() -> AsyncIterator[str]:
+            try:
+                yield "async"
+            finally:
+                with anyio.CancelScope(shield=True):
+                    await anyio.sleep(0)
+                    events.append("async")
+
+        class Resources(ManagedService):
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                with sync_resource() as sync_value:
+                    async with async_resource() as async_value:
+                        assert (sync_value, async_value) == ("sync", "async")
+                        task_status.started()
+                        await anyio.sleep_forever()
+
+        owner = ServiceOwner()
+        owner.own(Resources())
+        owner.activate(host)
+        await owner.wait_ready()
+        owner.cancel()
+        await owner.wait()
+        assert events == ["async", "sync"]
+
+
+async def test_host_cancellation_waits_for_async_cleanup() -> None:
+    owner = ServiceOwner()
+    service = owner.own(Recorder())
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as tasks:
+            host = ServiceHost()
+            await tasks.start(host.run)
+            owner.activate(host)
+            await owner.wait_ready()
+            tasks.cancel_scope.cancel()
+    assert service.events[-3:] == ["cancel", "cleanup", "unsubscribe"]
+
+
+KEY = ContextKey[Recorder]("service")
+
+
+class Consumer(Component[ComponentsV2Target]):
+    def __init__(self) -> None:
+        self.borrowed: Recorder | None = None
+
+    @override
+    def render(self) -> Text:
+        self.borrowed = self.inject(KEY)
+        return Text("consumer")
+
+
+class Panel(Component[ComponentsV2Target]):
+    visible: bool = state(default=True)
+
+    def __init__(self, borrowed: Recorder | None = None) -> None:
+        self.service = borrowed if borrowed is not None else self.own(Recorder())
+        self.child = Consumer()
+
+    @override
+    def render(self) -> DocumentLike[ComponentsV2Target]:
+        self.provide(KEY, self.service)
+        return self.boundary(self.child, key="child") if self.visible else Text("empty")
+
+
+async def test_committed_component_owns_activity_and_consumer_only_borrows() -> None:
+    async with running_host() as host:
+        panel = Panel()
+        runtime = ComponentRuntime(panel, service_host=host)
+        candidate = runtime.render()
+        assert not panel.service.events
+        assert panel.child.borrowed is panel.service
+        runtime.commit(candidate)
+        await runtime.wait_services_ready()
+        runtime.commit(runtime.render())
+        panel.visible = False
+        runtime.commit(runtime.render())
+        await runtime.wait_services()
+        assert len(panel.service.task_groups) == 1
+        assert not panel.service.stopped.is_set()
+        runtime.finish()
+        await runtime.wait_services()
+        assert panel.service.stopped.is_set()
+        runtime.finish()
+        await runtime.wait_services()
+
+
+async def test_abandoned_candidate_and_borrowed_application_service() -> None:
+    async with running_host() as host:
+        abandoned = Panel()
+        runtime = ComponentRuntime(abandoned, service_host=host)
+        runtime.render()
+        runtime.finish()
+        await runtime.wait_services()
+        assert not abandoned.service.events
+
+        application = ServiceOwner()
+        service = application.own(Recorder())
+        application.activate(host)
+        await application.wait_ready()
+        panel = Panel(service)
+        runtime = ComponentRuntime(panel)
+        runtime.commit(runtime.render())
+        runtime.finish()
+        assert not service.stopped.is_set()
+        application.cancel()
+        await application.wait()
+
+
+async def test_independent_owners_and_unmount_hook_failure() -> None:
+    async with running_host() as host:
+
+        class BrokenPanel(Panel):
+            @override
+            def on_unmount(self) -> None:
+                raise ValueError("unmount hook failed")
+
+        first, second = BrokenPanel(), Panel()
+
+        class Root(Component[ComponentsV2Target]):
+            @override
+            def render(self) -> DocumentLike[ComponentsV2Target]:
+                return self.boundary(first, key="first"), self.boundary(second, key="second")
+
+        runtime = ComponentRuntime(Root(), service_host=host)
+        runtime.commit(runtime.render())
+        await runtime.wait_services_ready()
+        assert first.service is not second.service
+        with pytest.raises(ExceptionGroup, match="lifecycle hooks"):
+            runtime.finish()
+        await runtime.wait_services()
+        assert first.service.stopped.is_set()
+        assert second.service.stopped.is_set()
+        assert runtime.components == {}
+
+
+def test_owned_services_require_host_and_render_cannot_register_services() -> None:
+    with pytest.raises(RuntimeError, match="ServiceHost"):
+        ComponentRuntime(Panel()).render()
+
+    class Invalid(Component[ComponentsV2Target]):
+        @override
+        def render(self) -> Text:
+            self.own(Recorder())
+            return Text("invalid")
+
+    with pytest.raises(RuntimeError, match="before rendering"):
+        ComponentRuntime(Invalid()).render()
+
+
+@pytest.mark.parametrize("cached", ["candidate", "committed", "backdated"])
+async def test_cached_tree_requires_running_service_host(cached: str) -> None:
+    async with running_host() as host:
+
+        class Values(SharedState):
+            count: int = state(default=0)
+
+        values = Values(LocalTopicBus())
+
+        class ReadingPanel(Panel):
+            @override
+            def render(self) -> Text:
+                return Text(str(values.count))
+
+        panel = ReadingPanel()
+        runtime = ComponentRuntime(panel, service_host=host)
+        tree = runtime.render()
+        if cached != "candidate":
+            runtime.commit(tree)
+            await runtime.wait_services_ready()
+        if cached == "committed":
+            # Keep only the committed cache to exercise reuse between candidate renders.
+            runtime._candidate_tree = None
+        elif cached == "backdated":
+            # A delayed notification for a value the committed tree already read.
+            runtime.invalidate_addresses(tree.observations)
+            assert runtime.dirty
+        await host.close()
+        with pytest.raises(RuntimeError, match="running ServiceHost"):
+            runtime.render(reuse_committed=True)
+        runtime.finish()
+        await runtime.wait_services()
+
+
+async def test_cancellation_during_async_acquisition_still_releases_resource() -> None:
+    async with running_host() as host:
+        entering, release, exited = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+        @asynccontextmanager
+        async def resource() -> AsyncIterator[None]:
+            # Simulate an acquisition that completes despite owner cancellation.
+            with anyio.CancelScope(shield=True):
+                entering.set()
+                await release.wait()
+            try:
+                yield
+            finally:
+                with anyio.CancelScope(shield=True):
+                    await anyio.sleep(0)
+                    exited.set()
+
+        class Acquiring(ManagedService):
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                async with resource():
+                    task_status.started()
+                    await anyio.sleep_forever()
+
+        owner = ServiceOwner()
+        owner.own(Acquiring())
+        owner.activate(host)
+        await entering.wait()
+        owner.cancel()
+        release.set()
+        await owner.wait()
+        assert exited.is_set()
+        with pytest.raises(RuntimeError, match="not active"):
+            await owner.wait_ready()
+
+
+async def test_actual_component_remount_preserves_object_and_restarts_activity() -> None:
+    async with running_host() as host:
+        panel = Panel()
+
+        class Root(Component[ComponentsV2Target]):
+            visible: bool = state(default=True)
+
+            @override
+            def render(self) -> DocumentLike[ComponentsV2Target]:
+                return self.boundary(panel, key="panel") if self.visible else Text("empty")
+
+        root = Root()
+        runtime = ComponentRuntime(root, service_host=host)
+        runtime.commit(runtime.render())
+        await runtime.wait_services_ready()
+        service = panel.service
+        root.visible = False
+        runtime.commit(runtime.render())
+        root.visible = True
+        runtime.commit(runtime.render())
+        await runtime.wait_services()
+        await runtime.wait_services_ready()
+        assert panel.service is service
+        assert len(service.task_groups) == 2
+        runtime.finish()
+        await runtime.wait_services()
+
+
+async def test_failed_mount_hook_cannot_leave_owned_work_running() -> None:
+    async with running_host() as host:
+
+        class Broken(Panel):
+            @override
+            def on_mount(self) -> None:
+                raise ValueError("mount failed")
+
+        panel = Broken()
+        runtime = ComponentRuntime(panel, service_host=host)
+        with pytest.raises(ExceptionGroup, match="lifecycle hooks"):
+            runtime.commit(runtime.render())
+        await runtime.wait_services()
+        assert not panel.service.events
+        runtime.finish()
+
+
+async def test_child_activity_cannot_wait_for_its_owner_or_host() -> None:
+    async with running_host() as host:
+        owner = ServiceOwner()
+        service = owner.own(Recorder())
+        owner.activate(host)
+        await owner.wait_ready()
+        checked = asyncio.Event()
+
+        async def child() -> None:
+            with pytest.raises(RuntimeError, match="own host"):
+                await host.close()
+            with anyio.CancelScope(shield=True):
+                owner.cancel()
+                with pytest.raises(RuntimeError, match="own owner's shutdown"):
+                    await owner.wait()
+                checked.set()
+
+        service.task_groups[0].start_soon(child)
+        await checked.wait()
+        await owner.wait()
+
+
+@pytest.mark.parametrize("shutdown", ["owner", "host"])
+async def test_service_can_submit_shutdown_to_application_task_group(shutdown: str) -> None:
+    async with running_host() as host, anyio.create_task_group() as application_tasks:
+        proceed, finished = asyncio.Event(), asyncio.Event()
+        owner = ServiceOwner()
+
+        async def close() -> None:
+            await proceed.wait()
+            if shutdown == "host":
+                await host.close()
+            else:
+                owner.cancel()
+                await owner.wait()
+            assert service.stopped.is_set()
+            finished.set()
+
+        class Submitting(Recorder):
+            @override
+            async def setup(self) -> None:
+                application_tasks.start_soon(close)
+
+        service = owner.own(Submitting())
+        owner.activate(host)
+        await owner.wait_ready()
+        proceed.set()
+        await finished.wait()
+
+
+@pytest.mark.parametrize("allow_reentry", [False, True])
+async def test_application_task_submitted_by_service_waits_for_component_cleanup(allow_reentry: bool) -> None:
+    async with running_host() as host, anyio.create_task_group() as application_tasks:
+        proceed, finished = asyncio.Event(), asyncio.Event()
+
+        async def close() -> None:
+            await proceed.wait()
+            runtime.finish()
+            await runtime.wait_services(allow_reentry=allow_reentry)
+            assert panel.service.stopped.is_set()
+            finished.set()
+
+        class Submitting(Recorder):
+            @override
+            async def setup(self) -> None:
+                application_tasks.start_soon(close)
+
+        class OwnedPanel(Component[ComponentsV2Target]):
+            def __init__(self) -> None:
+                self.service = self.own(Submitting())
+
+            @override
+            def render(self) -> Text:
+                return Text("panel")
+
+        panel = OwnedPanel()
+        runtime = ComponentRuntime(panel, service_host=host)
+        runtime.commit(runtime.render())
+        await runtime.wait_services_ready()
+        proceed.set()
+        await finished.wait()
+
+
+async def test_failure_handler_cannot_close_its_host() -> None:
+    async with running_host() as host:
+        reported = asyncio.Event()
+
+        class Broken(Recorder):
+            @override
+            async def setup(self) -> None:
+                raise ValueError("setup failed")
+
+        async def report(error: Exception) -> None:
+            assert service.stopped.is_set()
+            with pytest.raises(RuntimeError, match="own host"):
+                await host.close()
+            reported.set()
+
+        owner = ServiceOwner()
+        service = owner.own(Broken())
+        owner.activate(host, on_error=report)
+        await reported.wait()
+        owner.cancel()
+        with pytest.raises(ExceptionGroup):
+            await owner.wait()
+
+
+async def test_readiness_observes_failure_without_waiting_for_earlier_setup() -> None:
+    async with running_host() as host:
+        pending = asyncio.Event()
+        release = asyncio.Event()
+        stopped = asyncio.Event()
+
+        class Pending(ManagedService):
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                try:
+                    pending.set()
+                    await release.wait()
+                    task_status.started()
+                    await anyio.sleep_forever()
+                finally:
+                    stopped.set()
+
+        class Broken(ManagedService):
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                await pending.wait()
+                raise ValueError("later setup failed")
+
+        owner = ServiceOwner()
+        owner.own(Pending())
+        owner.own(Broken())
+        owner.activate(host)
+        with pytest.raises(ExceptionGroup, match="unhandled errors") as failure:
+            await owner.wait_ready()
+        assert failure.value.subgroup(ValueError) is not None
+        assert not stopped.is_set()
+        release.set()
+        owner.cancel()
+        with pytest.raises(ExceptionGroup):
+            await owner.wait()
+        assert stopped.is_set()
+
+
+@pytest.mark.parametrize("end", ["cancel", "host", "setup", "worker"])
+async def test_lexical_resources_outlive_workers_and_callbacks(end: str) -> None:
+    async with running_host() as host:
+        events: list[str] = []
+        trigger = asyncio.Event()
+        failed = asyncio.Event()
+
+        class Resources(ManagedService):
+            @asynccontextmanager
+            async def client(self) -> AsyncIterator[None]:
+                # Real clients can hide a task group and cancel scopes in their context.
+                with anyio.CancelScope():
+                    async with anyio.create_task_group() as tasks:
+                        await tasks.start(self.client_worker)
+                        try:
+                            yield
+                        finally:
+                            with anyio.CancelScope(shield=True):
+                                await anyio.sleep(0)
+                                events.append("resource exit")
+                            tasks.cancel_scope.cancel()
+
+            async def client_worker(self, *, task_status: TaskStatus[None]) -> None:
+                try:
+                    task_status.started()
+                    await anyio.sleep_forever()
+                finally:
+                    events.append("client stopped")
+
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                async with self.client():
+                    with ExitStack() as cleanup:
+                        cleanup.callback(events.append, "callback")
+                        async with anyio.create_task_group() as tasks:
+                            await tasks.start(self.worker)
+                            if end == "setup":
+                                raise ValueError("setup failed")
+                            task_status.started()
+                            await anyio.sleep_forever()
+
+            async def worker(self, *, task_status: TaskStatus[None]) -> None:
+                try:
+                    task_status.started()
+                    await trigger.wait()
+                    raise ValueError("worker failed")
+                finally:
+                    events.append("worker stopped")
+
+        async def report(error: Exception) -> None:
+            failed.set()
+
+        owner = ServiceOwner()
+        owner.own(Resources())
+        owner.activate(host, on_error=report)
+        if end == "setup":
+            with pytest.raises(ExceptionGroup):
+                await owner.wait_ready()
+        else:
+            await owner.wait_ready()
+        if end == "host":
+            await host.close()
+        elif end == "worker":
+            trigger.set()
+            await failed.wait()
+        owner.cancel()
+        if end in {"setup", "worker"}:
+            with pytest.raises(ExceptionGroup):
+                await owner.wait()
+        else:
+            await owner.wait()
+        assert events.index("worker stopped") < events.index("callback") < events.index("resource exit")
+        assert "client stopped" in events
+
+
+async def test_runtime_readiness_observes_all_committed_owners() -> None:
+    async with running_host() as host:
+        release = asyncio.Event()
+        entered = asyncio.Event()
+
+        class Pending(Recorder):
+            @override
+            async def setup(self) -> None:
+                await super().setup()
+                entered.set()
+                await release.wait()
+
+        class Broken(Recorder):
+            @override
+            async def setup(self) -> None:
+                await entered.wait()
+                raise ValueError("second owner failed")
+
+        class OwnedPanel(Component[ComponentsV2Target]):
+            def __init__(self, service: Recorder) -> None:
+                self.service = self.own(service)
+
+            @override
+            def render(self) -> Text:
+                return Text("owned")
+
+        first, second = OwnedPanel(Pending()), OwnedPanel(Broken())
+
+        class Root(Component[ComponentsV2Target]):
+            @override
+            def render(self) -> DocumentLike[ComponentsV2Target]:
+                return self.boundary(first, key="first"), self.boundary(second, key="second")
+
+        runtime = ComponentRuntime(Root(), service_host=host)
+        await runtime.wait_services_ready()
+        runtime.commit(runtime.render())
+        with pytest.raises(ExceptionGroup):
+            await runtime.wait_services_ready()
+        assert not first.service.stopped.is_set()
+        runtime.finish()
+        with pytest.raises(ExceptionGroup):
+            await runtime.wait_services()
+        assert first.service.stopped.is_set()
+
+
+async def test_cancelling_readiness_wait_does_not_cancel_services() -> None:
+    async with running_host() as host:
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        class Pending(Recorder):
+            @override
+            async def setup(self) -> None:
+                await super().setup()
+                entered.set()
+                await release.wait()
+
+        owner = ServiceOwner()
+        service = owner.own(Pending())
+        owner.activate(host)
+        async with anyio.create_task_group() as observers:
+            observers.start_soon(owner.wait_ready)
+            await entered.wait()
+            observers.cancel_scope.cancel()
+        assert not service.stopped.is_set()
+        release.set()
+        await owner.wait_ready()
+        owner.cancel()
+        await owner.wait()
+
+
+async def test_resource_entry_failure_unwinds_without_starting_activity() -> None:
+    async with running_host() as host:
+        events: list[str] = []
+
+        class Broken(ManagedService):
+            @asynccontextmanager
+            async def client(self) -> AsyncIterator[None]:
+                try:
+                    raise ValueError("resource entry failed")
+                    yield
+                finally:
+                    with anyio.CancelScope(shield=True):
+                        await anyio.sleep(0)
+                        events.append("resource released")
+
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                async with self.client():
+                    events.append("unexpected activation")
+                    task_status.started()
+                    await anyio.sleep_forever()
+
+        owner = ServiceOwner()
+        owner.own(Broken())
+        owner.activate(host)
+        with pytest.raises(ExceptionGroup):
+            await owner.wait_ready()
+        owner.cancel()
+        with pytest.raises(ExceptionGroup):
+            await owner.wait()
+        assert events == ["resource released"]
+
+
+async def test_runtime_readiness_does_not_switch_to_a_remounted_activation() -> None:
+    async with running_host() as host:
+        panel = Panel()
+        runtime = ComponentRuntime(panel, service_host=host)
+        runtime.commit(runtime.render())
+        await runtime.wait_services_ready()
+
+        async def remount() -> None:
+            runtime.finish()
+            runtime.commit(runtime.render())
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(remount)
+            with pytest.raises(ExceptionGroup):
+                await runtime.wait_services_ready()
+        await runtime.wait_services_ready()
+        assert len(panel.service.task_groups) == 2
+        runtime.finish()
+        await runtime.wait_services()
+
+
+async def test_normal_return_completes_once_and_keeps_passive_state() -> None:
+    async with running_host() as host:
+        completed = asyncio.Event()
+
+        class Finite(ManagedService):
+            runs = 0
+
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                self.runs += 1
+                task_status.started()
+                completed.set()
+
+        owner = ServiceOwner()
+        service = owner.own(Finite())
+        owner.activate(host)
+        await completed.wait()
+        await owner.wait_ready()
+        owner.activate(host)
+        assert service.runs == 1
+        owner.cancel()
+        await owner.wait()
+        assert service.runs == 1
+        owner.activate(host)
+        await owner.wait_ready()
+        assert service.runs == 2
+        owner.cancel()
+        await owner.wait()
+
+
+@pytest.mark.parametrize("signals", [0, 2])
+async def test_readiness_requires_exactly_one_signal(signals: int) -> None:
+    async with running_host() as host:
+        cleaned = asyncio.Event()
+        reported = asyncio.Event()
+
+        class Invalid(ManagedService):
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                try:
+                    for _ in range(signals):
+                        task_status.started()
+                finally:
+                    cleaned.set()
+
+        async def report(error: Exception) -> None:
+            assert cleaned.is_set()
+            reported.set()
+
+        owner = ServiceOwner()
+        owner.own(Invalid())
+        owner.activate(host, on_error=report)
+        await reported.wait()
+        with pytest.raises(ExceptionGroup):
+            await owner.wait_ready()
+        owner.cancel()
+        with pytest.raises(ExceptionGroup):
+            await owner.wait()
+
+
+async def test_async_exit_stack_attempts_remaining_cleanup_after_failure() -> None:
+    async with running_host() as host:
+        events: list[str] = []
+
+        async def cleanup(label: str, *, fail: bool = False) -> None:
+            await anyio.sleep(0)
+            events.append(label)
+            if fail:
+                raise ValueError("cleanup failed")
+
+        class Resources(ManagedService):
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                stack = AsyncExitStack()
+                async with stack:
+                    stack.push_async_callback(cleanup, "last")
+                    stack.push_async_callback(cleanup, "broken", fail=True)
+                    try:
+                        task_status.started()
+                        await anyio.sleep_forever()
+                    finally:
+                        with anyio.CancelScope(shield=True):
+                            await stack.aclose()
+
+        owner = ServiceOwner()
+        owner.own(Resources())
+        owner.activate(host)
+        await owner.wait_ready()
+        owner.cancel()
+        with pytest.raises(ExceptionGroup):
+            await owner.wait()
+        assert events == ["broken", "last"]
+
+
+async def test_owned_subscription_stops_updating_retained_shared_state() -> None:
+    async with running_host() as host:
+        bus = LocalTopicBus()
+        topic = Topic("build", "42")
+
+        class Updates(SharedState):
+            count: int = state(default=0)
+
+        class Subscription(ManagedService):
+            def __init__(self) -> None:
+                self.state = Updates(bus)
+
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                def changed(_: Topic) -> None:
+                    self.state.count += 1
+
+                unsubscribe = bus.subscribe(topic, changed)
+                try:
+                    task_status.started()
+                    await anyio.sleep_forever()
+                finally:
+                    unsubscribe()
+
+        class Owned(Component[ComponentsV2Target]):
+            def __init__(self) -> None:
+                self.service = self.own(Subscription())
+
+            @override
+            def render(self) -> Text:
+                return Text(str(self.service.state.count))
+
+        panel = Owned()
+        runtime = ComponentRuntime(panel, service_host=host)
+        runtime.commit(runtime.render())
+        await runtime.wait_services_ready()
+        retained = panel.service.state
+        bus.publish(topic)
+        assert retained.count == 1
+        runtime.finish()
+        await runtime.wait_services()
+        bus.publish(topic)
+        assert retained.count == 1
+        retained.count = 7
+        assert retained.count == 7
+
+
+async def test_service_run_uses_host_context_not_activating_transaction() -> None:
+    from contextvars import ContextVar
+
+    from squid_ui.runtime import transaction
+
+    context = ContextVar("service_test_context", default="unconfigured")
+    bus = LocalTopicBus()
+
+    class Values(SharedState):
+        count: int = state(default=0)
+
+    values = Values(bus)
+
+    class Writer(ManagedService):
+        @override
+        async def run(self, *, task_status: TaskStatus[None]) -> None:
+            values.count += 1
+            assert context.get() == "host"
+            task_status.started()
+            await anyio.sleep_forever()
+
+    with context.set("host"):
+        async with running_host() as host:
+            owner = ServiceOwner()
+            owner.own(Writer())
+            token = context.set("interaction")
+            try:
+                with transaction():
+                    owner.activate(host)
+                await owner.wait_ready()
+            finally:
+                context.reset(token)
+                owner.cancel()
+                await owner.wait()
+            assert values.count == 1
+
+
+async def test_failed_shutdown_does_not_retain_successfully_removed_services() -> None:
+    import gc
+    import weakref
+
+    class Broken(Recorder):
+        @override
+        async def cleanup(self) -> None:
+            await super().cleanup()
+            raise ValueError("cleanup failed")
+
+    class Owned(Component[ComponentsV2Target]):
+        def __init__(self, service: Recorder) -> None:
+            self.service = self.own(service)
+
+        @override
+        def render(self) -> Text:
+            return Text("owned")
+
+    class Root(Component[ComponentsV2Target]):
+        def __init__(self, children: tuple[Owned, ...]) -> None:
+            self.children = children
+
+        @override
+        def render(self) -> DocumentLike[ComponentsV2Target]:
+            return tuple(self.boundary(child, key=str(index)) for index, child in enumerate(self.children)) or Text(
+                "empty"
+            )
+
+    async with running_host() as host:
+        good = Owned(Recorder())
+        reference = weakref.ref(good.service)
+        root = Root((good, Owned(Broken())))
+        runtime = ComponentRuntime(root, service_host=host)
+        runtime.commit(runtime.render())
+        await runtime.wait_services_ready()
+        root.children = ()
+        root.invalidate()
+        runtime.commit(runtime.render())
+        with pytest.raises(ExceptionGroup):
+            await runtime.wait_services()
+        del good
+        gc.collect()
+        assert reference() is None
+        # Forgetting successful owners must not consume another owner's failure.
+        with pytest.raises(ExceptionGroup):
+            await runtime.wait_services()
+        runtime.finish()

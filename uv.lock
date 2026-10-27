@@ -3312,11 +3312,18 @@ dependencies = [
     { name = "squid-reactivity" },
 ]
 
+[package.optional-dependencies]
+services = [
+    { name = "anyio" },
+]
+
 [package.metadata]
 requires-dist = [
+    { name = "anyio", marker = "extra == 'services'", specifier = ">=4.14,<5" },
     { name = "markdown-it-py", specifier = ">=4.0,<5" },
     { name = "squid-reactivity", editable = "packages/squid-reactivity" },
 ]
+provides-extras = ["services"]
 
 [[package]]
 name = "squid-ui-discord"
@@ -3327,7 +3334,7 @@ dependencies = [
     { name = "discord-py" },
     { name = "packaging" },
     { name = "squid-reactivity" },
-    { name = "squid-ui" },
+    { name = "squid-ui", extra = ["services"] },
     { name = "typing-extensions" },
 ]
 
@@ -3352,7 +3359,7 @@ requires-dist = [
     { name = "squid-reactivity", editable = "packages/squid-reactivity" },
     { name = "squid-storage", marker = "extra == 'durable'", editable = "packages/squid-storage" },
     { name = "squid-storage", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/squid-storage" },
-    { name = "squid-ui", editable = "packages/squid-ui" },
+    { name = "squid-ui", extras = ["services"], editable = "packages/squid-ui" },
     { name = "typing-extensions", specifier = ">=4.13" },
 ]
 provides-extras = ["durable", "postgres"]

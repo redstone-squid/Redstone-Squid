@@ -4,6 +4,7 @@ import asyncio
 from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
+import anyio
 import discord
 import pytest
 
@@ -146,15 +147,13 @@ async def test_run_serves_the_reactor_and_the_challenge_runner_together() -> Non
     runtime = install(cast(discord.Client, fake_client()), bus=LocalTopicBus())
     assert runtime.scheduler is not None
 
-    task = asyncio.create_task(runtime.run())
-    await asyncio.sleep(0)
-    await asyncio.sleep(0)
-
-    assert runtime.scheduler._running
-    assert runtime.challenges._running
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(runtime.run)
+        assert runtime.scheduler._running
+        assert runtime.challenges._running
+        assert runtime.services is not None
+        runtime.services._require_running()
+        tasks.cancel_scope.cancel()
 
 
 async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
@@ -176,3 +175,15 @@ async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
     finally:
         task.cancel()
     message_root.refresh.assert_awaited()
+
+
+async def test_close_drops_installation_when_service_host_cleanup_fails() -> None:
+    client = fake_client()
+    runtime = install(cast(discord.Client, client))
+    assert runtime.services is not None
+    runtime.services.close = AsyncMock(side_effect=RuntimeError("service host cleanup failed"))
+
+    with pytest.raises(RuntimeError, match="service host cleanup failed"):
+        await runtime.close()
+
+    assert client not in _INSTALLED

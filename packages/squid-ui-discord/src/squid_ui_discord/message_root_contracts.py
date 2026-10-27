@@ -21,6 +21,7 @@ from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.navigation import NavFactory
 from squid_ui.planning.target import Target
 from squid_ui.profiling import Profiler
+from squid_ui.runtime.services import ServiceHost
 from squid_ui.runtime.topics import Address, TopicBus
 from squid_ui.scene.model import PlanMetrics, PlanReport
 from squid_ui.target_types import (
@@ -220,6 +221,7 @@ class MessageRootBehaviorOptions(TypedDict, total=False):
     profiler: Profiler | None
     render_cache: RenderProgramCache | None
     scheduler: Scheduler | None
+    service_host: ServiceHost | None
     expiry: ExpiryPolicy | None
     nav: NavFactory | None
     challenge: ChallengePresenter | None
@@ -269,6 +271,7 @@ class MessageRootConfig[
     profiler: Profiler | None = None
     render_cache: RenderProgramCache | None = None
     scheduler: Scheduler | None = None
+    service_host: ServiceHost | None = None
     expiry: ExpiryPolicy | None = DEFAULT_EXPIRY
     nav: NavFactory | None = None
     challenge: ChallengePresenter | None = None
