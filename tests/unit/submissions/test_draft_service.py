@@ -78,13 +78,6 @@ class FakeDraftRepository:
     async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
         return ()
 
-    async def count_active_for_account(self, account_id: int) -> int:
-        return sum(
-            draft.snapshot.owner_account_id == account_id
-            and draft.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
-            for draft in self.drafts.values()
-        )
-
     async def list_active_for_account(
         self,
         account_id: int,
@@ -159,28 +152,6 @@ class FakeDraftRepository:
         result = AppliedDraftChange(updated)
         self.replays[(draft_id, change.idempotency_key)] = AppliedDraftChange(updated, replayed=True)
         return result
-
-    async def transition(
-        self,
-        draft_id: UUID,
-        account_id: int,
-        *,
-        expected_revision: int,
-        status: DraftStatus,
-        updated_at: Instant,
-        expires_at: Instant,
-    ) -> StoredDraft:
-        current = self.drafts[draft_id]
-        assert current.snapshot.owner_account_id == account_id
-        assert current.snapshot.revision == expected_revision
-        updated = replace(
-            current,
-            snapshot=current.snapshot.transition(status),
-            updated_at=updated_at,
-            expires_at=expires_at,
-        )
-        self.drafts[draft_id] = updated
-        return updated
 
     async def upgrade_manifest(
         self,

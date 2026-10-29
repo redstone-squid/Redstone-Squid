@@ -282,7 +282,7 @@ async def test_expired_drafts_stop_consuming_capacity_and_can_be_marked_expired(
 
     assert await repository.expire_due(now=NOW) == 0
     assert await repository.expire_due(now=NOW.add(seconds=2)) == 1
-    assert await repository.count_active_for_account(account_id) == 0
+    assert await repository.list_active_for_account(account_id, now=NOW.add(seconds=2), limit=10) == ()
 
 
 @pytest.mark.asyncio

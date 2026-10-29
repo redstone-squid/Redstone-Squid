@@ -72,21 +72,6 @@ class PostgresDraftRepository(DraftRepository):
             return tuple(_to_stored(model) for model in await session.scalars(statement))
 
     @override
-    async def count_active_for_account(self, account_id: int) -> int:
-        async with self._session_factory() as session:
-            count = await session.scalar(
-                select(func.count())
-                .select_from(SubmissionDraft)
-                .where(
-                    SubmissionDraft.owner_account_id == account_id,
-                    SubmissionDraft.inferred.is_(False),
-                    SubmissionDraft.status.in_(_ACTIVE_STATUSES),
-                    SubmissionDraft.expires_at > func.now(),
-                )
-            )
-        return int(count or 0)
-
-    @override
     async def list_active_for_account(
         self,
         account_id: int,
@@ -255,29 +240,6 @@ class PostgresDraftRepository(DraftRepository):
                 )
             )
         return AppliedDraftChange(_to_stored(model))
-
-    @override
-    async def transition(
-        self,
-        draft_id: UUID,
-        account_id: int,
-        *,
-        expected_revision: int,
-        status: DraftStatus,
-        updated_at: Instant,
-        expires_at: Instant,
-    ) -> StoredDraft:
-        async with self._session_factory.begin() as session:
-            model = await self._locked(session, draft_id)
-            self._require_owner(model, account_id)
-            snapshot = _to_stored(model).snapshot
-            if snapshot.revision != expected_revision:
-                raise DraftRevisionConflictError(expected=expected_revision, actual=snapshot.revision)
-            candidate = snapshot.transition(status)
-            model.status = candidate.status
-            model.updated_at = updated_at
-            model.expires_at = expires_at
-        return _to_stored(model)
 
     @override
     async def upgrade_manifest(
