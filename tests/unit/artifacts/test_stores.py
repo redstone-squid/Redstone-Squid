@@ -79,3 +79,12 @@ async def test_local_artifact_keys_cannot_escape_the_storage_root(tmp_path: Path
 
     with pytest.raises(ValueError, match="relative paths"):
         await store.put("../escape", b"payload", content_type="application/octet-stream")
+
+
+@pytest.mark.parametrize("max_bytes", [0, -1, -2])
+async def test_invalid_download_budget_is_rejected(tmp_path: Path, max_bytes: int) -> None:
+    store = LocalArtifactStore(tmp_path)
+    await store.put("object", b"payload", content_type="application/octet-stream")
+
+    with pytest.raises(ValueError, match="positive"):
+        await store.get("object", max_bytes=max_bytes)
