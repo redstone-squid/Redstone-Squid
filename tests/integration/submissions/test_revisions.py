@@ -1,21 +1,28 @@
 """Revision approval preserves identity and commits its receipt atomically."""
 
 from dataclasses import replace
-from typing import override
+from typing import Literal, override
 from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.accounts.infrastructure.models import Account
 from squid.builds.application import BuildEditor, BuildService
 from squid.builds.domain import Build, BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.core.errors import AuthorizationError
+from squid.permissions.application import PermissionService
 from squid.permissions.domain import Subject
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.permissions.infrastructure.models import PermissionGrant
+from squid.permissions.infrastructure.repository import PermissionRepository
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal, revision_values
+from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.infrastructure.revisions import PostgresRevisionProposals
+from tests.support.database import record_queries
 from tests.support.submission_targets import seed_account_and_version, submission_build
 
 
@@ -129,3 +136,69 @@ async def test_first_target_match_is_immutable(migrated_session_factory: async_s
     repository, proposal, _, _, _ = await prepared_proposal(migrated_session_factory)
     with pytest.raises(ConflictError):
         await repository.match(replace(proposal, expected_revision=(proposal.expected_revision or 0) + 1))
+
+
+@pytest.mark.parametrize("role", ["owner", "requester", "staff"])
+async def test_history_authorizes_loaded_proposals_without_per_row_queries(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+    role: Literal["owner", "requester", "staff"],
+) -> None:
+    repository, original, _, owner, builds = await prepared_proposal(migrated_session_factory)
+    async with migrated_session_factory.begin() as session:
+        requester, staff = Account(), Account()
+        session.add_all((requester, staff))
+        await session.flush()
+        session.add(PermissionGrant(pattern=BUILD_SUBMISSION_EDIT.name, effect=1, subject_account_id=staff.id))
+    proposals = tuple(
+        [
+            await repository.create(
+                replace(
+                    original,
+                    id=uuid4(),
+                    source_message_id=456,
+                    requested_by_account_id=requester.id,
+                    created_at=original.created_at.add(seconds=index),
+                )
+            )
+            for index in range(3)
+        ]
+    )
+    actor = {
+        "owner": owner.subject,
+        "requester": Subject(account_id=requester.id),
+        "staff": Subject(account_id=staff.id),
+    }[role]
+    service = RevisionProposalService(
+        repository, builds, PermissionService(PermissionRepository(migrated_session_factory))
+    )
+
+    with record_queries(migrated_session_factory) as statements:
+        history = await service.list_for_source(456, actor)
+
+    assert [row.id for row in history] == [proposal.id for proposal in reversed(proposals)]
+    assert sum("FROM submission_revision_proposals" in statement for statement in statements) == 1
+    assert sum("FROM permission_epoch" in statement for statement in statements) == (1 if role == "staff" else 0)
+    assert await service.get(history[0].id, actor) == history[0]
+
+
+async def test_history_refuses_a_list_containing_another_accounts_proposal(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository, proposal, _, owner, builds = await prepared_proposal(migrated_session_factory)
+    async with migrated_session_factory.begin() as session:
+        other = Account()
+        session.add(other)
+        await session.flush()
+    foreign = await repository.create(
+        replace(proposal, id=uuid4(), owner_account_id=other.id, requested_by_account_id=other.id)
+    )
+    service = RevisionProposalService(
+        repository, builds, PermissionService(PermissionRepository(migrated_session_factory))
+    )
+
+    assert (await service.get(proposal.id, owner.subject)).id == proposal.id
+    with pytest.raises(AuthorizationError):
+        await service.get(foreign.id, owner.subject)
+    with pytest.raises(AuthorizationError):
+        await service.list_for_source(proposal.source_message_id, owner.subject)
+    assert await service.list_for_source(999, owner.subject) == ()

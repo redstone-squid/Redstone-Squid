@@ -1,5 +1,6 @@
 """Explicit review and approval of persisted recalculation candidates."""
 
+from collections.abc import Sequence
 from copy import deepcopy
 from typing import Protocol
 from uuid import UUID, uuid4, uuid5
@@ -72,17 +73,21 @@ class RevisionProposalService:
         proposal = await self._repository.get(proposal_id)
         if proposal is None:
             raise NotFoundError
-        if actor.account_id not in {
-            proposal.owner_account_id,
-            proposal.requested_by_account_id,
-        } and not await self._permissions.allows(actor, BUILD_SUBMISSION_EDIT):
-            raise AuthorizationError
+        await self._require_read_access((proposal,), actor)
         return proposal
 
     async def list_for_source(self, source_message_id: int, actor: Subject) -> tuple[RevisionProposal, ...]:
         """Return a bounded history with the same visibility policy as individual reads."""
         rows = await self._repository.list_for_source(source_message_id, limit=20)
-        return tuple([await self.get(row.id, actor) for row in rows])
+        await self._require_read_access(rows, actor)
+        return rows
+
+    async def _require_read_access(self, proposals: Sequence[RevisionProposal], actor: Subject) -> None:
+        if any(
+            actor.account_id not in {proposal.owner_account_id, proposal.requested_by_account_id}
+            for proposal in proposals
+        ) and not await self._permissions.allows(actor, BUILD_SUBMISSION_EDIT):
+            raise AuthorizationError
 
     async def match(self, proposal_id: UUID, build_id: int, actor: Subject, *, renew: bool = False) -> RevisionProposal:
         """Capture a fresh diff; renewed review creates a new immutable proposal identity."""
