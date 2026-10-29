@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from typing import override
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import Select, and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -54,76 +54,25 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
 
     @override
     async def get(self, draft_id: UUID) -> FinalizationJobSnapshot | None:
-        async with self._session_factory() as session:
-            row = (
-                await session.execute(
-                    select(SubmissionFinalizationJob, SubmissionFinalizationInput, SubmissionFinalizationResult)
-                    .outerjoin(
-                        SubmissionFinalizationInput,
-                        SubmissionFinalizationInput.job_id == SubmissionFinalizationJob.id,
-                    )
-                    .outerjoin(
-                        SubmissionFinalizationResult,
-                        SubmissionFinalizationResult.job_id == SubmissionFinalizationJob.id,
-                    )
-                    .where(SubmissionFinalizationJob.draft_id == draft_id)
-                    .order_by(SubmissionFinalizationJob.attempt_number.desc())
-                    .limit(1)
-                )
-            ).one_or_none()
-            if row is None:
-                return None
-            job, original_input, result = row
-        return _snapshot(job, original_input, result)
+        attempts = await self.list_attempts(draft_id, before=None, limit=1)
+        return attempts[0] if attempts else None
 
     @override
     async def get_attempt(self, draft_id: UUID, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+        statement = _attempts_for_draft(draft_id).where(SubmissionFinalizationJob.id == attempt_id)
         async with self._session_factory() as session:
-            row = (
-                await session.execute(
-                    select(SubmissionFinalizationJob, SubmissionFinalizationInput, SubmissionFinalizationResult)
-                    .outerjoin(
-                        SubmissionFinalizationInput,
-                        SubmissionFinalizationInput.job_id == SubmissionFinalizationJob.id,
-                    )
-                    .outerjoin(
-                        SubmissionFinalizationResult,
-                        SubmissionFinalizationResult.job_id == SubmissionFinalizationJob.id,
-                    )
-                    .where(
-                        SubmissionFinalizationJob.draft_id == draft_id,
-                        SubmissionFinalizationJob.id == attempt_id,
-                    )
-                )
-            ).one_or_none()
-            if row is None:
-                return None
-            return _snapshot(*row)
+            row = (await session.execute(statement)).one_or_none()
+            return None if row is None else _snapshot(*row)
 
     @override
     async def list_attempts(
         self, draft_id: UUID, *, before: int | None, limit: int
     ) -> tuple[FinalizationJobSnapshot, ...]:
-        statement = (
-            select(SubmissionFinalizationJob, SubmissionFinalizationInput, SubmissionFinalizationResult)
-            .outerjoin(
-                SubmissionFinalizationInput,
-                SubmissionFinalizationInput.job_id == SubmissionFinalizationJob.id,
-            )
-            .outerjoin(
-                SubmissionFinalizationResult, SubmissionFinalizationResult.job_id == SubmissionFinalizationJob.id
-            )
-            .where(SubmissionFinalizationJob.draft_id == draft_id)
-            .order_by(SubmissionFinalizationJob.attempt_number.desc())
-            .limit(limit)
-        )
+        statement = _attempts_for_draft(draft_id).order_by(SubmissionFinalizationJob.attempt_number.desc()).limit(limit)
         if before is not None:
             statement = statement.where(SubmissionFinalizationJob.attempt_number < before)
         async with self._session_factory() as session:
-            return tuple(
-                _snapshot(job, original_input, result)
-                for job, original_input, result in await session.execute(statement)
-            )
+            return tuple(_snapshot(*row) for row in await session.execute(statement))
 
     @override
     async def enqueue(
@@ -415,6 +364,18 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
                 model.attention_at = None
                 model.attention_issues = []
         return FinalizationFailureOutcome(applied=True, dead=dead)
+
+
+def _attempts_for_draft(
+    draft_id: UUID,
+) -> Select[tuple[SubmissionFinalizationJob, SubmissionFinalizationInput, SubmissionFinalizationResult]]:
+    """Read each attempt with its retained input and optional result, scoped to its draft."""
+    return (
+        select(SubmissionFinalizationJob, SubmissionFinalizationInput, SubmissionFinalizationResult)
+        .outerjoin(SubmissionFinalizationInput, SubmissionFinalizationInput.job_id == SubmissionFinalizationJob.id)
+        .outerjoin(SubmissionFinalizationResult, SubmissionFinalizationResult.job_id == SubmissionFinalizationJob.id)
+        .where(SubmissionFinalizationJob.draft_id == draft_id)
+    )
 
 
 async def _locked_draft(session: AsyncSession, draft_id: UUID) -> SubmissionDraft:
