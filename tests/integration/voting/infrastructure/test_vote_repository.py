@@ -5,7 +5,7 @@ from typing import cast
 import pytest
 from alembic_utils.pg_function import PGFunction
 from alembic_utils.pg_trigger import PGTrigger
-from sqlalchemy import Table, insert, text
+from sqlalchemy import Table, insert, text, update
 from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -313,24 +313,52 @@ async def test_cast_vote_replaces_then_toggles_the_same_choice(
 
 
 @pytest.mark.parametrize(
-    ("desired_weight", "expected_result"),
-    [(1.0, VoteSessionResult.APPROVED), (-1.0, VoteSessionResult.DENIED)],
+    ("option_id", "emoji", "expected_result"),
+    [
+        pytest.param("approve", "👍", VoteSessionResult.APPROVED, id="approved"),
+        pytest.param("deny", "👎", VoteSessionResult.DENIED, id="denied"),
+    ],
 )
-async def test_cast_vote_closes_at_either_threshold(
+@pytest.mark.parametrize("refreshed_weight", [0.0, 4.0], ids=["remove-ballot", "reweigh-ballot"])
+async def test_threshold_closure_freezes_the_deciding_ballot(
     repository: VoteRepository,
     async_session_factory: async_sessionmaker[AsyncSession],
-    desired_weight: float,
+    option_id: str,
+    emoji: str,
     expected_result: VoteSessionResult,
+    refreshed_weight: float,
 ) -> None:
-    _, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-1)
+    session_id, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-1)
 
-    option_id, emoji = ("approve", "👍") if desired_weight > 0 else ("deny", "👎")
-    mutation = await repository.cast_vote(message_id, 7, GUILD_ID, option_id, emoji, abs(desired_weight))
+    mutation = await repository.cast_vote(message_id, 7, GUILD_ID, option_id, emoji, 1.0)
 
     assert mutation is not None
     assert mutation.just_closed
     assert mutation.session.status is VoteStatus.CLOSED
     assert mutation.session.result is expected_result
+
+    refreshed = await repository.refresh_weights(session_id, {7: refreshed_weight})
+
+    assert refreshed is not None
+    assert not refreshed.just_closed
+    assert refreshed.session == mutation.session
+    assert await repository.get_by_id(session_id) == mutation.session
+
+
+async def test_refresh_can_remove_and_reweigh_ballots_until_the_threshold_is_reached(
+    repository: VoteRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    session_id, message_id = await seed_delete_log_vote(async_session_factory, pass_threshold=3, fail_threshold=-3)
+    await repository.cast_vote(message_id, 7, GUILD_ID, "approve", "👍", 1.0)
+    await repository.cast_vote(message_id, 8, GUILD_ID, "deny", "👎", 1.0)
+
+    refreshed = await repository.refresh_weights(session_id, {7: 3.0, 8: 0.0})
+
+    assert refreshed is not None
+    assert refreshed.just_closed
+    assert refreshed.session.result is VoteSessionResult.APPROVED
+    assert refreshed.session.votes == {7: 3.0}
 
 
 async def test_concurrent_votes_report_exactly_one_closure(
@@ -390,6 +418,13 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
     assert closed.just_closed
     assert closed.session.status is VoteStatus.CLOSED
     assert await repository.list_due(Instant.now()) == []
+
+    refreshed = await repository.refresh_weights(session_id, {7: 0.0, 8: 4.0})
+
+    assert refreshed is not None
+    assert not refreshed.just_closed
+    assert refreshed.session == closed.session
+    assert await repository.get_by_id(session_id) == closed.session
 
 
 async def test_generic_polls_store_null_thresholds_rather_than_sentinels(
@@ -632,6 +667,11 @@ async def test_kind_and_subtype_can_transition_atomically(
                 "VALUES (:id, :guild_id, 'Choose', 'anonymous_live', 'guild', now() + interval '1 hour')"
             ),
             {"id": vote_session_id, "guild_id": GUILD_ID},
+        )
+        await session.execute(
+            update(VoteSessionOption)
+            .where(VoteSessionOption.vote_session_id == vote_session_id)
+            .values(choice=VoteChoice.GENERIC, identifier=VoteSessionOption.emoji, label=VoteSessionOption.emoji)
         )
 
     transitioned = await repository.get_by_id(vote_session_id)
