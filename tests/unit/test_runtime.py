@@ -1,6 +1,5 @@
 """Application runtime lifecycle tests."""
 
-import asyncio
 import contextlib
 from dataclasses import fields
 from typing import Any, cast
@@ -96,7 +95,6 @@ async def test_background_task_supervisor_reports_fresh_periodic_heartbeats() ->
     async with BackgroundTaskSupervisor().running() as supervisor:
         supervisor.start_periodic(operation, name="heartbeat", interval=60)
         await completed.wait()
-        await asyncio.sleep(0)
 
         assert supervisor.is_healthy({"heartbeat"}, max_age_seconds=1) is True
         assert supervisor.is_healthy({"heartbeat", "missing"}, max_age_seconds=1) is False
@@ -105,22 +103,22 @@ async def test_background_task_supervisor_reports_fresh_periodic_heartbeats() ->
 async def test_background_task_supervisor_captures_a_failed_run() -> None:
     """A background job answers nobody, so a log line was the only trace it ever left."""
     captured: list[dict[str, object]] = []
-    failed = anyio.Event()
+    report_recorded = anyio.Event()
 
     class Reports:
         async def record(self, error: BaseException, **kwargs: object) -> None:
             captured.append({"error": error, **kwargs})
+            report_recorded.set()
 
     async def operation() -> None:
-        failed.set()
         msg = "job exploded"
         raise RuntimeError(msg)
 
     async with BackgroundTaskSupervisor().running() as supervisor:
         supervisor.capture_failures_into(cast(Any, Reports()))
         supervisor.start_periodic(operation, name="doomed", interval=60)
-        await failed.wait()
-        await asyncio.sleep(0)
+        with anyio.fail_after(5):
+            await report_recorded.wait()
         await supervisor.close()
 
     assert captured
@@ -193,10 +191,10 @@ async def test_background_task_supervisor_forces_down_a_job_that_swallows_cancel
     async def stubborn() -> None:
         entered.set()
         try:
-            await anyio.sleep(30)
+            await anyio.sleep_forever()
         except anyio.get_cancelled_exc_class():
             with contextlib.suppress(anyio.get_cancelled_exc_class()):
-                await anyio.sleep(30)
+                await anyio.sleep_forever()
             finished.set()
             raise
 
@@ -210,16 +208,16 @@ async def test_background_task_supervisor_forces_down_a_job_that_swallows_cancel
 
 async def test_background_task_supervisor_isolates_one_job_failure() -> None:
     """A task group cancels siblings on an unhandled error; the supervisor must not."""
-    failing_started = anyio.Event()
+    survivor_started = anyio.Event()
     survivor_cancelled = False
 
     async def failing() -> None:
-        failing_started.set()
         msg = "job blew up"
         raise RuntimeError(msg)
 
     async def survivor() -> None:
         nonlocal survivor_cancelled
+        survivor_started.set()
         try:
             await anyio.sleep_forever()
         except anyio.get_cancelled_exc_class():
@@ -228,9 +226,10 @@ async def test_background_task_supervisor_isolates_one_job_failure() -> None:
 
     async with BackgroundTaskSupervisor().running() as supervisor:
         survivor_handle = supervisor.start(survivor(), name="survivor")
-        supervisor.start(failing(), name="failing")
-        await failing_started.wait()
-        await asyncio.sleep(0)
+        with anyio.fail_after(5):
+            await survivor_started.wait()
+            failing_handle = supervisor.start(failing(), name="failing")
+            await failing_handle.finished.wait()
 
         assert survivor_cancelled is False
         assert survivor_handle.finished.is_set() is False
