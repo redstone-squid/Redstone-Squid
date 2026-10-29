@@ -23,6 +23,7 @@ class ManagedService(ABC):
 
     Each instance belongs to one owner for life. You can pass it around freely to share
     its state. On remount, the same instance gets a new run, with fresh resources.
+    Service methods manage access to the resources acquired by each run.
     """
 
     _service_owner: object | None = None
@@ -224,6 +225,7 @@ class ServiceOwner:
     Register services with ``own``, then call ``activate`` when they're needed. The owner
     keeps its services between activations, so it can start them again later.
 
+    An activation lasts until ``cancel``, even if individual runs return or fail sooner.
     After cancelling, call ``wait`` to wait for cleanup.
     """
 
@@ -234,6 +236,7 @@ class ServiceOwner:
         self._retired: list[_ServiceActivation] = []
         self._sealed = False
         self._active = False
+        self._host: ServiceHost | None = None
 
     def own[T: ManagedService](self, service: T) -> T:
         """Take ownership of a service and return it for convenient assignment.
@@ -260,8 +263,9 @@ class ServiceOwner:
     def activate(self, host: ServiceHost, *, on_error: ServiceFailure | None = None) -> None:
         """Start each service, or keep its current run if this owner is already active.
 
-        After cancellation, each new run waits for its previous run's cleanup. Call
-        ``wait_ready`` when you need to wait for setup too.
+        New runs wait for previous cleanup. Repeated activation keeps the original
+        runs and error handler, even after they finish. Cancel first to restart or
+        move to another host; use ``wait_ready`` to await setup.
 
         Args:
             host: A running host to supervise the services.
@@ -269,10 +273,14 @@ class ServiceOwner:
                 the host logs the error. ``wait`` also reports errors to its caller.
         """
         host._require_running()
-        self.seal()
         if self._active:
+            if self._host is not host:
+                msg = "cancel the active service owner before activating it on another host"
+                raise RuntimeError(msg)
             return
+        self.seal()
         self._active = True
+        self._host = host
         for service in self._services:
             self._current[id(service)] = host._start(service, self._current.get(id(service)), on_error)
 
@@ -281,6 +289,7 @@ class ServiceOwner:
         if not self._active:
             return
         self._active = False
+        self._host = None
         for activation in self._current.values():
             activation.cancel()
             self._retired.append(activation)
@@ -289,7 +298,9 @@ class ServiceOwner:
         """Wait for cancelled runs to finish cleaning up.
 
         This waits for the runs that were cancelled when the call began. Errors are
-        collected and raised together once those runs finish.
+        collected and raised together once those runs finish. Failed runs remain in
+        that history, so later waits report them too, even after reactivation. Cancelling
+        a wait leaves cleanup running and allows another caller to wait for it.
         """
         if self._owns_retired_activity():
             message = "service activity cannot await its own owner's shutdown"
@@ -314,6 +325,8 @@ class ServiceOwner:
 
         An error ends the wait. The other services keep running until the owner or its
         error handler cancels them. Cancelling the wait also leaves the services running.
+        The wait observes the current runs when it begins; it never follows a remount.
+        A service cannot wait for its own readiness before signalling it.
         """
         await _wait_ready(self._ready_activations())
 
@@ -401,6 +414,9 @@ async def _wait_ready(activations: tuple[_ServiceActivation, ...]) -> None:
     """Wait for setup in parallel so any failure can wake the caller promptly."""
     if not activations:
         return
+    if _owns_current_activity(activation for activation in activations if not activation._ready.is_set()):
+        message = "service activity cannot await its own readiness"
+        raise RuntimeError(message)
     import anyio
 
     async with anyio.create_task_group() as tasks:

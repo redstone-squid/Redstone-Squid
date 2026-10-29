@@ -1115,29 +1115,16 @@ class LivePreview(ManagedService):
 ```
 
 Here `open_preview_client()` is an application context manager, and `follow_updates` signals
-its readiness through `task_status`. Workers stop before the enclosing client exits, including
-clients that internally own task groups or cancellation scopes. Entry and exit stay in the
-same task, and normal Python exception propagation applies.
+its readiness through `task_status`. Workers stop before the client exits. Shield awaited
+cleanup with `anyio.CancelScope(shield=True)`; use `ExitStack` or `AsyncExitStack` when several
+resources need cleanup.
 
-The service and its context managers are responsible for cancellation-safe cleanup. Shield
-awaited cleanup with `anyio.CancelScope(shield=True)`; bound external cleanup with its own
-timeout when appropriate. Use nested `finally` blocks or `ExitStack`/`AsyncExitStack` when
-independent cleanups must all be attempted despite an earlier failure. Shield an async stack's
-exit, not the whole running service. Stack cleanup uses Python's exception chaining; Squid
-reports the resulting failure rather than replacing it with its own cleanup protocol.
+Unmount cancels the run and waits for cleanup. Remount reuses the service object and its
+passive state, then starts a fresh run after the previous one exits. Service methods manage
+access to their active resources, such as connections.
 
-Unmount requests cancellation immediately, and the frontend awaits complete `run()` exit
-outside the delivery lock. A stuck cleanup delays shutdown; Squid never detaches it or reports
-completion early. Repeated shutdown callers observe the same completion. Remount preserves
-the service object and its passive state, but starts a fresh run only after the previous run
-has fully exited. Acquire subscriptions, queues and other temporary resources afresh each run.
-
-Failed rendering/delivery starts nothing. A startup or worker failure unwinds the service's
-contexts before reporting the error. Discord finishes the affected message root; other roots
-remain live. Expected recoverable failures belong in service state. There is no automatic retry.
-Holding a service reference retains its passive data, not its execution. Arbitrary methods are
-not intercepted: methods requiring an active connection must enforce that contract themselves.
-Service activity cannot await its own owner's shutdown or close its own host.
+Setup and worker failures unwind the run before reaching the error handler. Discord finishes
+the affected message root; other roots stay live. Handle recoverable failures inside the service.
 
 For frontend and application integration, `ServiceHost` supervises execution and `ServiceOwner`
 declares which services start and stop together. Component authors normally need neither.
@@ -1169,11 +1156,14 @@ owner.cancel()
 await owner.wait()
 ```
 
-`ServiceOwner` freezes declarations on first activation and supports later reactivation.
-`wait_ready()` observes setup concurrently; failure or cancellation of that wait does not cancel
-services. The owner or frontend failure handler chooses that policy. `cancel()` requests shutdown;
-`wait()` awaits all requested shutdowns, collecting failures without skipping other services.
-`ServiceHost.close()` ends all remaining activations and awaits cleanup and failure reporting.
+An owner keeps its declarations across runs. To restart completed services or move to another
+host, call `cancel()` before activating again. Repeated activation otherwise keeps the current
+runs and error handler.
+
+`wait_ready()` observes setup of the current runs; `wait()` observes cleanup of cancelled runs.
+Cancelling either wait leaves the services alone. Shutdown waits collect failures and retain
+them for later callers, including after reactivation. See the method docstrings for the wait
+and failure semantics. `ServiceHost.close()` awaits all remaining runs and error handlers.
 
 Component ownership is unrelated to `SharedState.scope` (a diagnostic label), pool keys, and
 Discord access policies. Work that must outlive a panel belongs to an application/session owner.

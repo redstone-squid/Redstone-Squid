@@ -35,6 +35,11 @@ async def running_host() -> AsyncIterator[ServiceHost]:
                 await host.close()
 
 
+@pytest.fixture
+def owner() -> ServiceOwner:
+    return ServiceOwner()
+
+
 class Recorder(ManagedService):
     def __init__(self) -> None:
         self.events: list[str] = []
@@ -264,6 +269,15 @@ class Panel(Component[ComponentsV2Target]):
     def render(self) -> DocumentLike[ComponentsV2Target]:
         self.provide(KEY, self.service)
         return self.boundary(self.child, key="child") if self.visible else Text("empty")
+
+
+class OwnedPanel(Component[ComponentsV2Target]):
+    def __init__(self, service: Recorder) -> None:
+        self.service = self.own(service)
+
+    @override
+    def render(self) -> Text:
+        return Text("owned")
 
 
 async def test_committed_component_owns_activity_and_consumer_only_borrows() -> None:
@@ -533,15 +547,7 @@ async def test_application_task_submitted_by_service_waits_for_component_cleanup
             async def setup(self) -> None:
                 application_tasks.start_soon(close)
 
-        class OwnedPanel(Component[ComponentsV2Target]):
-            def __init__(self) -> None:
-                self.service = self.own(Submitting())
-
-            @override
-            def render(self) -> Text:
-                return Text("panel")
-
-        panel = OwnedPanel()
+        panel = OwnedPanel(Submitting())
         runtime = ComponentRuntime(panel, service_host=host)
         runtime.commit(runtime.render())
         await runtime.wait_services_ready()
@@ -703,14 +709,6 @@ async def test_runtime_readiness_observes_all_committed_owners() -> None:
             async def setup(self) -> None:
                 await entered.wait()
                 raise ValueError("second owner failed")
-
-        class OwnedPanel(Component[ComponentsV2Target]):
-            def __init__(self, service: Recorder) -> None:
-                self.service = self.own(service)
-
-            @override
-            def render(self) -> Text:
-                return Text("owned")
 
         first, second = OwnedPanel(Pending()), OwnedPanel(Broken())
 
@@ -998,16 +996,8 @@ async def test_failed_shutdown_does_not_retain_successfully_removed_services() -
             await super().cleanup()
             raise ValueError("cleanup failed")
 
-    class Owned(Component[ComponentsV2Target]):
-        def __init__(self, service: Recorder) -> None:
-            self.service = self.own(service)
-
-        @override
-        def render(self) -> Text:
-            return Text("owned")
-
     class Root(Component[ComponentsV2Target]):
-        def __init__(self, children: tuple[Owned, ...]) -> None:
+        def __init__(self, children: tuple[OwnedPanel, ...]) -> None:
             self.children = children
 
         @override
@@ -1017,9 +1007,9 @@ async def test_failed_shutdown_does_not_retain_successfully_removed_services() -
             )
 
     async with running_host() as host:
-        good = Owned(Recorder())
+        good = OwnedPanel(Recorder())
         reference = weakref.ref(good.service)
-        root = Root((good, Owned(Broken())))
+        root = Root((good, OwnedPanel(Broken())))
         runtime = ComponentRuntime(root, service_host=host)
         runtime.commit(runtime.render())
         await runtime.wait_services_ready()
@@ -1035,3 +1025,153 @@ async def test_failed_shutdown_does_not_retain_successfully_removed_services() -
         with pytest.raises(ExceptionGroup):
             await runtime.wait_services()
         runtime.finish()
+
+
+@pytest.mark.parametrize("child_task", [False, True])
+@pytest.mark.parametrize("through_runtime", [False, True])
+async def test_service_cannot_wait_for_its_own_readiness(child_task: bool, through_runtime: bool) -> None:
+    async with running_host() as host:
+
+        async def check() -> None:
+            with pytest.raises(RuntimeError, match="own readiness"):
+                await wait_ready()
+
+        class Checking(Recorder):
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                if child_task:
+                    async with anyio.create_task_group() as tasks:
+                        tasks.start_soon(check)
+                else:
+                    await check()
+                task_status.started()
+                # Once setup is complete, observing it from the run is safe.
+                await wait_ready()
+                await anyio.sleep_forever()
+
+        if through_runtime:
+            runtime = ComponentRuntime(OwnedPanel(Checking()), service_host=host)
+            runtime.commit(runtime.render())
+            wait_ready = runtime.wait_services_ready
+            cancel = runtime.finish
+            wait = runtime.wait_services
+        else:
+            owner = ServiceOwner()
+            owner.own(Checking())
+            owner.activate(host)
+            wait_ready = owner.wait_ready
+            cancel = owner.cancel
+            wait = owner.wait
+        await wait_ready()
+        cancel()
+        await wait()
+
+
+@pytest.mark.parametrize("close_first_host", [False, True])
+async def test_changing_hosts_requires_cancelling_the_owner(close_first_host: bool, owner: ServiceOwner) -> None:
+    async with running_host() as first, running_host() as second:
+        service = owner.own(Recorder())
+        owner.activate(first)
+        await owner.wait_ready()
+        if close_first_host:
+            await first.close()
+        with pytest.raises(RuntimeError, match=r"cancel.*another host"):
+            owner.activate(second)
+        assert service.events.count("activate") == 1
+        owner.cancel()
+        owner.activate(second)
+        await owner.wait_ready()
+        assert service.events == ["activate", "work", "cancel", "cleanup", "unsubscribe", "activate", "work"]
+        owner.cancel()
+        await owner.wait()
+
+
+async def test_cancel_before_start_does_not_acquire_resources_or_report_failure(owner: ServiceOwner) -> None:
+    async with running_host() as host:
+        errors: list[Exception] = []
+
+        async def report(error: Exception) -> None:
+            errors.append(error)
+
+        service = owner.own(Recorder())
+        owner.activate(host, on_error=report)
+        owner.cancel()
+        owner.cancel()
+        await owner.wait()
+        await host.close()
+        assert service.events == []
+        assert errors == []
+        with pytest.raises(RuntimeError, match="another owner"):
+            ServiceOwner().own(service)
+
+
+@pytest.mark.parametrize("during_setup", [False, True])
+async def test_failed_run_restarts_only_after_cancel_and_preserves_failure_history(
+    during_setup: bool, owner: ServiceOwner
+) -> None:
+    async with running_host() as host:
+        reported = asyncio.Event()
+        calls = 0
+
+        class FailsOnce(Recorder):
+            @override
+            async def run(self, *, task_status: TaskStatus[None]) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    if not during_setup:
+                        task_status.started()
+                    raise ValueError("first run failed")
+                await super().run(task_status=task_status)
+
+        async def report(error: Exception) -> None:
+            reported.set()
+
+        service = owner.own(FailsOnce())
+        owner.activate(host, on_error=report)
+        await reported.wait()
+        owner.activate(host)
+        with pytest.raises(ExceptionGroup) as failed_readiness:
+            await owner.wait_ready()
+        assert failed_readiness.value.subgroup(ValueError) is not None
+        assert calls == 1
+        owner.cancel()
+        owner.activate(host, on_error=report)
+        await owner.wait_ready()
+        assert calls == 2
+        # Historical shutdown failures do not affect readiness of the replacement run.
+        with pytest.raises(ExceptionGroup):
+            await owner.wait()
+        assert not service.stopped.is_set()
+        owner.cancel()
+        for _ in range(2):
+            with pytest.raises(ExceptionGroup) as failed_shutdown:
+                await owner.wait()
+            assert failed_shutdown.value.subgroup(ValueError) is not None
+        assert service.stopped.is_set()
+
+
+async def test_cancelling_shutdown_wait_does_not_interrupt_cleanup(owner: ServiceOwner) -> None:
+    async with running_host() as host:
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        class Slow(Recorder):
+            @override
+            async def cleanup(self) -> None:
+                entered.set()
+                await release.wait()
+                await super().cleanup()
+
+        service = owner.own(Slow())
+        owner.activate(host)
+        await owner.wait_ready()
+        owner.cancel()
+        await entered.wait()
+        async with anyio.create_task_group() as observers:
+            observers.start_soon(owner.wait)
+            await anyio.lowlevel.checkpoint()
+            observers.cancel_scope.cancel()
+        assert not service.stopped.is_set()
+        release.set()
+        await owner.wait()
+        assert service.events[-3:] == ["cancel", "cleanup", "unsubscribe"]
