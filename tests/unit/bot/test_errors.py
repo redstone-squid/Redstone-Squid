@@ -1,6 +1,7 @@
 """Discord error adapter tests."""
 
-from unittest.mock import patch
+from collections.abc import AsyncIterator, Iterator
+from contextlib import nullcontext
 
 import discord
 import pytest
@@ -22,9 +23,32 @@ from squid.bot.errors import (
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InternalError
-from squid.observability import correlation_id
+from squid.observability import TraceSpan, bind_correlation_id, correlation_id, unbind_correlation_id
 from squid_ui.text import Localization, current_localization
-from tests.support.discord import make_interaction, make_layout_bot, make_message
+from tests.support.discord import make_command_interaction, make_interaction, make_layout_bot, make_message
+
+
+@pytest.fixture
+async def command_tree() -> AsyncIterator[SquidCommandTree[discord.Client]]:
+    async def localize(_source: object) -> Localization:
+        return Localization(locale="en-GB")
+
+    async with discord.Client(intents=discord.Intents.none()) as client:
+        runtime = sd.install(client, localization=localize)
+        try:
+            yield SquidCommandTree(client)
+        finally:
+            await runtime.close()
+
+
+@pytest.fixture
+def error_correlation() -> Iterator[str]:
+    identifier = "b" * 32
+    token = bind_correlation_id(identifier)
+    try:
+        yield identifier
+    finally:
+        unbind_correlation_id(token)
 
 
 def test_unwrap_error_finds_original_command_exception() -> None:
@@ -71,12 +95,11 @@ def test_minecraft_service_outage_is_rendered_as_a_stable_retryable_bot_error() 
     assert notice.error_id is None
 
 
-def test_unexpected_error_presentation_redacts_diagnostic_detail() -> None:
-    with patch("squid.bot.errors.correlation_id", return_value="b" * 32):
-        notice = build_error_notice(InternalError("database password leaked"))
+def test_unexpected_error_presentation_redacts_diagnostic_detail(error_correlation: str) -> None:
+    notice = build_error_notice(InternalError("database password leaked"))
 
     assert "database password leaked" not in notice.detail
-    assert notice.error_id == "b" * 32
+    assert notice.error_id == error_correlation
     # The card shows the short reference, since the user has to retype it; the full id stays on
     # the log line and the stored report.
     assert notice.reference == "b" * 12
@@ -95,37 +118,48 @@ def test_permission_errors_name_the_missing_nodes(error: Exception, title: str) 
     assert build_error_notice(error).title == title
 
 
-async def test_application_command_span_excludes_user_id(mocker: MockerFixture) -> None:
-    client = discord.Client(intents=discord.Intents.none())
-    tree = SquidCommandTree(client)
-    interaction = mocker.Mock()
-    interaction.type = discord.InteractionType.application_command
-    interaction.data = {
-        "name": "admin",
-        "options": [{"name": "records", "type": 1, "options": []}],
-    }
-    interaction.command = mocker.Mock(qualified_name="admin records")
-    interaction.guild_id = 10
-    interaction.channel_id = 20
-    interaction.command_failed = False
-    base_call = mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
-    span = mocker.Mock()
-    span_context = mocker.MagicMock()
-    span_context.__enter__.return_value = span
-    trace = mocker.patch("squid.bot.errors.trace_span", return_value=span_context)
+@pytest.mark.parametrize("failed", [False, True], ids=["success", "failure"])
+async def test_command_dispatch_scopes_context_and_records_only_safe_span_attributes(
+    command_tree: SquidCommandTree[discord.Client], mocker: MockerFixture, failed: bool
+) -> None:
+    seen: list[tuple[str, str | None]] = []
+    group = app_commands.Group(name="admin", description="Administration")
 
-    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+    @group.command(name="records")
+    async def records(interaction: discord.Interaction) -> None:
+        seen.append((correlation_id(), current_localization().locale))
+        assert correlation_id() == seen[0][0], "all work in the invocation must share one correlation ID"
+        interaction.command_failed = failed
 
-    base_call.assert_awaited_once_with(interaction)
-    attributes = trace.call_args.args[1]
-    assert attributes == {
-        "squid.command.name": "admin records",
-        "squid.surface": "application_command",
-        "squid.guild.id": 10,
-        "squid.channel.id": 20,
-    }
-    assert all("user" not in name for name in attributes)
-    span.set_error.assert_not_called()
+    command_tree.add_command(group)
+    interaction = make_command_interaction(
+        command_tree.client,
+        name="admin",
+        options=[{"name": "records", "type": 1, "options": []}],
+        guild_id=10,
+    )
+    span = mocker.Mock(spec=TraceSpan)
+    trace = mocker.patch("squid.bot.errors.trace_span", return_value=nullcontext(span))
+
+    await command_tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+
+    trace.assert_called_once_with(
+        "discord.command admin records",
+        {
+            "squid.command.name": "admin records",
+            "squid.surface": "application_command",
+            "squid.guild.id": 10,
+            "squid.channel.id": 20,
+        },
+    )
+    assert len(seen) == 1
+    assert seen[0][1] == "en-GB"
+    assert correlation_id() != seen[0][0], "the correlation binding must end with the invocation"
+    assert current_localization().locale is None
+    if failed:
+        span.set_error.assert_called_once_with()
+    else:
+        span.set_error.assert_not_called()
 
 
 class RecordingReports:
@@ -142,34 +176,48 @@ class RecordingReports:
         self.calls.append({"error": error, **kwargs})
 
 
-async def test_unexpected_error_is_captured_with_a_redacted_context() -> None:
-    """Persisting is more exposing than logging, so the stored context is the redacted one."""
+async def test_unexpected_error_redacts_reports_logs_and_response_without_mutating_context(
+    error_correlation: str, caplog: pytest.LogCaptureFixture
+) -> None:
     reports = RecordingReports()
     discord_id = 987654321098765432
-    error = InternalError("database password leaked", context={"discord_id": discord_id, "job_id": 17})
+    error = InternalError(
+        "database password leaked",
+        context={
+            "discord_id": discord_id,
+            "minecraft_uuid": "11111111-1111-1111-1111-111111111111",
+            "attempts": [{"resolved_by_discord_id": discord_id, "job_id": 17}],
+        },
+    )
     harness = make_interaction(user_id=discord_id, guild_id=3, channel_id=4, error_reports=reports)
 
-    with patch("squid.bot.errors.correlation_id", return_value="b" * 32):
-        await handle_interaction_error(harness.interaction, error, surface="command")
+    await handle_interaction_error(harness.interaction, error, surface="command")
 
-    (call,) = reports.calls
-    assert call["correlation_id"] == "b" * 32
-    assert call["reference"] == "b" * 12
-    assert call["surface"] == "command"
-    context = call["context"]
-    assert isinstance(context, dict)
-    assert str(discord_id) not in repr(context)
-    assert context["application_context"] == {"job_id": 17}
-
-
-async def test_a_domain_error_is_not_captured() -> None:
-    """A build that does not exist is explained to the user in full and is not a failure."""
-    reports = RecordingReports()
-    harness = make_interaction(error_reports=reports)
-
-    await handle_interaction_error(harness.interaction, BuildNotFoundError(1), surface="command")
-
-    assert reports.calls == []
+    (report,) = reports.calls
+    assert report["correlation_id"] == error_correlation
+    assert report["reference"] == error_correlation[:12]
+    assert report["surface"] == "command"
+    safe_context = {
+        "command": None,
+        "guild_id": 3,
+        "channel_id": 4,
+    }
+    safe_application_context = {
+        "minecraft_uuid": "11111111-1111-1111-1111-111111111111",
+        "attempts": [{"job_id": 17}],
+    }
+    assert report["context"] == {**safe_context, "application_context": safe_application_context}
+    (record,) = [record for record in caplog.records if record.name == "squid.bot.errors"]
+    assert str(discord_id) not in record.getMessage()
+    assert repr(safe_context) in record.getMessage()
+    assert repr(safe_application_context) in record.getMessage()
+    assert error_correlation in record.getMessage()
+    assert error.context["discord_id"] == discord_id
+    (response,) = harness.send_initial.records
+    rendered = str(response.kwargs["view"].to_components())
+    assert "database password leaked" not in rendered
+    assert error_correlation[:12] in rendered
+    assert error_correlation[:13] not in rendered
 
 
 async def test_a_failing_report_store_still_answers_the_user(caplog: pytest.LogCaptureFixture) -> None:
@@ -183,144 +231,68 @@ async def test_a_failing_report_store_still_answers_the_user(caplog: pytest.LogC
     assert "Could not capture a Discord failure" in caplog.text
 
 
-async def test_application_command_binds_one_correlation_id_for_the_whole_invocation(
-    mocker: MockerFixture,
+async def test_unknown_application_command_uses_bounded_fallback_name(
+    command_tree: SquidCommandTree[discord.Client], mocker: MockerFixture
 ) -> None:
-    """Log lines a command emits before failing must share the ID its error card shows.
+    interaction = make_command_interaction(command_tree.client, name="unregistered")
+    trace = mocker.patch("squid.bot.errors.trace_span", return_value=nullcontext(TraceSpan()))
 
-    Before this binding the ID was minted at notice time, so nothing the command had
-    already logged carried it and the reference resolved to a traceback with no context.
-    """
-    client = discord.Client(intents=discord.Intents.none())
-    tree = SquidCommandTree(client)
-    interaction = mocker.Mock()
-    interaction.type = discord.InteractionType.application_command
-    interaction.data = {"name": "settings"}
-    interaction.command = mocker.Mock(qualified_name="settings")
-    interaction.guild_id = None
-    interaction.channel_id = None
-    interaction.command_failed = False
-
-    seen: list[str] = []
-
-    async def record_bound(_tree: object, _interaction: object) -> None:
-        seen.append(correlation_id())
-
-    mocker.patch.object(app_commands.CommandTree, "_call", new=record_bound)
-
-    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
-    outside = correlation_id()
-
-    assert len(seen) == 1
-    assert seen[0] != outside, "the binding must not leak past the invocation"
-
-
-async def test_application_command_establishes_localization_scope(mocker: MockerFixture) -> None:
-    client = discord.Client(intents=discord.Intents.none())
-
-    async def localize(_source: object) -> Localization:
-        return Localization(locale="en-GB")
-
-    runtime = sd.install(client, localization=localize)
-    tree = SquidCommandTree(client)
-    interaction = mocker.Mock(
-        type=discord.InteractionType.application_command,
-        data={"name": "settings"},
-        guild_id=None,
-        channel_id=None,
-        command_failed=False,
-        command=mocker.Mock(qualified_name="settings"),
-        client=client,
-        user=mocker.Mock(id=7),
-        guild=None,
-    )
-    seen: list[str | None] = []
-
-    async def record_bound(_tree: object, source: discord.Interaction) -> None:
-        del source
-        seen.append(current_localization().locale)
-
-    mocker.patch.object(app_commands.CommandTree, "_call", new=record_bound)
-
-    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
-    await runtime.close()
-
-    assert seen == ["en-GB"]
-    assert current_localization().locale is None
-
-
-async def test_application_command_failure_marks_span(mocker: MockerFixture) -> None:
-    client = discord.Client(intents=discord.Intents.none())
-    tree = SquidCommandTree(client)
-    interaction = mocker.Mock(
-        type=discord.InteractionType.application_command,
-        data={"name": "submit"},
-        guild_id=None,
-        channel_id=20,
-        command_failed=True,
-        command=mocker.Mock(qualified_name="submit"),
-    )
-    mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
-    span = mocker.Mock()
-    span_context = mocker.MagicMock()
-    span_context.__enter__.return_value = span
-    mocker.patch("squid.bot.errors.trace_span", return_value=span_context)
-
-    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
-
-    span.set_error.assert_called_once_with()
-
-
-async def test_unknown_application_command_uses_bounded_fallback_name(mocker: MockerFixture) -> None:
-    client = discord.Client(intents=discord.Intents.none())
-    tree = SquidCommandTree(client)
-    interaction = mocker.Mock(
-        type=discord.InteractionType.application_command,
-        command=None,
-        guild_id=None,
-        channel_id=None,
-        command_failed=False,
-    )
-    mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
-    span_context = mocker.MagicMock()
-    trace = mocker.patch("squid.bot.errors.trace_span", return_value=span_context)
-
-    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(app_commands.CommandNotFound):
+        await command_tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
 
     assert trace.call_args.args[0] == "discord.command unknown"
     assert trace.call_args.args[1]["squid.command.name"] == "unknown"
 
 
-async def test_autocomplete_does_not_emit_a_command_span(mocker: MockerFixture) -> None:
-    client = discord.Client(intents=discord.Intents.none())
-    tree = SquidCommandTree(client)
-    interaction = mocker.Mock(type=discord.InteractionType.autocomplete)
-    base_call = mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
+async def test_autocomplete_dispatch_does_not_emit_a_command_span(
+    command_tree: SquidCommandTree[discord.Client], mocker: MockerFixture
+) -> None:
+    @command_tree.command(name="settings")
+    async def settings(interaction: discord.Interaction, value: str) -> None:
+        pytest.fail("autocomplete must not invoke the command body")
+
+    @settings.autocomplete("value")
+    async def values(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        assert current == "part"
+        return [app_commands.Choice(name="partial", value="partial")]
+
+    interaction = make_command_interaction(
+        command_tree.client,
+        name="settings",
+        autocomplete=True,
+        options=[{"name": "value", "type": 3, "value": "part", "focused": True}],
+    )
+    send = mocker.patch.object(discord.InteractionResponse, "autocomplete", new_callable=mocker.AsyncMock)
     trace = mocker.patch("squid.bot.errors.trace_span")
 
-    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+    await command_tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
 
-    base_call.assert_awaited_once_with(interaction)
+    send.assert_awaited_once()
+    assert send.await_args is not None
+    assert send.await_args.args[0][0].value == "partial"
     trace.assert_not_called()
 
 
-async def test_application_command_error_records_exception_on_current_span(mocker: MockerFixture) -> None:
-    client = discord.Client(intents=discord.Intents.none())
-    tree = SquidCommandTree(client)
-    interaction = mocker.Mock()
+async def test_application_command_error_records_exception_and_answers_the_user(
+    command_tree: SquidCommandTree[discord.Client], mocker: MockerFixture
+) -> None:
+    reports = RecordingReports()
+    harness = make_interaction(error_reports=reports)
     error = app_commands.AppCommandError("failed")
     record = mocker.patch("squid.bot.errors.record_current_exception")
-    handle = mocker.patch("squid.bot.errors.handle_interaction_error", new=mocker.AsyncMock())
 
-    await tree.on_error(interaction, error)
+    await command_tree.on_error(harness.interaction, error)
 
     record.assert_called_once_with(error)
-    handle.assert_awaited_once_with(interaction, error, surface="application_command")
+    (report,) = reports.calls
+    assert report["surface"] == "application_command"
+    assert report["error"] is error
+    harness.send_initial.assert_awaited_once()
 
 
-@pytest.mark.asyncio
-async def test_interaction_error_uses_initial_ephemeral_response() -> None:
-    harness = make_interaction()
+async def test_domain_error_uses_initial_ephemeral_response_without_recording_a_failure() -> None:
+    reports = RecordingReports()
+    harness = make_interaction(error_reports=reports)
 
     await handle_interaction_error(harness.interaction, BuildNotFoundError(42), surface="context_menu")
 
@@ -333,9 +305,9 @@ async def test_interaction_error_uses_initial_ephemeral_response() -> None:
     assert "Build not found. Check the build ID and try again." in str(layout.to_components())
     assert "embed" not in initial_call.kwargs
     harness.send_followup.assert_not_awaited()
+    assert reports.calls == []
 
 
-@pytest.mark.asyncio
 async def test_interaction_error_uses_followup_after_response() -> None:
     harness = make_interaction(response_done=True, guild_id=3)
 
@@ -348,7 +320,6 @@ async def test_interaction_error_uses_followup_after_response() -> None:
     assert followup_call.kwargs["ephemeral"] is True
 
 
-@pytest.mark.asyncio
 async def test_interaction_error_completes_a_public_defer_in_place() -> None:
     """A public "thinking" placeholder is edited, not answered with an ephemeral follow-up."""
     harness = sd.testing.InteractionHarness(client=make_layout_bot())
@@ -361,59 +332,21 @@ async def test_interaction_error_completes_a_public_defer_in_place() -> None:
     harness.followup.send.assert_not_awaited()
 
 
-@pytest.mark.asyncio
-async def test_presented_error_is_not_rendered_or_logged_twice() -> None:
+async def test_presented_error_is_not_rendered_or_logged_twice(caplog: pytest.LogCaptureFixture) -> None:
     error = InternalError("private diagnostic")
     message = make_message()
     interaction = make_interaction()
 
-    with patch("squid.bot.errors.logger.error") as log_error:
-        await record_operation_error(
-            error,
-            locale=None,
-            result=sd.delivery.DeliveryResult(message.message, None),
-            presented=True,
-        )
-        await handle_interaction_error(interaction.interaction, error, surface="command")
+    await record_operation_error(
+        error,
+        locale=None,
+        result=sd.delivery.DeliveryResult(message.message, None),
+        presented=True,
+    )
+    await handle_interaction_error(interaction.interaction, error, surface="command")
 
     message.edit.assert_not_awaited()
     interaction.send_initial.assert_not_awaited()
-    log_error.assert_called_once()
+    (record,) = [record for record in caplog.records if record.name == "squid.bot.errors"]
+    assert "surface=command_operation" in record.getMessage()
     assert is_error_presented(error)
-
-
-@pytest.mark.asyncio
-async def test_unexpected_error_log_excludes_discord_account_identifiers() -> None:
-    discord_id = 8_675_309
-    error = InternalError(
-        "private diagnostic",
-        context={
-            "discord_id": discord_id,
-            "minecraft_uuid": "11111111-1111-1111-1111-111111111111",
-            "attempts": [
-                {
-                    "resolved_by_discord_id": discord_id,
-                    "job_id": 17,
-                }
-            ],
-        },
-    )
-    interaction = make_interaction(user_id=discord_id, guild_id=3, channel_id=4)
-
-    with (
-        patch("squid.bot.errors.correlation_id", return_value="b" * 32),
-        patch("squid.bot.errors.logger.error") as log_error,
-    ):
-        await handle_interaction_error(interaction.interaction, error, surface="command")
-
-    log_error.assert_called_once()
-    log_call = log_error.call_args
-    assert log_call is not None
-    assert log_call.args[4] == {"command": None, "guild_id": 3, "channel_id": 4}
-    assert log_call.args[5] == {
-        "minecraft_uuid": "11111111-1111-1111-1111-111111111111",
-        "attempts": [{"job_id": 17}],
-    }
-    rendered_log = log_call.args[0] % log_call.args[1:]
-    assert str(discord_id) not in rendered_log
-    assert error.context["discord_id"] == discord_id
