@@ -359,12 +359,7 @@ class ClaimedRowQueue[ModelT]:
         attempts += 1
         dead = terminal or (max_attempts is not None and attempts >= max_attempts)
         extra = dict(dead_values or {}) if dead else dict(values or {})
-        released = self._released({self._spec.attempts.key: attempts, **extra}, error=error)
-        if dead:
-            if self._spec.dead_at is not None:
-                released[self._spec.dead_at.key] = func.now()
-        else:
-            released[self._spec.available_at.key] = func.now() + retry_delay(attempts)
+        released = self._failed_values(attempts, error=error, values=extra, dead=dead)
         statement = update(self._spec.model).where(*identity, self.held_by(token)).values(**released)
         applied = bool(await self._rowcount(statement, session))
         if not applied:
@@ -406,13 +401,30 @@ class ClaimedRowQueue[ModelT]:
         if not tokens:
             return 0
         spec = self._spec
-        attempts = spec.attempts + 1
-        released = self._released({spec.attempts.key: attempts}, error=error)
         # Rows in one lease can be on different attempt counts, so the backoff has
         # to be computed per row inside the statement rather than passed in.
-        released[spec.available_at.key] = func.now() + retry_delay_sql(spec.attempts)
+        released = self._failed_values(spec.attempts + 1, error=error)
         statement = update(spec.model).where(self.held_by_any(tokens)).values(**released)
         return await self._rowcount(statement, session)
+
+    def _failed_values(
+        self,
+        attempts: int | ColumnElement[int],
+        *,
+        error: str,
+        values: Mapping[str, Any] | None = None,
+        dead: bool = False,
+    ) -> dict[str, Any]:
+        """Use the same incremented attempt count for persistence and retry timing."""
+        spec = self._spec
+        released = self._released({spec.attempts.key: attempts, **(values or {})}, error=error)
+        if dead:
+            if spec.dead_at is not None:
+                released[spec.dead_at.key] = func.now()
+        else:
+            delay = retry_delay(attempts) if isinstance(attempts, int) else retry_delay_sql(attempts)
+            released[spec.available_at.key] = func.now() + delay
+        return released
 
     def _report_lost_fence(self, operation: str, token: uuid.UUID, *, error: str | None = None) -> None:
         """Make a claim lost underneath a worker visible.

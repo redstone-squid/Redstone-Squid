@@ -199,12 +199,20 @@ async def test_a_reenqueue_clears_the_claim_and_the_backoff(
         session_id = (
             await session.execute(
                 text(
-                    "INSERT INTO vote_sessions (id, status, kind, author_account_id) "
-                    "VALUES (1, 'open', 'build', :account) RETURNING id"
+                    "INSERT INTO vote_sessions (status, kind, author_account_id, pass_threshold, fail_threshold) "
+                    "VALUES ('open', 'delete_log', :account, 3, -3) RETURNING id"
                 ),
                 {"account": account_id},
             )
         ).scalar_one()
+        await session.execute(
+            text(
+                "INSERT INTO delete_log_vote_sessions "
+                "(vote_session_id, target_message_id, target_channel_id, target_server_id) "
+                "VALUES (:id, 1, 2, 3)"
+            ),
+            {"id": session_id},
+        )
     queue = PostgresDiscordSyncQueue(migrated_session_factory)
     (job,) = await queue.claim(limit=10)
     await queue.fail(job, "boom", max_attempts=8)
@@ -308,6 +316,54 @@ async def test_the_sql_and_python_backoff_agree(
     async with migrated_session_factory() as session:
         in_postgres = await session.scalar(select(retry_delay_sql(literal(attempts))))
     assert in_postgres == retry_delay(attempts)
+
+
+async def test_batch_and_single_retries_use_each_rows_incremented_attempt_count(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    queue = ClaimedRowQueue(DISCORD_SYNC_QUEUE_SPEC)
+    previous_attempts = (0, 1, 8, 10_000)
+    async with migrated_session_factory.begin() as session:
+        for attempts in previous_attempts:
+            for kind in ("single", "batch"):
+                await session.execute(
+                    text(
+                        "INSERT INTO discord_sync_queue (resource_kind, source_key, attempts) "
+                        "VALUES ('build', :key, :attempts)"
+                    ),
+                    {"key": f"{kind}-{attempts}", "attempts": attempts},
+                )
+        claimed = await queue.claim(limit=8, session=session)
+        batch_tokens = []
+        for row in claimed:
+            token = queue.token_of(row)
+            if row.source_key.startswith("batch-"):
+                batch_tokens.append(token)
+            else:
+                outcome = await queue.fail(
+                    (DISCORD_SYNC_QUEUE_SPEC.key[0] == row.id,),
+                    token,
+                    attempts=row.attempts,
+                    error="retry",
+                    max_attempts=None,
+                    session=session,
+                )
+                assert outcome.applied
+        assert await queue.fail_batch(batch_tokens, error="retry", session=session) == len(previous_attempts)
+        rows = (
+            await session.execute(
+                text(
+                    "SELECT source_key, attempts, available_at - now() AS delay, claimed_at, claim_token, last_error "
+                    "FROM discord_sync_queue"
+                )
+            )
+        ).all()
+
+    assert len(rows) == 8
+    for source_key, attempts, delay, claimed_at, claim_token, last_error in rows:
+        assert attempts == int(source_key.split("-")[1]) + 1
+        assert delay == retry_delay(attempts)
+        assert (claimed_at, claim_token, last_error) == (None, None, "retry")
 
 
 async def _expire_the_claim(session_factory: async_sessionmaker[AsyncSession]) -> None:
