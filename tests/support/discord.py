@@ -119,6 +119,43 @@ def make_interaction(
     return InteractionHarness(interaction, send_initial, send_followup)
 
 
+def make_command_interaction(
+    client: discord.Client,
+    *,
+    name: str,
+    options: list[dict[str, Any]] | None = None,
+    autocomplete: bool = False,
+    guild_id: int | None = None,
+    channel_id: int = 20,
+    user_id: int = 987654321098765432,
+) -> discord.Interaction[discord.Client]:
+    """Decode a gateway payload so command dispatch uses discord.py's real state and lookup."""
+    state = client._connection  # pyright: ignore[reportPrivateUsage]
+    if state.user is None:
+        state.user = discord.ClientUser(
+            state=state,
+            data=cast(Any, {"id": "1", "username": "squid", "discriminator": "0", "avatar": None, "bot": True}),
+        )
+    user = {"id": str(user_id), "username": "builder", "discriminator": "0", "avatar": None}
+    payload: dict[str, Any] = {
+        "id": str(discord.utils.time_snowflake(datetime.now(UTC))),
+        "application_id": "1",
+        "type": 4 if autocomplete else 2,
+        "token": "test-interaction-token",
+        "version": 1,
+        "attachment_size_limit": 10 * 1024 * 1024,
+        "locale": "en-GB",
+        "data": {"id": "2", "name": name, "type": 1, "options": options or []},
+        "channel": {"id": str(channel_id), "type": 0 if guild_id is not None else 1, "name": "builds", "position": 0},
+    }
+    if guild_id is None:
+        payload["user"] = user
+    else:
+        payload["guild_id"] = str(guild_id)
+        payload["member"] = {"user": user, "roles": [], "joined_at": "2026-01-01T00:00:00Z", "flags": 0}
+    return discord.Interaction(data=cast(Any, payload), state=state)
+
+
 class _AutocompletePermissions(PermissionService):
     def __init__(self, allowed_nodes: frozenset[str]) -> None:
         self.allowed_nodes = allowed_nodes
