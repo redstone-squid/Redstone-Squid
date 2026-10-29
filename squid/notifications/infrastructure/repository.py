@@ -24,6 +24,7 @@ from squid.notifications.domain import (
     NotificationCandidate,
     NotificationKind,
     NotificationPreferences,
+    NotificationSource,
     NotificationSubscription,
     PendingNotificationDelivery,
     RecordSubscriptionFilter,
@@ -465,7 +466,7 @@ class PostgresNotificationRepository:
                 NotificationCandidate(
                     account_id=account_id,
                     kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-                    source_key=f"event:{event.id}:staff:{account_id}",
+                    source_key=NotificationSource(event.id, NotificationKind.STAFF_BUILD_SUBMITTED).key_for(account_id),
                     payload=payload,
                 )
                 for account_id in staff_account_ids
@@ -488,7 +489,7 @@ class PostgresNotificationRepository:
             NotificationCandidate(
                 account_id=build.submitter_account_id,
                 kind=kind,
-                source_key=f"event:{event.id}:owner:{build.submitter_account_id}",
+                source_key=NotificationSource(event.id, kind).key_for(build.submitter_account_id),
                 payload={"build_id": build.id},
             )
         ]
@@ -512,7 +513,9 @@ class PostgresNotificationRepository:
                 NotificationCandidate(
                     account_id=account_id,
                     kind=NotificationKind.CREATOR_BUILD_CONFIRMED,
-                    source_key=f"event:{event.id}:creator:{account_id}",
+                    source_key=NotificationSource(event.id, NotificationKind.CREATOR_BUILD_CONFIRMED).key_for(
+                        account_id
+                    ),
                     payload={"build_id": build.id, "creator_ids": [str(value) for value in creator_ids]},
                 )
                 for account_id in subscriber_ids
@@ -546,7 +549,9 @@ class PostgresNotificationRepository:
                 NotificationCandidate(
                     account_id=account_id,
                     kind=NotificationKind.RECORD_GAINED,
-                    source_key=f"event:{event.id}:record-build:{build_id}:account:{account_id}",
+                    source_key=NotificationSource(event.id, NotificationKind.RECORD_GAINED, build_id).key_for(
+                        account_id
+                    ),
                     payload=payload,
                 )
                 for account_id in sorted(recipients_by_build[build_id])
