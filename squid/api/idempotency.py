@@ -160,10 +160,12 @@ def assert_idempotency_completion_installed(app: FastAPI) -> None:
 
 
 async def _request_fingerprint(request: Request, route_path: str) -> bytes:
+    """Identify the concrete mutation, including the resource within its route."""
     digest = hashlib.sha256()
     for value in (
         request.method.encode(),
         route_path.encode(),
+        request.url.path.encode(),
         request.scope.get("query_string", b""),
         request.headers.get("content-type", "").encode(),
         await request.body(),
