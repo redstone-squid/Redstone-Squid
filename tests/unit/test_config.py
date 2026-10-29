@@ -1,24 +1,32 @@
 """Typed startup configuration tests."""
 
 import logging
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 from typing import cast
 
 import pytest
+from pydantic import BaseModel, SecretStr
 
 from squid.config import (
     EMBEDDING_DIMENSION,
+    ApiProcessConfig,
     ApplicationConfig,
+    BotProcessConfig,
     ObjectStorageConfig,
     RateLimitConfig,
     SchematicConfig,
     UpstreamHttpConfig,
+    WorkerProcessConfig,
     default_render_cache_dir,
     load_api_process_config,
     load_application_config,
     load_bot_process_config,
+    load_build_config,
+    load_database_config,
     load_or_exit,
+    load_worker_log_config,
     load_worker_observability_config,
     load_worker_process_config,
 )
@@ -1020,3 +1028,65 @@ def test_submission_capacity_reaches_the_runtime_projection(monkeypatch: pytest.
     )
     config = load_application_config(dotenv_path=dotenv)
     assert config.runtime.submissions.inferred_draft_capacity == 17
+
+
+@pytest.mark.parametrize(
+    "project",
+    [ApplicationConfig.bot_process, ApplicationConfig.api_process, ApplicationConfig.worker_process],
+    ids=["bot", "api", "worker"],
+)
+def test_process_projection_preserves_shared_operational_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    dotenv: Path,
+    project: Callable[[ApplicationConfig], BotProcessConfig | ApiProcessConfig | WorkerProcessConfig],
+) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_API_SECRET="api-secret",
+        SQUID_SUBMISSIONS_INFERRED_DRAFT_CAPACITY="17",
+        SQUID_DIAGNOSTICS_RETENTION_HOURS="24",
+        SQUID_DIAGNOSTICS_LOG_TAIL_RECORDS="19",
+    )
+    application = load_application_config(dotenv_path=dotenv)
+
+    projected = project(application)
+
+    assert projected.runtime.submissions.inferred_draft_capacity == 17
+    assert projected.runtime.diagnostics.retention_hours == 24
+    assert projected.logging.tail_records == 19
+
+
+@pytest.mark.parametrize(
+    ("loader", "settings", "expected_field", "expected_value"),
+    [
+        (
+            load_database_config,
+            "SQUID_DATABASE_URL=postgresql://localhost/isolated",
+            "url",
+            "postgresql://localhost/isolated",
+        ),
+        (load_build_config, "SQUID_BUILD_COMMIT_HASH=abc\nSQUID_BUILD_COMMIT_MESSAGE=test", "commit_hash", "abc"),
+        (load_worker_observability_config, "SQUID_OBSERVABILITY_SERVICE_NAME=child", "service_name", "child"),
+        (load_worker_log_config, "SQUID_LOG_LEVEL=DEBUG", "level", "DEBUG"),
+    ],
+    ids=["database", "build", "observability", "logging"],
+)
+def test_narrow_loaders_share_dotenv_and_unknown_key_policy(
+    monkeypatch: pytest.MonkeyPatch,
+    dotenv: Path,
+    loader: Callable[..., BaseModel],
+    settings: str,
+    expected_field: str,
+    expected_value: str,
+) -> None:
+    dotenv.write_text(settings, encoding="utf-8")
+
+    config = loader(dotenv_path=dotenv)
+    value = getattr(config, expected_field)
+    assert (value.get_secret_value() if isinstance(value, SecretStr) else value) == expected_value
+
+    monkeypatch.setenv("SQUID_STRICT_UNKNOWN_KEYS", "true")
+    monkeypatch.setenv("SQUID_MISSPELLED_SETTING", "ignored-value")
+    with pytest.raises(ConfigurationError, match="SQUID_MISSPELLED_SETTING"):
+        loader(dotenv_path=dotenv)
