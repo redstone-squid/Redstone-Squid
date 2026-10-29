@@ -2,7 +2,7 @@
 
 from collections.abc import AsyncGenerator, Coroutine
 from pathlib import Path
-from typing import Any
+from typing import Any, override
 
 import anyio
 import pytest
@@ -17,6 +17,7 @@ from squid.schematics.application.jobs import SchematicJobService
 from squid.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
 from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import InvalidSchematicError
+from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer, SchematicJobRunner
 from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
 from squid.schematics.infrastructure.models import SchematicJob
@@ -136,21 +137,55 @@ async def test_invalid_payloads_enter_a_retained_dead_state(
     assert snapshot.error_kind == "invalid"
 
 
-async def test_stale_workers_cannot_complete_a_reclaimed_job(
+async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
     schematic_job_table: None,
     async_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
 ) -> None:
-    del schematic_job_table
+    started, release = anyio.Event(), anyio.Event()
+
+    class DelayedAnalyzer(FakeSchematicAnalyzer):
+        @override
+        async def render(
+            self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
+        ) -> bytes:
+            started.set()
+            await release.wait()
+            return b"stale render"
+
+    artifacts = LocalArtifactStore(tmp_path / "objects")
+    await artifacts.put("input", b"schematic", content_type="application/octet-stream")
     repository = PostgresSchematicJobRepository(async_session_factory)
-    job_id = await repository.submit("capabilities", {}, ())
-    first = (await repository.claim(limit=1))[0]
+    jobs = SchematicJobService(repository)
+    job_id = await jobs.submit("render", {"request": wire.encode_render_request(RenderRequest())}, ("input",))
+    stale = SchematicJobRunner(jobs, artifacts, DelayedAnalyzer(), SchematicConfig())
+    native = FakeSchematicAnalyzer()
+    current = SchematicJobRunner(jobs, artifacts, native, SchematicConfig())
+
+    with anyio.fail_after(5):
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(stale.process_batch)
+            await started.wait()
+            async with async_session_factory.begin() as session:
+                await session.execute(
+                    update(SchematicJob)
+                    .where(SchematicJob.id == job_id)
+                    .values(claimed_at=text("now() - interval '6 minutes'"))
+                )
+            await current.process_batch()
+            completed = await jobs.get(job_id)
+            assert completed is not None
+            assert completed.completed_at is not None
+            assert completed.result_object_key is not None
+            release.set()
+
+    assert await jobs.get(job_id) == completed
+    assert await artifacts.get(completed.result_object_key, max_bytes=1024) == native.render_output
+
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(SchematicJob)
-            .where(SchematicJob.id == job_id)
-            .values(claimed_at=text("now() - interval '6 minutes'"))
+            update(SchematicJob).where(SchematicJob.id == job_id).values(expires_at=text("now() - interval '1 hour'"))
         )
-    second = (await repository.claim(limit=1))[0]
-
-    assert await repository.complete(first, {}, None, retention_hours=1) is False
-    assert await repository.complete(second, {}, None, retention_hours=1) is True
+    await current.cleanup()
+    assert await jobs.get(job_id) is None
+    assert await artifacts.get(completed.result_object_key, max_bytes=1024) is None
