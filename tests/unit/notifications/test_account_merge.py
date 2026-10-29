@@ -4,28 +4,11 @@ import uuid
 
 import pytest
 
-from squid.accounts.infrastructure.repository import (
-    _AccountMergeContext,
-    _canonical_notification_source_key,
-    _coalesce_notification_deliveries,
-)
 from squid.core.errors import DataIntegrityError
-from squid.notifications.domain import NotificationKind
-from squid.notifications.infrastructure.models import NotificationDeliveryRecord, NotificationRecord
+from squid.notifications.domain import NotificationKind, NotificationSource
+from squid.notifications.infrastructure.account_merge import _coalesce_notification_deliveries
+from squid.notifications.infrastructure.models import NotificationDeliveryRecord
 from squid.persistence.types import now
-
-
-def _notification(kind: NotificationKind, source_key: str) -> NotificationRecord:
-    row = NotificationRecord(
-        account_id=9,
-        event_id=3,
-        source_key=source_key,
-        kind=kind,
-        payload={"build_id": 42},
-        web_visible=True,
-    )
-    row.id = 1
-    return row
 
 
 @pytest.mark.parametrize(
@@ -33,21 +16,19 @@ def _notification(kind: NotificationKind, source_key: str) -> NotificationRecord
     [
         (NotificationKind.STAFF_BUILD_SUBMITTED, "event:3:staff:9", "event:3:staff:7"),
         (NotificationKind.BUILD_CONFIRMED, "event:3:owner:9", "event:3:owner:7"),
+        (NotificationKind.BUILD_DENIED, "event:3:owner:9", "event:3:owner:7"),
         (NotificationKind.CREATOR_BUILD_CONFIRMED, "event:3:creator:9", "event:3:creator:7"),
         (NotificationKind.RECORD_GAINED, "event:3:record-build:42:account:9", "event:3:record-build:42:account:7"),
-        (NotificationKind.RECORD_GAINED, "event:3:record-build:42:user:9", "event:3:record-build:42:account:7"),
     ],
 )
-def test_notification_source_keys_follow_the_survivor_and_upgrade_legacy_record_keys(
+def test_notification_source_keys_follow_the_survivor(
     kind: NotificationKind,
     source_key: str,
     expected: str,
 ) -> None:
+    assert NotificationSource(3, kind, build_id=42).key_for(7) == expected
     assert (
-        _canonical_notification_source_key(
-            _notification(kind, source_key),
-            _AccountMergeContext(survivor=7, absorbed=9),
-        )
+        NotificationSource.parse(source_key, event_id=3, kind=kind, account_id=9, payload={"build_id": 42}).key_for(7)
         == expected
     )
 
@@ -58,6 +39,7 @@ def test_notification_source_keys_follow_the_survivor_and_upgrade_legacy_record_
         (NotificationKind.BUILD_CONFIRMED, "event:999:owner:9"),
         (NotificationKind.BUILD_CONFIRMED, "event:3:creator:9"),
         (NotificationKind.RECORD_GAINED, "event:3:record-build:99:account:9"),
+        (NotificationKind.BUILD_CONFIRMED, "event:3:owner:7"),
     ],
 )
 def test_notification_source_keys_validate_the_complete_event_kind_and_payload_grammar(
@@ -65,9 +47,18 @@ def test_notification_source_keys_validate_the_complete_event_kind_and_payload_g
     source_key: str,
 ) -> None:
     with pytest.raises(DataIntegrityError, match="does not match"):
-        _canonical_notification_source_key(
-            _notification(kind, source_key),
-            _AccountMergeContext(survivor=7, absorbed=9),
+        NotificationSource.parse(source_key, event_id=3, kind=kind, account_id=9, payload={"build_id": 42}).key_for(7)
+
+
+@pytest.mark.parametrize("build_id", [None, True, "42"])
+def test_record_source_rejects_missing_or_malformed_payload_build_id(build_id: object) -> None:
+    with pytest.raises(DataIntegrityError, match="build identifier"):
+        NotificationSource.parse(
+            "event:3:record-build:42:account:9",
+            event_id=3,
+            kind=NotificationKind.RECORD_GAINED,
+            account_id=9,
+            payload={"build_id": build_id},
         )
 
 
