@@ -5,10 +5,12 @@ import asyncio
 import io
 import json
 import logging
+import os
 import signal
-from collections.abc import Callable, Coroutine
+import sys
+from collections.abc import AsyncIterator, Callable, Coroutine
 from pathlib import Path
-from typing import Any, NoReturn, cast
+from typing import Any, NoReturn, Protocol, cast
 
 import anyio
 import pytest
@@ -101,105 +103,124 @@ def test_worker_main_owns_observability_after_guardrails(mocker: MockerFixture) 
     handle.shutdown.assert_called_once_with()
 
 
-async def test_stderr_pump_reemits_json_and_falls_back_for_native_output(mocker: MockerFixture) -> None:
-    stream = asyncio.StreamReader()
-    stream.feed_data(
-        (
-            json.dumps(
-                {
-                    "levelname": "DEBUG",
-                    "name": "squid.schematics.infrastructure.worker_main",
-                    "message": "Structured child record",
-                }
-            )
-            + "\n"
-        ).encode()
-    )
-    stream.feed_data(b"native panic output\n")
-    stream.feed_eof()
-    process = mocker.Mock()
-    process.stderr = stream
-    process.pid = 2718
-    emit = mocker.patch.object(worker_module, "_emit_child_record")
-    warning = mocker.patch.object(worker_module.worker_logger, "warning")
-
-    await unowned_worker()._pump_stderr(process)
-
-    record = emit.call_args.args[0]
-    assert record.levelno == logging.DEBUG
-    assert record.name == "squid.schematics.infrastructure.worker_main"
-    warning.assert_called_once_with(
-        "Schematic worker emitted unstructured stderr: %s",
-        "native panic output",
-        extra={"worker_pid": 2718},
-    )
+class ChildProcessFactory(Protocol):
+    async def __call__(
+        self, stderr: bytes = b"", *, returncode: int = 0, stream_limit: int = 65536
+    ) -> asyncio.subprocess.Process: ...
 
 
-async def test_stderr_pump_survives_an_oversized_line(mocker: MockerFixture) -> None:
-    stream = asyncio.StreamReader(limit=64)
-    stream.feed_data(b"x" * 4096 + b"\n")
-    stream.feed_data((json.dumps({"levelname": "INFO", "name": "child", "message": "still alive"}) + "\n").encode())
-    stream.feed_eof()
-    process = mocker.Mock(stderr=stream, pid=2718)
-    emit = mocker.patch.object(worker_module, "_emit_child_record")
-    warning = mocker.patch.object(worker_module.worker_logger, "warning")
+@pytest.fixture
+async def child_process() -> AsyncIterator[ChildProcessFactory]:
+    children: list[asyncio.subprocess.Process] = []
 
-    await unowned_worker()._pump_stderr(process)
+    async def spawn(
+        stderr: bytes = b"", *, returncode: int = 0, stream_limit: int = 65536
+    ) -> asyncio.subprocess.Process:
+        script = f"import sys; sys.stderr.buffer.write({stderr!r}); sys.exit({returncode})"
+        process = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-c",
+            script,
+            stderr=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.DEVNULL,
+            start_new_session=os.name == "posix",
+            limit=stream_limit,
+        )
+        children.append(process)
+        return process
 
-    warning.assert_called_once_with(
-        "Schematic worker emitted an oversized stderr line; it was dropped.",
-        extra={"worker_pid": 2718},
-    )
-    assert emit.call_args.args[0].getMessage() == "still alive"
-
-
-async def test_stderr_pump_logs_when_it_dies(mocker: MockerFixture) -> None:
-    stderr = mocker.Mock()
-    stderr.readline = mocker.AsyncMock(side_effect=RuntimeError("transport gone"))
-    process = mocker.Mock(stderr=stderr, pid=2718)
-    exception = mocker.patch.object(worker_module.logger, "exception")
-
-    await unowned_worker()._pump_stderr(process)
-
-    exception.assert_called_once()
-    assert "further worker logs are lost" in exception.call_args.args[0]
-
-
-async def test_terminate_drains_buffered_stderr_before_finishing(mocker: MockerFixture) -> None:
-    stream = asyncio.StreamReader()
-    stream.feed_data((json.dumps({"levelname": "ERROR", "name": "child", "message": "dying words"}) + "\n").encode())
-    stream.feed_eof()
-    process = mocker.Mock(stderr=stream, pid=2718, returncode=0)
-    process.wait = mocker.AsyncMock(return_value=0)
-    emit = mocker.patch.object(worker_module, "_emit_child_record")
-    async with anyio.create_task_group() as pumps:
-
-        def spawn(pump: Callable[[], Coroutine[Any, Any, None]]) -> None:
-            pumps.start_soon(pump)
-
-        worker = _Worker(SchematicConfig(), spawn)
-        worker._process = process
-        worker._start_pump(process)
-
-        await worker._terminate()
-
-    assert emit.call_args.args[0].getMessage() == "dying words"
+    try:
+        yield spawn
+    finally:
+        with anyio.CancelScope(shield=True), anyio.fail_after(5):
+            for process in children:
+                if process.returncode is None:
+                    process.kill()
+                if process.stderr is not None and process.stderr.exception() is not None:
+                    await process.wait()
+                else:
+                    await process.communicate()
 
 
-@pytest.mark.parametrize(("returncode", "level"), [(0, logging.INFO), (-9, logging.WARNING)])
-async def test_terminate_logs_expected_exits_below_warning(
-    mocker: MockerFixture, caplog: pytest.LogCaptureFixture, returncode: int, level: int
+def child_record(message: str, *, level: str = "INFO") -> bytes:
+    return (json.dumps({"levelname": level, "name": "squid.schematics.child", "message": message}) + "\n").encode()
+
+
+async def test_stderr_pump_reemits_json_and_falls_back_for_native_output(
+    child_process: ChildProcessFactory, caplog: pytest.LogCaptureFixture
 ) -> None:
-    process = mocker.Mock(stderr=None, pid=2718, returncode=returncode)
-    process.wait = mocker.AsyncMock(return_value=returncode)
-    worker = unowned_worker()
-    worker._process = process
+    process = await child_process(child_record("Structured child record", level="DEBUG") + b"native panic output\n")
 
-    with caplog.at_level(logging.INFO, logger=worker_module.logger.name):
-        await worker._terminate()
+    with anyio.fail_after(5), caplog.at_level(logging.DEBUG, logger="squid.schematics"):
+        await unowned_worker()._pump_stderr(process)
 
-    exits = [record for record in caplog.records if "exited with code" in record.getMessage()]
-    assert [record.levelno for record in exits] == [level]
+    structured, fallback = caplog.records
+    assert (structured.name, structured.levelno, structured.getMessage()) == (
+        "squid.schematics.child",
+        logging.DEBUG,
+        "Structured child record",
+    )
+    assert fallback.levelno == logging.WARNING
+    assert fallback.getMessage() == "Schematic worker emitted unstructured stderr: native panic output"
+    assert all(vars(record)["worker_pid"] == process.pid for record in caplog.records)
+
+
+async def test_stderr_pump_survives_an_oversized_line(
+    child_process: ChildProcessFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    process = await child_process(b"x" * 4096 + b"\n" + child_record("still alive"), stream_limit=128)
+
+    with anyio.fail_after(5), caplog.at_level(logging.INFO, logger="squid.schematics"):
+        await unowned_worker()._pump_stderr(process)
+
+    assert [record.getMessage() for record in caplog.records] == [
+        "Schematic worker emitted an oversized stderr line; it was dropped.",
+        "still alive",
+    ]
+
+
+async def test_stderr_pump_logs_when_it_dies(
+    child_process: ChildProcessFactory, caplog: pytest.LogCaptureFixture
+) -> None:
+    process = await child_process()
+    with anyio.fail_after(5):
+        await process.wait()
+    assert process.stderr is not None
+    process.stderr.set_exception(RuntimeError("transport gone"))
+
+    with anyio.fail_after(5):
+        await unowned_worker()._pump_stderr(process)
+
+    (record,) = caplog.records
+    assert record.levelno == logging.ERROR
+    assert "further worker logs are lost" in record.getMessage()
+    assert record.exc_info is not None
+    assert str(record.exc_info[1]) == "transport gone"
+
+
+@pytest.mark.parametrize(("returncode", "level"), [(0, logging.INFO), (1, logging.WARNING)])
+async def test_terminate_drains_buffered_stderr_and_logs_the_exit(
+    child_process: ChildProcessFactory, caplog: pytest.LogCaptureFixture, returncode: int, level: int
+) -> None:
+    process = await child_process(child_record("dying words", level="ERROR"), returncode=returncode)
+    with anyio.fail_after(5):
+        await process.wait()
+    with anyio.fail_after(5), caplog.at_level(logging.INFO, logger="squid.schematics"):
+        async with anyio.create_task_group() as pumps:
+
+            def spawn(pump: Callable[[], Coroutine[Any, Any, None]]) -> None:
+                pumps.start_soon(pump)
+
+            worker = _Worker(SchematicConfig(), spawn)
+            worker._process = process
+            worker._start_pump(process)
+
+            assert await worker._terminate() == returncode
+
+    dying, exited = caplog.records
+    assert dying.getMessage() == "dying words"
+    assert exited.levelno == level
+    assert exited.getMessage() == f"Schematic worker {process.pid} exited with code {returncode}."
 
 
 def test_forwarded_records_reach_the_collector_as_the_child_service() -> None:
@@ -227,20 +248,6 @@ def test_forwarded_records_reach_the_collector_as_the_child_service() -> None:
 
     assert payload["service_name"] == "redstone-squid-schematic-worker"
     assert payload["worker_pid"] == 2718
-
-
-def test_child_records_are_dispatched_under_their_own_logger(caplog: pytest.LogCaptureFixture) -> None:
-    record = _worker_log_record(
-        json.dumps({"levelname": "WARNING", "name": "squid.schematics.child", "message": "engine complained"}), 2718
-    )
-    assert record is not None
-
-    with caplog.at_level(logging.DEBUG):
-        _emit_child_record(record)
-
-    assert [(entry.name, entry.getMessage()) for entry in caplog.records] == [
-        ("squid.schematics.child", "engine complained")
-    ]
 
 
 def test_child_records_obey_parent_side_levels_for_their_logger(caplog: pytest.LogCaptureFixture) -> None:
