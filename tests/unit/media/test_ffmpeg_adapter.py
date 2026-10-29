@@ -1,15 +1,93 @@
 import asyncio
 import json
+import sys
+from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from anyio import CancelScope, create_task_group, fail_after, sleep
 
 from squid.media.application.commands import MediaNormalizationRequest
 from squid.media.domain.models import MediaKind, MediaLimits, MediaProbe
-from squid.media.errors import InvalidMediaError, MediaFailureReason, MediaToolUnavailableError
+from squid.media.errors import (
+    InvalidMediaError,
+    MediaFailureReason,
+    MediaProcessingTimeoutError,
+    MediaToolUnavailableError,
+)
 from squid.media.infrastructure import FfmpegMediaNormalizer, MediaProcessLimits, parse_ffprobe_output
 from squid.media.infrastructure.ffmpeg import _staged_outputs
+
+
+@pytest.fixture
+async def child_processes(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[list[asyncio.subprocess.Process]]:
+    """Record real children and reap them even when a lifecycle assertion fails."""
+    children: list[asyncio.subprocess.Process] = []
+    spawn = asyncio.create_subprocess_exec
+
+    async def record_spawn(*args: str, **kwargs: Any) -> asyncio.subprocess.Process:
+        process = await spawn(*args, **kwargs)
+        children.append(process)
+        return process
+
+    monkeypatch.setattr(asyncio, "create_subprocess_exec", record_spawn)
+    yield children
+    with CancelScope(shield=True):
+        for process in children:
+            if process.returncode is None:
+                process.kill()
+            await process.communicate()
+
+
+async def run_python_tool(script: str, *, timeout_seconds: float = 5) -> bytes:
+    return await FfmpegMediaNormalizer()._run(
+        sys.executable,
+        ("-c", script),
+        operation="test_tool",
+        timeout_seconds=timeout_seconds,
+        max_file_bytes=1024 * 1024,
+        capture_stdout=True,
+    )
+
+
+async def test_tool_timeout_reaps_child_before_reporting_failure(
+    child_processes: list[asyncio.subprocess.Process],
+) -> None:
+    with pytest.raises(MediaProcessingTimeoutError) as raised:
+        await run_python_tool("import time; time.sleep(60)", timeout_seconds=0.05)
+
+    assert raised.value.context["operation"] == "test_tool"
+    (child,) = child_processes
+    assert child.returncode is not None
+
+
+async def test_task_group_cancellation_reaps_child_and_drains_its_pipes(
+    tmp_path: Path, child_processes: list[asyncio.subprocess.Process]
+) -> None:
+    ready = tmp_path / "ready"
+    script = f"""
+import os
+from pathlib import Path
+Path({str(ready)!r}).touch()
+while True:
+    os.write(1, b'o' * 65536)
+    os.write(2, b'e' * 65536)
+"""
+    with fail_after(5):
+        async with create_task_group() as tasks:
+            tasks.start_soon(run_python_tool, script)
+            while not ready.exists():
+                await sleep(0.001)
+            tasks.cancel_scope.cancel()
+
+    (child,) = child_processes
+    assert child.returncode is not None
+    assert child.stdout is not None
+    assert child.stdout.at_eof()
+    assert child.stderr is not None
+    assert child.stderr.at_eof()
 
 
 def test_ffprobe_json_is_normalized_without_float_rounding() -> None:
