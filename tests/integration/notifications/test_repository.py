@@ -2,11 +2,12 @@
 
 from collections.abc import AsyncGenerator, Generator
 from contextlib import contextmanager
+from dataclasses import replace
 from uuid import UUID
 
 import anyio
 import pytest
-from sqlalchemy import event, select, update
+from sqlalchemy import event, func, select, update
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -20,6 +21,7 @@ from squid.notifications.domain import (
     InboxVisibility,
     NotificationCandidate,
     NotificationKind,
+    PendingNotificationDelivery,
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
@@ -103,7 +105,13 @@ def _counting(session_factory: async_sessionmaker[AsyncSession]) -> Generator[li
         event.remove(engine, "before_cursor_execute", before_cursor_execute)
 
 
-async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession], *, consented: bool = True) -> int:
+async def _seed_delivery(
+    session_factory: async_sessionmaker[AsyncSession],
+    *,
+    consented: bool = True,
+    discord_id: int = 123,
+    build_id: int = 42,
+) -> int:
     async with session_factory.begin() as session:
         account = Account(
             consent_version=CURRENT_CONSENT_VERSION if consented else None,
@@ -112,7 +120,7 @@ async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession], *, c
         session.add(account)
         await session.flush()
         # The claim reads the DM address from here rather than from the delivery row.
-        session.add(AccountIdentity(account_id=account.id, provider=IdentityProvider.DISCORD, subject="123"))
+        session.add(AccountIdentity(account_id=account.id, provider=IdentityProvider.DISCORD, subject=str(discord_id)))
         session.add(
             NotificationProfile(
                 account_id=account.id,
@@ -123,16 +131,16 @@ async def _seed_delivery(session_factory: async_sessionmaker[AsyncSession], *, c
         event = DomainEventRecord(
             event_type="build.confirmed",
             aggregate_kind="build",
-            aggregate_id=42,
+            aggregate_id=build_id,
         )
         session.add(event)
         await session.flush()
         notification = NotificationRecord(
             account_id=account.id,
             event_id=event.id,
-            source_key="event:1:account:1",
+            source_key=f"event:{event.id}:account:{account.id}",
             kind=NotificationKind.BUILD_CONFIRMED,
-            payload={"build_id": 42},
+            payload={"build_id": build_id},
             web_visible=True,
         )
         session.add(notification)
@@ -157,6 +165,91 @@ async def test_delivery_claims_use_uuid_fencing_and_database_attempt_counts(
     assert claimed[0].claim_token is not None
     assert await repository.complete_delivery(claimed[0]) is True
     assert await repository.complete_delivery(claimed[0]) is False
+
+
+async def test_delivery_batch_returns_each_recipients_details_in_one_statement(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    expected = {}
+    for discord_id in (123, 456, 789):
+        delivery_id = await _seed_delivery(async_session_factory, discord_id=discord_id, build_id=discord_id + 1)
+        expected[delivery_id] = (discord_id, {"build_id": discord_id + 1})
+
+    with _counting(async_session_factory) as statements:
+        claimed = await repository.claim_deliveries(limit=10)
+
+    assert len(statements) == 1
+    assert {delivery.id: (delivery.discord_id, delivery.payload) for delivery in claimed} == expected
+    assert all(delivery.kind is NotificationKind.BUILD_CONFIRMED for delivery in claimed)
+
+
+async def test_concurrent_delivery_claims_are_disjoint(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    expected = {await _seed_delivery(async_session_factory, discord_id=discord_id) for discord_id in (123, 456, 789)}
+    claimed: list[PendingNotificationDelivery] = []
+
+    async def claim_one() -> None:
+        claimed.extend(await repository.claim_deliveries(limit=1))
+
+    async with anyio.create_task_group() as tasks:
+        for _ in expected:
+            tasks.start_soon(claim_one)
+
+    assert len(claimed) == len(expected)
+    assert {delivery.id for delivery in claimed} == expected
+    assert await repository.claim_deliveries(limit=10) == ()
+
+
+async def test_delivery_retry_and_terminal_failure_release_the_claim(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    delivery_id = await _seed_delivery(async_session_factory)
+    (first,) = await repository.claim_deliveries(limit=1)
+
+    assert not await repository.fail_delivery(first, "temporary failure", max_attempts=2)
+    async with async_session_factory.begin() as session:
+        row = await session.get(NotificationDeliveryRecord, delivery_id)
+        assert row is not None
+        assert row.available_at > Instant.now()
+        assert (row.claimed_at, row.claim_token, row.dead_at) == (None, None, None)
+        assert row.last_error == "temporary failure"
+        await session.execute(update(NotificationDeliveryRecord).values(available_at=func.now()))
+
+    (second,) = await repository.claim_deliveries(limit=1)
+    assert second.attempts == 2
+    assert await repository.fail_delivery(second, "x" * 5000, max_attempts=2)
+    async with async_session_factory() as session:
+        row = await session.get(NotificationDeliveryRecord, delivery_id)
+        assert row is not None
+        assert row.dead_at is not None
+        assert (row.claimed_at, row.claim_token, row.last_error) == (None, None, "x" * 4000)
+    assert await repository.claim_deliveries(limit=1) == ()
+
+
+async def test_stale_delivery_cannot_complete_fail_or_suspend_the_current_claim(
+    repository: PostgresNotificationRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _seed_delivery(async_session_factory)
+    (current,) = await repository.claim_deliveries(limit=1)
+    stale = replace(current, generation=current.generation + 1)
+
+    assert not await repository.complete_delivery(stale)
+    assert not await repository.fail_delivery(stale, "stale failure", max_attempts=1)
+    assert not await repository.suspend_dm(stale, "stale forbidden")
+    async with async_session_factory() as session:
+        row = await session.get(NotificationDeliveryRecord, current.id)
+        profile = await session.scalar(select(NotificationProfile))
+        assert row is not None
+        assert profile is not None
+        assert row.claim_token == current.claim_token
+        assert (row.sent_at, row.dead_at, row.last_error) == (None, None, None)
+        assert profile.dm_enabled
+    assert await repository.complete_delivery(current)
 
 
 async def test_delivery_claim_selects_most_recent_discord_identity_and_completes(
