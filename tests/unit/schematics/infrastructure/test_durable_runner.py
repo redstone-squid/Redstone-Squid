@@ -1,7 +1,7 @@
 """How the durable schematic runner reports a job's own failures."""
 
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -52,6 +52,9 @@ class RecordingJobRepository:
         claimed, self.pending = self.pending[:limit], self.pending[limit:]
         return claimed
 
+    async def register_result_object(self, job: ClaimedSchematicJob, object_key: str) -> bool:
+        return True
+
     async def complete(
         self,
         job: ClaimedSchematicJob,
@@ -76,8 +79,8 @@ class RecordingJobRepository:
         self.failures.append(RecordedFailure(error, error_kind, error_context, terminal))
         return terminal
 
-    async def cleanup(self, *, limit: int) -> Sequence[str]:
-        return []
+    async def cleanup(self, delete_object: Callable[[str], Awaitable[None]], *, limit: int) -> int:
+        return 0
 
 
 async def test_a_missing_input_artifact_is_classified_and_failed_terminally(tmp_path: Path) -> None:

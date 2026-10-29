@@ -250,8 +250,7 @@ class SchematicJobRunner:
         await run_all_settled([partial(self._process, job) for job in jobs])
 
     async def cleanup(self) -> None:
-        for object_key in await self._jobs.cleanup():
-            await self._artifacts.delete(object_key)
+        await self._jobs.cleanup(self._artifacts.delete)
 
     async def _process(self, job: ClaimedSchematicJob) -> None:
         token = current_schematic_job_id.set(job.id)
@@ -269,6 +268,8 @@ class SchematicJobRunner:
                 # A reclaimed job can finish before its old worker. Fence the object as well
                 # as the row so a rejected completion only deletes that worker's own output.
                 result_object_key = f"schematic-jobs/results/{job.id}/{job.claim_token}"
+                if not await self._jobs.register_result_object(job, result_object_key):
+                    return
                 content_type = "image/png" if job.operation == "render" else "application/octet-stream"
                 await self._artifacts.put(result_object_key, output, content_type=content_type)
             applied = await self._jobs.complete(job, result, result_object_key)
