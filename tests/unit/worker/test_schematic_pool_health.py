@@ -1,15 +1,12 @@
 # pyright: reportPrivateUsage=false
 """Saturation reporting for the schematic worker pool."""
 
-from typing import Any, cast
-
 from pytest_mock import MockerFixture
 
 from squid.config import SchematicConfig, WorkerConfig
 from squid.schematics.infrastructure import worker as worker_module
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
-from squid.worker.app import DatabaseWorker
-from tests.unit.worker.fakes import SupervisorRecorder, worker_services
+from tests.unit.worker.fakes import SupervisorRecorder, make_worker, worker_services
 
 
 async def test_pool_reports_idle_in_flight_and_waiting_counts(mocker: MockerFixture) -> None:
@@ -30,12 +27,9 @@ async def test_pool_reports_idle_in_flight_and_waiting_counts(mocker: MockerFixt
 async def test_worker_samples_pool_health_only_when_a_pool_exists() -> None:
     supervisor = SupervisorRecorder()
     pool = SchematicWorkerPool(SchematicConfig(workers=1))
-    worker = DatabaseWorker(
+    worker = make_worker(
         worker_services(),
-        cast(Any, object()),
-        WorkerConfig(maintenance_interval_seconds=11),
-        cast(Any, object()),
-        cast(Any, object()),
+        config=WorkerConfig(maintenance_interval_seconds=11),
         supervisor=supervisor,
         schematic_pool=pool,
     )
@@ -49,12 +43,9 @@ async def test_worker_samples_pool_health_only_when_a_pool_exists() -> None:
 
 async def test_worker_skips_pool_health_without_the_native_pool() -> None:
     supervisor = SupervisorRecorder()
-    worker = DatabaseWorker(
+    worker = make_worker(
         worker_services(),
-        cast(Any, object()),
-        WorkerConfig(),
-        cast(Any, object()),
-        cast(Any, object()),
+        config=WorkerConfig(),
         supervisor=supervisor,
     )
 
