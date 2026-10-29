@@ -622,7 +622,8 @@ class AccountRepository:
     async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile:
         """Apply a validated partial edit, creating the profile row if it is somehow missing."""
         async with self._session_factory.begin() as session:
-            account = await session.get(AccountModel, account_id)
+            # Match unlink and merge lock order so an avatar cannot disappear after its ownership check.
+            account = await session.get(AccountModel, account_id, with_for_update=True)
             if account is None:
                 raise AccountNotFoundError(account_id)
             model = await session.get(AccountProfileModel, account_id, with_for_update=True)
@@ -658,23 +659,10 @@ class AccountRepository:
         Staff moderation. Clearing leaves the profile *visible*: `hidden` is the owner's control,
         and a takedown that also hid the page would silently take that decision away from them.
         """
-        async with self._session_factory.begin() as session:
-            model = await session.get(AccountProfileModel, account_id, with_for_update=True)
-            if model is None:
-                account = await session.get(AccountModel, account_id)
-                if account is None:
-                    raise AccountNotFoundError(account_id)
-                model = AccountProfileModel(account_id=account_id)
-                session.add(model)
-            model.display_name = None
-            model.bio = None
-            model.pronouns = None
-            model.links = []
-            model.hidden = False
-            model.avatar_identity_id = None
-            model.updated_at = _now()
-            await session.flush()
-            return _to_profile(model)
+        return await self.upsert_profile(
+            account_id,
+            ProfileUpdate(display_name=None, bio=None, pronouns=None, links=(), hidden=False, avatar_identity_id=None),
+        )
 
     async def replace_merge_ticket(self, account_id: int, code: str, ttl_seconds: int) -> MergeTicket:
         """Mint the account's merge ticket, replacing any live one.
