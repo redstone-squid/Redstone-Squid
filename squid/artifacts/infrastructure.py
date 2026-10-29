@@ -53,6 +53,7 @@ class LocalArtifactStore:
         return await asyncio.to_thread(_copy_regular_atomic, source, self._path(key), max_bytes)
 
     async def get(self, key: str, *, max_bytes: int) -> bytes | None:
+        _require_positive_budget(max_bytes)
         path = self._path(key)
         try:
             return await asyncio.to_thread(self._read_bounded, path, max_bytes)
@@ -181,19 +182,24 @@ class S3ArtifactStore:
         )
 
     async def get(self, key: str, *, max_bytes: int) -> bytes | None:
+        _require_positive_budget(max_bytes)
+        return await asyncio.to_thread(self._get, self._key(key), max_bytes)
+
+    def _get(self, key: str, max_bytes: int) -> bytes | None:
+        # Keep acquisition, reading, and closing in one thread even if the caller is cancelled.
         try:
-            response = await asyncio.to_thread(self._client.get_object, Bucket=self._bucket, Key=self._key(key))
+            response = self._client.get_object(Bucket=self._bucket, Key=key)
         except ClientError as error:
             if _is_not_found(error):
                 return None
             raise
-        byte_size = int(response.get("ContentLength", 0))
         body: Any = response["Body"]
         try:
+            byte_size = int(response.get("ContentLength", 0))
             if byte_size > max_bytes:
                 msg = f"Artifact exceeds the {max_bytes}-byte download budget."
                 raise ArtifactTooLargeError(msg)
-            data = await asyncio.to_thread(body.read, max_bytes + 1)
+            data = body.read(max_bytes + 1)
         finally:
             body.close()
         if len(data) > max_bytes:
@@ -267,9 +273,9 @@ class S3ArtifactStore:
             if _is_not_found(error):
                 return None
             raise
-        byte_size = int(response.get("ContentLength", 0))
         body: Any = response["Body"]
         try:
+            byte_size = int(response.get("ContentLength", 0))
             if byte_size > max_bytes:
                 msg = f"Artifact exceeds the {max_bytes}-byte download budget."
                 raise ArtifactTooLargeError(msg)
