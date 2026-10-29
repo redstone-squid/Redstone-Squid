@@ -4,7 +4,7 @@ import json
 import logging
 from dataclasses import asdict
 from enum import Enum, StrEnum
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Self, override
 
 from discord import app_commands
 from discord.ext import commands
@@ -108,7 +108,11 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
         self.builds = bot.services.builds
         self.inference = bot.services.build_inference
         self.messages = bot.services.messages
-        self.consent_sticky = BuildLogConsentStickyMessage()
+        self.consent_sticky = BuildLogConsentStickyMessage(bot.background_tasks)
+
+    @override
+    async def ui_unload(self) -> None:
+        await self.consent_sticky.close()
 
     @autocompletes(sort="search_sorts", query="search_query")
     @sd.command(name="search", description="Search builds, records, and taxonomy metadata", defer="public")

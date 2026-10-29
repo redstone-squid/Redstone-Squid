@@ -1,139 +1,165 @@
-"""Unit tests for the reusable StickyMessage coordinator."""
+"""Sticky message delivery and timer ownership at the Discord boundary."""
 
-import asyncio
-from typing import Any, override
-from unittest.mock import AsyncMock, MagicMock
+from types import SimpleNamespace
+from typing import cast, override
 
+import aiohttp
+import anyio
 import discord
-from discord import TextChannel
+import pytest
 
 import squid_ui_discord as sd
-from squid.bot.utils.sticky_message import FunctionalStickyMessage, StickyMessage
+from squid.bot.utils.sticky_message import StickyMessage
+from squid.runtime import BackgroundTaskSupervisor, JobHandle
+from squid_ui_discord.testing import MessageHarness
 
 
 class StubStickyMessage(StickyMessage):
-    def __init__(self, *, stale_threshold: int = 3, debounce_delay: float = 0.05) -> None:
-        super().__init__(stale_threshold=stale_threshold, debounce_delay=debounce_delay)
-        self.render_count = 0
-
     @override
-    async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
-        self.render_count += 1
+    async def render(self, channel: discord.TextChannel) -> sd.message_payload.MessagePayload:
         return sd.render_static([])
 
 
-def _make_channel(channel_id: int = 12345) -> Any:
-    channel = MagicMock(spec=TextChannel)
-    channel.id = channel_id
-    channel.send = AsyncMock(side_effect=lambda **_kwargs: MagicMock(id=channel.send.call_count + 100))
-    mock_partial = MagicMock()
-    mock_partial.delete = AsyncMock()
-    channel.get_partial_message = MagicMock(return_value=mock_partial)
-    return channel
+class ChannelHarness:
+    """Record deliveries with real cancellation points at the network boundary."""
+
+    id = 12345
+
+    def __init__(self) -> None:
+        self.messages: list[MessageHarness] = []
+        self.repositioned = anyio.Event()
+        self.delete_started = anyio.Event()
+        self.delete_finished = anyio.Event()
+        self.block_delete = False
+
+    @property
+    def source(self) -> discord.TextChannel:
+        return cast(discord.TextChannel, self)
+
+    async def send(self, **kwargs: object) -> discord.Message:
+        await anyio.lowlevel.checkpoint()
+        message = MessageHarness(message_id=len(self.messages) + 101, channel_id=self.id)
+        message.delete.callback = self._delete
+        self.messages.append(message)
+        if len(self.messages) > 1:
+            self.repositioned.set()
+        return message.source
+
+    def get_partial_message(self, message_id: int) -> discord.PartialMessage:
+        return next(message.source for message in self.messages if message.id == message_id)
+
+    async def _delete(self) -> None:
+        self.delete_started.set()
+        try:
+            await anyio.lowlevel.checkpoint()
+            if self.block_delete:
+                await anyio.sleep_forever()
+        finally:
+            self.delete_finished.set()
 
 
-async def test_first_trigger_sends_sticky_message_immediately() -> None:
-    sticky = StubStickyMessage()
-    channel = _make_channel()
-
-    await sticky.trigger(channel)
-
-    assert sticky.is_active_in(channel.id)
-    assert sticky.get_message_id(channel.id) == 101
-    assert channel.send.await_count == 1
-    assert sticky.render_count == 1
+@pytest.fixture
+def channel() -> ChannelHarness:
+    return ChannelHarness()
 
 
-async def test_subsequent_trigger_within_stale_threshold_debounces() -> None:
-    sticky = StubStickyMessage(stale_threshold=3, debounce_delay=0.05)
-    channel = _make_channel()
+async def test_debounce_completes_delivery_across_network_checkpoints(channel: ChannelHarness) -> None:
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        sticky = StubStickyMessage(supervisor, debounce_delay=0)
+        await sticky.trigger(channel.source)
+        assert sticky.get_message_id(channel.id) == 101
 
-    await sticky.trigger(channel)
-    assert channel.send.await_count == 1
+        await sticky.trigger(channel.source)
+        await sticky.trigger(channel.source)
+        assert len(channel.messages) == 1
+        with anyio.fail_after(1):
+            await channel.repositioned.wait()
 
-    # Second trigger: staleness is 1 (< 3), so it shouldn't send immediately
-    await sticky.trigger(channel)
-    assert channel.send.await_count == 1
-
-    # Wait for debounce timer to fire
-    await asyncio.sleep(0.08)
-    assert channel.send.await_count == 2
-    assert sticky.get_message_id(channel.id) == 102
-
-
-async def test_reaching_stale_threshold_repositions_immediately() -> None:
-    sticky = StubStickyMessage(stale_threshold=3, debounce_delay=1.0)
-    channel = _make_channel()
-
-    # Initial trigger
-    await sticky.trigger(channel)
-    assert channel.send.await_count == 1
-
-    # Activity 1 & 2
-    sticky.record_activity(channel.id)
-    sticky.record_activity(channel.id)
-    assert channel.send.await_count == 1
-
-    # 3rd activity via trigger (staleness reaches 3) -> immediate reposition
-    await sticky.trigger(channel)
-    assert channel.send.await_count == 2
-    assert sticky.get_message_id(channel.id) == 102
+        assert sticky.get_message_id(channel.id) == 102
+        assert len(channel.messages[0].deletions) == 1
+        await sticky.close()
 
 
-async def test_reposition_deletes_old_message_and_resets_staleness() -> None:
-    sticky = StubStickyMessage()
-    channel = _make_channel()
+async def test_stale_threshold_repositions_and_cancels_pending_timer(channel: ChannelHarness) -> None:
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        sticky = StubStickyMessage(supervisor, debounce_delay=60)
+        await sticky.trigger(channel.source)
+        await sticky.trigger(channel.source)
+        sticky.record_activity(channel.id)
+        await sticky.trigger(channel.source)
 
-    await sticky.trigger(channel)
-    first_id = sticky.get_message_id(channel.id)
-    assert first_id == 101
-
-    await sticky.reposition(channel)
-    second_id = sticky.get_message_id(channel.id)
-    assert second_id == 102
-
-    channel.get_partial_message.assert_called_with(101)
-    partial_msg = channel.get_partial_message.return_value
-    partial_msg.delete.assert_awaited_once()
+        assert sticky.get_message_id(channel.id) == 102
+        assert len(channel.messages[0].deletions) == 1
+        assert not sticky._debounce_tasks
+        await sticky.close()
 
 
-async def test_reposition_tolerates_already_deleted_message() -> None:
-    sticky = StubStickyMessage()
-    channel = _make_channel()
-    partial_msg = channel.get_partial_message.return_value
-    partial_msg.delete = AsyncMock(side_effect=discord.NotFound(MagicMock(status=404), "Message not found"))
+async def test_dismiss_cancels_pending_timer_and_removes_message(channel: ChannelHarness) -> None:
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        sticky = StubStickyMessage(supervisor, debounce_delay=60)
+        await sticky.trigger(channel.source)
+        await sticky.trigger(channel.source)
+        await sticky.dismiss(channel.source)
 
-    await sticky.trigger(channel)
-    # Should not raise
-    await sticky.reposition(channel)
-    assert sticky.get_message_id(channel.id) == 102
-
-
-async def test_dismiss_deletes_message_and_clears_state() -> None:
-    sticky = StubStickyMessage()
-    channel = _make_channel()
-
-    await sticky.trigger(channel)
-    assert sticky.is_active_in(channel.id)
-
-    await sticky.dismiss(channel)
-    assert not sticky.is_active_in(channel.id)
-    assert sticky.get_message_id(channel.id) is None
-    partial_msg = channel.get_partial_message.return_value
-    partial_msg.delete.assert_awaited_once()
+        assert not sticky.is_active_in(channel.id)
+        assert sticky.get_message_id(channel.id) is None
+        assert len(channel.messages[0].deletions) == 1
+        assert not sticky._debounce_tasks
+        await sticky.close()
 
 
-async def test_functional_sticky_message_uses_renderer_callback() -> None:
-    called = False
+async def test_close_cancels_and_settles_inflight_delivery(channel: ChannelHarness) -> None:
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        sticky = StubStickyMessage(supervisor, debounce_delay=0)
+        channel.block_delete = True
+        await sticky.trigger(channel.source)
+        await sticky.trigger(channel.source)
+        with anyio.fail_after(1):
+            await channel.delete_started.wait()
+            await sticky.close()
 
-    async def custom_render(ch: TextChannel) -> sd.message_payload.MessagePayload:
-        nonlocal called
-        called = True
-        return sd.render_static([])
+        assert channel.delete_finished.is_set()
+        assert len(channel.messages) == 1
+        with pytest.raises(RuntimeError, match="after closing"):
+            await sticky.trigger(channel.source)
 
-    sticky = FunctionalStickyMessage(custom_render)
-    channel = _make_channel()
 
-    await sticky.trigger(channel)
-    assert called
-    assert sticky.is_active_in(channel.id)
+async def test_close_retains_timer_scheduled_while_another_is_cancelled(channel: ChannelHarness) -> None:
+    cancelling = anyio.Event()
+    resume_cancellation = anyio.Event()
+
+    class GatedSupervisor(BackgroundTaskSupervisor):
+        @override
+        async def cancel(self, *handles: JobHandle) -> None:
+            cancelling.set()
+            await resume_cancellation.wait()
+            await super().cancel(*handles)
+
+    async with GatedSupervisor().running() as supervisor:
+        sticky = StubStickyMessage(supervisor, debounce_delay=60)
+        await sticky.trigger(channel.source)
+        await sticky.trigger(channel.source)
+        with anyio.fail_after(1):
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(sticky.reposition, channel.source)
+                await cancelling.wait()
+                await sticky.trigger(channel.source)
+                replacement = sticky._debounce_tasks[channel.id]
+                resume_cancellation.set()
+
+        assert sticky._debounce_tasks[channel.id] is replacement
+        await sticky.close()
+        assert replacement.finished.is_set()
+        assert len(channel.messages) == 2
+
+
+async def test_reposition_tolerates_already_deleted_message(channel: ChannelHarness) -> None:
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        sticky = StubStickyMessage(supervisor)
+        await sticky.trigger(channel.source)
+        response = cast(aiohttp.ClientResponse, SimpleNamespace(status=404, reason="Not Found"))
+        channel.messages[0].delete.error = discord.NotFound(response, "Message not found")
+        await sticky.reposition(channel.source)
+
+        assert sticky.get_message_id(channel.id) == 102
+        await sticky.close()
