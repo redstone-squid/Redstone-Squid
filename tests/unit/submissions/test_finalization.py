@@ -90,10 +90,6 @@ class FakeDraftRepository:
     async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
         return ()
 
-    async def count_active_for_account(self, account_id: int) -> int:
-        del account_id
-        return 1
-
     async def list_active_for_account(
         self,
         account_id: int,
@@ -132,25 +128,6 @@ class FakeDraftRepository:
     ) -> AppliedDraftChange:
         del draft_id, account_id, change, updated_at, expires_at
         raise NotImplementedError
-
-    async def transition(
-        self,
-        draft_id: UUID,
-        account_id: int,
-        *,
-        expected_revision: int,
-        status: DraftStatus,
-        updated_at: Instant,
-        expires_at: Instant,
-    ) -> StoredDraft:
-        del draft_id, account_id, expected_revision
-        self.draft = replace(
-            self.draft,
-            snapshot=self.draft.snapshot.transition(status),
-            updated_at=updated_at,
-            expires_at=expires_at,
-        )
-        return self.draft
 
     async def upgrade_manifest(
         self,
@@ -203,7 +180,6 @@ class FakeFinalizationJobs:
         self.waiting_drafts: tuple[StoredDraft, ...] = ()
         self.attention: tuple[SubmissionAttentionIssue, ...] = ()
         self.claimed: tuple[ClaimedFinalizationJob, ...] = ()
-        self.completed: FinalizedBuild | None = None
         self.worker_attention: tuple[SubmissionAttentionIssue, ...] = ()
         self.failures: list[str] = []
 
@@ -262,18 +238,6 @@ class FakeFinalizationJobs:
         assert limit >= 1
         del now
         return self.claimed
-
-    async def complete(
-        self,
-        job: ClaimedFinalizationJob,
-        result: FinalizedBuild,
-        *,
-        now: Instant,
-    ) -> bool:
-        assert job in self.claimed
-        del now
-        self.completed = result
-        return True
 
     async def needs_attention(
         self,
@@ -716,7 +680,7 @@ def _claim(payload: NormalizedSubmission, attempts: int = 1) -> ClaimedFinalizat
 
 
 @pytest.mark.asyncio
-async def test_worker_completes_after_retry_safe_build_creation() -> None:
+async def test_worker_delegates_successful_completion_to_the_executor() -> None:
     payload = await _payload()
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload),)
@@ -727,7 +691,8 @@ async def test_worker_completes_after_retry_safe_build_creation() -> None:
     await worker.process_batch(now=NOW)
 
     assert executor.payloads == [payload]
-    assert jobs.completed is None
+    assert jobs.failures == []
+    assert jobs.worker_attention == ()
 
 
 @pytest.mark.asyncio

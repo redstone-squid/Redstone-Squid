@@ -60,7 +60,10 @@ from squid.submissions.domain import (
 from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationInput, SubmissionFinalizationJob
-from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.submissions.infrastructure.finalization_repository import (
+    PostgresFinalizationJobRepository,
+    complete_in_session,
+)
 from squid.submissions.infrastructure.models import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.payload_integrity import submission_payload_digest
@@ -743,12 +746,14 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     await accounts.merge(survivor.id, absorbed.id)
 
     result = FinalizedBuild(build_id)
-    assert await finalizations.complete(stale_claim, result, now=Instant.now()) is False
+    async with migrated_session_factory.begin() as session:
+        assert await complete_in_session(session, stale_claim, result, now=Instant.now()) is False
     (replacement_claim,) = await finalizations.claim(now=Instant.now().add(minutes=1), limit=1)
     assert replacement_claim.draft_id == claimed_draft_id
     assert replacement_claim.payload.owner_account_id == survivor.id
     assert replacement_claim.payload.sponsor == sponsor
-    assert await finalizations.complete(replacement_claim, result, now=Instant.now()) is True
+    async with migrated_session_factory.begin() as session:
+        assert await complete_in_session(session, replacement_claim, result, now=Instant.now()) is True
 
     async with migrated_session_factory() as session:
         jobs = {

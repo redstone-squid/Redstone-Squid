@@ -336,18 +336,6 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         return tuple(claims)
 
     @override
-    async def complete(
-        self,
-        job: ClaimedFinalizationJob,
-        result: FinalizedBuild,
-        *,
-        now: Instant,
-    ) -> bool:
-        """Retain the target result and submit the draft if this claim still owns it."""
-        async with self._session_factory.begin() as session:
-            return await complete_in_session(session, job, result, now=now)
-
-    @override
     async def needs_attention(
         self,
         job: ClaimedFinalizationJob,

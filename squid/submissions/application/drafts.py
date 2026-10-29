@@ -104,8 +104,6 @@ class ValidatedDraft:
 class DraftRepository(Protocol):
     """Atomic persistence required by the draft application service."""
 
-    async def count_active_for_account(self, account_id: int) -> int: ...
-
     async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]: ...
 
     async def list_active_for_account(
@@ -137,17 +135,6 @@ class DraftRepository(Protocol):
         expires_at: Instant,
         actor_account_id: int | None = None,
     ) -> AppliedDraftChange: ...
-
-    async def transition(
-        self,
-        draft_id: UUID,
-        account_id: int,
-        *,
-        expected_revision: int,
-        status: DraftStatus,
-        updated_at: Instant,
-        expires_at: Instant,
-    ) -> StoredDraft: ...
 
     async def upgrade_manifest(
         self,

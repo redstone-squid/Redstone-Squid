@@ -152,14 +152,6 @@ class FinalizationJobRepository(Protocol):
 
     async def claim(self, *, now: Instant, limit: int) -> Sequence[ClaimedFinalizationJob]: ...
 
-    async def complete(
-        self,
-        job: ClaimedFinalizationJob,
-        result: FinalizedBuild,
-        *,
-        now: Instant,
-    ) -> bool: ...
-
     async def needs_attention(
         self,
         job: ClaimedFinalizationJob,

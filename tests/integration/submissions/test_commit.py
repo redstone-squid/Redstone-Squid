@@ -27,7 +27,10 @@ from squid.submissions.domain import (
 from squid.submissions.infrastructure import commit as commit_module
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationResult, SubmissionReceiptMedia
-from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.submissions.infrastructure.finalization_repository import (
+    PostgresFinalizationJobRepository,
+    complete_in_session,
+)
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
 
@@ -251,7 +254,8 @@ async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
     claim = replace(claim, requested_by_account_id=staff.id)
     await accounts.merge(survivor.id, staff.id)
     jobs = PostgresFinalizationJobRepository(migrated_session_factory)
-    assert await jobs.complete(claim, FinalizedBuild(99), now=Instant.now()) is False
+    async with migrated_session_factory.begin() as session:
+        assert await complete_in_session(session, claim, FinalizedBuild(99), now=Instant.now()) is False
     (replacement,) = await jobs.claim(now=Instant.now(), limit=1)
     assert replacement.requested_by_account_id == survivor.id
     assert replacement.payload.owner_account_id == claim.payload.owner_account_id

@@ -45,7 +45,10 @@ from squid.submissions.infrastructure.finalization_models import (
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
 )
-from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
+from squid.submissions.infrastructure.finalization_repository import (
+    PostgresFinalizationJobRepository,
+    complete_in_session,
+)
 from squid.submissions.infrastructure.models import (
     SubmissionDraft,
     SubmissionDraftAccess,
@@ -156,8 +159,9 @@ async def test_enqueue_claim_fence_and_completion_are_atomic(
 
     assert first.job_id == replay.job_id
     assert claim.payload == payload
-    assert await repository.complete(stale, result, now=NOW) is False
-    assert await repository.complete(claim, result, now=NOW) is True
+    async with async_session_factory.begin() as session:
+        assert await complete_in_session(session, stale, result, now=NOW) is False
+        assert await complete_in_session(session, claim, result, now=NOW) is True
 
     completed = await repository.get(DRAFT_ID)
     assert completed is not None
@@ -373,7 +377,8 @@ async def test_retry_retains_failed_payload_and_rejects_its_stale_completion(
     second = await repository.enqueue(repaired, replace(payload, description="corrected"), now=NOW, expires_at=expiry)
 
     assert second.job_id != first.job_id
-    assert await repository.complete(claim, FinalizedBuild(41), now=NOW) is False
+    async with async_session_factory.begin() as session:
+        assert await complete_in_session(session, claim, FinalizedBuild(41), now=NOW) is False
     latest = await repository.get(DRAFT_ID)
     assert latest is not None
     assert latest.job_id == second.job_id
