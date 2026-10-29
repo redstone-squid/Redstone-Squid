@@ -1292,6 +1292,10 @@ msgstr ""
 msgid "Convert schematic"
 msgstr ""
 
+#: squid/bot/diagnostics_view.py:83
+msgid "Could not check for updates. You can still refresh reports."
+msgstr ""
+
 #: squid/bot/give_redstoner.py:239
 msgid "Could not find the redstoner role."
 msgstr ""
@@ -3775,6 +3779,10 @@ msgstr ""
 msgid "Refresh member identity"
 msgstr ""
 
+#: squid/bot/diagnostics_view.py:88
+msgid "Refresh reports"
+msgstr ""
+
 #: squid/permissions/domain/catalogue.py:247
 msgid "Register a new Minecraft version."
 msgstr ""
@@ -4854,6 +4862,10 @@ msgstr ""
 
 #: squid/media/errors.py:243
 msgid "The queued raw media object is inconsistent with its metadata."
+msgstr ""
+
+#: squid/bot/diagnostics_view.py:85
+msgid "The report list has changed. Refresh when you are ready."
 msgstr ""
 
 #: squid/api/errors.py:239

@@ -15,6 +15,7 @@ import discord
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
+from squid.bot.diagnostics_refresh import ErrorReportRefresh
 from squid.bot.ui import CHROME, tr
 from squid.diagnostics.domain import ErrorReport
 
@@ -46,6 +47,51 @@ ERROR_CHROME = dataclasses.replace(
 )
 
 
+class _ReportUpdates(sl.Component[sl.ComponentsV2Target]):
+    """Check for report changes without replacing the browser the reader is using."""
+
+    def __init__(
+        self,
+        operations: ErrorReportOperations,
+        shown: tuple[ErrorReport, ...],
+        *,
+        work_lost_only: bool,
+        refresh: Callable[[sl.PressEvent], Awaitable[None]],
+    ) -> None:
+        self._operations = operations
+        self._shown = shown
+        self._work_lost_only = work_lost_only
+        self._refresh = refresh
+        self.changed.replace(value=False)
+        self.own(ErrorReportRefresh(self.changed.invalidate))
+
+    @sl.resource
+    async def changed(self) -> bool:
+        reports = await self._operations.recent(limit=RECENT_LIMIT, work_lost_only=self._work_lost_only)
+        return tuple(reports) != self._shown
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+        status = self.changed.status
+        changed = (
+            status.value
+            if isinstance(status, sl.resources.Ready)
+            else (status.previous.value if status.previous is not None else False)
+        )
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
+        if isinstance(status, sl.resources.Failed):
+            nodes.append(sl.note(tr(t"Could not check for updates. You can still refresh reports.")))
+        elif changed:
+            nodes.append(sl.note(tr(t"The report list has changed. Refresh when you are ready.")))
+        nodes.append(
+            sl.action_controls(
+                sl.action_control(tr(t"Refresh reports"), self._refresh, key="refresh"),
+                key="report-updates",
+            )
+        )
+        return tuple(nodes)
+
+
 class ErrorReportScreen(sd.Screen):
     """An error browser that ends when closed, cleared, replaced, or timed out."""
 
@@ -57,6 +103,9 @@ class ErrorReportScreen(sd.Screen):
     work_lost_only: bool = sl.state(default=False)
     confirming_clear: bool = sl.state(default=False)
     cleared_count: int | None = sl.state(None)
+    _reports: tuple[ErrorReport, ...] = sl.state((), persist=False, opaque=True)
+    _updates: _ReportUpdates | None = sl.state(None, persist=False, opaque=True)
+    _browser: sp.Browser[ErrorReport, sl.ComponentsV2Target] | None = sl.state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -70,10 +119,8 @@ class ErrorReportScreen(sd.Screen):
         self._reference = reference
         self._can_clear = can_clear
         self._authorize_clear = authorize_clear
-        self._reports: tuple[ErrorReport, ...] = ()
         self._detail: ErrorReport | None = None
         self._matches = 1
-        self._browser: sp.Browser[ErrorReport, sl.ComponentsV2Target] | None = None
         self._clear_decision = sp.confirm(
             sl.section(
                 sl.heading(tr(t"Clear every error report?")),
@@ -95,6 +142,9 @@ class ErrorReportScreen(sd.Screen):
 
     async def _load_recent(self) -> None:
         self._reports = tuple(await self._operations.recent(limit=RECENT_LIMIT, work_lost_only=self.work_lost_only))
+        self._updates = _ReportUpdates(
+            self._operations, self._reports, work_lost_only=self.work_lost_only, refresh=self._refresh_reports
+        )
         self._browser = sp.Browser(
             sl.sources.list_source(self._reports),
             key="error-reports",
@@ -130,9 +180,11 @@ class ErrorReportScreen(sd.Screen):
             return sl.Document((self._render_report(self._detail, self._matches), self._detail_actions()))
         if self._browser is None:
             return sl.Document((sl.status(tr(t"Loading error reports.")),))
+        assert self._updates is not None
         return sl.Document(
             (
                 self.boundary(self._browser, key="browser"),
+                self.boundary(self._updates, key="updates"),
                 sl.action_controls(
                     sl.action_control(
                         tr(t"Show all") if self.work_lost_only else tr(t"Show work lost only"),
@@ -187,6 +239,10 @@ class ErrorReportScreen(sd.Screen):
             self._close,
             key="close",
         )
+
+    async def _refresh_reports(self, event: sl.PressEvent) -> None:
+        await event.acknowledge()
+        await self._load_recent()
 
     async def _toggle_filter(self, event: sl.PressEvent) -> None:
         await event.acknowledge()
