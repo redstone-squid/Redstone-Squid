@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from collections.abc import Iterator
 from typing import cast, override
 from uuid import UUID, uuid4
 
@@ -10,7 +11,7 @@ from anyio import create_task_group
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from starlette.responses import StreamingResponse
-from starlette.types import ASGIApp, Message, Scope
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from whenever import Instant
 
 from squid.api.idempotency import (
@@ -29,7 +30,6 @@ from tests.unit.api.fakes import (
     TEST_SYNERGY_SECRET,
     TEST_UUID,
     MockAccountManager,
-    MockDatabaseManager,
     build_app,
 )
 
@@ -106,8 +106,11 @@ class CompletionRecorder:
 async def run_completion_middleware(
     app: ASGIApp,
     recorder: CompletionRecorder,
+    *,
+    sent: list[Message] | None = None,
 ) -> list[Message]:
-    sent: list[Message] = []
+    if sent is None:
+        sent = []
     scope = cast(
         Scope,
         {
@@ -141,41 +144,44 @@ async def run_completion_middleware(
     return sent
 
 
-def idempotent_client() -> tuple[TestClient, CountingAccounts, MockDatabaseManager]:
+@pytest.fixture
+def idempotent_client() -> Iterator[tuple[TestClient, CountingAccounts]]:
     accounts = CountingAccounts()
     service = IdempotencyService(MemoryIdempotencyRepository())
     app, database = build_app(idempotency=service, accounts=accounts)
-    return TestClient(app), accounts, database
-
-
-def test_replays_completed_response_without_repeating_mutation() -> None:
-    client, accounts, database = idempotent_client()
-    headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "verification-request-1"}
-
-    with client:
-        first = client.post("/v1/verify", json={"uuid": str(TEST_UUID)}, headers=headers)
-        replay = client.post("/v1/verify", json={"uuid": str(TEST_UUID)}, headers=headers)
-
+    with TestClient(app, headers={"Authorization": TEST_SYNERGY_SECRET}) as client:
+        yield client, accounts
     assert database.closed
+
+
+def test_replays_completed_response_without_repeating_mutation(
+    idempotent_client: tuple[TestClient, CountingAccounts],
+) -> None:
+    client, accounts = idempotent_client
+    headers = {"Idempotency-Key": "verification-request"}
+
+    first = client.post("/v1/verify", json={"uuid": str(TEST_UUID)}, headers=headers)
+    replay = client.post("/v1/verify", json={"uuid": str(TEST_UUID)}, headers=headers)
+
     assert first.status_code == replay.status_code == 201
     assert first.content == replay.content == b"100001"
     assert first.headers["content-type"] == replay.headers["content-type"]
     assert accounts.calls == 1
 
 
-def test_reusing_key_for_different_payload_returns_conflict() -> None:
-    client, accounts, database = idempotent_client()
-    headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "verification-request-2"}
+def test_reusing_key_for_different_payload_returns_conflict(
+    idempotent_client: tuple[TestClient, CountingAccounts],
+) -> None:
+    client, accounts = idempotent_client
+    headers = {"Idempotency-Key": "verification-request"}
 
-    with client:
-        first = client.post("/v1/verify", json={"uuid": str(TEST_UUID)}, headers=headers)
-        conflict = client.post(
-            "/v1/verify",
-            json={"uuid": "22222222-2222-2222-2222-222222222222"},
-            headers=headers,
-        )
+    first = client.post("/v1/verify", json={"uuid": str(TEST_UUID)}, headers=headers)
+    conflict = client.post(
+        "/v1/verify",
+        json={"uuid": "22222222-2222-2222-2222-222222222222"},
+        headers=headers,
+    )
 
-    assert database.closed
     assert first.status_code == 201
     assert conflict.status_code == 409
     assert conflict.json()["code"] == ErrorCode.IDEMPOTENCY_CONFLICT
@@ -205,54 +211,37 @@ def test_resource_path_is_part_of_the_request_fingerprint() -> None:
     assert mutations == [1]
 
 
-def test_query_and_content_type_are_part_of_the_request_fingerprint() -> None:
-    client, accounts, database = idempotent_client()
-    authorization = {"Authorization": TEST_SYNERGY_SECRET}
+@pytest.mark.parametrize(
+    ("retry_url", "retry_content_type"),
+    [
+        pytest.param("/v1/verify?source=two", "application/json", id="query"),
+        pytest.param("/v1/verify?source=one", "application/json; charset=utf-8", id="content-type"),
+    ],
+)
+def test_reusing_key_for_different_request_metadata_returns_conflict(
+    idempotent_client: tuple[TestClient, CountingAccounts], retry_url: str, retry_content_type: str
+) -> None:
+    client, accounts = idempotent_client
     body = json.dumps({"uuid": str(TEST_UUID)}, separators=(",", ":"))
+    headers = {"Idempotency-Key": "verification-request", "Content-Type": "application/json"}
 
-    with client:
-        first = client.post(
-            "/v1/verify?source=one",
-            content=body,
-            headers={**authorization, "Idempotency-Key": "query", "Content-Type": "application/json"},
-        )
-        query_conflict = client.post(
-            "/v1/verify?source=two",
-            content=body,
-            headers={**authorization, "Idempotency-Key": "query", "Content-Type": "application/json"},
-        )
-        media_conflict = client.post(
-            "/v1/verify?source=one",
-            content=body,
-            headers={
-                **authorization,
-                "Idempotency-Key": "media-type",
-                "Content-Type": "application/json; charset=utf-8",
-            },
-        )
-        media_first = client.post(
-            "/v1/verify?source=one",
-            content=body,
-            headers={**authorization, "Idempotency-Key": "media-type", "Content-Type": "application/json"},
-        )
+    first = client.post("/v1/verify?source=one", content=body, headers=headers)
+    conflict = client.post(retry_url, content=body, headers={**headers, "Content-Type": retry_content_type})
 
-    assert database.closed
     assert first.status_code == 201
-    assert query_conflict.status_code == 409
-    assert media_conflict.status_code == 201
-    assert media_first.status_code == 409
-    assert accounts.calls == 2
+    assert conflict.status_code == 409
+    assert conflict.json()["code"] == ErrorCode.IDEMPOTENCY_CONFLICT
+    assert accounts.calls == 1
 
 
-def test_request_without_key_retains_normal_non_idempotent_behavior() -> None:
-    client, accounts, database = idempotent_client()
-    headers = {"Authorization": TEST_SYNERGY_SECRET}
+def test_request_without_key_retains_normal_non_idempotent_behavior(
+    idempotent_client: tuple[TestClient, CountingAccounts],
+) -> None:
+    client, accounts = idempotent_client
 
-    with client:
-        first = client.post("/v1/verify", json={"uuid": str(TEST_UUID)}, headers=headers)
-        second = client.post("/v1/verify", json={"uuid": str(TEST_UUID)}, headers=headers)
+    first = client.post("/v1/verify", json={"uuid": str(TEST_UUID)})
+    second = client.post("/v1/verify", json={"uuid": str(TEST_UUID)})
 
-    assert database.closed
     assert first.json() == 100_001
     assert second.json() == 100_002
     assert accounts.calls == 2
@@ -283,7 +272,7 @@ async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_caller(
 
 @pytest.mark.asyncio
 async def test_completion_buffers_multiple_and_empty_body_frames_before_sending() -> None:
-    async def app(_scope: Scope, _receive, send) -> None:
+    async def app(_scope: Scope, _receive: Receive, send: Send) -> None:
         await send({"type": "http.response.start", "status": 204, "headers": [(b"etag", b'"one"')]})
         await send({"type": "http.response.body", "body": b"", "more_body": True})
         await send({"type": "http.response.body", "body": b"", "more_body": False})
@@ -301,18 +290,21 @@ async def test_completion_buffers_multiple_and_empty_body_frames_before_sending(
 
 @pytest.mark.asyncio
 async def test_completion_failure_sends_no_partial_response() -> None:
-    async def app(_scope: Scope, _receive, send) -> None:
+    async def app(_scope: Scope, _receive: Receive, send: Send) -> None:
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"ok", "more_body": False})
 
     recorder = CompletionRecorder(RuntimeError("database unavailable"))
+    sent: list[Message] = []
     with pytest.raises(RuntimeError, match="database unavailable"):
-        await run_completion_middleware(app, recorder)
+        await run_completion_middleware(app, recorder, sent=sent)
+
+    assert sent == []
 
 
 @pytest.mark.asyncio
 async def test_cancellation_after_handler_success_does_not_interrupt_completion() -> None:
-    async def app(_scope: Scope, _receive, send) -> None:
+    async def app(_scope: Scope, _receive: Receive, send: Send) -> None:
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send({"type": "http.response.body", "body": b"ok", "more_body": False})
 
@@ -329,18 +321,21 @@ async def test_cancellation_after_handler_success_does_not_interrupt_completion(
 
 @pytest.mark.asyncio
 async def test_handler_failure_does_not_complete_or_send_a_response() -> None:
-    async def app(_scope: Scope, _receive, _send) -> None:
+    async def app(_scope: Scope, _receive: Receive, _send: Send) -> None:
         raise RuntimeError("handler failed")
 
     recorder = CompletionRecorder()
+    sent: list[Message] = []
     with pytest.raises(RuntimeError, match="handler failed"):
-        await run_completion_middleware(app, recorder)
+        await run_completion_middleware(app, recorder, sent=sent)
+
     assert recorder.responses == []
+    assert sent == []
 
 
 @pytest.mark.asyncio
 async def test_response_body_limit_is_enforced_before_bytes_are_sent() -> None:
-    async def app(_scope: Scope, _receive, send) -> None:
+    async def app(_scope: Scope, _receive: Receive, send: Send) -> None:
         await send({"type": "http.response.start", "status": 200, "headers": []})
         await send(
             {
@@ -351,16 +346,19 @@ async def test_response_body_limit_is_enforced_before_bytes_are_sent() -> None:
         )
 
     recorder = CompletionRecorder()
+    sent: list[Message] = []
     with pytest.raises(RuntimeError, match="replay limit"):
-        await run_completion_middleware(app, recorder)
+        await run_completion_middleware(app, recorder, sent=sent)
+
     assert recorder.responses == []
+    assert sent == []
 
 
 @pytest.mark.asyncio
 async def test_response_body_limit_stops_capturing_at_the_first_oversized_chunk() -> None:
     frames_sent = 0
 
-    async def app(_scope: Scope, _receive, send) -> None:
+    async def app(_scope: Scope, _receive: Receive, send: Send) -> None:
         nonlocal frames_sent
         frames_sent += 1
         await send({"type": "http.response.start", "status": 200, "headers": []})
