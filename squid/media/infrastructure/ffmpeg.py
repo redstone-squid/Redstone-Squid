@@ -15,6 +15,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, cast
 
+from anyio import CancelScope, fail_after
+
 try:
     import resource
 except ImportError:  # pragma: no cover - Windows has no rlimits
@@ -390,13 +392,16 @@ class FfmpegMediaNormalizer:
             raise MediaToolUnavailableError(tool=executable) from exc
 
         try:
-            stdout, _stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
-        except asyncio.CancelledError:
-            await _terminate(process)
+            try:
+                with fail_after(timeout_seconds):
+                    stdout, _stderr = await process.communicate()
+            except TimeoutError as exc:
+                raise MediaProcessingTimeoutError(operation=operation) from exc
+        except BaseException:
+            # The owning task may already be cancelled; reaping must still settle before it exits.
+            with CancelScope(shield=True):
+                await _terminate(process)
             raise
-        except TimeoutError as exc:
-            await _terminate(process)
-            raise MediaProcessingTimeoutError(operation=operation) from exc
         if process.returncode != 0:
             if process.returncode == -getattr(signal, "SIGXFSZ", 25):
                 raise MediaLimitExceededError(
@@ -653,7 +658,8 @@ async def _terminate(process: asyncio.subprocess.Process) -> None:
             process.kill()
     except ProcessLookupError:
         pass
-    await process.wait()
+    # A cancelled communicate() can leave paused pipe readers. Drain them so wait() can finish.
+    await process.communicate()
 
 
 def _apply_process_limits(limits: MediaProcessLimits, *, max_file_bytes: int) -> None:
