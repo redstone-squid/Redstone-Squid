@@ -23,10 +23,12 @@ from squid.voting.domain import (
     VoteActor,
     VoteKind,
     VoteMessage,
+    VoteRejection,
     VoteSelection,
     VoteSessionSnapshot,
     VoteVisibility,
 )
+from squid_ui_discord.testing import MessageHarness
 from tests.support.discord import make_layout_bot, make_reaction_payload
 from tests.support.voting import GENERIC_OPTIONS, poll_snapshot
 
@@ -40,6 +42,10 @@ class Member:
     id: int = 70
     bot: bool = False
     roles: tuple[discord.Role, ...] = ()
+
+    @property
+    def mention(self) -> str:
+        return f"<@{self.id}>"
 
 
 @dataclass
@@ -74,6 +80,16 @@ class Message:
     added: list[str] = field(default_factory=list)
     removed: list[tuple[str, int]] = field(default_factory=list)
     forbidden: set[str] = field(default_factory=set)
+    sent: list[dict[str, object]] = field(default_factory=list)
+    guild: None = None
+
+    @property
+    def channel(self) -> discord.TextChannel:
+        return cast(discord.TextChannel, self)
+
+    async def send(self, **kwargs: object) -> discord.Message:
+        self.sent.append(kwargs)
+        return MessageHarness().source
 
     async def add_reaction(self, emoji: str) -> None:
         self.added.append(emoji)
@@ -118,6 +134,7 @@ class Votes:
     )
     casts: list[tuple[int, VoteActor, str]] = field(default_factory=list)
     failure: Exception | None = None
+    rejection: VoteRejection | None = None
     resolver: VoteActorResolver | None = None
 
     def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
@@ -133,8 +150,13 @@ class Votes:
         if self.failure is not None:
             raise self.failure
         self.casts.append((message_id, actor, emoji))
-        self.trace.append("committed")
-        return CastVoteResult(self.snapshot)
+        self.trace.append("committed" if self.rejection is None else "refused")
+        return CastVoteResult(self.snapshot, self.rejection)
+
+
+class Settings:
+    async def get_locale(self, server_id: int) -> str | None:
+        return None
 
 
 @dataclass
@@ -142,6 +164,7 @@ class Services:
     votes: Votes
     accounts: Accounts = field(default_factory=Accounts)
     permissions: Permissions = field(default_factory=Permissions)
+    settings: Settings = field(default_factory=Settings)
 
 
 class ReactionHarness:
@@ -190,9 +213,14 @@ class ReactionHarness:
         pass
 
     def event(
-        self, action: Literal["REACTION_ADD", "REACTION_REMOVE"] = "REACTION_ADD", *, message_id: int = 100
+        self,
+        action: Literal["REACTION_ADD", "REACTION_REMOVE"] = "REACTION_ADD",
+        *,
+        message_id: int = 100,
+        emoji: str | None = None,
     ) -> ReactionEvent:
-        guild_id, emoji = (10, "1️⃣") if message_id == 100 else (11, "🔴")
+        guild_id, default_emoji = (10, "1️⃣") if message_id == 100 else (11, "🔴")
+        emoji = default_emoji if emoji is None else emoji
         payload = make_reaction_payload(
             message_id=message_id,
             channel_id=message_id + 100,
@@ -223,7 +251,7 @@ async def test_reconciliation_job_is_supervised_and_stops_on_unload(reactions: R
         with anyio.fail_after(1):
             while "vote-reaction-reconciliation" not in reactions.supervisor.last_success:
                 await anyio.lowlevel.checkpoint()
-        (job,) = reactions.cog._background_tasks
+        (job,) = reactions.cog.reactions._background_tasks
         assert reactions.services.votes.resolver is reactions.cog
         assert reactions.messages[100].added == ["1️⃣", "2️⃣"]
         assert not job.finished.is_set()
@@ -250,15 +278,19 @@ async def test_anonymous_reaction_is_removed_only_after_commit(reactions: Reacti
     reactions.services.votes.failure = RuntimeError("database unavailable")
     async with reactions.running():
         with pytest.raises(RuntimeError, match="database unavailable"):
-            await reactions.cog.on_reaction_add(reactions.event())
+            await reactions.cog.reactions.on_reaction_add(reactions.event())
         assert reactions.messages[100].removed == []
         reactions.services.votes.failure = None
-        await reactions.cog.on_reaction_add(reactions.event())
+        await reactions.cog.reactions.on_reaction_add(reactions.event())
         with anyio.fail_after(1):
             while not reactions.messages[100].removed:
                 await anyio.lowlevel.checkpoint()
+        reactions.selected()
+        await reactions.cog.reactions.recover_reaction_add(reactions.event())
+        assert reactions.messages[100].removed == [("1️⃣", 70)] * 2
+        assert len(reactions.services.votes.casts) == 1
 
-    assert reactions.trace == ["committed", "removed"]
+    assert reactions.trace == ["committed", "removed", "removed"]
 
 
 async def test_reconciliation_changes_public_selection_but_keeps_it_when_discord_is_unavailable(
@@ -267,12 +299,12 @@ async def test_reconciliation_changes_public_selection_but_keeps_it_when_discord
     reactions.selected()
     message = reactions.messages.pop(100)
     async with reactions.running():
-        await reactions.cog.reconcile_message_reactions(100)
+        await reactions.cog.reactions.reconcile_message_reactions(100)
         assert reactions.services.votes.casts == []
         assert reactions.refreshes == []
         reactions.messages[100] = message
         message.reactions = [Reaction("1️⃣"), Reaction("2️⃣", (Member(reactions.guilds[10]),))]
-        await reactions.cog.reconcile_message_reactions(100)
+        await reactions.cog.reactions.reconcile_message_reactions(100)
 
     assert reactions.services.votes.casts == [(100, VoteActor(7, 70, guild_id=10), "2️⃣")]
     assert reactions.refreshes == [("vote_session", "1")]
@@ -286,10 +318,10 @@ async def test_anonymous_recovery_cleans_committed_and_unconsented_reactions_wit
     message = reactions.messages[100]
     message.reactions = [Reaction("1️⃣", (Member(reactions.guilds[10]),)), Reaction("2️⃣")]
     async with reactions.running():
-        await reactions.cog.reconcile_message_reactions(100)
+        await reactions.cog.reactions.reconcile_message_reactions(100)
         reactions.services.accounts.account = replace(reactions.services.accounts.account, consent=None)
         reactions.services.votes.snapshot = replace(reactions.services.votes.snapshot, selections=())
-        await reactions.cog.reconcile_message_reactions(100)
+        await reactions.cog.reactions.reconcile_message_reactions(100)
 
     assert reactions.services.votes.casts == []
     assert message.removed == [("1️⃣", 70)] * 2
@@ -312,12 +344,12 @@ async def test_multi_guild_alias_recovery_is_idempotent_and_removal_unsets_the_s
     second = reactions.messages[101]
     second.reactions = [Reaction("🔴", (Member(reactions.guilds[11]),)), Reaction("🔵")]
     async with reactions.running():
-        await reactions.cog.reconcile_message_reactions(100)
-        await reactions.cog.recover_reaction_add(reactions.event(message_id=101))
+        await reactions.cog.reactions.reconcile_message_reactions(100)
+        await reactions.cog.reactions.recover_reaction_add(reactions.event(message_id=101))
         assert reactions.services.votes.casts == []
         assert reactions.refreshes == []
         assert second.removed == []
-        await reactions.cog.recover_reaction_remove(reactions.event("REACTION_REMOVE", message_id=101))
+        await reactions.cog.reactions.recover_reaction_remove(reactions.event("REACTION_REMOVE", message_id=101))
 
     assert reactions.services.votes.casts == [(101, VoteActor(7, 70, guild_id=11), "🔴")]
 
@@ -331,9 +363,56 @@ async def test_clear_and_recovery_restore_options_without_toggling_ballots(react
         cast(Any, {"message_id": 100, "channel_id": 200, "guild_id": 10}), discord.PartialEmoji(name="1️⃣")
     )
     async with reactions.running():
-        await reactions.cog.on_reaction_clear(ReactionClearEvent(clear))
-        await reactions.cog.on_reaction_clear_emoji(ReactionClearEvent(emoji, "1️⃣"))
-        await reactions.cog.recover_reaction_clear(ReactionClearEvent(clear))
+        await reactions.cog.reactions.on_reaction_clear(ReactionClearEvent(clear))
+        await reactions.cog.reactions.on_reaction_clear(ReactionClearEvent(emoji, "1️⃣"))
+        await reactions.cog.reactions.on_reaction_clear(ReactionClearEvent(clear))
 
     assert reactions.services.votes.casts == []
     assert message.added == ["1️⃣", "2️⃣"] * 3
+
+
+async def test_unconsented_live_vote_explains_refusal_but_recovery_stays_quiet(reactions: ReactionHarness) -> None:
+    reactions.services.accounts.account = replace(reactions.services.accounts.account, consent=None)
+    message = reactions.messages[100]
+    async with reactions.running():
+        await reactions.cog.reactions.recover_reaction_add(reactions.event())
+        assert message.removed == []
+        assert message.sent == []
+        await reactions.cog.reactions.on_reaction_add(reactions.event())
+
+    assert reactions.services.votes.casts == []
+    assert message.removed == [("1️⃣", 70)]
+    assert len(message.sent) == 1
+    assert message.sent[0]["delete_after"] == 30
+    assert "/account consent" in str(cast(discord.ui.LayoutView, message.sent[0]["view"]).to_components())
+
+
+async def test_anonymous_refusal_removes_reactions_but_only_live_events_explain_it(reactions: ReactionHarness) -> None:
+    reactions.anonymous()
+    reactions.services.votes.rejection = VoteRejection.NOT_ELIGIBLE
+    message = reactions.messages[100]
+    async with reactions.running():
+        await reactions.cog.reactions.recover_reaction_add(reactions.event())
+        assert message.removed == [("1️⃣", 70)]
+        assert message.sent == []
+        await reactions.cog.reactions.on_reaction_add(reactions.event())
+
+    assert message.removed == [("1️⃣", 70)] * 2
+    assert len(message.sent) == 1
+    assert "trusted role" in str(cast(discord.ui.LayoutView, message.sent[0]["view"]).to_components())
+    assert reactions.refreshes == []
+
+
+@pytest.mark.parametrize("recovering", [False, True], ids=["live", "recovery"])
+async def test_only_live_public_replacement_takes_back_the_previous_reaction(
+    reactions: ReactionHarness, recovering: bool
+) -> None:
+    reactions.selected()
+    handler = reactions.cog.reactions
+    async with reactions.running():
+        apply = handler.recover_reaction_add if recovering else handler.on_reaction_add
+        await apply(reactions.event(emoji="2️⃣"))
+
+    assert reactions.services.votes.casts == [(100, VoteActor(7, 70, guild_id=10), "2️⃣")]
+    assert reactions.messages[100].removed == ([] if recovering else [("1️⃣", 70)])
+    assert reactions.refreshes == [("vote_session", "1")]
