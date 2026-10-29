@@ -1,14 +1,12 @@
 """Integration coverage for notification opt-ins and fenced DM delivery."""
 
-from collections.abc import AsyncGenerator, Generator
-from contextlib import contextmanager
+from collections.abc import AsyncGenerator
 from dataclasses import replace
 from uuid import UUID
 
 import anyio
 import pytest
-from sqlalchemy import event, func, select, update
-from sqlalchemy.engine import Connection
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -43,6 +41,7 @@ from squid.permissions.infrastructure.models import (
 )
 from squid.persistence.base import Base
 from squid.persistence.types import now
+from tests.support.database import record_queries
 
 _TABLES = [
     Base.metadata.tables["accounts"],
@@ -80,29 +79,6 @@ def repository(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> PostgresNotificationRepository:
     return PostgresNotificationRepository(async_session_factory)
-
-
-@contextmanager
-def _counting(session_factory: async_sessionmaker[AsyncSession]) -> Generator[list[str]]:
-    statements: list[str] = []
-    engine = session_factory.kw["bind"].sync_engine
-
-    def before_cursor_execute(
-        connection: Connection,
-        cursor: object,
-        statement: str,
-        parameters: object,
-        context: object,
-        executemany: bool,
-    ) -> None:
-        del connection, cursor, parameters, context, executemany
-        statements.append(statement)
-
-    event.listen(engine, "before_cursor_execute", before_cursor_execute)
-    try:
-        yield statements
-    finally:
-        event.remove(engine, "before_cursor_execute", before_cursor_execute)
 
 
 async def _seed_delivery(
@@ -176,7 +152,7 @@ async def test_delivery_batch_returns_each_recipients_details_in_one_statement(
         delivery_id = await _seed_delivery(async_session_factory, discord_id=discord_id, build_id=discord_id + 1)
         expected[delivery_id] = (discord_id, {"build_id": discord_id + 1})
 
-    with _counting(async_session_factory) as statements:
+    with record_queries(async_session_factory) as statements:
         claimed = await repository.claim_deliveries(limit=10)
 
     assert len(statements) == 1
@@ -515,7 +491,7 @@ async def test_durable_staff_audience_discovery_has_constant_query_count(
             PermissionRoleAssignment(role_id=role.id, subject_account_id=account.id) for account in accounts
         )
 
-    with _counting(async_session_factory) as statements:
+    with record_queries(async_session_factory) as statements:
         async with async_session_factory() as session:
             recipients = tuple(
                 (
@@ -622,7 +598,7 @@ async def test_candidate_materialization_has_constant_query_count(
             for account in accounts
         )
 
-    with _counting(async_session_factory) as statements:
+    with record_queries(async_session_factory) as statements:
         async with async_session_factory.begin() as session:
             await repository._insert_candidates(session, event=materialized_event, candidates=candidates)
 
