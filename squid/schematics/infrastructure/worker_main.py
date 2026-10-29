@@ -225,7 +225,7 @@ def _error_payload(exc: Exception) -> Mapping[str, Any]:
         # Checked before its `InvalidSchematicError` base, so the candidate coordinates the
         # caller needs survive the pipe instead of collapsing into a generic rejection.
         kind = "ambiguous_simulation_input"
-        context = {"candidates": [list(candidate) for candidate in exc.candidates], "rejected": exc.rejected}
+        context = dict(wire.encode_simulation_input_error(exc))
     elif isinstance(exc, InvalidSchematicError):
         kind = "invalid"
         context = dict(exc.context)

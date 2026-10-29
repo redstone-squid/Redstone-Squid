@@ -44,6 +44,7 @@ from squid.schematics.domain.models import (
     VersionLossEntry,
 )
 from squid.schematics.domain.values import RESOURCE_PACK_MEDIA_TYPE, RgbaColor, VerifiedResourcePack
+from squid.schematics.errors import AmbiguousSimulationInputError
 
 LENGTH_PREFIX_BYTES = 4
 MAX_FRAME_BYTES = 256 * 1024 * 1024
@@ -609,6 +610,24 @@ def _decode_dimensions(payload: Mapping[str, Any]) -> SchematicDimensions:
         width=_integer(payload.get("width"), "schematic width", minimum=0),
         height=_integer(payload.get("height"), "schematic height", minimum=0),
         length=_integer(payload.get("length"), "schematic length", minimum=0),
+    )
+
+
+def encode_simulation_input_error(error: AmbiguousSimulationInputError) -> Mapping[str, Any]:
+    """Preserve the controls a caller can choose when simulation input is ambiguous."""
+    return {
+        "candidates": [list(candidate) for candidate in error.candidates],
+        "rejected": list(error.rejected) if error.rejected is not None else None,
+    }
+
+
+def decode_simulation_input_error(context: Mapping[str, Any]) -> AmbiguousSimulationInputError:
+    """Read current wire coordinates or the domain context retained by older durable workers."""
+    candidates = context.get("candidates", context.get("input_candidates"))
+    rejected = context.get("rejected")
+    return AmbiguousSimulationInputError(
+        candidates=tuple(_vector(value, "input candidate") for value in _array(candidates, "input candidates")),
+        rejected=_vector(rejected, "rejected input") if rejected is not None else None,
     )
 
 

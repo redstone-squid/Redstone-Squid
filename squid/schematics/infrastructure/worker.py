@@ -55,12 +55,10 @@ from squid.schematics.domain.models import (
     SchematicFormat,
     SchematicLimits,
     SimulationResult,
-    Vector3,
     VersionLossEntry,
 )
 from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
-    AmbiguousSimulationInputError,
     InvalidSchematicError,
     SchematicSupportUnavailableError,
     SchematicTimeoutError,
@@ -681,10 +679,7 @@ def _translate(error: object, operation: str) -> Exception:
             measure=_context_string(context, "measure"),
         )
     if kind == "ambiguous_simulation_input":
-        return AmbiguousSimulationInputError(
-            candidates=_vectors(context.get("candidates")),
-            rejected=_optional_vector(context.get("rejected")),
-        ).with_context(context={"operation": operation})
+        return wire.decode_simulation_input_error(context).with_context(context={"operation": operation})
     if kind == "invalid":
         return InvalidSchematicError(context={**context, "operation": operation})
     if kind == "unavailable":
@@ -694,36 +689,6 @@ def _translate(error: object, operation: str) -> Exception:
         resource="schematic",
         context={**context, "operation": operation},
     )
-
-
-def _vector(value: object) -> Vector3:
-    """Read one integer triple out of a child's error context, rejecting anything else.
-
-    The child is our own code, but it is still a separate process writing JSON into a pipe;
-    nothing here may assume the shape it claims to have sent.
-    """
-    if not isinstance(value, list):
-        msg = "Worker error coordinates must be JSON arrays."
-        raise TypeError(msg)
-    if len(value) != 3:
-        msg = "Worker error coordinates must contain exactly three integers."
-        raise ValueError(msg)
-    if any(not isinstance(axis, int) or isinstance(axis, bool) for axis in value):
-        msg = "Worker error coordinates must contain exactly three integers."
-        raise TypeError(msg)
-    x, y, z = cast(list[int], value)
-    return x, y, z
-
-
-def _vectors(value: object) -> tuple[Vector3, ...]:
-    if not isinstance(value, list):
-        msg = "Worker error candidates must be a JSON array."
-        raise TypeError(msg)
-    return tuple(_vector(raw) for raw in cast(list[Any], value))
-
-
-def _optional_vector(value: object) -> Vector3 | None:
-    return None if value is None else _vector(value)
 
 
 def _context_integer(context: Mapping[str, Any], key: str) -> int:

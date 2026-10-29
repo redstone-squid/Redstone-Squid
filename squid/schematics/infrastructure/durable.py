@@ -35,6 +35,7 @@ from squid.schematics.domain.models import (
 )
 from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
+    AmbiguousSimulationInputError,
     InvalidSchematicError,
     SchematicSupportUnavailableError,
     SchematicTimeoutError,
@@ -364,6 +365,8 @@ def _classify_error(error: Exception) -> tuple[SchematicJobErrorKind, Mapping[st
     context = dict(error.context) if isinstance(error, SquidError) else {}
     if isinstance(error, SchematicTooLargeError):
         return "too_large", context, True
+    if isinstance(error, AmbiguousSimulationInputError):
+        return "ambiguous_simulation_input", wire.encode_simulation_input_error(error), True
     if isinstance(error, InvalidSchematicError):
         return "invalid", context, True
     if isinstance(error, SchematicSupportUnavailableError):
@@ -388,6 +391,14 @@ def _job_failure(
             actual=int(context.get("actual", 0)),
             limit=int(context.get("limit", 0)),
             measure=str(context.get("measure", "size")),
+        )
+    # Older workers stored this subclass under its generic base kind, but retained both
+    # coordinate fields. Recover those rows without changing ordinary invalid schematics.
+    if snapshot.error_kind == "ambiguous_simulation_input" or (
+        snapshot.error_kind == "invalid" and "input_candidates" in context and "rejected" in context
+    ):
+        return wire.decode_simulation_input_error(context).with_context(
+            context={"job_id": snapshot.id, "operation": operation}
         )
     if snapshot.error_kind == "invalid":
         return InvalidSchematicError(snapshot.last_error, context={**context, "job_id": snapshot.id})
