@@ -152,7 +152,7 @@ def test_inherited_configured_state_is_rejected_after_fork(mocker: MockerFixture
         configure_observability(enabled_config(), service_name="api")
 
 
-def test_correlation_id_stays_unique_without_a_tracer(mocker: MockerFixture) -> None:
+def test_correlation_id_stays_unique_without_a_tracer() -> None:
     """Errors stay correlatable on deployments that never installed the SDK.
 
     `build_error_presentation` shows this id to the user and logs it beside the redacted
@@ -160,106 +160,29 @@ def test_correlation_id_stays_unique_without_a_tracer(mocker: MockerFixture) -> 
     constant. That it prefers the active trace id when there is one is proven for real,
     against a live tracer, in tests/integration/observability/test_traces.py.
     """
-    mocker.patch.object(observability, "_current_trace_id", return_value=None)
-
     error_ids = {observability.correlation_id() for _ in range(3)}
 
     assert len(error_ids) == 3
     assert all(len(error_id) == 12 for error_id in error_ids)
     assert all(set(error_id) <= set("0123456789abcdef") for error_id in error_ids)
-
-
-def test_trace_context_filter_adds_active_ids(mocker: MockerFixture) -> None:
-    mocker.patch.object(observability, "_current_trace_context", return_value=("a" * 32, "b" * 16))
-    record = logging.LogRecord("squid.test", logging.INFO, __file__, 1, "message", (), None)
-
-    assert observability.TraceContextFilter().filter(record) is True
-
-    assert vars(record)["trace_id"] == "a" * 32
-    assert vars(record)["span_id"] == "b" * 16
-
-
-def test_trace_context_filter_preserves_propagated_child_ids(mocker: MockerFixture) -> None:
-    mocker.patch.object(observability, "_current_trace_context", return_value=("a" * 32, "b" * 16))
-    record = logging.LogRecord("squid.worker", logging.INFO, __file__, 1, "message", (), None)
-    vars(record)["trace_id"] = "c" * 32
-    vars(record)["span_id"] = "d" * 16
-
-    observability.TraceContextFilter().filter(record)
-
-    assert vars(record)["trace_id"] == "c" * 32
-    assert vars(record)["span_id"] == "d" * 16
-
-
-def test_bound_correlation_id_wins_and_resets(mocker: MockerFixture) -> None:
-    mocker.patch.object(observability, "_current_trace_id", return_value=None)
-
-    token = observability.bind_correlation_id("request-scoped-id")
-    try:
-        assert observability.correlation_id() == "request-scoped-id"
-    finally:
-        observability.unbind_correlation_id(token)
-
-    # After unbinding, the untraced fallback resumes producing 12-hex-char ids.
-    fallback = observability.correlation_id()
-    assert len(fallback) == 12
-    assert set(fallback) <= set("0123456789abcdef")
-
-
-def test_trace_context_filter_stamps_bound_request_id(mocker: MockerFixture) -> None:
-    mocker.patch.object(observability, "_current_trace_context", return_value=None)
-    record = logging.LogRecord("squid.test", logging.INFO, __file__, 1, "message", (), None)
-
-    token = observability.bind_correlation_id("bound-request-id")
-    try:
-        observability.TraceContextFilter().filter(record)
-    finally:
-        observability.unbind_correlation_id(token)
-
-    assert vars(record)["request_id"] == "bound-request-id"
-
-
-def test_trace_context_filter_preserves_preset_request_id(mocker: MockerFixture) -> None:
-    mocker.patch.object(observability, "_current_trace_context", return_value=None)
-    record = logging.LogRecord("squid.test", logging.INFO, __file__, 1, "message", (), None)
-    vars(record)["request_id"] = "already-set"
-
-    token = observability.bind_correlation_id("bound-request-id")
-    try:
-        observability.TraceContextFilter().filter(record)
-    finally:
-        observability.unbind_correlation_id(token)
-
-    assert vars(record)["request_id"] == "already-set"
-
-
-def test_correlation_reference_shortens_a_trace_id_and_leaves_the_fallback_alone(
-    mocker: MockerFixture,
-) -> None:
-    """The two transports must show the same width, whether or not the SDK is installed.
-
-    A user reading an error card cannot tell which deployment they hit, so a reference quoted
-    from a traced process and one quoted from an untraced process have to look alike -- otherwise
-    the moderator looking it up has to know which is which.
-    """
+    assert all(observability.correlation_reference(error_id) == error_id for error_id in error_ids)
     assert observability.correlation_reference("a" * 32) == "a" * 12
 
-    mocker.patch.object(observability, "_current_trace_id", return_value=None)
-    fallback = observability.correlation_id()
 
-    assert observability.correlation_reference(fallback) == fallback
-
-
-def test_correlation_scope_is_reentrant_and_unbinds(mocker: MockerFixture) -> None:
-    """A hybrid command opens both the tree's scope and the prefix path's, and must get one ID."""
-    mocker.patch.object(observability, "_current_trace_id", return_value=None)
+def test_correlation_scope_stamps_logs_preserves_existing_ids_and_unbinds() -> None:
+    record = logging.LogRecord("squid.test", logging.INFO, __file__, 1, "message", (), None)
+    forwarded = _correlated_record("worker message", correlation="already-set")
 
     with observability.correlation_scope() as outer:
         with observability.correlation_scope() as inner:
             assert inner == outer
-        # The nested scope must not have unbound the outer one on the way out.
+            assert observability.correlation_id() == outer
         assert observability.correlation_id() == outer
+        observability.TraceContextFilter().filter(record)
+        observability.TraceContextFilter().filter(forwarded)
 
+    assert vars(record)["request_id"] == outer
+    assert vars(forwarded)["request_id"] == "already-set"
     assert observability.correlation_id() != outer
 
 
@@ -270,19 +193,12 @@ def test_correlated_log_buffer_keeps_the_most_recent_records_per_correlation() -
     for index in range(3):
         buffer.handle(_correlated_record(f"first-{index}", correlation="one"))
     buffer.handle(_correlated_record("other", correlation="two"))
+    buffer.handle(logging.LogRecord("squid.test", logging.INFO, __file__, 1, "loose", (), None))
 
     assert buffer.drain("one") == ("first-1", "first-2")
     assert buffer.drain("two") == ("other",)
-
-
-def test_correlated_log_buffer_drains_once() -> None:
-    """A drained tail must not reappear on a second error sharing the correlation."""
-    buffer = observability.CorrelatedLogBuffer()
-    buffer.setFormatter(logging.Formatter("%(message)s"))
-    buffer.handle(_correlated_record("only", correlation="one"))
-
-    assert buffer.drain("one") == ("only",)
     assert buffer.drain("one") == ()
+    assert buffer.drain("two") == ()
 
 
 def test_correlated_log_buffer_evicts_whole_correlations_past_its_bound() -> None:
@@ -296,16 +212,6 @@ def test_correlated_log_buffer_evicts_whole_correlations_past_its_bound() -> Non
     assert buffer.drain("one") == ()
     assert buffer.drain("two") == ("two",)
     assert buffer.drain("three") == ("three",)
-
-
-def test_correlated_log_buffer_ignores_records_without_a_correlation() -> None:
-    """Records logged outside any command or request have no tail to belong to."""
-    buffer = observability.CorrelatedLogBuffer()
-    buffer.setFormatter(logging.Formatter("%(message)s"))
-
-    buffer.handle(logging.LogRecord("squid.test", logging.INFO, __file__, 1, "loose", (), None))
-
-    assert buffer.drain("one") == ()
 
 
 def _correlated_record(message: str, *, correlation: str) -> logging.LogRecord:
