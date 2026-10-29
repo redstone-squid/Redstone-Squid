@@ -184,3 +184,43 @@ async def test_ranked_offsets_are_stable_across_requests(
         *(hit.title for hit in second.hits),
     ]
     assert first.total == whole.total == 3
+
+
+async def test_public_title_suggestions_share_search_visibility(
+    search_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    documents = (
+        ("build", "confirmed", "Piston confirmed"),
+        ("build", "CONFIRMED", "Piston uppercase"),
+        ("build", "pending", "Piston pending"),
+        ("build", "denied", "Piston denied"),
+        ("build", None, "Piston unclassified"),
+        ("record", None, "Piston record"),
+        ("tag", None, "Piston metadata"),
+    )
+    async with async_session_factory.begin() as session:
+        session.add_all(
+            SearchDocument(
+                resource_kind=kind,
+                source_key=str(index),
+                title=title,
+                normalized_title=title.casefold(),
+                fuzzy_text=title.casefold(),
+                status=status,
+                source_hash=f"visibility-{index}",
+            )
+            for index, (kind, status, title) in enumerate(documents)
+        )
+    backend = PostgresSearchBackend(async_session_factory)
+    query = SearchQueryParser().parse("piston")
+    public_titles = {"Piston confirmed", "Piston uppercase", "Piston record", "Piston metadata"}
+
+    assert set(await backend.suggest(query, limit=25)) == public_titles
+    public = await search(backend, SearchRequest(query="piston", scope=SearchScope.ALL, page_size=25))
+    assert {hit.title for hit in public.hits} == public_titles
+    staff = await search(
+        backend,
+        SearchRequest(query="piston", scope=SearchScope.BUILDS, visible_statuses=frozenset({"pending"})),
+    )
+    assert [hit.title for hit in staff.hits] == ["Piston pending"]
