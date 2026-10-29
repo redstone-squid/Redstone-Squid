@@ -13,9 +13,8 @@ from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
 from squid.api.errors import register_exception_handlers
-from squid.api.security import Caller, current_caller
+from squid.api.security import Caller, current_browser_account_id, current_caller
 from squid.api.v1.cli_auth import (
-    current_browser_account_id,
     current_cli_identity,
     get_cli_authorization_service,
     router,
@@ -264,6 +263,7 @@ async def test_enrollment_returns_fragment_approval_link_and_no_store() -> None:
 
     assert response.status_code == 201
     assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
     assert response.json()["verification_uri_complete"] == f"{VERIFICATION_URI}#code=ABCD-EFGH"
     assert cli.started == (PUBLIC_KEY, CLIENT_INSTANCE_ID, "Test workstation")
     caller = idempotency.reservations[0]["caller"]
@@ -286,6 +286,9 @@ async def test_browser_previews_fingerprint_before_approval() -> None:
     assert approved.status_code == 200
     assert approved.json()["approved_at"] is not None
     assert cli.approved_as == ACCOUNT_ID
+    for response in (preview, approved):
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["pragma"] == "no-cache"
 
 
 async def test_device_proofs_exchange_for_one_time_session_tokens() -> None:
@@ -342,6 +345,12 @@ async def test_account_and_current_session_revocation_are_separately_scoped() ->
     assert listed.json()["devices"][0]["id"] == str(DEVICE_ID)
     assert revoked_device.status_code == 204
     assert revoked_session.status_code == 204
+    for response in (listed, revoked_device, revoked_session):
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["pragma"] == "no-cache"
+    for response in (revoked_device, revoked_session):
+        assert response.content == b""
+        assert "content-type" not in response.headers
     assert cli.revoked_device == (DEVICE_ID, ACCOUNT_ID)
     assert cli.revoked_identity == CliIdentity(
         account_id=ACCOUNT_ID,

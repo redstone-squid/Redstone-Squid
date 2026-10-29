@@ -1,7 +1,6 @@
 """Strict HTTP routes for Minecraft installation and player authorization."""
 
 import hashlib
-from collections.abc import Awaitable
 from typing import Annotated
 from uuid import UUID
 
@@ -12,7 +11,7 @@ from squid.api.contract import ANONYMOUS, PAPER, WEB, WEB_WRITE, browser_only, c
 from squid.api.dependencies import MinecraftInstallations, MinecraftPlayerAuthorization
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
-from squid.api.security import Caller, current_caller, require_consented_account
+from squid.api.security import BrowserAccountId, prevent_credential_storage
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
     ChallengeApprovalResponse,
@@ -28,7 +27,7 @@ from squid.api.v1.schemas.minecraft_auth import (
     PaperChallengeExchangeRequest,
     ServerProfileSchema,
 )
-from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
+from squid.core.errors import NotFoundError, ServiceUnavailableError
 from squid.minecraft_auth.application.crypto import (
     MAX_INSTALLATION_ID_CHARS,
     MAX_INSTALLATION_SECRET_CHARS,
@@ -38,8 +37,6 @@ from squid.minecraft_auth.application.crypto import (
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
 )
-
-_NO_STORE = "no-store"
 
 
 async def get_minecraft_verification_uri(request: Request) -> AnyHttpUrl:
@@ -52,14 +49,6 @@ async def get_minecraft_verification_uri(request: Request) -> AnyHttpUrl:
     return verification_uri
 
 
-async def current_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
-    """Require a signed-in human account with current privacy consent."""
-    if caller.kind != "account" or caller.account_id is None:
-        raise AuthenticationError
-    return require_consented_account(caller)
-
-
-AccountId = Annotated[int, Depends(current_account_id)]
 InstallationIdHeader = Annotated[
     str | None,
     Header(
@@ -86,7 +75,7 @@ async def authenticated_paper_installation(
     installation_secret: InstallationSecretHeader = None,
 ) -> AuthenticatedPaperInstallation:
     """Authenticate both Paper headers without treating the installation as a player."""
-    return await _execute(installations.authenticate_headers(installation_id, installation_secret))
+    return await installations.authenticate_headers(installation_id, installation_secret)
 
 
 AuthenticatedPaper = Annotated[AuthenticatedPaperInstallation, Depends(authenticated_paper_installation)]
@@ -115,6 +104,7 @@ async def enforce_fabric_request_idempotency(
 router = APIRouter(
     prefix="/minecraft/auth",
     tags=["minecraft-authentication"],
+    dependencies=[Depends(prevent_credential_storage)],
 )
 
 
@@ -129,19 +119,15 @@ router = APIRouter(
 )
 async def create_installation(
     payload: InstallationCreateRequest,
-    response: Response,
     installations: MinecraftInstallations,
-    account_id: AccountId,
+    account_id: BrowserAccountId,
 ) -> IssuedInstallationResponse:
     """Register a Paper server and return its plaintext secret exactly once."""
-    issued = await _execute(
-        installations.register(
-            owner_account_id=account_id,
-            label=payload.label,
-            profile=payload.profile.to_domain(),
-        )
+    issued = await installations.register(
+        owner_account_id=account_id,
+        label=payload.label,
+        profile=payload.profile.to_domain(),
     )
-    _prevent_storage(response)
     return IssuedInstallationResponse.from_domain(issued)
 
 
@@ -153,13 +139,11 @@ async def create_installation(
     openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def list_installations(
-    response: Response,
     installations: MinecraftInstallations,
-    account_id: AccountId,
+    account_id: BrowserAccountId,
 ) -> InstallationListResponse:
     """List only the signed-in account's Paper installations, without secrets or digests."""
-    owned = await _execute(installations.list_owned(account_id))
-    _prevent_storage(response)
+    owned = await installations.list_owned(account_id)
     return InstallationListResponse(
         installations=[InstallationResponse.from_domain(installation) for installation in owned]
     )
@@ -175,13 +159,11 @@ async def list_installations(
 )
 async def rotate_installation(
     installation_id: UUID,
-    response: Response,
     installations: MinecraftInstallations,
-    account_id: AccountId,
+    account_id: BrowserAccountId,
 ) -> IssuedInstallationResponse:
     """Fence an owned installation's old credentials and return one replacement secret."""
-    issued = await _execute(installations.rotate(installation_id=installation_id, owner_account_id=account_id))
-    _prevent_storage(response)
+    issued = await installations.rotate(installation_id=installation_id, owner_account_id=account_id)
     return IssuedInstallationResponse.from_domain(issued)
 
 
@@ -196,25 +178,22 @@ async def rotate_installation(
 async def update_installation_profile(
     installation_id: UUID,
     payload: ServerProfileSchema,
-    response: Response,
     installations: MinecraftInstallations,
-    account_id: AccountId,
+    account_id: BrowserAccountId,
 ) -> InstallationResponse:
     """Replace an owned server's explicit public-listing and sponsorship preferences."""
-    installation = await _execute(
-        installations.update_profile(
-            installation_id=installation_id,
-            owner_account_id=account_id,
-            profile=payload.to_domain(),
-        )
+    installation = await installations.update_profile(
+        installation_id=installation_id,
+        owner_account_id=account_id,
+        profile=payload.to_domain(),
     )
-    _prevent_storage(response)
     return InstallationResponse.from_domain(installation)
 
 
 @router.delete(
     "/paper/installations/{installation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
     responses=responses(400, 401, 403, 404, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="paper_installation_revoke",
@@ -223,11 +202,10 @@ async def update_installation_profile(
 async def revoke_installation(
     installation_id: UUID,
     installations: MinecraftInstallations,
-    account_id: AccountId,
-) -> Response:
+    account_id: BrowserAccountId,
+) -> None:
     """Revoke an owned server and all pending or active authorization derived from it."""
-    await _execute(installations.revoke(installation_id=installation_id, owner_account_id=account_id))
-    return _empty_no_store()
+    await installations.revoke(installation_id=installation_id, owner_account_id=account_id)
 
 
 @router.post(
@@ -241,14 +219,12 @@ async def revoke_installation(
 )
 async def start_paper_challenge(
     payload: PaperChallengeCreateRequest,
-    response: Response,
     players: MinecraftPlayerAuthorization,
     installation: AuthenticatedPaper,
     verification_uri: VerificationUri,
 ) -> ChallengeCreateResponse:
     """Start player authorization bound to the authenticated Paper credential generation."""
-    challenge = await _execute(players.start_paper_challenge(installation=installation, java_uuid=payload.java_uuid))
-    _prevent_storage(response)
+    challenge = await players.start_paper_challenge(installation=installation, java_uuid=payload.java_uuid)
     return ChallengeCreateResponse.from_domain(challenge, verification_uri=verification_uri)
 
 
@@ -262,13 +238,11 @@ async def start_paper_challenge(
 )
 async def exchange_paper_challenge(
     payload: PaperChallengeExchangeRequest,
-    response: Response,
     players: MinecraftPlayerAuthorization,
     installation: AuthenticatedPaper,
 ) -> IssuedPlayerGrantResponse:
     """Exchange one approved Paper challenge on the same authenticated installation."""
-    issued = await _execute(players.exchange_paper(device_code=payload.device_code, installation=installation))
-    _prevent_storage(response)
+    issued = await players.exchange_paper(device_code=payload.device_code, installation=installation)
     return IssuedPlayerGrantResponse.from_domain(issued)
 
 
@@ -283,18 +257,14 @@ async def exchange_paper_challenge(
 )
 async def start_fabric_challenge(
     payload: FabricChallengeCreateRequest,
-    response: Response,
     players: MinecraftPlayerAuthorization,
     verification_uri: VerificationUri,
 ) -> ChallengeCreateResponse:
     """Start an anonymous Fabric challenge committed to a client-held S256 verifier."""
-    challenge = await _execute(
-        players.start_fabric_challenge(
-            java_uuid=payload.java_uuid,
-            pkce_s256_challenge=payload.pkce_s256_challenge,
-        )
+    challenge = await players.start_fabric_challenge(
+        java_uuid=payload.java_uuid,
+        pkce_s256_challenge=payload.pkce_s256_challenge,
     )
-    _prevent_storage(response)
     return ChallengeCreateResponse.from_domain(challenge, verification_uri=verification_uri)
 
 
@@ -308,14 +278,10 @@ async def start_fabric_challenge(
 )
 async def exchange_fabric_challenge(
     payload: FabricChallengeExchangeRequest,
-    response: Response,
     players: MinecraftPlayerAuthorization,
 ) -> IssuedPlayerGrantResponse:
     """Exchange one approved Fabric challenge by proving its client-held PKCE verifier."""
-    issued = await _execute(
-        players.exchange_fabric(device_code=payload.device_code, pkce_verifier=payload.pkce_verifier)
-    )
-    _prevent_storage(response)
+    issued = await players.exchange_fabric(device_code=payload.device_code, pkce_verifier=payload.pkce_verifier)
     return IssuedPlayerGrantResponse.from_domain(issued)
 
 
@@ -329,19 +295,18 @@ async def exchange_fabric_challenge(
 )
 async def approve_challenge(
     payload: ChallengeApprovalRequest,
-    response: Response,
     players: MinecraftPlayerAuthorization,
-    account_id: AccountId,
+    account_id: BrowserAccountId,
 ) -> ChallengeApprovalResponse:
     """Approve only the Java UUID authoritatively attached to the signed-in account."""
-    challenge = await _execute(players.approve(user_code=payload.user_code, account_id=account_id))
-    _prevent_storage(response)
+    challenge = await players.approve(user_code=payload.user_code, account_id=account_id)
     return ChallengeApprovalResponse.from_domain(challenge)
 
 
 @router.delete(
     "/grants/{grant_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
     responses=responses(400, 401, 403, 404, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="minecraft_grant_revoke",
@@ -350,25 +315,9 @@ async def approve_challenge(
 async def revoke_grant(
     grant_id: UUID,
     players: MinecraftPlayerAuthorization,
-    account_id: AccountId,
-) -> Response:
+    account_id: BrowserAccountId,
+) -> None:
     """Revoke one grant only when it belongs to the signed-in account."""
-    revoked = await _execute(players.revoke_grant(grant_id=grant_id, account_id=account_id))
+    revoked = await players.revoke_grant(grant_id=grant_id, account_id=account_id)
     if not revoked:
         raise NotFoundError
-    return _empty_no_store()
-
-
-async def _execute[T](operation: Awaitable[T]) -> T:
-    return await operation
-
-
-def _prevent_storage(response: Response) -> None:
-    response.headers["Cache-Control"] = _NO_STORE
-    response.headers["Pragma"] = "no-cache"
-
-
-def _empty_no_store() -> Response:
-    response = Response(status_code=status.HTTP_204_NO_CONTENT)
-    _prevent_storage(response)
-    return response

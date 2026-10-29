@@ -14,11 +14,8 @@ from whenever import Instant
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.dependencies import get_minecraft_installations, get_minecraft_player_authorization
 from squid.api.errors import register_exception_handlers
-from squid.api.security import ANONYMOUS, Caller, current_caller
-from squid.api.v1.minecraft_auth import (
-    current_account_id,
-    router,
-)
+from squid.api.security import ANONYMOUS, Caller, current_browser_account_id, current_caller
+from squid.api.v1.minecraft_auth import router
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
     FabricChallengeCreateRequest,
@@ -294,7 +291,7 @@ def app_with_fakes(
 
     app.dependency_overrides[get_minecraft_installations] = installation_dependency
     app.dependency_overrides[get_minecraft_player_authorization] = player_dependency
-    app.dependency_overrides[current_account_id] = account_dependency
+    app.dependency_overrides[current_browser_account_id] = account_dependency
     app.dependency_overrides[current_caller] = caller_dependency
     return app
 
@@ -441,6 +438,10 @@ async def test_routes_derive_account_origin_and_paper_installation_from_dependen
         installation_revoked,
     ):
         assert response.headers["Cache-Control"] == "no-store"
+        assert response.headers["Pragma"] == "no-cache"
+    for response in (grant_revoked, installation_revoked):
+        assert response.content == b""
+        assert "content-type" not in response.headers
 
 
 async def test_one_time_device_responses_use_server_derived_idempotency_namespaces() -> None:
@@ -538,7 +539,7 @@ async def test_authorization_errors_map_to_stable_problem_context_without_secret
 
 async def test_account_dependency_rejects_services_and_stale_consent() -> None:
     with pytest.raises(AuthenticationError):
-        await current_account_id(ANONYMOUS)
+        await current_browser_account_id(ANONYMOUS)
     caller = Caller(
         kind="account",
         subject="account:42",
@@ -547,4 +548,4 @@ async def test_account_dependency_rejects_services_and_stale_consent() -> None:
     )
 
     with pytest.raises(ConsentRequiredError):
-        await current_account_id(caller)
+        await current_browser_account_id(caller)
