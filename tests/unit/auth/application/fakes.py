@@ -8,11 +8,29 @@ Bedrock is a provider this project would plausibly add for real and already has 
 validation.
 """
 
+from dataclasses import dataclass, field
+from typing import override
+
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider
+from squid.accounts.application import AccountService
+from squid.accounts.domain import Account, AccountConsent, IdentityProvider
 from squid.auth.domain.oauth import ExternalIdentity
 from squid.auth.domain.sessions import OAuthState
+
+
+@dataclass(slots=True)
+class AccountServiceRecorder(AccountService):
+    account_id: int = 42
+    identities: list[tuple[IdentityProvider, str]] = field(default_factory=list)
+
+    @override
+    async def get_or_create_identity(
+        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+    ) -> Account:
+        del consent
+        self.identities.append((provider, subject))
+        return Account(id=self.account_id)
 
 
 class SessionRepository:

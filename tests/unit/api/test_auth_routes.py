@@ -1,106 +1,109 @@
-"""Browser-session route shape.
+"""Browser authorization routes over the real provider and session service."""
 
-`/v1/auth/{provider}` is a template and `/v1/auth/discord` is one instance of it, so
-`SQUID_OAUTH_REDIRECT_URI` needs no coordinated change and the frontend's URLs keep
-working byte-identically.
-"""
+from collections.abc import Iterator
+from dataclasses import dataclass
+from http.cookies import SimpleCookie
+from urllib.parse import parse_qs, urlsplit
 
-from typing import override
-
+import httpx
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import AnyHttpUrl, SecretStr
 
+from squid.accounts.domain import IdentityProvider
+from squid.auth.application.providers import DiscordOAuthProvider
 from squid.auth.application.web import WebSessionService
-from squid.core.errors import NotFoundError
+from squid.config import OAuthClientCredentials
 from tests.unit.api.fakes import build_app
+from tests.unit.auth.application.fakes import AccountServiceRecorder, SessionRepository
 
 
-class WebAuthRecorder(WebSessionService):
-    def __init__(self, *, authorize_error: Exception | None = None) -> None:
-        self.authorize_error = authorize_error
-        self.authorizations: list[tuple[str, str | None]] = []
-        self.callbacks: list[tuple[str, str, str, str | None]] = []
-
-    @property
-    @override
-    def configured(self) -> bool:
-        return True
-
-    @override
-    async def authorize_url(self, slug: str, redirect_to: str | None) -> str:
-        self.authorizations.append((slug, redirect_to))
-        if self.authorize_error is not None:
-            raise self.authorize_error
-        return "https://discord.example/authorize?state=abc"
-
-    @override
-    async def callback(self, slug: str, code: str, state: str, *, user_agent: str | None) -> tuple[str, str | None]:
-        self.callbacks.append((slug, code, state, user_agent))
-        return "session-token", "/account"
+@dataclass
+class BrowserLogin:
+    client: TestClient
+    sessions: SessionRepository
+    accounts: AccountServiceRecorder
+    auth: WebSessionService
 
 
-def web_auth(*, authorize_error: Exception | None = None) -> WebAuthRecorder:
-    return WebAuthRecorder(authorize_error=authorize_error)
+@pytest.fixture
+def login() -> Iterator[BrowserLogin]:
+    def discord(request: httpx.Request) -> httpx.Response:
+        payload = {"access_token": "discord-token"} if request.url.path.endswith("/oauth2/token") else {"id": "123"}
+        return httpx.Response(200, json=payload)
+
+    upstream = httpx.AsyncClient(transport=httpx.MockTransport(discord))
+    credentials = OAuthClientCredentials(
+        client_id="client",
+        client_secret=SecretStr("secret"),
+        redirect_uri=AnyHttpUrl("https://test/v1/auth/discord/callback"),
+    )
+    provider = DiscordOAuthProvider(credentials, upstream)
+    sessions = SessionRepository()
+    accounts = AccountServiceRecorder()
+    auth = WebSessionService(sessions, accounts, {provider.slug: provider}, 336, "test-session-pepper")
+    app, database = build_app(web_auth=auth)
+    with TestClient(app, base_url="https://test", follow_redirects=False) as client:
+        try:
+            yield BrowserLogin(client, sessions, accounts, auth)
+        finally:
+            assert client.portal is not None
+            client.portal.call(upstream.aclose)
+    assert database.closed
 
 
-def test_the_discord_paths_still_resolve_and_carry_their_slug() -> None:
-    """The instance of the template that already exists in the wild."""
-    auth = web_auth()
-    app, _ = build_app(web_auth=auth)
+def test_discord_login_consumes_state_and_sets_session_cookies(login: BrowserLogin) -> None:
+    authorize = login.client.get("/v1/auth/discord", params={"redirect_to": "/account"})
 
-    with TestClient(app) as client:
-        response = client.get("/v1/auth/discord", params={"redirect_to": "/account"}, follow_redirects=False)
+    assert authorize.status_code == 307
+    assert login.sessions.state is not None
+    state = login.sessions.state.state
+    query = parse_qs(urlsplit(authorize.headers["location"]).query)
+    assert query["state"] == [state]
+    assert query["code_challenge_method"] == ["S256"]
 
-    assert response.status_code == 307
-    assert auth.authorizations == [("discord", "/account")]
+    callback = login.client.get("/v1/auth/discord/callback", params={"code": "c", "state": state})
+
+    assert callback.status_code == 307
+    assert callback.headers["location"] == "/account"
+    assert login.sessions.state is None
+    assert login.accounts.identities == [(IdentityProvider.DISCORD, "123")]
+    token = callback.cookies["__Host-squid_session"]
+    assert login.sessions.token_hash == login.auth.hash_token(token)
+    assert login.sessions.account_id == login.accounts.account_id
+    cookies = SimpleCookie()
+    for header in callback.headers.get_list("set-cookie"):
+        cookies.load(header)
+    session_cookie = cookies["__Host-squid_session"]
+    assert session_cookie["secure"]
+    assert session_cookie["httponly"]
+    assert session_cookie["path"] == "/"
+    assert session_cookie["samesite"] == "lax"
+    assert cookies["squid_csrf"]["secure"]
+    assert not cookies["squid_csrf"]["httponly"]
+
+    replay = login.client.get("/v1/auth/discord/callback", params={"code": "c", "state": state})
+    assert replay.status_code == 401
+    assert login.accounts.identities == [(IdentityProvider.DISCORD, "123")]
 
 
-def test_the_callback_passes_its_slug_through() -> None:
-    auth = web_auth()
-    app, _ = build_app(web_auth=auth)
+def test_provider_route_does_not_swallow_the_csrf_endpoint(login: BrowserLogin) -> None:
+    response = login.client.get("/v1/auth/csrf")
 
-    with TestClient(app) as client:
-        response = client.get("/v1/auth/discord/callback", params={"code": "c", "state": "s"}, follow_redirects=False)
-
-    assert response.status_code == 307
-    assert auth.callbacks[0][:3] == ("discord", "c", "s")
-
-
-def test_the_templated_route_does_not_swallow_the_csrf_endpoint() -> None:
-    """FastAPI matches in declaration order, so this failure would be silent.
-
-    `GET /v1/auth/{provider}` declared above `GET /v1/auth/csrf` would answer the CSRF
-    request as a provider lookup -- a plausible-looking 404 rather than an obvious break.
-    """
-    auth = web_auth()
-    app, _ = build_app(web_auth=auth)
-
-    with TestClient(app) as client:
-        response = client.get("/v1/auth/csrf")
-
-    # 401 because this client carries no session, which is the CSRF route answering. A
-    # 404 here would mean the templated route had taken the path.
     assert response.status_code == 401
-    assert auth.authorizations == []
+    assert login.sessions.state is None
 
 
-def test_an_unconfigured_provider_is_a_404_not_a_credential_failure() -> None:
-    auth = web_auth(authorize_error=NotFoundError(context={"provider": "github"}))
-    app, _ = build_app(web_auth=auth)
-
-    with TestClient(app) as client:
-        response = client.get("/v1/auth/github", follow_redirects=False)
+def test_unconfigured_provider_is_not_found(login: BrowserLogin) -> None:
+    response = login.client.get("/v1/auth/github")
 
     assert response.status_code == 404
+    assert login.sessions.state is None
 
 
 @pytest.mark.parametrize("slug", ["Discord", "a" * 33, "-discord", "1discord"])
-def test_a_malformed_slug_never_reaches_the_service(slug: str) -> None:
-    auth = web_auth()
-    app, _ = build_app(web_auth=auth)
+def test_malformed_slug_cannot_create_authorization_state(login: BrowserLogin, slug: str) -> None:
+    response = login.client.get(f"/v1/auth/{slug}")
 
-    with TestClient(app) as client:
-        response = client.get(f"/v1/auth/{slug}", follow_redirects=False)
-
-    assert response.status_code in {404, 422}
-    assert auth.authorizations == []
+    assert response.status_code == 422
+    assert login.sessions.state is None
