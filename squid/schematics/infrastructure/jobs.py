@@ -1,10 +1,10 @@
 """PostgreSQL adapter for durable schematic jobs."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import timedelta
 from typing import Any, cast
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -85,6 +85,20 @@ class PostgresSchematicJobRepository:
             for row in await self._queue.claim(limit=limit)
         )
 
+    async def register_result_object(self, job: ClaimedSchematicJob, object_key: str) -> bool:
+        statement = (
+            update(SchematicJob)
+            .where(SchematicJob.id == job.id, self._queue.held_by(job.claim_token))
+            .values(
+                result_object_keys=func.array_append(
+                    func.array_remove(SchematicJob.result_object_keys, object_key), object_key
+                )
+            )
+            .returning(SchematicJob.id)
+        )
+        async with self._session_factory.begin() as session:
+            return await session.scalar(statement) is not None
+
     async def complete(
         self,
         job: ClaimedSchematicJob,
@@ -134,17 +148,23 @@ class PostgresSchematicJobRepository:
         )
         return outcome.dead_lettered
 
-    async def cleanup(self, *, limit: int) -> Sequence[str]:
-        candidates = (
-            select(SchematicJob.id)
+    async def cleanup(self, delete_object: Callable[[str], Awaitable[None]], *, limit: int) -> int:
+        """Retain cleanup inventory until every external deletion succeeds."""
+        statement = (
+            select(SchematicJob)
             .where(SchematicJob.expires_at <= func.now())
             .order_by(SchematicJob.expires_at)
             .limit(limit)
             .with_for_update(skip_locked=True)
         )
-        statement = (
-            delete(SchematicJob).where(SchematicJob.id.in_(candidates)).returning(SchematicJob.result_object_key)
-        )
         async with self._session_factory.begin() as session:
-            rows = (await session.execute(statement)).scalars().all()
-        return tuple(key for key in rows if key is not None)
+            jobs = (await session.scalars(statement)).all()
+            # Include the legacy key: jobs completed by an older worker have no inventory.
+            keys = dict.fromkeys(
+                key for job in jobs for key in (*job.result_object_keys, job.result_object_key) if key is not None
+            )
+            for key in keys:
+                await delete_object(key)
+            if jobs:
+                await session.execute(delete(SchematicJob).where(SchematicJob.id.in_([job.id for job in jobs])))
+            return len(jobs)

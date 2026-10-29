@@ -1,19 +1,20 @@
 """Real-PostgreSQL coverage for durable schematic execution."""
 
-from collections.abc import AsyncGenerator, Coroutine
+from collections.abc import AsyncGenerator, Coroutine, Mapping
 from pathlib import Path
-from typing import Any, override
+from typing import Any, Literal, override
 
 import anyio
 import pytest
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from squid.artifacts.application import ArtifactMetadata
 from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.config import SchematicConfig
 from squid.persistence.base import Base
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.jobs import SchematicJobService
+from squid.schematics.application.jobs import ClaimedSchematicJob, SchematicJobService
 from squid.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
 from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import AmbiguousSimulationInputError, InvalidSchematicError
@@ -175,21 +176,25 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
 ) -> None:
     started, release = anyio.Event(), anyio.Event()
 
-    class DelayedAnalyzer(FakeSchematicAnalyzer):
-        @override
-        async def render(
-            self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
-        ) -> bytes:
-            started.set()
-            await release.wait()
-            return b"stale render"
+    class DelayedUpload(LocalArtifactStore):
+        delayed: bool = False
 
-    artifacts = LocalArtifactStore(tmp_path / "objects")
+        @override
+        async def put(self, key: str, data: bytes, *, content_type: str) -> ArtifactMetadata:
+            if key.startswith("schematic-jobs/results/") and not self.delayed:
+                self.delayed = True
+                started.set()
+                await release.wait()
+            return await super().put(key, data, content_type=content_type)
+
+    artifacts = DelayedUpload(tmp_path / "objects")
     await artifacts.put("input", b"schematic", content_type="application/octet-stream")
     repository = PostgresSchematicJobRepository(async_session_factory)
     jobs = SchematicJobService(repository)
     job_id = await jobs.submit("render", {"request": wire.encode_render_request(RenderRequest())}, ("input",))
-    stale = SchematicJobRunner(jobs, artifacts, DelayedAnalyzer(), SchematicConfig())
+    stale_native = FakeSchematicAnalyzer()
+    stale_native.render_output = b"stale render"
+    stale = SchematicJobRunner(jobs, artifacts, stale_native, SchematicConfig())
     native = FakeSchematicAnalyzer()
     current = SchematicJobRunner(jobs, artifacts, native, SchematicConfig())
 
@@ -220,3 +225,113 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
     await current.cleanup()
     assert await jobs.get(job_id) is None
     assert await artifacts.get(completed.result_object_key, max_bytes=1024) is None
+
+
+@pytest.mark.parametrize("interruption", ["before_commit", "after_commit", "cancelled"])
+async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retries(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+    interruption: Literal["before_commit", "after_commit", "cancelled"],
+) -> None:
+    sessions = migrated_session_factory
+    completion_started = anyio.Event()
+
+    class InterruptedCompletion(PostgresSchematicJobRepository):
+        interrupted: bool = False
+        first_claim: ClaimedSchematicJob | None = None
+
+        @override
+        async def complete(
+            self,
+            job: ClaimedSchematicJob,
+            result: Mapping[str, Any],
+            result_object_key: str | None,
+            *,
+            retention_hours: int,
+        ) -> bool:
+            if not self.interrupted:
+                self.interrupted = True
+                self.first_claim = job
+                if interruption == "cancelled":
+                    completion_started.set()
+                    await anyio.sleep_forever()
+                if interruption == "after_commit":
+                    await super().complete(job, result, result_object_key, retention_hours=retention_hours)
+                raise OSError("completion acknowledgement lost")
+            return await super().complete(job, result, result_object_key, retention_hours=retention_hours)
+
+    class InterruptedDeletion(LocalArtifactStore):
+        fail_key: str | None = None
+
+        @override
+        async def delete(self, key: str) -> None:
+            if key == self.fail_key:
+                self.fail_key = None
+                raise OSError("object storage unavailable")
+            await super().delete(key)
+
+    artifacts = InterruptedDeletion(tmp_path / "objects")
+    await artifacts.put("input", b"schematic", content_type="application/octet-stream")
+    repository = InterruptedCompletion(sessions)
+    jobs = SchematicJobService(repository)
+    job_id = await jobs.submit("render", {"request": wire.encode_render_request(RenderRequest())}, ("input",))
+    native = FakeSchematicAnalyzer()
+    runner = SchematicJobRunner(jobs, artifacts, native, SchematicConfig())
+    if interruption == "cancelled":
+        with anyio.fail_after(5):
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(runner.process_batch)
+                await completion_started.wait()
+                tasks.cancel_scope.cancel()
+    else:
+        await runner.process_batch()
+
+    async with sessions() as session:
+        row = await session.get(SchematicJob, job_id)
+        assert row is not None
+        (first_key,) = row.result_object_keys
+    assert await artifacts.get(first_key, max_bytes=1024) == native.render_output
+    if interruption != "after_commit":
+        async with sessions.begin() as session:
+            await session.execute(
+                update(SchematicJob)
+                .where(SchematicJob.id == job_id)
+                .values(available_at=func.now(), claimed_at=text("now() - interval '6 minutes'"))
+            )
+        await runner.process_batch()
+    completed = await jobs.get(job_id)
+    assert completed is not None
+    assert completed.completed_at is not None
+    assert completed.result_object_key is not None
+    winning_key = completed.result_object_key
+    assert (first_key == winning_key) is (interruption == "after_commit")
+    assert await artifacts.get(winning_key, max_bytes=1024) == native.render_output
+    assert repository.first_claim is not None
+    assert not await jobs.register_result_object(repository.first_claim, "stale-output")
+
+    # Old worker versions only wrote the winning key, without an attempt inventory.
+    legacy_id = await jobs.submit("render", {}, ())
+    await artifacts.put("legacy-output", b"legacy", content_type="image/png")
+    async with sessions.begin() as session:
+        await session.execute(
+            update(SchematicJob)
+            .where(SchematicJob.id == legacy_id)
+            .values(result_object_key="legacy-output", completed_at=func.now())
+        )
+        await session.execute(
+            update(SchematicJob)
+            .where(SchematicJob.id.in_((job_id, legacy_id)))
+            .values(expires_at=text("now() - interval '1 hour'"))
+        )
+    artifacts.fail_key = winning_key
+    with pytest.raises(OSError, match="object storage unavailable"):
+        await runner.cleanup()
+    assert await jobs.get(job_id) is not None
+    assert await jobs.get(legacy_id) is not None
+    if first_key != winning_key:
+        assert await artifacts.get(first_key, max_bytes=1024) is None
+    await runner.cleanup()
+    assert await jobs.get(job_id) is None
+    assert await jobs.get(legacy_id) is None
+    for key in {first_key, winning_key, "legacy-output"}:
+        assert await artifacts.get(key, max_bytes=1024) is None

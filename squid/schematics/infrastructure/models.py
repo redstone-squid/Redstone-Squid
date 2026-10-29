@@ -326,6 +326,13 @@ class SchematicJob(Base, kw_only=True):
     input_keys: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default_factory=list)
     result: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
     result_object_key: Mapped[str | None] = mapped_column(Text, default=None)
+    result_object_keys: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+        default_factory=list,
+        server_default=text("'{}'::text[]"),
+        comment="Result objects registered by worker claims, retained until job expiry.",
+    )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
