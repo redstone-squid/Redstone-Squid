@@ -977,10 +977,6 @@ mako==1.4.3 \
     --hash=sha256:723296007c870bfd6b3f0c3230dba7198096e5269297ebf5e4eff9e7ffa39d4f \
     --hash=sha256:cd6537fe88d5fec315c55c2f8529bc4ce7a9a352ad7db3eeaa6a66e2dd4ec37a
     # via alembic
-markdown==3.11.2 \
-    --hash=sha256:87bf5d90f2d2882e2c02fcda182c2800456b985bff38913867c49706481514b0 \
-    --hash=sha256:f80390747a2a0ff2ba54da074ce4f862f72a6685f608cd2637b646a6d83993f5
-    # via redstone-squid
 markdown-it-py==4.2.0 \
     --hash=sha256:04a21681d6fbb623de53f6f364d352309d4094dd4194040a10fd51833e418d49 \
     --hash=sha256:9f7ebbcd14fe59494226453aed97c1070d83f8d24b6fc3a3bcf9a38092641c4a
@@ -1974,9 +1970,6 @@ truststore==0.10.5 ; sys_platform != 'emscripten' \
 types-docker==7.2.0.20260806 \
     --hash=sha256:5f1dd8f10c64d37675a9694cad96c4163a7c8f4e7b1f40faf69855e6da8051c2 \
     --hash=sha256:a426388646f115bf85554734ff0b7eb308903fbe5081a5588d1a271b7845d473
-types-markdown==3.10.2.20260712 \
-    --hash=sha256:25aea17282490f35ab6b17a87771abd2f479185aaff8e8f4a0035043f02f2c52 \
-    --hash=sha256:a551ddedde46e0eaca7059aa3d0e42db71afe2b53d8b58f72f2de63f3284f625
 types-psycopg2==2.9.21.20260724 \
     --hash=sha256:4f87890dd06cea99e3bb0536330ffc2a7320e69059dc1ee0e2c884ef2718f2b4 \
     --hash=sha256:db31031c37de823a2b21c787cb84832174fdda2a99a8b1af648206f19cc32f8c

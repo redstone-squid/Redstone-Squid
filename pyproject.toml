@@ -26,7 +26,6 @@ dependencies = [
     "pgvector>=0.5,<1",
     "openai>=1.58.1",
     "async-lru>=2.0.4",
-    "markdown>=3.7",
     "beautifulsoup4>=4.12.3",
     "boto3>=1.43.48,<2",
     "cryptography>=50,<51",
@@ -95,8 +94,9 @@ dev = [
     "testcontainers>=4.10.0",
     "prek>=0.2.28",
     "schemathesis==4.24.2",
+    # Stub-only packages: docker and psycopg2 ship no type information, so without
+    # these every symbol they export is `Any` and pyrefly reports `untyped-import`.
     "types-docker>=7.1",
-    "types-Markdown>=3.7",
     "types-psycopg2>=2.9",
     "redstone-squid[schematics,observability]",
 ]
