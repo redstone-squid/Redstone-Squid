@@ -397,7 +397,6 @@ class _ServiceGraph:
             self.artifacts,
             normalization,
             working_directory=media.working_directory,
-            cleanup=self.media_cleanup,
         )
 
     @cached_property
