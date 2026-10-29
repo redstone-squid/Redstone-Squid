@@ -86,11 +86,14 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
             assert client.get("/probe").json() == {"value": 1}
             traced_error_id = client.get("/correlation").json()["error_id"]
         command_record = logging.LogRecord("squid.bot", logging.INFO, __file__, 1, "command", (), None)
+        worker_record = logging.LogRecord("squid.worker", logging.INFO, __file__, 1, "forwarded", (), None)
+        vars(worker_record).update(trace_id="c" * 32, span_id="d" * 16)
         with trace_span(
             "discord.command submit",
             {"squid.command.name": "submit", "squid.surface": "application_command"},
         ):
             TraceContextFilter().filter(command_record)
+            assert TraceContextFilter().filter(worker_record)
         tracer = trace.get_tracer("propagation-test")
         with tracer.start_as_current_span("schematic.supervisor"):
             carrier = trace_context_headers()
@@ -124,6 +127,8 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
     assert command_span.context is not None
     assert vars(command_record)["trace_id"] == f"{command_span.context.trace_id:032x}"
     assert vars(command_record)["span_id"] == f"{command_span.context.span_id:016x}"
+    assert vars(worker_record)["trace_id"] == "c" * 32
+    assert vars(worker_record)["span_id"] == "d" * 16
     assert command_span.attributes is not None
     assert "squid.user.id" not in command_span.attributes
     traceparent = carrier["traceparent"]
