@@ -19,7 +19,9 @@ type SchematicJobOperation = Literal[
     "simulate",
     "autostack",
 ]
-type SchematicJobErrorKind = Literal["invalid", "too_large", "unavailable", "timeout", "crashed", "internal"]
+type SchematicJobErrorKind = Literal[
+    "invalid", "ambiguous_simulation_input", "too_large", "unavailable", "timeout", "crashed", "internal"
+]
 
 
 @dataclass(frozen=True, slots=True)

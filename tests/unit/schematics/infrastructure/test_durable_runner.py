@@ -2,9 +2,11 @@
 
 import uuid
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
+
+from whenever import Instant
 
 from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.config import SchematicConfig
@@ -15,7 +17,8 @@ from squid.schematics.application.jobs import (
     SchematicJobService,
     SchematicJobSnapshot,
 )
-from squid.schematics.infrastructure.durable import SchematicJobRunner
+from squid.schematics.errors import AmbiguousSimulationInputError, InvalidSchematicError
+from squid.schematics.infrastructure.durable import SchematicJobRunner, _job_failure
 from tests.unit.schematics.fakes import FakeSchematicAnalyzer
 
 
@@ -103,3 +106,32 @@ async def test_a_missing_input_artifact_is_classified_and_failed_terminally(tmp_
     assert failure.terminal is True
     assert failure.error_kind == "internal"
     assert failure.error_context["object_key"] == "schematics/ab/missing"
+
+
+def test_historical_invalid_jobs_recover_input_choices_without_reclassifying_other_errors() -> None:
+    original = AmbiguousSimulationInputError(candidates=((12, 5, -3), (0, 1, 2)))
+    snapshot = SchematicJobSnapshot(
+        id=42,
+        completed_at=None,
+        dead_at=Instant.now(),
+        result=None,
+        result_object_key=None,
+        last_error=str(original),
+        error_kind="invalid",
+        error_context=original.context,
+    )
+
+    rebuilt = _job_failure("simulate", 10, snapshot)
+
+    assert isinstance(rebuilt, AmbiguousSimulationInputError)
+    assert rebuilt.candidates == original.candidates
+    assert rebuilt.rejected is None
+    assert rebuilt.public_detail() == original.public_detail()
+    assert rebuilt.context["job_id"] == snapshot.id
+
+    invalid = _job_failure(
+        "simulate", 10, replace(snapshot, last_error="invalid file", error_context={"reason": "NBT"})
+    )
+    assert type(invalid) is InvalidSchematicError
+    assert invalid.context == {"reason": "NBT", "job_id": snapshot.id}
+    assert str(invalid) == "invalid file"

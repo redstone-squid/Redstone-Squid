@@ -16,7 +16,7 @@ from squid.schematics.application.commands import RenderRequest, SimulationReque
 from squid.schematics.application.jobs import SchematicJobService
 from squid.schematics.domain.models import AutostackLattice, FingerprintPreset, SchematicFormat, SchematicLimits
 from squid.schematics.domain.values import VerifiedResourcePack
-from squid.schematics.errors import InvalidSchematicError
+from squid.schematics.errors import AmbiguousSimulationInputError, InvalidSchematicError
 from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer, SchematicJobRunner
 from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
@@ -135,6 +135,37 @@ async def test_invalid_payloads_enter_a_retained_dead_state(
     assert snapshot is not None
     assert snapshot.dead_at is not None
     assert snapshot.error_kind == "invalid"
+
+
+async def test_ambiguous_simulation_inputs_survive_the_durable_worker_boundary(
+    durable_components: tuple[QueuedSchematicAnalyzer, SchematicJobRunner, FakeSchematicAnalyzer, SchematicJobService],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    client, runner, native, jobs = durable_components
+    original = AmbiguousSimulationInputError(candidates=((12, 5, -3), (0, 1, 2)), rejected=(9, 9, 9))
+    native.failure = original
+    request = SimulationRequest(input_position=original.rejected)
+
+    with pytest.raises(AmbiguousSimulationInputError) as raised:
+        await _with_runner(runner, client.simulate(b"schematic", request=request))
+
+    rebuilt = raised.value
+    assert rebuilt.candidates == original.candidates
+    assert rebuilt.rejected == original.rejected
+    assert rebuilt.public_context == original.public_context
+    assert rebuilt.public_detail() == original.public_detail()
+    assert rebuilt.context["operation"] == "simulate"
+    async with async_session_factory() as session:
+        job_id = await session.scalar(select(func.max(SchematicJob.id)))
+    assert job_id is not None
+    assert rebuilt.context["job_id"] == job_id
+    snapshot = await jobs.get(job_id)
+    assert snapshot is not None
+    assert snapshot.dead_at is not None
+    assert snapshot.error_kind == "ambiguous_simulation_input"
+    assert snapshot.error_context == {"candidates": [[0, 1, 2], [12, 5, -3]], "rejected": [9, 9, 9]}
+    await runner.process_batch()
+    assert native.simulate_calls == [(b"schematic", request)]
 
 
 async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
