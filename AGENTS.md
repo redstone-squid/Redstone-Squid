@@ -4,7 +4,12 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
 
 ### Code Style
 - **Formatting**: 120-character lines and Python 3.14 target
-- **Documentation**: Google-style docstrings with type information
+- **Documentation**: Use plainspoken engineering prose with Google-style docstring structure.
+  Write like a teammate explaining the code: conversational, concrete, and technically precise.
+  Start with what it does. Let the length follow the complexity; one sentence is often enough.
+  Describe normal behavior first. Explain surprising behavior and edge cases when callers need
+  to understand them. Prefer direct explanations over defensive lists of restrictions.
+  Use `Args:`, `Returns:`, and `Raises:` sections when they help, with type information where useful.
 - **Type Safety**: Full type hints. **Pyrefly is the type checker for local development** — run it
   with `just typecheck` (`uv run --locked pyrefly check --config pyproject.toml`); it is also a
   pre-push hook in `prek.toml`. BasedPyright still runs in CI at `--level=warning` and is not
@@ -13,7 +18,8 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
   alone. Use your best judgement for when to suppress and when to fix the typing issue.
 - **Don't use Python 3.8 typings**: Never import `List`, `Tuple` or other deprecated classes from `typing`, use `list`, `tuple` etc. instead, or import from `collections.abc`
 - Do not `from __future__ import annotations` and do not quote forward references in type hints — Python 3.14 defers annotation evaluation by default (PEP 649/749), so plain unquoted names work everywhere.
-- Add code comments sparingly. Focus on why something is done, especially for complex logic. For unintuitive code, explain until it is clear.
+- Add code comments sparingly. Explain why the code works this way. For unintuitive code,
+  explain until it is clear.
 - **Lifetime in docstrings**: a type that defines a terminating verb (`close`, `detach`,
   `finish`, `cancel`, `discard`, `run`) or hands out expiring authority states what ends it,
   in one clause, in its first paragraph. Everything else states nothing — a frozen value has
