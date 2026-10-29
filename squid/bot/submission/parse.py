@@ -1,50 +1,7 @@
 """Functions for parsing user input."""
 
 import re
-from io import StringIO
 from typing import Literal, overload
-from xml.etree.ElementTree import Element
-
-from markdown import Markdown
-
-
-# See https://stackoverflow.com/questions/761824/python-how-to-convert-markdown-formatted-text-to-text
-def _unmark_element(element: Element, stream: StringIO | None = None):
-    if stream is None:
-        stream = StringIO()
-    if element.text:
-        stream.write(element.text)
-    for sub in element:
-        _unmark_element(sub, stream)
-    if element.tail:
-        stream.write(element.tail)
-    return stream.getvalue()
-
-
-# patching Markdown
-Markdown.output_formats["plain"] = _unmark_element  # type: ignore
-__md = Markdown(output_format="plain")  # type: ignore
-__md.stripTopLevelTags = False
-
-
-def remove_markdown(text: str) -> str:
-    """Removes Markdown formatting from a string."""
-    return __md.convert(text)
-
-
-def replace_insensitive(string: str, old: str, new: str) -> str:
-    """Replaces a substring in a string case-insensitively.
-
-    Args:
-        string: The string to search and replace in.
-        old: The substring to search for.
-        new: The substring to replace with.
-
-    Returns:
-        The modified string.
-    """
-    pattern = re.compile(re.escape(old), re.IGNORECASE)
-    return pattern.sub(new, string)
 
 
 @overload
