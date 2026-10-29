@@ -35,6 +35,52 @@ class NotificationKind(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class NotificationSource:
+    """The event identity shared by notification creation and account-merge replay."""
+
+    event_id: int
+    kind: NotificationKind
+    build_id: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind is NotificationKind.RECORD_GAINED and (
+            isinstance(self.build_id, bool) or not isinstance(self.build_id, int)
+        ):
+            msg = "A record notification source key cannot be validated without its build identifier."
+            raise DataIntegrityError(msg)
+
+    def key_for(self, account_id: int) -> str:
+        """Construct the canonical recipient-bound idempotency key."""
+        if self.kind is NotificationKind.RECORD_GAINED:
+            return f"event:{self.event_id}:record-build:{self.build_id}:account:{account_id}"
+        label = {
+            NotificationKind.STAFF_BUILD_SUBMITTED: "staff",
+            NotificationKind.BUILD_CONFIRMED: "owner",
+            NotificationKind.BUILD_DENIED: "owner",
+            NotificationKind.CREATOR_BUILD_CONFIRMED: "creator",
+        }[self.kind]
+        return f"event:{self.event_id}:{label}:{account_id}"
+
+    @classmethod
+    def parse(
+        cls,
+        source_key: str,
+        *,
+        event_id: int,
+        kind: NotificationKind,
+        account_id: int,
+        payload: Mapping[str, object],
+    ) -> NotificationSource:
+        """Validate the key against its event, payload, and owner before changing its recipient."""
+        build_id = payload.get("build_id") if kind is NotificationKind.RECORD_GAINED else None
+        source = cls(event_id, kind, build_id=cast(int | None, build_id))
+        if source_key != source.key_for(account_id):
+            msg = "A notification source key does not match its kind, event, payload, and recipient."
+            raise DataIntegrityError(msg, context={"source_key": source_key})
+        return source
+
+
+@dataclass(frozen=True, slots=True)
 class InboxVisibility:
     """The notification kinds one authenticated inbox request may observe."""
 
