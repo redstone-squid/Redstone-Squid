@@ -109,8 +109,36 @@ async def test_authenticate_returns_active_key_and_records_throttled_use() -> No
     ]
 
 
+@pytest.mark.parametrize("entropy", [b"\xff", b"\xfb", b"x"])
+async def test_issued_keys_round_trip_with_base64url_separators(entropy: bytes) -> None:
+    repository = FakeApiKeyRepository()
+    api_keys = ApiKeyService(
+        repository,
+        "test-api-key-pepper",
+        now=lambda: NOW,
+        token_bytes=lambda size: entropy * size,
+    )
+    issued = await api_keys.issue(label="Round trip", scopes={"account.verify.relay"})
+
+    assert await api_keys.authenticate(issued.token) == issued.key
+    assert repository.lookups == [issued.key.key_id]
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("token", ["", "not-a-key", "sq__secret", "sq_key_"])
+@pytest.mark.parametrize(
+    "token",
+    [
+        "",
+        "not-a-key",
+        "sq__secret",
+        "sq_key_",
+        "sq_123456789012345_secret",
+        "sq_12345678901234567_secret",
+        "sq_1234567890123456-secret",
+        "sq_1234567890123456_",
+        "other_1234567890123456_secret",
+    ],
+)
 async def test_malformed_tokens_do_not_reach_persistence(token: str) -> None:
     repository = FakeApiKeyRepository()
 
