@@ -265,7 +265,9 @@ class SchematicJobRunner:
             inputs = await run_all([partial(self._load_input, job, key) for key in job.input_keys])
             result, output = await self._execute(job, inputs)
             if output is not None:
-                result_object_key = f"schematic-jobs/results/{job.id}"
+                # A reclaimed job can finish before its old worker. Fence the object as well
+                # as the row so a rejected completion only deletes that worker's own output.
+                result_object_key = f"schematic-jobs/results/{job.id}/{job.claim_token}"
                 content_type = "image/png" if job.operation == "render" else "application/octet-stream"
                 await self._artifacts.put(result_object_key, output, content_type=content_type)
             applied = await self._jobs.complete(job, result, result_object_key)
