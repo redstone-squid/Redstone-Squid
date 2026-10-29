@@ -182,6 +182,29 @@ def test_reusing_key_for_different_payload_returns_conflict() -> None:
     assert accounts.calls == 1
 
 
+def test_resource_path_is_part_of_the_request_fingerprint() -> None:
+    service = IdempotencyService(MemoryIdempotencyRepository())
+    app, _database = build_app(idempotency=service)
+    mutations: list[int] = []
+
+    @app.post("/mutation/{resource_id}", dependencies=[Depends(reserve_idempotent_request)])
+    async def mutate(resource_id: int) -> dict[str, int]:
+        mutations.append(resource_id)
+        return {"resource_id": resource_id}
+
+    headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "resource-mutation"}
+    with TestClient(app) as client:
+        first = client.post("/mutation/1", headers=headers)
+        replay = client.post("/mutation/1", headers=headers)
+        conflict = client.post("/mutation/2", headers=headers)
+
+    assert first.status_code == replay.status_code == 200
+    assert first.json() == replay.json() == {"resource_id": 1}
+    assert conflict.status_code == 409
+    assert conflict.json()["code"] == ErrorCode.IDEMPOTENCY_CONFLICT
+    assert mutations == [1]
+
+
 def test_query_and_content_type_are_part_of_the_request_fingerprint() -> None:
     client, accounts, database = idempotent_client()
     authorization = {"Authorization": TEST_SYNERGY_SECRET}
