@@ -6,7 +6,6 @@ submission form `option_source` values keep their spelling so the form manifest 
 registry never disagree about what a name means.
 """
 
-from collections.abc import Sequence
 from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -28,7 +27,6 @@ from squid.suggestions.infrastructure.providers import (
     SearchQueryProvider,
     SearchSortProvider,
     StaticProvider,
-    TaxonomyIdProvider,
     TaxonomyProvider,
     VersionIdProvider,
     VersionProvider,
@@ -56,9 +54,10 @@ from squid.suggestions.infrastructure.providers.records import (
     PendingAliasClaims,
     RecordDefinitionProvider,
 )
+from squid.suggestions.infrastructure.providers.taxonomy import PendingTagDefinitions
+from squid.suggestions.infrastructure.providers.versions import CanonicalMinecraftVersions
 from squid.suggestions.infrastructure.repository import PostgresSuggestionRepository
-from squid.tags.domain import TagDefinition, TagSemanticKind
-from squid.versions.domain import MinecraftVersion
+from squid.tags.domain import TagSemanticKind
 
 PUBLIC_BUILD_STATUSES = ("confirmed",)
 """Build statuses anyone may be offered, matching the public search fence."""
@@ -70,18 +69,6 @@ class SearchFields(Protocol):
     """Read the effective public field registry."""
 
     async def fields(self) -> FieldRegistry: ...
-
-
-class CanonicalMinecraftVersions(Protocol):
-    """Read canonical versions recognized by build persistence."""
-
-    async def list_all(self) -> Sequence[MinecraftVersion]: ...
-
-
-class PendingTagDefinitions(Protocol):
-    """Read the tag definitions awaiting moderation."""
-
-    async def pending(self) -> Sequence[TagDefinition]: ...
 
 
 def build_registry(
@@ -253,14 +240,14 @@ def _taxonomy_sources(repository: PostgresSuggestionRepository) -> tuple[Suggest
         ),
         SuggestionSource(
             id="showcase_tag_ids",
-            provider=TaxonomyIdProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None),
+            provider=TaxonomyProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None, by_id=True),
             kind=SourceKind.ENUMERABLE,
             value_type=ValueType.INTEGER,
             kind_label="showcase",
         ),
         SuggestionSource(
             id="restriction_ids",
-            provider=TaxonomyIdProvider(repository, TagSemanticKind.RESTRICTION.value),
+            provider=TaxonomyProvider(repository, TagSemanticKind.RESTRICTION.value, by_id=True),
             kind=SourceKind.ENUMERABLE,
             value_type=ValueType.INTEGER,
             multi_value=",",

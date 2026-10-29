@@ -33,7 +33,7 @@ class PendingTagDefinitions(Protocol):
 
 
 class TaxonomyProvider:
-    """Suggest approved taxonomy values of one semantic kind."""
+    """Suggest approved taxonomy names, submitting stable keys or numeric IDs."""
 
     def __init__(
         self,
@@ -42,55 +42,13 @@ class TaxonomyProvider:
         *,
         build_kind: str | None = None,
         authority: str | None = "official",
+        by_id: bool = False,
     ) -> None:
         self._reader = reader
         self._semantic_kind = semantic_kind
         self._build_kind = build_kind
         self._authority = authority
-        self._cache = TtlCache[None, tuple[Candidate, ...]](self._load)
-
-    async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        del request
-        return await self._cache.get(None)
-
-    async def _load(self, _key: None) -> tuple[Candidate, ...]:
-        entries = _ordered(
-            await self._reader.taxonomy(self._semantic_kind, build_kind=self._build_kind, authority=self._authority)
-        )
-        return tuple(
-            # The stable key is submitted while the display name is what people read and type, so
-            # both are matchable — as are aliases, which is the whole point of restriction aliases.
-            candidate(
-                value=entry.stable_key,
-                label=entry.display_name,
-                description=_alias_hint(entry),
-                kind=entry.semantic_kind,
-                terms=(entry.display_name, entry.stable_key, *entry.aliases),
-            )
-            for entry in entries
-        )
-
-
-class TaxonomyIdProvider:
-    """Suggest taxonomy values by name while submitting the numeric tag id.
-
-    Some commands persist restriction identifiers rather than names. Completing by name and
-    submitting the id keeps those commands working unchanged while removing the step where a user
-    had to look the number up somewhere else first.
-    """
-
-    def __init__(
-        self,
-        reader: TaxonomyReader,
-        semantic_kind: str,
-        *,
-        build_kind: str | None = None,
-        authority: str | None = "official",
-    ) -> None:
-        self._reader = reader
-        self._semantic_kind = semantic_kind
-        self._build_kind = build_kind
-        self._authority = authority
+        self._by_id = by_id
         self._cache = TtlCache[None, tuple[Candidate, ...]](self._load)
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
@@ -103,11 +61,12 @@ class TaxonomyIdProvider:
         )
         return tuple(
             candidate(
-                value=str(entry.id),
+                value=str(entry.id) if self._by_id else entry.stable_key,
                 label=entry.display_name,
                 description=_alias_hint(entry),
                 kind=entry.semantic_kind,
-                terms=(entry.display_name, entry.stable_key, str(entry.id), *entry.aliases),
+                terms=(entry.display_name, entry.stable_key, *entry.aliases)
+                + ((str(entry.id),) if self._by_id else ()),
             )
             for entry in entries
         )
