@@ -14,7 +14,7 @@ type RefreshCallback = Callable[[EntryKey, bool], Awaitable[None]]
 
 
 class EntryDebouncer:
-    """Coalesce bursts into one delayed refresh per starboard entry."""
+    """Coalesce bursts into one refresh per entry until close cancels pending work."""
 
     def __init__(
         self,
@@ -22,12 +22,10 @@ class EntryDebouncer:
         supervisor: BackgroundTaskSupervisor,
         *,
         delay: float = 2.0,
-        shutdown_timeout: float = 10.0,
     ) -> None:
         self._callback = callback
         self._delay = delay
         self._supervisor = supervisor
-        self._shutdown_timeout = shutdown_timeout
         self._handles: dict[EntryKey, JobHandle] = {}
         self._force: set[EntryKey] = set()
         self._closing = False
@@ -53,18 +51,8 @@ class EntryDebouncer:
         if self._closing:
             return
         self._closing = True
-        handles = tuple(self._handles.values())
         self._force.clear()
-        if not handles:
-            return
-        for handle in handles:
-            handle.cancel()
-        with anyio.move_on_after(self._shutdown_timeout):
-            for handle in handles:
-                await handle.finished.wait()
-        pending = [handle.name for handle in handles if not handle.finished.is_set()]
-        if pending:
-            logger.error("Starboard refresh tasks exceeded the shutdown deadline", extra={"squid.tasks": len(pending)})
+        await self._supervisor.cancel(*tuple(self._handles.values()))
 
     async def _run(self, key: EntryKey) -> None:
         try:
