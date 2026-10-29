@@ -1,6 +1,6 @@
 """Worker event tests: the worker serves no request and knows no chat client."""
 
-from typing import Any, cast, override
+from typing import cast, override
 
 from whenever import Instant
 
@@ -8,7 +8,6 @@ from squid.builds.domain import Build
 from squid.config import WorkerConfig
 from squid.events import DomainEvent, DomainEventDelivery, UnsupportedEventVersionError
 from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot, VoteStatus
-from squid.worker.app import DatabaseWorker
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
 from tests.support.voting import build_snapshot
 from tests.unit.worker.fakes import (
@@ -17,6 +16,7 @@ from tests.unit.worker.fakes import (
     StubNotificationService,
     StubVoteService,
     SupervisorRecorder,
+    make_worker,
     worker_services,
 )
 
@@ -203,12 +203,9 @@ async def test_periodic_poll_materializes_an_event_without_a_listen_wake_hint() 
     events = EventRecorder(delivery)
     notifications = NotificationRecorder()
     supervisor = SupervisorRecorder()
-    worker = DatabaseWorker(
+    worker = make_worker(
         worker_services(events=events, notifications=notifications),
-        cast(Any, object()),
-        WorkerConfig(event_interval_seconds=7),
-        cast(Any, object()),
-        cast(Any, object()),
+        config=WorkerConfig(event_interval_seconds=7),
         supervisor=supervisor,
     )
 

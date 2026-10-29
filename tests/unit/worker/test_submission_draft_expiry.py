@@ -1,21 +1,15 @@
 """Worker scheduling coverage for synchronized-draft retention."""
 
-from typing import Any, cast
-
 from squid.config import WorkerConfig
-from squid.worker.app import DatabaseWorker
-from tests.unit.worker.fakes import MaintenanceRecorder, SupervisorRecorder, worker_services
+from tests.unit.worker.fakes import MaintenanceRecorder, SupervisorRecorder, make_worker, worker_services
 
 
 async def test_worker_schedules_and_invokes_bounded_draft_expiry() -> None:
     maintenance = MaintenanceRecorder(expiry_result=2)
     supervisor = SupervisorRecorder()
-    worker = DatabaseWorker(
+    worker = make_worker(
         worker_services(maintenance=maintenance),
-        cast(Any, object()),
-        WorkerConfig(maintenance_interval_seconds=30),
-        cast(Any, object()),
-        cast(Any, object()),
+        config=WorkerConfig(maintenance_interval_seconds=30),
         supervisor=supervisor,
     )
 
