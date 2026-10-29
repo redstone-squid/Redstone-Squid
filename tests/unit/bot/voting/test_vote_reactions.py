@@ -1,328 +1,339 @@
-"""Discord reaction adaptation for vote sessions, independent of starboard."""
+"""Reaction adaptation with real consent, actor resolution, routing and task ownership."""
 
-from dataclasses import dataclass
-from types import SimpleNamespace
-from typing import Any, cast
+import asyncio
+from collections.abc import AsyncIterator, Iterable
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Any, Literal, cast
 
+import anyio
 import discord
 import pytest
-from pytest_mock import MockerFixture
+from whenever import Instant
 
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
+from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionResolver, ReactionRouter
+from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.voting.vote import VoteCog
+from squid.permissions.domain import PermissionNode, Subject
+from squid.runtime import BackgroundTaskSupervisor
+from squid.voting.application.ports import VoteActorResolver
 from squid.voting.domain import (
     CastVoteResult,
     VoteActor,
-    VoteChoice,
+    VoteKind,
     VoteMessage,
-    VoteOption,
     VoteSelection,
+    VoteSessionSnapshot,
     VoteVisibility,
 )
-from tests.support.discord import make_reaction_payload
+from tests.support.discord import make_layout_bot, make_reaction_payload
 from tests.support.voting import GENERIC_OPTIONS, poll_snapshot
+
+if TYPE_CHECKING:
+    from squid.bot.app import RedstoneSquid
 
 
 @dataclass
-class _Reaction:
+class Member:
+    guild: Guild
+    id: int = 70
+    bot: bool = False
+    roles: tuple[discord.Role, ...] = ()
+
+
+@dataclass
+class Guild:
+    id: int
+
+    def get_member(self, user_id: int) -> discord.Member:
+        return cast(discord.Member, Member(self, id=user_id))
+
+
+@dataclass
+class Reaction:
     emoji: str
-    members: tuple[Any, ...]
+    members: tuple[Member, ...] = ()
     me: bool = True
 
-    async def users(self, *, limit: None) -> Any:
-        del limit
+    async def users(self, *, limit: None) -> AsyncIterator[Member]:
         for member in self.members:
             yield member
 
 
-def _cog(mocker: MockerFixture, session: Any) -> tuple[Any, Any, Any]:
-    votes = mocker.Mock()
-    votes.get_session = mocker.AsyncMock(return_value=session)
-    votes.cast_vote = mocker.AsyncMock(return_value=CastVoteResult(session))
-    bot = SimpleNamespace(
-        user=SimpleNamespace(id=999),
-        services=SimpleNamespace(votes=votes, accounts=mocker.Mock()),
-        refresh_posts=mocker.AsyncMock(),
-        account_ids=SimpleNamespace(resolve=mocker.AsyncMock(return_value=7)),
-        get_or_fetch_message=mocker.AsyncMock(),
-    )
-    cog = cast(Any, object.__new__(VoteCog))
-    cog.bot = bot
-    cog.vote_service = votes
-    cog._background_tasks = set()
-    return cog, bot, votes
+@dataclass(frozen=True)
+class ForbiddenResponse:
+    status: int = 403
+    reason: str = "Forbidden"
 
 
-def _event(
-    mocker: MockerFixture,
-    *,
-    event_type: str = "REACTION_ADD",
-    message_id: int = 100,
-    guild_id: int = 10,
-    emoji: str = "1️⃣",
-) -> Any:
-    payload = make_reaction_payload(
-        message_id=message_id,
-        channel_id=200,
-        guild_id=guild_id,
-        user_id=70,
-        emoji=emoji,
-        event_type=cast(Any, event_type),
-    )
-    return SimpleNamespace(
-        payload=payload,
-        emoji=str(payload.emoji),
-        message=mocker.AsyncMock(return_value=mocker.Mock()),
-        resolve_member=mocker.AsyncMock(return_value=mocker.Mock(bot=False)),
+@dataclass
+class Message:
+    trace: list[str]
+    reactions: list[Reaction] = field(default_factory=list)
+    added: list[str] = field(default_factory=list)
+    removed: list[tuple[str, int]] = field(default_factory=list)
+    forbidden: set[str] = field(default_factory=set)
+
+    async def add_reaction(self, emoji: str) -> None:
+        self.added.append(emoji)
+        if emoji in self.forbidden:
+            raise discord.Forbidden(cast(Any, ForbiddenResponse()), "Cannot add reaction")
+
+    async def remove_reaction(self, emoji: discord.PartialEmoji | str, user: discord.abc.Snowflake) -> None:
+        self.removed.append((str(emoji), user.id))
+        self.trace.append("removed")
+
+
+@dataclass
+class Accounts:
+    account: Account = field(
+        default_factory=lambda: Account(
+            id=7,
+            identities=(AccountIdentity.discord(70),),
+            consent=AccountConsent(CURRENT_CONSENT_VERSION, Instant.now()),
+        )
     )
 
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        return self.account if self.account.identity_for(provider, subject) else None
 
-async def test_vote_reconciliation_is_a_supervised_periodic_job(mocker: MockerFixture) -> None:
-    cog, bot, _votes = _cog(mocker, poll_snapshot())
-    handle = mocker.Mock()
-    handle.finished.is_set.return_value = False
-    bot.background_tasks = SimpleNamespace(start_periodic=mocker.Mock(return_value=handle))
 
-    await cog.ui_load()
+@dataclass
+class Permissions:
+    subjects: list[Subject] = field(default_factory=list)
 
-    bot.background_tasks.start_periodic.assert_called_once_with(
-        cog.reconcile_open_reactions,
-        name="vote-reaction-reconciliation",
-        interval=60,
+    async def capabilities(self, subject: Subject, nodes: Iterable[PermissionNode | str]) -> frozenset[str]:
+        self.subjects.append(subject)
+        return frozenset()
+
+
+@dataclass
+class Votes:
+    trace: list[str]
+    snapshot: VoteSessionSnapshot = field(
+        default_factory=lambda: poll_snapshot(
+            visibility=VoteVisibility.VISIBLE_LIVE, messages=(VoteMessage(100, 200, 10),)
+        )
     )
-    assert cog._background_tasks == {handle}
+    casts: list[tuple[int, VoteActor, str]] = field(default_factory=list)
+    failure: Exception | None = None
+    resolver: VoteActorResolver | None = None
+
+    def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
+        self.resolver = resolver
+
+    async def get_session(self, message_id: int) -> VoteSessionSnapshot | None:
+        return self.snapshot if message_id in self.snapshot.message_ids else None
+
+    async def list_open(self, kind: VoteKind) -> tuple[VoteSessionSnapshot, ...]:
+        return (self.snapshot,) if self.snapshot.kind is kind else ()
+
+    async def cast_vote(self, message_id: int, actor: VoteActor, emoji: str) -> CastVoteResult:
+        if self.failure is not None:
+            raise self.failure
+        self.casts.append((message_id, actor, emoji))
+        self.trace.append("committed")
+        return CastVoteResult(self.snapshot)
 
 
-async def test_vote_adapter_casts_an_added_reaction(mocker: MockerFixture) -> None:
-    session = poll_snapshot(
-        visibility=VoteVisibility.VISIBLE_LIVE,
-        messages=(VoteMessage(100, 200, 10),),
-    )
-    cog, bot, votes = _cog(mocker, session)
-    event = _event(mocker)
-    actor = VoteActor(7, 70, guild_id=10)
-    mocker.patch.object(cog, "_consented_account_id", new=mocker.AsyncMock(return_value=7))
-    resolve = mocker.patch("squid.bot.voting.vote.resolve_actor", new=mocker.AsyncMock(return_value=actor))
-
-    await cog.on_reaction_add(event)
-
-    resolve.assert_awaited_once_with(bot, event.resolve_member.return_value, account_id=7)
-    votes.cast_vote.assert_awaited_once_with(100, actor, "1️⃣")
-    bot.refresh_posts.assert_awaited_once_with("vote_session", str(session.id))
+@dataclass
+class Services:
+    votes: Votes
+    accounts: Accounts = field(default_factory=Accounts)
+    permissions: Permissions = field(default_factory=Permissions)
 
 
-async def test_vote_adapter_keeps_anonymous_reaction_until_ballot_commits(mocker: MockerFixture) -> None:
-    session = poll_snapshot(messages=(VoteMessage(100, 200, 10),))
-    cog, bot, votes = _cog(mocker, session)
-    event = _event(mocker)
-    actor = VoteActor(7, 70, guild_id=10)
-    mocker.patch.object(cog, "_consented_account_id", new=mocker.AsyncMock(return_value=7))
-    mocker.patch("squid.bot.voting.vote.resolve_actor", new=mocker.AsyncMock(return_value=actor))
-    remove = mocker.patch.object(cog, "_remove_reaction", new=mocker.AsyncMock())
-    handle = mocker.Mock()
-    handle.finished.is_set.return_value = False
-    bot.background_tasks = SimpleNamespace(start=mocker.Mock(return_value=handle))
+class ReactionHarness:
+    def __init__(self) -> None:
+        self.trace: list[str] = []
+        self.services = Services(Votes(self.trace))
+        self.messages = {100: Message(self.trace), 101: Message(self.trace)}
+        self.guilds = {guild_id: Guild(guild_id) for guild_id in (10, 11)}
+        self.refreshes: list[tuple[str, str]] = []
+        self.refreshed: asyncio.Queue[None] = asyncio.Queue()
+        self.supervisor = BackgroundTaskSupervisor()
+        self.bot: RedstoneSquid = make_layout_bot(
+            user=discord.Object(999),
+            services=self.services,
+            account_ids=AccountIdCache(),
+            background_tasks=self.supervisor,
+            get_guild=self.guilds.get,
+            get_or_fetch_message=self.fetch_message,
+            refresh_posts=self.refresh_posts,
+            is_owner=self.is_owner,
+            wait_until_ready=self.wait_until_ready,
+        )
+        self.bot.reactions = ReactionRouter(self.bot, self.supervisor, concurrency=1)
+        self.cog = VoteCog(self.bot)
 
-    votes.cast_vote.side_effect = RuntimeError("database unavailable")
-    with pytest.raises(RuntimeError, match="database unavailable"):
-        await cog.on_reaction_add(event)
+    @asynccontextmanager
+    async def running(self) -> AsyncIterator[None]:
+        async with self.supervisor.running():
+            try:
+                yield
+            finally:
+                await self.bot.reactions.close()
+                await self.cog.ui_unload()
 
-    remove.assert_not_called()
-    bot.background_tasks.start.assert_not_called()
+    async def fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
+        return cast(discord.Message | None, self.messages.get(message_id))
 
+    async def refresh_posts(self, kind: str, key: str) -> None:
+        self.refreshes.append((kind, key))
+        self.refreshed.put_nowait(None)
 
-async def test_vote_adapter_toggles_a_removed_public_ballot(mocker: MockerFixture) -> None:
-    session = poll_snapshot(
-        visibility=VoteVisibility.VISIBLE_LIVE,
-        messages=(VoteMessage(100, 200, 10),),
-        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
-    )
-    cog, bot, votes = _cog(mocker, session)
-    event = _event(mocker, event_type="REACTION_REMOVE")
-    actor = VoteActor(7, 70, guild_id=10)
-    mocker.patch("squid.bot.voting.vote.resolve_actor", new=mocker.AsyncMock(return_value=actor))
+    async def is_owner(self, user: object) -> bool:
+        return False
 
-    await cog.on_reaction_remove(event)
+    async def wait_until_ready(self) -> None:
+        pass
 
-    bot.account_ids.resolve.assert_awaited_once_with(bot.services.accounts, 70)
-    votes.cast_vote.assert_awaited_once_with(100, actor, "1️⃣")
-    bot.refresh_posts.assert_awaited_once_with("vote_session", str(session.id))
+    def event(
+        self, action: Literal["REACTION_ADD", "REACTION_REMOVE"] = "REACTION_ADD", *, message_id: int = 100
+    ) -> ReactionEvent:
+        guild_id, emoji = (10, "1️⃣") if message_id == 100 else (11, "🔴")
+        payload = make_reaction_payload(
+            message_id=message_id,
+            channel_id=message_id + 100,
+            guild_id=guild_id,
+            user_id=70,
+            emoji=emoji,
+            event_type=action,
+        )
+        return ReactionEvent(payload, emoji, ReactionResolver(self.bot, None))
 
+    def selected(self) -> None:
+        self.services.votes.snapshot = replace(
+            self.services.votes.snapshot, selections=(VoteSelection(7, 10, "one", "1️⃣", 1),)
+        )
 
-async def test_recovery_reconciles_public_reactions_to_persisted_selection(mocker: MockerFixture) -> None:
-    session = poll_snapshot(
-        visibility=VoteVisibility.VISIBLE_LIVE,
-        messages=(VoteMessage(100, 200, 10),),
-        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
-    )
-    cog, bot, votes = _cog(mocker, session)
-    member = mocker.Mock(spec=discord.Member, id=70, bot=False)
-    message = mocker.Mock(
-        reactions=[
-            _Reaction("1️⃣", ()),
-            _Reaction("2️⃣", (member,)),
-        ]
-    )
-    message.add_reaction = mocker.AsyncMock()
-    message.remove_reaction = mocker.AsyncMock()
-    bot.get_or_fetch_message.return_value = message
-    mocker.patch.object(cog, "_reaction_member", new=mocker.AsyncMock(return_value=member))
-    mocker.patch.object(cog, "_consented_account_id", new=mocker.AsyncMock(return_value=7))
-    actor = VoteActor(7, 70, guild_id=10)
-    mocker.patch("squid.bot.voting.vote.resolve_actor", new=mocker.AsyncMock(return_value=actor))
-
-    await cog.reconcile_message_reactions(100)
-
-    votes.cast_vote.assert_awaited_once_with(100, actor, "2️⃣")
-    bot.refresh_posts.assert_awaited_once_with("vote_session", str(session.id))
+    def anonymous(self) -> None:
+        self.services.votes.snapshot = poll_snapshot(messages=(VoteMessage(100, 200, 10),))
 
 
-async def test_recovery_retries_anonymous_reaction_without_replaying_committed_ballot(
-    mocker: MockerFixture,
+@pytest.fixture
+def reactions() -> ReactionHarness:
+    return ReactionHarness()
+
+
+async def test_reconciliation_job_is_supervised_and_stops_on_unload(reactions: ReactionHarness) -> None:
+    async with reactions.running():
+        await reactions.cog.ui_load()
+        with anyio.fail_after(1):
+            while "vote-reaction-reconciliation" not in reactions.supervisor.last_success:
+                await anyio.lowlevel.checkpoint()
+        (job,) = reactions.cog._background_tasks
+        assert reactions.services.votes.resolver is reactions.cog
+        assert reactions.messages[100].added == ["1️⃣", "2️⃣"]
+        assert not job.finished.is_set()
+        await reactions.cog.ui_unload()
+        assert job.finished.is_set()
+
+
+async def test_routed_public_reactions_add_and_remove_a_ballot(reactions: ReactionHarness) -> None:
+    async with reactions.running():
+        with anyio.fail_after(1):
+            await reactions.bot.reactions.dispatch_add(reactions.event().payload)
+            await reactions.refreshed.get()
+            reactions.selected()
+            await reactions.bot.reactions.dispatch_remove(reactions.event("REACTION_REMOVE").payload)
+            await reactions.refreshed.get()
+
+    assert reactions.services.votes.casts == [(100, VoteActor(7, 70, guild_id=10), "1️⃣")] * 2
+    assert reactions.refreshes == [("vote_session", "1")] * 2
+    assert reactions.services.permissions.subjects == [Subject(account_id=7, guild_id=10)] * 2
+
+
+async def test_anonymous_reaction_is_removed_only_after_commit(reactions: ReactionHarness) -> None:
+    reactions.anonymous()
+    reactions.services.votes.failure = RuntimeError("database unavailable")
+    async with reactions.running():
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            await reactions.cog.on_reaction_add(reactions.event())
+        assert reactions.messages[100].removed == []
+        reactions.services.votes.failure = None
+        await reactions.cog.on_reaction_add(reactions.event())
+        with anyio.fail_after(1):
+            while not reactions.messages[100].removed:
+                await anyio.lowlevel.checkpoint()
+
+    assert reactions.trace == ["committed", "removed"]
+
+
+async def test_reconciliation_changes_public_selection_but_keeps_it_when_discord_is_unavailable(
+    reactions: ReactionHarness,
 ) -> None:
-    session = poll_snapshot(
-        messages=(VoteMessage(100, 200, 10),),
-        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
-    )
-    cog, bot, votes = _cog(mocker, session)
-    member = mocker.Mock(spec=discord.Member, id=70, bot=False)
-    message = mocker.Mock(reactions=[_Reaction("1️⃣", (member,)), _Reaction("2️⃣", ())])
-    message.add_reaction = mocker.AsyncMock()
-    message.remove_reaction = mocker.AsyncMock()
-    bot.get_or_fetch_message.return_value = message
-    mocker.patch.object(cog, "_reaction_member", new=mocker.AsyncMock(return_value=member))
-    mocker.patch.object(cog, "_consented_account_id", new=mocker.AsyncMock(return_value=7))
+    reactions.selected()
+    message = reactions.messages.pop(100)
+    async with reactions.running():
+        await reactions.cog.reconcile_message_reactions(100)
+        assert reactions.services.votes.casts == []
+        assert reactions.refreshes == []
+        reactions.messages[100] = message
+        message.reactions = [Reaction("1️⃣"), Reaction("2️⃣", (Member(reactions.guilds[10]),))]
+        await reactions.cog.reconcile_message_reactions(100)
 
-    await cog.reconcile_message_reactions(100)
-
-    votes.cast_vote.assert_not_awaited()
-    message.remove_reaction.assert_awaited_once_with("1️⃣", member)
+    assert reactions.services.votes.casts == [(100, VoteActor(7, 70, guild_id=10), "2️⃣")]
+    assert reactions.refreshes == [("vote_session", "1")]
 
 
-async def test_recovery_does_not_remove_public_ballot_from_an_incomplete_discord_read(
-    mocker: MockerFixture,
+async def test_anonymous_recovery_cleans_committed_and_unconsented_reactions_without_replaying(
+    reactions: ReactionHarness,
 ) -> None:
-    session = poll_snapshot(
-        visibility=VoteVisibility.VISIBLE_LIVE,
-        messages=(VoteMessage(100, 200, 10),),
-        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
-    )
-    cog, bot, votes = _cog(mocker, session)
-    bot.get_or_fetch_message.return_value = None
+    reactions.anonymous()
+    reactions.selected()
+    message = reactions.messages[100]
+    message.reactions = [Reaction("1️⃣", (Member(reactions.guilds[10]),)), Reaction("2️⃣")]
+    async with reactions.running():
+        await reactions.cog.reconcile_message_reactions(100)
+        reactions.services.accounts.account = replace(reactions.services.accounts.account, consent=None)
+        reactions.services.votes.snapshot = replace(reactions.services.votes.snapshot, selections=())
+        await reactions.cog.reconcile_message_reactions(100)
 
-    await cog.reconcile_message_reactions(100)
-
-    votes.cast_vote.assert_not_awaited()
-    bot.refresh_posts.assert_not_awaited()
+    assert reactions.services.votes.casts == []
+    assert message.removed == [("1️⃣", 70)] * 2
 
 
-async def test_recovery_compares_multi_guild_aliases_by_stable_option_id(mocker: MockerFixture) -> None:
-    options = (
-        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=10, label="One"),
-        VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=10, label="Two"),
-        VoteOption("🔴", VoteChoice.GENERIC, identifier="one", guild_id=11, label="One"),
-        VoteOption("🔵", VoteChoice.GENERIC, identifier="two", guild_id=11, label="Two"),
-    )
-    session = poll_snapshot(
+async def test_multi_guild_alias_recovery_is_idempotent_and_removal_unsets_the_stable_option(
+    reactions: ReactionHarness,
+) -> None:
+    reactions.services.votes.snapshot = poll_snapshot(
         visibility=VoteVisibility.VISIBLE_LIVE,
         messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 11)),
-        options=options,
+        options=GENERIC_OPTIONS
+        + tuple(
+            replace(option, emoji=emoji, guild_id=11)
+            for option, emoji in zip(GENERIC_OPTIONS, ("🔴", "🔵"), strict=True)
+        ),
         selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
     )
-    cog, bot, votes = _cog(mocker, session)
-    member = mocker.Mock(spec=discord.Member, id=70, bot=False)
-    first = mocker.Mock(reactions=[_Reaction("1️⃣", ()), _Reaction("2️⃣", ())])
-    second = mocker.Mock(reactions=[_Reaction("🔴", (member,)), _Reaction("🔵", ())])
-    first.add_reaction = mocker.AsyncMock()
-    second.add_reaction = mocker.AsyncMock()
-    bot.get_or_fetch_message.side_effect = [first, second]
-    mocker.patch.object(cog, "_reaction_member", new=mocker.AsyncMock(return_value=member))
-    mocker.patch.object(cog, "_consented_account_id", new=mocker.AsyncMock(return_value=7))
+    reactions.messages[100].reactions = [Reaction("1️⃣"), Reaction("2️⃣")]
+    second = reactions.messages[101]
+    second.reactions = [Reaction("🔴", (Member(reactions.guilds[11]),)), Reaction("🔵")]
+    async with reactions.running():
+        await reactions.cog.reconcile_message_reactions(100)
+        await reactions.cog.recover_reaction_add(reactions.event(message_id=101))
+        assert reactions.services.votes.casts == []
+        assert reactions.refreshes == []
+        assert second.removed == []
+        await reactions.cog.recover_reaction_remove(reactions.event("REACTION_REMOVE", message_id=101))
 
-    await cog.reconcile_message_reactions(100)
-
-    votes.cast_vote.assert_not_awaited()
-    second.remove_reaction.assert_not_called()
+    assert reactions.services.votes.casts == [(101, VoteActor(7, 70, guild_id=11), "🔴")]
 
 
-async def test_event_recovery_is_idempotent_across_multi_guild_aliases(mocker: MockerFixture) -> None:
-    options = (
-        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=10, label="One"),
-        VoteOption("🔴", VoteChoice.GENERIC, identifier="one", guild_id=11, label="One"),
+async def test_clear_and_recovery_restore_options_without_toggling_ballots(reactions: ReactionHarness) -> None:
+    reactions.selected()
+    message = reactions.messages[100]
+    message.forbidden = {"1️⃣"}
+    clear = discord.RawReactionClearEvent(cast(Any, {"message_id": 100, "channel_id": 200, "guild_id": 10}))
+    emoji = discord.RawReactionClearEmojiEvent(
+        cast(Any, {"message_id": 100, "channel_id": 200, "guild_id": 10}), discord.PartialEmoji(name="1️⃣")
     )
-    session = poll_snapshot(
-        visibility=VoteVisibility.VISIBLE_LIVE,
-        messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 11)),
-        options=options,
-        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
-    )
-    cog, bot, votes = _cog(mocker, session)
-    event = _event(mocker, message_id=101, guild_id=11, emoji="🔴")
-    actor = VoteActor(7, 70, guild_id=11)
-    mocker.patch.object(cog, "_consented_account_id", new=mocker.AsyncMock(return_value=7))
-    mocker.patch("squid.bot.voting.vote.resolve_actor", new=mocker.AsyncMock(return_value=actor))
+    async with reactions.running():
+        await reactions.cog.on_reaction_clear(ReactionClearEvent(clear))
+        await reactions.cog.on_reaction_clear_emoji(ReactionClearEvent(emoji, "1️⃣"))
+        await reactions.cog.recover_reaction_clear(ReactionClearEvent(clear))
 
-    await cog.recover_reaction_add(event)
-
-    votes.cast_vote.assert_not_awaited()
-    bot.refresh_posts.assert_not_awaited()
-
-
-async def test_alias_remove_recovery_unsets_the_stable_option(mocker: MockerFixture) -> None:
-    options = (
-        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=10, label="One"),
-        VoteOption("🔴", VoteChoice.GENERIC, identifier="one", guild_id=11, label="One"),
-    )
-    session = poll_snapshot(
-        visibility=VoteVisibility.VISIBLE_LIVE,
-        messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 11)),
-        options=options,
-        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
-    )
-    cog, bot, votes = _cog(mocker, session)
-    event = _event(mocker, event_type="REACTION_REMOVE", message_id=101, guild_id=11, emoji="🔴")
-    actor = VoteActor(7, 70, guild_id=11)
-    mocker.patch("squid.bot.voting.vote.resolve_actor", new=mocker.AsyncMock(return_value=actor))
-
-    await cog.recover_reaction_remove(event)
-
-    votes.cast_vote.assert_awaited_once_with(101, actor, "🔴")
-
-
-@pytest.mark.parametrize("handler_name", ["on_reaction_clear", "on_reaction_clear_emoji"])
-async def test_vote_adapter_restores_every_baseline_after_clear_and_tolerates_forbidden(
-    handler_name: str,
-    mocker: MockerFixture,
-) -> None:
-    session = poll_snapshot(messages=(VoteMessage(100, 200, 10),), options=GENERIC_OPTIONS)
-    cog, bot, _votes = _cog(mocker, session)
-    response = cast(Any, SimpleNamespace(status=403, reason="Forbidden"))
-    message = mocker.Mock()
-    message.add_reaction = mocker.AsyncMock(side_effect=[discord.Forbidden(response, "Cannot add reaction"), None])
-    bot.get_or_fetch_message.return_value = message
-    event = SimpleNamespace(payload=SimpleNamespace(message_id=100), emoji=None)
-
-    await getattr(cog, handler_name)(event)
-
-    assert message.add_reaction.await_args_list == [
-        mocker.call(GENERIC_OPTIONS[0].emoji),
-        mocker.call(GENERIC_OPTIONS[1].emoji),
-    ]
-
-
-async def test_clear_recovery_restores_options_without_toggling_public_ballots(mocker: MockerFixture) -> None:
-    session = poll_snapshot(
-        visibility=VoteVisibility.VISIBLE_LIVE,
-        messages=(VoteMessage(100, 200, 10),),
-        options=GENERIC_OPTIONS,
-        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
-    )
-    cog, bot, votes = _cog(mocker, session)
-    message = mocker.Mock()
-    message.add_reaction = mocker.AsyncMock()
-    bot.get_or_fetch_message.return_value = message
-    event = SimpleNamespace(payload=SimpleNamespace(message_id=100), emoji=None)
-
-    await cog.recover_reaction_clear(event)
-
-    votes.cast_vote.assert_not_awaited()
-    assert message.add_reaction.await_count == 2
+    assert reactions.services.votes.casts == []
+    assert message.added == ["1️⃣", "2️⃣"] * 3
