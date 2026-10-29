@@ -7,12 +7,9 @@ pin the fixed cost so it cannot regress into an N+1 again.
 """
 
 import uuid
-from collections.abc import AsyncIterator, Generator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator
 
 import pytest
-from sqlalchemy import event
-from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -21,6 +18,7 @@ from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.infrastructure.models import CreatorAlias
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.persistence.base import Base
+from tests.support.database import record_queries
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
 
@@ -33,30 +31,6 @@ _TABLES = [
     Base.metadata.tables["creator_alias_claims"],
     Base.metadata.tables["verification_codes"],
 ]
-
-
-@contextmanager
-def _counting(session_factory: async_sessionmaker[AsyncSession]) -> Generator[list[str]]:
-    """Record every statement executed on the factory's engine."""
-    statements: list[str] = []
-    engine = session_factory.kw["bind"].sync_engine
-
-    def before_cursor_execute(
-        conn: Connection,
-        cursor: object,
-        statement: str,
-        parameters: object,
-        context: object,
-        executemany: bool,
-    ) -> None:
-        del conn, cursor, parameters, context, executemany
-        statements.append(statement)
-
-    event.listen(engine, "before_cursor_execute", before_cursor_execute)
-    try:
-        yield statements
-    finally:
-        event.remove(engine, "before_cursor_execute", before_cursor_execute)
 
 
 def _selects(statements: list[str]) -> list[str]:
@@ -90,7 +64,7 @@ async def test_create_does_not_scale_with_identity_count(
         AccountIdentityValue.bedrock(2**63, gamertag="Builder"),
     )[:identity_count]
 
-    with _counting(async_session_factory) as statements:
+    with record_queries(async_session_factory) as statements:
         await repository.create(consent=CONSENT, identities=identities)
 
     assert len(_selects(statements)) == 0, _selects(statements)
@@ -109,7 +83,7 @@ async def test_get_many_costs_two_queries_regardless_of_account_count(
         assert account.id is not None
         account_ids.append(account.id)
 
-    with _counting(async_session_factory) as statements:
+    with record_queries(async_session_factory) as statements:
         loaded = await repository.get_many(account_ids)
 
     assert set(loaded) == set(account_ids)
@@ -120,7 +94,7 @@ async def test_get_many_of_nothing_touches_the_database_not_at_all(
     repository: AccountRepository,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    with _counting(async_session_factory) as statements:
+    with record_queries(async_session_factory) as statements:
         assert await repository.get_many([]) == {}
 
     assert statements == []
@@ -162,7 +136,7 @@ async def test_pending_claims_with_claimants_does_not_scale_with_queue_length(
         assert account.id is not None
         await repository.request_claim(name=f"Name{discord_id - 1}", account_id=account.id)
 
-    with _counting(async_session_factory) as statements:
+    with record_queries(async_session_factory) as statements:
         claims = await repository.pending_claims(with_claimants=True)
 
     assert len(claims) == 4
@@ -181,7 +155,7 @@ async def test_pending_claims_without_claimants_stays_one_query(
     assert account.id is not None
     await repository.request_claim(name="Name", account_id=account.id)
 
-    with _counting(async_session_factory) as statements:
+    with record_queries(async_session_factory) as statements:
         claims = await repository.pending_claims()
 
     assert [claim.claimant for claim in claims] == [None]
@@ -207,7 +181,7 @@ async def test_resolving_a_claim_names_its_claimant_at_constant_query_cost(
         session.add(CreatorAlias(name="OldName"))
     claim = await repository.request_claim(name="OldName", account_id=claimant.id)
 
-    with _counting(async_session_factory) as statements:
+    with record_queries(async_session_factory) as statements:
         resolved = await repository.resolve_claim(
             claim_id=claim.id,
             status=status,

@@ -6,12 +6,7 @@ removed. That made mapping a page O(rows) queries. These tests pin the fixed
 cost so the batching cannot silently regress into an N+1.
 """
 
-from collections.abc import Generator
-from contextlib import contextmanager
-
 import pytest
-from sqlalchemy import event
-from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import IdentityProvider
@@ -19,34 +14,11 @@ from squid.accounts.infrastructure.models import Account, AccountIdentity, Creat
 from squid.builds.domain import OtherBuild, Status
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.versions.infrastructure.models import Version
+from tests.support.database import record_queries
 
 # Row query + tag-assignment and tag-definition eager loads + links eager load,
 # then the creator, submitter-identity, version and source-message batches.
 _EXPECTED_PAGE_QUERIES = 7
-
-
-@contextmanager
-def _counting(session_factory: async_sessionmaker[AsyncSession]) -> Generator[list[str]]:
-    """Record every statement executed on the factory's engine."""
-    statements: list[str] = []
-    engine = session_factory.kw["bind"].sync_engine
-
-    def before_cursor_execute(
-        conn: Connection,
-        cursor: object,
-        statement: str,
-        parameters: object,
-        context: object,
-        executemany: bool,
-    ) -> None:
-        del conn, cursor, parameters, context, executemany
-        statements.append(statement)
-
-    event.listen(engine, "before_cursor_execute", before_cursor_execute)
-    try:
-        yield statements
-    finally:
-        event.remove(engine, "before_cursor_execute", before_cursor_execute)
 
 
 async def _seed(session_factory: async_sessionmaker[AsyncSession], count: int) -> tuple[int, list[int]]:
@@ -91,7 +63,7 @@ async def test_list_page_query_count_does_not_grow_with_the_page(
     await _seed(migrated_session_factory, count)
     repository = BuildRepository(migrated_session_factory)
 
-    with _counting(migrated_session_factory) as statements:
+    with record_queries(migrated_session_factory) as statements:
         builds = await repository.list_page(
             statuses=frozenset({Status.PENDING}),
             submitter_account_id=None,
@@ -115,7 +87,7 @@ async def test_get_many_batches_cross_context_loads(
     _, build_ids = await _seed(migrated_session_factory, 5)
     repository = BuildRepository(migrated_session_factory)
 
-    with _counting(migrated_session_factory) as statements:
+    with record_queries(migrated_session_factory) as statements:
         builds = await repository.get_many(build_ids)
 
     assert [build.id for build in builds] == build_ids
