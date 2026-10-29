@@ -41,7 +41,6 @@ from squid.accounts.errors import (
     InvalidMergeCodeError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
-    LastIdentityError,
     LinkReservationExpiredError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
@@ -348,8 +347,6 @@ class AccountService:
         attribution is a fact about the build and should not change when someone tidies up how
         they sign in.
         """
-        if await self._repository.count_identities(account_id) <= 1:
-            raise LastIdentityError(account_id=account_id)
         removed = await self._repository.unlink_identity(account_id, identity_id)
         if removed is None:
             raise AccountIdentityNotFoundError(identity_id, account_id=account_id)

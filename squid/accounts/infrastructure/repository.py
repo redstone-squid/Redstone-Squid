@@ -43,6 +43,7 @@ from squid.accounts.errors import (
     AliasAlreadyClaimedError,
     ClaimNotFoundError,
     CreatorAliasNotFoundError,
+    LastIdentityError,
     MinecraftAccountNotFoundError,
 )
 from squid.accounts.infrastructure.consent import account_consent_current
@@ -544,13 +545,17 @@ class AccountRepository:
             return await self._load_account(session, model)
 
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None:
-        """Remove one identity by internal id, returning it, or `None` when it is not this account's.
+        """Remove one owned identity, refusing to remove the account's last sign-in method.
 
-        Addressed by id rather than by provider because an account can hold two identities from the
-        same provider: a merge moves every row across, and picking "the Discord one" would then be
-        a coin flip.
+        Addressed by id because a merge can leave multiple identities from the same provider.
+        Creator credit is independent of sign-in identities and remains untouched.
         """
         async with self._session_factory.begin() as session:
+            # Link and merge paths take this same lock. Keep the delete and remaining-identity
+            # check together so concurrent unlinks cannot both remove the last sign-in method.
+            account = await session.get(AccountModel, account_id, with_for_update=True)
+            if account is None:
+                return None
             removed = await session.scalar(
                 delete(AccountIdentityModel)
                 .where(
@@ -559,21 +564,17 @@ class AccountRepository:
                 )
                 .returning(AccountIdentityModel)
             )
-            # An avatar sourced from this identity clears itself: the foreign key is ON DELETE SET
-            # NULL precisely so nothing has to remember to do it here.
-            return None if removed is None else _to_identity(removed)
-
-    async def count_identities(self, account_id: int) -> int:
-        """Return how many identities an account currently holds."""
-        async with self._session_factory() as session:
-            return (
-                await session.scalar(
-                    select(func.count())
-                    .select_from(AccountIdentityModel)
-                    .where(AccountIdentityModel.account_id == account_id)
-                )
-                or 0
+            if removed is None:
+                return None
+            remaining = await session.scalar(
+                select(func.count())
+                .select_from(AccountIdentityModel)
+                .where(AccountIdentityModel.account_id == account_id)
             )
+            if not remaining:
+                raise LastIdentityError(account_id=account_id)
+            # ON DELETE SET NULL clears a removed avatar; rejecting the unlink rolls that back too.
+            return _to_identity(removed)
 
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
         """Publish or withhold one identity on the account's public profile."""
