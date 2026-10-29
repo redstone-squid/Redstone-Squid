@@ -1,8 +1,9 @@
 # Structural debt in squid and its tests
 
-Status: submission convergence implemented around the sanitizer boundary. Section 3's API service
-graph is done; its remaining test-boundary work and sections 2 and 4 are queued.
-Reviewed: 2026-09-09.
+Status: submission convergence and transactional account-merge ownership are implemented.
+Section 3's API service graph and merge test boundaries are done; bot/worker test graphs remain.
+Section 4 needs reassessment against the current metadata producers and consumers.
+Reviewed: 2026-10-29.
 
 The approved submission design and implementation record are in
 [`submission-convergence.md`](submission-convergence.md). Its decisions supersede section 1
@@ -80,7 +81,7 @@ Current architecture tests chiefly constrain horizontal layers rather than these
 - Pass the existing database session into those helpers. Preserve one transaction, deterministic lock
   ordering, phase ordering, and rollback across all participating features.
 - Centralize notification source-key construction and validation so creation and merging share the
-  grammar, including accepted legacy record keys and their canonical replacements.
+  current grammar. Legacy record-key normalization is intentionally removed.
 - Inventory cross-feature writes separately from read projections. Give each write an explicit owner;
   allow deliberate query projections to read across features without adding unnecessary service hops.
 - Add targeted architecture rules for the resulting ownership boundaries. Avoid a blanket prohibition
@@ -89,11 +90,30 @@ Current architecture tests chiefly constrain horizontal layers rather than these
 ### Acceptance
 
 - Existing merge tests retain coverage for late-failure rollback, reversed concurrent merges, conflict
-  collapse, legacy-key replay, and stale delivery completion.
+  collapse, current-key replay, and stale delivery completion.
 - Every account reference has an explicit merge disposition, including references retained or deleted
   rather than reassigned. Check the disposition inventory against schema references where feasible.
 - A feature's merge policy can change without editing its SQL and data grammar inside account CRUD.
 - No asynchronous event-based replacement weakens the current atomic merge guarantee.
+
+### Completion: transactional ownership, 2026-10-29
+
+`AccountRepository.merge` opens one transaction and delegates to the account-merge coordinator.
+The coordinator locks accounts in ascending ID order and invokes submission, identity, creator,
+voting, notification, and permission phases in the existing order. Feature-specific SQL now lives
+with the feature; shared persistence primitives only describe the account pair and routine reference
+moves. Submission payload integrity checks and worker claim invalidation remain in that transaction.
+
+`NotificationSource` owns current key construction and validation for both materialization and merge.
+Only current keys are accepted. Recipient rewriting is one-to-one, so merging uses a fixed survivor
+lookup instead of repeatedly canonicalizing and re-indexing historical aliases.
+
+The architecture suite inventories every account foreign key, including explicit cascade deletion
+and nullable attribution policies, and enforces the dependency boundary around account CRUD and the
+feature helpers. It replaces private-helper compilation checks and exact SQL-comment assertions.
+Real PostgreSQL tests cover rollback, reverse concurrent merges, current-key replay, delivery fencing,
+and retained submission payloads. Existing fixtures now use storage-precision timestamps and create
+the required generic-vote subtype.
 
 ## 3. Refactor test boundaries alongside production boundaries
 
@@ -154,10 +174,15 @@ contract suite driving every generated operation. Project-wide Pyrefly reports z
 format and whitespace checks pass. Six architecture failures in these runs reproduce on a clean
 tree and are unrelated.
 
-Still open in this track: the source-shape assertions in `tests/unit/accounts/test_merge_phases.py`,
-and the bot and worker service graphs, which retain their own unchecked doubles.
+The merge source-shape assertions were replaced by schema disposition and dependency checks in
+October 2026. Still open: the bot and worker service graphs, which retain their own unchecked doubles.
 
 ## 4. Give build metadata explicit types and ownership
+
+Reassessment, 2026-10-29: submission convergence left one provenance writer and no provenance reader;
+enrichment currently has legacy rendering but no production writers. A wholesale metadata wrapper
+would add a representation without removing shared interpretation today. Revisit this track when
+new producers or consumers justify a concrete boundary, rather than expanding it for compatibility.
 
 ### Evidence and growth risk
 

@@ -26,8 +26,8 @@ from squid.notifications.infrastructure.repository import PostgresNotificationRe
 from squid.persistence.types import now
 from squid.submissions.domain import SubmissionOrigin
 from squid.submissions.infrastructure.models import SubmissionDraft
-from squid.voting.domain import VoteKind, VoteSessionResult, VoteStatus
-from squid.voting.infrastructure.models import Vote, VoteSession
+from squid.voting.domain import PollScope, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
+from squid.voting.infrastructure.models import GenericVoteSession, Vote, VoteSession
 
 
 @pytest.mark.parametrize(
@@ -110,7 +110,7 @@ async def test_profile_merge_preserves_realistic_dm_health_states(
     absorbed = await accounts.create()
     assert survivor.id is not None
     assert absorbed.id is not None
-    suspended_at = Instant.now()
+    suspended_at = now()
     survivor_healthy = profile_state == "healthy_survivor"
     absorbed_healthy = profile_state == "healthy_absorbed"
     both_suspended = profile_state == "both_suspended_disabled"
@@ -199,7 +199,7 @@ async def test_no_collision_notification_and_delivery_move_together_at_merge_com
     assert merged_delivery.account_id == survivor.id
 
 
-async def test_legacy_record_key_merge_replay_and_stale_delivery_completion_are_idempotent(
+async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempotent(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     accounts = AccountRepository(migrated_session_factory, "test-pepper")
@@ -233,7 +233,7 @@ async def test_legacy_record_key_merge_replay_and_stale_delivery_completion_are_
         notification = NotificationRecord(
             account_id=absorbed.id,
             event_id=event.id,
-            source_key=f"event:{event.id}:record-build:42:user:{absorbed.id}",
+            source_key=f"event:{event.id}:record-build:42:account:{absorbed.id}",
             kind=NotificationKind.RECORD_GAINED,
             payload={"build_id": 42, "records": []},
             web_visible=True,
@@ -243,7 +243,7 @@ async def test_legacy_record_key_merge_replay_and_stale_delivery_completion_are_
             NotificationRecord(
                 account_id=survivor.id,
                 event_id=event.id,
-                source_key=f"event:{event.id}:record-build:42:user:{survivor.id}",
+                source_key=f"event:{event.id}:record-build:42:account:{survivor.id}",
                 kind=NotificationKind.RECORD_GAINED,
                 payload={"build_id": 42, "records": []},
                 web_visible=True,
@@ -343,6 +343,16 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
         )
         session.add_all([alias, vote_session])
         await session.flush()
+        session.add(
+            GenericVoteSession(
+                vote_session_id=vote_session.id,
+                guild_id=None,
+                question="Merge preferences?",
+                visibility=VoteVisibility.VISIBLE_LIVE,
+                scope=PollScope.GUILD,
+                deadline=resolved_at.add(hours=1),
+            )
+        )
         session.add_all(
             [
                 CreatorAliasClaim(alias_id=alias.id, account_id=survivor.id),
