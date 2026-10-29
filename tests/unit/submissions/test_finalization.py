@@ -12,6 +12,7 @@ from squid.sponsors import PublicSponsor
 from squid.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
+    CheckedInFormManifestRegistry,
     ClaimedFinalizationJob,
     DraftPreparationSnapshot,
     FinalizationFailureOutcome,
@@ -22,7 +23,6 @@ from squid.submissions.application import (
     SubmissionFinalizationWorker,
     SubmissionPreparation,
     SubmissionRequestResult,
-    build_submission_manifest,
 )
 from squid.submissions.domain import (
     BuildSubmissionRejected,
@@ -35,7 +35,6 @@ from squid.submissions.domain import (
     ExtenderSubmissionDetails,
     FinalizationJobStatus,
     FinalizedBuild,
-    FormManifest,
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicArtifactState,
@@ -61,26 +60,6 @@ The draft service reads its own clock unless given one, so a fixture dated in th
 against the real time of day — these tests passed until seven days after the date above and then
 failed together. `_drafts` hands the service this instant so the suite tests the code rather than
 the calendar."""
-
-
-class FakeManifestRegistry:
-    def __init__(self) -> None:
-        self.manifest = build_submission_manifest("en")
-
-    async def current(self, *, locale: str | None) -> FormManifest:
-        del locale
-        return self.manifest
-
-    async def get(
-        self,
-        schema_id: str,
-        revision: int,
-        *,
-        locale: str | None,
-    ) -> FormManifest | None:
-        if schema_id == self.manifest.schema_id and revision in {1, 2}:
-            return build_submission_manifest(locale, revision=revision)
-        return None
 
 
 class FakeDraftRepository:
@@ -323,7 +302,7 @@ def _stored(
 
 def _drafts(repository: FakeDraftRepository) -> SubmissionDraftService:
     """A draft service frozen at `NOW`, so a fixture's expiry never depends on the wall clock."""
-    return SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: NOW)
+    return SubmissionDraftService(repository, CheckedInFormManifestRegistry(), now=lambda: NOW)
 
 
 def _snapshot(status: FinalizationJobStatus) -> FinalizationJobSnapshot:
