@@ -314,7 +314,7 @@ class VoteRepository:
             row = await self._get_session_row(session, message_id, for_update=True)
             if row is None or row.status is not VoteStatus.OPEN:
                 return None
-            await self._apply_refresh(session, row.id, refreshed_weights or {})
+            await self._apply_refresh(session, row, refreshed_weights or {})
             previous = await session.scalar(
                 select(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
             )
@@ -355,8 +355,8 @@ class VoteRepository:
             row = await session.scalar(select(VoteSession).where(VoteSession.id == vote_session_id).with_for_update())
             if row is None:
                 return None
-            await self._apply_refresh(session, row.id, weights)
-            just_closed = row.status is VoteStatus.OPEN and await self._close_at_threshold(session, row)
+            await self._apply_refresh(session, row, weights)
+            just_closed = await self._close_at_threshold(session, row)
             return StoredVoteMutation(await self._to_snapshot(session, row), None, None, just_closed)
 
     async def close(self, message_id: int) -> StoredVoteMutation | None:
@@ -384,22 +384,26 @@ class VoteRepository:
         )
 
     @staticmethod
-    async def _apply_refresh(session: AsyncSession, session_id: int, weights: dict[int, float]) -> None:
+    async def _apply_refresh(session: AsyncSession, row: VoteSession, weights: dict[int, float]) -> None:
+        """Reweigh ballots only while the locked session still accepts changes."""
+        # Actor lookups happen before this lock, so a closing vote may have won
+        # while the refresh was in flight. Its final tally must stay frozen.
+        if row.status is not VoteStatus.OPEN:
+            return
         for account_id, weight in weights.items():
             if weight <= 0:
-                await session.execute(
-                    delete(Vote).where(Vote.vote_session_id == session_id, Vote.account_id == account_id)
-                )
+                await session.execute(delete(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id))
             else:
                 await session.execute(
                     update(Vote)
-                    .where(Vote.vote_session_id == session_id, Vote.account_id == account_id)
+                    .where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
                     .values(weight=weight)
                 )
 
     @staticmethod
     async def _close_at_threshold(session: AsyncSession, row: VoteSession) -> bool:
-        if row.pass_threshold is None or row.fail_threshold is None:
+        """Finalize a locked open session once its current tally reaches a threshold."""
+        if row.status is not VoteStatus.OPEN or row.pass_threshold is None or row.fail_threshold is None:
             return False
         selections = (
             await session.execute(
