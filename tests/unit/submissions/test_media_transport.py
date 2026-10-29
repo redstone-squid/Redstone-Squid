@@ -1,10 +1,11 @@
 """Transport and association acceptance tests for submission media routes."""
 
 import asyncio
+import errno
 import os
 import shutil
 import threading
-from collections.abc import Iterator
+from collections.abc import Sequence
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -13,7 +14,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from starlette.requests import ClientDisconnect, Request
 from starlette.responses import Response
-from starlette.types import Message, Receive
+from starlette.types import Message
 
 from squid.api.v1 import submission_media
 from squid.api.v1.submission_media import upload_draft_media
@@ -38,7 +39,7 @@ def raw_request(
     headers: list[tuple[bytes, bytes]],
     *,
     query_string: bytes = b"",
-    receive: Receive | None = None,
+    messages: Sequence[Message] = (),
 ) -> Request:
     scope = {
         "type": "http",
@@ -52,7 +53,32 @@ def raw_request(
         "client": ("127.0.0.1", 1234),
         "server": ("test", 443),
     }
-    return Request(scope) if receive is None else Request(scope, receive)
+    pending = iter(messages)
+
+    async def receive() -> Message:
+        return next(pending)
+
+    return Request(scope, receive)
+
+
+async def upload_image(request: Request, media: FakeMedia | None = None) -> None:
+    media = media or FakeMedia([])
+    await upload_draft_media(
+        draft_id=DRAFT_ID,
+        kind=MediaKind.IMAGE,
+        request=request,
+        response=Response(),
+        attachments=DraftAttachmentService(FakeDrafts(media.events), media),
+        account_id=ACCOUNT_ID,
+        strip_audio=False,
+        upload_id=UPLOAD_ID,
+    )
+
+
+@pytest.fixture
+def staging_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setattr(submission_media.tempfile, "tempdir", str(tmp_path))
+    return tmp_path
 
 
 async def test_upload_streams_to_private_file_and_returns_only_safe_state() -> None:
@@ -92,8 +118,9 @@ async def test_upload_streams_to_private_file_and_returns_only_safe_state() -> N
     assert not media.staged_parent.exists()
 
 
-async def test_upload_rejects_ambiguous_or_over_limit_framing_before_registration() -> None:
-    cases = (
+@pytest.mark.parametrize(
+    ("headers", "params", "body", "reason"),
+    [
         ({"Content-Type": "image/png", "Content-Length": "0"}, {}, b"", "content_length_invalid"),
         ({"Content-Type": "image/png", "Content-Length": "9"}, {}, b"", "limit_exceeded"),
         ({"Content-Type": "image/png", "Content-Length": "5"}, {}, b"four", "content_length_mismatch"),
@@ -104,22 +131,25 @@ async def test_upload_rejects_ambiguous_or_over_limit_framing_before_registratio
             "strip_audio_requires_video",
         ),
         ({"Content-Type": "image/png", "Content-Length": "4"}, {"unknown": "1"}, b"four", "query_parameters_invalid"),
-    )
-    for headers, params, body, reason in cases:
-        events: list[str] = []
-        media = FakeMedia(events)
-        app = app_with_fakes(media, FakeDrafts(events))
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.post(
-                f"/submissions/drafts/{DRAFT_ID}/media/image",
-                params=params,
-                headers=headers,
-                content=body,
-            )
-        assert response.status_code == 400
-        assert response.json()["context"]["reason"] == reason
-        assert media.submission is None
-        assert events == ["owner"]
+    ],
+)
+async def test_upload_rejects_ambiguous_or_over_limit_framing_before_registration(
+    headers: dict[str, str], params: dict[str, str], body: bytes, reason: str
+) -> None:
+    events: list[str] = []
+    media = FakeMedia(events)
+    app = app_with_fakes(media, FakeDrafts(events))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/submissions/drafts/{DRAFT_ID}/media/image",
+            params=params,
+            headers=headers,
+            content=body,
+        )
+    assert response.status_code == 400
+    assert response.json()["context"]["reason"] == reason
+    assert media.submission is None
+    assert events == ["owner"]
 
 
 @pytest.mark.parametrize(
@@ -202,31 +232,30 @@ async def test_raw_content_type_headers_reject_ambiguous_media(
     assert raised.value.public_context == {"reason": reason}
 
 
-async def test_nil_upload_identifiers_are_rejected_before_draft_authorization() -> None:
-    nil = UUID(int=0)
-    draft_events: list[str] = []
-    upload_events: list[str] = []
-    draft_app = app_with_fakes(FakeMedia(draft_events), FakeDrafts(draft_events))
-    upload_app = app_with_fakes(FakeMedia(upload_events), FakeDrafts(upload_events))
+@pytest.mark.parametrize(
+    ("draft_id", "params", "reason"),
+    [
+        pytest.param(UUID(int=0), {}, "nil_draft_id", id="draft"),
+        pytest.param(DRAFT_ID, {"upload_id": str(UUID(int=0))}, "nil_upload_id", id="upload"),
+    ],
+)
+async def test_nil_upload_identifiers_are_rejected_before_draft_authorization(
+    draft_id: UUID, params: dict[str, str], reason: str
+) -> None:
+    events: list[str] = []
+    app = app_with_fakes(FakeMedia(events), FakeDrafts(events))
 
-    async with AsyncClient(transport=ASGITransport(app=draft_app), base_url="http://test") as client:
-        nil_draft = await client.post(
-            f"/submissions/drafts/{nil}/media/image",
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            f"/submissions/drafts/{draft_id}/media/image",
+            params=params,
             headers={"Content-Type": "image/png", "Content-Length": "1"},
             content=b"x",
         )
-    async with AsyncClient(transport=ASGITransport(app=upload_app), base_url="http://test") as client:
-        nil_upload = await client.post(
-            f"/submissions/drafts/{DRAFT_ID}/media/image",
-            params={"upload_id": str(nil)},
-            headers={"Content-Type": "image/png", "Content-Length": "1"},
-            content=b"x",
-        )
 
-    assert (nil_draft.status_code, nil_draft.json()["context"]["reason"]) == (400, "nil_draft_id")
-    assert (nil_upload.status_code, nil_upload.json()["context"]["reason"]) == (400, "nil_upload_id")
-    assert draft_events == []
-    assert upload_events == []
+    assert response.status_code == 400
+    assert response.json()["context"]["reason"] == reason
+    assert events == []
 
 
 async def test_duplicate_query_parameter_is_rejected_after_authorization() -> None:
@@ -273,43 +302,16 @@ async def test_upload_checks_draft_ownership_before_inspecting_or_staging_body()
 async def test_upload_cleans_private_stage_when_registration_aborts(failure: BaseException) -> None:
     events: list[str] = []
     media = FakeMedia(events, failure=failure)
-    drafts = FakeDrafts(events)
-    chunks = iter((b"ab", b"cd"))
-
-    async def receive() -> dict[str, object]:
-        try:
-            chunk = next(chunks)
-        except StopIteration:
-            return {"type": "http.request", "body": b"", "more_body": False}
-        return {"type": "http.request", "body": chunk, "more_body": chunk == b"ab"}
-
-    request = Request(
-        {
-            "type": "http",
-            "http_version": "1.1",
-            "method": "POST",
-            "scheme": "https",
-            "path": f"/submissions/drafts/{DRAFT_ID}/media/video",
-            "raw_path": b"/submissions/drafts/media/video",
-            "query_string": b"upload_id=75043a53-05ae-4097-bbf4-4eae1d6b088c",
-            "headers": [(b"content-type", b"video/mp4"), (b"content-length", b"4")],
-            "client": ("127.0.0.1", 1234),
-            "server": ("test", 443),
-        },
-        receive,
+    request = raw_request(
+        [(b"content-type", b"image/png"), (b"content-length", b"4")],
+        messages=(
+            {"type": "http.request", "body": b"ab", "more_body": True},
+            {"type": "http.request", "body": b"cd", "more_body": False},
+        ),
     )
 
     with pytest.raises(type(failure)):
-        await upload_draft_media(
-            draft_id=DRAFT_ID,
-            kind=MediaKind.VIDEO,
-            request=request,
-            response=Response(),
-            attachments=DraftAttachmentService(drafts, media),
-            account_id=ACCOUNT_ID,
-            strip_audio=False,
-            upload_id=UPLOAD_ID,
-        )
+        await upload_image(request, media)
 
     assert media.staged_path is not None
     assert not media.staged_path.exists()
@@ -317,9 +319,11 @@ async def test_upload_cleans_private_stage_when_registration_aborts(failure: Bas
     assert not media.staged_parent.exists()
 
 
-async def test_upload_logs_tree_cleanup_failure_without_masking_stream_error(
+@pytest.mark.parametrize("body", [b"four", b"short"], ids=["success", "stream-error"])
+async def test_upload_logs_cleanup_failure_without_changing_response(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
+    body: bytes,
 ) -> None:
     real_rmtree = shutil.rmtree
     retained: list[Path] = []
@@ -336,11 +340,14 @@ async def test_upload_logs_tree_cleanup_failure_without_masking_stream_error(
             response = await client.post(
                 f"/submissions/drafts/{DRAFT_ID}/media/image",
                 headers={"Content-Type": "image/png", "Content-Length": "4"},
-                content=b"short",
+                content=body,
             )
 
-        assert response.status_code == 400
-        assert response.json()["context"]["reason"] == "content_length_mismatch"
+        if body == b"four":
+            assert response.status_code == 202
+        else:
+            assert response.status_code == 400
+            assert response.json()["context"]["reason"] == "content_length_mismatch"
         assert "Unable to remove a private upload staging directory" in caplog.text
         assert len(retained) == 1
     finally:
@@ -348,97 +355,49 @@ async def test_upload_logs_tree_cleanup_failure_without_masking_stream_error(
             real_rmtree(directory, ignore_errors=True)
 
 
-async def test_private_upload_tree_logs_cleanup_failure_after_normal_exit(
-    monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    real_rmtree = shutil.rmtree
-    retained: list[Path] = []
-
-    def fail_cleanup(path: str | os.PathLike[str], *_args: object, **_kwargs: object) -> None:
-        retained.append(Path(path))
-        raise PermissionError("cleanup refused")
-
-    monkeypatch.setattr(submission_media.shutil, "rmtree", fail_cleanup)
-    try:
-        with submission_media._private_upload_directory() as directory:
-            (directory / "source").write_bytes(b"registered")
-
-        assert "Unable to remove a private upload staging directory" in caplog.text
-        assert retained == [directory]
-    finally:
-        for path in retained:
-            real_rmtree(path, ignore_errors=True)
-
-
-async def test_upload_disconnect_closes_and_removes_partial_stage(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    directory = tmp_path / "upload"
-    directory.mkdir()
-    monkeypatch.setattr(submission_media.tempfile, "mkdtemp", lambda **_kwargs: str(directory))
-    messages: Iterator[Message] = iter(
-        (
+async def test_upload_disconnect_closes_and_removes_partial_stage(staging_root: Path) -> None:
+    request = raw_request(
+        [(b"content-type", b"image/png"), (b"content-length", b"4")],
+        messages=(
             {"type": "http.request", "body": b"ab", "more_body": True},
             {"type": "http.disconnect"},
-        )
+        ),
     )
 
-    async def receive() -> Message:
-        return next(messages)
-
-    request = raw_request([(b"content-type", b"image/png"), (b"content-length", b"4")], receive=receive)
-
     with pytest.raises(ClientDisconnect):
-        await upload_draft_media(
-            draft_id=DRAFT_ID,
-            kind=MediaKind.IMAGE,
-            request=request,
-            response=Response(),
-            attachments=DraftAttachmentService(FakeDrafts([]), FakeMedia([])),
-            account_id=ACCOUNT_ID,
-            strip_audio=False,
-            upload_id=UPLOAD_ID,
+        await upload_image(request)
+
+    assert list(staging_root.iterdir()) == []
+
+
+async def test_stream_never_overwrites_an_existing_destination(tmp_path: Path) -> None:
+    destination = tmp_path / "source"
+    destination.write_bytes(b"existing")
+
+    with pytest.raises(FileExistsError):
+        await submission_media._stream_to_private_file(raw_request([]), destination, content_length=1, max_bytes=8)
+
+    assert destination.read_bytes() == b"existing"
+
+
+@pytest.mark.skipif(not hasattr(os, "fchmod"), reason="requires POSIX descriptor permissions")
+async def test_permission_failure_closes_the_open_descriptor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    opened: list[int] = []
+
+    def deny_fchmod(descriptor: int, mode: int) -> None:
+        opened.append(descriptor)
+        raise PermissionError("permission change refused")
+
+    monkeypatch.setattr(submission_media.os, "fchmod", deny_fchmod)
+    with pytest.raises(PermissionError, match="permission change refused"):
+        await submission_media._stream_to_private_file(
+            raw_request([]), tmp_path / "source", content_length=1, max_bytes=8
         )
 
-    assert not directory.exists()
-
-
-async def test_stream_open_and_permission_failures_do_not_leak_descriptors(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    request = raw_request([])
-    destination = tmp_path / "source"
-
-    def deny_open(*_args: object, **_kwargs: object) -> int:
-        raise PermissionError
-
-    with monkeypatch.context() as patch:
-        patch.setattr(submission_media.os, "open", deny_open)
-        with pytest.raises(PermissionError):
-            await submission_media._stream_to_private_file(request, destination, content_length=1, max_bytes=8)
-
-    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    closed: list[int] = []
-    real_close = os.close
-
-    def close(recorded: int) -> None:
-        closed.append(recorded)
-        real_close(recorded)
-
-    def deny_fchmod(*_args: object) -> None:
-        raise PermissionError
-
-    with monkeypatch.context() as patch:
-        patch.setattr(submission_media.os, "open", lambda *_args, **_kwargs: descriptor)
-        patch.setattr(submission_media.os, "fchmod", deny_fchmod)
-        patch.setattr(submission_media.os, "close", close)
-        with pytest.raises(PermissionError):
-            await submission_media._stream_to_private_file(request, destination, content_length=1, max_bytes=8)
-
-    assert closed == [descriptor]
+    (descriptor,) = opened
+    with pytest.raises(OSError, match=os.strerror(errno.EBADF)) as raised:
+        os.fstat(descriptor)
+    assert raised.value.errno == errno.EBADF
 
 
 async def test_zero_length_filesystem_write_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -449,12 +408,9 @@ async def test_zero_length_filesystem_write_is_rejected(monkeypatch: pytest.Monk
 
 
 async def test_cancellation_waits_for_blocking_write_before_closing_and_removing_stage(
-    tmp_path: Path,
+    staging_root: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    directory = tmp_path / "upload"
-    directory.mkdir()
-    monkeypatch.setattr(submission_media.tempfile, "mkdtemp", lambda **_kwargs: str(directory))
     started = threading.Event()
     release = threading.Event()
     real_write_all = submission_media._write_all
@@ -467,28 +423,17 @@ async def test_cancellation_waits_for_blocking_write_before_closing_and_removing
         real_write_all(descriptor, data)
 
     monkeypatch.setattr(submission_media, "_write_all", blocking_write)
-    messages: Iterator[Message] = iter(({"type": "http.request", "body": b"data", "more_body": False},))
-
-    async def receive() -> Message:
-        return next(messages)
-
-    request = raw_request([(b"content-type", b"image/png"), (b"content-length", b"4")], receive=receive)
+    request = raw_request(
+        [(b"content-type", b"image/png"), (b"content-length", b"4")],
+        messages=({"type": "http.request", "body": b"data", "more_body": False},),
+    )
     cancel_scope = anyio.CancelScope()
     settled = anyio.Event()
 
     async def upload() -> None:
         try:
             with cancel_scope:
-                await upload_draft_media(
-                    draft_id=DRAFT_ID,
-                    kind=MediaKind.IMAGE,
-                    request=request,
-                    response=Response(),
-                    attachments=DraftAttachmentService(FakeDrafts([]), FakeMedia([])),
-                    account_id=ACCOUNT_ID,
-                    strip_audio=False,
-                    upload_id=UPLOAD_ID,
-                )
+                await upload_image(request)
         finally:
             settled.set()
 
@@ -498,16 +443,18 @@ async def test_cancellation_waits_for_blocking_write_before_closing_and_removing
             while not started.is_set():
                 await anyio.sleep(0)
 
-        cancel_scope.cancel()
-        await anyio.sleep(0)
-        assert directory.exists()
-        assert (directory / "source").exists()
-        assert not settled.is_set()
+        try:
+            cancel_scope.cancel()
+            await anyio.sleep(0)
+            (directory,) = staging_root.iterdir()
+            assert (directory / "source").is_file()
+            assert not settled.is_set()
+        finally:
+            release.set()
+        with anyio.fail_after(2):
+            await settled.wait()
 
-        release.set()
-        await settled.wait()
-
-    assert not directory.exists()
+    assert list(staging_root.iterdir()) == []
 
 
 async def test_cross_draft_lookup_and_missing_discard_are_not_visible() -> None:
