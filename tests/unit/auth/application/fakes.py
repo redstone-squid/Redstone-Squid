@@ -16,7 +16,7 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.accounts.domain import Account, AccountConsent, IdentityProvider
 from squid.auth.domain.oauth import ExternalIdentity
-from squid.auth.domain.sessions import OAuthState
+from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
 
 
 @dataclass(slots=True)
@@ -40,6 +40,7 @@ class SessionRepository:
         self.state: OAuthState | None = None
         self.token_hash: bytes | None = None
         self.account_id: int | None = None
+        self.expires_at: Instant | None = None
 
     async def save_state(self, state: OAuthState) -> None:
         self.state = state
@@ -58,17 +59,26 @@ class SessionRepository:
         expires_at: Instant,
         user_agent: str | None,
     ) -> str:
-        del expires_at, user_agent
+        del user_agent
         self.token_hash = token_hash
         self.account_id = account_id
+        self.expires_at = expires_at
         return "session-id"
 
-    async def authenticate(self, token_hash: bytes, *, now: Instant) -> None:
-        del token_hash, now
-        return
+    async def authenticate(self, token_hash: bytes, *, now: Instant) -> WebSessionIdentity | None:
+        if (
+            token_hash != self.token_hash
+            or self.account_id is None
+            or self.expires_at is None
+            or self.expires_at <= now
+        ):
+            return None
+        return WebSessionIdentity("session-id", self.account_id, consent_pending=False)
 
     async def revoke(self, token_hash: bytes, *, now: Instant) -> None:
-        del token_hash, now
+        del now
+        if token_hash == self.token_hash:
+            self.token_hash = None
 
 
 class FakeXboxOAuthProvider:
