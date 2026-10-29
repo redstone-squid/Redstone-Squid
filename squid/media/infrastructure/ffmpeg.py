@@ -8,7 +8,7 @@ import os
 import shutil
 import signal
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from fractions import Fraction
@@ -158,8 +158,7 @@ class FfmpegMediaNormalizer:
         source_bytes: int,
         limits: MediaLimits,
     ) -> MediaNormalizationResult:
-        temporary = _temporary_destination(request.output_path, suffix=".png")
-        try:
+        with _staged_outputs((request.output_path, ".png")) as (temporary,):
             await self._run(
                 self._ffmpeg,
                 (
@@ -199,10 +198,6 @@ class FfmpegMediaNormalizer:
             output_probe = await self.probe(temporary)
             _validate_image_output(probe, output_probe)
             artifact = _artifact(temporary, "image/png", output_probe, byte_size=output_size)
-            _commit_one(temporary, request.output_path)
-        except Exception:
-            temporary.unlink(missing_ok=True)
-            raise
 
         report = MediaNormalizationReport(
             kind=MediaKind.IMAGE,
@@ -227,14 +222,10 @@ class FfmpegMediaNormalizer:
         limits: MediaLimits,
     ) -> MediaNormalizationResult:
         assert request.poster_path is not None
-        video_temporary = _temporary_destination(request.output_path, suffix=".mp4")
-        try:
-            poster_temporary = _temporary_destination(request.poster_path, suffix=".jpg")
-        except Exception:
-            video_temporary.unlink(missing_ok=True)
-            raise
-        committed_video = False
-        try:
+        with _staged_outputs((request.output_path, ".mp4"), (request.poster_path, ".jpg")) as (
+            video_temporary,
+            poster_temporary,
+        ):
             audio_arguments = ("-an",) if request.strip_audio else ("-map", "0:a:0?", "-c:a", "aac", "-b:a", "192k")
             await self._run(
                 self._ffmpeg,
@@ -341,15 +332,6 @@ class FfmpegMediaNormalizer:
 
             output_artifact = _artifact(video_temporary, "video/mp4", output_probe, byte_size=video_size)
             poster_artifact = _artifact(poster_temporary, "image/jpeg", poster_probe, byte_size=poster_size)
-            _commit_one(video_temporary, request.output_path)
-            committed_video = True
-            _commit_one(poster_temporary, request.poster_path)
-        except Exception:
-            video_temporary.unlink(missing_ok=True)
-            poster_temporary.unlink(missing_ok=True)
-            if committed_video:
-                request.output_path.unlink(missing_ok=True)
-            raise
 
         actions = [
             MediaNormalizationAction.METADATA_REMOVED,
@@ -528,6 +510,23 @@ def _validate_combined_size(video_size: int, poster_size: int, *, limit: int) ->
     combined_size = video_size + poster_size
     if combined_size > limit:
         raise MediaLimitExceededError(MediaViolation(MediaLimitMeasure.OUTPUT_BYTES, combined_size, limit))
+
+
+@contextlib.contextmanager
+def _staged_outputs(*destinations: tuple[Path, str]) -> Iterator[tuple[Path, ...]]:
+    """Own temporary outputs until validation ends, rolling back incomplete publication."""
+    with contextlib.ExitStack() as temporary_cleanup:
+        staged: list[Path] = []
+        for destination, suffix in destinations:
+            temporary = _temporary_destination(destination, suffix=suffix)
+            temporary_cleanup.callback(temporary.unlink, missing_ok=True)
+            staged.append(temporary)
+        yield tuple(staged)
+        with contextlib.ExitStack() as rollback:
+            for temporary, (destination, _) in zip(staged, destinations, strict=True):
+                _commit_one(temporary, destination)
+                rollback.callback(destination.unlink, missing_ok=True)
+            rollback.pop_all()
 
 
 def _temporary_destination(destination: Path, *, suffix: str) -> Path:
