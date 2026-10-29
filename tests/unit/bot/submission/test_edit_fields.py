@@ -1,7 +1,7 @@
 """The generic build edit UI must stay aligned with the edit patch."""
 
 from dataclasses import replace
-from unittest.mock import AsyncMock
+from typing import Never
 
 import discord
 import pytest
@@ -39,9 +39,12 @@ def test_every_edit_field_emits_a_typed_patch_fragment() -> None:
         "coordinates": "1 2 3",
         "command_to_get_to_build": "/warp door",
     }
+    assert len(EDIT_FIELDS) == len(samples)
+    assert {field.key for field in EDIT_FIELDS} == samples.keys()
     source = DoorBuild()
     for field in EDIT_FIELDS:
         bound = field.bind(source)
+        assert field.parser(bound.current_text) == bound.value, field.key
         bound.stage(samples[field.key])
         assert bound.validation_error is None
 
@@ -49,11 +52,6 @@ def test_every_edit_field_emits_a_typed_patch_fragment() -> None:
         bound.to_patch().apply(target)
 
         assert field.reader(target) == bound.value, field.key
-
-
-def test_edit_field_names_are_unique() -> None:
-    attributes = [field.key for field in EDIT_FIELDS]
-    assert len(attributes) == len(set(attributes))
 
 
 def test_door_only_fields_are_offered_to_doors_alone() -> None:
@@ -75,17 +73,22 @@ def test_door_only_fields_are_offered_to_doors_alone() -> None:
         assert "creators_ign" in offered
 
 
-def test_every_edit_field_round_trips_through_its_declared_formatter_and_parser() -> None:
-    build = DoorBuild()
+def test_blank_values_preserve_optional_text_numbers_and_list_semantics() -> None:
+    fields = {field.key: field for field in EDIT_FIELDS}
+    assert fields["version_spec"].parser("") is None
+    assert fields["version_spec"].parser(" ") == " "
+    assert fields["normal_opening_time"].parser("") is None
+    assert fields["normal_opening_time"].parser("0") == 0
+    with pytest.raises(ValueError, match="invalid literal"):
+        fields["normal_opening_time"].parser(" ")
+    assert fields["creators_ign"].parser(" Alice, , Bob, ") == ["Alice", "Bob"]
+    assert fields["creators_ign"].parser(" , ") == []
 
-    for field in EDIT_FIELDS:
-        if not field.applies_to(build):
-            continue
-        bound = field.bind(build)
-        assert field.parser(bound.current_text) == bound.value, field.key
 
+def test_edit_form_pages_preserve_field_metadata_and_fit_discord_limits() -> None:
+    async def submit(_interaction: discord.Interaction, _values: dict[str, object]) -> None:
+        pass
 
-def test_edit_form_metadata_comes_from_the_same_specs_as_parsing() -> None:
     items = tuple(field.bind(DoorBuild()) for field in EDIT_FIELDS if field.applies_to(DoorBuild()))
 
     for page in range(1, (len(items) + 4) // 5 + 1):
@@ -99,15 +102,7 @@ def test_edit_form_metadata_comes_from_the_same_specs_as_parsing() -> None:
         assert [control.label for control in controls] == [item.spec.label for item in expected]
         assert [control.placeholder for control in controls] == [item.spec.placeholder for item in expected]
         assert [control.maximum for control in controls] == [item.spec.maximum for item in expected]
-
-
-def test_every_edit_form_page_fits_the_strict_discord_modal_boundary() -> None:
-    async def submit(_interaction: discord.Interaction, _values: dict[str, object]) -> None:
-        pass
-
-    build = DoorBuild()
-    items = tuple(field.bind(build) for field in EDIT_FIELDS if field.applies_to(build))
-    for page in range(1, (len(items) + 4) // 5 + 1):
+        assert [control.required for control in controls] == [item.spec.required for item in expected]
         modal = build_form_modal(_edit_form(items, page), on_submit=submit, strict=True)
         assert_within_limits(modal)
 
@@ -117,6 +112,12 @@ async def test_invalid_edit_urls_reopen_the_modal_with_every_attempted_value() -
         def __init__(self) -> None:
             pass
 
+    async def authorize() -> bool:
+        return True
+
+    async def unexpected_write(*args: object) -> Never:
+        raise AssertionError("Invalid modal input must not render or publish a changed build")
+
     build = DoorBuild()
     items = tuple(
         field.bind(build) for field in EDIT_FIELDS if field.key in {"image_urls", "video_urls", "world_download_urls"}
@@ -125,9 +126,9 @@ async def test_invalid_edit_urls_reopen_the_modal_with_every_attempted_value() -
         build,
         Builds(),
         items,
-        authorize=AsyncMock(return_value=True),
-        render_build=AsyncMock(),
-        refresh_posts=AsyncMock(),
+        authorize=authorize,
+        render_build=unexpected_write,
+        refresh_posts=unexpected_write,
     )
     await screen.projection.reload()
     root = sd.MessageRoot(screen, access=sd.Owner(7), timeout=None)
@@ -166,16 +167,16 @@ async def test_invalid_edit_urls_reopen_the_modal_with_every_attempted_value() -
     assert defaults == attempted
 
 
-@pytest.mark.parametrize("field_key", ["image_urls", "video_urls", "world_download_urls"])
-def test_edit_link_fields_name_every_invalid_url(field_key: str) -> None:
-    field = next(field for field in EDIT_FIELDS if field.key == field_key)
-    bound = field.bind(DoorBuild())
+def test_edit_link_fields_name_every_invalid_url() -> None:
+    for field in EDIT_FIELDS:
+        if field.key not in {"image_urls", "video_urls", "world_download_urls"}:
+            continue
+        bound = field.bind(DoorBuild())
+        bound.stage("https://valid.example/file, invalid, ftp://also-invalid")
 
-    bound.stage("https://valid.example/file, invalid, ftp://also-invalid")
-
-    assert bound.modified is False
-    assert bound.validation_error is not None
-    assert "`invalid`, `ftp://also-invalid`" in bound.validation_error
+        assert bound.modified is False
+        assert bound.validation_error is not None
+        assert "`invalid`, `ftp://also-invalid`" in bound.validation_error
 
 
 def test_unexpected_edit_parser_failures_propagate() -> None:
