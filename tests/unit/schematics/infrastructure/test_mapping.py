@@ -1,13 +1,15 @@
 """Tests for persisted schematic row decoding."""
 
+import json
 from collections.abc import Callable
 
 import pytest
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
-from squid.schematics.infrastructure.mapping import to_stored_schematic
+from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
 from squid.schematics.infrastructure.models import BuildSchematic
+from squid.schematics.infrastructure.wire import decode_simulation
 
 
 def row() -> BuildSchematic:
@@ -145,3 +147,8 @@ def test_valid_persisted_json_is_decoded_without_coercion() -> None:
     assert decoded.simulation_evidence is not None
     assert decoded.simulation_evidence.trustworthy is True
     assert decoded.publication.sanitization_report == {"removed": 0, "paths": ["Metadata.Author"]}
+
+    assert to_row_values(decoded.analysis)["lattice"] == lattice()
+    evidence = simulation_to_json(decoded.simulation_evidence)
+    assert evidence == json.loads(json.dumps(evidence))
+    assert decode_simulation(evidence) == decoded.simulation_evidence
