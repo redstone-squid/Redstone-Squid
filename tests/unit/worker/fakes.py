@@ -3,14 +3,46 @@
 from collections.abc import Awaitable, Callable, Collection
 from dataclasses import dataclass, field
 from typing import Any, cast, override
+from unittest.mock import create_autospec
 
 from squid.builds.application import BuildService
+from squid.config import WorkerConfig
 from squid.diagnostics.application import ErrorReportService
 from squid.events import DomainEventService
 from squid.media.application.jobs import MediaStorageCleanup
 from squid.notifications import NotificationService
 from squid.runtime import BackgroundTaskSupervisor, JobHandle, WorkerServices
+from squid.schematics.infrastructure.durable import SchematicJobRunner
+from squid.schematics.infrastructure.worker import SchematicWorkerPool
 from squid.voting.application import VoteService
+from squid.worker.app import DatabaseWorker
+from squid.worker.rendering import SchematicPreviewWorker
+
+
+def make_worker(
+    services: WorkerServices,
+    *,
+    config: WorkerConfig | None = None,
+    supervisor: BackgroundTaskSupervisor | None = None,
+    schematic_renders: SchematicPreviewWorker | None = None,
+    schematic_pool: SchematicWorkerPool | None = None,
+) -> DatabaseWorker:
+    """Construct a worker with signature-checked defaults for unrelated infrastructure."""
+
+    async def keep_database_active() -> None:
+        pass
+
+    return DatabaseWorker(
+        services,
+        keep_database_active,
+        config or WorkerConfig(),
+        cast(SchematicJobRunner, create_autospec(SchematicJobRunner, instance=True, spec_set=True)),
+        schematic_renders
+        if schematic_renders is not None
+        else cast(SchematicPreviewWorker, create_autospec(SchematicPreviewWorker, instance=True, spec_set=True)),
+        supervisor=supervisor,
+        schematic_pool=schematic_pool,
+    )
 
 
 class StubBuildService(BuildService):

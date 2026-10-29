@@ -1,30 +1,34 @@
 """Worker scheduling and readiness parity from one immutable registry."""
 
 from dataclasses import FrozenInstanceError, replace
-from typing import Any, cast
+from typing import override
 
 import pytest
 
 from squid.config import WorkerConfig
-from squid.worker.app import DatabaseWorker, WorkerJobSpec
-from tests.unit.worker.fakes import SupervisorRecorder, worker_services
+from squid.media.application.jobs import MediaNormalizationJobRunner
+from squid.worker.app import WorkerJobSpec
+from squid.worker.rendering import SchematicPreviewWorker
+from tests.unit.worker.fakes import SupervisorRecorder, make_worker, worker_services
 
 
-class MediaRunnerRecorder:
+class MediaRunnerRecorder(MediaNormalizationJobRunner):
     """Record normalization batches captured during registry construction."""
 
     def __init__(self) -> None:
         self.limits: list[int] = []
 
+    @override
     async def process_batch(self, *, limit: int = 8) -> None:
         self.limits.append(limit)
 
 
-class PreviewCleanupRecorder:
+class PreviewCleanupRecorder(SchematicPreviewWorker):
     def __init__(self) -> None:
         self.calls = 0
 
-    async def cleanup(self) -> int:
+    @override
+    async def cleanup(self, *, retention_hours: int = 24, limit: int = 50) -> int:
         self.calls += 1
         return 1
 
@@ -33,14 +37,11 @@ class PreviewCleanupRecorder:
 def test_worker_scheduling_and_readiness_derive_from_the_same_registry(media_enabled: bool) -> None:
     services = worker_services()
     if media_enabled:
-        services = replace(services, media_runner=cast(Any, object()))
+        services = replace(services, media_runner=MediaRunnerRecorder())
     supervisor = SupervisorRecorder()
-    worker = DatabaseWorker(
+    worker = make_worker(
         services,
-        cast(Any, object()),
-        WorkerConfig(media_job_interval_seconds=5, maintenance_interval_seconds=11),
-        cast(Any, object()),
-        cast(Any, object()),
+        config=WorkerConfig(media_job_interval_seconds=5, maintenance_interval_seconds=11),
         supervisor=supervisor,
     )
 
@@ -69,13 +70,10 @@ def test_worker_job_specs_are_frozen_values() -> None:
 
 async def test_media_job_captures_the_runner_registered_at_construction() -> None:
     runner = MediaRunnerRecorder()
-    services = replace(worker_services(), media_runner=cast(Any, runner))
-    worker = DatabaseWorker(
+    services = replace(worker_services(), media_runner=runner)
+    worker = make_worker(
         services,
-        cast(Any, object()),
-        WorkerConfig(media_job_concurrency=3),
-        cast(Any, object()),
-        cast(Any, object()),
+        config=WorkerConfig(media_job_concurrency=3),
     )
     media_job = next(spec for spec in worker.job_specs if spec.name == "media-normalization")
 
@@ -86,12 +84,10 @@ async def test_media_job_captures_the_runner_registered_at_construction() -> Non
 
 async def test_preview_cleanup_is_registered_with_worker_maintenance() -> None:
     previews = PreviewCleanupRecorder()
-    worker = DatabaseWorker(
+    worker = make_worker(
         worker_services(),
-        cast(Any, object()),
-        WorkerConfig(maintenance_interval_seconds=11),
-        cast(Any, object()),
-        cast(Any, previews),
+        config=WorkerConfig(maintenance_interval_seconds=11),
+        schematic_renders=previews,
     )
     cleanup = next(spec for spec in worker.job_specs if spec.name == "schematic-preview-cleanup")
 
