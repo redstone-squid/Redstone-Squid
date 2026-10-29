@@ -1,16 +1,14 @@
 """PostgreSQL candidate queries and atomic record-run persistence."""
 
-from __future__ import annotations
-
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from itertools import pairwise
 from typing import cast
-from uuid import UUID
 
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -80,6 +78,21 @@ RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
     # visible staleness bug, where a dead-lettered one is invisible -- at the cost
     # that a poisoned scope can spin forever.
 )
+
+
+@dataclass(frozen=True, slots=True)
+class _DefinitionWrite:
+    """A record rule's mutable presentation and canonical taxonomy membership."""
+
+    record_class: RecordClass
+    category_key: str
+    title: CategoryText
+    source: RecordMaterializationSource
+    facets: tuple[tuple[RecordFacetKind, int], ...]
+
+    @property
+    def key(self) -> tuple[RecordClass, str]:
+        return self.record_class, self.category_key
 
 
 class PostgresRecordRepository:
@@ -484,50 +497,24 @@ class PostgresRecordRepository:
         titles: Mapping[RecordClass, CategoryText],
     ) -> None:
         """Persist an accepted exact category so future rebuilds retain it."""
-        async with self._session_factory() as session, session.begin():
-            for record_class in _record_classes(category.kind):
-                statement = select(RecordRule).where(
-                    RecordRule.ruleset_id == ruleset_id,
-                    RecordRule.record_class == record_class,
-                    RecordRule.build_kind == category.kind,
-                    RecordRule.version_scope == VersionScope.ALL_TIME,
-                    RecordRule.version_id.is_(None),
-                    RecordRule.category_key == category.key,
-                )
-                definition = (await session.execute(statement)).scalar_one_or_none()
-                if definition is None:
-                    competition_id = await self._ensure_competition(
-                        session,
-                        record_class=record_class,
-                        build_kind=category.kind,
-                        version_scope=VersionScope.ALL_TIME,
-                        version_id=None,
-                        category_key=category.key,
+        async with self._session_factory.begin() as session:
+            await self._write_definitions(
+                session,
+                ruleset_id=ruleset_id,
+                kind=category.kind,
+                scope=VersionScope.ALL_TIME,
+                version_id=None,
+                writes=tuple(
+                    _DefinitionWrite(
+                        record_class,
+                        category.key,
+                        title,
+                        RecordMaterializationSource.PUBLIC_LOOKUP,
+                        tuple((RecordFacetKind.RESTRICTION, facet_id) for facet_id in category.restriction_ids),
                     )
-                    definition = RecordRule(
-                        competition_id=competition_id,
-                        ruleset_id=ruleset_id,
-                        record_class=record_class,
-                        build_kind=category.kind,
-                        version_scope=VersionScope.ALL_TIME,
-                        version_id=None,
-                        category_key=category.key,
-                        title=titles[record_class].title,
-                        subtitle=titles[record_class].subtitle,
-                        title_diagnostics=[diagnostic.as_dict() for diagnostic in titles[record_class].diagnostics],
-                        materialization_source=RecordMaterializationSource.PUBLIC_LOOKUP,
-                    )
-                    session.add(definition)
-                    await session.flush()
-                    for order, facet_id in enumerate(category.restriction_ids):
-                        session.add(
-                            RecordDefinitionFacet(
-                                definition_id=definition.id,
-                                facet_kind=RecordFacetKind.RESTRICTION,
-                                facet_id=facet_id,
-                                display_order=order,
-                            )
-                        )
+                    for record_class, title in titles.items()
+                ),
+            )
 
     async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None:
         """Enqueue a durable full-kind rebuild hint."""
@@ -614,135 +601,114 @@ class PostgresRecordRepository:
             if (candidate := _extender_candidate(extender, timing_by_build.get(extender.id, ()))) is not None
         )
 
-    async def _ensure_definitions(
-        self,
-        session: AsyncSession,
-        batch: ComputationBatch,
-    ) -> tuple[RecordRule, ...]:
-        if not batch.records:
-            return ()
-
-        first = batch.records[0]
-        version_predicate = (
-            RecordRule.version_id.is_(None) if first.version_id is None else RecordRule.version_id == first.version_id
+    async def _ensure_definitions(self, session: AsyncSession, batch: ComputationBatch) -> tuple[RecordRule, ...]:
+        return await self._write_definitions(
+            session,
+            ruleset_id=batch.ruleset_id,
+            kind=batch.kind,
+            scope=VersionScope.ALL_TIME if batch.version_id is None else VersionScope.CURRENT,
+            version_id=batch.version_id,
+            writes=tuple(
+                _DefinitionWrite(
+                    computed.record_class,
+                    computed.competition.identity.key,
+                    computed.title,
+                    RecordMaterializationSource(computed.competition.source),
+                    tuple((RecordFacetKind(facet.kind), facet.id) for facet in computed.competition.facets),
+                )
+                for computed in batch.records
+            ),
         )
-        existing = (
-            await session.execute(
-                select(RecordRule).where(
-                    RecordRule.ruleset_id == batch.ruleset_id,
-                    RecordRule.build_kind == batch.kind,
-                    RecordRule.version_scope == first.scope,
-                    version_predicate,
-                    RecordRule.record_class.in_({computed.record_class for computed in batch.records}),
-                    RecordRule.category_key.in_({computed.competition.identity.key for computed in batch.records}),
-                )
-            )
-        ).scalars()
-        by_identity = {(definition.record_class, definition.category_key): definition for definition in existing}
 
-        definitions: list[RecordRule] = []
-        for computed in batch.records:
-            identity = (computed.record_class, computed.competition.identity.key)
-            definition = by_identity.get(identity)
-            if definition is None:
-                competition_id = await self._ensure_competition(
-                    session,
-                    record_class=computed.record_class,
-                    build_kind=computed.competition.identity.kind,
-                    version_scope=computed.scope,
-                    version_id=computed.version_id,
-                    category_key=computed.competition.identity.key,
-                )
-                definition = RecordRule(
-                    competition_id=competition_id,
-                    ruleset_id=batch.ruleset_id,
-                    record_class=computed.record_class,
-                    build_kind=computed.competition.identity.kind,
-                    version_scope=computed.scope,
-                    version_id=computed.version_id,
-                    category_key=computed.competition.identity.key,
-                    title=computed.title.title,
-                    subtitle=computed.title.subtitle,
-                    title_diagnostics=[diagnostic.as_dict() for diagnostic in computed.title.diagnostics],
-                    materialization_source=RecordMaterializationSource(computed.competition.source),
-                )
-                session.add(definition)
-                by_identity[identity] = definition
-            else:
-                definition.title = computed.title.title
-                definition.subtitle = computed.title.subtitle
-                definition.title_diagnostics = [diagnostic.as_dict() for diagnostic in computed.title.diagnostics]
-            definitions.append(definition)
-
-        await session.flush()
-        definition_ids = [definition.id for definition in definitions]
-        existing_facets = set(
-            (
-                await session.execute(
-                    select(
-                        RecordDefinitionFacet.definition_id,
-                        RecordDefinitionFacet.facet_kind,
-                        RecordDefinitionFacet.facet_id,
-                    ).where(RecordDefinitionFacet.definition_id.in_(definition_ids))
-                )
-            ).tuples()
-        )
-        for definition, computed in zip(definitions, batch.records, strict=True):
-            for order, facet in enumerate(computed.competition.facets):
-                facet_kind = RecordFacetKind(facet.kind)
-                identity = (definition.id, facet_kind, facet.id)
-                if identity in existing_facets:
-                    continue
-                session.add(
-                    RecordDefinitionFacet(
-                        definition_id=definition.id,
-                        facet_kind=facet_kind,
-                        facet_id=facet.id,
-                        display_order=order,
-                    )
-                )
-                existing_facets.add(identity)
-        return tuple(definitions)
-
-    async def _ensure_competition(
+    async def _write_definitions(
         self,
         session: AsyncSession,
         *,
-        record_class: RecordClass,
-        build_kind: BuildKind,
-        version_scope: VersionScope,
+        ruleset_id: int,
+        kind: BuildKind,
+        scope: VersionScope,
         version_id: int | None,
-        category_key: str,
-    ) -> UUID:
-        values = {
-            "record_class": record_class,
-            "build_kind": build_kind,
-            "version_scope": version_scope,
-            "version_id": version_id,
-            "category_key": category_key,
-        }
-        public_id = await session.scalar(
+        writes: Sequence[_DefinitionWrite],
+    ) -> tuple[RecordRule, ...]:
+        """Persist one scope in bulk, preserving stable IDs and explicit public requests."""
+        if not writes:
+            return ()
+        # Both callers take unique identities in the same order, including concurrent lookups.
+        ordered = sorted({write.key: write for write in writes}.values(), key=lambda write: write.key)
+        scope_values: dict[str, object] = {"build_kind": kind, "version_scope": scope, "version_id": version_id}
+        identities = [
+            dict(scope_values, record_class=write.record_class, category_key=write.category_key) for write in ordered
+        ]
+        # RETURNING enables SQLAlchemy's paged insertmanyvalues path instead of one statement
+        # per rule. Passing parameter rows separately keeps large catalogues below bind limits.
+        await session.execute(
             insert(RecordSeries)
-            .values(**values)
             .on_conflict_do_nothing(constraint="record_competitions_identity_key")
-            .returning(RecordSeries.public_id)
+            .returning(RecordSeries.public_id),
+            identities,
         )
-        if public_id is not None:
-            return public_id
-        version_predicate = (
-            RecordSeries.version_id.is_(None) if version_id is None else RecordSeries.version_id == version_id
-        )
-        return (
-            await session.execute(
-                select(RecordSeries.public_id).where(
-                    RecordSeries.record_class == record_class,
-                    RecordSeries.build_kind == build_kind,
-                    RecordSeries.version_scope == version_scope,
-                    version_predicate,
-                    RecordSeries.category_key == category_key,
-                )
+        competitions = await session.scalars(
+            select(RecordSeries).where(
+                RecordSeries.build_kind == kind,
+                RecordSeries.version_scope == scope,
+                RecordSeries.version_id.is_not_distinct_from(version_id),
+                RecordSeries.record_class.in_({write.record_class for write in ordered}),
+                RecordSeries.category_key.in_({write.category_key for write in ordered}),
             )
-        ).scalar_one()
+        )
+        public_ids = {(row.record_class, row.category_key): row.public_id for row in competitions}
+        statement = insert(RecordRule)
+        statement = statement.on_conflict_do_update(
+            constraint="record_definitions_identity_key",
+            set_={
+                "title": statement.excluded.title,
+                "subtitle": statement.excluded.subtitle,
+                "title_diagnostics": statement.excluded.title_diagnostics,
+                "materialization_source": case(
+                    (
+                        statement.excluded.materialization_source == RecordMaterializationSource.PUBLIC_LOOKUP,
+                        statement.excluded.materialization_source,
+                    ),
+                    else_=RecordRule.materialization_source,
+                ),
+            },
+        ).returning(RecordRule)
+        definitions = await session.scalars(
+            statement,
+            [
+                dict(
+                    identity,
+                    ruleset_id=ruleset_id,
+                    competition_id=public_ids[write.key],
+                    title=write.title.title,
+                    subtitle=write.title.subtitle,
+                    title_diagnostics=[diagnostic.as_dict() for diagnostic in write.title.diagnostics],
+                    materialization_source=write.source,
+                )
+                for identity, write in zip(identities, ordered, strict=True)
+            ],
+            execution_options={"render_nulls": True},
+        )
+        by_key = {(row.record_class, row.category_key): row for row in definitions}
+        facets = {
+            (by_key[write.key].id, facet_kind, facet_id): order
+            for write in ordered
+            for order, (facet_kind, facet_id) in enumerate(write.facets)
+        }
+        if facets:
+            await session.execute(
+                insert(RecordDefinitionFacet).on_conflict_do_nothing().returning(RecordDefinitionFacet.definition_id),
+                [
+                    {
+                        "definition_id": definition_id,
+                        "facet_kind": facet_kind,
+                        "facet_id": facet_id,
+                        "display_order": order,
+                    }
+                    for (definition_id, facet_kind, facet_id), order in sorted(facets.items())
+                ],
+            )
+        return tuple(by_key[write.key] for write in writes)
 
 
 async def _door_timings(
@@ -953,16 +919,6 @@ def _metric_snapshot(computed: ComputedRecord, candidate: RecordCandidate) -> di
     reduction = reduce_timing_variants(candidate.timing_variants)
     snapshot["timing"] = list(reduction.timing.values) if reduction.timing is not None else None
     return snapshot
-
-
-def _record_classes(kind: BuildKind) -> tuple[RecordClass, ...]:
-    shared = (
-        RecordClass.FASTEST,
-        RecordClass.SMALLEST,
-        RecordClass.FASTEST_SMALLEST,
-        RecordClass.SMALLEST_FASTEST,
-    )
-    return (RecordClass.FIRST, *shared) if kind is BuildKind.DOOR else shared
 
 
 def _gap_from_row(definition: RecordRule, result: RecordStanding) -> RecordGap:
