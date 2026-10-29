@@ -2,13 +2,12 @@
 
 import inspect
 from collections.abc import Callable
+from typing import Literal
 
 import pytest
 
 from squid.accounts.errors import ConsentRequiredError
-from squid.api.security import Caller, require_consented_account
-from squid.api.v1.cli_auth import current_browser_account_id
-from squid.api.v1.minecraft_auth import current_account_id
+from squid.api.security import Caller, current_browser_account_id, require_consented_account
 from squid.api.v1.submissions import _submission_actor
 from squid.core.errors import AuthenticationError
 from tests.unit.api.fakes import credential_nodes
@@ -29,11 +28,9 @@ def account(*, consent_pending: bool) -> Caller:
 GATES: list[tuple[str, Callable[[Caller], object]]] = [
     ("security", require_consented_account),
     ("submissions", _submission_actor),
-    ("cli_auth", current_browser_account_id),
-    ("minecraft_auth", current_account_id),
+    ("browser_auth", current_browser_account_id),
 ]
-"""Both forms on purpose: two of these are FastAPI dependencies and two are plain functions
-called from inside a route, and the gate has to behave the same either way."""
+"""Both dependency and direct-call forms must report the same consent refusal."""
 
 
 async def call(gate: Callable[[Caller], object], caller: Caller) -> object:
@@ -66,3 +63,12 @@ async def test_an_anonymous_caller_is_refused_before_consent_is_considered(
 
 def test_a_consented_caller_passes_the_gate() -> None:
     assert require_consented_account(account(consent_pending=False)) == 1
+
+
+@pytest.mark.parametrize("kind", ["service", "cli", "minecraft_player"])
+async def test_browser_gate_rejects_non_browser_credentials_even_with_an_account(
+    kind: Literal["service", "cli", "minecraft_player"],
+) -> None:
+    caller = Caller(kind=kind, subject=f"{kind}:1", account_id=1)
+    with pytest.raises(AuthenticationError):
+        await current_browser_account_id(caller)
