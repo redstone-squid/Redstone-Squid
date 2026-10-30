@@ -195,6 +195,34 @@ class TestResults:
 
 
 class TestReplacement:
+    async def test_cleanup_failure_does_not_interrupt_replacement_admission(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        manager = SessionManager()
+        victims: list[Session] = []
+        for _ in range(3):
+            opened = await manager.open(a_root(), to_message(), key=KEY, admission=AdmissionSpec(limit=None))
+            assert isinstance(opened, Opened)
+            victims.append(opened.session)
+
+        async def fail(_root: squid_ui_discord.MessageRoot) -> None:
+            raise ValueError("retired callback failed")
+
+        victims[0].root.on_finish(fail)
+        opened = await manager.open(a_root(), to_message(), key=KEY)
+
+        assert isinstance(opened, Opened)
+        assert manager.get(KEY) == (opened.session,)
+        assert tuple(manager.active()) == (opened.session,)
+        for victim in victims:
+            assert victim.root.finished
+            assert manager.session_for(victim.root) is None
+        for victim in victims[1:]:
+            await victim.wait()
+        with pytest.raises(ExceptionGroup, match="message root shutdown failed"):
+            await victims[0].wait()
+        assert "replacement cleanup failed" in caplog.text
+
     async def test_same_actor_replaces_the_oldest_incumbent(self) -> None:
         manager = SessionManager()
         first_root, second_root = a_root(), a_root()
