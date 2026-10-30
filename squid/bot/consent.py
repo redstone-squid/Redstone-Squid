@@ -46,11 +46,9 @@ CONSENT_PROMPT_TIMEOUT_SECONDS = 120.0
 class _Answer:
     """What the reader said, held off the component on purpose.
 
-    Nothing renders it, and it has to outlive the press that writes it: the answering handler
-    runs in a transaction, so a declared cell would only be staged -- invisible to a waiter in
-    another task, and dropped by the teardown `finish` performs a line later. Writing through
-    an object the component merely holds is what keeps it off `Component.__setattr__`, which
-    is where an undeclared write raises.
+    Nothing renders it. A waiter in another task needs the answer as soon as the handler
+    signals it, before the action transaction commits. Holding it in an ordinary object
+    makes that handoff independent of transactional render state.
     """
 
     consent: AccountConsent | None = None
@@ -133,10 +131,9 @@ class ConsentPrompt(sd.Screen):
         self._answer.consent = consent
         self.closed = True
         self._done.set()
-        # The continuation runs last, so nothing in this handler can fail after it and roll
-        # back what it wrote. Closing first also answers the click inside its own deadline,
-        # whatever the continuation then goes on to do.
-        await event.finish()
+        # Request closure as part of this action. The dispatcher closes the prompt
+        # after the continuation succeeds and the action commits.
+        event.finish_on_success()
         if self._on_answer is not None:
             await self._on_answer(event, consent)
 

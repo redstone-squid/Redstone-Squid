@@ -235,8 +235,13 @@ class RedstoneSquid(Bot):
         # Panels are left showing disabled controls rather than silently going dead. Bounded
         # because each one is a gateway round trip: a slow Discord must not stall shutdown,
         # and an undisabled panel times out on its own anyway.
-        with anyio.move_on_after(3.0):
-            await self.ui.close()
+        with anyio.move_on_after(3.0) as ui_shutdown:
+            try:
+                await self.ui.close()
+            except Exception:
+                logger.exception("UI cleanup failed during application shutdown")
+        if ui_shutdown.cancel_called:
+            logger.error("UI cleanup did not finish before the application shutdown deadline")
         await self.background_tasks.close()
         # After the supervisor, so the bridge's listener is already cancelled and cannot
         # log a torn connection on the way out. Bounded, then hung up: shutdown must not

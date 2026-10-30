@@ -148,3 +148,21 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
         router.register.assert_called_once_with(bot)
     finally:
         layout_job.close()
+
+
+async def test_ui_cleanup_failure_still_closes_application_resources(mocker: MockerFixture) -> None:
+    bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
+    bot.reactions = mocker.Mock(close=mocker.AsyncMock())
+    bot.ui = mocker.Mock(close=mocker.AsyncMock(side_effect=ExceptionGroup("UI shutdown", [ValueError("cleanup")])))
+    bot.background_tasks = mocker.Mock(close=mocker.AsyncMock())
+    bot.topic_bridge = None
+    bot.catbox = mocker.Mock(aclose=mocker.AsyncMock())
+    bot.media_previews = mocker.Mock(aclose=mocker.AsyncMock())
+    close_gateway = mocker.patch.object(Bot, "close", new=mocker.AsyncMock())
+
+    await bot.close()
+
+    bot.background_tasks.close.assert_awaited_once()
+    bot.catbox.aclose.assert_awaited_once()
+    bot.media_previews.aclose.assert_awaited_once()
+    close_gateway.assert_awaited_once()

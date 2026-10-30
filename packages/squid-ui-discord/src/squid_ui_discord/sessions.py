@@ -374,8 +374,9 @@ class Session:
             local=local,
         )
         self._lifecycle_lock = asyncio.Lock()
-        self._finishing = False
         self._closed = False
+        self._closing_roots: tuple[MessageRoot, ...] = ()
+        self._retiring: dict[MessageRoot, _Membership] = {}
 
     @property
     def message_roots(self) -> tuple[MessageRoot, ...]:
@@ -488,9 +489,13 @@ class Session:
             result = await message_root.send(message_destination)
             if isinstance(result, Abandoned):
                 return result
+            if self._closed or parent.finished:
+                await message_root.finish(wait=False)
+                return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
+            parent._shutdown_dependencies = (*parent._shutdown_dependencies, message_root)
             self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
             self._manager._index_root(self, message_root)
-            message_root.on_finish(self._message_root_finished)
+            message_root._finishing_hooks.append(self._message_root_finishing)
             return Opened(self)
 
     async def join(
@@ -569,59 +574,83 @@ class Session:
     def _membership(self, user_id: int, status: MembershipStatus) -> MembershipResult:
         return MembershipResult(user_id, status, self._members, self.remaining_capacity)
 
-    async def finish(self, *, disable: bool = True) -> None:
-        """End this session, finishing every message root depth-first and unregistering it."""
-        async with self._lifecycle_lock:
-            if self._closed:
-                return
-            self._finishing = True
-            try:
-                await self._finish_roots(self._depth_first(self.root), disable=disable)
-            finally:
-                self._manager._forget(self)
-                self._closed = True
-                self._finishing = False
+    async def finish(self, *, disable: bool = True, wait: bool = True) -> None:
+        """Close the session and its panels, optionally awaiting cleanup and callbacks.
+
+        Closing removes the session from admission bookkeeping. Its root supervises
+        child-before-parent cleanup; repeated callers observe that same shutdown.
+        """
+        if self._message_root_finishing not in self.root._finishing_hooks:
+            self.root._finishing_hooks.append(self._message_root_finishing)
+        await self.root.finish(disable=disable, wait=False)
+        if wait:
+            await self.wait()
+
+    async def wait(self) -> None:
+        """Observe session shutdown without initiating it or owning its execution."""
+        for root in self._closing_roots:
+            root.runtime.check_service_wait()
+            root._shutdown.check_wait()
+        await self.root.wait()
 
     def _activate(self) -> None:
         self._manager._index_root(self, self.root)
-        self.root.on_finish(self._message_root_finished)
+        self.root._finishing_hooks.append(self._message_root_finishing)
 
     def _attach_existing(self, message_root: MessageRoot, *, parent: MessageRoot, actor_id: int | None) -> None:
         """Attach an already presented mount while reconstructing a session."""
         if parent not in self._graph:
             message = "recovered attachment parent is not in the session"
             raise ValueError(message)
+        parent._shutdown_dependencies = (*parent._shutdown_dependencies, message_root)
         self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
         self._manager._index_root(self, message_root)
-        message_root.on_finish(self._message_root_finished)
+        message_root._finishing_hooks.append(self._message_root_finishing)
 
-    async def _message_root_finished(self, message_root: MessageRoot) -> None:
-        if self._finishing or self._closed:
+    def _message_root_finishing(self, message_root: MessageRoot) -> None:
+        if message_root not in self._graph:
             return
-        async with self._lifecycle_lock:
-            if self._finishing or self._closed or message_root not in self._graph:
-                return
-            self._finishing = True
-            try:
-                if message_root is self.root:
-                    descendants = tuple(
-                        candidate for candidate in self._depth_first(self.root) if candidate is not message_root
-                    )
-                    await self._finish_roots(descendants)
-                    self._manager._forget(self)
-                    self._closed = True
-                    return
-                branch = self._depth_first(message_root)
-                await self._finish_roots(tuple(candidate for candidate in branch if candidate is not message_root))
-                self._detach(branch)
-            finally:
-                self._finishing = False
+        self._retiring = {root: member for root, member in self._retiring.items() if not root._shutdown.done.is_set()}
+        graph = self._retiring | self._graph
+        branch = self._depth_first(message_root)
+        for parent in branch:
+            children = tuple(child for child in branch if graph[child].parent is parent)
+            if children:
+                parent._shutdown_dependencies = children
+                parent._finish_children = self._children_cleanup(children)
+        if message_root is self.root:
+            self._closing_roots = branch
+            self._closed = True
+            self._manager._forget(self)
+        else:
+            self._detach(branch)
+
+    @staticmethod
+    def _children_cleanup(children: tuple[MessageRoot, ...]) -> Callable[[bool], Awaitable[None]]:
+        async def cleanup(disable: bool) -> None:
+            errors: list[Exception] = []
+            for child in children:
+                try:
+                    await child.finish(disable=disable, wait=False)
+                except Exception as error:
+                    errors.append(error)
+            for child in children:
+                if child.finished:
+                    try:
+                        await child.wait()
+                    except Exception as error:
+                        errors.append(error)
+            if errors:
+                message = "session child shutdown failed"
+                raise ExceptionGroup(message, errors)
+
+        return cleanup
 
     def _depth_first(self, root: MessageRoot) -> tuple[MessageRoot, ...]:
         ordered: list[MessageRoot] = []
 
         def visit(parent: MessageRoot) -> None:
-            for child, membership in tuple(self._graph.items()):
+            for child, membership in (self._retiring | self._graph).items():
                 if membership.parent is parent:
                     visit(child)
             ordered.append(parent)
@@ -629,19 +658,13 @@ class Session:
         visit(root)
         return tuple(ordered)
 
-    async def _finish_roots(self, message_roots: Sequence[MessageRoot], *, disable: bool = True) -> None:
-        for message_root in message_roots:
-            try:
-                await message_root.finish(disable=disable)
-            except Exception:
-                logger.exception("could not finish mount %s in session %r", message_root.id, self.key)
-
     def _detach(self, branch: Sequence[MessageRoot]) -> None:
         for message_root in branch:
             # The registry is a separate owner of the same mount, so its index is dropped
             # separately rather than folded into the membership record.
             self._manager._unindex_root(self, message_root)
-            self._graph.pop(message_root, None)
+            if (membership := self._graph.pop(message_root, None)) is not None:
+                self._retiring[message_root] = membership
 
 
 def _resolve_victims(selected: tuple[SessionSnapshot, ...], occupants: tuple[Session, ...]) -> tuple[Session, ...]:
@@ -835,17 +858,30 @@ class SessionManager:
         return next((session for session in self._sessions if session.id == session_id), None)
 
     async def close(self, key: Hashable, *, disable: bool = True) -> None:
-        """End every session under `key`; the manager remains usable."""
-        for session in self.get(key):
-            await session.finish(disable=disable)
+        """End every session under ``key``, reporting failures after all attempts."""
+        await self._finish_sessions(tuple(self.get(key)), disable=disable)
 
     async def close_all(self, *, disable: bool = True) -> None:
-        """Finish every session, isolating one teardown failure from the rest."""
-        for session in tuple(self._sessions):
+        """Request closure of every session, then await their collected results."""
+        await self._finish_sessions(tuple(self._sessions), disable=disable)
+
+    @staticmethod
+    async def _finish_sessions(sessions: tuple[Session, ...], *, disable: bool) -> None:
+        errors: list[Exception] = []
+        for session in sessions:
             try:
-                await session.finish(disable=disable)
-            except Exception:
-                logger.exception("could not close session %r", session.key)
+                await session.finish(disable=disable, wait=False)
+            except Exception as error:
+                errors.append(error)
+        for session in sessions:
+            if session.root.finished:
+                try:
+                    await session.wait()
+                except Exception as error:
+                    errors.append(error)
+        if errors:
+            message = "session shutdown failed"
+            raise ExceptionGroup(message, errors)
 
     def active(self) -> Iterator[Session]:
         """Yield every live session in registration order."""

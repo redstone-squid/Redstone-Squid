@@ -13,7 +13,8 @@ from anyio.abc import TaskStatus
 from squid_ui import Component, ComponentsV2Target, DocumentLike, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import ManagedService, ServiceHost
-from squid_ui_discord import Everyone, MessageRoot
+from squid_ui_discord import Everyone, MessageRoot, SessionManager
+from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
@@ -154,8 +155,9 @@ async def test_failed_disable_edit_still_completes_service_cleanup() -> None:
         await root.send(delivered_to(message))
         await panel.service.started.wait()
         message.edit = AsyncMock(side_effect=ValueError("edit failed"))
-        with pytest.raises(ValueError, match="edit failed"):
+        with pytest.raises(ExceptionGroup) as failure:
             await root.finish()
+        assert failure.value.subgroup(ValueError) is not None
         assert panel.service.stopped.is_set()
         assert root.finished
 
@@ -242,7 +244,26 @@ async def test_failed_terminal_render_and_teardown_callback_still_stop_services(
 
         root._unwatch_expiry = broken_expiry_cleanup
         panel.broken = True
-        with pytest.raises(ValueError, match="terminal render failed"):
+        with pytest.raises(ExceptionGroup) as failure:
             await root.finish_via(interaction_harness())
+        assert failure.value.subgroup(ValueError) is not None
         assert root.finished
         assert panel.service.stopped.is_set()
+
+
+async def test_host_close_drains_session_children_with_services() -> None:
+    async with running_host() as host:
+        parent_panel, child_panel = Panel(), Panel()
+        parent = MessageRoot(parent_panel, access=Everyone(), service_host=host)
+        child = MessageRoot(child_panel, access=Everyone(), service_host=host)
+        manager = SessionManager()
+        opened = await manager.open(parent, delivered_to(message_harness()))
+        assert isinstance(opened, Opened)
+        await opened.session.attach(child, delivered_to(message_harness()))
+        await parent.runtime.wait_services_ready()
+        await child.runtime.wait_services_ready()
+        await opened.session.finish(wait=False)
+        await host.close()
+        await opened.session.wait()
+        assert parent_panel.service.stopped.is_set()
+        assert child_panel.service.stopped.is_set()

@@ -134,7 +134,7 @@ class VersionScreen(sd.Screen):
         await event.notice(tr(t"Added {version}."))
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="VersionTracker"):

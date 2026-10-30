@@ -157,10 +157,17 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         The application's task group still owns ``run()``. Cancel it there when the
         application is ready to stop the scheduler and challenge runner too.
         """
+        errors: list[Exception] = []
         try:
             for scope in tuple(self._scopes):
-                await scope.close()
-            await self.sessions.close_all()
+                try:
+                    await scope.close()
+                except Exception as error:
+                    errors.append(error)
+            try:
+                await self.sessions.close_all()
+            except Exception as error:
+                errors.append(error)
         finally:
             try:
                 if self.services is not None:
@@ -168,6 +175,9 @@ class DiscordUIRuntime[ClientT: discord.Client]:
             finally:
                 if _INSTALLED.get(self.client) is self:
                     del _INSTALLED[self.client]
+        if errors:
+            message = "Discord runtime shutdown failed"
+            raise ExceptionGroup(message, errors)
 
     @classmethod
     def of(cls, source: RuntimeSource) -> DiscordUIRuntime[Any]:
@@ -244,13 +254,23 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     async def _close_scope[OwnerT](self, scope: Scope[OwnerT]) -> None:
         roots = self._scope_roots.pop(id(scope), set())
-        for message_root in tuple(roots):
-            session = self.sessions.session_for(message_root)
-            if session is not None:
-                await session.finish()
-            else:
-                await message_root.finish()
+        targets = {session.root if (session := self.sessions.session_for(root)) is not None else root for root in roots}
+        errors: list[Exception] = []
+        for message_root in targets:
+            try:
+                await message_root.finish(wait=False)
+            except Exception as error:
+                errors.append(error)
+        for message_root in targets:
+            if message_root.finished:
+                try:
+                    await message_root.wait()
+                except Exception as error:
+                    errors.append(error)
         self._scopes = [candidate for candidate in self._scopes if candidate is not scope]
+        if errors:
+            message = "UI scope shutdown failed"
+            raise ExceptionGroup(message, errors)
 
 
 def install[ClientT: discord.Client](

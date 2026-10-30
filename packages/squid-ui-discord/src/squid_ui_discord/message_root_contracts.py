@@ -272,6 +272,7 @@ class MessageRootConfig[
     render_cache: RenderProgramCache | None = None
     scheduler: Scheduler | None = None
     service_host: ServiceHost | None = None
+    """Running owner of service activity and asynchronous panel shutdown."""
     expiry: ExpiryPolicy | None = DEFAULT_EXPIRY
     nav: NavFactory | None = None
     challenge: ChallengePresenter | None = None

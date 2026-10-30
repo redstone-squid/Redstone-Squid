@@ -259,13 +259,13 @@ class ErrorReportScreen(sd.Screen):
             return
         self.cleared_count = await self._operations.clear_all()
         self.confirming_clear = False
-        await event.source.finish()
+        event.source.finish_on_success()
 
     async def _cancel_clear(self, _event: sp.TransitionEvent[sp.DecisionState]) -> None:
         self.confirming_clear = False
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 def report_attachment(report: ErrorReport) -> discord.File:

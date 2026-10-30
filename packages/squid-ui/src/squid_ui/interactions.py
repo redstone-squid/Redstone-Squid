@@ -13,6 +13,7 @@ from squid_ui.text import TextLike
 if TYPE_CHECKING:
     from squid_ui.forms import FormIssue, FormLike, SubmitHandler
     from squid_ui.guards import Guard
+    from squid_ui.runtime.continuations import PostCommitOperation
     from squid_ui.runtime.histories import History
 
 
@@ -64,7 +65,7 @@ class Actor:
 
 
 class ActionResponder(Protocol):
-    """Response authority for one action, ended by ``finish`` after its terminal acknowledgement.
+    """Response authority for one action, ending when its handler returns.
 
     Every method here is one that any frontend can honestly implement. Forms joined this
     surface once their schemas became portable; frontend-native payloads remain on concrete
@@ -77,7 +78,11 @@ class ActionResponder(Protocol):
 
     async def redirect(self, url: str) -> None: ...
 
-    async def finish(self) -> None: ...
+    def finish_on_success(self) -> None: ...
+
+    def on_success[ValueT](
+        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
+    ) -> PostCommitOperation[ValueT]: ...
 
     async def present_form(
         self,
@@ -95,7 +100,7 @@ class ActionResponder(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ActionEvent:
-    """Portable action input whose response authority ends when ``finish`` delegates to its responder.
+    """Portable action input whose response authority ends when the handler returns.
 
     `context` carries one reserved key, `"frontend"`, naming the adapter that dispatched
     the event; the rest is for host-injected `ContextKey`s. It is not a place to smuggle
@@ -117,8 +122,30 @@ class ActionEvent:
     async def redirect(self, url: str) -> None:
         await self.responder.redirect(url)
 
-    async def finish(self) -> None:
-        await self.responder.finish()
+    def finish_on_success(self) -> None:
+        """Close this panel if the action succeeds, without waiting for cleanup.
+
+        The handler must finish successfully and its state changes must be accepted
+        before closure starts. Failure or cancellation discards the request.
+        """
+        self.responder.finish_on_success()
+
+    def on_success[ValueT](
+        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
+    ) -> PostCommitOperation[ValueT]:
+        """Schedule an async operation if this action succeeds.
+
+        Pass a callable, such as ``event.on_success(other_session.finish)``. The
+        handler must finish successfully and its state changes must be accepted
+        before the host starts the callback. The host owns it through completion,
+        even if the interaction stops waiting. The returned handle exposes its
+        status and result; wait on it outside this handler.
+
+        Callbacks run independently. Failure in one does not undo the accepted
+        changes or prevent others from running. Undo and redo do not replay these
+        callbacks; reversible external work needs explicit compensation.
+        """
+        return self.responder.on_success(callback, name=name)
 
     async def present_form(
         self,

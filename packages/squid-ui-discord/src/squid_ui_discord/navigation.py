@@ -79,4 +79,4 @@ class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target](Com
 
     async def _close(self, event: PressEvent) -> None:
         """End the current presentation from its Close control."""
-        await event.finish()
+        event.finish_on_success()

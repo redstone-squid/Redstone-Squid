@@ -58,11 +58,11 @@ class _Confirm:
         async def approved(event: TransitionEvent[DecisionState]) -> None:
             # Closing first answers the click inside its own deadline, and leaves nothing in
             # this handler that could fail after the press has been handed on.
-            await event.source.finish()
+            event.source.finish_on_success()
             await resolver.approve()
 
         async def declined(event: TransitionEvent[DecisionState]) -> None:
-            await event.source.finish()
+            event.source.finish_on_success()
             await resolver.decline()
 
         return confirm_shell(

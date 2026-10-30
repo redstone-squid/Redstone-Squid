@@ -345,7 +345,7 @@ class TagsScreen(sd.Screen):
         return False
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 def _tag_summary(tag: TagDefinition) -> str:

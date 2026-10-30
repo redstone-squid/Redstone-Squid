@@ -298,8 +298,8 @@ class PollScreen(sd.Screen):
             self.driver.machine_state = replace(event.state, complete=False)
             await event.source.notice(error.message)
             return
-        await event.source.finish()
+        event.source.finish_on_success()
 
     async def _cancel(self, event: sl.PressEvent) -> None:
         self.cancelled = True
-        await event.finish()
+        event.finish_on_success()

@@ -137,7 +137,7 @@ async def test_close_drops_the_installation_even_when_a_teardown_fails() -> None
     runtime = install(cast(discord.Client, client))
     runtime.sessions.close_all = AsyncMock(side_effect=RuntimeError("gateway is gone"))
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ExceptionGroup):
         await runtime.close()
 
     assert client not in _INSTALLED

@@ -473,12 +473,12 @@ class BuildEditScreen(sd.Screen):
         self.saved = True
         self.confirming = False
         self._replace(build, await self._render_build(build))
-        await event.finish()
+        event.finish_on_success()
         if edited_build_id is not None:
             await self._refresh_posts(edited_build_id)
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
     async def _reload(self, event: sl.PressEvent) -> None:
         await self.projection.reload()

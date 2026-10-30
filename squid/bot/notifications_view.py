@@ -385,7 +385,7 @@ class NotificationScreen(sd.Screen):
 
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
-        await event.finish()
+        event.finish_on_success()
 
     def _subscription_list(self) -> sl.TextLike:
         if not self._subscriptions:
