@@ -17,7 +17,7 @@ from squid_ui.runtime.component import (
 from squid_ui.runtime.context import ContextKey
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.runtime.resources import AsyncBinding, PendingMode
-from squid_ui.runtime.services import ServiceFailure, ServiceHost, _ServiceLifecycle
+from squid_ui.runtime.services import ServiceFailure, ServiceHost, _owns_current_activity, _ServiceLifecycle
 from squid_ui.runtime.topics import Address
 from squid_ui.target_types import RenderTarget
 
@@ -307,7 +307,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             for path, component in sorted(tree._added_components, key=lambda item: depth(item[0])):
                 self.components[path] = component
                 self._component_paths[component] = path
-                self._mount(component)
+                self._mount(component, path)
             for path, component in tree._removed_components:
                 if component not in self._component_paths:
                     self._render_cache.pop(component, None)
@@ -337,8 +337,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             component._runtime = None
             if path != "$":
                 component._parent = None
-        for _, component in sorted(added, key=lambda item: depth(item[0])):
-            self._mount(component)
+        for path, component in sorted(added, key=lambda item: depth(item[0])):
+            self._mount(component, path)
         self.components = dict(tree.components)
         self._component_paths = {component: path for path, component in tree.components.items()}
         self._committed_tree = tree
@@ -357,11 +357,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         self.dirty = rendered_revision is not None and self.revision != rendered_revision
         self._raise_hook_errors()
 
-    def _mount(self, component: AnyComponent) -> None:
+    def _mount(self, component: AnyComponent, path: str) -> None:
         owner = component._owned_services
         try:
             if owner is not None:
-                self._services.activate(owner)
+                self._services.activate(owner, path)
             component.on_mount()
         except Exception as error:
             if owner is not None:
@@ -382,6 +382,15 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             errors, self._hook_errors = self._hook_errors, []
             msg = "component lifecycle hooks failed"
             raise ExceptionGroup(msg, errors)
+
+    def check_service_wait(self) -> None:
+        """Reject a caller whose own service run would be included in shutdown."""
+        owners = self._services._active | self._services._retired
+        if _owns_current_activity(
+            activation for owner in owners for activation in (*owner._current.values(), *owner._retired)
+        ):
+            message = "service activity cannot await its own component's shutdown"
+            raise RuntimeError(message)
 
     async def wait_services_ready(self) -> None:
         """Wait for the mounted services to finish setup.
