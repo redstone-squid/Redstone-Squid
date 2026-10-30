@@ -1102,6 +1102,17 @@ Returning without signalling readiness is an error. Returning after readiness co
 activation normally; rerendering does not restart it. Render initial/loading state until
 setup completes. Data required before first delivery belongs in `on_load()` or an atomic resource.
 
+The diagnostics report browser is a production example in
+`squid/bot/diagnostics_view.py`. Its update panel owns `ErrorReportRefresh`, which awaits an
+initial comparison before signalling readiness and then schedules periodic checks. The notice
+and refresh controls inject the same monitor. Its resource lives on `SharedState`, so each
+child observes changes through the topic bus. A resource owned locally by the parent would
+invalidate that parent, which is insufficient for independently cached child readers.
+Query failures remain visible resource results and leave manual refresh available; hiding the
+update panel cancels its work. Reopening it keeps the service object and starts a fresh run.
+The report being read only changes after an explicit refresh. This exercises asynchronous
+startup and shared reactive results without holding a database connection for the panel's lifetime.
+
 #### Rendering and context
 
 Context exposes the service object during rendering, before its first run starts. Children
