@@ -1102,6 +1102,39 @@ Returning without signalling readiness is an error. Returning after readiness co
 activation normally; rerendering does not restart it. Render initial/loading state until
 setup completes. Data required before first delivery belongs in `on_load()` or an atomic resource.
 
+#### Rendering and context
+
+Context exposes the service object during rendering, before its first run starts. Children
+read initial passive state and render a useful loading view. `provide()` applies to that
+render's descendants; the nearest provider wins. Replacing a provided value changes what
+consumers receive, without transferring ownership or stopping either service. Use the default
+identity comparison for service context keys: distinct services are not interchangeable merely
+because their current data matches.
+
+The delivered tree decides which services run. A failed delivery or abandoned candidate leaves
+the previously committed services running and does not activate prospective owners. A successful
+commit reconciles ownership even when the frontend can skip an identical message edit. Rerenders
+keep existing runs. Removing and remounting a component uses the same service object, with its
+next run waiting for previous cleanup; rendering during that wait can still see retained state.
+
+Readiness is an execution signal, not reactive state. Calling `task_status.started()` wakes
+readiness waiters but does not redraw consumers. Publish UI-visible loading, ready, or error
+state through `SharedState` so the normal render subscriptions update the UI. Define what retained
+state means during a restart, and make service methods check whether their required resources
+are available. Injecting a service is not evidence that those resources are ready.
+
+Parent components mount before children, but their async setup can finish in any order. A child's
+service that needs a parent resource must explicitly await readiness supplied by that service;
+it must not wait for the whole runtime, which would include itself. Resolve borrowed inputs
+explicitly when constructing services: `inject()` is a render-time API. Mount hooks also run
+before async readiness and must not assume setup has completed.
+
+Frontends commit after successful delivery and await removed-service cleanup outside delivery
+locks. They need not wait for newly mounted services to become ready before returning from
+delivery. Await `wait_services_ready()` explicitly when a caller needs that guarantee. Loading
+required to produce the first message cannot depend on a service that starts after that message
+is delivered.
+
 Use lexical context managers and AnyIO task groups for more involved activity:
 
 ```python
@@ -1144,6 +1177,23 @@ awaits completion. Every other caller waits normally.
 Use `runtime.wait_services_ready()` to await the currently committed activations, also outside
 locks. Supply `on_service_error` for the frontend's failure policy. Components declaring services
 without a running host are rejected before delivery.
+
+Borrowers can capture `run = service.current_run` to observe one specific activation.
+It is `None` before activation and after the owner releases that run through its shutdown
+wait. A captured `ServiceRun` never follows a remount and has no cancellation method.
+Its `status` is `STARTING`, `READY`, `STOPPING`, `COMPLETED`, `CANCELLED`, or `FAILED`;
+terminal states include completed cleanup. `await run.wait()` observes normal completion or
+cancellation and raises the same terminal failure on repeated waits. `run.error` exposes that
+failure after cleanup. Retaining the handle deliberately retains its outcome, including failure
+tracebacks; the owner releases its references after shutdown has been observed.
+
+`await run.wait_ready()` observes setup of that activation. It raises on failure or cancellation;
+a normally completed run can still report that it reached readiness. Readiness is a milestone,
+not permission to use a connection forever: service methods must still check their resources.
+For a child service depending on a parent's setup, capture the parent's `current_run` when the
+child starts and await that handle. Parent mounting registers its run before child work starts.
+Cancelling either observation leaves the service running. Neither wait silently follows a new
+activation, and a service cannot await its own readiness or completion.
 
 Application and session code can own services without a dummy component:
 
