@@ -166,8 +166,7 @@ async def test_partial_activation_failure_and_cleanup_failures_all_settle() -> N
             await owner.wait()
         assert events == ["broken cleanup", "last cleanup"]
         assert good.stopped.is_set() or not good.events
-        with pytest.raises(ExceptionGroup):
-            await owner.wait()
+        await owner.wait()
 
 
 async def test_task_failure_cancels_siblings_and_reports_after_cleanup() -> None:
@@ -1021,9 +1020,8 @@ async def test_failed_shutdown_does_not_retain_successfully_removed_services() -
         del good
         gc.collect()
         assert reference() is None
-        # Forgetting successful owners must not consume another owner's failure.
-        with pytest.raises(ExceptionGroup):
-            await runtime.wait_services()
+        # Completed observations release failed owners too.
+        await runtime.wait_services()
         runtime.finish()
 
 
@@ -1106,7 +1104,7 @@ async def test_cancel_before_start_does_not_acquire_resources_or_report_failure(
 
 
 @pytest.mark.parametrize("during_setup", [False, True])
-async def test_failed_run_restarts_only_after_cancel_and_preserves_failure_history(
+async def test_failed_run_restarts_only_after_cancel_without_inheriting_failure_history(
     during_setup: bool, owner: ServiceOwner
 ) -> None:
     async with running_host() as host:
@@ -1139,15 +1137,12 @@ async def test_failed_run_restarts_only_after_cancel_and_preserves_failure_histo
         owner.activate(host, on_error=report)
         await owner.wait_ready()
         assert calls == 2
-        # Historical shutdown failures do not affect readiness of the replacement run.
-        with pytest.raises(ExceptionGroup):
-            await owner.wait()
+        # The replacement run does not inherit the completed run's failure.
+        await owner.wait()
         assert not service.stopped.is_set()
         owner.cancel()
         for _ in range(2):
-            with pytest.raises(ExceptionGroup) as failed_shutdown:
-                await owner.wait()
-            assert failed_shutdown.value.subgroup(ValueError) is not None
+            await owner.wait()
         assert service.stopped.is_set()
 
 
@@ -1175,3 +1170,86 @@ async def test_cancelling_shutdown_wait_does_not_interrupt_cleanup(owner: Servic
         release.set()
         await owner.wait()
         assert service.events[-3:] == ["cancel", "cleanup", "unsubscribe"]
+
+
+@pytest.mark.parametrize("through_runtime", [False, True])
+async def test_shutdown_observers_keep_run_failure_across_remount(through_runtime: bool) -> None:
+    async with running_host() as host:
+        cleaning, release = asyncio.Event(), asyncio.Event()
+        reports: list[Exception] = []
+
+        async def report(error: Exception) -> None:
+            reports.append(error)
+
+        class FailsOnce(Recorder):
+            runs = 0
+
+            @override
+            async def cleanup(self) -> None:
+                self.runs += 1
+                if self.runs == 1:
+                    cleaning.set()
+                    await release.wait()
+                    raise ValueError("first cleanup failed")
+                await super().cleanup()
+
+        panel = OwnedPanel(FailsOnce())
+        owner = panel._owned_services
+        assert owner is not None
+        runtime = ComponentRuntime(panel, service_host=host, on_service_error=report)
+
+        def activate() -> None:
+            if through_runtime:
+                runtime.commit(runtime.render())
+            else:
+                owner.activate(host, on_error=report)
+
+        def cancel() -> None:
+            if through_runtime:
+                runtime.finish()
+            else:
+                owner.cancel()
+
+        async def wait() -> None:
+            if through_runtime:
+                await runtime.wait_services()
+            else:
+                await owner.wait()
+
+        activate()
+        await owner.wait_ready()
+        cancel()
+        await cleaning.wait()
+        captured = [asyncio.Event(), asyncio.Event()]
+        failures: list[ExceptionGroup] = []
+        replacement_waiting = asyncio.Event()
+
+        async def observe_replacement() -> None:
+            replacement_waiting.set()
+            await wait()
+
+        async def observe(index: int) -> None:
+            captured[index].set()
+            with pytest.raises(ExceptionGroup) as failure:
+                await wait()
+            failures.append(failure.value)
+
+        async with anyio.create_task_group() as observers:
+            for index in range(2):
+                observers.start_soon(observe, index)
+            for event in captured:
+                await event.wait()
+            activate()
+            observers.start_soon(observe_replacement)
+            await replacement_waiting.wait()
+            release.set()
+
+        assert len(failures) == 2
+        assert all(failure.subgroup(ValueError) is not None for failure in failures)
+        await owner.wait_ready()
+        cancel()
+        await wait()
+        await wait()
+        assert panel.service.stopped.is_set()
+        await host.close()
+        assert len(reports) == 1

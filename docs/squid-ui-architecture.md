@@ -1161,8 +1161,10 @@ host, call `cancel()` before activating again. Repeated activation otherwise kee
 runs and error handler.
 
 `wait_ready()` observes setup of the current runs; `wait()` observes cleanup of cancelled runs.
-Cancelling either wait leaves the services alone. Shutdown waits collect failures and retain
-them for later callers, including after reactivation. See the method docstrings for the wait
+Cancelling either wait leaves the services alone. Shutdown waits report failures from the latest
+activation when the wait begins; reactivation never changes an existing wait's results. Concurrent waiters receive the same failures, and
+completed waits release those results. Later activations do not inherit earlier failures;
+use the error handler or logs for history. See the method docstrings for the wait
 and failure semantics. `ServiceHost.close()` awaits all remaining runs and error handlers.
 
 Component ownership is unrelated to `SharedState.scope` (a diagnostic label), pool keys, and
