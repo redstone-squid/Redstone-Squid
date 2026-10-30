@@ -17,7 +17,8 @@ import sys
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields, is_dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, override
+from pathlib import Path
+from typing import Any
 
 from squid_ui.forms import FormIssue, FormLike, SubmitHandler
 from squid_ui.interactions import (
@@ -400,42 +401,14 @@ def assert_imports_without(imports: str | Sequence[str], *blocked: str) -> None:
     interpreter on PATH is not this venv when pytest is driven from Git Bash, and the
     assertions only mean anything in the interpreter that installed the package under test.
 
-    The child runs `_isolated_import` below, so the blocker is real source this repo lints and
-    type-checks rather than a string literal nothing can see into.
+    The child runs a standalone helper by file path, installing the import blocker
+    before loading this package or any of its optional dependencies.
     """
     names = (imports,) if isinstance(imports, str) else tuple(imports)
     argument = ", ".join(repr(name) for name in (names, *blocked))
-    code = f"from squid_ui.testing import _isolated_import; _isolated_import({argument})"
+    helper = Path(__file__).with_name("_import_isolation.py")
+    code = f"import runpy; runpy.run_path({str(helper)!r})['_isolated_import']({argument})"
     subprocess.run([sys.executable, "-c", code], check=True)
-
-
-def _isolated_import(imports: Sequence[str], *blocked: str) -> None:
-    """Import each of `imports` with `blocked` unimportable, and prove none of them arrived.
-
-    The child-process half of `assert_imports_without`. Both halves are needed: refusing the
-    import proves nothing reached for the module directly, and the `sys.modules` check catches
-    a name that arrived transitively before the finder was installed.
-    """
-    import importlib
-    import importlib.abc
-    import importlib.machinery
-
-    roots = {name.split(".", 1)[0] for name in blocked}
-
-    class BlockImports(importlib.abc.MetaPathFinder):
-        @override
-        def find_spec(
-            self, fullname: str, path: Sequence[str] | None = None, target: object = None
-        ) -> importlib.machinery.ModuleSpec | None:
-            if fullname.split(".", 1)[0] in roots:
-                raise ModuleNotFoundError(fullname)
-            return None
-
-    sys.meta_path.insert(0, BlockImports())
-    for name in imports:
-        importlib.import_module(name)
-    leaked = roots & set(sys.modules)
-    assert not leaked, f"{list(imports)} pulled in {sorted(leaked)}"
 
 
 __all__ = [
