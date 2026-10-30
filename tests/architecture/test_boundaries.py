@@ -886,7 +886,7 @@ class BlockAnyIO:
             raise ImportError('AnyIO is not installed')
 sys.meta_path.insert(0, BlockAnyIO())
 import squid_ui
-from squid_ui.runtime import ManagedService, ServiceHost, ServiceOwner
+from squid_ui.runtime import ManagedService, UIExecutionHost, ServiceOwner
 assert 'anyio' not in sys.modules
 """
     subprocess.run([sys.executable, "-c", script], check=True, capture_output=True, text=True)

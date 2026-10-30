@@ -19,8 +19,8 @@ from squid_ui.runtime import (
     History,
     LocalTopicBus,
     PostCommitOperation,
-    ServiceHost,
     SharedState,
+    UIExecutionHost,
     history,
     transaction,
 )
@@ -311,9 +311,9 @@ async def test_host_close_drains_accepted_operations() -> None:
         handles.append(event.on_success(callback))
 
     async with anyio.create_task_group() as tasks:
-        host = ServiceHost()
+        host = UIExecutionHost()
         await tasks.start(host.run)
-        root = MessageRoot(Panel(handler), access=Everyone(), service_host=host)
+        root = MessageRoot(Panel(handler), access=Everyone(), execution_host=host)
         await root.send(delivered_to(message_harness()))
 
         async def close() -> None:
@@ -372,13 +372,13 @@ async def test_failed_host_submission_settles_handle_without_rolling_back_action
         handles.append(event.on_success(callback))
 
     panel, root = await mount(handler)
-    assert root.config.service_host is not None
+    assert root.config.execution_host is not None
 
     def reject(callback: Callable[[], Awaitable[None]]) -> None:
         raise RuntimeError("host submission failed")
 
     with monkeypatch.context() as patch:
-        patch.setattr(root.config.service_host, "start_cleanup", reject)
+        patch.setattr(root.config.execution_host, "start_operation", reject)
         with pytest.raises(RuntimeError, match="host submission failed"):
             await root.dispatch("save", interaction_harness())
     assert panel.value == 1

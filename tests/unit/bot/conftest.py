@@ -7,7 +7,7 @@ from typing import Any
 import anyio
 import pytest
 
-from squid_ui.runtime import ServiceHost
+from squid_ui.runtime import UIExecutionHost
 from squid_ui_discord import MessageRoot
 
 
@@ -16,22 +16,22 @@ def _host_standalone_roots(request: pytest.FixtureRequest, monkeypatch: pytest.M
     """Supply standalone test roots with a host owned by the test coroutine.
 
     Pytest-asyncio enters and exits async fixtures in different tasks, so the task
-    group wraps the test body instead. Explicit service_host arguments, including
+    group wraps the test body instead. Explicit execution_host arguments, including
     None in missing-host tests, always take precedence over this harness default.
     """
     test = request.node.obj
     if not inspect.iscoroutinefunction(test):
         return
-    host = ServiceHost()
+    host = UIExecutionHost()
     original = MessageRoot.__init__
 
     @wraps(original)
     def initialize(self: Any, *args: Any, **kwargs: Any) -> None:
-        if "service_host" not in kwargs:
+        if "execution_host" not in kwargs:
             config = kwargs.get("config")
-            configured = None if config is None else config.service_host
+            configured = None if config is None else config.execution_host
             if configured is None or configured._tasks is None:
-                kwargs["service_host"] = host
+                kwargs["execution_host"] = host
         original(self, *args, **kwargs)
 
     @wraps(test)

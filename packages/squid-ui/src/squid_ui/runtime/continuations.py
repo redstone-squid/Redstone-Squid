@@ -22,7 +22,7 @@ from squid_ui.errors import SquidUiError
 from squid_ui.runtime.tasks import anyio, task_is_within
 
 if TYPE_CHECKING:
-    from squid_ui.runtime.services import ServiceHost
+    from squid_ui.runtime.services import UIExecutionHost
 
 _logger = logging.getLogger(__name__)
 
@@ -95,13 +95,13 @@ class PostCommitOperation[ValueT]:
         assert self._execution is not None
         return await self._execution
 
-    def _commit(self, commit: ActionCommit, continuation: ActionContinuation, host: ServiceHost) -> None:
+    def _commit(self, commit: ActionCommit, continuation: ActionContinuation, host: UIExecutionHost) -> None:
         definition = OperationDefinition(self._owner, self._invoke, name=self._name, initial=None)
         self._execution = continuation.start_operation(
             lambda cause, root: definition.start(cause=cause, root_action_id=root)
         )
         try:
-            host.start_cleanup(self._run)
+            host.start_operation(self._run)
         except Exception as error:
             self._start_error = error
             self._callback = None

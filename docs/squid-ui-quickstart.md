@@ -70,10 +70,30 @@ await request.defer("private")
 await request.respond("Saved.")
 ```
 
-`sd.install()` starts no background work. If the application uses scheduled topic refreshes or
-challenge flows, the host must supervise `runtime.run()` with its other process jobs. Call
-`await runtime.close()` during shutdown; cancellation remains the responsibility of the supervisor
-that started the task.
+`sd.install()` starts no tasks. Run the installed runtime before opening panels, even when
+using neither scheduled refreshes nor challenges: ordinary panel shutdown also needs its execution
+host. Await startup readiness, then finish the runtime before cancelling its runner:
+
+```python
+import anyio
+
+
+async def main(token: str) -> None:
+    async with bot:
+        async with anyio.create_task_group() as tasks:
+            await tasks.start(runtime.run)
+            try:
+                await bot.start(token)
+            finally:
+                with anyio.CancelScope(shield=True):
+                    try:
+                        await runtime.close()
+                    finally:
+                        tasks.cancel_scope.cancel()
+```
+
+The application owns its shutdown deadline. Shielding lets accepted cleanup finish when the
+caller is cancelled; resource-specific timeouts belong in that cleanup.
 
 Use `sd.DISCORD_V2_DPY27` for Components V2. Classic-message rendering is explicitly separate under
 `sd.classic` and uses `sd.DISCORD_V1_DPY27`; there is no implicit target switch.

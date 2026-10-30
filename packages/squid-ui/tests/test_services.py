@@ -16,18 +16,18 @@ from squid_ui.runtime import (
     ContextKey,
     LocalTopicBus,
     ManagedService,
-    ServiceHost,
     ServiceOwner,
     SharedState,
     Topic,
+    UIExecutionHost,
 )
 
 
 @asynccontextmanager
-async def running_host() -> AsyncIterator[ServiceHost]:
+async def running_host() -> AsyncIterator[UIExecutionHost]:
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
-            host = ServiceHost()
+            host = UIExecutionHost()
             await tasks.start(host.run)
             try:
                 yield host
@@ -236,7 +236,7 @@ async def test_host_cancellation_waits_for_async_cleanup() -> None:
     service = owner.own(Recorder())
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
-            host = ServiceHost()
+            host = UIExecutionHost()
             await tasks.start(host.run)
             owner.activate(host)
             await owner.wait_ready()
@@ -282,7 +282,7 @@ class OwnedPanel(Component[ComponentsV2Target]):
 async def test_committed_component_owns_activity_and_consumer_only_borrows() -> None:
     async with running_host() as host:
         panel = Panel()
-        runtime = ComponentRuntime(panel, service_host=host)
+        runtime = ComponentRuntime(panel, execution_host=host)
         candidate = runtime.render()
         assert not panel.service.events
         assert panel.child.borrowed is panel.service
@@ -304,7 +304,7 @@ async def test_committed_component_owns_activity_and_consumer_only_borrows() -> 
 async def test_abandoned_candidate_and_borrowed_application_service() -> None:
     async with running_host() as host:
         abandoned = Panel()
-        runtime = ComponentRuntime(abandoned, service_host=host)
+        runtime = ComponentRuntime(abandoned, execution_host=host)
         runtime.render()
         runtime.finish()
         await runtime.wait_services()
@@ -402,7 +402,7 @@ async def test_injected_service_renders_before_readiness_and_publishes_ready_sta
                 return self.boundary(self.reader, key="reader")
 
         panel = Owner()
-        runtime = ComponentRuntime(panel, service_host=host)
+        runtime = ComponentRuntime(panel, execution_host=host)
         tree = runtime.render()
         assert rendered == [False]
         assert not panel.service.events
@@ -434,7 +434,7 @@ async def test_independent_owners_and_unmount_hook_failure() -> None:
             def render(self) -> DocumentLike[ComponentsV2Target]:
                 return self.boundary(first, key="first"), self.boundary(second, key="second")
 
-        runtime = ComponentRuntime(Root(), service_host=host)
+        runtime = ComponentRuntime(Root(), execution_host=host)
         runtime.commit(runtime.render())
         await runtime.wait_services_ready()
         assert first.service is not second.service
@@ -447,7 +447,7 @@ async def test_independent_owners_and_unmount_hook_failure() -> None:
 
 
 def test_owned_services_require_host_and_render_cannot_register_services() -> None:
-    with pytest.raises(RuntimeError, match="ServiceHost"):
+    with pytest.raises(RuntimeError, match="UIExecutionHost"):
         ComponentRuntime(Panel()).render()
 
     class Invalid(Component[ComponentsV2Target]):
@@ -461,7 +461,7 @@ def test_owned_services_require_host_and_render_cannot_register_services() -> No
 
 
 @pytest.mark.parametrize("cached", ["candidate", "committed", "backdated"])
-async def test_cached_tree_requires_running_service_host(cached: str) -> None:
+async def test_cached_tree_requires_running_execution_host(cached: str) -> None:
     async with running_host() as host:
 
         class Values(SharedState):
@@ -475,7 +475,7 @@ async def test_cached_tree_requires_running_service_host(cached: str) -> None:
                 return Text(str(values.count))
 
         panel = ReadingPanel()
-        runtime = ComponentRuntime(panel, service_host=host)
+        runtime = ComponentRuntime(panel, execution_host=host)
         tree = runtime.render()
         if cached != "candidate":
             runtime.commit(tree)
@@ -488,7 +488,7 @@ async def test_cached_tree_requires_running_service_host(cached: str) -> None:
             runtime.invalidate_addresses(tree.observations)
             assert runtime.dirty
         await host.close()
-        with pytest.raises(RuntimeError, match="running ServiceHost"):
+        with pytest.raises(RuntimeError, match="running UIExecutionHost"):
             runtime.render(reuse_committed=True)
         runtime.finish()
         await runtime.wait_services()
@@ -542,7 +542,7 @@ async def test_actual_component_remount_preserves_object_and_restarts_activity()
                 return self.boundary(panel, key="panel") if self.visible else Text("empty")
 
         root = Root()
-        runtime = ComponentRuntime(root, service_host=host)
+        runtime = ComponentRuntime(root, execution_host=host)
         runtime.commit(runtime.render())
         await runtime.wait_services_ready()
         service = panel.service
@@ -567,7 +567,7 @@ async def test_failed_mount_hook_cannot_leave_owned_work_running() -> None:
                 raise ValueError("mount failed")
 
         panel = Broken()
-        runtime = ComponentRuntime(panel, service_host=host)
+        runtime = ComponentRuntime(panel, execution_host=host)
         with pytest.raises(ExceptionGroup, match="lifecycle hooks"):
             runtime.commit(runtime.render())
         await runtime.wait_services()
@@ -643,7 +643,7 @@ async def test_application_task_submitted_by_service_waits_for_component_cleanup
                 application_tasks.start_soon(close)
 
         panel = OwnedPanel(Submitting())
-        runtime = ComponentRuntime(panel, service_host=host)
+        runtime = ComponentRuntime(panel, execution_host=host)
         runtime.commit(runtime.render())
         await runtime.wait_services_ready()
         proceed.set()
@@ -812,7 +812,7 @@ async def test_runtime_readiness_observes_all_committed_owners() -> None:
             def render(self) -> DocumentLike[ComponentsV2Target]:
                 return self.boundary(first, key="first"), self.boundary(second, key="second")
 
-        runtime = ComponentRuntime(Root(), service_host=host)
+        runtime = ComponentRuntime(Root(), execution_host=host)
         await runtime.wait_services_ready()
         runtime.commit(runtime.render())
         with pytest.raises(ExceptionGroup):
@@ -885,7 +885,7 @@ async def test_resource_entry_failure_unwinds_without_starting_activity() -> Non
 async def test_runtime_readiness_does_not_switch_to_a_remounted_activation() -> None:
     async with running_host() as host:
         panel = Panel()
-        runtime = ComponentRuntime(panel, service_host=host)
+        runtime = ComponentRuntime(panel, execution_host=host)
         runtime.commit(runtime.render())
         await runtime.wait_services_ready()
 
@@ -1030,7 +1030,7 @@ async def test_owned_subscription_stops_updating_retained_shared_state() -> None
                 return Text(str(self.service.state.count))
 
         panel = Owned()
-        runtime = ComponentRuntime(panel, service_host=host)
+        runtime = ComponentRuntime(panel, execution_host=host)
         runtime.commit(runtime.render())
         await runtime.wait_services_ready()
         retained = panel.service.state
@@ -1105,7 +1105,7 @@ async def test_failed_shutdown_does_not_retain_successfully_removed_services() -
         good = OwnedPanel(Recorder())
         reference = weakref.ref(good.service)
         root = Root((good, OwnedPanel(Broken())))
-        runtime = ComponentRuntime(root, service_host=host)
+        runtime = ComponentRuntime(root, execution_host=host)
         runtime.commit(runtime.render())
         await runtime.wait_services_ready()
         root.children = ()
@@ -1144,7 +1144,7 @@ async def test_service_cannot_wait_for_its_own_readiness(child_task: bool, throu
                 await anyio.sleep_forever()
 
         if through_runtime:
-            runtime = ComponentRuntime(OwnedPanel(Checking()), service_host=host)
+            runtime = ComponentRuntime(OwnedPanel(Checking()), execution_host=host)
             runtime.commit(runtime.render())
             wait_ready = runtime.wait_services_ready
             cancel = runtime.finish
@@ -1292,7 +1292,7 @@ async def test_shutdown_observers_keep_run_failure_across_remount(through_runtim
         panel = OwnedPanel(FailsOnce())
         owner = panel._owned_services
         assert owner is not None
-        runtime = ComponentRuntime(panel, service_host=host, on_service_error=report)
+        runtime = ComponentRuntime(panel, execution_host=host, on_service_error=report)
 
         def activate() -> None:
             if through_runtime:
@@ -1377,7 +1377,7 @@ async def test_parent_service_outlives_child_cleanup(fail_child: bool) -> None:
             def render(self) -> DocumentLike[ComponentsV2Target]:
                 return self.boundary(child, key="child")
 
-        runtime = ComponentRuntime(Parent(), service_host=host)
+        runtime = ComponentRuntime(Parent(), execution_host=host)
         runtime.commit(runtime.render())
         await runtime.wait_services_ready()
         runtime.finish()

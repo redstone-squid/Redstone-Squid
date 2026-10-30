@@ -12,17 +12,17 @@ from anyio.abc import TaskStatus
 
 from squid_ui import Component, ComponentsV2Target, DocumentLike, state
 from squid_ui.primitives import Text
-from squid_ui.runtime import ManagedService, ServiceHost
+from squid_ui.runtime import ManagedService, UIExecutionHost
 from squid_ui_discord import Everyone, MessageRoot, SessionManager
 from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
 @asynccontextmanager
-async def running_host() -> AsyncIterator[ServiceHost]:
+async def running_host() -> AsyncIterator[UIExecutionHost]:
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
-            host = ServiceHost()
+            host = UIExecutionHost()
             await tasks.start(host.run)
             try:
                 yield host
@@ -76,7 +76,7 @@ class Panel(Component[ComponentsV2Target]):
 async def test_failed_delivery_never_activates_and_retry_then_finish_cleans_up() -> None:
     async with running_host() as host:
         panel = Panel()
-        root = MessageRoot(panel, access=Everyone(), service_host=host)
+        root = MessageRoot(panel, access=Everyone(), execution_host=host)
         panel.service.root = root
         with pytest.raises(ValueError, match="delivery failed"):
             await root.send(AsyncMock(side_effect=ValueError("delivery failed")))
@@ -100,7 +100,7 @@ async def test_removing_owner_waits_for_cleanup_but_keeps_message_root_live() ->
                 return self.boundary(panel, key="editor") if self.visible else Text("closed")
 
         component = Root()
-        root = MessageRoot(component, access=Everyone(), service_host=host)
+        root = MessageRoot(component, access=Everyone(), execution_host=host)
         panel.service.root = root
         await root.send(delivered_to(message_harness()))
         await panel.service.started.wait()
@@ -124,7 +124,7 @@ async def test_failed_replacement_keeps_visible_owner_active_until_successful_de
                 return Text("replacement" if self.replaced else "original"), self.boundary(panel, key="editor")
 
         component = Root()
-        root = MessageRoot(component, access=Everyone(), service_host=host)
+        root = MessageRoot(component, access=Everyone(), execution_host=host)
         message = message_harness()
         await root.send(delivered_to(message))
         await root.runtime.wait_services_ready()
@@ -156,10 +156,10 @@ async def test_unexpected_failure_finishes_only_its_message_root(during_setup: b
                     raise ValueError("setup failed")
 
         panel = Panel(Broken())
-        root = MessageRoot(panel, access=Everyone(), service_host=host)
+        root = MessageRoot(panel, access=Everyone(), execution_host=host)
         panel.service.root = root
         sibling = Panel()
-        sibling_root = MessageRoot(sibling, access=Everyone(), service_host=host)
+        sibling_root = MessageRoot(sibling, access=Everyone(), execution_host=host)
         finished = asyncio.Event()
 
         async def on_finish(_root: MessageRoot) -> None:
@@ -182,7 +182,7 @@ async def test_unexpected_failure_finishes_only_its_message_root(during_setup: b
 async def test_failed_disable_edit_still_completes_service_cleanup() -> None:
     async with running_host() as host:
         panel = Panel()
-        root = MessageRoot(panel, access=Everyone(), service_host=host)
+        root = MessageRoot(panel, access=Everyone(), execution_host=host)
         panel.service.root = root
         message = message_harness()
         await root.send(delivered_to(message))
@@ -208,7 +208,7 @@ async def test_concurrent_finish_callers_wait_for_same_cleanup() -> None:
                 await super().cleanup()
 
         panel = Panel(Slow())
-        root = MessageRoot(panel, access=Everyone(), service_host=host)
+        root = MessageRoot(panel, access=Everyone(), execution_host=host)
         panel.service.root = root
         await root.send(delivered_to(message_harness()))
         await panel.service.started.wait()
@@ -244,7 +244,7 @@ async def test_multiple_cleanups_can_reenter_frontend_without_waiting_on_each_ot
                 self.second = self.own(Reentrant())
 
         panel = TwoServices()
-        root = MessageRoot(panel, access=Everyone(), service_host=host)
+        root = MessageRoot(panel, access=Everyone(), execution_host=host)
         panel.service.root = panel.second.root = root
         await root.send(delivered_to(message_harness()))
         await panel.service.started.wait()
@@ -267,7 +267,7 @@ async def test_failed_terminal_render_and_teardown_callback_still_stop_services(
                 return super().render()
 
         panel = BrokenRender()
-        root = MessageRoot(panel, access=Everyone(), service_host=host)
+        root = MessageRoot(panel, access=Everyone(), execution_host=host)
         panel.service.root = root
         await root.send(delivered_to(message_harness()))
         await panel.service.started.wait()
@@ -287,8 +287,8 @@ async def test_failed_terminal_render_and_teardown_callback_still_stop_services(
 async def test_host_close_drains_session_children_with_services() -> None:
     async with running_host() as host:
         parent_panel, child_panel = Panel(), Panel()
-        parent = MessageRoot(parent_panel, access=Everyone(), service_host=host)
-        child = MessageRoot(child_panel, access=Everyone(), service_host=host)
+        parent = MessageRoot(parent_panel, access=Everyone(), execution_host=host)
+        child = MessageRoot(child_panel, access=Everyone(), execution_host=host)
         manager = SessionManager()
         opened = await manager.open(parent, delivered_to(message_harness()))
         assert isinstance(opened, Opened)

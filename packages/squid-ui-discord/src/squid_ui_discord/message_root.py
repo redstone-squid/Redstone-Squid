@@ -447,7 +447,7 @@ class MessageRoot[
         self.runtime = ComponentRuntime(
             component,
             on_invalidate=self._mark_dirty,
-            service_host=config.service_host,
+            execution_host=config.execution_host,
             on_service_error=self._service_failed,
             context={
                 CHROME_CONTEXT: self.chrome,
@@ -2495,18 +2495,18 @@ class MessageRoot[
                         message = "after-commit work requires a dispatcher-owned transaction, not a nested dispatch"
                         raise RuntimeError(message)
                     if adapter._after_commit:
-                        assert self.config.service_host is not None
-                        self.config.service_host._require_running()
+                        assert self.config.execution_host is not None
+                        self.config.execution_host._require_running()
                 if adapter._finish_requested:
                     # Reserve delivery before commit. Cancellation while acquiring the
                     # lock rolls back the action and leaves its closure unaccepted.
                     await self._render_lock.acquire()
                     locked = True
                     if not self._finished:
-                        if self.config.service_host is None:
-                            message = "action closure requires a running ServiceHost"
+                        if self.config.execution_host is None:
+                            message = "action closure requires a running UIExecutionHost"
                             raise RuntimeError(message)
-                        self.config.service_host._require_running()
+                        self.config.execution_host._require_running()
             if adapter._finish_requested:
                 # Commit, capture the terminal view, and accept closure without another
                 # checkpoint. The host executes delivery and cleanup outside the action.
@@ -2864,7 +2864,7 @@ class MessageRoot[
 
         # Registration, logical closure and the terminal snapshot contain no checkpoint.
         # Even immediate low-level closure captures the caller's current render state.
-        self._shutdown.start(self.config.service_host, work)
+        self._shutdown.start(self.config.execution_host, work)
         self._finished = True
         if not delete and disable and (self._handle is not None or interaction is not None):
             try:

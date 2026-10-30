@@ -45,8 +45,32 @@ async def counter(interaction) -> None:
     await Counter().show(interaction)
 ```
 
-`sd.install()` starts no tasks. The host owns `runtime.run()` when it enables scheduled refreshes
-or challenge flows, and `await runtime.close()` ends the installed runtime. Components V2 uses
+`sd.install()` starts no tasks. Run the installed runtime before opening panels, even when
+using neither scheduled refreshes nor challenges: ordinary panel shutdown also needs its execution
+host. Await startup readiness, then finish the runtime before cancelling its runner:
+
+```python
+import anyio
+
+
+async def main(token: str) -> None:
+    async with bot:
+        async with anyio.create_task_group() as tasks:
+            await tasks.start(runtime.run)
+            try:
+                await bot.start(token)
+            finally:
+                with anyio.CancelScope(shield=True):
+                    try:
+                        await runtime.close()
+                    finally:
+                        tasks.cancel_scope.cancel()
+```
+
+The application owns its shutdown deadline. Shielding lets accepted cleanup finish when the
+caller is cancelled; resource-specific timeouts belong in that cleanup.
+
+Components V2 uses
 `sd.DISCORD_V2_DPY27`; classic messages use `sd.DISCORD_V1_DPY27` through `sd.classic`.
 
 Storage stays optional. Importing `squid_ui_discord` without a durability extra does not import or

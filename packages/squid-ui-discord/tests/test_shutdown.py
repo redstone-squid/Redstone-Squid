@@ -8,7 +8,7 @@ import pytest
 
 from squid_ui import Component, ComponentsV2Target
 from squid_ui.primitives import Text
-from squid_ui.runtime import ServiceHost
+from squid_ui.runtime import UIExecutionHost
 from squid_ui_discord import Everyone, MessageRoot, SessionManager
 from squid_ui_discord.sessions import Opened
 from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
@@ -33,9 +33,9 @@ async def test_cancel_before_acceptance_leaves_panel_open() -> None:
 
 
 async def test_unavailable_host_rejects_closure_before_changing_panel() -> None:
-    for host in (None, ServiceHost()):
-        root = MessageRoot(Panel(), access=Everyone(), service_host=host)
-        with pytest.raises(RuntimeError, match="running ServiceHost"):
+    for host in (None, UIExecutionHost()):
+        root = MessageRoot(Panel(), access=Everyone(), execution_host=host)
+        with pytest.raises(RuntimeError, match="running UIExecutionHost"):
             await root.finish(wait=False)
         assert not root.finished
 
@@ -181,9 +181,9 @@ async def test_session_leaves_registry_before_child_cleanup_finishes() -> None:
 
 async def test_host_close_drains_accepted_shutdown_before_returning() -> None:
     async with anyio.create_task_group() as tasks:
-        host = ServiceHost()
+        host = UIExecutionHost()
         await tasks.start(host.run)
-        root = MessageRoot(Panel(), access=Everyone(), service_host=host)
+        root = MessageRoot(Panel(), access=Everyone(), execution_host=host)
         entered, release, closed = asyncio.Event(), asyncio.Event(), asyncio.Event()
 
         async def callback(_root: MessageRoot) -> None:

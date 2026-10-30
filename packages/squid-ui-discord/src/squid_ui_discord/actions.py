@@ -180,9 +180,9 @@ class ActionResponder:
         if current_action() is not self._action_context:
             message = "after-commit work requires a dispatcher-owned transaction, not a nested dispatch"
             raise RuntimeError(message)
-        host = self.message_root.config.service_host
+        host = self.message_root.config.execution_host
         if host is None:
-            message = "after-commit work requires a running ServiceHost"
+            message = "after-commit work requires a running UIExecutionHost"
             raise RuntimeError(message)
         host._require_running()
         operation = PostCommitOperation(

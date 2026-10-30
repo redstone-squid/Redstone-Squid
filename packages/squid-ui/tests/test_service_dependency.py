@@ -9,7 +9,7 @@ from anyio.abc import TaskStatus
 
 from squid_ui import Component, ComponentsV2Target, DocumentLike
 from squid_ui.primitives import Text
-from squid_ui.runtime import ComponentRuntime, ManagedService, ServiceHost, ServiceRun, ServiceRunStatus
+from squid_ui.runtime import ComponentRuntime, ManagedService, ServiceRun, ServiceRunStatus, UIExecutionHost
 
 
 @pytest.mark.parametrize("outcome", ["cancel_setup", "fail_setup", "complete", "ready"])
@@ -80,9 +80,9 @@ async def test_child_observes_one_parent_run_across_panel_remount(outcome: str) 
 
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
-            host = ServiceHost()
+            host = UIExecutionHost()
             await tasks.start(host.run)
-            runtime = ComponentRuntime(Parent(), service_host=host, on_service_error=report)
+            runtime = ComponentRuntime(Parent(), execution_host=host, on_service_error=report)
             runtime.commit(runtime.render())
             await entered.wait()
             await child_started.wait()
