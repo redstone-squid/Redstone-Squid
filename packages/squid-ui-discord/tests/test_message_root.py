@@ -1130,7 +1130,8 @@ class TestFinishHooks:
         message_root.on_finish(lambda finished: _record(seen, finished))
         commit_render(message_root)
 
-        await message_root.finish(disable=False)
+        with pytest.raises(ExceptionGroup):
+            await message_root.finish(disable=False)
 
         assert seen == [message_root]
         assert message_root.finished
@@ -1148,7 +1149,7 @@ class TestFinishHooks:
         interaction = interaction_harness()
         interaction.response.edit_message.error = RuntimeError("gateway is down")
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(ExceptionGroup):
             await message_root.finish_via(interaction)
 
         assert seen == [message_root]
@@ -1167,7 +1168,7 @@ class TestFinishHooks:
         message.edit.error = RuntimeError("message is gone")
         await message_root.send(delivered_to(message))
 
-        with pytest.raises(RuntimeError):
+        with pytest.raises(ExceptionGroup):
             await message_root.finish()
 
         assert seen == [message_root]
@@ -1180,7 +1181,7 @@ class TestFinishHooks:
 
         async def finish_again(finished: MessageRoot) -> None:
             calls.append(1)
-            await finished.finish(disable=False)
+            await finished.finish(disable=False, wait=False)
 
         message_root.on_finish(finish_again)
 

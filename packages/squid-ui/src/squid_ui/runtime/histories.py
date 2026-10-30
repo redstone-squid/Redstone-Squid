@@ -25,6 +25,7 @@ from squid_reactivity.actions import (
     current_action,
     emit_causal_event,
 )
+from squid_reactivity.internals import CURRENT_TRANSACTION
 from squid_reactivity.operations import OperationContext
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.errors import SquidUiError
@@ -39,6 +40,7 @@ from squid_ui.runtime.reactivity import (
     FrameworkIntegrityError,
     FreshActionError,
     ReactiveConflictError,
+    ReactiveWriteError,
     TransactionParticipant,
     TransactionView,
     apply_conditional_patches,
@@ -867,6 +869,10 @@ class History:
         self._owner.invalidate()
 
     def _reserve(self, callback: Callable[[ActionCommit, ActionContinuation], None]) -> None:
+        current = CURRENT_TRANSACTION.get()
+        if current is not None and current.readonly:
+            message = "a read-only action changed nothing, so it has nothing to record"
+            raise ReactiveWriteError(message)
         if has_action_hook(self):
             message = "this action already used this history; only one history operation is allowed"
             raise HistoryError(message)

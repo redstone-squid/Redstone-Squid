@@ -193,7 +193,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
 
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
-        await event.finish()
+        event.finish_on_success()
 
 
 def _claim_entry(claim: AliasClaim) -> sl.TextLike:

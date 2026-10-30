@@ -236,7 +236,7 @@ class RecordsScreen(sd.Screen):
         return False
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):

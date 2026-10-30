@@ -1,5 +1,6 @@
 """`squid_ui_discord.responder`/`native` — the sanctioned escape hatches to Discord's own surfaces."""
 
+from collections.abc import Awaitable, Callable
 from typing import override
 
 import pytest
@@ -25,7 +26,12 @@ class Portable:
 
     async def redirect(self, url: str) -> None: ...
 
-    async def finish(self) -> None: ...
+    def finish_on_success(self) -> None: ...
+
+    def on_success[ValueT](
+        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
+    ) -> sl.runtime.PostCommitOperation[ValueT]:
+        raise AssertionError
 
     async def present_form(
         self,

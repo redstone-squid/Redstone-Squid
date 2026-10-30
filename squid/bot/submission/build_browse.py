@@ -499,4 +499,4 @@ class BuildBrowseScreen(sd.Screen):
         self._selected = None
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()

@@ -352,4 +352,4 @@ class AccountWorkspace(sd.Screen):
         return account.id
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()

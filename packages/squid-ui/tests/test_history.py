@@ -36,6 +36,7 @@ from squid_ui.runtime import (
     HistoryResultStatus,
     LocalTopicBus,
     MemoryCompensationOutbox,
+    ReactiveWriteError,
     SharedState,
     UndoMode,
     history,
@@ -43,6 +44,7 @@ from squid_ui.runtime import (
     inspect_cells,
     transaction,
 )
+from squid_ui.runtime.reactivity import readonly_transaction
 from squid_ui.semantic import ActionControl
 
 
@@ -693,3 +695,10 @@ async def test_outbox_failure_after_external_success_needs_reconciliation_before
     assert repeated is result
     assert subject.page == 4
     assert calls == ["outbox"]
+
+
+def test_readonly_action_cannot_record_history() -> None:
+    subject, _ = panel()
+    with readonly_transaction(), pytest.raises(ReactiveWriteError, match="nothing to record"):
+        subject.history.record("read")
+    assert not subject.history.entries

@@ -140,11 +140,15 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         *,
         defer: Callable[[AnyComponent], bool] | None = None,
         reuse_committed: bool = False,
+        terminal: bool = False,
     ) -> ComponentTree[RenderTargetT]:
         """Render a candidate tree; call :meth:`commit` after planning and drawing succeed.
 
         ``defer`` renders for discovery only -- see :func:`render_component_tree`. Such a tree
         is missing subtrees and must never be passed to :meth:`commit`.
+        ``terminal=True`` draws a final view while the host drains shutdown. Such a
+        tree must not be committed: it can describe existing state, but cannot start
+        another service activation on the closing host.
         """
         if not self.dirty and not reuse_committed:
             # A direct render is an explicit request to sample inputs outside the reactive graph.
@@ -154,17 +158,20 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             self._force_all = True
             self._candidate_tree = None
         if reuse_committed and self._candidate_tree is not None and self._candidate_revision == self.revision:
-            self._validate_service_host(self._candidate_tree)
+            if not terminal:
+                self._validate_service_host(self._candidate_tree)
             return self._candidate_tree
         if reuse_committed and not self.dirty and self._committed_tree is not None:
-            self._validate_service_host(self._committed_tree)
+            if not terminal:
+                self._validate_service_host(self._committed_tree)
             return self._committed_tree
         if reuse_committed and self._backdated_to_committed():
             committed = self._committed_tree
             if committed is None:
                 message = "backdating succeeded without a committed tree"
                 raise AssertionError(message)
-            self._validate_service_host(committed)
+            if not terminal:
+                self._validate_service_host(committed)
             return committed
         tree = render_component_tree(
             self.root,
@@ -181,7 +188,8 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 component_paths=self._component_paths,
             ),
         )
-        self._validate_service_host(tree)
+        if not terminal:
+            self._validate_service_host(tree)
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree
         self._clear_render_invalidations()

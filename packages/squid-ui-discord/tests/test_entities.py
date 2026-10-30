@@ -1,5 +1,7 @@
 """Entity picker semantics, planning, and scene contracts."""
 
+from collections.abc import Awaitable, Callable
+
 import pytest
 
 import squid_ui as sl
@@ -23,7 +25,12 @@ class _Responder:
 
     async def redirect(self, url: str) -> None: ...
 
-    async def finish(self) -> None: ...
+    def finish_on_success(self) -> None: ...
+
+    def on_success[ValueT](
+        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
+    ) -> sl.runtime.PostCommitOperation[ValueT]:
+        raise AssertionError
 
     async def present_form(
         self, form, *, key: str = "form", on_submit=None, mode=None, label: sl.TextLike = "", record=None

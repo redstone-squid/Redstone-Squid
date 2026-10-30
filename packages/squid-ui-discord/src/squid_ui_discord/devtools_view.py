@@ -209,7 +209,7 @@ class MessageRootInspector(sl.Component):
         self.revision += 1
 
     async def _close(self, event: sl.ActionEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 class OperationalInspector(sl.Component):
@@ -456,16 +456,24 @@ class OperationalInspector(sl.Component):
         self.confirming_session = None
 
     async def _confirm_close_session(self, event: sl.ActionEvent) -> None:
-        if self.session_id is None:
+        session_id = self.session_id
+        if session_id is None:
             return
-        try:
-            await self._devtools_runtime.close_session(self.session_id, confirmed=True)
-            self.notice = f"Session `{self.session_id}` closed."
-            self.session_id = None
-        except Exception as error:
-            self.notice = f"Close failed: {type(error).__name__}: {error}"
-        finally:
-            self.confirming_session = None
+
+        async def close() -> None:
+            try:
+                await self._devtools_runtime.close_session(session_id, confirmed=True)
+            except Exception as error:
+                with sl.runtime.transaction():
+                    self.notice = f"Close failed: {type(error).__name__}: {error}"
+                raise
+            else:
+                with sl.runtime.transaction():
+                    self.notice = f"Session `{session_id}` closed."
+                    self.session_id = None
+
+        self.confirming_session = None
+        event.on_success(close, name="Close session from devtools")
 
     async def _back(self, event: sl.ActionEvent) -> None:
         self.message_root_id = None
@@ -477,7 +485,7 @@ class OperationalInspector(sl.Component):
         self.revision += 1
 
     async def _close(self, event: sl.ActionEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 def scene_attachment(snapshot: squid_ui_discord.MessageRootSnapshot) -> sl.document.Asset | None:

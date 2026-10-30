@@ -608,7 +608,7 @@ class _AdoptedView(Component[Any]):
             # and `mutated` cannot undo that. Reporting it is what keeps the next render honest.
             self.mutated(view)
             if view.is_finished():
-                await answers.finish()
+                answers.finish_on_success()
 
     def _adopt_modal(self, modal: discord.ui.Modal, message_root: Any) -> None:
         """Put the proxy in front of a modal's submit, which is a second interaction.
@@ -745,7 +745,7 @@ class _ProxyResponse:
             shown = "None" if view is None else type(view).__name__
             message = (
                 f"edit_message(view={shown}) would replace the adopted view with a different screen; "
-                "push one with squid_ui_discord.StackNavigator, or end this one with responder(event).finish()"
+                "push one with squid_ui_discord.StackNavigator, or end this one with responder(event).finish_on_success()"
             )
             raise AdoptionError(message)
         self._proxy.flush_requested = True
@@ -823,7 +823,7 @@ class _ProxyMessage:
         raise AdoptionError(message)
 
     async def delete(self, *_args: Any, **_kwargs: Any) -> Any:
-        message = "interaction.message.delete() is the mount's to do; use responder(event).finish()"
+        message = "interaction.message.delete() is the mount's to do; use responder(event).finish_on_success()"
         raise AdoptionError(message)
 
     def __getattr__(self, name: str) -> Any:
@@ -870,7 +870,7 @@ class _InteractionProxy:
         raise AdoptionError(message)
 
     async def delete_original_response(self, *_args: Any, **_kwargs: Any) -> Any:
-        message = "delete_original_response() is the mount's to do; use responder(event).finish()"
+        message = "delete_original_response() is the mount's to do; use responder(event).finish_on_success()"
         raise AdoptionError(message)
 
     def __getattr__(self, name: str) -> Any:

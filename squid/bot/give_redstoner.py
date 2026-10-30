@@ -138,7 +138,7 @@ class RedstonerScreen(sd.Screen):
         await event.notice(tr(t"Redstoner role controls deployed."))
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):

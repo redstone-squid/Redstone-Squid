@@ -263,3 +263,25 @@ class TestOperationalInspectorSections:
             inspector.section = "sessions"
             inspector.session_id = snapshot.sessions[0].id
             assert list(inspector.render())
+
+
+async def test_confirm_close_session_runs_after_inspector_action_commits() -> None:
+    manager = squid_ui_discord.SessionManager()
+    subject = MessageRoot(Subject(), access=Everyone())
+    opened = await manager.open(subject, delivered_to(sd.message_harness()))
+    assert isinstance(opened, squid_ui_discord.sessions.Opened)
+    inspector = OperationalInspector(DevToolsRuntime(sessions=manager))
+    inspector.section = "sessions"
+    inspector.session_id = opened.session.id
+    inspector.confirming_session = opened.session.id
+    root = MessageRoot(inspector, access=Everyone())
+    await root.send(delivered_to(sd.message_harness()))
+
+    await root.dispatch("confirm-close", interaction_harness())
+
+    assert subject.finished
+    assert inspector.session_id is None
+    assert inspector.confirming_session is None
+    assert inspector.notice == f"Session `{opened.session.id}` closed."
+    assert not root.finished
+    await root.finish()

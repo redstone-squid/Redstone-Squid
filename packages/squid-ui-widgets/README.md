@@ -14,7 +14,7 @@ import squid_ui_widgets as sp
 
 
 async def chosen(event: sp.TransitionEvent[sp.DecisionState]) -> None:
-    await event.source.finish()
+    event.source.finish_on_success()
 
 
 panel = sp.confirm("Delete this build?", on_confirm=chosen)

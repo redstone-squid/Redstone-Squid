@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.context import ContextKey
+from squid_ui.runtime.continuations import ActionDiscardedError, Discarded, PostCommitOperation
 from squid_ui.runtime.histories import (
     CompensationClaim,
     CompensationExecution,
@@ -142,6 +143,7 @@ __all__ = [
     "ActionCommit",
     "ActionContext",
     "ActionContinuation",
+    "ActionDiscardedError",
     "ActionLedger",
     "ActionPurpose",
     "ActionResult",
@@ -171,6 +173,7 @@ __all__ = [
     "ContextKey",
     "CursorState",
     "CursorUpdate",
+    "Discarded",
     "DisclosureState",
     "Failed",
     "History",
@@ -188,6 +191,7 @@ __all__ = [
     "Observation",
     "Pending",
     "PendingMode",
+    "PostCommitOperation",
     "PresentationState",
     "ReactiveConflictError",
     "ReactiveCycleError",

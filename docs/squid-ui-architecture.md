@@ -1119,7 +1119,8 @@ its readiness through `task_status`. Workers stop before the client exits. Shiel
 cleanup with `anyio.CancelScope(shield=True)`; use `ExitStack` or `AsyncExitStack` when several
 resources need cleanup.
 
-Unmount cancels the run and waits for cleanup. Remount reuses the service object and its
+Unmount stops child services before their parents, so children can finish using borrowed
+parent resources during cleanup. Independent sibling services can clean up concurrently. Remount reuses the service object and its
 passive state, then starts a fresh run after the previous one exits. Service methods manage
 access to their active resources, such as connections.
 
@@ -1162,13 +1163,134 @@ runs and error handler.
 
 `wait_ready()` observes setup of the current runs; `wait()` observes cleanup of cancelled runs.
 Cancelling either wait leaves the services alone. Shutdown waits report failures from the latest
-activation when the wait begins; reactivation never changes an existing wait's results. Concurrent waiters receive the same failures, and
+activation when the wait begins; reactivation never changes an existing wait's results.
+Concurrent waiters receive the same failures, and
 completed waits release those results. Later activations do not inherit earlier failures;
 use the error handler or logs for history. See the method docstrings for the wait
 and failure semantics. `ServiceHost.close()` awaits all remaining runs and error handlers.
 
 Component ownership is unrelated to `SharedState.scope` (a diagnostic label), pool keys, and
 Discord access policies. Work that must outlive a panel belongs to an application/session owner.
+
+### Finishing panels and sessions
+
+`finish()` closes a panel and waits for its services and finish callbacks. Use `wait=False`
+when the caller needs to continue while the host finishes cleanup:
+
+```python
+await panel.finish(wait=False)
+# The panel now rejects interactions. Its host still owns cleanup.
+await panel.wait()
+```
+
+Inside an action handler, use `event.finish_on_success()`. It records a request and returns;
+the handler can finish its work before closure starts. Success means the handler returned
+normally and the framework accepted its state changes. If the handler is cancelled,
+raises, or its changes cannot be accepted, the request is discarded. The dispatcher then captures
+the terminal view and accepts closure without another scheduling point. Delivery, cleanup,
+and callbacks run outside the transaction, so a cleanup failure cannot undo the action.
+This requires a dispatcher-owned action transaction; closure from a dispatch nested inside
+another transaction is rejected rather than committing that outer transaction early.
+
+`root.finish()` is an immediate lifecycle operation and rejects calls inside a transaction.
+A closed panel cannot be reopened by rolling back state, so action handlers schedule closure
+with `finish_on_success()` instead:
+
+```python
+async def save(self, event: ActionEvent) -> None:
+    self.saved = True
+    event.finish_on_success()
+```
+
+To close another session, or perform other async work after a successful action, pass a
+callable to `event.on_success()`:
+
+```python
+async def save(self, event: ActionEvent) -> None:
+    self.history.record("Save changes")
+    self.saved = True
+    event.on_success(other_session.finish, name="Close editor")
+```
+
+The callback runs outside the action's transaction under the host. It sees committed
+state and continues if the interaction stops waiting. The dispatcher normally waits for
+the operations and presents their resulting state. Each callback runs independently;
+combine dependent steps in one callback when their order matters. Callbacks should bound
+their own waits, just like service cleanup. They may outlive the panel and must not rely on
+resources that its services release during closure. `finish_on_success()` still captures
+the current panel's final view at commit; it does not wait for these callbacks first.
+
+`on_success()` returns a `PostCommitOperation`. Its `status` uses the existing operation
+statuses, and its `context` identifies the operation and its originating action once admitted.
+Use `await operation.wait()` outside the handler to observe completion. A rolled-back action
+leaves the handle `Discarded`; waiting then raises `ActionDiscardedError`. An operation failure
+is logged and available to waiters. The dispatcher observes all scheduled operations before
+reporting their collected failures. Failure never rolls back an action that already committed.
+This is in-process execution, with no automatic retries or persistence across restart.
+
+History and these operations share action identities. Undo and redo apply state changes;
+they do not replay callbacks or automatically reverse their effects. External work that
+needs undo still requires explicit compensation. Calling `on_success()` alone does not
+make an effect reversible. If a callback publishes new reactive state, use a fresh
+`transaction()` inside it; that action is recorded as caused by the operation.
+
+Sessions also support `finish(wait=...)` and `wait()`. Closure removes a session from active
+admission bookkeeping; its children finish before their parent's services stop. This includes a child whose closure
+was already underway. Siblings can finish concurrently. This ordering describes orderly
+shutdown: a service that has already failed may have released its resources before closure.
+
+`finished` means closure was accepted. `wait()` observes completion without initiating it.
+A successful wait means cleanup and `on_finish` callbacks completed. Unexpected errors are
+collected after the remaining cleanup and callbacks have been attempted, then raised to
+waiters and logged by the host. Concurrent and later waiters receive the same terminal result.
+An already-deleted Discord message counts as successful closure. Shutdown runs in the host
+context, so callbacks see committed state rather than the initiating action's pending writes.
+
+The first accepted request determines options such as disabling or deleting the message.
+Repeated requests join that shutdown. Cancellation while waiting for acceptance leaves the
+panel unchanged; once accepted, shutdown belongs to the host. Cancelling a caller's wait
+leaves cleanup running. For example, this limits the caller's wait to two seconds:
+
+```python
+await panel.finish(wait=False)
+with anyio.move_on_after(2):
+    await panel.wait()
+```
+
+A service or finish callback can request closure with `wait=False`. Awaiting shutdown that
+needs that same task to finish raises an error. The same check covers child tasks and session
+children; a child callback cannot await its parent's completion.
+
+Installed Discord runtimes supply the host. Standalone roots also need one, even when they
+have no services, because delivery and callbacks can await:
+
+```python
+async with anyio.create_task_group() as tasks:
+    host = ServiceHost()
+    await tasks.start(host.run)
+    panel = MessageRoot(component, access=Everyone(), service_host=host)
+    try:
+        await panel.send(destination)
+        # Use the panel here.
+    finally:
+        try:
+            await panel.finish()
+        finally:
+            await host.close()
+```
+
+Finish panels before closing their host. `ServiceHost.close()` drains accepted cleanup and
+then cancels remaining service runs. The application owns its overall shutdown deadline.
+If that deadline expires, report unfinished work; cancellation cannot forcibly stop shielded
+or blocking code. Enforcing a hard process deadline belongs to the application or its process
+supervisor.
+
+Service authors choose cleanup limits for individual resources. See `ManagedService.run()`
+for a connection-close example: shielding lets the close await a response after cancellation,
+and a timeout bounds that attempt. Use context managers or `AsyncExitStack` so one failed
+attempt still leaves the other resources an opportunity to close. Operations that must
+complete after a panel disappears, such as an accepted submission, belong to a longer-lived
+application or session owner.
 
 ### Lifecycle verbs
 

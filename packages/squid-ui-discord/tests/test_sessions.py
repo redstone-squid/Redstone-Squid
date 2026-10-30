@@ -401,7 +401,8 @@ class TestAttachments:
         await opened.session.attach(sibling, to_message())
         doomed.finish = AsyncMock(side_effect=RuntimeError("message is gone"))  # type: ignore[method-assign]
 
-        await opened.session.finish()
+        with pytest.raises(ExceptionGroup):
+            await opened.session.finish()
 
         assert sibling.finished and opened.session.root.finished
         assert manager.get(KEY) == ()

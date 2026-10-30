@@ -1241,16 +1241,20 @@ def batch() -> Iterator[None]:
 
 
 @contextmanager
-def readonly_transaction() -> Iterator[None]:
+def readonly_transaction(*, action_context: ActionContext | None = None) -> Iterator[None]:
     """Run an identified read-only action and reject any state mutation."""
     if _CURRENT.get() is not None:
         message = "a read-only transaction cannot nest inside a writable transaction"
         raise RuntimeError(message)
     causality = current_causality()
-    context = current_action() or ActionContext.create(
-        "read-only action",
-        cause=None if causality is None else causality[0],
-        root_action_id=None if causality is None else causality[1],
+    context = (
+        action_context
+        or current_action()
+        or ActionContext.create(
+            "read-only action",
+            cause=None if causality is None else causality[0],
+            root_action_id=None if causality is None else causality[1],
+        )
     )
     current = _Transaction(readonly=True, owner_task=_current_task(), context=context)
     with action_scope(context):
@@ -1306,9 +1310,6 @@ def _add_action_hook(kind: str, callback: Callable[..., None], *, key: object | 
         raise RuntimeError(message)
     if not current.writable():
         current.reject_stale("a commit hook")
-    if current.readonly:
-        message = "a read-only action changed nothing, so it has nothing to record"
-        raise ReactiveWriteError(message)
     if key is not None and has_action_hook(key):
         message = f"{key!r} already registered a commit hook for this action"
         raise RuntimeError(message)

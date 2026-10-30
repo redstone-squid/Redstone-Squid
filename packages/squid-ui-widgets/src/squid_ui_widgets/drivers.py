@@ -217,7 +217,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
         if handler := self.handlers.get(action_name):
             await handler(transition_event)
         if action_name in self.finish_actions:
-            await event.finish()
+            event.finish_on_success()
 
 
 class _ComponentControls[StateT, RenderTargetT: RenderTarget]:

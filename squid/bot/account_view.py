@@ -439,7 +439,7 @@ class AccountScreen(sd.Screen):
 
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
-        await event.finish()
+        event.finish_on_success()
 
     def _fields(self) -> list[CardField]:
         fields = self._profile_fields(self._profile)

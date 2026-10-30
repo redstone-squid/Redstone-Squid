@@ -100,7 +100,7 @@ class TestRecordingResponder:
         await event.notice("saved", visibility=Visibility.PUBLIC)
         await event.redirect("https://example.invalid")
         event.invalidate()
-        await event.finish()
+        event.finish_on_success()
 
         assert responder.acknowledged == 1
         assert responder.notices == [("saved", Visibility.PUBLIC)]
@@ -119,6 +119,9 @@ class TestRecordingResponder:
 
         with pytest.raises(AssertionError, match="called notice"):
             await event.notice("nope")
+
+        with pytest.raises(AssertionError, match="called finish_on_success"):
+            event.finish_on_success()
 
 
 class TestEvents:

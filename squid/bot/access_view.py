@@ -416,7 +416,7 @@ class AccessScreen(sd.Screen):
         return False
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 def _scope_field() -> sl.forms.ChoiceField[str]:

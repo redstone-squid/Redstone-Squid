@@ -440,7 +440,7 @@ class SettingsPanel(sd.Screen):
         await self.open_server()
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
     async def _may_event(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
