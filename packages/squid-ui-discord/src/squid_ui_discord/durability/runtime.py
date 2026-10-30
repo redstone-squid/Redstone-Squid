@@ -589,18 +589,14 @@ class DurableSessionRuntime:
         if not self.components.has(recipe):
             message = f"durable component {recipe!r} is not registered"
             raise MessageRootStateError(message)
-        async with session._lifecycle_lock:
-            if session._closed or session.root.finished:
-                return Rejected((session.snapshot,), RejectionReason.SESSION_FINISHED)
-            parent = session.root if parent is None else parent
-            if parent not in session.message_roots or parent.finished:
-                return Rejected((session.snapshot,), RejectionReason.SESSION_FINISHED)
-            result = await message_root.send(message_destination)
-            if isinstance(result, Abandoned):
+        parent = session.root if parent is None else parent
+        async with session._deliver_attachment(message_root, message_destination, parent=parent) as result:
+            if not isinstance(result, Delivered):
                 return result
             promoted = await self.frontend.promote(message_root, result.result)
+            if not session._accepts_attachment(parent):
+                return Rejected((session.snapshot,), RejectionReason.SESSION_FINISHED)
             if isinstance(promoted, NotDurable):
-                await message_root.finish()
                 return promoted
             active = self._active_for(session)
             message_root_id = str(uuid4())

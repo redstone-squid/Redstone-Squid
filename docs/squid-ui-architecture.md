@@ -1289,6 +1289,31 @@ admission bookkeeping; its children finish before their parent's services stop. 
 was already underway. Siblings can finish concurrently. This ordering describes orderly
 shutdown: a service that has already failed may have released its resources before closure.
 
+Attachment delivery has a separate owner until the child is registered. Ordinary and durable
+sessions use the same delivery scope: if registration cannot complete after a successful send,
+the scope transfers the child to host-owned cleanup, including on cancellation. The session lock
+serializes attachments and membership changes, but closure does not take that lock. Delivery and
+durable promotion must therefore recheck the parent after awaiting external work. Recovered and
+new children share registration bookkeeping. A detached child remains a shutdown dependency until
+its cleanup and callbacks settle, then releases that reference even when cleanup failed.
+
+Replacement commits when the newcomer is registered. All selected incumbents are asked to close
+before their cleanup results are collected. Cleanup failures are logged and remain available from
+the incumbents' `wait()` methods; they do not change the successful admission into a failed `open()`.
+
+When changing lifecycle behavior here or in another subsystem, review the callers as well as the
+terminating method:
+
+- At each `await`, identify what can become invalid and who owns cleanup if the operation stops.
+- Identify the commit point and distinguish failures before it from cleanup failures afterward.
+- Inject a failure in the first cleanup and verify that all remaining resources are processed.
+- Check every owning collection and callback closure for references that must end at completion.
+
+The session lifecycle tests apply the same contract to ordinary, durable, and recovered sessions.
+They pause delivery and promotion with events to force closure at specific boundaries, and use
+weak references to check that completed children can be collected while their parent stays open.
+Keep these interaction tests alongside focused shutdown tests when changing either side of the contract.
+
 `finished` means closure was accepted. `wait()` observes completion without initiating it.
 A successful wait means cleanup and `on_finish` callbacks completed. Unexpected errors are
 collected after the remaining cleanup and callbacks have been attempted, then raised to

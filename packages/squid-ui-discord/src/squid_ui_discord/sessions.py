@@ -10,8 +10,11 @@ from enum import Enum, StrEnum
 from typing import Literal, Protocol
 from uuid import uuid4
 
+import anyio
+
 from squid_ui.text import TextLike
-from squid_ui_discord.delivery import Abandoned, Delivered, MessageDestination
+from squid_ui_discord.delivery import Abandoned, Delivered, DeliveryResult, MessageDestination
+from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_options import MessageRootDefaults
 
@@ -480,23 +483,48 @@ class Session:
         parent: MessageRoot | None = None,
     ) -> OpenResult:
         """Deliver and attach a child mount to this session."""
-        async with self._lifecycle_lock:
-            if self._closed or self.root.finished:
-                return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
-            parent = self.root if parent is None else parent
-            if parent not in self._graph or parent.finished:
-                return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
-            result = await message_root.send(message_destination)
-            if isinstance(result, Abandoned):
+        parent = self.root if parent is None else parent
+        async with self._deliver_attachment(message_root, message_destination, parent=parent) as result:
+            if not isinstance(result, Delivered):
                 return result
-            if self._closed or parent.finished:
-                await message_root.finish(wait=False)
-                return Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
-            parent._shutdown_dependencies = (*parent._shutdown_dependencies, message_root)
-            self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
-            self._manager._index_root(self, message_root)
-            message_root._finishing_hooks.append(self._message_root_finishing)
+            self._attach_existing(message_root, parent=parent, actor_id=actor_id)
             return Opened(self)
+
+    def _accepts_attachment(self, parent: MessageRoot) -> bool:
+        return not (self._closed or self.root.finished or parent not in self._graph or parent.finished)
+
+    @asynccontextmanager
+    async def _deliver_attachment(
+        self, message_root: MessageRoot, message_destination: MessageDestination, *, parent: MessageRoot
+    ) -> AsyncIterator[Delivered | Abandoned | Rejected]:
+        """Own delivery until registration, handing rejected or interrupted children to cleanup.
+
+        The lock serializes attachments and membership changes, but closure can invalidate
+        the parent during any await. Callers that await again must recheck before registering.
+        """
+        async with self._lifecycle_lock:
+            if not self._accepts_attachment(parent):
+                yield Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
+                return
+            delivered = False
+
+            async def deliver(payload: MessagePayload) -> DeliveryResult:
+                nonlocal delivered
+                result = await message_destination(payload)
+                delivered = True
+                return result
+
+            try:
+                result = await message_root.send(deliver)
+                if isinstance(result, Delivered) and not self._accepts_attachment(parent):
+                    yield Rejected((self.snapshot,), RejectionReason.SESSION_FINISHED)
+                else:
+                    yield result
+            finally:
+                if delivered and message_root not in self._graph:
+                    # Cancellation must not interrupt the transfer to host-owned cleanup.
+                    with anyio.CancelScope(shield=True):
+                        await message_root.finish(wait=False)
 
     async def join(
         self,
@@ -513,7 +541,7 @@ class Session:
 
         `when` is an extra rule over the current members, evaluated under the session
         lifecycle lock. **It must be synchronous and pure** — that lock also serialises
-        `attach` and `finish`, so I/O inside it stalls the whole session. A rule that is both
+        attachments and membership changes. Closure can proceed without it. A rule that is both
         asynchronous and set-dependent belongs outside the lock instead: read `members`, make
         the async decision, then commit with `expect=` and retry on `CONFLICT`.
         """
@@ -598,14 +626,22 @@ class Session:
         self.root._finishing_hooks.append(self._message_root_finishing)
 
     def _attach_existing(self, message_root: MessageRoot, *, parent: MessageRoot, actor_id: int | None) -> None:
-        """Attach an already presented mount while reconstructing a session."""
-        if parent not in self._graph:
-            message = "recovered attachment parent is not in the session"
+        """Register a delivered or recovered child and own it until shutdown completes."""
+        if not self._accepts_attachment(parent):
+            message = "attachment parent is not active in the session"
             raise ValueError(message)
         parent._shutdown_dependencies = (*parent._shutdown_dependencies, message_root)
         self._graph[message_root] = _Membership(parent=parent, actor=actor_id)
         self._manager._index_root(self, message_root)
         message_root._finishing_hooks.append(self._message_root_finishing)
+
+        def completed() -> None:
+            parent._shutdown_dependencies = tuple(
+                child for child in parent._shutdown_dependencies if child is not message_root
+            )
+            self._retiring.pop(message_root, None)
+
+        message_root._shutdown.add_done_callback(completed)
 
     def _message_root_finishing(self, message_root: MessageRoot) -> None:
         if message_root not in self._graph:
@@ -705,6 +741,10 @@ class SessionManager:
         session may pass its immutable ``snapshot`` instead to retain the original identity
         and opening time.  ``capacity`` caps the session's explicit members; it is a fact of
         this session rather than of the key contest, so it is not part of ``policy``.
+
+        Once registered, the newcomer is admitted. Every selected incumbent is retired;
+        cleanup failures are logged and remain available through its ``wait()``, without
+        changing the successful admission result.
         """
         if not isinstance(message_root, MessageRoot):
             message = "SessionManager.open requires a MessageRoot; use MessageRootDefaults.mount or SessionSpec.open"
@@ -982,8 +1022,12 @@ class SessionManager:
             if key is not None:
                 self._by_key.setdefault(key, []).append(newcomer)
             newcomer._activate()
-        for victim in victims:
-            await victim.finish()
+        try:
+            await self._finish_sessions(victims, disable=True)
+        except Exception:
+            # Admission has committed. Retired-session failures remain observable through
+            # their shutdown results, but must not turn a successful open into a retry.
+            logger.exception("replacement cleanup failed after admitting session %s", newcomer.id)
         return Opened(newcomer)
 
     def _live_occupants(self, key: Hashable) -> tuple[Session, ...]:

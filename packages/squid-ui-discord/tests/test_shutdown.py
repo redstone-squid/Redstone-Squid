@@ -263,3 +263,32 @@ async def test_parent_waits_for_child_that_was_already_closing() -> None:
     release.set()
     await root.wait()
     assert events == ["child", "parent"]
+
+
+async def test_failed_child_cleanup_releases_parent_dependencies() -> None:
+    manager = SessionManager()
+    root = MessageRoot(Panel(), access=Everyone())
+    opened = await manager.open(root, delivered_to(message_harness()))
+    assert isinstance(opened, Opened)
+    child = MessageRoot(Panel(), access=Everyone())
+    await opened.session.attach(child, delivered_to(message_harness()))
+    pause, release = asyncio.Event(), asyncio.Event()
+
+    async def fail(_root: MessageRoot) -> None:
+        pause.set()
+        await release.wait()
+        raise ValueError("child cleanup failed")
+
+    child.on_finish(fail)
+    with anyio.fail_after(3):
+        await child.finish(wait=False)
+        await pause.wait()
+        assert child in root._shutdown_dependencies
+        assert child in opened.session._retiring
+        release.set()
+        with pytest.raises(ExceptionGroup):
+            await child.wait()
+
+    assert child not in root._shutdown_dependencies
+    assert child not in opened.session._retiring
+    await root.finish()

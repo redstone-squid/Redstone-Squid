@@ -20,6 +20,14 @@ class Shutdown:
         self.done = asyncio.Event()
         self.runner: int | None = None
         self.error: Exception | None = None
+        self._done_callbacks: list[Callable[[], None]] = []
+
+    def add_done_callback(self, callback: Callable[[], None]) -> None:
+        """Release ownership after cleanup and callbacks have settled, including failures."""
+        if self.done.is_set():
+            callback()
+        else:
+            self._done_callbacks.append(callback)
 
     def start(self, host: ServiceHost | None, work: Callable[[], Awaitable[None]]) -> None:
         if self.accepted:
@@ -38,6 +46,12 @@ class Shutdown:
             finally:
                 self.runner = None
                 self.done.set()
+                callbacks, self._done_callbacks = self._done_callbacks, []
+                for callback in callbacks:
+                    try:
+                        callback()
+                    except Exception:
+                        _logger.exception("shutdown completion callback failed")
 
         host.start_cleanup(run)
         self.accepted = True
