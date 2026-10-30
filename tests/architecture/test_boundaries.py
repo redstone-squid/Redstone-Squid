@@ -867,9 +867,9 @@ def test_the_engine_needs_no_transport_install() -> None:
             else:
                 continue
             if found := imported & blocked:
-                # Owned services are an optional execution extra. Its runner imports AnyIO
-                # lazily; ordinary authoring and rendering must still import without it.
-                if path == root / "runtime" / "services.py" and found == {"anyio"}:
+                # Owned services are an optional execution extra. Its backend imports AnyIO
+                # optionally; ordinary authoring and rendering must still import without it.
+                if path in {root / "runtime" / "services.py", root / "runtime" / "tasks.py"} and found == {"anyio"}:
                     continue
                 violations.append(f"{path}:{node.lineno}: {sorted(found)}")
 

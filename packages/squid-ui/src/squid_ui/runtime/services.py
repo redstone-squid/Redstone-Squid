@@ -7,8 +7,9 @@ from collections.abc import Awaitable, Callable, Iterable
 from contextvars import Context, copy_context
 from typing import TYPE_CHECKING
 
+from squid_ui.runtime.tasks import anyio, task_is_within
+
 if TYPE_CHECKING:
-    import anyio
     from anyio.abc import TaskGroup, TaskStatus
 
 _logger = logging.getLogger(__name__)
@@ -32,12 +33,34 @@ class ManagedService(ABC):
     async def run(self, *, task_status: TaskStatus[None]) -> None:
         """Set up the service, call ``task_status.started()``, then do its work.
 
-        Use context managers for resources and AnyIO task groups for child tasks. They
-        keep cleanup in the same place as setup. Put async cleanup inside a shielded
-        cancel scope so it can finish when the owner cancels the run.
+        When the component unmounts, its owner cancels this run. Use context managers
+        or finally blocks to release the resources it acquired. A later mount runs
+        the same service again, after the previous run has finished cleaning up.
 
-        Returning ends this run. A later remount can start another one. Returning before
-        calling ``started()`` counts as a setup failure.
+        Closing a connection may need to await a response. Since the run is already
+        cancelled, put those awaits inside a shielded cancel scope so cleanup can
+        finish. Give remote operations a timeout appropriate to the resource::
+
+            connection = await connect()
+            try:
+                task_status.started()
+                await connection.follow_updates()
+            finally:
+                with anyio.CancelScope(shield=True):
+                    with anyio.fail_after(5):
+                        await connection.aclose()
+
+        Here the shield lets closing continue after cancellation, and the timeout
+        reports a cleanup failure if the connection takes more than five seconds.
+        Choose that limit for your connection. If one cleanup step fails, still
+        attempt the others; context managers and AsyncExitStack help arrange this.
+        Nest child task groups inside the resources they use, so workers finish
+        before those resources close.
+
+        Returning ends this run. Returning before calling ``started()`` is a setup
+        failure. Register cleanup as each resource is acquired so partial setup can
+        unwind too. Work that must finish after the panel disappears belongs to an
+        application or session owner that outlives it.
         """
 
 
@@ -86,7 +109,6 @@ class _ServiceActivation:
             raise RuntimeError(message)
 
     async def _run(self, service: ManagedService, previous: _ServiceActivation | None) -> None:
-        import anyio
 
         self._runner_id = anyio.get_current_task().id
         try:
@@ -126,6 +148,9 @@ class ServiceHost:
         self._tasks: TaskGroup | None = None
         self._runner_id: int | None = None
         self._activations: set[_ServiceActivation] = set()
+        self._cleanup_tasks = 0
+        self._cleanup_done = asyncio.Event()
+        self._cleanup_done.set()
         self._context = Context()
         self._closed = False
         self._stop = asyncio.Event()
@@ -144,7 +169,6 @@ class ServiceHost:
         inherit the context from this call. Pass any interaction-specific inputs to the
         service explicitly.
         """
-        import anyio
 
         if self._tasks is not None or self._closed:
             msg = "service host is already running or closed"
@@ -160,6 +184,8 @@ class ServiceHost:
                     await self._stop.wait()
                 finally:
                     self._closed = True
+                    with anyio.CancelScope(shield=True):
+                        await self._cleanup_done.wait()
                     for activation in tuple(self._activations):
                         activation.cancel()
         finally:
@@ -171,13 +197,42 @@ class ServiceHost:
 
     async def close(self) -> None:
         """Stop the services and wait for cleanup and error handlers to finish."""
-        if self._runner_id is not None and _is_current_task_within({self._runner_id}):
+        if self._runner_id is not None and task_is_within({self._runner_id}):
             msg = "service activity cannot close its own host"
             raise RuntimeError(msg)
         self._closed = True
         self._stop.set()
         if self._tasks is not None:
             await self._done.wait()
+
+    def start_cleanup(self, cleanup: Callable[[], Awaitable[None]]) -> None:
+        """Supervise accepted cleanup, including when its initiating caller is cancelled.
+
+        The callback inherits the host context and runs shielded from cancellation.
+        It should bound resource-specific operations that may stall. Closing the
+        host waits for accepted callbacks before cancelling remaining service runs.
+        Cleanup already running on this host may submit further cleanup while the
+        host drains; other callers must submit before host closure begins.
+        """
+        tasks = self._tasks
+        if tasks is None or (self._closed and (self._runner_id is None or not task_is_within({self._runner_id}))):
+            message = "cleanup requires a running ServiceHost"
+            raise RuntimeError(message)
+        self._context.run(tasks.start_soon, self._run_cleanup, cleanup)
+        self._cleanup_tasks += 1
+        self._cleanup_done.clear()
+
+    async def _run_cleanup(self, cleanup: Callable[[], Awaitable[None]]) -> None:
+
+        try:
+            with anyio.CancelScope(shield=True):
+                await cleanup()
+        except Exception:
+            _logger.exception("host cleanup failed")
+        finally:
+            self._cleanup_tasks -= 1
+            if not self._cleanup_tasks:
+                self._cleanup_done.set()
 
     def _start(
         self, service: ManagedService, previous: _ServiceActivation | None, on_error: ServiceFailure | None
@@ -202,7 +257,6 @@ class ServiceHost:
         finally:
             # The run is done now, so an error handler can finish its message root and
             # wait for service cleanup. Shield reporting so host shutdown lets it finish.
-            import anyio
 
             try:
                 with anyio.CancelScope(shield=True):
@@ -288,13 +342,28 @@ class ServiceOwner:
 
     def cancel(self) -> None:
         """Ask all current runs to stop. The services stay registered for reuse."""
+        self._cancel_after(())
+
+    def _cancel_after(self, dependencies: tuple[_ServiceActivation, ...]) -> None:
         if not self._active:
             return
+        activations = tuple(self._current.values())
+        if dependencies:
+
+            async def cleanup() -> None:
+                for dependency in dependencies:
+                    await dependency._done.wait()
+                for activation in activations:
+                    activation.cancel()
+
+            assert self._host is not None
+            self._host.start_cleanup(cleanup)
+        else:
+            for activation in activations:
+                activation.cancel()
         self._active = False
         self._host = None
-        for activation in self._current.values():
-            activation.cancel()
-            self._retired.append(activation)
+        self._retired.extend(activations)
 
     async def wait(self) -> None:
         """Wait for cancelled runs to finish cleaning up.
@@ -351,6 +420,7 @@ class _ServiceLifecycle:
         self.on_error = on_error
         self._active: set[ServiceOwner] = set()
         self._retired: set[ServiceOwner] = set()
+        self._paths: dict[ServiceOwner, str] = {}
 
     def validate(self) -> ServiceHost:
         """Check that services have a running host before delivering the tree."""
@@ -360,12 +430,21 @@ class _ServiceLifecycle:
         self.host._require_running()
         return self.host
 
-    def activate(self, owner: ServiceOwner) -> None:
+    def activate(self, owner: ServiceOwner, path: str) -> None:
+        self._paths[owner] = path
         owner.activate(self.validate(), on_error=self.on_error)
         self._active.add(owner)
 
     def cancel(self, owner: ServiceOwner) -> None:
-        owner.cancel()
+        path = self._paths.get(owner)
+        dependencies = tuple(
+            activation
+            for child, child_path in self._paths.items()
+            if child is not owner and path is not None and (path == "$" or child_path.startswith(f"{path}."))
+            for activation in (*child._current.values(), *child._retired)
+            if not activation._done.is_set()
+        )
+        owner._cancel_after(dependencies)
         self._active.discard(owner)
         self._retired.add(owner)
 
@@ -391,31 +470,16 @@ class _ServiceLifecycle:
                 errors.append(error)
         # Release owners whose cleanup finished, even if another owner failed.
         self._retired.difference_update(owner for owner, _, _ in pending if not owner._retired)
+        self._paths = {
+            owner: path for owner, path in self._paths.items() if owner in self._active or owner in self._retired
+        }
         if errors:
             message = "component service shutdown failed"
             raise ExceptionGroup(message, errors)
 
 
 def _owns_current_activity(activations: Iterable[_ServiceActivation]) -> bool:
-    return _is_current_task_within(
-        {activation._runner_id for activation in activations if activation._runner_id is not None}
-    )
-
-
-def _is_current_task_within(runner_ids: set[int]) -> bool:
-    if not runner_ids:
-        return False
-    import anyio
-
-    # Task groups decide ownership. Context variables come from whoever submits the
-    # work, which can be a service handing a job to an application task group (or vice versa).
-    parents = {task.id: task.parent_id for task in anyio.get_running_tasks()}
-    current: int | None = anyio.get_current_task().id
-    while current is not None:
-        if current in runner_ids:
-            return True
-        current = parents.get(current)
-    return False
+    return task_is_within({activation._runner_id for activation in activations if activation._runner_id is not None})
 
 
 async def _wait_ready(activations: tuple[_ServiceActivation, ...]) -> None:
@@ -425,7 +489,6 @@ async def _wait_ready(activations: tuple[_ServiceActivation, ...]) -> None:
     if _owns_current_activity(activation for activation in activations if not activation._ready.is_set()):
         message = "service activity cannot await its own readiness"
         raise RuntimeError(message)
-    import anyio
 
     async with anyio.create_task_group() as tasks:
         for activation in activations:

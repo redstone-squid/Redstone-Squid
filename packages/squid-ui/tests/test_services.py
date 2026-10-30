@@ -1253,3 +1253,47 @@ async def test_shutdown_observers_keep_run_failure_across_remount(through_runtim
         assert panel.service.stopped.is_set()
         await host.close()
         assert len(reports) == 1
+
+
+@pytest.mark.parametrize("fail_child", [False, True])
+async def test_parent_service_outlives_child_cleanup(fail_child: bool) -> None:
+    async with running_host() as host:
+        entered, release = asyncio.Event(), asyncio.Event()
+        parent = Recorder()
+
+        class Child(Recorder):
+            @override
+            async def cleanup(self) -> None:
+                entered.set()
+                await release.wait()
+                assert not parent.stopped.is_set()
+                await super().cleanup()
+                if fail_child:
+                    raise ValueError("child cleanup failed")
+
+        child = OwnedPanel(Child())
+
+        class Parent(Component[ComponentsV2Target]):
+            def __init__(self) -> None:
+                self.service = self.own(parent)
+
+            @override
+            def render(self) -> DocumentLike[ComponentsV2Target]:
+                return self.boundary(child, key="child")
+
+        runtime = ComponentRuntime(Parent(), service_host=host)
+        runtime.commit(runtime.render())
+        await runtime.wait_services_ready()
+        runtime.finish()
+        await entered.wait()
+        try:
+            assert not parent.stopped.is_set()
+        finally:
+            release.set()
+        if fail_child:
+            with pytest.raises(ExceptionGroup):
+                await runtime.wait_services()
+        else:
+            await runtime.wait_services()
+        assert parent.stopped.is_set()
+        assert child.service.stopped.is_set()
