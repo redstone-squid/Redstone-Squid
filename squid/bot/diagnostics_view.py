@@ -47,6 +47,19 @@ ERROR_CHROME = dataclasses.replace(
 )
 
 
+class _ReportChanges(sl.runtime.SharedState):
+    """Share the latest report comparison between the notice and refresh controls."""
+
+    def __init__(self, bus: sl.runtime.TopicBus, check: Callable[[], Awaitable[bool]]) -> None:
+        super().__init__(bus)
+        self._check = check
+        self.changed.replace(value=False)
+
+    @sl.resource
+    async def changed(self) -> bool:
+        return await self._check()
+
+
 class _ReportUpdates(sl.Component[sl.ComponentsV2Target]):
     """Check for report changes without replacing the browser the reader is using."""
 
@@ -55,24 +68,41 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target]):
         operations: ErrorReportOperations,
         shown: tuple[ErrorReport, ...],
         *,
+        bus: sl.runtime.TopicBus,
         work_lost_only: bool,
         refresh: Callable[[sl.PressEvent], Awaitable[None]],
     ) -> None:
         self._operations = operations
         self._shown = shown
         self._work_lost_only = work_lost_only
-        self._refresh = refresh
-        self.changed.replace(value=False)
-        self.own(ErrorReportRefresh(self.changed.invalidate))
+        self._notice = _ReportUpdateNotice()
+        self._controls = _ReportUpdateControls(refresh)
+        self._changes = _ReportChanges(bus, self._check)
+        self.monitor = self.own(ErrorReportRefresh(self.changed))
 
-    @sl.resource
-    async def changed(self) -> bool:
+    @property
+    def changed(self) -> sl.runtime.Resource[bool]:
+        return self._changes.changed
+
+    async def _check(self) -> bool:
         reports = await self._operations.recent(limit=RECENT_LIMIT, work_lost_only=self._work_lost_only)
         return tuple(reports) != self._shown
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-        status = self.changed.status
+        self.provide(_REPORT_MONITOR, self.monitor)
+        return self.boundary(self._notice, key="notice"), self.boundary(self._controls, key="controls")
+
+
+_REPORT_MONITOR = sl.runtime.ContextKey[ErrorReportRefresh]("report-monitor")
+
+
+class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target]):
+    """Display the shared monitor's latest comparison without changing the open report."""
+
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+        status = self.inject(_REPORT_MONITOR).changes.status
         changed = (
             status.value
             if isinstance(status, sl.resources.Ready)
@@ -83,13 +113,28 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target]):
             nodes.append(sl.note(tr(t"Could not check for updates. You can still refresh reports.")))
         elif changed:
             nodes.append(sl.note(tr(t"The report list has changed. Refresh when you are ready.")))
-        nodes.append(
-            sl.action_controls(
-                sl.action_control(tr(t"Refresh reports"), self._refresh, key="refresh"),
-                key="report-updates",
-            )
-        )
         return tuple(nodes)
+
+
+class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target]):
+    """Keep manual refresh available while automatic checks load or fail."""
+
+    def __init__(self, refresh: Callable[[sl.PressEvent], Awaitable[None]]) -> None:
+        self._refresh = refresh
+
+    @override
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+        status = self.inject(_REPORT_MONITOR).changes.status
+        changed = isinstance(status, sl.resources.Ready) and status.value
+        return sl.action_controls(
+            sl.action_control(
+                tr(t"Refresh reports"),
+                self._refresh,
+                key="refresh",
+                tone=sl.Tone.INFO if changed else sl.Tone.NEUTRAL,
+            ),
+            key="report-updates",
+        )
 
 
 class ErrorReportScreen(sd.Screen):
@@ -111,11 +156,13 @@ class ErrorReportScreen(sd.Screen):
         self,
         operations: ErrorReportOperations,
         *,
+        bus: sl.runtime.TopicBus,
         reference: str | None = None,
         can_clear: bool = False,
         authorize_clear: Callable[[], Awaitable[bool]] | None = None,
     ) -> None:
         self._operations = operations
+        self._bus = bus
         self._reference = reference
         self._can_clear = can_clear
         self._authorize_clear = authorize_clear
@@ -143,7 +190,11 @@ class ErrorReportScreen(sd.Screen):
     async def _load_recent(self) -> None:
         self._reports = tuple(await self._operations.recent(limit=RECENT_LIMIT, work_lost_only=self.work_lost_only))
         self._updates = _ReportUpdates(
-            self._operations, self._reports, work_lost_only=self.work_lost_only, refresh=self._refresh_reports
+            self._operations,
+            self._reports,
+            bus=self._bus,
+            work_lost_only=self.work_lost_only,
+            refresh=self._refresh_reports,
         )
         self._browser = sp.Browser(
             sl.sources.list_source(self._reports),

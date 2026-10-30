@@ -14,7 +14,7 @@ import squid_ui_widgets as sp
 from squid.bot.diagnostics_view import ErrorReportScreen, report_attachment
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.domain import ErrorReport
-from squid_ui.runtime import ServiceHost
+from squid_ui.runtime import LocalTopicBus, Resource, ServiceHost
 from squid_ui.sources import Position
 from squid_ui.testing import RecordingResponder, labels, press_event, render_tree
 from squid_ui_discord import (
@@ -70,6 +70,7 @@ def make_screen(
     operations = ErrorReportRecorder(reports, report=report, matches=matches)
     return ErrorReportScreen(
         operations,
+        bus=LocalTopicBus(),
         reference=report.reference if report is not None else None,
         can_clear=can_clear,
         authorize_clear=Authorizer(allowed=True) if can_clear else None,
@@ -129,7 +130,7 @@ async def message_root_browser(
 ) -> tuple[MessageRoot, discord.ui.LayoutView]:
     await browser.on_load()
     browser._loaded = True
-    bot = make_layout_bot()
+    bot = make_layout_bot(topic_bus=browser._bus)
     message_root = bot.ui.mount(browser, access=Owner(1), chrome=browser.chrome, service_host=service_host)
     if browser._browser is not None:
         await browser._browser.window._load()
@@ -358,21 +359,16 @@ async def test_live_updates_preserve_the_open_report_and_stop_with_the_screen(
     monkeypatch: pytest.MonkeyPatch, *, hide: bool
 ) -> None:
     import asyncio
-    from collections.abc import Callable
 
     from anyio.abc import TaskStatus
 
     from squid.bot.diagnostics_refresh import ErrorReportRefresh
 
-    ticked, stopped = asyncio.Event(), anyio.Event()
+    stopped = anyio.Event()
 
     class ObservedRefresh(ErrorReportRefresh):
-        def __init__(self, invalidate: Callable[[], None]) -> None:
-            def tick() -> None:
-                invalidate()
-                ticked.set()
-
-            super().__init__(tick, interval=0.001)
+        def __init__(self, changes: Resource[bool]) -> None:
+            super().__init__(changes, interval=0.001)
 
         @override
         async def run(self, *, task_status: TaskStatus[None]) -> None:
@@ -391,8 +387,8 @@ async def test_live_updates_preserve_the_open_report_and_stop_with_the_screen(
         assert screen._updates is not None
         assert isinstance(screen._operations, ErrorReportRecorder)
         screen._operations.reports = (make_report("bbb222"), make_report("aaa111"))
-        ticked.clear()
-        await ticked.wait()
+        while not screen._updates.changed.pending:
+            await asyncio.sleep(0)
         assert screen._updates.changed.pending
         assert screen._updates._shown != screen._operations.reports
         await screen._updates.changed._load()
@@ -458,3 +454,69 @@ async def test_refresh_button_commits_a_new_report_window() -> None:
         assert screen._updates in root.runtime.components.values()
         assert old_updates not in root.runtime.components.values()
         await root.finish(disable=False)
+
+
+async def test_report_monitor_cancels_initial_check_and_remounts_with_a_new_run() -> None:
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from squid_ui.runtime import ServiceRunStatus
+
+    entered, release = asyncio.Event(), asyncio.Event()
+    screen = make_screen((make_report(),))
+    assert isinstance(screen._operations, ErrorReportRecorder)
+    original = screen._operations.recent
+    calls = 0
+
+    async def recent(*, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            entered.set()
+            await release.wait()
+        return await original(limit=limit, work_lost_only=work_lost_only)
+
+    screen._operations.recent = AsyncMock(side_effect=recent)
+    async with running_service_host() as host:
+        root, _ = await message_root_browser(screen, service_host=host)
+        updates = screen._updates
+        assert updates is not None
+        first = updates.monitor.current_run
+        assert first is not None
+        await entered.wait()
+        assert first.status is ServiceRunStatus.STARTING
+        assert screen.reports == (make_report(),)
+        screen.confirming_clear = True
+        commit_render(root)
+        await root.runtime.wait_services()
+        assert first.status is ServiceRunStatus.CANCELLED
+        release.set()
+        screen.confirming_clear = False
+        commit_render(root)
+        await root.runtime.wait_services_ready()
+        assert updates.monitor.current_run is not first
+        assert first.status is ServiceRunStatus.CANCELLED
+        assert screen._updates is updates
+        await root.finish(disable=False)
+
+
+async def test_initial_monitor_failure_keeps_report_and_refresh_controls_live() -> None:
+    from unittest.mock import AsyncMock
+
+    screen = make_screen((make_report(),))
+    async with running_service_host() as host:
+        root, _ = await message_root_browser(screen, service_host=host)
+        assert isinstance(screen._operations, ErrorReportRecorder)
+        screen._operations.recent = AsyncMock(side_effect=RuntimeError("database unavailable"))
+        updates = screen._updates
+        assert updates is not None
+        run = updates.monitor.current_run
+        assert run is not None
+        await run.wait_ready()
+        view = commit_render(root)
+        assert "Could not check for updates" in "\n".join(_texts(view))
+        assert any(key.endswith("refresh") for key in root._handlers)
+        assert screen.reports == (make_report(),)
+        assert not root.finished
+        await root.finish(disable=False)
+        await run.wait()

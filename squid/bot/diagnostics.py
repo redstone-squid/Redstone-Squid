@@ -35,6 +35,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             interaction,
             ErrorReportScreen(
                 self.error_reports,
+                bus=self.bot.topic_bus,
                 reference=reference,
                 can_clear=await may_clear(),
                 authorize_clear=may_clear,
