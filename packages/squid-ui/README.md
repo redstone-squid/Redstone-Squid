@@ -54,7 +54,7 @@ pip install squid-ui==0.1.0a1
 ```
 
 For component-owned subscriptions and background work, install `squid-ui[services]`.
-`Component.own(ManagedService(...))` declares ownership; a supervised `ServiceHost` activates it on
+`Component.own(ManagedService(...))` declares ownership; a supervised `UIExecutionHost` activates it on
 committed mount and awaits cleanup on unmount. Define activity and lexical cleanup in `run()`.
 Ordinary state and rendering do not require this optional AnyIO backend. The Discord package
 includes and integrates it automatically.

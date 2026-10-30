@@ -25,7 +25,10 @@ class ManagedService(ABC):
 
     Each instance belongs to one owner for life. You can pass it around freely to share
     its state. On remount, the same instance gets a new run, with fresh resources.
-    Service methods manage access to the resources acquired by each run.
+    Service methods check that the resources they need are available; retaining the
+    object or observing readiness does not keep those resources open. The author
+    registers cleanup during acquisition, shields awaited cleanup from cancellation,
+    and bounds resource operations that could stall. See ``run`` for an example.
     """
 
     _service_owner: object | None = None
@@ -207,20 +210,21 @@ class _ServiceActivation:
             self._ready.set()
 
 
-class ServiceHost:
-    """Run services until ``close`` or cancellation shuts down the host.
+class UIExecutionHost:
+    """Supervise UI activity until ``close`` or cancellation drains the host.
 
-    Start ``host.run`` in an application task group before mounting components that own
-    services. Owners decide when each service runs; the host gives those runs a home.
+    Start ``host.run`` in an application task group before opening panels. The host
+    runs owned services, post-commit operations, and shutdown work. Closure drains
+    accepted operations and cleanup before cancelling remaining service runs.
     """
 
     def __init__(self) -> None:
         self._tasks: TaskGroup | None = None
         self._runner_id: int | None = None
         self._activations: set[_ServiceActivation] = set()
-        self._cleanup_tasks = 0
-        self._cleanup_done = asyncio.Event()
-        self._cleanup_done.set()
+        self._pending_callbacks = 0
+        self._callbacks_done = asyncio.Event()
+        self._callbacks_done.set()
         self._context = Context()
         self._closed = False
         self._stop = asyncio.Event()
@@ -228,7 +232,7 @@ class ServiceHost:
 
     def _require_running(self) -> TaskGroup:
         if self._closed or self._tasks is None:
-            msg = "owned services require a running ServiceHost"
+            msg = "UI activity requires a running UIExecutionHost"
             raise RuntimeError(msg)
         return self._tasks
 
@@ -241,7 +245,7 @@ class ServiceHost:
         """
 
         if self._tasks is not None or self._closed:
-            msg = "service host is already running or closed"
+            msg = "UI execution host is already running or closed"
             raise RuntimeError(msg)
         self._runner_id = anyio.get_current_task().id
         try:
@@ -255,7 +259,7 @@ class ServiceHost:
                 finally:
                     self._closed = True
                     with anyio.CancelScope(shield=True):
-                        await self._cleanup_done.wait()
+                        await self._callbacks_done.wait()
                     for activation in tuple(self._activations):
                         activation.cancel()
         finally:
@@ -266,7 +270,7 @@ class ServiceHost:
             self._done.set()
 
     async def close(self) -> None:
-        """Stop the services and wait for cleanup and error handlers to finish."""
+        """Drain accepted operations and cleanup, then stop services and await error handlers."""
         if self._runner_id is not None and task_is_within({self._runner_id}):
             msg = "service activity cannot close its own host"
             raise RuntimeError(msg)
@@ -275,34 +279,49 @@ class ServiceHost:
         if self._tasks is not None:
             await self._done.wait()
 
+    def start_operation(self, operation: Callable[[], Awaitable[None]]) -> None:
+        """Accept an operation while open and run it to completion under the host.
+
+        The callback inherits the host context and is shielded from cancellation.
+        Closing the host waits for accepted operations; even host-owned callers
+        cannot submit new operations once closure begins. Bound waits that may stall.
+        Failures are logged without cancelling unrelated work. Callers needing an
+        outcome should capture it in their callback, as PostCommitOperation does.
+        """
+        self._submit(self._require_running(), operation, kind="operation")
+
     def start_cleanup(self, cleanup: Callable[[], Awaitable[None]]) -> None:
         """Supervise accepted cleanup, including when its initiating caller is cancelled.
 
         The callback inherits the host context and runs shielded from cancellation.
         It should bound resource-specific operations that may stall. Closing the
         host waits for accepted callbacks before cancelling remaining service runs.
-        Cleanup already running on this host may submit further cleanup while the
-        host drains; other callers must submit before host closure begins.
+        Activity already running on this host may submit further cleanup while the
+        host drains; other callers must submit before host closure begins. This
+        permission never extends to starting new operations. Failures are logged
+        without cancelling unrelated work.
         """
         tasks = self._tasks
         if tasks is None or (self._closed and (self._runner_id is None or not task_is_within({self._runner_id}))):
-            message = "cleanup requires a running ServiceHost"
+            message = "cleanup requires a running UIExecutionHost"
             raise RuntimeError(message)
-        self._context.run(tasks.start_soon, self._run_cleanup, cleanup)
-        self._cleanup_tasks += 1
-        self._cleanup_done.clear()
+        self._submit(tasks, cleanup, kind="cleanup")
 
-    async def _run_cleanup(self, cleanup: Callable[[], Awaitable[None]]) -> None:
+    def _submit(self, tasks: TaskGroup, callback: Callable[[], Awaitable[None]], *, kind: str) -> None:
+        self._context.run(tasks.start_soon, self._run_callback, callback, kind)
+        self._pending_callbacks += 1
+        self._callbacks_done.clear()
 
+    async def _run_callback(self, callback: Callable[[], Awaitable[None]], kind: str) -> None:
         try:
             with anyio.CancelScope(shield=True):
-                await cleanup()
+                await callback()
         except Exception:
-            _logger.exception("host cleanup failed")
+            _logger.exception("host %s failed", kind)
         finally:
-            self._cleanup_tasks -= 1
-            if not self._cleanup_tasks:
-                self._cleanup_done.set()
+            self._pending_callbacks -= 1
+            if not self._pending_callbacks:
+                self._callbacks_done.set()
 
     def _start(
         self, service: ManagedService, previous: _ServiceActivation | None, on_error: ServiceFailure | None
@@ -362,7 +381,7 @@ class ServiceOwner:
         self._retired: list[_ServiceActivation] = []
         self._sealed = False
         self._active = False
-        self._host: ServiceHost | None = None
+        self._host: UIExecutionHost | None = None
 
     def own[T: ManagedService](self, service: T) -> T:
         """Take ownership of a service and return it for convenient assignment.
@@ -386,7 +405,7 @@ class ServiceOwner:
         """Finish registration. Called before rendering or starting services."""
         self._sealed = True
 
-    def activate(self, host: ServiceHost, *, on_error: ServiceFailure | None = None) -> None:
+    def activate(self, host: UIExecutionHost, *, on_error: ServiceFailure | None = None) -> None:
         """Start each service, or keep its current run if this owner is already active.
 
         New runs wait for previous cleanup. Repeated activation keeps the original
@@ -491,17 +510,17 @@ class ServiceOwner:
 class _ServiceLifecycle:
     """Track component services until ``cancel`` starts their cleanup."""
 
-    def __init__(self, host: ServiceHost | None, on_error: ServiceFailure | None) -> None:
+    def __init__(self, host: UIExecutionHost | None, on_error: ServiceFailure | None) -> None:
         self.host = host
         self.on_error = on_error
         self._active: set[ServiceOwner] = set()
         self._retired: set[ServiceOwner] = set()
         self._paths: dict[ServiceOwner, str] = {}
 
-    def validate(self) -> ServiceHost:
+    def validate(self) -> UIExecutionHost:
         """Check that services have a running host before delivering the tree."""
         if self.host is None:
-            message = "components with owned services require a ServiceHost"
+            message = "components with owned services require a UIExecutionHost"
             raise RuntimeError(message)
         self.host._require_running()
         return self.host
@@ -571,4 +590,4 @@ async def _wait_ready(activations: tuple[_ServiceActivation, ...]) -> None:
             tasks.start_soon(activation.wait_ready)
 
 
-__all__ = ["ManagedService", "ServiceHost", "ServiceOwner", "ServiceRun", "ServiceRunStatus"]
+__all__ = ["ManagedService", "ServiceOwner", "ServiceRun", "ServiceRunStatus", "UIExecutionHost"]

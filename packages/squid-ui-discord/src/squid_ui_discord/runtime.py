@@ -26,7 +26,7 @@ from anyio.abc import TaskStatus
 from squid_ui.errors import SquidUiError
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.services import ServiceHost
+from squid_ui.runtime.services import UIExecutionHost
 from squid_ui.runtime.topics import TopicBus
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import AccessPolicy
@@ -105,7 +105,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         self.localization = localization
         self.response_defaults = response_defaults
         self.config = config
-        self.services = sessions.defaults.service_host
+        self.execution_host = sessions.defaults.execution_host
         self._scopes: list[Scope[Any]] = []
         self._scope_roots: dict[int, set[MessageRoot]] = {}
 
@@ -137,22 +137,22 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         return self.defaults.mount(component, access=access, **overrides)
 
     async def run(self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED) -> None:
-        """Run the scheduler, challenges, and service host until the caller cancels.
+        """Run the scheduler, challenges, and execution host until the caller cancels.
 
         Use ``await tasks.start(runtime.run)`` to wait until services can be mounted.
         Applications that track each job's health can start ``scheduler.run()``,
-        ``challenges.run()``, and ``services.run()`` separately instead.
+        ``challenges.run()``, and ``execution_host.run()`` separately instead.
         """
         async with anyio.create_task_group() as tasks:
             if self.scheduler is not None:
                 tasks.start_soon(self.scheduler.run)
             tasks.start_soon(self.challenges.run)
-            if self.services is not None:
-                await tasks.start(self.services.run)
+            if self.execution_host is not None:
+                await tasks.start(self.execution_host.run)
             task_status.started()
 
     async def close(self) -> None:
-        """Finish the sessions, close the service host, and unregister this runtime.
+        """Finish the sessions, close the execution host, and unregister this runtime.
 
         The application's task group still owns ``run()``. Cancel it there when the
         application is ready to stop the scheduler and challenge runner too.
@@ -170,8 +170,8 @@ class DiscordUIRuntime[ClientT: discord.Client]:
                 errors.append(error)
         finally:
             try:
-                if self.services is not None:
-                    await self.services.close()
+                if self.execution_host is not None:
+                    await self.execution_host.close()
             finally:
                 if _INSTALLED.get(self.client) is self:
                     del _INSTALLED[self.client]
@@ -307,8 +307,8 @@ def install[ClientT: discord.Client](
         localization=localization,
     )
     defaults = selected.defaults
-    if defaults.service_host is None:
-        defaults = defaults.replace(service_host=ServiceHost())
+    if defaults.execution_host is None:
+        defaults = defaults.replace(execution_host=UIExecutionHost())
     bus = selected.bus
     profiler = selected.profiler
     localization = selected.localization

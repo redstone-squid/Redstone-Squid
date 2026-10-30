@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 
 import anyio
 
-from squid_ui.runtime.services import ServiceHost
+from squid_ui.runtime.services import UIExecutionHost
 from squid_ui.runtime.tasks import task_is_within
 
 _logger = logging.getLogger(__name__)
@@ -29,11 +29,11 @@ class Shutdown:
         else:
             self._done_callbacks.append(callback)
 
-    def start(self, host: ServiceHost | None, work: Callable[[], Awaitable[None]]) -> None:
+    def start(self, host: UIExecutionHost | None, work: Callable[[], Awaitable[None]]) -> None:
         if self.accepted:
             return
         if host is None:
-            message = "finishing requires a running ServiceHost; pass service_host when constructing the root"
+            message = "finishing requires a running UIExecutionHost; pass execution_host when constructing the root"
             raise RuntimeError(message)
 
         async def run() -> None:

@@ -151,8 +151,8 @@ async def test_run_serves_the_reactor_and_the_challenge_runner_together() -> Non
         await tasks.start(runtime.run)
         assert runtime.scheduler._running
         assert runtime.challenges._running
-        assert runtime.services is not None
-        runtime.services._require_running()
+        assert runtime.execution_host is not None
+        runtime.execution_host._require_running()
         tasks.cancel_scope.cancel()
 
 
@@ -177,11 +177,11 @@ async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
     message_root.refresh.assert_awaited()
 
 
-async def test_close_drops_installation_when_service_host_cleanup_fails() -> None:
+async def test_close_drops_installation_when_execution_host_cleanup_fails() -> None:
     client = fake_client()
     runtime = install(cast(discord.Client, client))
-    assert runtime.services is not None
-    runtime.services.close = AsyncMock(side_effect=RuntimeError("service host cleanup failed"))
+    assert runtime.execution_host is not None
+    runtime.execution_host.close = AsyncMock(side_effect=RuntimeError("service host cleanup failed"))
 
     with pytest.raises(RuntimeError, match="service host cleanup failed"):
         await runtime.close()

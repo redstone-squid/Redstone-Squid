@@ -105,7 +105,7 @@ from squid_ui.runtime.resources import (
     ResourceStatus,
     resource,
 )
-from squid_ui.runtime.services import ManagedService, ServiceHost, ServiceOwner, ServiceRun, ServiceRunStatus
+from squid_ui.runtime.services import ManagedService, ServiceOwner, ServiceRun, ServiceRunStatus, UIExecutionHost
 from squid_ui.runtime.shared import SharedState, SharedStateFactory, SharedStatePool
 from squid_ui.runtime.topics import (
     Address,
@@ -203,7 +203,6 @@ __all__ = [
     "ResourceStatus",
     "RollbackReason",
     "SelectionState",
-    "ServiceHost",
     "ServiceOwner",
     "ServiceRun",
     "ServiceRunStatus",
@@ -225,6 +224,7 @@ __all__ = [
     "TransactionParticipant",
     "TransactionView",
     "TransactionalCompensationOutbox",
+    "UIExecutionHost",
     "UndeclaredStateError",
     "UndoMode",
     "UndoPlan",

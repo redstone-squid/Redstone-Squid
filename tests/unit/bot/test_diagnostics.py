@@ -14,7 +14,7 @@ import squid_ui_widgets as sp
 from squid.bot.diagnostics_view import ErrorReportScreen, report_attachment
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.domain import ErrorReport
-from squid_ui.runtime import LocalTopicBus, Resource, ServiceHost
+from squid_ui.runtime import LocalTopicBus, Resource, UIExecutionHost
 from squid_ui.sources import Position
 from squid_ui.testing import RecordingResponder, labels, press_event, render_tree
 from squid_ui_discord import (
@@ -26,10 +26,10 @@ from tests.support.discord import make_layout_bot
 
 
 @asynccontextmanager
-async def running_service_host() -> AsyncIterator[ServiceHost]:
+async def running_execution_host() -> AsyncIterator[UIExecutionHost]:
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
-            host = ServiceHost()
+            host = UIExecutionHost()
             await tasks.start(host.run)
             try:
                 yield host
@@ -126,12 +126,12 @@ def decision_event(responder: RecordingResponder) -> sp.TransitionEvent[sp.Decis
 
 
 async def message_root_browser(
-    browser: ErrorReportScreen, *, service_host: ServiceHost
+    browser: ErrorReportScreen, *, execution_host: UIExecutionHost
 ) -> tuple[MessageRoot, discord.ui.LayoutView]:
     await browser.on_load()
     browser._loaded = True
     bot = make_layout_bot(topic_bus=browser._bus)
-    message_root = bot.ui.mount(browser, access=Owner(1), chrome=browser.chrome, service_host=service_host)
+    message_root = bot.ui.mount(browser, access=Owner(1), chrome=browser.chrome, execution_host=execution_host)
     if browser._browser is not None:
         await browser._browser.window._load()
     return message_root, commit_render(message_root)
@@ -166,11 +166,11 @@ def _code_pages(message_root: MessageRoot) -> list[str]:
 
 
 async def test_recent_list_offers_every_entry_for_opening() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         """The audit's complaint: a listed reference could only be read, then retyped."""
         reports = (make_report("aaa111"), make_report("bbb222", work_lost=True))
         browser = make_screen(reports)
-        await message_root_browser(browser, service_host=service_host)
+        await message_root_browser(browser, execution_host=execution_host)
 
         assert browser._browser is not None
         rendered_labels = labels(render_tree(browser._browser))
@@ -179,9 +179,9 @@ async def test_recent_list_offers_every_entry_for_opening() -> None:
 
 
 async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         browser = make_screen((make_report("aaa111"),))
-        message_root, _ = await message_root_browser(browser, service_host=service_host)
+        message_root, _ = await message_root_browser(browser, execution_host=execution_host)
         interaction = interaction_harness()
 
         await open_report(message_root, interaction, "aaa111")
@@ -193,11 +193,11 @@ async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
 
 
 async def test_a_long_traceback_is_readable_past_one_page() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         """Previously the card showed a fixed 1200-character tail and nothing could reach the rest."""
         frames = "\n".join(f"  File 'module{index}.py', line {index}, in frame{index}" for index in range(300))
         browser = make_screen(report=make_report(traceback=f"Traceback:\n{frames}\nValueError: boom"))
-        message_root, view = await message_root_browser(browser, service_host=service_host)
+        message_root, view = await message_root_browser(browser, execution_host=execution_host)
 
         # The failing frame is at the end, so that is where the report opens.
         first_shown = next(text for text in _texts(view) if text.startswith("```"))
@@ -212,9 +212,9 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
 
 
 async def test_paging_controls_absent_for_a_short_traceback() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         _, view = await message_root_browser(
-            make_screen(report=make_report(traceback="one frame")), service_host=service_host
+            make_screen(report=make_report(traceback="one frame")), execution_host=execution_host
         )
 
         buttons = [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
@@ -223,10 +223,10 @@ async def test_paging_controls_absent_for_a_short_traceback() -> None:
 
 
 async def test_paging_stops_at_both_ends() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         frames = "\n".join("frame " + "x" * 90 for _ in range(200))
         browser = make_screen(report=make_report(traceback=frames))
-        message_root, view = await message_root_browser(browser, service_host=service_host)
+        message_root, view = await message_root_browser(browser, execution_host=execution_host)
 
         nav = [item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.custom_id]
         later = next(item for item in nav if ":__cursor_next" in (item.custom_id or ""))
@@ -237,9 +237,9 @@ async def test_paging_stops_at_both_ends() -> None:
 
 
 async def test_the_log_tail_is_shown_and_keeps_its_last_lines() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         browser = make_screen(report=make_report(log_tail=("first line", "second line")))
-        _, view = await message_root_browser(browser, service_host=service_host)
+        _, view = await message_root_browser(browser, execution_host=execution_host)
 
         text = "\n".join(_texts(view))
         assert "Log tail" in text
@@ -247,11 +247,11 @@ async def test_the_log_tail_is_shown_and_keeps_its_last_lines() -> None:
 
 
 async def test_every_page_fits_the_real_display_budget() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         """The PAGE_CHARS killer: each page, chrome and footer included, fits the actual budget."""
         long_line = "x" * 9001
         browser = make_screen(report=make_report(traceback=f"{long_line}\nValueError: boom"))
-        message_root, _ = await message_root_browser(browser, service_host=service_host)
+        message_root, _ = await message_root_browser(browser, execution_host=execution_host)
 
         message_root.presentation.move_cursor("traceback", Position())
         pages = _code_pages(message_root)
@@ -268,9 +268,9 @@ async def test_every_page_fits_the_real_display_budget() -> None:
 
 
 async def test_choosing_a_report_attaches_its_full_text() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         browser = make_screen((make_report("aaa111"),))
-        message_root, _ = await message_root_browser(browser, service_host=service_host)
+        message_root, _ = await message_root_browser(browser, execution_host=execution_host)
         interaction = interaction_harness()
 
         await open_report(message_root, interaction, "aaa111")
@@ -280,9 +280,9 @@ async def test_choosing_a_report_attaches_its_full_text() -> None:
 
 
 async def test_going_back_removes_the_attachment() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         browser = make_screen((make_report("aaa111"),))
-        message_root, _ = await message_root_browser(browser, service_host=service_host)
+        message_root, _ = await message_root_browser(browser, execution_host=execution_host)
         opened = interaction_harness()
         await open_report(message_root, opened, "aaa111")
         interaction = interaction_harness()
@@ -338,9 +338,9 @@ async def test_clear_rechecks_permission_before_deleting() -> None:
 
 
 async def test_a_fence_inside_a_traceback_cannot_close_the_card_fence() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         _, view = await message_root_browser(
-            make_screen(report=make_report(traceback="ValueError: ```not markdown```")), service_host=service_host
+            make_screen(report=make_report(traceback="ValueError: ```not markdown```")), execution_host=execution_host
         )
 
         fenced = next(text for text in _texts(view) if "not markdown" in text)
@@ -378,9 +378,9 @@ async def test_live_updates_preserve_the_open_report_and_stop_with_the_screen(
                 stopped.set()
 
     monkeypatch.setattr("squid.bot.diagnostics_view.ErrorReportRefresh", ObservedRefresh)
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         screen = make_screen((make_report("aaa111"),))
-        root, _ = await message_root_browser(screen, service_host=service_host)
+        root, _ = await message_root_browser(screen, execution_host=execution_host)
         await root.runtime.wait_services_ready()
         await open_report(root, interaction_harness(), "aaa111")
         original_browser = screen._browser
@@ -441,9 +441,9 @@ async def test_update_check_failure_keeps_manual_refresh_available() -> None:
 
 
 async def test_refresh_button_commits_a_new_report_window() -> None:
-    async with running_service_host() as service_host:
+    async with running_execution_host() as execution_host:
         screen = make_screen((make_report("aaa111"),))
-        root, _ = await message_root_browser(screen, service_host=service_host)
+        root, _ = await message_root_browser(screen, execution_host=execution_host)
         old_updates = screen._updates
         assert isinstance(screen._operations, ErrorReportRecorder)
         screen._operations.reports = (make_report("bbb222"),)
@@ -477,8 +477,8 @@ async def test_report_monitor_cancels_initial_check_and_remounts_with_a_new_run(
         return await original(limit=limit, work_lost_only=work_lost_only)
 
     screen._operations.recent = AsyncMock(side_effect=recent)
-    async with running_service_host() as host:
-        root, _ = await message_root_browser(screen, service_host=host)
+    async with running_execution_host() as host:
+        root, _ = await message_root_browser(screen, execution_host=host)
         updates = screen._updates
         assert updates is not None
         first = updates.monitor.current_run
@@ -504,8 +504,8 @@ async def test_initial_monitor_failure_keeps_report_and_refresh_controls_live() 
     from unittest.mock import AsyncMock
 
     screen = make_screen((make_report(),))
-    async with running_service_host() as host:
-        root, _ = await message_root_browser(screen, service_host=host)
+    async with running_execution_host() as host:
+        root, _ = await message_root_browser(screen, execution_host=host)
         assert isinstance(screen._operations, ErrorReportRecorder)
         screen._operations.recent = AsyncMock(side_effect=RuntimeError("database unavailable"))
         updates = screen._updates

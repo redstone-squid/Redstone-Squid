@@ -1039,6 +1039,19 @@ with `self.own(service)` before the component's first render. Construction and r
 are inert. Only a successful delivery and component mount start `run()`. Ownership is
 exclusive and permanent, while any number of consumers may borrow the same service.
 
+The framework owns activation, cancellation, and waiting for completion. Service authors
+own the resources inside each run:
+
+- Check resource availability in active methods, including during startup and remounting.
+  A retained service or a completed readiness wait does not keep a connection open.
+- Register cleanup as resources are acquired, so partial setup can unwind. Context managers
+  or `AsyncExitStack` let remaining cleanup run even when an earlier step fails.
+- Shield awaited cleanup from cancellation and put resource-specific timeouts around waits
+  that may stall. Keep child task groups inside the resources their workers use.
+
+Passive state may remain readable between runs. Define what that retained state means while
+the next activation is starting.
+
 For example, an editor can subscribe to build changes and let its children display a notice.
 Fetching the updated preview can remain a resource; the service only owns the subscription:
 
@@ -1171,16 +1184,17 @@ access to their active resources, such as connections.
 Setup and worker failures unwind the run before reaching the error handler. Discord finishes
 the affected message root; other roots stay live. Handle recoverable failures inside the service.
 
-For frontend and application integration, `ServiceHost` supervises execution and `ServiceOwner`
-declares which services start and stop together. Component authors normally need neither.
+For frontend and application integration, `UIExecutionHost` supervises services, post-commit
+operations, and shutdown. `ServiceOwner` declares which services start and stop together.
+Component authors normally need neither.
 The portable engine has no mandatory AnyIO dependency: install `squid-ui[services]` for execution.
 `squid-ui-discord` includes that extra, and `DiscordUIRuntime.run()` supervises the host alongside
 the scheduler and challenge runner. Hosts supervising those jobs individually must also run
-`runtime.services.run()`. Construction starts no tasks. Service runs inherit the host runner's
+`runtime.execution_host.run()`. Construction starts no tasks. Service runs inherit the host runner's
 context, not the interaction that activates them: request transactions must not leak into
 background work. Pass request-specific inputs explicitly when constructing a service.
 
-Standalone frontends pass a running `ServiceHost` to `ComponentRuntime(service_host=...)`.
+Standalone frontends pass a running `UIExecutionHost` to `ComponentRuntime(execution_host=...)`.
 After commit/removal or `finish()`, await `runtime.wait_services()` outside delivery locks.
 Frontends whose service cleanup can re-enter delivery use `allow_reentry=True`: a call from
 retiring activity returns instead of waiting on itself, while its outer caller or host still
@@ -1228,7 +1242,7 @@ activation when the wait begins; reactivation never changes an existing wait's r
 Concurrent waiters receive the same failures, and
 completed waits release those results. Later activations do not inherit earlier failures;
 use the error handler or logs for history. See the method docstrings for the wait
-and failure semantics. `ServiceHost.close()` awaits all remaining runs and error handlers.
+and failure semantics. `UIExecutionHost.close()` awaits all remaining runs and error handlers.
 
 Component ownership is unrelated to `SharedState.scope` (a diagnostic label), pool keys, and
 Discord access policies. Work that must outlive a panel belongs to an application/session owner.
@@ -1352,9 +1366,9 @@ have no services, because delivery and callbacks can await:
 
 ```python
 async with anyio.create_task_group() as tasks:
-    host = ServiceHost()
+    host = UIExecutionHost()
     await tasks.start(host.run)
-    panel = MessageRoot(component, access=Everyone(), service_host=host)
+    panel = MessageRoot(component, access=Everyone(), execution_host=host)
     try:
         await panel.send(destination)
         # Use the panel here.
@@ -1365,8 +1379,15 @@ async with anyio.create_task_group() as tasks:
             await host.close()
 ```
 
-Finish panels before closing their host. `ServiceHost.close()` drains accepted cleanup and
-then cancels remaining service runs. The application owns its overall shutdown deadline.
+Finish panels before closing their host. `UIExecutionHost.start_operation()` accepts work only
+while the host is open, including when called by existing host activity. `start_cleanup()` also
+accepts cleanup from existing host activity while draining, so accepted operations and shutdown
+callbacks can release their resources. External callers must submit cleanup before closure begins.
+Both callbacks inherit the host context, run shielded, and log failures without cancelling unrelated
+work. `PostCommitOperation` and panel shutdown handles additionally expose results to their waiters.
+
+`UIExecutionHost.close()` drains accepted operations and cleanup, then cancels remaining service
+runs and awaits their error handlers. The application owns its overall shutdown deadline.
 If that deadline expires, report unfinished work; cancellation cannot forcibly stop shielded
 or blocking code. Enforcing a hard process deadline belongs to the application or its process
 supervisor.

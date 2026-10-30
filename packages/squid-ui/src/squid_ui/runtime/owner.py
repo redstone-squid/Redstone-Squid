@@ -17,7 +17,7 @@ from squid_ui.runtime.component import (
 from squid_ui.runtime.context import ContextKey
 from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.runtime.resources import AsyncBinding, PendingMode
-from squid_ui.runtime.services import ServiceFailure, ServiceHost, _owns_current_activity, _ServiceLifecycle
+from squid_ui.runtime.services import ServiceFailure, UIExecutionHost, _owns_current_activity, _ServiceLifecycle
 from squid_ui.runtime.topics import Address
 from squid_ui.target_types import RenderTarget
 
@@ -33,11 +33,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
         on_invalidate: Callable[[], None] | None = None,
         context: Mapping[ContextKey[Any], object] | None = None,
         plan_cache: PlanCache | None = None,
-        service_host: ServiceHost | None = None,
+        execution_host: UIExecutionHost | None = None,
         on_service_error: ServiceFailure | None = None,
     ) -> None:
         self.root = root
-        self._services = _ServiceLifecycle(service_host, on_service_error)
+        self._services = _ServiceLifecycle(execution_host, on_service_error)
         self._hook_errors: list[Exception] = []
         root._runtime = self
         self.presentation = presentation if presentation is not None else PresentationState()
@@ -159,11 +159,11 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             self._candidate_tree = None
         if reuse_committed and self._candidate_tree is not None and self._candidate_revision == self.revision:
             if not terminal:
-                self._validate_service_host(self._candidate_tree)
+                self._validate_execution_host(self._candidate_tree)
             return self._candidate_tree
         if reuse_committed and not self.dirty and self._committed_tree is not None:
             if not terminal:
-                self._validate_service_host(self._committed_tree)
+                self._validate_execution_host(self._committed_tree)
             return self._committed_tree
         if reuse_committed and self._backdated_to_committed():
             committed = self._committed_tree
@@ -171,7 +171,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
                 message = "backdating succeeded without a committed tree"
                 raise AssertionError(message)
             if not terminal:
-                self._validate_service_host(committed)
+                self._validate_execution_host(committed)
             return committed
         tree = render_component_tree(
             self.root,
@@ -189,7 +189,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             ),
         )
         if not terminal:
-            self._validate_service_host(tree)
+            self._validate_execution_host(tree)
         if reuse_committed and self._committed_tree is not None and tree == self._committed_tree:
             tree = self._committed_tree
         self._clear_render_invalidations()
@@ -198,7 +198,7 @@ class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
             self._candidate_revision = self.revision
         return tree
 
-    def _validate_service_host(self, tree: ComponentTree[RenderTargetT]) -> None:
+    def _validate_execution_host(self, tree: ComponentTree[RenderTargetT]) -> None:
         # A host can close between renders, including while a candidate waits for delivery.
         if any(component._owned_services is not None for component in tree.components.values()):
             self._services.validate()

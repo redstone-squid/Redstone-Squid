@@ -8,7 +8,7 @@ import anyio
 import pytest
 from anyio.abc import TaskStatus
 
-from squid_ui.runtime import ManagedService, ServiceHost, ServiceOwner, ServiceRunStatus
+from squid_ui.runtime import ManagedService, ServiceOwner, ServiceRunStatus, UIExecutionHost
 
 
 @pytest.mark.parametrize("fail", [False, True])
@@ -24,7 +24,7 @@ async def test_run_outcome_survives_owner_shutdown_and_remount(fail: bool) -> No
         pass
 
     async with anyio.create_task_group() as tasks:
-        host = ServiceHost()
+        host = UIExecutionHost()
         await tasks.start(host.run)
         owner = ServiceOwner()
         service = owner.own(Finite())
@@ -75,7 +75,7 @@ async def test_completed_owner_wait_releases_failed_run_locals() -> None:
         pass
 
     async with anyio.create_task_group() as tasks:
-        host = ServiceHost()
+        host = UIExecutionHost()
         await tasks.start(host.run)
         owner = ServiceOwner()
         service = owner.own(Broken())
