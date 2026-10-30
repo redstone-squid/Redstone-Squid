@@ -111,6 +111,39 @@ async def test_removing_owner_waits_for_cleanup_but_keeps_message_root_live() ->
         await root.finish()
 
 
+async def test_failed_replacement_keeps_visible_owner_active_until_successful_delivery() -> None:
+    async with running_host() as host:
+        first, replacement = Panel(), Panel()
+
+        class Root(Component[ComponentsV2Target]):
+            replaced: bool = state(default=False)
+
+            @override
+            def render(self) -> DocumentLike[ComponentsV2Target]:
+                panel = replacement if self.replaced else first
+                return Text("replacement" if self.replaced else "original"), self.boundary(panel, key="editor")
+
+        component = Root()
+        root = MessageRoot(component, access=Everyone(), service_host=host)
+        message = message_harness()
+        await root.send(delivered_to(message))
+        await root.runtime.wait_services_ready()
+        component.replaced = True
+        edit = message.edit
+        message.edit = AsyncMock(side_effect=ValueError("replacement delivery failed"))
+        with pytest.raises(ValueError, match="replacement delivery failed"):
+            await root.refresh()
+        assert not first.service.stopped.is_set()
+        assert not replacement.service.started.is_set()
+        message.edit = edit
+        await root.refresh()
+        await root.runtime.wait_services_ready()
+        assert first.service.stopped.is_set()
+        assert replacement.service.started.is_set()
+        await root.finish()
+        assert replacement.service.stopped.is_set()
+
+
 @pytest.mark.parametrize("during_setup", [False, True])
 async def test_unexpected_failure_finishes_only_its_message_root(during_setup: bool) -> None:
     async with running_host() as host:

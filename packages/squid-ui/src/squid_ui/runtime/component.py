@@ -317,7 +317,11 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
             self._parent.invalidate()
 
     def provide[ValueT](self, key: ContextKey[ValueT], value: ValueT) -> None:
-        """Provide an ephemeral value to descendants rendered below this component."""
+        """Provide a value to descendants for this render.
+
+        Providing a service shares access; it neither owns nor starts the service.
+        Descendants can receive it before its run is ready.
+        """
         context = _CURRENT_CONTEXT.get()
         if context is None:
             message = "provide() is only available while rendering"

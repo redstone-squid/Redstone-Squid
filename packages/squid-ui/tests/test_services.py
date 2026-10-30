@@ -323,6 +323,102 @@ async def test_abandoned_candidate_and_borrowed_application_service() -> None:
         await application.wait()
 
 
+async def test_nearest_provider_changes_without_transferring_service_ownership() -> None:
+    async with running_host() as host:
+        outer, inner = Recorder(), Recorder()
+        consumer = Consumer()
+
+        class Nested(Panel):
+            overridden: bool = state(default=True)
+
+            @override
+            def render(self) -> DocumentLike[ComponentsV2Target]:
+                if self.overridden:
+                    self.provide(KEY, self.service)
+                return self.boundary(consumer, key="consumer")
+
+        nested = Nested(inner)
+
+        class Root(Panel):
+            @override
+            def render(self) -> DocumentLike[ComponentsV2Target]:
+                self.provide(KEY, self.service)
+                return self.boundary(nested, key="nested")
+
+        application = ServiceOwner()
+        application.own(outer)
+        application.own(inner)
+        application.activate(host)
+        await application.wait_ready()
+        runtime = ComponentRuntime(Root(outer))
+        runtime.commit(runtime.render())
+        assert consumer.borrowed is inner
+        nested.overridden = False
+        runtime.commit(runtime.render())
+        assert consumer.borrowed is outer
+        runtime.finish()
+        assert not outer.stopped.is_set()
+        assert not inner.stopped.is_set()
+        application.cancel()
+        await application.wait()
+
+
+async def test_injected_service_renders_before_readiness_and_publishes_ready_state() -> None:
+    async with running_host() as host:
+        bus = LocalTopicBus()
+        release = asyncio.Event()
+
+        class Status(SharedState):
+            ready: bool = state(default=False)
+
+        class Loading(Recorder):
+            def __init__(self) -> None:
+                super().__init__()
+                self.status = Status(bus)
+
+            @override
+            async def setup(self) -> None:
+                await release.wait()
+                self.status.ready = True
+
+        key = ContextKey[Loading]("loading-service")
+        rendered: list[bool] = []
+
+        class Reader(Component[ComponentsV2Target]):
+            @override
+            def render(self) -> Text:
+                ready = self.inject(key).status.ready
+                rendered.append(ready)
+                return Text("ready" if ready else "loading")
+
+        class Owner(Component[ComponentsV2Target]):
+            def __init__(self) -> None:
+                self.service = self.own(Loading())
+                self.reader = Reader()
+
+            @override
+            def render(self) -> DocumentLike[ComponentsV2Target]:
+                self.provide(key, self.service)
+                return self.boundary(self.reader, key="reader")
+
+        panel = Owner()
+        runtime = ComponentRuntime(panel, service_host=host)
+        tree = runtime.render()
+        assert rendered == [False]
+        assert not panel.service.events
+        with ExitStack() as subscriptions:
+            for address in tree.observations:
+                subscriptions.callback(bus.subscribe(address, runtime.invalidate_address))
+            runtime.commit(tree)
+            release.set()
+            await runtime.wait_services_ready()
+            assert runtime.dirty
+            runtime.commit(runtime.render())
+            assert rendered == [False, True]
+        runtime.finish()
+        await runtime.wait_services()
+
+
 async def test_independent_owners_and_unmount_hook_failure() -> None:
     async with running_host() as host:
 
