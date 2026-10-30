@@ -96,6 +96,7 @@ class _ServiceActivation:
                     scope.cancel()
                 if previous is not None:
                     await previous._done.wait()
+                    previous = None
                 await anyio.lowlevel.checkpoint()
                 await service.run(task_status=self)
                 if not self._started:
@@ -279,6 +280,7 @@ class ServiceOwner:
                 raise RuntimeError(msg)
             return
         self.seal()
+        self._retired = [activation for activation in self._retired if not activation._done.is_set()]
         self._active = True
         self._host = host
         for service in self._services:
@@ -297,28 +299,32 @@ class ServiceOwner:
     async def wait(self) -> None:
         """Wait for cancelled runs to finish cleaning up.
 
-        This waits for the runs that were cancelled when the call began. Errors are
-        collected and raised together once those runs finish. Failed runs remain in
-        that history, so later waits report them too, even after reactivation. Cancelling
-        a wait leaves cleanup running and allows another caller to wait for it.
+        This waits for the runs that were cancelled when the call began, reporting
+        failures from the owner's latest activation at that point. Earlier runs still
+        finish cleanup, but their failures belong to their own observers and the error
+        handler. Reactivation does not change what an existing waiter observes.
+
+        Completed waits release the cancelled runs, including failures. Concurrent
+        waiters each receive their captured results. Cancelling a wait leaves cleanup
+        running and allows another caller to wait for it.
         """
-        if self._owns_retired_activity():
+        await self._wait(tuple(self._retired), frozenset(self._current.values()))
+
+    async def _wait(self, pending: tuple[_ServiceActivation, ...], observed: frozenset[_ServiceActivation]) -> None:
+        if _owns_current_activity(pending):
             message = "service activity cannot await its own owner's shutdown"
             raise RuntimeError(message)
-        pending = tuple(self._retired)
         errors: list[Exception] = []
         for activation in pending:
             try:
                 await activation.wait()
             except Exception as error:
-                errors.append(error)
-        self._retired = [activation for activation in self._retired if activation not in pending or activation._errors]
+                if activation in observed:
+                    errors.append(error)
+        self._retired = [activation for activation in self._retired if activation not in pending]
         if errors:
             msg = "owned services failed"
             raise ExceptionGroup(msg, errors)
-
-    def _owns_retired_activity(self) -> bool:
-        return _owns_current_activity(self._retired)
 
     async def wait_ready(self) -> None:
         """Wait for the current runs to finish setup.
@@ -374,15 +380,17 @@ class _ServiceLifecycle:
                 return
             message = "service activity cannot await its own component's shutdown"
             raise RuntimeError(message)
-        pending = tuple(self._retired)
+        # Capture every owner's runs before awaiting any cleanup: another waiter or
+        # remount may change the owner while an earlier one is still stopping.
+        pending = tuple((owner, tuple(owner._retired), frozenset(owner._current.values())) for owner in self._retired)
         errors: list[Exception] = []
-        for owner in pending:
+        for owner, activations, observed in pending:
             try:
-                await owner.wait()
+                await owner._wait(activations, observed)
             except Exception as error:
                 errors.append(error)
         # Release owners whose cleanup finished, even if another owner failed.
-        self._retired.difference_update(owner for owner in pending if not owner._retired)
+        self._retired.difference_update(owner for owner, _, _ in pending if not owner._retired)
         if errors:
             message = "component service shutdown failed"
             raise ExceptionGroup(message, errors)
