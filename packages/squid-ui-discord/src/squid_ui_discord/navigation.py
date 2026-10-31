@@ -3,7 +3,7 @@
 `StackNavigator` embeds whichever child component is on top of its stack and appends the
 Back/Home/Close row *last, because it renders last* — no `__init_subclass__` machinery
 rewriting subclass constructors to keep controls in order. It is an ordinary consumer of
-`Component.embed`: the screens are children in the component tree, reaching the mount through
+`Component.boundary`: the screens are children in the component tree, reaching the mount through
 their parent rather than through a mount reference the navigator hands out.
 """
 
@@ -52,11 +52,11 @@ class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target](Com
             self.invalidate()
 
     @override
-    def render(self) -> list[LayoutNode[ComponentsV2Target]]:
+    def render(self) -> list[LayoutNode[RenderTargetT]]:
         """Render the current child followed by its navigation controls."""
         # Keyed by depth: each screen owns its control namespace, so pushing the same child
         # class twice does not make the two copies share handlers.
-        nodes: list[LayoutNode[ComponentsV2Target]] = [self.boundary(self.current, key=f"s{self.depth - 1}")]
+        nodes: list[LayoutNode[RenderTargetT]] = [self.boundary(self.current, key=f"s{self.depth - 1}")]
         chrome = self.inject(CHROME_CONTEXT)
         controls = [
             Button(label=chrome.back, on_click=self._back, key="__nav_back", disabled=self.depth == 1),

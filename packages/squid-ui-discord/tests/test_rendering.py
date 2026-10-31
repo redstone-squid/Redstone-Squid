@@ -865,7 +865,7 @@ class Tracked(Component[sl.ComponentsV2Target]):
         self.events = events
 
     @override
-    def render(self) -> Text | Boundary:
+    def render(self) -> Text | Boundary[sl.ComponentsV2Target]:
         return Text(self.name)
 
     @override

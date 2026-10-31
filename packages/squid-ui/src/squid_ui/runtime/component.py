@@ -253,7 +253,7 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
     def render(self) -> DocumentLike[RenderTargetT]:
         """Describe the message for the current state. Pure and synchronous."""
 
-    def boundary(self, child: Component[RenderTargetT], *, key: str) -> Boundary:
+    def boundary(self, child: Component[RenderTargetT], *, key: str) -> Boundary[RenderTargetT]:
         """Place child in this render tree under a stable key and namespace.
 
         The child is bound to this component's own dialect. `Component` is contravariant in
@@ -619,7 +619,7 @@ class _TreeRender[RenderTargetT: RenderTarget]:
                     raise LayoutInvariantError(message)
                 # Before the defer check: a deferred child still reaches the mount through
                 # its parent when its on_load writes state.
-                child_component = cast(Component[RenderTargetT], item.component)
+                child_component = item.component
                 child_component._parent = component
                 if self.defer is not None and self.defer(child_component):
                     self.deferred.append(child_component)
