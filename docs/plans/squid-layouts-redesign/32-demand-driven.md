@@ -176,6 +176,7 @@ class AgreementParticipant:
     actor_id: str
     display: TextLike
 
+
 class Agreement(Component):
     approved: tuple[str, ...] = state((), persist=False)
     resolved: bool = state(default=False, persist=False)

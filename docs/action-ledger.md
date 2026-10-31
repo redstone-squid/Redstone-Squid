@@ -140,8 +140,8 @@ not write has to say so:
 # local decision action
 with transaction(), strong_read():
     if target.counter("votes").value < 10:  # now a document-version precondition
-        receiver_checkpoint()               # the receiver imports an envelope here
-        panel.accepted = True               # commit raises ReactiveConflictError
+        receiver_checkpoint()  # the receiver imports an envelope here
+        panel.accepted = True  # commit raises ReactiveConflictError
 
 assert panel.accepted is False
 ```
@@ -214,6 +214,7 @@ recovery is another causally linked action:
 def present_error(rollback, aftermath) -> None:
     with aftermath.start_action("Present conflict"):
         panel.error = rollback.reason.value
+
 
 with transaction():
     on_action_rollback(present_error)
