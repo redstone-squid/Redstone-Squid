@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import override
+from typing import cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -383,9 +383,7 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
             label=lambda build: f"#{build.id} {build.title}",
             # `_BuildSource` filters on `submission_status`, so every listed build carries one; the
             # domain type stays optional only for a build that has not been submitted yet.
-            summary=lambda build: (
-                f"{build.category} · {build.submission_status.name.lower()}"  # pyright: ignore[reportOptionalMemberAccess]
-            ),
+            summary=lambda build: f"{build.category} · {cast(Status, build.submission_status).name.lower()}",
             detail=self._detail,
             page_size=15,
             title=tr(t"Build catalogue"),

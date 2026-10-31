@@ -36,7 +36,7 @@ def test_known_labels_become_keys_and_unknown_names_remain_proposals() -> None:
     assert result.answers["restrictions"] == ["observerless"]
     assert result.answers["source_version"] == "Java 1.21.0"
     assert result.answers["schematic_visibility"] == "reviewer_only"
-    assert result.answers["include_inventories"] is False
+    assert {"include_inventories", "include_free_text"}.isdisjoint(result.answers)
     assert "rights_attestation" not in result.answers
 
 

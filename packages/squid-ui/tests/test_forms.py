@@ -73,7 +73,7 @@ def test_parallel_read_form_cannot_declare_history_recording() -> None:
 def _multi_choice(
     *, required: bool = True, minimum: int = 0, maximum: int | None = None
 ) -> sl.forms.MultiChoiceField[int, Any]:
-    return sl.forms.MultiChoiceField(
+    return sl.forms.MultiChoiceField[int, Any](
         key="values",
         label="Values",
         options=(

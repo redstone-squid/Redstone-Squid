@@ -164,7 +164,8 @@ class FormField[ValueT, RequiredT: bool = bool](ABC):
     def bind(self, name: str) -> Self:
         """Fill descriptor-derived schema metadata without mutating the declaration."""
         label = self.label if self.label is not None else name.replace("_", " ").capitalize()
-        return replace(self, key=self.key or name, label=label, _declaration=self._declaration or self)
+        # Pyrefly treats this stored field reference as an invoked descriptor.
+        return replace(self, key=self.key or name, label=label, _declaration=self._declaration or self)  # pyrefly: ignore[no-matching-overload]
 
     @abstractmethod
     def parse(self, raw: object) -> ValueT | None:
@@ -748,7 +749,8 @@ class FormSpec:
                             (
                                 item
                                 for item in self.items
-                                if isinstance(item, FormField) and (reference is item or reference is item._declaration)
+                                # Pyrefly treats this stored field reference as an invoked descriptor.
+                                if isinstance(item, FormField) and (reference is item or reference is item._declaration)  # pyrefly: ignore[no-matching-overload]
                             ),
                             None,
                         )
@@ -785,7 +787,8 @@ class FormSpec:
                 continue
             # `FormField` is also the `Form` descriptor, so BasedPyright runs `__get__` over this
             # field's declared type; the slot on a frozen slotted dataclass holds a plain value.
-            declared: FormField[Any] | None = field.fallback  # pyright: ignore[reportAttributeAccessIssue]
+            # Pyrefly treats this stored field reference as an invoked descriptor.
+            declared: FormField[Any] | None = field.fallback  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[no-matching-overload]
             if declared is None:
                 message = f"form field {field.key!r} requires unsupported capability {field.capability!r}"
                 raise LayoutInvariantError(message)
@@ -796,7 +799,8 @@ class FormSpec:
                     key=field.key,
                     label=fallback.label if fallback.label is not None else field.label,
                     description=fallback.description if fallback.description is not None else field.description,
-                    _declaration=field._declaration or field,
+                    # Pyrefly treats this stored field reference as an invoked descriptor.
+                    _declaration=field._declaration or field,  # pyrefly: ignore[no-matching-overload]
                 )
             )
         return replace(self, items=tuple(adapted))

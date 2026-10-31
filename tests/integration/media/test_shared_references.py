@@ -27,6 +27,7 @@ async def test_shared_media_is_normalized_once_and_discarded_independently(
     await create_submission_draft(sessions, draft_id=second)
     async with sessions.begin() as session:
         owner = await session.scalar(select(SubmissionDraft.owner_account_id).where(SubmissionDraft.id == first))
+        assert owner is not None
         await session.execute(
             update(SubmissionDraft).where(SubmissionDraft.id == second).values(owner_account_id=owner)
         )
@@ -59,6 +60,7 @@ async def test_expiring_birth_draft_preserves_other_candidate(
     await create_submission_draft(sessions, draft_id=second)
     async with sessions.begin() as session:
         owner = await session.scalar(select(SubmissionDraft.owner_account_id).where(SubmissionDraft.id == first))
+        assert owner is not None
         await session.execute(
             update(SubmissionDraft).where(SubmissionDraft.id == second).values(owner_account_id=owner)
         )
