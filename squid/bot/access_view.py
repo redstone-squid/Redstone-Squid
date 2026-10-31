@@ -31,12 +31,10 @@ type ActorProvider = Callable[[], Awaitable[Actor]]
 type AccessAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class AccessScreen(sd.Screen):
+class AccessScreen(sd.UserSessionScreen, session_name="access"):
     """A guild access workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("access")
     timeout = 300
-    audience = "personal"
 
     def __init__(
         self,

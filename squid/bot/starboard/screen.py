@@ -37,12 +37,10 @@ class StarboardOperations(Protocol):
     async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None: ...
 
 
-class StarboardScreen(sd.Screen):
+class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
     """A guild starboard workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("starboard", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300
-    audience = "personal"
 
     def __init__(
         self,

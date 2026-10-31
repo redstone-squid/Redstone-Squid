@@ -345,12 +345,10 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
         return False
 
 
-class BuildBrowseScreen(sd.Screen):
+class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
     """A live build workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("build-browse")
     timeout = 300
-    audience = "personal"
     follow_topics = True
 
     def __init__(

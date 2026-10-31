@@ -53,12 +53,10 @@ class RecordComputationOperations(Protocol):
 type RecordAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class RecordsScreen(sd.Screen):
+class RecordsScreen(sd.UserGuildSessionScreen, session_name="records"):
     """A records workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("records", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300
-    audience = "personal"
 
     def __init__(
         self,

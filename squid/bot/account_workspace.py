@@ -23,12 +23,10 @@ from squid_ui_discord.modal import EntityField
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class AccountWorkspace(sd.Screen):
+class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
     """An account workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("account")
     timeout = 300
-    audience = "personal"
 
     def __init__(
         self,
