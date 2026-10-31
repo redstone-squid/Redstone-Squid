@@ -132,9 +132,7 @@ class StickyMessage(abc.ABC):
     def record_activity(self, channel_id: int) -> None:
         """Record general message activity in the channel to track staleness."""
         if channel_id in self._last_message_id:
-            self._messages_since_reposition[channel_id] = (
-                self._messages_since_reposition.get(channel_id, 0) + 1
-            )
+            self._messages_since_reposition[channel_id] = self._messages_since_reposition.get(channel_id, 0) + 1
 
     async def trigger(self, channel: TextChannel) -> None:
         """Request the sticky message be posted or refreshed in the channel.
@@ -179,7 +177,7 @@ class StickyMessage(abc.ABC):
                 try:
                     old_msg = channel.get_partial_message(old_id)
                     await old_msg.delete()
-                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                except discord.NotFound, discord.Forbidden, discord.HTTPException:
                     logger.debug(
                         "Could not delete previous sticky message %s in %s",
                         old_id,
@@ -192,7 +190,7 @@ class StickyMessage(abc.ABC):
                 new_msg = await channel.send(view=view)
                 self._last_message_id[channel.id] = new_msg.id
                 self._messages_since_reposition[channel.id] = 0
-            except (discord.Forbidden, discord.HTTPException):
+            except discord.Forbidden, discord.HTTPException:
                 logger.warning("Failed to send sticky message in channel %s", channel.id, exc_info=True)
 
     async def dismiss(self, channel: TextChannel) -> None:
@@ -208,7 +206,7 @@ class StickyMessage(abc.ABC):
                 try:
                     old_msg = channel.get_partial_message(old_id)
                     await old_msg.delete()
-                except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                except discord.NotFound, discord.Forbidden, discord.HTTPException:
                     pass
 
 
@@ -287,9 +285,7 @@ class DynamicBuildLogConsentButton[
 
     @classmethod
     @override
-    async def from_custom_id(
-        cls: type[Self], interaction: Interaction[BotT], item: Item[Any], match: Any, /
-    ) -> Self:
+    async def from_custom_id(cls: type[Self], interaction: Interaction[BotT], item: Item[Any], match: Any, /) -> Self:
         return cls()
 
     @override
