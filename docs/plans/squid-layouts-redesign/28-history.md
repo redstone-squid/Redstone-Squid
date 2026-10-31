@@ -31,14 +31,17 @@ attribute would need `Component.mutated("history")` at every mutation site.
 ```python
 type Inverse = Callable[[], Awaitable[None]]
 
+
 class History:
-    can_undo: bool; can_redo: bool
-    undo_label: TextLike | None; redo_label: TextLike | None
-    entries: tuple[HistoryEntry, ...]      # oldest first
+    can_undo: bool
+    can_redo: bool
+    undo_label: TextLike | None
+    redo_label: TextLike | None
+    entries: tuple[HistoryEntry, ...]  # oldest first
     redoable: tuple[HistoryEntry, ...]
-    def record(self, label: TextLike, *, undo: Inverse | None = None,
-               redo: Inverse | None = None) -> None: ...
-    async def undo(self) -> HistoryEntry | None: ...   # None when the stack is empty
+
+    def record(self, label: TextLike, *, undo: Inverse | None = None, redo: Inverse | None = None) -> None: ...
+    async def undo(self) -> HistoryEntry | None: ...  # None when the stack is empty
     async def redo(self) -> HistoryEntry | None: ...
     def clear(self) -> None: ...
 ```

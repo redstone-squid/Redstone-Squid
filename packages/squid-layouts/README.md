@@ -144,9 +144,9 @@ close_poll = polls.define("close", aliases=("poll:close",))
 
 router = sl.discord.Router(namespace=routes, on_gone=control_gone)
 
+
 @polls.route(close_poll)
-async def close(interaction: discord.Interaction[Bot]) -> None:
-    ...
+async def close(interaction: discord.Interaction[Bot]) -> None: ...
 ```
 
 Reusable policy is a `Middleware[BotT]` instance attached before `Router.register(client)`:
@@ -156,6 +156,7 @@ class TraceRoutes(sl.discord.Middleware[Bot]):
     async def dispatch(self, request, proceed) -> None:
         with route_span(request):
             await proceed()
+
 
 router.add_middleware(TraceRoutes())
 polls.add_middleware(PollAuthorization())
@@ -218,6 +219,7 @@ class BuildSource:
     async def fetch(self, position: sl.Position, extent: int) -> sl.Window[Build]:
         resolved, rows, has_previous, has_more = await builds.window(position, extent)
         return sl.Window(resolved, tuple(rows), has_previous, has_more)
+
 
 ranking = sl.SourceRankedList(
     BuildSource(),

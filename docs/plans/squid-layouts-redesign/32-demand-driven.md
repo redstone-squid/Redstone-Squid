@@ -43,9 +43,11 @@ class RosterSlot:
     capacity: int | None = None
     tone: Tone = Tone.NEUTRAL
 
+
 class Overflow(StrEnum):
     REJECT = "reject"
     WAITLIST = "waitlist"
+
 
 @dataclass(frozen=True, slots=True)
 class RosterEntry:
@@ -54,11 +56,13 @@ class RosterEntry:
     slot: str
     joined_at: datetime | None = None
 
+
 class RosterVerdict(StrEnum):
     SEATED = "seated"
     WAITLISTED = "waitlisted"
     FULL = "full"
     MOVED = "moved"
+
 
 @dataclass(frozen=True, slots=True)
 class Placement:
@@ -67,6 +71,7 @@ class Placement:
 
     def verdict(self, actor_id: str, slot: str) -> RosterVerdict: ...
 
+
 def place(
     entries: Sequence[RosterEntry],
     slots: Sequence[RosterSlot],
@@ -74,13 +79,14 @@ def place(
     overflow: Overflow = Overflow.WAITLIST,
 ) -> Placement: ...
 
+
 def roster(
     slots: Sequence[RosterSlot],
     placement: Placement,
     *,
     key: str,
     on_join: Callable[[SelectionEvent], Awaitable[None]] | None = None,
-    routes: Mapping[str, str] | None = None,      # slot key → route_id
+    routes: Mapping[str, str] | None = None,  # slot key → route_id
     locked: bool = False,
     show_waitlist: bool = True,
 ) -> LayoutNode: ...
@@ -127,12 +133,13 @@ class TallyOption:
     mine: bool = False
     emoji: str | None = None
 
+
 def tally(
     options: Sequence[TallyOption],
     *,
     key: str,
     on_vote: Callable[[SelectionEvent], Awaitable[None]] | None = None,
-    routes: Mapping[str, str] | None = None,      # option key → route_id
+    routes: Mapping[str, str] | None = None,  # option key → route_id
     total: int | None = None,
     show_bars: bool = True,
 ) -> LayoutNode: ...
@@ -169,6 +176,7 @@ class GridCell:
     label: TextLike
     available: bool = True
     tone: Tone = Tone.NEUTRAL
+
 
 @dataclass(frozen=True, slots=True)
 class Grid:
