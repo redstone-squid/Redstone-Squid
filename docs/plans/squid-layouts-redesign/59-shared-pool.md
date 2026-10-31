@@ -115,6 +115,7 @@ def _create(self, scope: ScopeT) -> SharedT:
     The pool is unchanged whether this returns or raises.
     """
 
+
 def _adopt(self, scope: ScopeT, handle: SharedT) -> SharedT:
     """Retain `handle` as canonical for `scope`, or return the incumbent if one already exists.
 
@@ -188,6 +189,7 @@ writes:
 class Preferences(sl.runtime.Shared[UserGuildScope]):
     theme: str = sl.state("dark")
 
+
 preferences = sl.runtime.SharedPool(Preferences, bus)
 prefs = preferences.get(Opener.of(interaction).user_guild())
 ```
@@ -245,13 +247,14 @@ the commands extension"*. [65](65-screen-entrypoints.md) already deferred a Cont
 ```python
 type SharedFactory[ScopeT, SharedT] = Callable[[TopicBus, ScopeT], SharedT]
 
+
 class SharedPool[ScopeT: Hashable, SharedT: Shared[Any]]:
     @overload
-    def __init__(self, namespace: Callable[[TopicBus, ScopeT], SharedT], bus: TopicBus,
-                 *, factory: None = None) -> None: ...
+    def __init__(
+        self, namespace: Callable[[TopicBus, ScopeT], SharedT], bus: TopicBus, *, factory: None = None
+    ) -> None: ...
     @overload
-    def __init__(self, namespace: type[SharedT], bus: TopicBus,
-                 *, factory: SharedFactory[ScopeT, SharedT]) -> None: ...
+    def __init__(self, namespace: type[SharedT], bus: TopicBus, *, factory: SharedFactory[ScopeT, SharedT]) -> None: ...
 
     def get(self, scope: ScopeT) -> SharedT: ...
     def get_existing(self, scope: ScopeT) -> SharedT | None: ...
@@ -276,6 +279,7 @@ extra collaborators fixes them once, when constructing its pool:
 ```python
 def make_search_state(bus: TopicBus, scope: UserGuildScope) -> SearchState:
     return SearchState(bus, scope, index=index)
+
 
 searches = sl.runtime.SharedPool(SearchState, bus, factory=make_search_state)
 ```
