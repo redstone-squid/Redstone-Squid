@@ -217,7 +217,7 @@ def controls(*items: Conditional[Control]) -> ControlGroup:
     return ControlGroup(_controls(items, "controls"))
 
 
-def _controls(items: tuple[Conditional[Control], ...], origin: str) -> tuple[Control, ...]:
+def _controls(items: tuple[object, ...], origin: str) -> tuple[Control, ...]:
     collected: list[Control] = []
     for index, item in enumerate(items):
         if item is None or item is False:
@@ -227,6 +227,12 @@ def _controls(items: tuple[Conditional[Control], ...], origin: str) -> tuple[Con
             raise TypeError(message)
         collected.append(item)
     return tuple(collected)
+
+
+def _check_content(value: object, origin: str, index: int) -> None:
+    if value is True:
+        message = f"{origin} argument {index}: True is not content"
+        raise TypeError(message)
 
 
 __all__ = [

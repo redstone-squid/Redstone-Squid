@@ -26,6 +26,7 @@ from squid_ui.primitives.styles import Color
 from squid_ui.target_types import ComponentsV2Target, Renderable
 from squid_ui.text import TextLike
 from squid_ui_discord._exact_factories import (
+    _check_content,
     button,
     code,
     controls,
@@ -96,9 +97,7 @@ def panel(*children: Child, accent: Color | None = None, spoiler: bool = False) 
     for index, child in enumerate(children):
         if child is None or child is False:
             continue
-        if child is True:
-            message = f"panel argument {index}: True is not content"
-            raise TypeError(message)
+        _check_content(child, "panel", index)
         if isinstance(child, Renderable):
             normalized.append(cast(Node, child))
         else:
@@ -110,9 +109,7 @@ def _text_child(value: SectionText, origin: str, index: int) -> Text | Heading |
     if value is None or value is False:
         message = f"{origin} argument {index}: omitted content reached normalization"
         raise TypeError(message)
-    if value is True:
-        message = f"{origin} argument {index}: True is not content"
-        raise TypeError(message)
+    _check_content(value, origin, index)
     return value if isinstance(value, Text | Heading | Footer) else Text(value)
 
 

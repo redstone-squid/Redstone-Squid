@@ -49,6 +49,7 @@ from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import NEUTRAL, Localization, TextLike
 from squid_ui_discord._draw import plan_and_draw
 from squid_ui_discord._exact_factories import (
+    _check_content,
     button,
     code,
     controls,
@@ -128,9 +129,7 @@ def card(
     for index, child in enumerate(children):
         if child is None or child is False:
             continue
-        if child is True:
-            message = f"card argument {index}: True is not content"
-            raise TypeError(message)
+        _check_content(child, "card", index)
         if isinstance(child, Renderable):
             normalized.append(cast(Node, child))
         else:
