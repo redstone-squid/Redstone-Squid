@@ -130,6 +130,7 @@ anyio==4.15.1 \
     #   openai
     #   redstone-squid
     #   squid-storage
+    #   squid-ui
     #   squid-ui-discord
     #   starlette
 async-lru==2.4.0 \
