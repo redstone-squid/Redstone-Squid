@@ -74,9 +74,7 @@ class _ArtifactsPayload(_StrictPayloadModel):
     def to_domain(self) -> VerifiedSubmissionArtifacts:
         return VerifiedSubmissionArtifacts(
             normalized_media_upload_ids=tuple(UUID(identifier) for identifier in self.normalized_media_upload_ids),
-            schematic_id=UUID(self.schematic_id)
-            if self.schematic_id is not None
-            else None,
+            schematic_id=UUID(self.schematic_id) if self.schematic_id is not None else None,
         )
 
 
@@ -357,9 +355,7 @@ def _submission_document(submission: NormalizedSubmission) -> dict[str, object]:
         "artifacts": {
             "normalized_media_upload_ids": [str(value) for value in submission.artifacts.normalized_media_upload_ids],
             "schematic_id": (
-                str(submission.artifacts.schematic_id)
-                if submission.artifacts.schematic_id is not None
-                else None
+                str(submission.artifacts.schematic_id) if submission.artifacts.schematic_id is not None else None
             ),
         },
         "details": details,
