@@ -12,7 +12,7 @@ pip install 'squid-ui-discord[durable]==0.1.0a1'
 pip install 'squid-ui-discord[postgres]==0.1.0a1'
 ```
 
-Install one runtime on each Discord client, then enter application code through an invocation or
+Install one runtime on each Discord client, then enter application code through an owner scope and
 a declarative screen:
 
 ```python
@@ -21,6 +21,7 @@ import squid_ui_discord as sd
 
 
 runtime = sd.install(bot)
+app_ui = runtime.scope(bot)
 
 
 class Counter(sd.Screen):
@@ -42,7 +43,7 @@ class Counter(sd.Screen):
 
 @bot.tree.command()
 async def counter(interaction) -> None:
-    await Counter().show(interaction)
+    await app_ui.respond(interaction, Counter())
 ```
 
 `sd.install()` starts no tasks. Run the installed runtime before opening panels, even when
@@ -72,6 +73,16 @@ caller is cancelled; resource-specific timeouts belong in that cleanup.
 
 Components V2 uses
 `sd.DISCORD_V2_DPY27`; classic messages use `sd.DISCORD_V1_DPY27` through `sd.classic`.
+
+Named sessions can use `sd.UserSessionScreen`, `sd.UserGuildSessionScreen`, or
+`sd.SharedGuildSessionScreen` with a `session_name` class keyword. They preserve the typed
+request owner and accept an explicit `SessionSpec` for custom session policy. Exact Discord
+layouts have factories under `sd.v2` and `sd.classic`, returning the existing primitive nodes.
+
+Install `sd.devtools.DevTools` as a Cog for prefix `dev ui` and the hybrid `/dev ui` command tree,
+or call `await sd.open_devtools(ctx, runtime=devtools_runtime)` from an authorized host command.
+`sd.devtools_runtime.DevToolsPolicy()` is read-only; mutations require `full_access()` or an
+explicit `allow(...)` list. Persistence records load only when the dashboard visits that section.
 
 Storage stays optional. Importing `squid_ui_discord` without a durability extra does not import or
 require `squid-storage`.
