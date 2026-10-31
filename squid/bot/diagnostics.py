@@ -1,8 +1,7 @@
 """Look up a stored error report from the reference a user quoted."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
-import discord
 from discord import app_commands
 
 import squid_ui_discord as sd
@@ -21,25 +20,22 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         super().__init__(bot)
         self.error_reports = bot.services.error_reports
 
-    @app_commands.command(name="errors")
+    @sd.command(name="errors")
     @app_commands.describe(reference="The error reference to open immediately")
     @hide_unless(manage_guild=True)
-    async def errors(self, interaction: discord.Interaction[BotT], reference: str | None = None) -> None:
+    async def errors(self, request: sd.Request[Self], reference: str | None = None) -> ErrorReportScreen:
         """Browse private error reports, optionally opening one reference."""
-        await enforce(interaction, DIAGNOSTICS_ERROR_READ)
+        await enforce(request, DIAGNOSTICS_ERROR_READ)
 
         async def may_clear() -> bool:
-            return await allows(interaction, DIAGNOSTICS_ERROR_CLEAR)
+            return await allows(request, DIAGNOSTICS_ERROR_CLEAR)
 
-        await self.ui.respond(
-            interaction,
-            ErrorReportScreen(
-                self.error_reports,
-                bus=self.bot.topic_bus,
-                reference=reference,
-                can_clear=await may_clear(),
-                authorize_clear=may_clear,
-            ),
+        return ErrorReportScreen(
+            self.error_reports,
+            bus=self.bot.topic_bus,
+            reference=reference,
+            can_clear=await may_clear(),
+            authorize_clear=may_clear,
         )
 
 

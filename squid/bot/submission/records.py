@@ -1,9 +1,8 @@
 """Discord workspace for querying and maintaining computed records."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING, Literal, Protocol, override
+from typing import TYPE_CHECKING, Literal, Protocol, Self, override
 
-import discord
 from discord import app_commands
 
 import squid_ui as sl
@@ -230,25 +229,22 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
         self.records = bot.services.records
         self.computation = bot.services.record_computation
 
-    @app_commands.command(name="records", description="Inspect and maintain computed records")
+    @sd.command(name="records", description="Inspect and maintain computed records")
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
-    async def records_workspace(self, interaction: discord.Interaction[BotT]) -> None:
+    async def records_workspace(self, request: sd.Request[Self]) -> RecordsScreen:
         """Open capability-aware diagnostics, lookup, and rebuild tools."""
-        await enforce(interaction, RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
+        await enforce(request, RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
 
         async def authorize(node: PermissionNode) -> bool:
-            return await allows(interaction, node)
+            return await allows(request, node)
 
-        await self.ui.respond(
-            interaction,
-            RecordsScreen(
-                self.records,
-                self.computation,
-                can_inspect=await authorize(RECORD_ENTRY_INSPECT),
-                can_rebuild=await authorize(RECORD_ENTRY_REBUILD),
-                authorize=authorize,
-            ),
+        return RecordsScreen(
+            self.records,
+            self.computation,
+            can_inspect=await authorize(RECORD_ENTRY_INSPECT),
+            can_rebuild=await authorize(RECORD_ENTRY_REBUILD),
+            authorize=authorize,
         )
 
 

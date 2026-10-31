@@ -48,7 +48,8 @@ def poll_controls() -> sl.semantic.ActionControls:
 @polls.route(poll_close)
 async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """End a poll early, tallying it where it stands."""
-    authorized = await _authorize(interaction)
+    request = await interaction.client.app_ui.request(interaction)
+    authorized = await _authorize(request)
     if authorized is None:
         return
     _snapshot, actor = authorized
@@ -56,16 +57,17 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
     assert interaction.message is not None
     result = await bot.services.votes.close(interaction.message.id, actor)
     if result.rejection is not None or result.session is None:
-        await _refuse(interaction, result.rejection or VoteRejection.NOT_FOUND)
+        await _refuse(request, result.rejection or VoteRejection.NOT_FOUND)
         return
     await bot.refresh_posts("vote_session", str(result.session.id))
-    await bot.app_ui.respond(interaction, text_node(tr(t"Poll closed.")), audience="personal")
+    await request.respond(text_node(tr(t"Poll closed.")), audience="personal")
 
 
 @polls.route(poll_refresh)
 async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """Recompute cached role weights, for a poll whose voters gained or lost roles."""
-    authorized = await _authorize(interaction)
+    request = await interaction.client.app_ui.request(interaction)
+    authorized = await _authorize(request)
     if authorized is None:
         return
     _snapshot, _actor = authorized
@@ -79,41 +81,41 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
         # A count, not the raw account ids the command used to print (audit C5).
         count = len(result.unresolved_account_ids)
         text += " " + tr(tr(t"{count} voter(s) could not be resolved, so their cached weight was kept."))
-    await bot.app_ui.respond(interaction, text_node(text), audience="personal")
+    await request.respond(text_node(text), audience="personal")
 
 
 async def _authorize(
-    interaction: discord.Interaction[squid.bot.app.RedstoneSquid],
+    request: sd.Request[squid.bot.app.RedstoneSquid],
 ) -> tuple[VoteSessionSnapshot, VoteActor] | None:
     """The session and actor behind a click, or `None` once the click has been refused.
 
     Refreshing recomputes the weights a close would act on, so both controls are gated by
     the session's own `can_close` rather than by a second copy of the rule.
     """
-    bot = interaction.client
+    bot = request.owner
+    interaction = request.interaction
+    assert interaction is not None
     message = interaction.message
     if message is None or not isinstance(interaction.user, discord.Member):
-        await _refuse(interaction, VoteRejection.WRONG_GUILD)
+        await _refuse(request, VoteRejection.WRONG_GUILD)
         return None
 
     snapshot = await bot.services.votes.get_session(message.id)
     if snapshot is None:
-        await _refuse(interaction, VoteRejection.NOT_FOUND)
+        await _refuse(request, VoteRejection.NOT_FOUND)
         return None
 
     account_id = await bot.account_ids.resolve(bot.services.accounts, interaction.user.id)
     actor = await resolve_actor(bot, interaction.user, account_id=account_id or 0)
     rejection = snapshot.can_close(actor)
     if rejection is not None:
-        await _refuse(interaction, rejection)
+        await _refuse(request, rejection)
         return None
     return snapshot, actor
 
 
-async def _refuse(interaction: discord.Interaction[Any], rejection: VoteRejection) -> None:
-    runtime = sd.DiscordUIRuntime.of(interaction)
-    await runtime.scope(runtime.client).respond(
-        interaction,
+async def _refuse(request: sd.Request[Any], rejection: VoteRejection) -> None:
+    await request.respond(
         text_node(describe_rejection(rejection)),
         audience="personal",
     )

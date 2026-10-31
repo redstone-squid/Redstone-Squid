@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from textwrap import dedent
-from typing import TYPE_CHECKING, Any, Protocol, cast, override
+from typing import TYPE_CHECKING, Any, Protocol, Self, cast, override
 
 import discord
 from discord import app_commands
@@ -177,11 +177,11 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         self.bot.help_command = Help()
 
     # /help [command]
-    @app_commands.command()
+    @sd.command()
     @app_commands.describe(command=app_commands.locale_str("The command to get help for."))
-    async def help(self, interaction: discord.Interaction[BotT], command: str | None):
+    async def help(self, request: sd.Request[Self], command: str | None) -> HelpScreen:
         """Show a grouped command directory or focused command details."""
-        await self.ui.respond(interaction, HelpScreen(self.bot, self._all_commands(), command))
+        return HelpScreen(self.bot, self._all_commands(), command)
 
     def _all_commands(self) -> list[AnyCommand]:
         """Every command in either public tree, de-duplicated by qualified name."""
