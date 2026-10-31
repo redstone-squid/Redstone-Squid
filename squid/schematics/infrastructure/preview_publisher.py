@@ -316,7 +316,7 @@ class PostgresSchematicPreviewPublisher:
         )
 
     @staticmethod
-    def _registered_preview_urls(build_id: int) -> Select[str]:
+    def _registered_preview_urls(build_id: int) -> Select[tuple[str]]:
         """Return generated preview URLs whose lifecycle this publisher owns."""
         return (
             select(SchematicRender.url)

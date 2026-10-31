@@ -320,24 +320,3 @@ def _literal[T: str](value: object, options: tuple[T, ...], *, field: str) -> T:
         msg = f"{field} must be one of {options}"
         raise ValueError(msg)
     return cast(T, value)
-
-
-def _json_object(value: object, *, field: str) -> dict[str, JSONValue]:
-    mapping = _mapping(value, field=field)
-    return {key: _json_value(item, field=f"{field}.{key}") for key, item in mapping.items()}
-
-
-def _json_value(value: object, *, field: str) -> JSONValue:
-    if value is None or isinstance(value, bool | int | str):
-        return value
-    if isinstance(value, float):
-        if isfinite(value):
-            return value
-        msg = f"{field} must be finite"
-        raise ValueError(msg)
-    if isinstance(value, Mapping):
-        return _json_object(value, field=field)
-    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
-        return [_json_value(item, field=field) for item in value]
-    msg = f"{field} is not a JSON value"
-    raise TypeError(msg)

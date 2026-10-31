@@ -88,8 +88,6 @@ def normalized_submission(account_id: int, draft_id: UUID, source_version: str) 
             visibility=SubmissionSchematicVisibility.REVIEWER_ONLY,
             license=None,
             rights_attested=False,
-            include_inventories=False,
-            include_free_text=False,
         ),
         completion=None,
         ai_generated=False,

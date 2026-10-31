@@ -123,7 +123,7 @@ def test_preview_orchestration_has_an_application_owned_boundary() -> None:
     assert isinstance(schematics.previews, SchematicPreviewService)
 
 
-def publication(*, public: bool = False) -> SchematicPublication:
+def original_publication(*, public: bool = False) -> SchematicPublication:
     now = Instant.parse_iso("2026-08-11T12:00:00Z")
     if public:
         return SchematicPublication(
@@ -163,7 +163,7 @@ def test_publication_requires_rights_and_no_content_rewriting() -> None:
 
     with pytest.raises(DataIntegrityError, match="license and rights"):
         SchematicPublication(visibility=SchematicVisibility.PUBLIC_DOWNLOAD)
-    assert publication(public=True).is_public_downloadable is True
+    assert original_publication(public=True).is_public_downloadable is True
     assert SchematicLicense.CC_BY_NC_SA_4_0.uri == "https://creativecommons.org/licenses/by-nc-sa/4.0/"
     assert (
         SchematicPublication(
@@ -194,7 +194,7 @@ async def test_public_content_requires_the_build_attachment_and_complete_publica
         digest,
         make_analysis(),
         primary=True,
-        publication=publication(public=True),
+        publication=original_publication(public=True),
     )
 
     download = await schematics.public_download(7, public_id)
@@ -215,7 +215,7 @@ async def test_public_content_requires_the_build_attachment_and_complete_publica
 async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
     schematics, _analyzer, store = service()
     digest = await store.put_file(b"stored", source_format=SchematicFormat.SPONGE_SCHEM)
-    public = publication(public=True)
+    public = original_publication(public=True)
     await store.record_analysis(7, digest, make_analysis(), primary=True, publication=public)
     await store.record_analysis(7, digest, make_analysis(), primary=False)
     await store.record_analysis(
@@ -241,7 +241,7 @@ async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
 
 async def test_two_public_attachments_download_while_only_the_featured_one_supplies_preview() -> None:
     schematics, _analyzer, store = service(render_enabled=True, resource_pack=FakeResourcePack())
-    publication = sanitized_publication(public=True)
+    publication = original_publication(public=True)
     first_digest = await store.put_file(b"featured", source_format=SchematicFormat.LITEMATIC)
     second_digest = await store.put_file(b"secondary", source_format=SchematicFormat.LITEMATIC)
     featured_id = await store.record_analysis(
@@ -460,7 +460,7 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=publication(),
+        publication=original_publication(),
     )
 
     prepared = await schematics.prepare_render(7)
@@ -494,7 +494,7 @@ async def test_render_is_skipped_wholesale_when_previews_are_disabled() -> None:
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=publication(),
+        publication=original_publication(),
     )
 
     assert await schematics.prepare_render(7) == SkippedRender(RenderSkipReason.RENDERING_DISABLED)
@@ -506,7 +506,7 @@ async def test_render_is_skipped_when_the_stored_file_has_gone_missing() -> None
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=publication(),
+        publication=original_publication(),
     )
     store.files.clear()
 
@@ -520,13 +520,10 @@ async def test_permanent_render_skips_do_not_acquire_unavailable_render_resource
 
     assert await schematics.prepare_render(404) == SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC)
 
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
-    assert await schematics.prepare_render(7) == SkippedRender(RenderSkipReason.NOT_SANITIZED)
-
     await schematics.attach(
         8,
         IngestRequest(data=litematic_bytes(b"\x00"), filename="missing.litematic"),
-        publication=sanitized_publication(),
+        publication=original_publication(),
     )
     stored = await schematics.featured_for_build(8)
     assert stored is not None
@@ -543,19 +540,19 @@ async def test_explaining_a_render_skip_costs_nothing(caplog: pytest.LogCaptureF
     assert stored is not None
 
     with caplog.at_level(logging.INFO, logger="squid.schematics.application.preview_service"):
-        assert await schematics.explain_render_skip(stored) is RenderSkipReason.NOT_SANITIZED
+        assert await schematics.explain_render_skip(stored) is None
 
     assert analyzer.render_calls == []
     assert analyzer.capabilities_calls == 0
     assert caplog.records == []
 
 
-async def test_a_sanitized_schematic_within_budget_has_no_skip_to_explain() -> None:
+async def test_an_original_schematic_within_budget_has_no_skip_to_explain() -> None:
     schematics, _, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=sanitized_publication(),
+        publication=original_publication(),
     )
     stored = await schematics.featured_for_build(7)
     assert stored is not None
@@ -569,7 +566,7 @@ async def test_explaining_a_render_skip_reports_a_missing_source_without_acquiri
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=sanitized_publication(),
+        publication=original_publication(),
     )
     stored = await schematics.featured_for_build(7)
     assert stored is not None
@@ -584,12 +581,12 @@ async def test_render_recipe_includes_the_schematic_content_identity() -> None:
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="first.litematic"),
-        publication=publication(),
+        publication=original_publication(),
     )
     await schematics.attach(
         8,
         IngestRequest(data=litematic_bytes(b"\x00"), filename="second.litematic"),
-        publication=publication(),
+        publication=original_publication(),
     )
 
     first = await schematics.prepare_render(7)
@@ -606,7 +603,7 @@ async def test_render_recipe_is_stable_and_invalidated_by_camera_or_pack_identit
     await baseline.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=sanitized_publication(),
+        publication=original_publication(),
     )
     same, _, _ = service(store=store, render_enabled=True, resource_pack=FakeResourcePack(b"pack-a"))
     camera, _, _ = service(
@@ -652,7 +649,7 @@ async def test_render_skips_a_schematic_over_a_budget(
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=publication(),
+        publication=original_publication(),
     )
 
     with caplog.at_level(logging.INFO, logger="squid.schematics.application.preview_service"):
@@ -671,7 +668,7 @@ async def test_render_worker_crash_is_retried_by_the_durable_queue() -> None:
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=publication(),
+        publication=original_publication(),
     )
     analyzer.failure = SchematicWorkerCrashedError(operation="render", exit_code=-9)
 
@@ -683,7 +680,7 @@ async def test_render_worker_crash_is_retried_by_the_durable_queue() -> None:
         store.records[0][1],
         analyzer.analysis,
         primary=True,
-        publication=publication(),
+        publication=original_publication(),
     )
     assert await schematics.prepare_render(8) == SkippedRender(RenderSkipReason.POISONED_FILE)
     assert len(analyzer.render_calls) == 1
@@ -697,7 +694,7 @@ async def test_a_renderer_that_does_not_return_a_png_is_an_operational_failure()
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=publication(),
+        publication=original_publication(),
     )
 
     with pytest.raises(SchematicRenderUnavailableError):
@@ -710,7 +707,7 @@ async def test_rendering_now_serves_the_recipe_the_queue_already_rendered() -> N
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=sanitized_publication(),
+        publication=original_publication(),
     )
     prepared = await schematics.prepare_render(7)
     assert isinstance(prepared, FreshRender)
@@ -730,7 +727,7 @@ async def test_rendering_now_with_a_different_camera_renders_a_different_recipe(
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=sanitized_publication(),
+        publication=original_publication(),
     )
     prepared = await schematics.prepare_render(7)
     assert isinstance(prepared, FreshRender)
@@ -748,16 +745,16 @@ async def test_rendering_now_with_a_different_camera_renders_a_different_recipe(
 
 
 async def test_rendering_now_refuses_with_the_reason_rather_than_a_blank_image() -> None:
-    schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
+    schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack(), render_max_block_count=0)
     await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
 
     with pytest.raises(SchematicRenderRefusedError) as refusal:
         await schematics.render_now(7)
 
-    assert refusal.value.reason == RenderSkipReason.NOT_SANITIZED.value
-    assert refusal.value.public_context == {"reason": "not_sanitized"}
+    assert refusal.value.reason == RenderSkipReason.OVER_BLOCK_BUDGET.value
+    assert refusal.value.public_context == {"reason": "over_block_budget"}
     # The sentence a user is shown is the skip reason's own, not a generic conflict message.
-    assert refusal.value.public_detail() == tr(RenderSkipReason.NOT_SANITIZED.description)
+    assert refusal.value.public_detail() == tr(RenderSkipReason.OVER_BLOCK_BUDGET.description)
     assert analyzer.render_calls == []
 
 
@@ -774,7 +771,7 @@ async def test_rendering_now_is_unavailable_where_previews_are_disabled() -> Non
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        publication=sanitized_publication(),
+        publication=original_publication(),
     )
 
     with pytest.raises(SchematicRenderUnavailableError):

@@ -34,7 +34,6 @@ class RenderSkipReason(StrEnum):
 
     RENDERING_DISABLED = "rendering_disabled"
     NO_PRIMARY_SCHEMATIC = "no_primary_schematic"
-    NOT_SANITIZED = "not_sanitized"
     POISONED_FILE = "poisoned_file"
     OVER_BLOCK_BUDGET = "over_block_budget"
     OVER_VOLUME_BUDGET = "over_volume_budget"
@@ -49,7 +48,6 @@ class RenderSkipReason(StrEnum):
 _RENDER_SKIP_DESCRIPTIONS: dict[RenderSkipReason, Message] = {
     RenderSkipReason.RENDERING_DISABLED: tr(t"Schematic previews are not enabled on this instance."),
     RenderSkipReason.NO_PRIMARY_SCHEMATIC: tr(t"This build has no primary schematic to preview."),
-    RenderSkipReason.NOT_SANITIZED: tr(t"This schematic has not been sanitized, so it is never rendered."),
     RenderSkipReason.POISONED_FILE: tr(t"This schematic file already crashed the engine on this instance."),
     RenderSkipReason.OVER_BLOCK_BUDGET: tr(t"This schematic has too many blocks to preview."),
     RenderSkipReason.OVER_VOLUME_BUDGET: tr(t"This schematic is too large to preview."),
