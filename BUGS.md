@@ -14,7 +14,7 @@ monotonically with every in-game `/link` and stops at 32,767, after which issuin
 outright and Minecraft accounts can no longer be linked at all. Nothing rewinds or reuses the range.
 
 Found while auditing the table for
-`docs/plans/pr-183-review/01-consent-verification-ux.md` §1; not a UX matter, so that plan records it
+`docs/plans/completed/pr-183-review/01-consent-verification-ux.md` §1; not a UX matter, so that plan records it
 rather than fixing it. Unbounded growth of expired rows is the same root cause and wants the same
 answer: widen the key and reap consumed codes.
 

@@ -62,7 +62,7 @@ is `outstanding / space`, not `1 / space`. And the Discord identity comes from w
 code, so a hit attaches the matched Java account to the guesser. That is identity takeover, not a
 nuisance.
 
-Three levers, all now applied ([plan 2](plans/pr-183-review/02-user-identity-persistence.md),
+Three levers, all now applied ([plan 2](plans/completed/pr-183-review/02-user-identity-persistence.md),
 subplan 6):
 
 - **A keyed digest.** `hash_verification_code` is `hmac.digest(pepper, code, sha256)`. The pepper is

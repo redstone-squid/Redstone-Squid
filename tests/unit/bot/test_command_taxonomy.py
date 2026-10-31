@@ -119,7 +119,7 @@ def test_guided_submit_puts_attachments_last() -> None:
     """The tab order through the options is the form: typed fields first, attachments trailing.
 
     Attachments-first was the original dogfooding complaint against `/build submit`
-    (docs/plans/command-redesign/01-build-submit.md), so the order is pinned.
+    (docs/plans/completed/command-redesign/01-build-submit.md), so the order is pinned.
     """
     build_group = next(
         command for command in cast(Any, SearchCog).__cog_app_commands__ if command.qualified_name == "build"

@@ -1,7 +1,6 @@
 # Phase 7: `/account`
 
-> **Status.** Planned. Like phases 5 and 6 this lands as a sequence of steps, each one a commit
-> that stands alone.
+> **Status.** Delivered. Both steps below are complete, as recorded in the series index.
 
 ## Problem
 

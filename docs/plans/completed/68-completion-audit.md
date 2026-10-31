@@ -58,7 +58,7 @@ The development box deliberately did not run repository-wide pytest discovery.
 - `alembic heads` reported the single expected head `f8a4c7d2b5e9`; `git diff --check` passed.
 
 The accepted performance and backend decisions are
-[ADR 0068](../decisions/0068-action-ledger-performance.md) and
+[ADR 0068](../../decisions/0068-action-ledger-performance.md) and
 [the replicated backend ADR](68-replicated-backend-adr.md). The latter is the required explicit
 deferral: neither experimental text adapter met the production gate, so Squid does not claim it did.
 

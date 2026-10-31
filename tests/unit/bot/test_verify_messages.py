@@ -247,7 +247,7 @@ async def test_registered_claim_provider_uses_the_canonical_presentation() -> No
 
 # The unlink decision tree that used to live here is gone with the command: unlinking is a
 # picked row on the `/account` panel, and its cases are pinned in `test_account_panel.py`
-# (docs/plans/command-redesign/07-account.md).
+# (docs/plans/completed/command-redesign/07-account.md).
 
 
 @pytest.mark.parametrize(

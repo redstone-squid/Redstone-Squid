@@ -34,7 +34,7 @@ two sweeps (5.6, 5.7) come last because they touch what the earlier steps rewrit
 ## Not in this phase
 
 Each of these is a phase-sized rebuild rather than a step in a sweep, so each now has a phase
-of its own in [README.md](README.md).
+of its own in [README.md](../../command-redesign/README.md).
 
 - **`/starboard`'s 14 commands** *(phase 9)*. The audit's own suggestion was "C1 first, then
   decide how much is worth rebuilding", and C1 has since hidden the whole group. A panel like

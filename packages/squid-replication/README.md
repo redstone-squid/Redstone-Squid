@@ -11,7 +11,7 @@ It proves operation identity, idempotent delivery, convergence, semantic inverse
 ordinary/replicated atomicity; it is not a networking or durable-storage product.
 
 The `loro` extra contains the production generalized backend pinned to the version audited in
-`docs/plans/68-replicated-backend-report.md`. It exposes named text, list, movable-list, map, tree,
+`docs/plans/completed/68-replicated-backend-report.md`. It exposes named text, list, movable-list, map, tree,
 exact counter, and tagged-set containers. The `pycrdt` extra is public but experimental: it is a
 conformance backend for evaluating interoperability and does not carry the production guarantees of
 the Loro adapter.

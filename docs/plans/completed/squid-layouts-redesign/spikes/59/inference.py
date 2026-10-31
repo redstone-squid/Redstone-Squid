@@ -5,7 +5,7 @@ promoted into a package. See README.md for the recorded output and what it decid
 
 Run:
 
-    uv run --locked pyrefly check docs/plans/squid-ui-redesign/spikes/59/inference.py
+    uv run --locked pyrefly check docs/plans/completed/squid-layouts-redesign/spikes/59/inference.py
 
 `docs/` is outside `[tool.pyrefly] project-includes`, so this file is only ever checked by hand.
 """
