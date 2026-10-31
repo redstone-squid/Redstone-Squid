@@ -15,7 +15,7 @@ import discord
 from squid_ui.guards import Guard, permission
 from squid_ui.interactions import ActionEvent
 from squid_ui.text import TextLike
-from squid_ui_discord.actions import native
+from squid_ui_discord.actions import _responder
 
 
 def requires_role(role_id: int | AbstractSet[int], *, reason: TextLike | None = None) -> Guard:
@@ -27,7 +27,7 @@ def requires_role(role_id: int | AbstractSet[int], *, reason: TextLike | None = 
     wanted = frozenset({role_id} if isinstance(role_id, int) else role_id)
 
     async def check(event: ActionEvent) -> bool:
-        member = native(event).user
+        member = _responder(event).interaction.user
         if not isinstance(member, discord.Member):
             return False
         return any(role.id in wanted for role in member.roles)
@@ -43,6 +43,6 @@ def requires(check: Callable[[discord.Interaction], Awaitable[bool]], *, reason:
     """
 
     async def portable(event: ActionEvent) -> bool:
-        return await check(native(event))
+        return await check(_responder(event).interaction)
 
     return permission(portable, reason=reason)

@@ -19,7 +19,6 @@ from squid.accounts.domain import (
 )
 from squid.bot.ui import CardField, text_node, tr
 from squid.bot.utils.sentinel import Sentinel
-from squid_ui_discord.sessions import AdmissionSpec, Reject
 
 
 class NotAskedType(Enum):
@@ -59,8 +58,8 @@ class ConsentPrompt(sd.UserSessionScreen):
 
     session = sd.SessionSpec(
         "consent",
-        admission=AdmissionSpec(
-            collision=Reject(notice=tr(t"You already have a consent prompt open. Please answer that one."))
+        admission=sd.AdmissionSpec(
+            collision=sd.Reject(notice=tr(t"You already have a consent prompt open. Please answer that one."))
         ),
     )
     timeout = CONSENT_PROMPT_TIMEOUT_SECONDS

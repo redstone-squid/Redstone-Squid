@@ -301,9 +301,11 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
     async def _locale_changed(self, event: sl.ChoiceEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
+        request = await sd.request(event)
+        assert request.root is not None
         await self.set_locale(
             None if event.selected[0] == FOLLOW_DISCORD else event.selected[0],
-            message_root=sd.responder(event).message_root,
+            message_root=request.root,
         )
 
     async def _kind_changed(self, event: sl.ChoiceEvent) -> None:

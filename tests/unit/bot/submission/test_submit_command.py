@@ -1,6 +1,6 @@
 """`/build submit` as one request: the private defer is completed by the workspace."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, cast, override
 
 from whenever import Instant
@@ -83,8 +83,6 @@ class Drafts:
         return self.current
 
     async def apply_change(self, draft_id: Any, actor: int, change: Any, *, locale: str | None) -> None:
-        from dataclasses import replace
-
         assert self.current is not None
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
 

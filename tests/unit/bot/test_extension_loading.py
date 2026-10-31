@@ -15,6 +15,7 @@ import discord
 import pytest_asyncio
 from discord.ext import commands
 
+import squid_ui_discord as sd
 from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS
 from squid.bot.errors import SquidCommandTree
 from squid.bot.help import DIRECTORY_CATEGORIES
@@ -37,6 +38,7 @@ class StubBot(commands.Bot):
             intents=discord.Intents.none(),
             tree_cls=SquidCommandTree,
         )
+        self.ui = sd.install(self)
         self.services = MagicMock()
         self.reactions = MagicMock()
         self.background_tasks = MagicMock()
@@ -80,6 +82,7 @@ async def _loaded_bot(extensions: Sequence[str]) -> AsyncIterator[commands.Bot]:
             await bot.load_extension(extension)
         yield bot
     finally:
+        await bot.ui.close()
         for name, module in before.items():
             if sys.modules.get(name) is not module:
                 sys.modules[name] = module

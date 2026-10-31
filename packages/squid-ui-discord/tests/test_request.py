@@ -36,7 +36,7 @@ def installed() -> tuple[sd.Scope[Owner], InteractionHarness]:
 async def test_request_normalizes_an_interaction() -> None:
     ui, interaction = installed()
 
-    request = await ui.request(interaction.source)
+    request = await sd.request(interaction.source, owner=ui.owner)
 
     assert request.kind == "interaction"
     assert request.interaction is interaction.source
@@ -52,7 +52,7 @@ async def test_request_normalizes_a_command_context() -> None:
     ui, _ = installed()
     context = ContextHarness(bot=ui.runtime.client, user_id=3)
 
-    request = await ui.request(context.source)
+    request = await sd.request(context.source, owner=ui.owner)
 
     assert request.kind == "context"
     assert request.context is context.source
@@ -63,7 +63,7 @@ async def test_request_normalizes_a_command_context() -> None:
 async def test_the_same_event_resolves_to_the_same_request() -> None:
     ui, interaction = installed()
 
-    first = await ui.request(interaction.source)
+    first = await sd.request(interaction.source, owner=ui.owner)
     second = await sd.request(interaction.source)
 
     assert first is second
@@ -85,7 +85,7 @@ async def test_an_owner_claims_a_request_left_waiting_in_the_app_scope() -> None
     early = await sd.request(interaction.source)
     assert early.scope is ui.runtime.app
 
-    claimed = await ui.request(interaction.source)
+    claimed = await sd.request(interaction.source, owner=ui.owner)
 
     assert claimed is early
     assert claimed.scope is ui
@@ -96,12 +96,12 @@ async def test_a_request_that_responded_keeps_its_scope() -> None:
     early = await sd.request(interaction.source)
     await early.respond("first")
 
-    assert (await ui.request(interaction.source)).scope is ui.runtime.app
+    assert (await sd.request(interaction.source, owner=ui.owner)).scope is ui.runtime.app
 
 
 async def test_defer_fixes_the_audience_of_what_follows() -> None:
     ui, interaction = installed()
-    request = await ui.request(interaction.source)
+    request = await sd.request(interaction.source, owner=ui.owner)
 
     await request.defer("private")
     outcome = await request.respond("Done")
@@ -114,7 +114,7 @@ async def test_defer_fixes_the_audience_of_what_follows() -> None:
 
 async def test_only_an_explicit_audience_conflicts_with_a_defer() -> None:
     ui, interaction = installed()
-    request = await ui.request(interaction.source)
+    request = await sd.request(interaction.source, owner=ui.owner)
     await request.defer("private")
 
     with pytest.raises(RuntimeError, match="audience conflicts"):
@@ -123,7 +123,7 @@ async def test_only_an_explicit_audience_conflicts_with_a_defer() -> None:
 
 async def test_a_second_response_becomes_a_followup() -> None:
     ui, interaction = installed()
-    request = await ui.request(interaction.source)
+    request = await sd.request(interaction.source, owner=ui.owner)
     await interaction.response.send_message(content="native")
     interaction.followup.send.result = interaction.message
 
@@ -135,7 +135,7 @@ async def test_a_second_response_becomes_a_followup() -> None:
 
 async def test_a_defer_outside_the_ledger_is_not_claimed() -> None:
     ui, interaction = installed()
-    request = await ui.request(interaction.source)
+    request = await sd.request(interaction.source, owner=ui.owner)
     await interaction.response.defer(ephemeral=True, thinking=True)
 
     with pytest.raises(RuntimeError, match="deferred outside"):
@@ -146,7 +146,7 @@ async def test_a_defer_outside_the_ledger_is_not_claimed() -> None:
 
 async def test_a_form_is_the_initial_response_and_excludes_content() -> None:
     ui, interaction = installed()
-    request = await ui.request(interaction.source)
+    request = await sd.request(interaction.source, owner=ui.owner)
     modal = discord.ui.Modal(title="Rename")
 
     await request.form(modal)
@@ -158,7 +158,7 @@ async def test_a_form_is_the_initial_response_and_excludes_content() -> None:
 
 async def test_a_form_cannot_follow_a_response() -> None:
     ui, interaction = installed()
-    request = await ui.request(interaction.source)
+    request = await sd.request(interaction.source, owner=ui.owner)
     await request.respond("first")
 
     with pytest.raises(RuntimeError, match="initial response"):
@@ -188,3 +188,27 @@ async def test_a_foreign_frontend_event_is_refused() -> None:
 
     with pytest.raises(LookupError, match="not Discord"):
         await sd.request(event)
+
+
+async def test_a_click_claims_a_request_first_seen_as_a_native_interaction() -> None:
+    ui, interaction = installed()
+    root = ui.runtime.mount(Panel(), access=sd.Owner(7), localization=sl.text.Localization(locale="fr"))
+    ui.runtime._track(ui, root)
+    early = await sd.request(interaction.source)
+
+    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(interaction.source, root))
+    request = await sd.request(event)
+
+    assert request is early
+    assert request.root is root
+    assert request.scope is ui
+    assert request.localization is root.localization
+
+
+async def test_request_exposes_the_audience_of_its_first_response() -> None:
+    _ui, interaction = installed()
+    request = await sd.request(interaction.source)
+    assert request.audience is None
+
+    await request.respond("Private", audience="personal")
+    assert request.audience == "personal"

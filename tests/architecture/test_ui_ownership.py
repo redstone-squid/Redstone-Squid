@@ -7,12 +7,6 @@ from tests.support.source_tree import source_tree
 
 BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
 
-NATIVE_EVENT_ALLOWLIST = {
-    # Re-resolve credential-bounded staff inbox visibility from each live component interaction.
-    ("notifications.py", "notifications"),
-}
-"""Reviewed Discord operation bridges that still need native event access."""
-
 
 def _classes(tree: ast.AST) -> list[ast.ClassDef]:
     return [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
@@ -59,7 +53,7 @@ def test_application_components_do_not_own_message_roots_or_send_methods() -> No
     assert not violations, "\n".join(violations)
 
 
-def test_native_event_access_stays_inside_the_reviewed_transport_allowlist() -> None:
+def test_retired_event_helpers_stay_out_of_application_code() -> None:
     found: set[tuple[str, str]] = set()
     for path in BOT_ROOT.rglob("*.py"):
         relative = str(path.relative_to(BOT_ROOT))
@@ -73,7 +67,7 @@ def test_native_event_access_stays_inside_the_reviewed_transport_allowlist() -> 
                 and isinstance(node.func, ast.Attribute)
                 and isinstance(node.func.value, ast.Name)
                 and node.func.value.id == "sd"
-                and node.func.attr == "native"
+                and node.func.attr in {"native", "responder"}
             ):
                 continue
             owner = parents.get(node)
@@ -82,7 +76,7 @@ def test_native_event_access_stays_inside_the_reviewed_transport_allowlist() -> 
             function = owner.name if isinstance(owner, (ast.FunctionDef, ast.AsyncFunctionDef)) else "<module>"
             found.add((relative, function))
 
-    assert found == NATIVE_EVENT_ALLOWLIST
+    assert not found, sorted(found)
 
 
 def test_localized_ui_literals_use_template_strings() -> None:

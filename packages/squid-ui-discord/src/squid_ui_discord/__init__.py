@@ -64,10 +64,6 @@ from squid_ui_discord.access import (
     Owner,
     Users,
 )
-from squid_ui_discord.actions import (
-    native,
-    responder,
-)
 from squid_ui_discord.adoption import (
     AdoptionError,
     adopt,
@@ -92,7 +88,7 @@ from squid_ui_discord.commands import (
     hybrid_group,
     prefix_command,
 )
-from squid_ui_discord.config import DiscordUIConfig, ErrorObserver, ErrorPolicy, ErrorRenderer
+from squid_ui_discord.config import Config, ErrorObserver, ErrorPolicy, ErrorRenderer
 from squid_ui_discord.conformance import conform
 from squid_ui_discord.contracts import LocalizationResolver, RequestSource, ResponseSource
 from squid_ui_discord.delivery import (
@@ -240,10 +236,10 @@ __all__ = [
     "Cog",
     "CommandPolicy",
     "CommandResult",
+    "Config",
     "Deferral",
     "DevToolsSection",
     "DialogPresenter",
-    "DiscordUIConfig",
     "DiscordUIRuntime",
     "DiscordUIRuntimeMissing",
     "ErrorObserver",
@@ -356,7 +352,6 @@ __all__ = [
     "message_root",
     "message_roots",
     "modals",
-    "native",
     "navigation",
     "navigation_controls",
     "open_devtools",
@@ -370,7 +365,6 @@ __all__ = [
     "reply_to",
     "request",
     "respond_to",
-    "responder",
     "response",
     "roles",
     "routing",

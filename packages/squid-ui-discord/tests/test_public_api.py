@@ -1,5 +1,6 @@
 """Public namespace and optional-extra packaging contracts for the Discord adapter."""
 
+import importlib
 import subprocess
 import sys
 import tomllib
@@ -20,8 +21,6 @@ RENAMED_SUBMODULES = (
 
 @pytest.mark.parametrize("dotted", RENAMED_SUBMODULES)
 def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> None:
-    import importlib
-
     mod = importlib.import_module(dotted)
     assert isinstance(mod, ModuleType)
 
@@ -100,3 +99,11 @@ def test_package_metadata_keeps_its_base_and_optional_dependencies() -> None:
     ]
     assert project["optional-dependencies"]["durable"] == ["squid-storage==0.1.0a1"]
     assert project["optional-dependencies"]["postgres"] == ["squid-storage[postgres]==0.1.0a1"]
+
+
+@pytest.mark.parametrize(
+    "name", ["DiscordUI", "DiscordAction", "DiscordUIConfig", "native", "responder", "run_managed_result"]
+)
+def test_retired_application_entry_points_are_absent(name: str) -> None:
+    assert name not in squid_ui_discord.__all__
+    assert not hasattr(squid_ui_discord, name)

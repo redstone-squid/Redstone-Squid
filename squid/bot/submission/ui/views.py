@@ -6,6 +6,7 @@ from typing import Any, cast, override
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.input import parse_web_urls
+from squid.bot.submission.ui.controls import build_edit_recovery
 from squid.bot.submission.ui.fields import (
     DIMENSIONS_FORMAT,
     OPTIONAL_INT_FORMAT,
@@ -238,7 +239,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
 
     timeout = 900
     follow_topics = True
-    root_options = {"retain_routed_on_timeout": True}
+    retain_routed_on_timeout = True
 
     page: int = sl.state(1)
     confirming: bool = sl.state(default=False)
@@ -326,8 +327,6 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-        from squid.bot.submission.ui.controls import build_edit_recovery
-
         if self.saved:
             return (
                 sl.section(

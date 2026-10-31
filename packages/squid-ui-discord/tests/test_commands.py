@@ -15,7 +15,7 @@ from squid_ui_discord.delivery import DeliveryResult
 from squid_ui_discord.testing import ContextHarness, InteractionHarness, payload_texts
 
 
-def installed_bot(config: sd.DiscordUIConfig | None = None) -> commands.Bot:
+def installed_bot(config: sd.Config | None = None) -> commands.Bot:
     bot = commands.Bot(command_prefix="!", intents=discord.Intents.none())
     cast(Any, bot).ui = sd.install(bot, config)
     return bot
@@ -265,7 +265,7 @@ async def test_pending_failure_uses_the_error_policy_and_reraises() -> None:
     async def observe(request: sd.Request[Any], error: Exception, delivery: DeliveryResult | None) -> None:
         observed.append((error, delivery))
 
-    bot = installed_bot(sd.DiscordUIConfig(errors=sd.ErrorPolicy(render=render_failure, observe=observe)))
+    bot = installed_bot(sd.Config(errors=sd.ErrorPolicy(render=render_failure, observe=observe)))
     cog = Slow(bot)
     interaction = interaction_for(bot)
 
@@ -342,3 +342,14 @@ def test_request_must_occupy_the_native_source_slot() -> None:
         @cast(Any, sd.command())
         async def misplaced(owner: object, value: int, request: sd.Request[object]) -> None:
             pass
+
+
+async def test_cog_finds_the_installed_runtime_without_a_bot_ui_attribute() -> None:
+    bot = commands.Bot(command_prefix="!", intents=discord.Intents.none())
+    runtime = sd.install(bot)
+    cog = sd.Cog(bot)
+
+    assert cog.ui is runtime.scope(cog)
+    await cog.cog_unload()
+    assert cog.ui.closed
+    await bot.close()

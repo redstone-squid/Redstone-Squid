@@ -34,7 +34,7 @@ async def command_tree() -> AsyncIterator[SquidCommandTree[discord.Client]]:
         return Localization(locale="en-GB")
 
     async with discord.Client(intents=discord.Intents.none()) as client:
-        runtime = sd.install(client, localization=localize)
+        runtime = sd.install(client, sd.Config(localization=localize))
         try:
             yield SquidCommandTree(client)
         finally:

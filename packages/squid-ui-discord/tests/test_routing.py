@@ -110,7 +110,7 @@ class TestRouter:
         async def localize(_source) -> sl.text.Localization:
             return sl.text.Localization(locale="en-GB")
 
-        runtime = squid_ui_discord.install(cast(discord.Client, client), localization=localize)
+        runtime = squid_ui_discord.install(cast(discord.Client, client), squid_ui_discord.Config(localization=localize))
         interaction = interaction_harness()
         interaction.client = client
         seen: list[str | None] = []

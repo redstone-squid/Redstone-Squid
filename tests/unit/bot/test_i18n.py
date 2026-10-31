@@ -125,7 +125,7 @@ def test_localization_for_builds_the_negotiated_catalogue(mocker: MockerFixture)
 async def test_localization_resolver_uses_the_installed_bot_settings() -> None:
     service = SettingsService(FakeSettingsRepository(locale="zh-CN"))
     client = FakeClient(Services(settings=service))
-    runtime = sd.install(cast(discord.Client, client), localization=localization_resolver)
+    runtime = sd.install(cast(discord.Client, client), sd.Config(localization=localization_resolver))
     context = cast(
         "object",
         ContextSource(

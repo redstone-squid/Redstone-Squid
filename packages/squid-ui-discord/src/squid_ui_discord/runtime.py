@@ -15,6 +15,7 @@ Nothing here starts a task. `DiscordUIRuntime.run()` is offered for a host that 
 declined by a host that wants per-job health granularity; either way the host supervises it.
 """
 
+import logging
 import weakref
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any, Never, Unpack, cast, overload
@@ -23,17 +24,16 @@ import anyio
 import discord
 from anyio.abc import TaskStatus
 
-from squid_reactivity.topics import TopicBus
 from squid_ui.errors import SquidUiError
-from squid_ui.profiling import Profiler
+from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.services import UIExecutionHost
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
-from squid_ui_discord.config import DiscordUIConfig
+from squid_ui_discord.config import Config
 from squid_ui_discord.contracts import LocalizationResolver
-from squid_ui_discord.delivery import Replyable
+from squid_ui_discord.delivery import DeliveryResult, Replyable
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
 from squid_ui_discord.message_root_options import MessageRootDefaults
@@ -96,7 +96,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         scheduler: MessageRootScheduler | None,
         localization: LocalizationResolver | None,
         response_defaults: ResponseSpec,
-        config: DiscordUIConfig,
+        config: Config,
     ) -> None:
         self.client = client
         self.sessions = sessions
@@ -200,27 +200,22 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         raise DiscordUIRuntimeMissing(message)
 
     @overload
-    def scope(self, owner: None, *, defaults: ResponseSpec | None = None) -> Never: ...
+    def scope(self, owner: None) -> Never: ...
 
     @overload
-    def scope[OwnerT](self, owner: OwnerT, *, defaults: ResponseSpec | None = None) -> Scope[OwnerT]: ...
+    def scope[OwnerT](self, owner: OwnerT) -> Scope[OwnerT]: ...
 
-    def scope[OwnerT](self, owner: OwnerT | None, *, defaults: ResponseSpec | None = None) -> Scope[OwnerT]:
+    def scope[OwnerT](self, owner: OwnerT | None) -> Scope[OwnerT]:
         """Return the one live scope registered for ``owner`` by exact identity."""
         from squid_ui_discord.facade import Scope
-        from squid_ui_discord.response import ResponseSpec
 
         if owner is None:
             message = "None cannot own a Discord UI scope"
             raise TypeError(message)
-        selected = ResponseSpec() if defaults is None else defaults
         for scope in self._scopes:
             if scope.owner is owner and not scope.closed:
-                if defaults is not None and scope.defaults != selected:
-                    message = "owner is already registered with different response defaults"
-                    raise ValueError(message)
                 return cast(Scope[OwnerT], scope)
-        scope = Scope(cast(DiscordUIRuntime[discord.Client], self), owner, selected)
+        scope = Scope(cast(DiscordUIRuntime[discord.Client], self), owner)
         self._scopes.append(cast(Scope[Any], scope))
         self._scope_roots[id(scope)] = set()
         return scope
@@ -252,6 +247,28 @@ class DiscordUIRuntime[ClientT: discord.Client]:
     def _track[OwnerT](self, scope: Scope[OwnerT], message_root: MessageRoot) -> None:
         self._scope_roots[id(scope)].add(message_root)
 
+    async def _handle_component_error(self, event: ActionEvent, error: Exception, source: str) -> None:
+        """Present and observe a rolled-back component failure through the installed policy."""
+        from squid_ui_discord.request import request
+        from squid_ui_discord.response import Presented, Sent
+
+        policy = self.config.errors
+        if policy.render is None and policy.observe is None:
+            logging.getLogger(__name__).error("unhandled component error in %s", source, exc_info=error)
+            return
+        req = await request(event)
+        delivery: DeliveryResult | None = None
+        try:
+            if policy.render is not None:
+                content = policy.render(req, error)
+                audience = req.audience if req.deferred is not None else "personal"
+                result = await req.respond(content, audience=audience or "personal")
+                if isinstance(result, Sent | Presented):
+                    delivery = result.delivery
+        finally:
+            if policy.observe is not None:
+                await policy.observe(req, error, delivery)
+
     async def _close_scope[OwnerT](self, scope: Scope[OwnerT]) -> None:
         roots = self._scope_roots.pop(id(scope), set())
         targets = {session.root if (session := self.sessions.session_for(root)) is not None else root for root in roots}
@@ -275,20 +292,15 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
 def install[ClientT: discord.Client](
     client: ClientT,
-    config: DiscordUIConfig | None = None,
-    *,
-    defaults: MessageRootDefaults | None = None,
-    bus: TopicBus | None = None,
-    profiler: Profiler | None = None,
-    localization: LocalizationResolver | None = None,
+    config: Config | None = None,
 ) -> DiscordUIRuntime[ClientT]:
     """Assemble the Discord runtime for `client` and record it against the client.
 
-    `bus` is what makes a scheduler: with one, message roots refresh from topics and shared state, and
+    `config.bus` is what makes a scheduler: with one, message roots refresh from topics and shared state, and
     the scheduler becomes the default scheduler; without one, a mount is refreshed only by its
-    own clicks. `profiler` instruments that scheduler. `localization` is the host's one async
-    hook for resolving a request's render-time locale; it runs when an owner scope resolves
-    the request.
+    own clicks. `config.profiler` instruments that scheduler. `config.localization` is the host's one async
+    hook for resolving a request's render-time locale; it runs when `sd.request` first resolves
+    a native source.
 
     Raises:
         ValueError: A host is already installed on this client. One client has one host, the
@@ -297,15 +309,7 @@ def install[ClientT: discord.Client](
     """
     from squid_ui_discord.response import DEFAULT_RESPONSE_SPEC
 
-    if config is not None and any(value is not None for value in (defaults, bus, profiler, localization)):
-        message = "pass DiscordUIConfig or legacy installation keywords, not both"
-        raise TypeError(message)
-    selected = config or DiscordUIConfig(
-        defaults=MessageRootDefaults() if defaults is None else defaults,
-        bus=bus,
-        profiler=profiler,
-        localization=localization,
-    )
+    selected = config or Config()
     defaults = selected.defaults
     if defaults.execution_host is None:
         defaults = defaults.replace(execution_host=UIExecutionHost())

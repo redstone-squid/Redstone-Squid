@@ -838,8 +838,6 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
     -- up to two minutes. Nothing here waits, so the editor is simply not open yet.
     """
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     message_root = ScheduleRoot()
 
     await panel._edit_page(cast(Any, _press(message_root)))
@@ -858,8 +856,6 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
 async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cancelling stores nothing, changes nothing, and does not redraw anything."""
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     message_root = ScheduleRoot()
 
     await panel._edit_page(cast(Any, _press(message_root)))
@@ -880,8 +876,6 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     to sit in the handler rather than in the control declaration.
     """
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     panel._identities = (DISCORD,)
     panel.selected_id = DISCORD.id
     message_root = ScheduleRoot()

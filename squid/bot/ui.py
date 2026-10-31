@@ -183,15 +183,8 @@ def truncate_display_text(content: str, limit: int) -> str:
     return content[: limit - 1].rstrip() + "\u2026"
 
 
-async def _component_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
-    # Imported lazily to keep error handling independent from the command UI catalogue.
-    from squid.bot.errors import handle_interaction_error
-
-    await handle_interaction_error(interaction, error, surface=f"component:{source}")
-
-
-HOST_DEFAULTS = sd.MessageRootDefaults(chrome=CHROME, palette=PALETTES.resolve(), on_error=_component_error_hook)
-"""What the bot installs with: the chrome and error handling every panel shares.
+HOST_DEFAULTS = sd.MessageRootDefaults(chrome=CHROME, palette=PALETTES.resolve())
+"""What the bot installs with: the chrome and rendering palette every panel shares.
 
 Only the half that can be written down as a value. The other half -- a challenge presenter,
 which needs the session registry and the background runner -- is assembled by

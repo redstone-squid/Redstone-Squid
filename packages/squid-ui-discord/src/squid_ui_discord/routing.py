@@ -51,6 +51,8 @@ from squid_ui.target_types import DiscordPyAdapter
 from squid_ui.text import NEUTRAL, localization_scope
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui_discord.message_root_contracts import ErrorHook
+from squid_ui_discord.request import request as resolve_request
+from squid_ui_discord.runtime import DiscordUIRuntimeMissing
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()
@@ -729,9 +731,6 @@ class Router[BotT: discord.Client]:
                 finish_acknowledgement("handler")
 
             async def dispatch_operation() -> None:
-                from squid_ui_discord.request import request as resolve_request
-                from squid_ui_discord.runtime import DiscordUIRuntimeMissing
-
                 try:
                     localization = (await resolve_request(interaction)).localization
                 except DiscordUIRuntimeMissing:

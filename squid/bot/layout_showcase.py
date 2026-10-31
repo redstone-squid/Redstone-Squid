@@ -206,8 +206,9 @@ return sl.form("Open the feedback form", FeedbackForm(**prefill), key="feedback"
     )
 
 async def switch_language(self, event: sl.PressEvent) -> None:
-    mount = sd.responder(event).mount
-    mount.localize(localization_for("zh-CN"))
+    request = await sd.request(event)
+    assert request.root is not None
+    request.root.localize(localization_for("zh-CN"))
 
 # Interpolated values are Markdown-escaped unless wrapped in sl.raw_md().""",
     "history": """history: sl.runtime.History = sl.runtime.history(limit=5)
@@ -945,7 +946,9 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
 
     async def _switch_language(self, event: sl.ActionEvent) -> None:
         self.display_locale = "en" if event.locale == "zh-CN" else "zh-CN"
-        sd.responder(event).message_root.localize(localization_for(self.display_locale))
+        request = await sd.request(event)
+        assert request.root is not None
+        request.root.localize(localization_for(self.display_locale))
 
     async def _action_notice(self, event: sl.ActionEvent) -> None:
         await event.notice(tr(t"That option kept its own handler, whichever dropdown it ended up in."))
@@ -1251,7 +1254,7 @@ class Lobby(sd.SharedGuildSessionScreen):
     session = sd.SessionSpec(
         "showcase-lobby",
         scope=sd.ScopeKind.GUILD,
-        admission=sd.sessions.AdmissionSpec(collision=sd.sessions.Reject()),
+        admission=sd.AdmissionSpec(collision=sd.Reject()),
         capacity=capacity,
         quota=quota,
     )
@@ -1373,7 +1376,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         entries: app_commands.Range[int, 12, 120] = 30,
     ) -> None:
         """Open an interactive tour of how this bot lays out its messages."""
-        request = await self.ui.request(ctx)
+        request = await sd.request(ctx, owner=self)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await request.respond(
             LayoutShowcase(section=section, entries=entries, locale=locale),
@@ -1383,7 +1386,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     @layout_group.command(name="shared")
     async def shared(self, ctx: Context[BotT]) -> None:
         """Open two live panels that agree on settings neither of them owns."""
-        request = await self.ui.request(ctx)
+        request = await sd.request(ctx, owner=self)
         scope = OpenContext(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
         appearance = self._appearance.get(scope)
         # Co-existence state: only the two panels hold it, so it is collected when the second
@@ -1405,7 +1408,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def lobby(self, ctx: Context[BotT]) -> None:
         """Open a four-seat lobby anyone can join, with the roster held by the session."""
         assert ctx.guild is not None
-        request = await self.ui.request(ctx)
+        request = await sd.request(ctx, owner=self)
         await request.respond(Lobby(ctx.author.id))
 
 

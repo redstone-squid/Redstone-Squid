@@ -3051,6 +3051,16 @@ class MessageRoot[
         await self.finish(disable=True, retain_routed=self.retain_routed_on_timeout)
 
     async def handle_error(self, interaction: discord.Interaction, error: Exception, source: str) -> None:
+        # Runtime constructs message roots, so this callback must import it after initialization.
+        from squid_ui_discord.runtime import DiscordUIRuntime, DiscordUIRuntimeMissing
+
+        try:
+            host = DiscordUIRuntime.of(interaction)
+        except DiscordUIRuntimeMissing:
+            host = None
+        if host is not None:
+            await host._handle_component_error(self._event(interaction, None), error, source)
+            return
         if self.on_error is not None:
             await self.on_error(interaction, error, source)
             return

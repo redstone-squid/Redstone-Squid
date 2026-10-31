@@ -5,6 +5,9 @@ from typing import TYPE_CHECKING, override
 import discord
 
 import squid_ui_discord as sd
+from squid.bot.errors import handle_interaction_error
+from squid.bot.ui import text_node
+from squid.core.i18n import tr
 from squid.observability import SpanAttribute, TraceSurface, correlation_scope, trace_span
 
 if TYPE_CHECKING:
@@ -45,10 +48,7 @@ class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
 
 
 async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> None:
-    from squid.bot.ui import text_node
-    from squid.core.i18n import tr
-
-    request = await interaction.client.app_ui.request(interaction)
+    request = await sd.request(interaction)
     await request.respond(
         text_node(tr(t"This control is no longer available.")),
         audience="personal",
@@ -56,9 +56,6 @@ async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> N
 
 
 async def _route_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
-    # Keep the route hook lazy so importing the router does not import the command UI catalogue.
-    from squid.bot.errors import handle_interaction_error
-
     await handle_interaction_error(interaction, error, surface=source)
 
 

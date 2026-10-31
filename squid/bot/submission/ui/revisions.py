@@ -66,7 +66,7 @@ class RevisionProposalScreen(sd.Screen):
         return tuple(nodes)
 
     async def _match(self, event: sl.ChoiceEvent) -> None:
-        actor = await subject_for_interaction(await sd.request(sd.responder(event).interaction))
+        actor = await subject_for_interaction(await sd.request(event))
         try:
             self.proposal = await self.services.submission_revisions.match(
                 self.proposal.id, int(event.selected[0]), actor
@@ -76,14 +76,14 @@ class RevisionProposalScreen(sd.Screen):
 
     async def _approve(self, event: sl.PressEvent) -> None:
         await event.acknowledge()
-        actor = await subject_for_interaction(await sd.request(sd.responder(event).interaction))
+        actor = await subject_for_interaction(await sd.request(event))
         try:
             self.proposal = await self.services.submission_revisions.approve(self.proposal.id, actor)
         except SquidError as error:
             self.notice = error.public_detail()
 
     async def _renew(self, event: sl.PressEvent) -> None:
-        actor = await subject_for_interaction(await sd.request(sd.responder(event).interaction))
+        actor = await subject_for_interaction(await sd.request(event))
         if self.proposal.build_id is not None:
             self.proposal = await self.services.submission_revisions.match(
                 self.proposal.id, self.proposal.build_id, actor, renew=True

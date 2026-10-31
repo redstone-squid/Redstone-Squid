@@ -48,7 +48,7 @@ def test_install_wires_the_presenter_the_registry_could_not_build_for_itself() -
 
 def test_install_makes_a_reactor_only_when_given_a_bus() -> None:
     without = install(cast(discord.Client, fake_client()))
-    with_bus = install(cast(discord.Client, fake_client()), bus=LocalTopicBus())
+    with_bus = install(cast(discord.Client, fake_client()), sd.Config(bus=LocalTopicBus()))
 
     assert without.scheduler is None
     assert without.defaults.scheduler is None
@@ -68,7 +68,9 @@ def test_a_second_install_on_one_client_is_refused() -> None:
 def test_install_keeps_host_defaults_and_adds_to_them() -> None:
     chrome = sl.chrome.Chrome(close=sl.text.ResolvedText("Dismiss"))
 
-    runtime = install(cast(discord.Client, fake_client()), defaults=sd.MessageRootDefaults(chrome=chrome, strict=True))
+    runtime = install(
+        cast(discord.Client, fake_client()), sd.Config(defaults=sd.MessageRootDefaults(chrome=chrome, strict=True))
+    )
 
     assert runtime.defaults.chrome is chrome
     assert runtime.defaults.strict is True
@@ -79,7 +81,7 @@ def test_install_keeps_the_optional_localization_resolver() -> None:
         del source
         return sl.text.Localization(locale="en-GB")
 
-    runtime = install(cast(discord.Client, fake_client()), localization=resolve)
+    runtime = install(cast(discord.Client, fake_client()), sd.Config(localization=resolve))
 
     assert runtime.localization is resolve
 
@@ -144,7 +146,7 @@ async def test_close_drops_the_installation_even_when_a_teardown_fails() -> None
 
 
 async def test_run_serves_the_reactor_and_the_challenge_runner_together() -> None:
-    runtime = install(cast(discord.Client, fake_client()), bus=LocalTopicBus())
+    runtime = install(cast(discord.Client, fake_client()), sd.Config(bus=LocalTopicBus()))
     assert runtime.scheduler is not None
 
     async with anyio.create_task_group() as tasks:
@@ -159,7 +161,7 @@ async def test_run_serves_the_reactor_and_the_challenge_runner_together() -> Non
 async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
     """The scheduler `install` built is the one `run` drains, not a spare."""
     bus = LocalTopicBus()
-    runtime = install(cast(discord.Client, fake_client()), bus=bus)
+    runtime = install(cast(discord.Client, fake_client()), sd.Config(bus=bus))
     assert runtime.scheduler is not None
     message_root = runtime.mount(Panel(), access=sd.Everyone(), timeout=None)
     message_root.refresh = AsyncMock()  # pyrefly: ignore

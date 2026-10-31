@@ -60,10 +60,7 @@ async def test_run_bot_starts_log_capture(mocker: MockerFixture) -> None:
 
 async def test_prefix_invoke_establishes_localization_scope(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
-    runtime = sd.install(
-        cast(discord.Client, bot),
-        localization=lambda _source: _localization("en-GB"),
-    )
+    runtime = sd.install(cast(discord.Client, bot), sd.Config(localization=lambda _source: _localization("en-GB")))
     bot.ui = cast(Any, runtime)
     context = cast(Context[Any], ContextHarness(message=MessageHarness(), bot=bot, user_id=7).source)
     context.command = None
@@ -96,10 +93,7 @@ async def test_prefix_invoke_establishes_localization_scope(mocker: MockerFixtur
 
 async def test_failed_prefix_command_marks_its_invocation_span(mocker: MockerFixture) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
-    runtime = sd.install(
-        cast(discord.Client, bot),
-        localization=lambda _source: _localization("en-GB"),
-    )
+    runtime = sd.install(cast(discord.Client, bot), sd.Config(localization=lambda _source: _localization("en-GB")))
     bot.ui = cast(Any, runtime)
     context = cast(Context[Any], ContextHarness(message=MessageHarness(), bot=bot, user_id=7).source)
     context.command = mocker.Mock(qualified_name="admin sync")

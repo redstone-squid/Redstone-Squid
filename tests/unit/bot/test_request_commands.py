@@ -35,7 +35,7 @@ async def test_error_command_checks_access_before_presenting_in_its_cog_scope(
         with pytest.raises(PermissionNodeRequired):
             await cast(Any, cog.errors).callback(cog, interaction, None)
 
-    request = await cog.ui.request(interaction)
+    request = await sd.request(interaction, owner=cog)
     check.assert_awaited_once_with(request, DIAGNOSTICS_ERROR_READ)
     assert request.owner is cog
     if allowed:
@@ -70,7 +70,7 @@ async def test_notification_consent_uses_the_command_request_without_a_second_re
     monkeypatch.setattr(notifications, "ensure_consented_account", refuse)
     await cast(Any, cog.notifications).callback(cog, interaction)
 
-    request = await cog.ui.request(interaction)
+    request = await sd.request(interaction, owner=cog)
     assert seen == [request]
     assert request.owner is cog
     interaction.response.send_message.assert_awaited_once()
