@@ -55,6 +55,7 @@ jobs:
           commit_message=$(git log -1 --pretty=%s)
           docker buildx build \
             --platform linux/amd64 \
+            --target runtime-base \
             --build-arg "GIT_COMMIT_HASH=$GITHUB_SHA" \
             --build-arg "GIT_COMMIT_MESSAGE=$commit_message" \
             --build-arg WITH_OBSERVABILITY=1 \
@@ -72,9 +73,9 @@ jobs:
           commit_message=$(git log -1 --pretty=%s)
           docker buildx build \
             --platform linux/amd64 \
+            --target runtime-media \
             --build-arg "GIT_COMMIT_HASH=$GITHUB_SHA" \
             --build-arg "GIT_COMMIT_MESSAGE=$commit_message" \
-            --build-arg WITH_MEDIA=1 \
             --build-arg WITH_OBSERVABILITY=1 \
             --build-arg WITH_SCHEMATICS=1 \
             --provenance=mode=max \

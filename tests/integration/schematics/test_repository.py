@@ -122,6 +122,34 @@ async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
     assert queued == 1
 
 
+async def test_uploader_account_attribution_reaches_the_persisted_attachment(
+    repository: SchematicRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Provider-neutral account identity must survive the repository boundary."""
+    async with async_session_factory.begin() as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        account_id = account.id
+    digest = await repository.put_file(b"attributed", source_format=SchematicFormat.LITEMATIC)
+
+    await repository.record_analysis(
+        1,
+        digest,
+        make_analysis(),
+        primary=True,
+        uploaded_by_account_id=account_id,
+    )
+
+    async with async_session_factory() as session:
+        stored_account_id = await session.scalar(
+            text("SELECT uploaded_by_account_id FROM build_schematics WHERE build_id = 1 AND file_sha256 = :digest"),
+            {"digest": digest},
+        )
+    assert stored_account_id == account_id
+
+
 async def test_promoting_a_new_primary_demotes_the_previous_one(repository: SchematicRepository) -> None:
     """A partial unique index allows only one primary per build, so the swap has to happen in
     a single transaction or the second insert fails."""

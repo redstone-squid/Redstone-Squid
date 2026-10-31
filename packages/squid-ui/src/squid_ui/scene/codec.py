@@ -3,7 +3,6 @@
 import hashlib
 import json
 import math
-from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any, cast
 
@@ -12,6 +11,15 @@ from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.errors import SquidUiError
 from squid_ui.interactions import ActionMode
 from squid_ui.primitives.styles import ActionStyle
+from squid_ui.scene._json import (
+    JsonObject,
+    optional_string,
+    require_boolean,
+    require_integer,
+    require_object,
+    require_string,
+    require_string_array,
+)
 from squid_ui.scene.model import (
     Asset,
     Body,
@@ -133,7 +141,7 @@ class Codec:
         }
 
     @classmethod
-    def from_dict(cls, raw: Mapping[str, Any]) -> Scene:
+    def from_dict(cls, raw: JsonObject) -> Scene:
         protocol = _integer(raw, "protocol")
         if protocol != cls.protocol:
             msg = f"unsupported scene protocol {protocol}"
@@ -189,7 +197,7 @@ def _body_to_dict(body: Body) -> dict[str, Any]:
             return slack_body_to_dict(body)
 
 
-def _body_from_dict(raw: Mapping[str, Any]) -> Body:
+def _body_from_dict(raw: JsonObject) -> Body:
     kind = _string(raw, "kind")
     match kind:
         case ComponentsV2.KIND:
@@ -263,7 +271,7 @@ def _html_node_to_dict(node: HtmlNode) -> dict[str, Any]:
             }
 
 
-def _html_node_from_dict(raw: Mapping[str, Any]) -> HtmlNode:
+def _html_node_from_dict(raw: JsonObject) -> HtmlNode:
     kind = _string(raw, "kind")
     if kind == HtmlText.KIND:
         return HtmlText(_string(raw, "content"), Markup(_string(raw, "markup")))
@@ -276,7 +284,7 @@ def _html_node_from_dict(raw: Mapping[str, Any]) -> HtmlNode:
         msg = "HTML element children and attributes must be arrays"
         raise CodecError(msg)
 
-    def optional_ref(key: str) -> Mapping[str, Any] | None:
+    def optional_ref(key: str) -> JsonObject | None:
         value = raw.get(key)
         return None if value is None else _object(value)
 
@@ -328,7 +336,7 @@ def _html_attribute_value(value: object) -> str | int | float | bool:
     return value
 
 
-def _row_from_dict(raw: Mapping[str, Any]) -> ClassicRow:
+def _row_from_dict(raw: JsonObject) -> ClassicRow:
     controls = raw.get("controls")
     if not isinstance(controls, list):
         msg = "classic row controls must be an array"
@@ -369,7 +377,7 @@ def _media_to_dict(media: EmbedMedia | None) -> dict[str, Any] | None:
     return None if media is None else {"url": media.url, "description": media.description}
 
 
-def _embed_from_dict(raw: Mapping[str, Any]) -> Embed:
+def _embed_from_dict(raw: JsonObject) -> Embed:
     fields = raw.get("fields")
     if not isinstance(fields, list):
         msg = "embed fields must be an array"
@@ -415,7 +423,7 @@ def _embed_from_dict(raw: Mapping[str, Any]) -> Embed:
     )
 
 
-def _media_from_dict(raw: Any) -> EmbedMedia | None:
+def _media_from_dict(raw: object) -> EmbedMedia | None:
     if raw is None:
         return None
     return EmbedMedia(url=_string(_object(raw), "url"), description=_optional_string(_object(raw), "description"))
@@ -580,7 +588,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
 
 
 def _node_from_dict(
-    raw: Mapping[str, Any],
+    raw: JsonObject,
 ) -> Node | Link | PremiumButton | Button | RoutedButton:
     kind = _string(raw, "kind")
     match kind:
@@ -767,46 +775,27 @@ def _node_from_dict(
             raise CodecError(msg)
 
 
-def _object(value: Any) -> Mapping[str, Any]:
-    if not isinstance(value, dict):
-        msg = "expected an object"
-        raise CodecError(msg)
-    return value
+def _object(value: object) -> JsonObject:
+    return require_object(value, "expected an object", CodecError)
 
 
-def _string(raw: Mapping[str, Any], key: str) -> str:
-    value = raw.get(key)
-    if not isinstance(value, str):
-        msg = f"{key} must be a string"
-        raise CodecError(msg)
-    return value
+def _string(raw: JsonObject, key: str) -> str:
+    return require_string(raw, key, CodecError)
 
 
-def _optional_string(raw: Mapping[str, Any], key: str) -> str | None:
-    value = raw.get(key)
-    if value is not None and not isinstance(value, str):
-        msg = f"{key} must be a string or null"
-        raise CodecError(msg)
-    return value
+def _optional_string(raw: JsonObject, key: str) -> str | None:
+    return optional_string(raw, key, CodecError)
 
 
-def _string_array(raw: Mapping[str, Any], key: str) -> list[str]:
-    value = raw.get(key)
-    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        msg = f"{key} must be an array of strings"
-        raise CodecError(msg)
-    return value
+def _string_array(raw: JsonObject, key: str) -> list[str]:
+    return require_string_array(raw, key, CodecError)
 
 
-def _integer(raw: Mapping[str, Any], key: str) -> int:
-    value = raw.get(key)
-    if not isinstance(value, int) or isinstance(value, bool):
-        msg = f"{key} must be an integer"
-        raise CodecError(msg)
-    return value
+def _integer(raw: JsonObject, key: str) -> int:
+    return require_integer(raw, key, CodecError)
 
 
-def _entity_id(raw: Mapping[str, Any]) -> int | str:
+def _entity_id(raw: JsonObject) -> int | str:
     value = raw.get("id")
     if isinstance(value, bool) or not isinstance(value, int | str):
         message = "id must be an integer or string"
@@ -814,12 +803,8 @@ def _entity_id(raw: Mapping[str, Any]) -> int | str:
     return value
 
 
-def _boolean(raw: Mapping[str, Any], key: str, *, default: bool | None = None) -> bool:
-    value = raw.get(key, default)
-    if not isinstance(value, bool):
-        msg = f"{key} must be a boolean"
-        raise CodecError(msg)
-    return value
+def _boolean(raw: JsonObject, key: str, *, default: bool | None = None) -> bool:
+    return require_boolean(raw, key, CodecError, default=default)
 
 
 def _emoji_to_dict(emoji: Emoji | None) -> dict[str, object] | None:

@@ -6,7 +6,7 @@ import time
 import uuid
 import weakref
 from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -542,7 +542,7 @@ def current_causality() -> tuple[CausalRef, ActionId | None] | None:
 
 
 @contextmanager
-def action_scope(context: ActionContext):
+def action_scope(context: ActionContext) -> Iterator[ActionContext]:
     """Install an action context until the lexical scope exits."""
     token = _CURRENT_ACTION.set(context)
     causal = _CURRENT_CAUSALITY.set((context.causal_ref(), context.root_action_id))
@@ -554,7 +554,7 @@ def action_scope(context: ActionContext):
 
 
 @contextmanager
-def causal_scope(cause: CausalRef, root_action_id: ActionId | None):
+def causal_scope(cause: CausalRef, root_action_id: ActionId | None) -> Iterator[None]:
     """Install detached immutable causality without granting live transaction authority."""
     token = _CURRENT_CAUSALITY.set((cause, root_action_id))
     try:
@@ -585,7 +585,9 @@ def remove_action_result_sink(sink: ActionResultSink) -> None:
 
 
 @contextmanager
-def action_result_sink(sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION):
+def action_result_sink(
+    sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION
+) -> Iterator[ActionResultSink]:
     """Register a sink until the lexical scope exits.
 
     The scoped form of :func:`add_action_result_sink`, for observers -- a test collector, a
@@ -662,7 +664,7 @@ class ActionContinuation:
         self.result = result
 
     @contextmanager
-    def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.RECOVERY):
+    def start_action(self, name: str, *, kind: ActionPurpose = ActionPurpose.RECOVERY) -> Iterator[ActionContext]:
         """Start a fresh causal action and transaction."""
         from squid_reactivity.core import fresh_action_transaction
 
@@ -675,13 +677,14 @@ class ActionContinuation:
         with fresh_action_transaction(action_context=context):
             yield context
 
-    def start_operation(self, start: Callable[[CausalRef, ActionId], Any]) -> Any:
+    def start_operation[ResultT](self, start: Callable[[CausalRef, ActionId], ResultT]) -> ResultT:
         """Start application-owned work with immutable cause and root identifiers."""
         return start(self.result.context.causal_ref(), self.result.context.root_action_id)
 
 
 @contextmanager
-def continuation_callback():
+def continuation_callback() -> Iterator[None]:
+    """Mark the lexical scope as post-result continuation work."""
     token = _continuation_depth.set(_continuation_depth.get() + 1)
     try:
         yield

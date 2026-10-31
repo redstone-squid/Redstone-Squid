@@ -123,7 +123,12 @@ class MessagePayload:
         return files_for(self.assets)
 
     def _send_fields(self) -> dict[str, Any]:
-        """The discord.py send kwargs this payload owns, attachments excluded."""
+        """Return the mode-dependent discord.py send kwargs, attachments excluded.
+
+        The values remain ``Any`` at this final SDK boundary because discord.py expresses
+        classic and Components V2 sends as disjoint overloads selected by ``view`` type;
+        :class:`MessagePayload` enforces that dependent relationship at construction.
+        """
         if self.mode is MessageMode.COMPONENTS_V2:
             # Content and embeds are not merely empty here, they are forbidden: naming them
             # at all beside the V2 flag is a payload Discord is entitled to reject.
@@ -132,6 +137,9 @@ class MessagePayload:
 
     def _edit_fields(self, previous: MessageMode) -> dict[str, Any]:
         """The discord.py edit kwargs that move a message in `previous` mode to this one.
+
+        As with :meth:`_send_fields`, the heterogeneous dictionary is the final expansion
+        into discord.py's mutually exclusive overloads, after this value validates its mode.
 
         Raises:
             MessageModeError: The transition is one Discord does not offer.

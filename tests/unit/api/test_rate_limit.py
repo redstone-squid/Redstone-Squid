@@ -1,18 +1,24 @@
 """Distributed sliding-window rate limiter tests."""
 
 from collections.abc import Sequence
+from typing import Any, cast, override
 
 import pytest
 from fastapi.testclient import TestClient
+from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import ResponseError
 
 from squid.api.rate_limit import (
     DistributedRateLimiter,
     LocalSlidingWindowRateLimiter,
     RateLimitDecision,
+    RateLimiter,
     RateLimitPolicy,
     RateLimitRequest,
     RateLimitState,
+    RedisSlidingWindowRateLimiter,
+    render_rate_limit_headers,
 )
 from squid.config import RateLimitConfig
 from squid.core.errors import ErrorCode
@@ -30,11 +36,12 @@ def allowed(policy: RateLimitPolicy) -> RateLimitDecision:
     )
 
 
-class StubLimiter:
+class StubLimiter(RateLimiter):
     def __init__(self, *results: RateLimitDecision | Exception) -> None:
         self.results = list(results)
         self.calls = 0
 
+    @override
     async def check(self, requests: Sequence[RateLimitRequest]) -> RateLimitDecision:
         del requests
         self.calls += 1
@@ -42,6 +49,39 @@ class StubLimiter:
         if isinstance(result, Exception):
             raise result
         return result
+
+
+class StubRedis:
+    def __init__(self, result: object) -> None:
+        self.result = result
+
+    def register_script(self, _script: str):
+        async def execute(**_kwargs: Any) -> object:
+            return self.result
+
+        return execute
+
+
+def test_quota_headers_have_one_stable_renderer() -> None:
+    first = RateLimitPolicy("ip", 10, 60)
+    second = RateLimitPolicy("write", 2, 60)
+
+    rendered = render_rate_limit_headers(
+        (
+            RateLimitState(first, remaining=9, reset_after=60),
+            RateLimitState(second, remaining=1, reset_after=42),
+        )
+    )
+
+    assert rendered is not None
+    assert rendered.policy == '"ip";q=10;w=60, "write";q=2;w=60'
+    assert rendered.state == '"ip";r=9;t=60, "write";r=1;t=42'
+
+
+@pytest.mark.parametrize("name", ["space name", 'quote"name', "comma,name", ""])
+def test_policy_names_must_be_safe_header_tokens(name: str) -> None:
+    with pytest.raises(ValueError, match="token-safe"):
+        RateLimitPolicy(name, 1, 1)
 
 
 @pytest.mark.asyncio
@@ -80,6 +120,46 @@ async def test_local_limiter_does_not_partially_consume_a_rejected_policy_set() 
     assert [state.blocked for state in denied.states] == [True, False]
     assert broad_only.allowed is True
     assert broad_only.states[0].remaining == 1
+
+
+@pytest.mark.asyncio
+async def test_local_limiter_evicts_the_least_recently_used_identity() -> None:
+    policy = RateLimitPolicy("bounded", 2, 30)
+    limiter = LocalSlidingWindowRateLimiter(max_keys=2)
+
+    await limiter.check((request(policy, "a"),))
+    await limiter.check((request(policy, "b"),))
+    await limiter.check((request(policy, "a"),))
+    await limiter.check((request(policy, "c"),))
+    b_after_eviction = await limiter.check((request(policy, "b"),))
+
+    assert b_after_eviction.allowed is True
+    assert b_after_eviction.states[0].remaining == 1
+
+
+@pytest.mark.asyncio
+async def test_redis_limiter_decodes_one_atomic_multi_policy_result() -> None:
+    first = RateLimitPolicy("first", 5, 60)
+    second = RateLimitPolicy("second", 2, 30)
+    limiter = RedisSlidingWindowRateLimiter(cast(Redis, StubRedis([1, 4, 60, 0, 1, 30, 0])))
+
+    decision = await limiter.check((request(first), request(second)))
+
+    assert decision == RateLimitDecision(
+        allowed=True,
+        states=(
+            RateLimitState(first, remaining=4, reset_after=60),
+            RateLimitState(second, remaining=1, reset_after=30),
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_redis_limiter_rejects_a_malformed_batch_result() -> None:
+    limiter = RedisSlidingWindowRateLimiter(cast(Redis, StubRedis([1, 0])))
+
+    with pytest.raises(ResponseError, match="malformed"):
+        await limiter.check((request(RateLimitPolicy("test", 1, 30)),))
 
 
 @pytest.mark.asyncio
@@ -125,7 +205,7 @@ def test_api_ip_limit_returns_quota_headers_and_retry_after() -> None:
         update={
             "rate_limit": RateLimitConfig(
                 ip_requests=1,
-                principal_requests=10,
+                caller_requests=10,
                 write_requests=10,
                 vote_requests=10,
             )
@@ -172,7 +252,7 @@ def test_minecraft_device_flows_use_polling_aware_dedicated_quotas() -> None:
         update={
             "rate_limit": RateLimitConfig(
                 ip_requests=100,
-                principal_requests=100,
+                caller_requests=100,
                 write_requests=1,
                 minecraft_challenge_start_requests=1,
                 minecraft_challenge_exchange_requests=2,

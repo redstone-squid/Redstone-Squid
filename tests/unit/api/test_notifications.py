@@ -7,11 +7,20 @@ from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
 from squid.api.security import UNBOUNDED, Caller
-from squid.api.v1.notifications import create_subscription, list_inbox, update_preferences
+from squid.api.v1.notifications import (
+    create_subscription,
+    list_inbox,
+    mark_read,
+    mark_unread,
+    resolve_inbox_visibility,
+    update_preferences,
+)
 from squid.api.v1.schemas.notifications import NotificationPreferenceUpdate, NotificationSubscriptionCreate
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.notifications import (
+    DEFAULT_INBOX_VISIBILITY,
     InboxNotification,
+    InboxVisibility,
     NotificationPreferences,
     NotificationService,
     NotificationSubscription,
@@ -33,7 +42,8 @@ class NotificationRecorder(NotificationService):
         self.inbox_result: Page[InboxNotification] = Page(items=(), total=0, next=None, prev=None)
         self.preference_updates: list[tuple[int, bool, bool]] = []
         self.subscription_calls: list[tuple[int, SubscriptionKind, UUID | None, RecordSubscriptionFilter | None]] = []
-        self.inbox_reads: list[tuple[int, PageSelector, int, bool]] = []
+        self.inbox_reads: list[tuple[int, PageSelector, int, InboxVisibility]] = []
+        self.read_changes: list[tuple[int, int, bool, InboxVisibility]] = []
 
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
         self.preference_updates.append((account_id, web_enabled, dm_enabled))
@@ -57,10 +67,20 @@ class NotificationRecorder(NotificationService):
         *,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        include_staff: bool = False,
+        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
     ) -> Page[InboxNotification]:
-        self.inbox_reads.append((account_id, selector, page_size, include_staff))
+        self.inbox_reads.append((account_id, selector, page_size, visibility))
         return self.inbox_result
+
+    async def mark_read(
+        self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
+    ) -> None:
+        self.read_changes.append((account_id, notification_id, True, visibility))
+
+    async def mark_unread(
+        self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
+    ) -> None:
+        self.read_changes.append((account_id, notification_id, False, visibility))
 
 
 class PermissionAnswer(PermissionService):
@@ -139,7 +159,21 @@ async def test_staff_inbox_access_follows_the_pending_submission_node(holds_node
     notifications.inbox_result = Page(items=(item,), total=1, next=None, prev=None)
     permissions = PermissionAnswer(holds_node)
 
-    page = await list_inbox(notifications, permissions, ACCOUNT)
+    visibility = await resolve_inbox_visibility(permissions, ACCOUNT)
+    page = await list_inbox(notifications, ACCOUNT, visibility)
 
     assert page.items[0].kind == "staff_build_submitted"
-    assert notifications.inbox_reads == [(7, PageSelector(), 20, holds_node)]
+    assert notifications.inbox_reads == [(7, PageSelector(), 20, InboxVisibility(include_staff=holds_node))]
+
+
+async def test_read_and_unread_routes_share_the_resolved_visibility() -> None:
+    notifications = NotificationRecorder()
+    visibility = InboxVisibility(include_staff=True)
+
+    assert (await mark_read(3, notifications, ACCOUNT, visibility)).status_code == 204
+    assert (await mark_unread(3, notifications, ACCOUNT, visibility)).status_code == 204
+
+    assert notifications.read_changes == [
+        (7, 3, True, visibility),
+        (7, 3, False, visibility),
+    ]

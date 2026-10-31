@@ -4,6 +4,7 @@
 import asyncio
 from unittest.mock import AsyncMock
 
+import anyio
 import pytest
 
 from squid.config import SchematicConfig
@@ -33,6 +34,37 @@ async def test_worker_deadline_includes_cold_process_start(monkeypatch: pytest.M
 
     with pytest.raises(SchematicTimeoutError):
         await worker.request("capabilities", {}, (), 0.001)
+
+
+async def test_timeout_cleanup_has_a_separate_bounded_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    worker = _worker()
+
+    async def slow_start() -> None:
+        await asyncio.sleep(1)
+
+    async def hung_cleanup() -> None:
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(worker, "_ensure_started", slow_start)
+    monkeypatch.setattr(worker, "_terminate", hung_cleanup)
+
+    with pytest.raises(SchematicTimeoutError), anyio.fail_after(0.2):
+        await worker.request("capabilities", {}, (), 0.001)
+
+
+async def test_restart_backoff_does_not_delay_the_failed_caller(monkeypatch: pytest.MonkeyPatch) -> None:
+    pool = SchematicWorkerPool(SchematicConfig(workers=1, restart_backoff_seconds=1.0))
+    worker = pool._workers[0]
+    monkeypatch.setattr(
+        worker,
+        "request",
+        AsyncMock(side_effect=SchematicTimeoutError(operation="analyze", timeout_seconds=0.01)),
+    )
+
+    with pytest.raises(SchematicTimeoutError), anyio.fail_after(0.1):
+        await pool._call_unmeasured("analyze", {}, (b"data",), 0.01)
+
+    assert worker._restart_not_before > asyncio.get_running_loop().time()
 
 
 async def test_worker_write_and_read_share_one_deadline(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -237,7 +237,7 @@ class LocalTopicBus:
 
 
 class SubscriptionReconciler:
-    """Keep subscriptions for one committed projection and at most one candidate."""
+    """Keep subscriptions until ``close`` releases them; ``commit`` or ``discard`` ends a candidate."""
 
     def __init__(self, bus: TopicBus | None, callback: Subscriber) -> None:
         self.bus = bus
@@ -295,11 +295,13 @@ class SubscriptionReconciler:
         self._retire_unneeded()
 
     def discard(self) -> None:
+        """End the staged candidate without replacing the committed projection."""
         self._require_staged()
         self._staged = None
         self._retire_unneeded()
 
     def close(self) -> None:
+        """End reconciliation and release every committed or staged subscription."""
         if self._closed:
             return
         self._closed = True

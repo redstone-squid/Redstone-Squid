@@ -52,13 +52,20 @@ def _cog(mocker: MockerFixture, session: Any) -> tuple[Any, Any, Any]:
     return cog, bot, votes
 
 
-def _event(mocker: MockerFixture, *, event_type: str = "REACTION_ADD") -> Any:
+def _event(
+    mocker: MockerFixture,
+    *,
+    event_type: str = "REACTION_ADD",
+    message_id: int = 100,
+    guild_id: int = 10,
+    emoji: str = "1️⃣",
+) -> Any:
     payload = make_reaction_payload(
-        message_id=100,
+        message_id=message_id,
         channel_id=200,
-        guild_id=10,
+        guild_id=guild_id,
         user_id=70,
-        emoji="1️⃣",
+        emoji=emoji,
         event_type=cast(Any, event_type),
     )
     return SimpleNamespace(
@@ -235,6 +242,50 @@ async def test_recovery_compares_multi_guild_aliases_by_stable_option_id(mocker:
 
     votes.cast_vote.assert_not_awaited()
     second.remove_reaction.assert_not_called()
+
+
+async def test_event_recovery_is_idempotent_across_multi_guild_aliases(mocker: MockerFixture) -> None:
+    options = (
+        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=10, label="One"),
+        VoteOption("🔴", VoteChoice.GENERIC, identifier="one", guild_id=11, label="One"),
+    )
+    session = poll_snapshot(
+        visibility=VoteVisibility.VISIBLE_LIVE,
+        messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 11)),
+        options=options,
+        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
+    )
+    cog, bot, votes = _cog(mocker, session)
+    event = _event(mocker, message_id=101, guild_id=11, emoji="🔴")
+    actor = VoteActor(7, 70, guild_id=11)
+    mocker.patch.object(cog, "_consented_account_id", new=mocker.AsyncMock(return_value=7))
+    mocker.patch("squid.bot.voting.vote.resolve_actor", new=mocker.AsyncMock(return_value=actor))
+
+    await cog.recover_reaction_add(event)
+
+    votes.cast_vote.assert_not_awaited()
+    bot.refresh_posts.assert_not_awaited()
+
+
+async def test_alias_remove_recovery_unsets_the_stable_option(mocker: MockerFixture) -> None:
+    options = (
+        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=10, label="One"),
+        VoteOption("🔴", VoteChoice.GENERIC, identifier="one", guild_id=11, label="One"),
+    )
+    session = poll_snapshot(
+        visibility=VoteVisibility.VISIBLE_LIVE,
+        messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 11)),
+        options=options,
+        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
+    )
+    cog, bot, votes = _cog(mocker, session)
+    event = _event(mocker, event_type="REACTION_REMOVE", message_id=101, guild_id=11, emoji="🔴")
+    actor = VoteActor(7, 70, guild_id=11)
+    mocker.patch("squid.bot.voting.vote.resolve_actor", new=mocker.AsyncMock(return_value=actor))
+
+    await cog.recover_reaction_remove(event)
+
+    votes.cast_vote.assert_awaited_once_with(101, actor, "🔴")
 
 
 @pytest.mark.parametrize("handler_name", ["on_reaction_clear", "on_reaction_clear_emoji"])

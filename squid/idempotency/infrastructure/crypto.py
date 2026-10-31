@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from squid.core.errors import ConfigurationError, DataIntegrityError
 from squid.core.i18n import tr
+from squid.idempotency.domain import UnsafeHttpMethod
 
 _NONCE_BYTES = 12
 _AAD_DOMAIN = b"redstone-squid:idempotency-response:v1"
@@ -32,7 +33,7 @@ class ResponseEncryptionMetadata:
     caller: str
     idempotency_key: str
     request_fingerprint: bytes
-    method: str
+    method: UnsafeHttpMethod
     route: str
     status_code: int
     headers: Mapping[str, str]

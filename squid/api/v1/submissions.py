@@ -1,4 +1,4 @@
-"""Submission form and synchronized-draft routes.
+"""Submission form and draft routes.
 
 The form describes fields and constraints; whether they become a Discord modal,
 an HTML form, or a CLI prompt is the client's decision.
@@ -20,20 +20,28 @@ from squid.api.v1.schemas.submissions import (
     DraftChangeResponse,
     DraftCreateRequest,
     DraftListResponse,
+    DraftManifestUpgradeRequest,
+    DraftManifestUpgradeResponse,
     FormManifestResponse,
     FormOptionSetResponse,
     StoredDraftResponse,
     SubmissionFinalizationResponse,
 )
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
-from squid.submissions.application import AppliedDraftChange, FinalizationJobSnapshot, FormOptionSet, StoredDraft
+from squid.submissions.application import (
+    AppliedDraftChange,
+    AppliedDraftUpgrade,
+    FinalizationJobSnapshot,
+    FormOptionSet,
+    StoredDraft,
+)
 from squid.submissions.domain import DraftChange, FormManifest, SubmissionOrigin
 
 
 class SubmissionFormReader(Protocol):
     """Form reads needed by the HTTP transport."""
 
-    def manifest(self, *, locale: str | None) -> FormManifest: ...
+    async def manifest(self, *, locale: str | None) -> FormManifest: ...
 
     async def manifest_revision(
         self,
@@ -72,6 +80,16 @@ class SubmissionDraftCommands(Protocol):
         *,
         locale: str | None,
     ) -> AppliedDraftChange: ...
+
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_revision: int,
+        locale: str | None,
+    ) -> AppliedDraftUpgrade: ...
 
     async def delete(self, draft_id: UUID, account_id: int) -> None: ...
 
@@ -279,7 +297,7 @@ async def list_drafts(drafts: Drafts, account_id: AccountId) -> DraftListRespons
 )
 async def current_form(request: Request, forms: Forms) -> FormManifestResponse:
     """Return the localized form and protocol bounds authored by this server."""
-    manifest = forms.manifest(locale=locale_for_request(request))
+    manifest = await forms.manifest(locale=locale_for_request(request))
     return FormManifestResponse.from_domain(manifest)
 
 
@@ -339,7 +357,7 @@ async def create_draft(
     drafts: Drafts,
     actor: SubmissionActor,
 ) -> StoredDraftResponse:
-    """Create an empty synchronized draft owned by the signed-in account."""
+    """Create an empty draft owned by the signed-in account."""
     if payload.origin is not actor.origin:
         raise AuthorizationError
     draft = await drafts.create(
@@ -364,7 +382,7 @@ async def create_draft(
     ),
 )
 async def get_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> StoredDraftResponse:
-    """Return one synchronized draft after enforcing caller ownership."""
+    """Return one draft after enforcing caller ownership."""
     return StoredDraftResponse.from_domain(await drafts.get_owned(draft_id, account_id))
 
 
@@ -394,6 +412,34 @@ async def change_draft(
         locale=locale_for_request(request),
     )
     return DraftChangeResponse(draft=StoredDraftResponse.from_domain(result.draft), replayed=result.replayed)
+
+
+@router.post(
+    "/drafts/{draft_id}/manifest-upgrade",
+    response_model=DraftManifestUpgradeResponse,
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
+    operation_id="submission_draft_manifest_upgrade",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE, MINECRAFT],
+        cli=cli_command("draft.upgrade", features=("submission-drafts",), interaction="direct"),
+    ),
+)
+async def upgrade_draft_manifest(
+    draft_id: UUID,
+    payload: DraftManifestUpgradeRequest,
+    request: Request,
+    drafts: Drafts,
+    account_id: AccountId,
+) -> DraftManifestUpgradeResponse:
+    """Upgrade an owned draft to the next checked-in form revision."""
+    result = await drafts.upgrade_manifest(
+        draft_id,
+        account_id,
+        expected_revision=payload.base_revision,
+        target_revision=payload.target_revision,
+        locale=locale_for_request(request),
+    )
+    return DraftManifestUpgradeResponse.from_domain(result)
 
 
 @router.post(
@@ -457,6 +503,6 @@ async def get_draft_submission(
     ),
 )
 async def delete_draft(draft_id: UUID, drafts: Drafts, account_id: AccountId) -> Response:
-    """Immediately delete one caller-owned synchronized draft."""
+    """Immediately delete one caller-owned draft."""
     await drafts.delete(draft_id, account_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

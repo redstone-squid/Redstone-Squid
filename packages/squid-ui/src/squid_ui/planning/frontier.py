@@ -6,7 +6,7 @@ positions keyed by the path through the *currently selected* rungs — so the pl
 can canonicalize, price, and step decisions without re-deriving the traversal each time.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 
 from squid_ui.planning.adapter import ResourceCost
@@ -31,7 +31,11 @@ def format_path(path: VariantPath) -> str:
     return "$." + ".".join(str(part) for part in path if part != "panel")
 
 
-def walk_ladders(nodes: Sequence[Node], positions: Positions, visit) -> None:
+def walk_ladders(
+    nodes: Sequence[Node],
+    positions: Positions,
+    visit: Callable[[VariantPath, Variants, int], None],
+) -> None:
     """Visit every node reachable through the currently selected rungs, in document order.
 
     Ladders only occur at the top level, inside a Panel, or inside another ladder's rung:

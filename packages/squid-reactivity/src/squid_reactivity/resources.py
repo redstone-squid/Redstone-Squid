@@ -28,7 +28,7 @@ from squid_reactivity.core import (
     ReactivityError,
     TransactionView,
     _bump_epoch,
-    _Cell,
+    _ReactiveSource,
     action_participant,
     cycle_path,
     declared_cells,
@@ -68,7 +68,7 @@ class AddressedOwner(Protocol):
     write does -- by publishing an address they follow.
     """
 
-    def _resource_binding(self, name: str) -> tuple[Address, Callable[[Any], None]]:
+    def _resource_binding(self, name: str) -> tuple[Address, Callable[[Address], None]]:
         """The address this resource publishes under, and what to publish it with."""
         ...
 
@@ -217,7 +217,7 @@ class _Replacement:
         self._resource = resource
         self.value: Any = _MISSING
 
-    def prepare(self, view: TransactionView) -> dict[_Cell, int] | None:
+    def prepare(self, view: TransactionView) -> dict[_ReactiveSource, int] | None:
         """Settle every source while the action can still roll back.
 
         `None` means this participant staged no replacement, which is why `apply` can be
@@ -227,21 +227,21 @@ class _Replacement:
             return None
         return {source: source.settle() for source in self._resource.sources}
 
-    def apply(self, prepared: dict[_Cell, int] | None) -> None:
+    def apply(self, prepared: dict[_ReactiveSource, int] | None) -> None:
         if prepared is not None:
             self._resource._replace_now(self.value, baseline=prepared)
 
-    def describe_change(self, prepared: dict[_Cell, int] | None) -> None:
+    def describe_change(self, prepared: dict[_ReactiveSource, int] | None) -> None:
         return None
 
-    def abort(self, prepared: dict[_Cell, int] | None, cause: BaseException) -> None:
+    def abort(self, prepared: dict[_ReactiveSource, int] | None, cause: BaseException) -> None:
         self.value = _MISSING
 
-    def finalize(self, prepared: dict[_Cell, int] | None) -> None:
+    def finalize(self, prepared: dict[_ReactiveSource, int] | None) -> None:
         """Installing already invalidated the owner, which is the only watcher there is."""
 
 
-class _Load:
+class _Load[ValueT]:
     """One generation's private notebook: what it read, how to stop it, and how to wake joiners.
 
     The reads are held here rather than on the resource because a superseded loader does not
@@ -255,7 +255,13 @@ class _Load:
 
     __slots__ = ("completion", "owner", "scope", "sources", "token")
 
-    def __init__(self, owner: Resource[Any], token: int, completion: Completion[Any], scope: LoadScope) -> None:
+    def __init__(
+        self,
+        owner: Resource[ValueT],
+        token: int,
+        completion: Completion[ResourceStatus[ValueT]],
+        scope: LoadScope,
+    ) -> None:
         # `owner` is what keeps `Resource.track` able to recognise a self-read. While the load
         # runs it, not the resource, is the `_CONSUMER`, so an identity check against the
         # consumer alone would let a loader that reads its own resource subscribe the resource
@@ -264,7 +270,7 @@ class _Load:
         self.token = token
         self.completion = completion
         self.scope = scope
-        self.sources: dict[_Cell, int] = {}
+        self.sources: dict[_ReactiveSource, int] = {}
 
 
 def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
@@ -287,7 +293,7 @@ class Resource[ValueT](AsyncBinding):
         name: str,
         pending_mode: PendingMode,
         address: Address | None = None,
-        publish: Callable[[Any], None] | None = None,
+        publish: Callable[[Address], None] | None = None,
     ) -> None:
         self._owner = owner
         self._loader = loader
@@ -301,7 +307,7 @@ class Resource[ValueT](AsyncBinding):
         """
         self._publish = publish
         self._status: ResourceStatus[ValueT] = Pending()
-        self._loading: _Load | None = None
+        self._loading: _Load[ValueT] | None = None
         self._request_token = 0
         self._generation_id = uuid.uuid7()
         causality = current_causality()
@@ -316,7 +322,9 @@ class Resource[ValueT](AsyncBinding):
         immediately rather than one load later, and it is safe because a dependent awaits its
         input rather than racing it -- see `__await__`.
         """
-        self.sources: dict[_Cell, int] = declared_cells(owner)
+        self.sources: dict[_ReactiveSource, int] = {
+            source: version for source, version in declared_cells(owner).items()
+        }
         """State the last load read, and the version each held. Filled by tracking, not declared.
 
         Seeded with everything the component declares, because a resource whose loader has not
@@ -466,7 +474,7 @@ class Resource[ValueT](AsyncBinding):
             return
         staged.value = value
 
-    def _replace_now(self, value: ValueT, *, baseline: dict[_Cell, int] | None = None) -> None:
+    def _replace_now(self, value: ValueT, *, baseline: dict[_ReactiveSource, int] | None = None) -> None:
         if baseline is None:
             baseline = {source: source.settle() for source in self.sources}
         self._new_generation()

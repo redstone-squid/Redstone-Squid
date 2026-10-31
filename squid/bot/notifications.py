@@ -1,7 +1,7 @@
 """Slash-only notification management and durable Discord DM delivery."""
 
 import logging
-from typing import TYPE_CHECKING, Any, override
+from typing import Any, override
 
 import discord
 from discord import app_commands
@@ -9,13 +9,16 @@ from discord import app_commands
 import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.notifications_view import NotificationScreen
+from squid.bot.utils.permissions import allows
+from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
 from squid.notifications import (
+    InboxVisibility,
     PendingNotificationDelivery,
 )
+from squid.notifications.domain import NotificationKind
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.runtime import JobHandle
-
-if TYPE_CHECKING:
-    from squid.bot.app import RedstoneSquid
+from squid_ui.text import Message, localization_scope
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +26,9 @@ logger = logging.getLogger(__name__)
 class NotificationCog(sd.Cog[Any]):
     """Manage notification state and deliver queued DMs without prefix commands."""
 
-    bot: RedstoneSquid
+    bot: Any
 
-    def __init__(self, bot: RedstoneSquid) -> None:
+    def __init__(self, bot: Any) -> None:
         super().__init__(bot)
         self._delivery_task: JobHandle | None = None
 
@@ -42,8 +45,11 @@ class NotificationCog(sd.Cog[Any]):
         if self._delivery_task is not None:
             await self.bot.background_tasks.cancel(self._delivery_task)
 
-    @app_commands.command(name="notifications", description="Manage notification channels and subscriptions")
-    async def notifications(self, interaction: discord.Interaction) -> None:
+    @app_commands.command(
+        name="notifications",
+        description=app_commands.locale_str("Manage notification channels and subscriptions"),
+    )
+    async def notifications(self, interaction: discord.Interaction[Any]) -> None:
         """Open the notification preferences and subscription workspace."""
         account_id = await self._account_id(interaction)
         if account_id is None:
@@ -54,8 +60,14 @@ class NotificationCog(sd.Cog[Any]):
                 notifications=self.bot.services.notifications,
                 account_id=account_id,
                 author_id=interaction.user.id,
+                visibility=await self._inbox_visibility(interaction),
+                visibility_resolver=lambda event: self._inbox_visibility(sd.native(event)),
             ),
         )
+
+    @staticmethod
+    async def _inbox_visibility(interaction: discord.Interaction[Any]) -> InboxVisibility:
+        return InboxVisibility(include_staff=await allows(interaction, BUILD_SUBMISSION_VIEW_PENDING))
 
     async def process_deliveries(self) -> None:
         """Drain a bounded DM batch; retry ambiguous failures and suspend explicit forbiddens."""
@@ -85,29 +97,44 @@ class NotificationCog(sd.Cog[Any]):
         return await ensure_consented_account(await sd.request(interaction), self.bot.services.accounts)
 
 
-def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None) -> str:
-    """Render transport-safe DM text from a materialized notification payload."""
+def delivery_message(delivery: PendingNotificationDelivery) -> Message:
+    """Build deferred DM text from a materialized notification payload."""
     build_id = delivery.payload.get("build_id")
-    if delivery.kind.value == "staff_build_submitted":
-        message = "A new build is awaiting staff review."
+    if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
         if isinstance(build_id, int):
-            return f"{message}\nOpen it in Discord with `/build browse id:{build_id}`."
-        return message
-    build_link = f"{site_url}/builds/{build_id}" if site_url is not None and isinstance(build_id, int) else None
-    if delivery.kind.value == "record_gained":
+            return tr(t"A new build is awaiting staff review.\nOpen it in Discord with `/build browse id:{build_id}`.")
+        return tr(t"A new build is awaiting staff review.")
+    if delivery.kind is NotificationKind.RECORD_GAINED:
         raw_records = delivery.payload.get("records", [])
         count = len(raw_records) if isinstance(raw_records, list) else 1
-        message = f"A credited build gained {count} record{'s' if count != 1 else ''}."
-    elif delivery.kind.value == "build_confirmed":
-        message = "Your build was confirmed."
-    elif delivery.kind.value == "build_denied":
-        message = "Your build was denied."
-    elif delivery.kind.value == "creator_build_confirmed":
-        message = "A creator you follow has a newly confirmed build."
-    else:
-        message = "A build notification is available."
-    return f"{message}\n{build_link}" if build_link is not None else message
+        return tr(
+            t"A credited build gained {count} record.",
+            plural=t"A credited build gained {count} records.",
+        )
+    if delivery.kind is NotificationKind.BUILD_CONFIRMED:
+        return tr(t"Your build was confirmed.")
+    if delivery.kind is NotificationKind.BUILD_DENIED:
+        return tr(t"Your build was denied.")
+    if delivery.kind is NotificationKind.CREATOR_BUILD_CONFIRMED:
+        return tr(t"A creator you follow has a newly confirmed build.")
+    return tr(t"A build notification is available.")
 
 
-async def setup(bot: RedstoneSquid) -> None:
+def render_delivery(
+    delivery: PendingNotificationDelivery,
+    site_url: str | None,
+    *,
+    locale: str = DEFAULT_LOCALE,
+) -> str:
+    """Localize transport-safe DM text when it is delivered."""
+    with localization_scope(localization_for(locale)):
+        rendered = tr(delivery_message(delivery))
+    build_id = delivery.payload.get("build_id")
+    if delivery.kind is NotificationKind.STAFF_BUILD_SUBMITTED:
+        return rendered
+    build_link = f"{site_url}/builds/{build_id}" if site_url is not None and isinstance(build_id, int) else None
+    return f"{rendered}\n{build_link}" if build_link is not None else rendered
+
+
+async def setup(bot: Any) -> None:
     await bot.add_cog(NotificationCog(bot))

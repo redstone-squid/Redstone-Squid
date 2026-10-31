@@ -16,7 +16,7 @@ from squid.auth.application.web import WebSessionService
 from squid.auth.domain.sessions import WebSessionIdentity
 from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import ErrorCode, InternalError
-from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
+from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
 from tests.unit.api.fakes import (
     NONEXISTENT_UUID,
     TEST_CONFIG,
@@ -51,7 +51,7 @@ class IdempotencyRecorder(IdempotencyService):
 
     @override
     async def reserve(
-        self, *, caller: str, key: str, fingerprint: bytes, method: str, route: str
+        self, *, caller: str, key: str, fingerprint: bytes, method: UnsafeHttpMethod, route: str
     ) -> PendingRequest | StoredResponse:
         self.reservations.append(
             {"caller": caller, "key": key, "fingerprint": fingerprint, "method": method, "route": route}

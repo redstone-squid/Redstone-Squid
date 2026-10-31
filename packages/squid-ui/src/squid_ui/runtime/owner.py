@@ -22,7 +22,7 @@ from squid_ui.target_types import RenderTarget
 
 
 class ComponentRuntime[RenderTargetT: RenderTarget = RenderTarget]:
-    """Frontend-neutral owner of a reactive component tree and presentation session."""
+    """Own a reactive component tree and presentation session until ``finish`` unmounts the tree."""
 
     def __init__(
         self,

@@ -15,16 +15,16 @@ from squid.core.pagination import MAX_PAGE_OFFSET, PageSelector
 from squid.core.pagination import Page as ResultPage
 from squid.core.pagination import PageAnchor as ResultPageAnchor
 
-PageSizeParam = Annotated[int, Query(ge=1, le=50, description="Maximum number of items to return.")]
-OffsetParam = Annotated[
+type PageSizeParam = Annotated[int, Query(ge=1, le=50, description="Maximum number of items to return.")]
+type OffsetParam = Annotated[
     int | None,
     Query(ge=0, le=MAX_PAGE_OFFSET, description="Number of items to skip. Excludes after_id and before_id."),
 ]
-AfterIdParam = Annotated[
+type AfterIdParam = Annotated[
     int | None,
     Query(ge=1, description="Return the items after this identifier in display order. Excludes offset."),
 ]
-BeforeIdParam = Annotated[
+type BeforeIdParam = Annotated[
     int | None,
     Query(ge=1, description="Return the items before this identifier in display order. Excludes offset."),
 ]

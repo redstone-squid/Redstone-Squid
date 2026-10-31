@@ -11,7 +11,7 @@ from squid_ui.semantic import ActionControl, ControlDisplay, FormTrigger, Layout
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key
-from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
+from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControls, TransitionEvent
 
 REVIEW_STEP = "@review"
 """The reserved `WizardState.current` value naming the review screen rather than a step."""
@@ -77,7 +77,7 @@ class WizardStep[RenderTargetT: RenderTarget = RenderTarget]:
         object.__setattr__(self, "content", content)
 
 
-type WizardAnswers = Mapping[str, Mapping[str, object]]
+type WizardAnswers = Mapping[str, FormValues]
 type StepSource[RenderTargetT: RenderTarget = RenderTarget] = (
     Iterable[WizardStep[RenderTargetT]] | Callable[[WizardAnswers], Iterable[WizardStep[RenderTargetT]]]
 )
@@ -107,6 +107,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
 
     @property
     def initial_state(self) -> WizardState:
+        """Return state positioned at the first initial step."""
         return self._initial_state
 
     def build_component(
@@ -126,10 +127,12 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         return ComponentDriver(self, initial=initial, on_change=changed)
 
     @staticmethod
-    def _answer_map(answers: tuple[WizardAnswer, ...]) -> dict[str, Mapping[str, object]]:
+    def _answer_map(answers: tuple[WizardAnswer, ...]) -> dict[str, FormValues]:
+        """Expand serialized answers for branch and form logic."""
         return {answer.step: dict(answer.values) for answer in answers}
 
     def _steps(self, answers: tuple[WizardAnswer, ...]) -> tuple[WizardStep[RenderTargetT], ...]:
+        """Resolve and validate the branch selected by retained answers."""
         answer_map = self._answer_map(answers)
         resolved = tuple(self.steps(MappingProxyType(answer_map)) if callable(self.steps) else self.steps)
         if any(not isinstance(step, WizardStep) for step in resolved):
@@ -164,9 +167,8 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         return all(step.key in retained for step in self.live_steps(state) if step.form is not None)
 
     @staticmethod
-    def _store(
-        answers: tuple[WizardAnswer, ...], step: str, submitted: Mapping[str, object]
-    ) -> tuple[WizardAnswer, ...]:
+    def _store(answers: tuple[WizardAnswer, ...], step: str, submitted: FormValues) -> tuple[WizardAnswer, ...]:
+        """Replace one retained answer while preserving other branches."""
         replacement = WizardAnswer(step, tuple(submitted.items()))
         result = [answer for answer in answers if answer.step != step]
         result.append(replacement)
@@ -174,6 +176,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
 
     @staticmethod
     def _index(steps: tuple[WizardStep[RenderTargetT], ...], key: str) -> int:
+        """Locate a step, falling back to the first live step."""
         return next((index for index, step in enumerate(steps) if step.key == key), 0)
 
     def transition(
@@ -182,8 +185,9 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> WizardState:
+        """Navigate, submit, review, or finish the current branch."""
         del values
         live = self.live_steps(state)
         at_review = state.current == REVIEW_STEP
@@ -235,6 +239,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         return WizardState(recomputed[recomputed_index + 1].key, answers)
 
     def _prefilled(self, step: WizardStep[RenderTargetT], state: WizardState) -> FormSpec:
+        """Apply a retained answer to one form step."""
         assert step.form is not None
         attempted = self._answer_map(state.answers).get(step.key)
         return step.form if attempted is None else step.form.with_prefill(attempted)
@@ -248,9 +253,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         return None if step is None or step.form is None else self._prefilled(step, state)
 
     @staticmethod
-    def _summarize_step(
-        step: WizardStep[RenderTargetT], answer: Mapping[str, object] | None, unanswered: TextLike
-    ) -> TextLike:
+    def _summarize_step(step: WizardStep[RenderTargetT], answer: FormValues | None, unanswered: TextLike) -> TextLike:
         """One step's answers as a single line, each value through its field's prefill form."""
         if step.form is None or answer is None:
             return unanswered
@@ -268,6 +271,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         controls: MachineControls[WizardState, RenderTargetT],
         review: WizardReview[RenderTargetT],
     ) -> DocumentLike[RenderTargetT]:
+        """Render live answers and controls for the review screen."""
         live = self.live_steps(state)
         answered = self._answer_map(state.answers)
         steps = tuple(step for step in live if step.form is not None)
@@ -322,6 +326,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
     def render(
         self, state: WizardState, controls: MachineControls[WizardState, RenderTargetT]
     ) -> DocumentLike[RenderTargetT]:
+        """Render the current step or configured review screen."""
         if self.review is not None and state.current == REVIEW_STEP:
             return self._render_review(state, controls, self.review)
         live = self.live_steps(state)

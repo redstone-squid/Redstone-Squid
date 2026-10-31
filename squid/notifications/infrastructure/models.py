@@ -20,8 +20,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
+from squid.notifications.domain import NotificationKind, SubscriptionKind
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC, StrEnumText, now
 
 
 class NotificationProfile(Base, kw_only=True):
@@ -92,7 +93,7 @@ class NotificationSubscriptionRecord(Base, kw_only=True):
         ForeignKey("accounts.id", name="notification_subscriptions_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
-    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[SubscriptionKind] = mapped_column(StrEnumText(SubscriptionKind), nullable=False)
     subject_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     filter: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
@@ -128,7 +129,7 @@ class NotificationRecord(Base, kw_only=True):
         nullable=False,
     )
     source_key: Mapped[str] = mapped_column(Text, nullable=False)
-    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[NotificationKind] = mapped_column(StrEnumText(NotificationKind), nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )

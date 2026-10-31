@@ -14,6 +14,7 @@ from typing import Any, Protocol, Self, overload
 
 from squid_reactivity.actions import (
     DEFAULT_REDACTION,
+    ActionContinuation,
     ActionId,
     CausalRef,
     ChangeToken,
@@ -863,7 +864,7 @@ class History:
         self._redoable.clear()
         self._owner.invalidate()
 
-    def _reserve(self, callback) -> None:
+    def _reserve(self, callback: Callable[[ActionCommit, ActionContinuation], None]) -> None:
         if has_action_hook(self):
             message = "this action already used this history; only one history operation is allowed"
             raise HistoryError(message)

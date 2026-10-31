@@ -8,12 +8,19 @@ a write rather than a read, it is also what gives the attempt cap something to c
 from collections.abc import AsyncIterator
 from uuid import UUID
 
+import anyio
 import pytest
-from sqlalchemy import insert, select, text
+from sqlalchemy import insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, AccountIdentity, ClaimMethod
+from squid.accounts.domain import (
+    CURRENT_CONSENT_VERSION,
+    AccountConsent,
+    AccountIdentity,
+    ClaimMethod,
+    LinkReservation,
+)
 from squid.accounts.infrastructure.models import Account as AccountModel
 from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
 from squid.accounts.infrastructure.models import CreatorAlias
@@ -100,6 +107,24 @@ async def test_a_held_code_cannot_be_reserved_twice(repository: AccountRepositor
     assert first is not None
 
     assert await repository.reserve_verification_code(CODE, ttl_seconds=TTL) is None
+
+
+async def test_concurrent_reservations_issue_exactly_one_hold(repository: AccountRepository) -> None:
+    await _seed_code(repository)
+    start = anyio.Event()
+    reservations: list[LinkReservation | None] = []
+
+    async def reserve() -> None:
+        await start.wait()
+        reservations.append(await repository.reserve_verification_code(CODE, ttl_seconds=TTL))
+
+    async with anyio.create_task_group() as tasks:
+        tasks.start_soon(reserve)
+        tasks.start_soon(reserve)
+        start.set()
+
+    assert len(reservations) == 2
+    assert sum(reservation is not None for reservation in reservations) == 1
 
 
 async def test_releasing_frees_the_code_immediately(repository: AccountRepository) -> None:
@@ -246,6 +271,42 @@ async def test_the_preview_reports_a_contested_credit_by_public_creator(
     assert credit is not None
     assert credit.is_contested
     assert credit.held_by_public_creator_id == holder.public_creator_id
+
+
+async def test_an_unclaimed_preview_can_become_contested_before_commit(repository: AccountRepository) -> None:
+    """The atomic commit must re-evaluate ownership changed while the reader considered the preview."""
+    await _seed_code(repository, username="Notch")
+    claimant = await repository.create(identities=[AccountIdentity.discord(1)])
+    holder = await repository.create(identities=[AccountIdentity.discord(2)])
+    assert claimant.id is not None
+    assert holder.id is not None
+    async with repository._session_factory.begin() as session:
+        session.add(CreatorAlias(name="Notch"))
+
+    reservation = await repository.reserve_verification_code(CODE, ttl_seconds=TTL)
+    assert reservation is not None
+    assert reservation.preview.credit is not None
+    assert not reservation.preview.credit.is_contested
+
+    async with repository._session_factory.begin() as session:
+        await session.execute(
+            update(CreatorAlias)
+            .where(CreatorAlias.name == "Notch")
+            .values(account_id=holder.id, claimed_at=Instant.now(), claim_method=ClaimMethod.STAFF_APPROVED)
+        )
+
+    result = await repository.consume_code_and_link_account(
+        account_id=claimant.id,
+        code=CODE,
+        consent=CONSENT,
+        reservation_token=reservation.token,
+    )
+
+    assert result.refresh is not None
+    assert result.refresh.contested_alias is not None
+    assert result.refresh.contested_alias.account_id == holder.id
+    assert result.refresh.opened_claim is not None
+    assert result.refresh.opened_claim.account_id == claimant.id
 
 
 async def test_the_preview_reports_a_java_uuid_already_linked_elsewhere(repository: AccountRepository) -> None:

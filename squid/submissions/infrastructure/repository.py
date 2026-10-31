@@ -12,15 +12,15 @@ from squid.core.errors import JSONValue
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
-from squid.submissions.application import AppliedDraftChange, DraftRepository, StoredDraft
+from squid.submissions.application import AppliedDraftChange, AppliedDraftUpgrade, DraftRepository, StoredDraft
 from squid.submissions.domain import (
     DraftChange,
+    DraftChangeKey,
     DraftRevisionConflictError,
     DraftSnapshot,
     DraftStatus,
     FieldOperation,
     FieldOperationKind,
-    SubmissionOrigin,
 )
 from squid.submissions.errors import DraftAccessDeniedError, DraftNotFoundError, DraftStateConflictError
 from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
@@ -30,7 +30,7 @@ from squid.submissions.infrastructure.models import (
     SubmissionDraftChange,
 )
 
-_ACTIVE_STATUSES = (DraftStatus.EDITING.value, DraftStatus.PROCESSING.value, DraftStatus.NEEDS_ATTENTION.value)
+_ACTIVE_STATUSES = (DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION)
 
 
 class PostgresDraftRepository(DraftRepository):
@@ -106,7 +106,7 @@ class PostgresDraftRepository(DraftRepository):
         self,
         draft_id: UUID,
         account_id: int,
-        idempotency_key: str,
+        idempotency_key: DraftChangeKey,
     ) -> AppliedDraftChange | None:
         async with self._session_factory() as session:
             row = (
@@ -148,7 +148,7 @@ class PostgresDraftRepository(DraftRepository):
 
             candidate = _to_stored(model).snapshot.apply(change)
             model.revision = candidate.revision
-            model.status = candidate.status.value
+            model.status = candidate.status
             model.answers = _json_object(candidate.answers)
             model.updated_at = updated_at
             model.expires_at = expires_at
@@ -159,7 +159,7 @@ class PostgresDraftRepository(DraftRepository):
                     base_revision=change.base_revision,
                     resulting_revision=candidate.revision,
                     client_instance_id=change.client_instance_id,
-                    idempotency_key=change.idempotency_key,
+                    idempotency_key=str(change.idempotency_key),
                     operations=_operations_to_json(change.operations),
                     applied_at=updated_at,
                 )
@@ -184,10 +184,41 @@ class PostgresDraftRepository(DraftRepository):
             if snapshot.revision != expected_revision:
                 raise DraftRevisionConflictError(expected=expected_revision, actual=snapshot.revision)
             candidate = snapshot.transition(status)
-            model.status = candidate.status.value
+            model.status = candidate.status
             model.updated_at = updated_at
             model.expires_at = expires_at
         return _to_stored(model)
+
+    @override
+    async def upgrade_manifest(
+        self,
+        draft_id: UUID,
+        account_id: int,
+        *,
+        expected_revision: int,
+        target_schema_revision: int,
+        answers: Mapping[str, JSONValue],
+        updated_at: Instant,
+        expires_at: Instant,
+    ) -> AppliedDraftUpgrade:
+        async with self._session_factory.begin() as session:
+            model = await self._locked(session, draft_id)
+            self._require_owner(model, account_id)
+            if model.schema_revision == target_schema_revision:
+                return AppliedDraftUpgrade(_to_stored(model), replayed=True)
+            if model.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
+                raise DraftStateConflictError(model.status.value, operation="upgrade_manifest")
+            if model.revision != expected_revision:
+                raise DraftRevisionConflictError(expected=expected_revision, actual=model.revision)
+            if target_schema_revision != model.schema_revision + 1:
+                msg = "draft manifests must be upgraded by one revision"
+                raise ValueError(msg)
+            model.schema_revision = target_schema_revision
+            model.revision += 1
+            model.answers = _json_object(answers)
+            model.updated_at = updated_at
+            model.expires_at = expires_at
+        return AppliedDraftUpgrade(_to_stored(model))
 
     @override
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
@@ -200,7 +231,7 @@ class PostgresDraftRepository(DraftRepository):
             if model is None:
                 return False
             self._require_owner(model, account_id)
-            status = DraftStatus(model.status)
+            status = model.status
             if status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
                 raise DraftStateConflictError(status.value, operation="delete")
             # Retain artifact rows and object keys: normalized content is addressable by hash and may be shared,
@@ -262,7 +293,7 @@ class PostgresDraftRepository(DraftRepository):
                 await session.execute(
                     update(SubmissionDraft)
                     .where(SubmissionDraft.id == draft_id)
-                    .values(status=DraftStatus.EXPIRED.value, updated_at=now)
+                    .values(status=DraftStatus.EXPIRED, updated_at=now)
                 )
                 await session.execute(
                     update(MediaNormalizationJobRecord)
@@ -307,9 +338,9 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
         schema_revision=snapshot.schema_revision,
         category=snapshot.category,
         revision=snapshot.revision,
-        status=snapshot.status.value,
+        status=snapshot.status,
         answers=_json_object(snapshot.answers),
-        origin=draft.origin.value,
+        origin=draft.origin,
         source_installation_id=draft.source_installation_id,
         created_at=draft.created_at,
         updated_at=draft.updated_at,
@@ -326,10 +357,10 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
             schema_revision=model.schema_revision,
             category=model.category,
             revision=model.revision,
-            status=DraftStatus(model.status),
+            status=model.status,
             answers=cast(Mapping[str, JSONValue], model.answers),
         ),
-        origin=SubmissionOrigin(model.origin),
+        origin=model.origin,
         created_at=model.created_at,
         updated_at=model.updated_at,
         expires_at=model.expires_at,

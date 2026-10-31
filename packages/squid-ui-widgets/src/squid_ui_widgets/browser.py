@@ -21,7 +21,6 @@ from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
     MountNavNode,
     NavigationContext,
-    NavigationState,
     default_nav,
 )
 from squid_ui.runtime.component import Component
@@ -30,7 +29,6 @@ from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
 from squid_ui.sources import (
     ORIGIN,
-    CountPrecision,
     LoadedWindow,
     Position,
     WindowLoader,
@@ -46,6 +44,7 @@ from squid_ui_widgets._window import (
     WindowRequest,
     last_ready,
     load_window,
+    source_navigation_state,
 )
 
 type BrowserDetail[ItemT, RenderTargetT: DiscordTarget = DiscordTarget] = Callable[[ItemT], ContentLike[RenderTargetT]]
@@ -99,6 +98,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
 
     @resource
     async def window(self) -> LoadedWindow[ItemT]:
+        """Load the requested source window around the visible anchor."""
         return await load_window(
             self.loader,
             self._request,
@@ -112,18 +112,23 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         await self.window._load()
 
     async def _previous(self, _event: ActionEvent) -> None:
+        """Request the previous source window."""
         self._request = WindowRequest("previous")
 
     async def _next(self, _event: ActionEvent) -> None:
+        """Request the next source window."""
         self._request = WindowRequest("next")
 
     async def _seek(self, page: int) -> None:
+        """Request a zero-based page from a jumpable source."""
         self._request = WindowRequest("seek", Position(offset=page * self.page_size))
 
     async def _retry(self, _event: ActionEvent) -> None:
+        """Retry the current window request."""
         self._request = WindowRequest(self._request.operation, self._request.position)
 
     def _ready(self) -> LoadedWindow[ItemT] | None:
+        """Return the current or stale window available for interaction."""
         current = self.window.status
         if isinstance(current, Ready):
             return current.value
@@ -132,6 +137,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         return None
 
     async def _selected(self, event: ChoiceEvent) -> None:
+        """Open the single selected item if it remains visible."""
         if len(event.selected) != 1:
             return
         loaded = self._ready()
@@ -143,16 +149,19 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         await self._open(event, item)
 
     async def _open(self, event: ActionEvent, item: ItemT) -> None:
+        """Open one item and materialize its detail once."""
         self.opened = item
         self._detail_value = self.detail(item)
         if self.on_open is not None:
             await self.on_open(event, item)
 
     async def _back(self, _event: ActionEvent) -> None:
+        """Return from detail to the source overview."""
         self.opened = None
         self._detail_value = None
 
     async def _adjacent(self, event: ActionEvent, delta: int) -> None:
+        """Open an adjacent item within the current source window."""
         loaded = self._ready()
         if loaded is None or self.opened is None:
             return
@@ -165,12 +174,15 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
             await self._open(event, items[target])
 
     async def _previous_item(self, event: ActionEvent) -> None:
+        """Open the previous item in the visible window."""
         await self._adjacent(event, -1)
 
     async def _next_item(self, event: ActionEvent) -> None:
+        """Open the next item in the visible window."""
         await self._adjacent(event, 1)
 
     def render(self) -> DocumentLike[RenderTargetT]:
+        """Render ready, pending, or failed source state."""
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
         # checker saw a path with no return on a shape that cannot occur.
@@ -187,6 +199,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
                 return self._render_loaded(previous.value, status_text=self.copy.failed, retry=True)
 
     def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT]:
+        """Render a source status without a stale window."""
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
@@ -204,6 +217,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         status_text: TextLike | None = None,
         retry: bool = False,
     ) -> DocumentLike[RenderTargetT]:
+        """Render a loaded window as either overview or detail."""
         opened = None
         if self.opened is not None:
             opened = next(
@@ -221,6 +235,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         status_text: TextLike | None,
         retry: bool,
     ) -> DocumentLike[RenderTargetT]:
+        """Render overview content, item selection, and navigation."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         extra = (
@@ -261,49 +276,25 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         )
 
     def _navigation(self, loaded: LoadedWindow[ItemT]) -> tuple[MountNavNode, ...]:
+        """Bind shared source navigation facts to mounted handlers."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
-        window = loaded.window
-        capabilities = self.source.capabilities
-        extent = (
-            max(1, (window.total + self.page_size - 1) // self.page_size)
-            if capabilities.count is CountPrecision.EXACT and capabilities.jumpable and window.total is not None
-            else None
+        state = source_navigation_state(
+            loaded,
+            self.source.capabilities,
+            key=self.key,
+            page_size=self.page_size,
+            chrome=chrome,
         )
-        navigable = window.has_next or (capabilities.backward and window.has_previous) or (extent or 0) > 1
-        if not navigable:
+        if state is None:
             return ()
-        total = window.total if capabilities.count is not CountPrecision.NONE else None
-        visible_range = (
-            (window.position.offset + 1, window.position.offset + len(window.items))
-            if capabilities.offsets and window.items
-            else None
-        )
         return tuple(
             nav(
                 NavigationContext(
-                    NavigationState(
-                        key=self.key,
-                        position=window.position,
-                        has_previous=window.has_previous,
-                        has_next=window.has_next,
-                        backward=capabilities.backward,
-                        previous_label=chrome.older,
-                        next_label=chrome.newer,
-                        previous_key=f"{self.key}.previous",
-                        next_key=f"{self.key}.next",
-                        extent=extent,
-                        page=window.position.offset // self.page_size if capabilities.offsets else None,
-                        visible_range=visible_range,
-                        total=total,
-                        count=capabilities.count,
-                        seek_key=f"{self.key}.seek",
-                        seek_label=chrome.jump_to_page,
-                        page_option=chrome.page_option,
-                    ),
+                    state,
                     self._previous,
                     self._next,
-                    self._seek if extent is not None else None,
+                    self._seek if state.extent is not None else None,
                 )
             )
         )
@@ -316,6 +307,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         status_text: TextLike | None,
         retry: bool,
     ) -> DocumentLike[RenderTargetT]:
+        """Render one opened item and its local actions."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         index = next(index for index, candidate in enumerate(items) if self.identity(candidate) == self.identity(item))

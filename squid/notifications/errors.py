@@ -8,3 +8,10 @@ class NotificationSubscriptionNotFoundError(NotFoundError):
 
     default_message = "Notification subscription not found."
     default_resource = "notification_subscription"
+
+
+class NotificationNotFoundError(NotFoundError):
+    """Raised when a caller addresses an inbox item they cannot observe."""
+
+    default_message = "Notification not found."
+    default_resource = "notification"

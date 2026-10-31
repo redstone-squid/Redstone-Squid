@@ -1,12 +1,12 @@
 """Form and nested-machine sections under one editor commit boundary."""
 
 from collections.abc import Iterable, Mapping
-from typing import Any, cast
 
 import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_ui import testing as engine
 from squid_ui.semantic import ActionControls, FormTrigger, RoutedActionControl, Stack
 
 
@@ -19,7 +19,7 @@ def _walk(node: object) -> Iterable[object]:
         yield from node.items
 
 
-def _profile_section() -> sp.EditorSection[tuple[tuple[str, object], ...], Mapping[str, object], sl.RenderTarget]:
+def _profile_section() -> sp.EditorSection[tuple[tuple[str, object], ...], sp.FormValues, sl.RenderTarget]:
     return sp.EditorSection.from_form(
         "profile",
         "Profile",
@@ -90,7 +90,7 @@ async def test_immediate_commit_reports_complete_values_and_all_changed_keys() -
     previous = component.machine_state
     component.machine_state = state
     assert component.on_change is not None
-    await component.on_change(sp.TransitionEvent(cast(Any, object()), "submit:profile", previous, state))
+    await component.on_change(sp.TransitionEvent(engine.press_event(), "submit:profile", previous, state))
 
     assert commits[-1][0]["profile"] == {"name": "New", "bio": None}
     assert commits[-1][1] == frozenset({"profile"})
@@ -98,7 +98,8 @@ async def test_immediate_commit_reports_complete_values_and_all_changed_keys() -
 
 def test_invalid_immediate_edit_stays_staged_until_aggregate_becomes_valid() -> None:
     def validate(values: sp.EditorValues) -> tuple[sl.forms.FormIssue, ...]:
-        profile = cast(Mapping[str, object], values["profile"])
+        profile = values["profile"]
+        assert isinstance(profile, Mapping)
         return () if profile["name"] else (sl.forms.FormError("Name is required."),)
 
     editor = sp.Editor(
@@ -118,7 +119,7 @@ def test_invalid_immediate_edit_stays_staged_until_aggregate_becomes_valid() -> 
 
 def _collection_section() -> tuple[
     sp.CollectionEditor,
-    sp.EditorSection[sp.CollectionState, tuple[Mapping[str, object], ...], sl.RenderTarget],
+    sp.EditorSection[sp.CollectionState, tuple[sp.FormValues, ...], sl.RenderTarget],
 ]:
     collection = sp.CollectionEditor(
         "Links",
@@ -126,11 +127,15 @@ def _collection_section() -> tuple[
         label=lambda value: str(value["name"]),
         window_size=1,
     )
+
+    def load(value: tuple[sp.FormValues, ...]) -> sp.CollectionState:
+        return collection.initial_from(value)
+
     section = sp.EditorSection.from_pattern(
         "links",
         "Links",
         collection,
-        load=lambda value: collection.initial_from(cast(Iterable[Mapping[str, object]], value)),
+        load=load,
         dump=collection.values,
         summary=lambda value: f"{len(value)} links",
         issues=lambda state: (sl.forms.FormError(message) for message in collection.errors(state)),
@@ -150,7 +155,7 @@ def test_nested_pattern_navigation_is_not_dirty_but_value_changes_are() -> None:
     assert paged.editing == "links"
     assert editor.dirty_sections(paged) == frozenset()
     assert editor.dirty_sections(added) == frozenset({"links"})
-    assert tuple(dict(value) for value in cast(tuple[Mapping[str, object], ...], section.value(added))) == (
+    assert tuple(dict(value) for value in section.value(added)) == (
         {"name": "A"},
         {"name": "B"},
         {"name": "C"},

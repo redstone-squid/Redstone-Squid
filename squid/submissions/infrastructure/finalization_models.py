@@ -97,13 +97,13 @@ class SubmissionFinalizationJob(Base, kw_only=True):
 
 
 class SubmissionFinalizationResult(Base, kw_only=True):
-    """Immutable build identity and target provenance retained after success."""
+    """Immutable build identity retained after successful finalization."""
 
     __tablename__ = "submission_finalization_results"
     __table_args__ = (
         CheckConstraint("build_id > 0", name="submission_finalization_results_build_id_positive"),
         CheckConstraint(
-            "target_key ~ '^[a-z][a-z0-9_]{0,63}$'",
+            "target_key IS NULL OR target_key ~ '^[a-z][a-z0-9_]{0,63}$'",
             name="submission_finalization_results_target_key_check",
         ),
         Index("submission_finalization_results_build_idx", "build_id"),
@@ -117,8 +117,10 @@ class SubmissionFinalizationResult(Base, kw_only=True):
         primary_key=True,
     )
     build_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    target_key: Mapped[str] = mapped_column(Text, nullable=False)
-    provenance: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
+    _legacy_target_key: Mapped[str | None] = mapped_column("target_key", Text, default=None, deferred=True)
+    _legacy_provenance: Mapped[dict[str, object] | None] = mapped_column(
+        "provenance", JSONB, default=None, deferred=True
+    )
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )

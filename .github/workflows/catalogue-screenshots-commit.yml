@@ -20,6 +20,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # For workflow_run, github.sha is the trusted default-branch revision that authorized this job.
+      - name: Load trusted screenshot validation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: .trusted-workflow
+          sparse-checkout: .github/scripts/catalogue-screenshot-plan.cjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
       - name: Download screenshot artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -32,45 +42,33 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           SCREENSHOT_DIRECTORY: ${{ runner.temp }}/catalogue-screenshots
+          TRUSTED_SCREENSHOT_PLANNER: ${{ github.workspace }}/.trusted-workflow/.github/scripts/catalogue-screenshot-plan.cjs
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('node:fs');
             const path = require('node:path');
+            const {
+              planScreenshotArtifact,
+              validateScreenshotMetadata,
+            } = require(process.env.TRUSTED_SCREENSHOT_PLANNER);
 
-            const expected = [
-              'en-desktop-build-detail.png',
-              'en-desktop-builds.png',
-              'en-desktop-home.png',
-              'en-desktop-record-detail.png',
-              'zh-cn-mobile-build-detail.png',
-              'zh-cn-mobile-builds.png',
-              'zh-cn-mobile-home.png',
-              'zh-cn-mobile-record-detail.png',
-            ];
-            const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
             const directory = process.env.SCREENSHOT_DIRECTORY;
-            const files = fs.readdirSync(directory).sort();
-            if (JSON.stringify(files) !== JSON.stringify(expected)) {
-              throw new Error(`Screenshot artifact path allowlist mismatch: ${files.join(', ')}`);
-            }
-
-            let totalBytes = 0;
-            for (const filename of files) {
+            const artifactMetadata = validateScreenshotMetadata(fs.readdirSync(directory).map((filename) => {
               const filePath = path.join(directory, filename);
               const stats = fs.lstatSync(filePath);
-              if (!stats.isFile() || stats.isSymbolicLink()) {
-                throw new Error(`${filename} is not a regular file.`);
-              }
-              const contents = fs.readFileSync(filePath);
-              if (!contents.subarray(0, signature.length).equals(signature)) {
-                throw new Error(`${filename} does not have a PNG signature.`);
-              }
-              totalBytes += contents.byteLength;
-            }
-            if (totalBytes > 8 * 1024 * 1024) {
-              throw new Error(`Screenshot artifact is ${(totalBytes / 1024 / 1024).toFixed(1)} MiB; maximum is 8 MiB.`);
-            }
+              return {
+                name: filename,
+                isFile: stats.isFile(),
+                isSymbolicLink: stats.isSymbolicLink(),
+                size: stats.size,
+              };
+            }));
+            const artifactContents = artifactMetadata.files.map((entry) => ({
+              ...entry,
+              contents: fs.readFileSync(path.join(directory, entry.name)),
+            }));
+            const artifactPlan = planScreenshotArtifact(artifactContents);
 
             const run = context.payload.workflow_run;
             const runPull = run.pull_requests[0];
@@ -89,17 +87,16 @@ jobs:
             }
 
             const blobs = [];
-            for (const filename of files) {
-              const content = fs.readFileSync(path.join(directory, filename)).toString('base64');
+            for (const plannedBlob of artifactPlan.blobs) {
               const { data: blob } = await github.rest.git.createBlob({
                 ...context.repo,
-                content,
-                encoding: 'base64',
+                content: plannedBlob.content,
+                encoding: plannedBlob.encoding,
               });
               blobs.push({
-                path: `catalogue-screenshots/${filename}`,
-                mode: '100644',
-                type: 'blob',
+                path: plannedBlob.path,
+                mode: plannedBlob.mode,
+                type: plannedBlob.type,
                 sha: blob.sha,
               });
             }

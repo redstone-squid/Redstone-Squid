@@ -66,7 +66,7 @@ TAGS_METADATA = [
     {"name": "builds", "description": "Public redstone build catalog."},
     {"name": "search", "description": "Search grammar and field discovery."},
     {"name": "suggest", "description": "Typeahead completions for registered value sources."},
-    {"name": "submissions", "description": "Revisioned submission forms and synchronized drafts."},
+    {"name": "submissions", "description": "Revisioned submission forms and drafts."},
     {"name": "records", "description": "Active computed record results."},
     {"name": "tags", "description": "Published build and record taxonomy."},
     {"name": "versions", "description": "Recognized Minecraft versions."},

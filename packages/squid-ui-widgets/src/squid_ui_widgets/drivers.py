@@ -25,7 +25,10 @@ from squid_ui.semantic import (
 )
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
-from squid_ui_widgets._content import ContentItem
+from squid_ui_widgets._content import ContentItem, render_content
+
+type FormValues = Mapping[str, object]
+"""Values submitted by a heterogeneous form schema."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +54,7 @@ class TransitionEvent[StateT]:
     previous: StateT
     state: StateT
     values: tuple[str, ...] = ()
-    submitted: Mapping[str, object] | None = None
+    submitted: FormValues | None = None
 
 
 type TransitionHandler[StateT] = Callable[[TransitionEvent[StateT]], Awaitable[None]]
@@ -59,7 +62,7 @@ type RouteEncoder[StateT] = Callable[[TransitionRoute[StateT]], str]
 
 
 class _MissingInitialState:
-    pass
+    """Sentinel distinguishing omission from an explicit state value."""
 
 
 _MISSING_INITIAL_STATE = _MissingInitialState()
@@ -81,7 +84,7 @@ class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol)
         action: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> StateT: ...
 
 
@@ -188,6 +191,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
         self.finish_actions = frozenset(finish_actions)
 
     def render(self) -> DocumentLike[RenderTargetT]:
+        """Render the current machine state with mounted controls."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         return self.machine.render(self.machine_state, _ComponentControls(self, chrome))
 
@@ -197,8 +201,9 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
         action_name: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> None:
+        """Apply an interaction, notify handlers, and finish if configured."""
         previous = self.machine_state
         current = self.machine.transition(previous, action_name, values=values, submitted=submitted)
         self.machine_state = current
@@ -212,6 +217,8 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
 
 
 class _ComponentControls[StateT, RenderTargetT: RenderTarget]:
+    """Mounted control bindings for one component driver."""
+
     def __init__(self, owner: ComponentDriver[StateT, RenderTargetT], chrome: Chrome) -> None:
         self.owner = owner
         self.chrome = chrome
@@ -219,10 +226,8 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget]:
     def content(
         self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
     ) -> tuple[LayoutNode[RenderTargetT], ...]:
-        return tuple(
-            self.owner.boundary(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
-            for index, item in enumerate(content)
-        )
+        """Embed child components under stable keys."""
+        return render_content(self.owner, content, prefix=prefix)
 
     def action_control(
         self,
@@ -234,6 +239,8 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget]:
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
     ) -> ActionControl:
+        """Bind a mounted action control to machine dispatch."""
+
         async def trigger(event: ActionEvent) -> None:
             await self.owner._dispatch(event, action_name)
 
@@ -251,6 +258,7 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget]:
         placeholder: TextLike | None = None,
         available: bool = True,
     ) -> Choices:
+        """Bind mounted choices to machine dispatch."""
         del placeholder
 
         async def choose(event: ChoiceEvent) -> None:
@@ -277,6 +285,7 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget]:
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
     ) -> FormTrigger:
+        """Bind a mounted form submission to machine dispatch."""
         resolved = spec.spec() if isinstance(spec, Form) else spec
 
         async def submitted(event: SubmitEvent) -> None:
@@ -297,6 +306,7 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
     chrome: Chrome = DEFAULT_CHROME
 
     def render(self, machine: StateMachine[StateT, RenderTargetT], state: StateT) -> DocumentLike[RenderTargetT]:
+        """Render `state` with route-backed controls."""
         return machine.render(state, _RoutedControls(machine, state, self.route, self.chrome))
 
     def transition(
@@ -306,13 +316,15 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
         action_name: str,
         *,
         values: tuple[str, ...] = (),
-        submitted: Mapping[str, object] | None = None,
+        submitted: FormValues | None = None,
     ) -> StateT:
         """Apply input received by a routed select or form handler."""
         return machine.transition(state, action_name, values=values, submitted=submitted)
 
 
 class _RoutedControls[StateT, RenderTargetT: RenderTarget]:
+    """Route-backed control bindings for one stateless render."""
+
     def __init__(
         self,
         machine: StateMachine[StateT, RenderTargetT],
@@ -328,6 +340,7 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget]:
     def content(
         self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
     ) -> tuple[LayoutNode[RenderTargetT], ...]:
+        """Return portable content and reject mounted child components."""
         del prefix
         nodes: list[LayoutNode[RenderTargetT]] = []
         for item in content:
@@ -350,6 +363,7 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget]:
         emphasis: Emphasis = Emphasis.NORMAL,
         available: bool = True,
     ) -> RoutedActionControl:
+        """Encode the deterministic next state into a routed control."""
         next_state = self.machine.transition(self.current, action_name)
         route_id = self.route(TransitionRoute(action_name, next_state, "next"))
         return routed_action_control(label, route_id, key=key, tone=tone, emphasis=emphasis, available=available)
@@ -366,6 +380,7 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget]:
         placeholder: TextLike | None = None,
         available: bool = True,
     ) -> RoutedChoices:
+        """Encode an input-phase route for a choice control."""
         del selected
         route_id = self.route(TransitionRoute(action_name, self.current, "input"))
         return routed_choices(
@@ -388,6 +403,7 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget]:
         tone: Tone = Tone.NEUTRAL,
         emphasis: Emphasis = Emphasis.NORMAL,
     ) -> RoutedActionControl:
+        """Encode an input-phase route for a form trigger."""
         del spec
         route_id = self.route(TransitionRoute(action_name, self.current, "input"))
         return routed_action_control(label, route_id, key=key, tone=tone, emphasis=emphasis)

@@ -139,14 +139,12 @@ async def attach_vote_message(
     `discord_posts`, so a message without a post is not findable, which is why both
     are written here.
     """
-    await session.execute(
-        insert(Message).values(
-            id=message_id,
-            guild_id=guild_id,
-            channel_id=channel_id,
-            author_id=AUTHOR_ACCOUNT_IDS[0],
-            content=content,
-        )
+    await record_vote_message(
+        session,
+        message_id=message_id,
+        content=content,
+        guild_id=guild_id,
+        channel_id=channel_id,
     )
     await session.execute(
         insert(DiscordPost).values(
@@ -156,6 +154,26 @@ async def attach_vote_message(
             resource_key=str(vote_session_id),
             surface="vote_card",
             applied_revision=0,
+        )
+    )
+
+
+async def record_vote_message(
+    session: AsyncSession,
+    *,
+    message_id: int,
+    content: str | None = None,
+    guild_id: int = GUILD_ID,
+    channel_id: int = CHANNEL_ID,
+) -> None:
+    """Record the Discord message fact that the attachment operation consumes."""
+    await session.execute(
+        insert(Message).values(
+            id=message_id,
+            guild_id=guild_id,
+            channel_id=channel_id,
+            author_id=AUTHOR_ACCOUNT_IDS[0],
+            content=content,
         )
     )
 

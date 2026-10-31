@@ -25,6 +25,10 @@ from squid_ui.semantic import (
 from squid_ui_widgets import testing as wt
 
 KEYED_CONTROLS = (ActionControl, Choices, FormTrigger, RoutedActionControl, RoutedChoices)
+# The catalogue intentionally erases unrelated state and target parameters so every
+# advertised machine can share the same behavioral-law parametrization.
+type ConformanceMachine = sp.StateMachine[Any, Any]
+type MachineFactory = Callable[[], ConformanceMachine]
 
 
 def _form(title: str = "Value") -> sl.forms.FormSpec:
@@ -66,7 +70,7 @@ def _wizard() -> sp.Wizard:
     return sp.Wizard("Wizard", (sp.WizardStep("value", "Value", _form()),), review=True)
 
 
-MACHINES: tuple[tuple[str, Callable[[], sp.StateMachine[Any, Any]]], ...] = (
+MACHINES: tuple[tuple[str, MachineFactory], ...] = (
     ("decision", _decision),
     ("collection", _collection),
     ("editor", _editor),
@@ -85,7 +89,7 @@ def _control_keys(nodes: tuple[object, ...]) -> list[str]:
 
 
 @machine
-def test_the_initial_state_is_stable_across_reads(build: Callable[[], sp.StateMachine[Any, Any]]) -> None:
+def test_the_initial_state_is_stable_across_reads(build: MachineFactory) -> None:
     """Two reads must agree, and rendering must not quietly move it."""
     subject = build()
     first = subject.initial_state
@@ -97,13 +101,13 @@ def test_the_initial_state_is_stable_across_reads(build: Callable[[], sp.StateMa
 
 
 @machine
-def test_both_shells_render_something(build: Callable[[], sp.StateMachine[Any, Any]]) -> None:
+def test_both_shells_render_something(build: MachineFactory) -> None:
     assert wt.mounted(build()).nodes
     assert wt.routed(build()).nodes
 
 
 @machine
-def test_no_two_controls_in_one_render_share_a_key(build: Callable[[], sp.StateMachine[Any, Any]]) -> None:
+def test_no_two_controls_in_one_render_share_a_key(build: MachineFactory) -> None:
     """A duplicate key silently cross-wires two controls through the mount's handler table:
     the second registration wins, and the first button starts doing the second one's job."""
     for nodes in (wt.mounted(build()).nodes, wt.routed(build()).nodes):
@@ -116,7 +120,7 @@ def test_no_two_controls_in_one_render_share_a_key(build: Callable[[], sp.StateM
 
 @machine
 def test_every_action_the_routed_shell_encodes_is_one_the_machine_accepts(
-    build: Callable[[], sp.StateMachine[Any, Any]],
+    build: MachineFactory,
 ) -> None:
     """The render and the transition table are written apart; nothing else checks they agree."""
     subject = build()
@@ -130,7 +134,7 @@ def test_every_action_the_routed_shell_encodes_is_one_the_machine_accepts(
 
 @machine
 def test_a_render_encodes_exactly_one_route_per_routed_control(
-    build: Callable[[], sp.StateMachine[Any, Any]],
+    build: MachineFactory,
 ) -> None:
     """An unencoded control is dead; an encoded route with no control is an id nobody can reach."""
     render = wt.routed(build())
@@ -140,7 +144,7 @@ def test_a_render_encodes_exactly_one_route_per_routed_control(
 
 @machine
 def test_an_unknown_action_is_the_identity_rather_than_an_error(
-    build: Callable[[], sp.StateMachine[Any, Any]],
+    build: MachineFactory,
 ) -> None:
     """Discord replays ids from messages that may be older than the current code, so a machine
     meets actions it no longer has. Ignoring one is recoverable; raising is not."""
@@ -152,7 +156,7 @@ def test_an_unknown_action_is_the_identity_rather_than_an_error(
 
 
 @machine
-def test_a_transition_is_deterministic(build: Callable[[], sp.StateMachine[Any, Any]]) -> None:
+def test_a_transition_is_deterministic(build: MachineFactory) -> None:
     subject = build()
     render = wt.routed(subject)
 
@@ -165,7 +169,7 @@ def test_a_transition_is_deterministic(build: Callable[[], sp.StateMachine[Any, 
 
 @machine
 @given(action=st.text(max_size=40))
-def test_any_string_at_all_is_a_safe_action(build: Callable[[], sp.StateMachine[Any, Any]], action: str) -> None:
+def test_any_string_at_all_is_a_safe_action(build: MachineFactory, action: str) -> None:
     """The stronger form of the law above, over inputs nobody would think to write down."""
     subject = build()
     initial = subject.initial_state

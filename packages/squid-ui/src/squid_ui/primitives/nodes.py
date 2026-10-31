@@ -424,6 +424,11 @@ class GalleryItem:
     spoiler: bool = False
 
 
+def normalize_gallery_item(value: str | GalleryItem) -> GalleryItem:
+    """Promote a shorthand image URL to a complete gallery item."""
+    return GalleryItem(value) if isinstance(value, str) else value
+
+
 @dataclass(frozen=True, slots=True)
 class Gallery(Renderable[ComponentsV2Target]):
     """One exact target gallery."""
@@ -431,9 +436,7 @@ class Gallery(Renderable[ComponentsV2Target]):
     items: tuple[str | GalleryItem, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "items", tuple(GalleryItem(item) if isinstance(item, str) else item for item in self.items)
-        )
+        object.__setattr__(self, "items", tuple(normalize_gallery_item(item) for item in self.items))
 
 
 @dataclass(frozen=True, slots=True)
@@ -443,9 +446,7 @@ class MediaCollection(Renderable[ComponentsV2Target]):
     items: tuple[str | GalleryItem, ...]
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "items", tuple(GalleryItem(item) if isinstance(item, str) else item for item in self.items)
-        )
+        object.__setattr__(self, "items", tuple(normalize_gallery_item(item) for item in self.items))
 
 
 @dataclass(frozen=True, slots=True)

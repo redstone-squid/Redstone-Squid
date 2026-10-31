@@ -37,12 +37,16 @@ type SearchPickHandler[ItemT] = Callable[[ActionEvent, tuple[ItemT, ...]], Await
 
 @dataclass(frozen=True, slots=True)
 class _LookupRequest:
+    """A reload-triggering search window operation."""
+
     operation: Literal["refresh", "previous", "next"] = "refresh"
     generation: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class _LookupWindow[ItemT]:
+    """The source, loader, and result retained for one query."""
+
     query: str
     source: WindowSource[ItemT]
     loader: WindowLoader[ItemT]
@@ -103,6 +107,7 @@ class SearchPicker[ItemT](Component):
 
     @resource
     async def results(self) -> _LookupWindow[ItemT]:
+        """Load or move within the current query's source."""
         query = self.query
         if query is None:
             message = "SearchPicker.results was observed before a query was submitted"
@@ -132,20 +137,25 @@ class SearchPicker[ItemT](Component):
         return _LookupWindow(query, source, loader, loaded)
 
     async def _searched(self, event: SubmitEvent) -> None:
+        """Adopt a submitted query and start a fresh source generation."""
         query = str(event.values["query"]).strip()
         self.query = query
         self._request = _LookupRequest(generation=self._request.generation + 1)
 
     async def _previous(self, _event: ActionEvent) -> None:
+        """Request the previous result window."""
         self._request = _LookupRequest("previous", self._request.generation + 1)
 
     async def _next(self, _event: ActionEvent) -> None:
+        """Request the next result window."""
         self._request = _LookupRequest("next", self._request.generation + 1)
 
     async def _retry(self, _event: ActionEvent) -> None:
+        """Retry the current result operation."""
         self._request = _LookupRequest(self._request.operation, self._request.generation + 1)
 
     def _visible(self) -> _LookupWindow[ItemT] | None:
+        """Return the current or stale result window available for input."""
         current = self.results.status
         if isinstance(current, Ready):
             return current.value
@@ -154,6 +164,7 @@ class SearchPicker[ItemT](Component):
         return None
 
     async def _selected(self, event: ChoiceEvent) -> None:
+        """Add the single visible selection within configured bounds."""
         if len(event.selected) != 1:
             return
         current = self._visible()
@@ -176,6 +187,7 @@ class SearchPicker[ItemT](Component):
         await self.on_pick(event, updated)
 
     async def _remove(self, event: ActionEvent, identity: str) -> None:
+        """Remove one picked identity without crossing the minimum."""
         if len(self.picked) <= self.minimum:
             return
         updated = tuple(item for item in self.picked if self.identity(item) != identity)
@@ -185,6 +197,7 @@ class SearchPicker[ItemT](Component):
         await self.on_pick(event, updated)
 
     def _picked_nodes(self) -> tuple[LayoutNode, ...]:
+        """Render retained picks with identity-bound removal controls."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nodes: list[LayoutNode] = []
         for item in self.picked:
@@ -213,6 +226,7 @@ class SearchPicker[ItemT](Component):
         return tuple(nodes)
 
     def render(self) -> DocumentLike:
+        """Render query input, retained picks, and result status."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         search_form = FormSpec(chrome.search, (TextField(key="query", label=chrome.search),))
         search_control = form(
@@ -245,6 +259,7 @@ class SearchPicker[ItemT](Component):
         return stack(heading(chrome.search), *self._picked_nodes(), search_control, *body)
 
     def _failure(self) -> tuple[LayoutNode, ...]:
+        """Render a failed search with no stale results."""
         return (
             note(self.copy.failed),
             action_controls(
@@ -259,6 +274,7 @@ class SearchPicker[ItemT](Component):
         status_text: TextLike | None = None,
         retry: bool = False,
     ) -> tuple[ChildLike, ...]:
+        """Render one result window with navigation and status."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         window = current.loaded.window
         entries = tuple(

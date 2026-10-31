@@ -10,6 +10,7 @@ from squid.submissions.domain import (
     CategoryForm,
     ControlKind,
     DraftChange,
+    DraftChangeKey,
     DraftSnapshot,
     FieldConstraints,
     FieldOperation,
@@ -51,7 +52,7 @@ def test_change_enforces_its_operation_count_in_the_domain() -> None:
         DraftChange(
             base_revision=0,
             client_instance_id="browser:test",
-            idempotency_key="bounded-change",
+            idempotency_key=DraftChangeKey("bounded-change"),
             operations=operations,
         )
 
@@ -70,7 +71,7 @@ def test_draft_rejects_cumulative_answer_growth_with_a_stable_domain_error() -> 
             DraftChange(
                 base_revision=revision,
                 client_instance_id="browser:test",
-                idempotency_key=f"bounded-change-{revision}",
+                idempotency_key=DraftChangeKey(f"bounded-change-{revision}"),
                 operations=(operation(f"description_{revision}", answers),),
             )
         )
@@ -80,7 +81,7 @@ def test_draft_rejects_cumulative_answer_growth_with_a_stable_domain_error() -> 
             DraftChange(
                 base_revision=4,
                 client_instance_id="browser:test",
-                idempotency_key="bounded-change-final",
+                idempotency_key=DraftChangeKey("bounded-change-final"),
                 operations=(operation("description_final", answers),),
             )
         )
