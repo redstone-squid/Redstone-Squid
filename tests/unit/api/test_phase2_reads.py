@@ -342,10 +342,7 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
     [
         (build_snapshot(), VoteKind.BUILD, 42, None),
         (build_snapshot(kind=VoteKind.DELETE_LOG), VoteKind.DELETE_LOG, None, None),
-        *[
-            (poll_snapshot(visibility=visibility), VoteKind.GENERIC, None, visibility)
-            for visibility in VoteVisibility
-        ],
+        *[(poll_snapshot(visibility=visibility), VoteKind.GENERIC, None, visibility) for visibility in VoteVisibility],
     ],
     ids=["build", "delete-log", *[f"generic-{visibility.value}" for visibility in VoteVisibility]],
 )
