@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from uuid import UUID
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -155,8 +155,8 @@ async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(
     await _seed_delivery(async_session_factory)
     expired_at = Instant.now().subtract(hours=24 * 91)
     async with async_session_factory.begin() as session:
-        await session.execute(NotificationRecord.__table__.update().values(created_at=expired_at))
-        await session.execute(DomainEventRecord.__table__.update().values(occurred_at=expired_at))
+        await session.execute(update(NotificationRecord).values(created_at=expired_at))
+        await session.execute(update(DomainEventRecord).values(occurred_at=expired_at))
 
     assert await repository.cleanup(retention_days=90) == 1
 

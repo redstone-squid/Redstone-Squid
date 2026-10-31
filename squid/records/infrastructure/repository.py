@@ -366,7 +366,7 @@ class PostgresRecordRepository:
                     version_scope=definition.version_scope,
                     status=result.status,
                     holder_build_ids=tuple(holders.get(result.id, ())),
-                    computed_at=result.computed_at.py_datetime(),
+                    computed_at=result.computed_at.to_stdlib(),
                 )
                 for result, definition in rows
             )

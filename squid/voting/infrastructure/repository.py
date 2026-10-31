@@ -437,7 +437,8 @@ class VoteRepository:
         )
         if for_update:
             statement = statement.with_for_update(of=VoteSession)
-        return await _VoteSessionModelRepository(session=session).get_one_or_none(statement=statement)
+        # advanced-alchemy 1.12 still annotates Select with SQLAlchemy 2.0's tuple-wrapped row type.
+        return await _VoteSessionModelRepository(session=session).get_one_or_none(statement=statement)  # type: ignore[arg-type]
 
     @staticmethod
     async def _to_snapshot(session: AsyncSession, row: VoteSession) -> VoteSessionSnapshot:

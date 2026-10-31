@@ -58,7 +58,7 @@ def durable_components(
 
 
 async def _with_runner(runner: SchematicJobRunner, request: Awaitable[ResultT]) -> ResultT:
-    task = asyncio.create_task(request)
+    task = asyncio.ensure_future(request)
     while not task.done():
         await runner.process_batch()
         await asyncio.sleep(0.005)

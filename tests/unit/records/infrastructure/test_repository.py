@@ -1,10 +1,12 @@
 from datetime import UTC, datetime, timedelta
 from typing import cast
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
+from uuid import UUID
 
 import pytest
 from sqlalchemy import CheckConstraint, Index, Table
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from whenever import Instant
 
 from squid.records.application.models import (
     CategoryCompetition,
@@ -115,6 +117,36 @@ def test_active_run_identity_is_global_across_rulesets() -> None:
     assert tuple(column.name for column in active_index.columns) == ("build_kind", "version_id")
     assert FORMATTER_VERSION == "2"
     assert CALCULATOR_VERSION == "3"
+
+
+async def test_active_records_convert_computed_timestamp_to_datetime() -> None:
+    computed_at = Instant.from_utc(2026, 10, 31, 12)
+    result = RecordResult(run_id=4, definition_id=2, status="resolved", computed_at=computed_at)
+    result.id = 1
+    definition = RecordDefinition(
+        ruleset_id=7,
+        competition_id=UUID(int=3),
+        category_key="door|2x2|t[20]|Door",
+        materialization_source="eager",
+        title="Smallest 2x2 Door",
+        subtitle=None,
+        record_class=RecordClass.SMALLEST.value,
+        build_kind=BuildKind.DOOR.value,
+        version_scope=VersionScope.ALL_TIME.value,
+    )
+    definition.id = 2
+    session = FakeSession()
+    session.execute.side_effect = [
+        Mock(all=Mock(return_value=[(result, definition)])),
+        Mock(all=Mock(return_value=[(1, 42)])),
+    ]
+    repository = PostgresRecordRepository(cast(async_sessionmaker[AsyncSession], FakeSessionFactory(session)))
+
+    records = await repository.list_active_records(after_id=None, limit=10)
+
+    assert len(records) == 1
+    assert records[0].computed_at == datetime(2026, 10, 31, 12, tzinfo=UTC)
+    assert records[0].holder_build_ids == (42,)
 
 
 @pytest.mark.asyncio

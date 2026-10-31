@@ -1,17 +1,12 @@
 """Database schema inspection and consistency checks."""
 
-from __future__ import annotations
-
 import logging
 from typing import Any, cast
 
 from sqlalchemy import Engine, Inspector, Table, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.orm import ColumnProperty, DeclarativeBase, Mapper, RelationshipProperty
-
-# noinspection PyProtectedMember
-from sqlalchemy.orm.clsregistry import ClsRegistryToken, _ModuleMarker  # pyright: ignore[reportPrivateUsage]
+from sqlalchemy.orm import ColumnProperty, DeclarativeBase, RelationshipProperty
 
 logger = logging.getLogger(__name__)
 
@@ -245,15 +240,9 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
     #         - Check if the foreign key constraints are valid
     #         - Check if the column is nullable
     #
-    # noinspection PyProtectedMember
-    for name, klass in base_cls.registry._class_registry.items():  # pyright: ignore[reportPrivateUsage]
-        logger.debug("Checking model %s (%s)", name, klass)
-        if isinstance(klass, _ModuleMarker):
-            logger.debug("Skipping module marker %s", name)
-            continue
-        if isinstance(klass, ClsRegistryToken):
-            logger.debug("Skipping ClsRegistryToken %s", name)
-            continue
+    for mapper in base_cls.registry.mappers:
+        klass = mapper.class_
+        logger.debug("Checking model %s (%s)", klass.__name__, klass)
         if not issubclass(klass, DeclarativeBase):
             logger.warning(
                 "Cannot determine whether %s is actually a model because it is not a subclass of DeclarativeBase. "
@@ -272,9 +261,6 @@ def is_sane_database(base_cls: type[DeclarativeBase], engine: Engine) -> bool:
             logger.error("Model %s declares table %s which does not exist in database %s", klass, table, engine.url)
             errors = True
             continue
-
-        mapper = inspect(klass)
-        assert isinstance(mapper, Mapper), "Expected mapper to be an instance of Mapper (uncertain)"
 
         try:  # If any error occurs during inspection, it will be caught, and errors will be set to True
             for column_prop in mapper.attrs:

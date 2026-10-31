@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable, Sequence
 from typing import override
 
 from squid.reactions.application import RoleWeightPolicy
-from squid.reactions.domain import RoleMultiplier, WeightScope
+from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
 from squid.voting.application.ports import VoteWeightPolicy
 from squid.voting.domain import RoleWeight, VoteActor, VoteSessionSnapshot
 
@@ -26,4 +26,11 @@ class RoleVoteWeightPolicy(VoteWeightPolicy):
 
     @override
     async def calculate(self, actor: VoteActor, session: VoteSessionSnapshot, emoji: str) -> float | None:
-        return await self._policy.calculate(actor, WeightScope(actor.guild_id, session.kind))
+        reaction_actor = ReactionActor(
+            user_id=actor.discord_id,
+            guild_id=actor.guild_id,
+            role_ids=actor.role_ids,
+            is_staff=actor.is_staff,
+            is_trusted=actor.is_trusted,
+        )
+        return await self._policy.calculate(reaction_actor, WeightScope(actor.guild_id, session.kind))

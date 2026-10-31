@@ -1,7 +1,6 @@
 """SQLAlchemy persistence adapter for stored schematics."""
 
 import hashlib
-from collections.abc import Sequence
 from typing import cast
 
 from sqlalchemy import ColumnElement, Select, Table, and_, delete, func, or_, select, update
@@ -499,7 +498,7 @@ class SchematicRepository:
         )
 
     @staticmethod
-    def _registered_render_urls(build_id: int) -> Select[tuple[str]]:
+    def _registered_render_urls(build_id: int) -> Select[str]:
         """Return URLs whose lifecycle is owned by this schematic projection."""
         return (
             select(SchematicRender.url)
@@ -532,15 +531,15 @@ class SchematicRepository:
             await session.commit()
 
     @staticmethod
-    def _joined() -> Select[tuple[BuildSchematic, str, int]]:
+    def _joined() -> Select[BuildSchematic, str, int]:
         """Select an attachment together with the two facts that live on its file row."""
         return select(BuildSchematic, SchematicFile.source_format, SchematicFile.byte_size).join(
             SchematicFile, BuildSchematic.file_sha256 == SchematicFile.sha256
         )
 
-    async def _fetch(self, statement: Select[tuple[BuildSchematic, str, int]]) -> list[StoredSchematic]:
+    async def _fetch(self, statement: Select[BuildSchematic, str, int]) -> list[StoredSchematic]:
         async with self._session_factory() as session:
-            rows: Sequence[tuple[BuildSchematic, str, int]] = (await session.execute(statement)).all()  # type: ignore[assignment]
+            rows = (await session.execute(statement)).all()
         return [
             to_stored_schematic(row, source_format=SchematicFormat(source_format), byte_size=byte_size)
             for row, source_format, byte_size in rows

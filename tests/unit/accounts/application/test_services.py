@@ -51,6 +51,20 @@ class FakeAccountRepository:
         self.merge_result: AccountMerge | None = None
         self._next_id = 1
 
+    async def create(
+        self, *, consent: AccountConsent | None = None, identities: Sequence[AccountIdentity] = ()
+    ) -> Account:
+        raise NotImplementedError
+
+    async def get_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        raise NotImplementedError
+
+    async def unlink_java_identity(self, discord_id: int) -> bool:
+        raise NotImplementedError
+
+    async def claim_unclaimed_alias(self, *, account_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
+        raise NotImplementedError
+
     def seed_account(
         self,
         discord_id: int,
