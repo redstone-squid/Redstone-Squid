@@ -39,7 +39,7 @@ async def test_the_pool_reports_the_engine_it_actually_loaded(pool: SchematicWor
 
     assert capabilities.available is True
     assert capabilities.analyzer_version is not None
-    assert capabilities.analyzer_version == "nucleation-0.10.1"
+    assert capabilities.analyzer_version == "nucleation-0.12.0"
     assert capabilities.can_simulate is True
 
 

@@ -25,10 +25,7 @@ from collections.abc import Callable, Mapping, Sequence
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal, cast
 
-# The wheel ships a bare `nucleation.abi3.so` with no stub file, so static analysis has
-# nothing to read. Every value crossing back out of this module is converted to a domain type
-# below, which is where the real checking happens.
-import nucleation  # type: ignore[missing-import]
+import nucleation
 
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.schematics.domain.formats import sniff_schematic_format
@@ -170,10 +167,10 @@ def compare(left: bytes, right: bytes, *, preset: FingerprintPreset) -> Schemati
 
 
 def render(data: bytes, *, request: RenderRequest, resource_pack: bytes) -> bytes:
-    """Render a schematic to PNG bytes. Phase 3 wires this up; the plumbing exists now."""
+    """Render a schematic to PNG bytes using a cached resource pack."""
     schematic = _load(data)
-    config = nucleation.RenderConfig.create()
-    config.set_isometric(request.width, request.height)
+    config = nucleation.RenderConfig.create(request.width, request.height)
+    config.set_isometric()
     config.set_sphere_fit(request.sphere_fit)
     config.set_background(*request.background)
     pack_digest = hashlib.sha256(resource_pack).hexdigest()

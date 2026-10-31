@@ -354,11 +354,12 @@ mdurl==0.1.2 \
     --hash=sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8 \
     --hash=sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba
     # via markdown-it-py
-nucleation==0.10.1 ; platform_machine == 'arm64' or platform_machine == 'x86_64' \
-    --hash=sha256:0f5eb9021d55cc7eef18a9b094e739b4b2c8eeb2aa0329c8c95749a2b591284b \
-    --hash=sha256:20601e58e189331530b42082abe9b8c897e1178d9b13787819b3535bce7f11ba \
-    --hash=sha256:21d00a55bfbc8d9824c74053eda0ae0fdef4353e9f7d4d1dd4dd94652479f88d \
-    --hash=sha256:a4b2ee2ff168c696da3d05ac619b77c73f33e659b0763cf969496f5e8e894d90
+nucleation==0.12.0 \
+    --hash=sha256:8152d0e2025acc42b57e821ab230a55013afae7c85a293d6fac225b87623466a \
+    --hash=sha256:ade12f71233002d93eeb89bfc4bf9f49f27c02bb9cbec41e33a7da9df9031fb8 \
+    --hash=sha256:da51e74420e43921876e5ef07435606373e45606d235923702cff2cf277fd9ef \
+    --hash=sha256:e90ca78bbb6a79dda5785f0f1d45ec62bbd635a40d25a4d2044d8d4cfcf0873a
+    # via redstone-squid
 packaging==26.2 \
     --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e \
     --hash=sha256:ff452ff5a3e828ce110190feff1178bb1f2ea2281fa2075aadb987c2fb221661

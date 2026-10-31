@@ -11,9 +11,6 @@ resolution-markers = [
 exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P7D"
 
-[options.exclude-newer-package]
-nucleation = "2026-08-05T00:00:00Z"
-
 [[package]]
 name = "advanced-alchemy"
 version = "1.12.0"
@@ -2115,13 +2112,13 @@ wheels = [
 
 [[package]]
 name = "nucleation"
-version = "0.10.1"
+version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/fe/e6/c939b3e2f59fe07e18a8168dc361918a5c32285ece20bbc63e7f302a62f4/nucleation-0.10.1.tar.gz", hash = "sha256:0f5eb9021d55cc7eef18a9b094e739b4b2c8eeb2aa0329c8c95749a2b591284b", size = 2141719, upload-time = "2026-08-04T00:01:16.521Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/97/71/2a11daf0b0e3710c6126343a4e2ba1de3841bfbc4aad6ea98f9a5e72d547/nucleation-0.12.0.tar.gz", hash = "sha256:ade12f71233002d93eeb89bfc4bf9f49f27c02bb9cbec41e33a7da9df9031fb8", size = 3019797, upload-time = "2026-10-23T09:15:52.036Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/20/c1/c33a753b893653d0d05529f9cc44dde7e2f71f70a8c30a9520cfc25b598e/nucleation-0.10.1-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:20601e58e189331530b42082abe9b8c897e1178d9b13787819b3535bce7f11ba", size = 12509782, upload-time = "2026-08-04T00:01:06.848Z" },
-    { url = "https://files.pythonhosted.org/packages/16/01/b907ddd59549539fe4e526e38b03e03fc9b49281019b70d8c6b618bf4d0b/nucleation-0.10.1-cp312-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:21d00a55bfbc8d9824c74053eda0ae0fdef4353e9f7d4d1dd4dd94652479f88d", size = 15124559, upload-time = "2026-08-04T00:01:11.272Z" },
-    { url = "https://files.pythonhosted.org/packages/cc/3a/44607208d74f126102ad347381de629ef6ca144db11f700ebcdcf974ba72/nucleation-0.10.1-cp312-abi3-win_amd64.whl", hash = "sha256:a4b2ee2ff168c696da3d05ac619b77c73f33e659b0763cf969496f5e8e894d90", size = 10255026, upload-time = "2026-08-04T00:01:13.919Z" },
+    { url = "https://files.pythonhosted.org/packages/76/de/de442aafb2a1e78a4a99f54870b0c185eca6c90c67bea8f56834e841c7e9/nucleation-0.12.0-cp312-abi3-macosx_11_0_arm64.whl", hash = "sha256:8152d0e2025acc42b57e821ab230a55013afae7c85a293d6fac225b87623466a", size = 14493669, upload-time = "2026-10-23T09:15:44.633Z" },
+    { url = "https://files.pythonhosted.org/packages/b6/b4/772ea9cdbfed726e1757d24a595583e0042dc45fcb530d90caa09a39839f/nucleation-0.12.0-cp312-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:da51e74420e43921876e5ef07435606373e45606d235923702cff2cf277fd9ef", size = 17549552, upload-time = "2026-10-23T09:15:47.383Z" },
+    { url = "https://files.pythonhosted.org/packages/4c/9d/31a5e14b082430aabd65475077b417b152ba5d37209149bbb4851d396d03/nucleation-0.12.0-cp312-abi3-win_amd64.whl", hash = "sha256:e90ca78bbb6a79dda5785f0f1d45ec62bbd635a40d25a4d2044d8d4cfcf0873a", size = 12340920, upload-time = "2026-10-23T09:15:50.006Z" },
 ]
 
 [[package]]
@@ -3381,7 +3378,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "jishaku", specifier = ">=2.6.0" },
     { name = "markdown", specifier = ">=3.7" },
-    { name = "nucleation", marker = "extra == 'schematics'", specifier = "==0.10.1" },
+    { name = "nucleation", marker = "extra == 'schematics'", specifier = "==0.12.0" },
     { name = "openai", specifier = ">=1.58.1" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'observability'", specifier = ">=1.44,<2" },
     { name = "opentelemetry-instrumentation-aiohttp-client", marker = "extra == 'observability'", specifier = ">=0.65b0,<1" },
