@@ -39,10 +39,10 @@ from squid.permissions.domain import BuiltinRoleKeys
 from squid.permissions.infrastructure.models import PermissionRole, PermissionRoleAssignment
 from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.records.infrastructure.models import (
-    RecordCompetition,
-    RecordDefinition,
-    RecordResult,
     RecordResultHolder,
+    RecordRule,
+    RecordSeries,
+    RecordStanding,
 )
 from squid.tags.infrastructure.models import BuildTagAssignment
 
@@ -70,6 +70,21 @@ def _is_durable_staff_notification_recipient(account_column):
             PermissionRoleAssignment.expires_at.is_(None),
             PermissionRoleAssignment.expires_at > func.now(),
         ),
+    )
+
+
+def _most_recent_discord_identity_id(account_column):
+    """Select the newest verified Discord identity, with persistence order breaking ties."""
+    return (
+        select(AccountIdentity.id)
+        .where(
+            AccountIdentity.account_id == account_column,
+            AccountIdentity.provider == IdentityProvider.DISCORD,
+        )
+        .order_by(AccountIdentity.verified_at.desc(), AccountIdentity.id.desc())
+        .limit(1)
+        .correlate(NotificationDeliveryRecord)
+        .scalar_subquery()
     )
 
 
@@ -151,7 +166,7 @@ class PostgresNotificationRepository:
                     )
                 )
             else:
-                statement = select(exists().where(RecordCompetition.public_id == subject_id))
+                statement = select(exists().where(RecordSeries.public_id == subject_id))
             return bool(await session.scalar(statement))
 
     async def add_subscription(
@@ -329,12 +344,16 @@ class PostgresNotificationRepository:
                             NotificationProfile,
                             NotificationProfile.account_id == NotificationDeliveryRecord.account_id,
                         )
-                        .join(NotificationRecord, NotificationRecord.id == NotificationDeliveryRecord.notification_id)
+                        .join(
+                            NotificationRecord,
+                            (NotificationRecord.id == NotificationDeliveryRecord.notification_id)
+                            & (NotificationRecord.account_id == NotificationDeliveryRecord.account_id),
+                        )
                         .join(Account, Account.id == NotificationDeliveryRecord.account_id)
                         .join(
                             AccountIdentity,
-                            (AccountIdentity.account_id == NotificationDeliveryRecord.account_id)
-                            & (AccountIdentity.provider == IdentityProvider.DISCORD),
+                            AccountIdentity.id
+                            == _most_recent_discord_identity_id(NotificationDeliveryRecord.account_id),
                         )
                         .where(
                             NotificationDeliveryRecord.available_at <= func.now(),
@@ -693,25 +712,25 @@ class PostgresNotificationRepository:
         new_rows = (
             await session.execute(
                 select(
-                    RecordDefinition.competition_id,
+                    RecordRule.competition_id,
                     RecordResultHolder.build_id,
-                    RecordDefinition.title,
-                    RecordDefinition.record_class,
-                    RecordDefinition.build_kind,
-                    RecordDefinition.version_scope,
+                    RecordRule.title,
+                    RecordRule.record_class,
+                    RecordRule.build_kind,
+                    RecordRule.version_scope,
                 )
-                .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
-                .join(RecordResultHolder, RecordResultHolder.result_id == RecordResult.id)
-                .where(RecordResult.run_id == run_id)
+                .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
+                .join(RecordResultHolder, RecordResultHolder.result_id == RecordStanding.id)
+                .where(RecordStanding.run_id == run_id)
             )
         ).all()
         old_holders = set(
             (
                 await session.execute(
-                    select(RecordDefinition.competition_id, RecordResultHolder.build_id)
-                    .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
-                    .join(RecordResultHolder, RecordResultHolder.result_id == RecordResult.id)
-                    .where(RecordResult.run_id == previous_run_id)
+                    select(RecordRule.competition_id, RecordResultHolder.build_id)
+                    .join(RecordStanding, RecordStanding.definition_id == RecordRule.id)
+                    .join(RecordResultHolder, RecordResultHolder.result_id == RecordStanding.id)
+                    .where(RecordStanding.run_id == previous_run_id)
                 )
             ).tuples()
         )

@@ -13,9 +13,11 @@ from squid.accounts.domain import (
     IdentityProvider,
     ProfileLink,
     PublicCreatorProfile,
+    PublicIdentity,
     avatar_url_for,
 )
 from squid.bot.ui import CardField, tr
+from squid_ui.text import raw_md
 
 _PROVIDER_LABELS = {
     IdentityProvider.DISCORD: tr(t"Discord"),
@@ -35,14 +37,12 @@ def identity_label(identity: AccountIdentity) -> str:
     A Discord identity renders as a mention, which is the only handle a reader can click; every
     other provider has a stored display name worth showing, and falls back to the subject.
     """
-    provider = provider_label(identity.provider)
+    provider = raw_md(provider_label(identity.provider))
     if identity.provider is IdentityProvider.DISCORD and identity.discord_id is not None:
-        return tr("{provider} — <@{subject}>", provider=provider, subject=identity.discord_id)
-    return tr(
-        "{provider} — {name}",
-        provider=provider,
-        name=identity.display_name or identity.subject,
-    )
+        subject = identity.discord_id
+        return tr(tr(t"{provider} — <@{subject}>"))
+    name = identity.display_name or identity.subject
+    return tr(tr(t"{provider} — {name}"))
 
 
 def render_links(links: tuple[ProfileLink, ...]) -> str:
@@ -59,9 +59,9 @@ def own_profile_fields(profile: AccountProfile) -> list[CardField]:
     """
     fields: list[CardField] = []
     if profile.pronouns:
-        fields.append(CardField(tr("Pronouns"), profile.pronouns))
+        fields.append(CardField(tr(tr(t"Pronouns")), profile.pronouns))
     if profile.links:
-        fields.append(CardField(tr("Links"), render_links(profile.links)))
+        fields.append(CardField(tr(tr(t"Links")), render_links(profile.links)))
     return fields
 
 
@@ -86,38 +86,34 @@ def public_profile_fields(profile: PublicCreatorProfile) -> list[CardField]:
     """
     fields: list[CardField] = []
     if profile.pronouns:
-        fields.append(CardField(tr("Pronouns"), profile.pronouns))
+        fields.append(CardField(tr(tr(t"Pronouns")), profile.pronouns))
     if profile.links:
-        fields.append(CardField(tr("Links"), render_links(profile.links)))
+        fields.append(CardField(tr(tr(t"Links")), render_links(profile.links)))
     if profile.identities:
         fields.append(
             CardField(
-                tr("Linked accounts"),
-                "\n".join(
-                    tr(
-                        "{provider} — {name}",
-                        provider=provider_label(identity.provider),
-                        name=identity.display_name or identity.subject,
-                    )
-                    for identity in profile.identities
-                ),
+                tr(tr(t"Linked accounts")),
+                "\n".join(_public_identity_label(identity) for identity in profile.identities),
             )
         )
     if profile.aliases:
         fields.append(
             CardField(
-                tr("Creator credit"),
-                "\n".join(
-                    tr(
-                        "**{name}** — {count} build(s)",
-                        name=alias.name,
-                        count=alias.build_count,
-                    )
-                    for alias in profile.aliases
-                ),
+                tr(tr(t"Creator credit")),
+                "\n".join(_alias_credit_label(alias.name, alias.build_count) for alias in profile.aliases),
             )
         )
     return fields
+
+
+def _public_identity_label(identity: PublicIdentity) -> str:
+    provider = raw_md(provider_label(identity.provider))
+    name = identity.display_name or identity.subject
+    return tr(tr(t"{provider} — {name}"))
+
+
+def _alias_credit_label(name: str, count: int) -> str:
+    return tr(tr(t"**{name}** — {count} build(s)"))
 
 
 def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
@@ -135,16 +131,19 @@ def present_claimant(claim: AliasClaim, *, mention: bool = True) -> str:
     """
     claimant = claim.claimant
     if claimant is not None:
-        discord = claimant.identity(IdentityProvider.DISCORD)
+        discord = claimant.most_recent_identity_for(IdentityProvider.DISCORD)
         if mention and discord is not None and discord.discord_id is not None:
             return f"<@{discord.discord_id}>"
-        java = claimant.identity(IdentityProvider.JAVA)
+        java = claimant.most_recent_identity_for(IdentityProvider.JAVA)
         if java is not None and java.display_name is not None:
             return java.display_name
         if claimant.public_creator_id is not None:
-            return tr("creator `{creator_id}`", creator_id=claimant.public_creator_id)
+            creator_id = raw_md(claimant.public_creator_id)
+            return tr(tr(t"creator `{creator_id}`"))
         if discord is not None and discord.discord_id is not None:
             # Reached only without a mention: the snowflake is the last handle left, and it is a
             # diagnostic here rather than a name.
-            return tr("Discord user `{discord_id}`", discord_id=discord.discord_id)
-    return tr("unidentified account (internal ID `{account_id}`)", account_id=claim.account_id)
+            discord_id = raw_md(discord.discord_id)
+            return tr(tr(t"Discord user `{discord_id}`"))
+    account_id = raw_md(claim.account_id)
+    return tr(tr(t"unidentified account (internal ID `{account_id}`)"))

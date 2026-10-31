@@ -1,17 +1,21 @@
 """Strict streaming HTTP routes for account-owned draft media."""
 
-import asyncio
+import logging
 import os
 import re
+import shutil
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Annotated, Protocol, cast
+from typing import Annotated
 from uuid import UUID
 
+import anyio
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
+from squid.api.dependencies import DraftAttachments
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
 from squid.api.request_body import streams_own_body
@@ -21,16 +25,9 @@ from squid.api.v1.schemas.submission_media import (
     DraftMediaResponse,
 )
 from squid.api.v1.submissions import authenticated_account
-from squid.core.errors import ConflictError, NotFoundError, ServiceUnavailableError, ValidationError
-from squid.media.application.jobs import (
-    MediaJobSnapshot,
-    MediaNormalizationJobService,
-    MediaUploadConflictError,
-    StagedMediaUploadSubmission,
-)
 from squid.media.domain import MediaKind, MediaLimitMeasure, MediaLimits, MediaViolation
-from squid.media.errors import MediaLimitExceededError
-from squid.submissions.application import StoredDraft
+from squid.media.errors import DraftMediaRequestError, MediaLimitExceededError
+from squid.submissions.application import StagedUpload
 
 _NO_STORE = "no-store"
 _MAX_UPLOAD_HEADER = "Squid-Max-Upload-Bytes"
@@ -49,100 +46,9 @@ _STREAMING_REQUEST_BODY = {
     },
 }
 
-
-class DraftMediaJobs(Protocol):
-    """Media operations needed by the owner-only HTTP transport."""
-
-    @property
-    def limits(self) -> MediaLimits: ...
-
-    async def submit_staged(self, submission: StagedMediaUploadSubmission) -> UUID: ...
-
-    async def get(self, upload_id: UUID) -> MediaJobSnapshot | None: ...
-
-    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]: ...
-
-    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool: ...
+logger = logging.getLogger(__name__)
 
 
-class DraftOwnership(Protocol):
-    """Owner check required before an upload body is accepted."""
-
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft: ...
-
-
-class SubmissionMediaApiServices(Protocol):
-    """Narrow runtime bundle consumed by this isolated router."""
-
-    media_jobs: MediaNormalizationJobService | None
-    submission_drafts: DraftOwnership
-
-
-class _SubmissionMediaRuntime(Protocol):
-    services: SubmissionMediaApiServices
-
-
-class _SubmissionMediaAppState(Protocol):
-    runtime: _SubmissionMediaRuntime
-
-
-class DraftMediaRequestError(ValidationError):
-    """A raw upload request is ambiguous or violates its declared framing."""
-
-    default_message = "The draft media upload request is invalid."
-    default_title = "Invalid media upload"
-    default_resource = "submission_media"
-
-    def __init__(self, reason: str) -> None:
-        super().__init__(public_context={"reason": reason})
-
-
-class DraftMediaNotFoundError(NotFoundError):
-    """No owner-visible media upload matches the requested UUID."""
-
-    default_message = "Draft media upload not found."
-    default_title = "Media upload not found"
-    default_resource = "submission_media"
-
-    def __init__(self, upload_id: UUID) -> None:
-        super().__init__(public_context={"upload_id": str(upload_id)})
-
-
-class DraftMediaConflictError(ConflictError):
-    """A caller-provided retry UUID was already used for different bytes."""
-
-    default_message = "The media upload identifier is already in use."
-    default_title = "Media upload conflict"
-    default_resource = "submission_media"
-
-    def __init__(self, upload_id: UUID) -> None:
-        super().__init__(public_context={"upload_id": str(upload_id)})
-
-
-class DraftMediaUnavailableError(ServiceUnavailableError):
-    """Media normalization is not enabled for this API process."""
-
-    default_message = "Draft media processing is temporarily unavailable."
-    default_resource = "submission_media"
-
-
-def get_media_jobs(request: Request) -> DraftMediaJobs:
-    """Resolve normalization jobs without importing the global runtime type."""
-    state = cast(_SubmissionMediaAppState, request.app.state)
-    media_jobs = state.runtime.services.media_jobs
-    if media_jobs is None:
-        raise DraftMediaUnavailableError
-    return media_jobs
-
-
-def get_submission_drafts(request: Request) -> DraftOwnership:
-    """Resolve the shared synchronized-draft owner check."""
-    state = cast(_SubmissionMediaAppState, request.app.state)
-    return state.runtime.services.submission_drafts
-
-
-MediaJobs = Annotated[DraftMediaJobs, Depends(get_media_jobs)]
-Drafts = Annotated[DraftOwnership, Depends(get_submission_drafts)]
 AccountId = Annotated[int, Depends(authenticated_account)]
 StripAudio = Annotated[bool, Query(description="Remove audio while normalizing a video.")]
 UploadId = Annotated[UUID | None, Query(description="Stable client-generated UUID for safe upload retries.")]
@@ -170,53 +76,54 @@ async def upload_draft_media(
     kind: MediaKind,
     request: Request,
     response: Response,
-    media: MediaJobs,
-    drafts: Drafts,
+    attachments: DraftAttachments,
     account_id: AccountId,
     strip_audio: StripAudio = False,
     upload_id: UploadId = None,
 ) -> DraftMediaResponse:
     """Stream one owned-draft upload through a private bounded staging file."""
-    await drafts.get_owned(draft_id, account_id)
-    _require_query_names(request, _UPLOAD_QUERY_NAMES)
     _require_non_nil(draft_id, reason="nil_draft_id")
     if upload_id is not None:
         _require_non_nil(upload_id, reason="nil_upload_id")
+    authority = await attachments.authorize_upload(draft_id, account_id, kind)
+    _require_query_names(request, _UPLOAD_QUERY_NAMES)
     if kind is MediaKind.IMAGE and strip_audio:
         reason = "strip_audio_requires_video"
         raise DraftMediaRequestError(reason)
 
     content_type = _source_content_type(request, kind)
-    content_length = _declared_content_length(request, media.limits.max_source_bytes)
-    with tempfile.TemporaryDirectory(prefix="squid-media-upload-") as directory_name:
-        directory = Path(directory_name)
-        directory.chmod(0o700)
+    content_length = _declared_content_length(request, attachments.limits.max_source_bytes)
+    with _private_upload_directory() as directory:
         source_path = directory / "source"
         await _stream_to_private_file(
             request,
             source_path,
             content_length=content_length,
-            max_bytes=media.limits.max_source_bytes,
+            max_bytes=attachments.limits.max_source_bytes,
         )
-        try:
-            registered_id = await media.submit_staged(
-                StagedMediaUploadSubmission(
-                    draft_id=draft_id,
-                    kind=kind,
-                    source_path=source_path,
-                    source_content_type=content_type,
-                    strip_audio=strip_audio,
-                    upload_id=upload_id,
-                )
-            )
-        except MediaUploadConflictError as error:
-            raise DraftMediaConflictError(error.upload_id) from None
+        snapshot = await attachments.register(
+            authority,
+            StagedUpload(source_path, content_type),
+            strip_audio=strip_audio,
+            upload_id=upload_id,
+        )
 
-    snapshot = await media.get(registered_id)
-    if snapshot is None or snapshot.upload.draft_id != draft_id:
-        raise DraftMediaNotFoundError(registered_id)
-    _prevent_storage(response, media.limits)
+    _prevent_storage(response, attachments.limits)
     return DraftMediaResponse.from_snapshot(snapshot)
+
+
+@contextmanager
+def _private_upload_directory() -> Iterator[Path]:
+    """Own one private upload tree and log best-effort teardown on every exit."""
+    directory = Path(tempfile.mkdtemp(prefix="squid-media-upload-"))
+    try:
+        directory.chmod(0o700)
+        yield directory
+    finally:
+        try:
+            shutil.rmtree(directory)
+        except OSError:
+            logger.warning("Unable to remove a private upload staging directory", exc_info=True)
 
 
 @router.get(
@@ -233,18 +140,16 @@ async def list_draft_media(
     draft_id: UUID,
     request: Request,
     response: Response,
-    media: MediaJobs,
-    drafts: Drafts,
+    attachments: DraftAttachments,
     account_id: AccountId,
 ) -> DraftMediaListResponse:
     """List all retained states and safe normalized facts for an owned draft."""
-    await drafts.get_owned(draft_id, account_id)
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
-    snapshots = await media.list_for_draft(draft_id)
-    _prevent_storage(response, media.limits)
+    snapshots = await attachments.list(draft_id, account_id)
+    _prevent_storage(response, attachments.limits)
     return DraftMediaListResponse(
-        limits=DraftMediaLimitsResponse.from_domain(media.limits),
+        limits=DraftMediaLimitsResponse.from_domain(attachments.limits),
         media=[DraftMediaResponse.from_snapshot(snapshot) for snapshot in snapshots],
     )
 
@@ -264,17 +169,15 @@ async def get_draft_media(
     upload_id: UUID,
     request: Request,
     response: Response,
-    media: MediaJobs,
-    drafts: Drafts,
+    attachments: DraftAttachments,
     account_id: AccountId,
 ) -> DraftMediaResponse:
     """Return one upload after enforcing both draft ownership and association."""
-    await drafts.get_owned(draft_id, account_id)
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
     _require_non_nil(upload_id, reason="nil_upload_id")
-    snapshot = await _owned_snapshot(media, draft_id, upload_id)
-    _prevent_storage(response, media.limits)
+    snapshot = await attachments.get(draft_id, account_id, upload_id)
+    _prevent_storage(response, attachments.limits)
     return DraftMediaResponse.from_snapshot(snapshot)
 
 
@@ -293,28 +196,18 @@ async def discard_draft_media(
     draft_id: UUID,
     upload_id: UUID,
     request: Request,
-    media: MediaJobs,
-    drafts: Drafts,
+    attachments: DraftAttachments,
     account_id: AccountId,
 ) -> Response:
     """Withdraw one upload while retaining a stable discarded state."""
-    await drafts.get_owned(draft_id, account_id)
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
     _require_non_nil(upload_id, reason="nil_upload_id")
-    if not await media.discard(draft_id, upload_id):
-        raise DraftMediaNotFoundError(upload_id)
+    await attachments.discard(draft_id, account_id, upload_id)
     return Response(
         status_code=status.HTTP_204_NO_CONTENT,
-        headers={"Cache-Control": _NO_STORE, _MAX_UPLOAD_HEADER: str(media.limits.max_source_bytes)},
+        headers={"Cache-Control": _NO_STORE, _MAX_UPLOAD_HEADER: str(attachments.limits.max_source_bytes)},
     )
-
-
-async def _owned_snapshot(media: DraftMediaJobs, draft_id: UUID, upload_id: UUID) -> MediaJobSnapshot:
-    snapshot = await media.get(upload_id)
-    if snapshot is None or snapshot.upload.draft_id != draft_id:
-        raise DraftMediaNotFoundError(upload_id)
-    return snapshot
 
 
 def _source_content_type(request: Request, kind: MediaKind) -> str:
@@ -326,7 +219,9 @@ def _source_content_type(request: Request, kind: MediaKind) -> str:
         content_type = values[0].decode("ascii").lower()
     except UnicodeDecodeError:
         raise DraftMediaRequestError(_CONTENT_TYPE_INVALID) from None
-    if not _MEDIA_TYPE.fullmatch(content_type) or not content_type.startswith(f"{kind.value}/"):
+    if not _MEDIA_TYPE.fullmatch(content_type):
+        raise DraftMediaRequestError(_CONTENT_TYPE_INVALID)
+    if not content_type.startswith(f"{kind.value}/"):
         reason = "content_type_kind_mismatch"
         raise DraftMediaRequestError(reason)
     return content_type
@@ -353,10 +248,13 @@ def _declared_content_length(request: Request, max_bytes: int) -> int:
         raise DraftMediaRequestError(_CONTENT_LENGTH_INVALID) from None
     if not _CONTENT_LENGTH.fullmatch(raw):
         raise DraftMediaRequestError(_CONTENT_LENGTH_INVALID)
-    content_length = int(raw)
-    if content_length > max_bytes:
+    limit = str(max_bytes)
+    if len(raw) > len(limit) or (len(raw) == len(limit) and raw > limit):
+        # The public limit response does not expose the attacker-controlled value. Use the
+        # smallest proven violation rather than materializing an unbounded decimal integer.
+        content_length = max_bytes + 1
         raise MediaLimitExceededError(MediaViolation(MediaLimitMeasure.SOURCE_BYTES, content_length, max_bytes))
-    return content_length
+    return int(raw)
 
 
 async def _stream_to_private_file(
@@ -378,7 +276,7 @@ async def _stream_to_private_file(
             if received > max_bytes:
                 raise MediaLimitExceededError(MediaViolation(MediaLimitMeasure.SOURCE_BYTES, received, max_bytes))
             if chunk:
-                await asyncio.to_thread(_write_all, descriptor, chunk)
+                await anyio.to_thread.run_sync(_write_all, descriptor, chunk, abandon_on_cancel=False)
         if received != content_length:
             raise DraftMediaRequestError(_CONTENT_LENGTH_MISMATCH)
     finally:

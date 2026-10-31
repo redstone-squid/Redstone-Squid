@@ -11,12 +11,11 @@ from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
 from squid.accounts.errors import ConsentRequiredError
+from squid.api.dependencies import get_minecraft_installations, get_minecraft_player_authorization
 from squid.api.errors import register_exception_handlers
 from squid.api.security import ANONYMOUS, Caller, current_caller
 from squid.api.v1.minecraft_auth import (
     current_account_id,
-    get_installation_service,
-    get_player_authorization_service,
     router,
 )
 from squid.api.v1.schemas.minecraft_auth import (
@@ -39,7 +38,7 @@ from squid.minecraft_auth.domain import (
     PlayerGrant,
     PublicServerProfile,
 )
-from squid.minecraft_auth.errors import AuthorizationPendingError
+from squid.minecraft_auth.errors import AuthorizationPendingError, InvalidInstallationCredentialError
 from tests.unit.api.fakes import TEST_CONFIG
 
 pytestmark = pytest.mark.asyncio
@@ -153,6 +152,21 @@ class FakeInstallations(InstallationCredentialService):
             credential_version=self.current.credential_version,
         )
 
+    async def authenticate_headers(
+        self,
+        installation_id: str | None,
+        installation_secret: str | None,
+    ) -> AuthenticatedPaperInstallation:
+        if installation_id is None or installation_secret is None or not 32 <= len(installation_secret) <= 512:
+            raise InvalidInstallationCredentialError
+        try:
+            parsed_id = UUID(installation_id)
+        except ValueError:
+            raise InvalidInstallationCredentialError from None
+        if parsed_id != self.current.id or installation_secret != INSTALLATION_SECRET:
+            raise InvalidInstallationCredentialError
+        return await self.authenticate(f"sqpi_{parsed_id.hex}_{installation_secret}")
+
 
 class FakePlayers(PlayerAuthorizationService):
     def __init__(self) -> None:
@@ -264,8 +278,8 @@ def app_with_fakes(
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
-    app.dependency_overrides[get_installation_service] = installation_dependency
-    app.dependency_overrides[get_player_authorization_service] = player_dependency
+    app.dependency_overrides[get_minecraft_installations] = installation_dependency
+    app.dependency_overrides[get_minecraft_player_authorization] = player_dependency
     app.dependency_overrides[current_account_id] = account_dependency
     app.dependency_overrides[current_caller] = caller_dependency
     return app
@@ -292,9 +306,22 @@ async def test_openapi_declares_paper_headers_and_server_scoped_idempotency() ->
     contract = app_with_fakes(FakeInstallations(), FakePlayers()).openapi()
     paths = contract["paths"]
     paper_start = paths["/minecraft/auth/paper/challenges"]["post"]
-    header_names = {parameter["name"] for parameter in paper_start["parameters"] if parameter["in"] == "header"}
+    headers = {parameter["name"]: parameter for parameter in paper_start["parameters"] if parameter["in"] == "header"}
+    header_names = headers.keys()
 
     assert {"Squid-Installation-ID", "Squid-Installation-Secret"} <= header_names
+    assert headers["Squid-Installation-ID"]["schema"] == {
+        "anyOf": [{"type": "string"}, {"type": "null"}],
+        "minLength": 32,
+        "maxLength": 45,
+        "title": "Squid-Installation-Id",
+    }
+    assert headers["Squid-Installation-Secret"]["schema"] == {
+        "anyOf": [{"type": "string"}, {"type": "null"}],
+        "minLength": 32,
+        "maxLength": 512,
+        "title": "Squid-Installation-Secret",
+    }
     assert "Idempotency-Key" in header_names
     mutations = (
         ("/minecraft/auth/paper/installations", "post"),
@@ -432,16 +459,49 @@ async def test_one_time_device_responses_use_server_derived_idempotency_namespac
     assert "127.0.0.1" not in fabric_caller
 
 
-async def test_paper_endpoints_require_both_installation_headers() -> None:
+async def test_invalid_paper_installation_headers_are_indistinguishable() -> None:
     app = app_with_fakes(FakeInstallations(), FakePlayers())
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post(
-            "/minecraft/auth/paper/challenges",
-            json={"java_uuid": str(JAVA_UUID)},
-        )
+        responses = [
+            await client.post(
+                "/minecraft/auth/paper/challenges",
+                headers=headers,
+                json={"java_uuid": str(JAVA_UUID)},
+            )
+            for headers in (
+                {},
+                {"Squid-Installation-ID": str(INSTALLATION_ID)},
+                {
+                    "Squid-Installation-ID": "not-a-uuid",
+                    "Squid-Installation-Secret": INSTALLATION_SECRET,
+                },
+                {
+                    "Squid-Installation-ID": str(INSTALLATION_ID),
+                    "Squid-Installation-Secret": "short",
+                },
+                {
+                    "Squid-Installation-ID": "22222222-2222-4222-8222-222222222222",
+                    "Squid-Installation-Secret": INSTALLATION_SECRET,
+                },
+                {
+                    "Squid-Installation-ID": str(INSTALLATION_ID),
+                    "Squid-Installation-Secret": "x" * 43,
+                },
+                {
+                    "Squid-Installation-ID": "x" * 46,
+                    "Squid-Installation-Secret": INSTALLATION_SECRET,
+                },
+                {
+                    "Squid-Installation-ID": str(INSTALLATION_ID),
+                    "Squid-Installation-Secret": "x" * 513,
+                },
+            )
+        ]
 
-    assert response.status_code == 401
+    assert {response.status_code for response in responses} == {401}
+    assert len({response.content for response in responses}) == 1
+    assert responses[0].json()["context"] == {"minecraft_auth_code": "invalid_installation_credential"}
 
 
 async def test_authorization_errors_map_to_stable_problem_context_without_secrets() -> None:

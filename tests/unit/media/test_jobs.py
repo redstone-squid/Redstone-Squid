@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import threading
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -10,8 +11,10 @@ from typing import override
 from uuid import UUID, uuid4
 
 import pytest
+from anyio import CancelScope, Event, create_task_group, fail_after, sleep
 from whenever import Instant
 
+import squid.media.application.jobs as media_jobs
 from squid.artifacts import ArtifactMetadata
 from squid.media.application.commands import MediaNormalizationRequest
 from squid.media.application.jobs import (
@@ -19,6 +22,7 @@ from squid.media.application.jobs import (
     MediaArtifactCleanupInProgressError,
     MediaArtifactCleanupOutcome,
     MediaArtifactRole,
+    MediaDraftUploadAuthorization,
     MediaEnqueueOutcome,
     MediaJobFailureOutcome,
     MediaJobSnapshot,
@@ -140,7 +144,14 @@ class MemoryMediaJobs:
         self.heartbeat_calls = 0
         self.artifact_cleanup_calls = 0
 
-    async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
+    async def enqueue(
+        self,
+        upload: MediaUploadMetadata,
+        limits: MediaLimits,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> MediaEnqueueOutcome:
+        del authorization
         existing = self.states.get(upload.id)
         if existing is not None:
             if replace(existing.upload, created_at=None, raw_deleted_at=None) != upload:
@@ -168,9 +179,8 @@ class MemoryMediaJobs:
             )
             + upload.source_byte_size,
         )
-        violation = limits.batch_violation(totals)
-        if violation is not None:
-            raise MediaLimitExceededError(violation)
+        if violations := limits.batch_violations(totals):
+            raise MediaLimitExceededError(violations)
         self.states[upload.id] = _JobState(replace(upload, created_at=NOW))
         return MediaEnqueueOutcome(created=True, status=MediaJobStatus.PENDING)
 
@@ -359,8 +369,14 @@ class RejectingMediaJobs(MemoryMediaJobs):
         self.error = error
 
     @override
-    async def enqueue(self, upload: MediaUploadMetadata, limits: MediaLimits) -> MediaEnqueueOutcome:
-        del upload, limits
+    async def enqueue(
+        self,
+        upload: MediaUploadMetadata,
+        limits: MediaLimits,
+        *,
+        authorization: MediaDraftUploadAuthorization | None = None,
+    ) -> MediaEnqueueOutcome:
+        del upload, limits, authorization
         raise self.error
 
 
@@ -563,6 +579,55 @@ async def test_submit_staged_streams_a_regular_file_and_rejects_empty_source(tmp
         raise AssertionError
 
 
+async def test_submit_staged_cancellation_settles_metadata_reader_before_returning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    jobs = MediaNormalizationJobService(MemoryMediaJobs(), MemoryArtifacts())
+    source = tmp_path / "source"
+    source.write_bytes(b"image")
+    started = threading.Event()
+    release = threading.Event()
+    real_metadata = media_jobs._staged_source_metadata
+
+    def blocking_metadata(path: Path, max_bytes: int) -> tuple[int, str]:
+        started.set()
+        if not release.wait(timeout=5):
+            msg = "test did not release the staged metadata reader"
+            raise TimeoutError(msg)
+        return real_metadata(path, max_bytes)
+
+    monkeypatch.setattr(media_jobs, "_staged_source_metadata", blocking_metadata)
+    cancel_scope = CancelScope()
+    settled = Event()
+
+    async def submit() -> None:
+        try:
+            with cancel_scope:
+                await jobs.submit_staged(
+                    StagedMediaUploadSubmission(
+                        draft_id=DRAFT_ID,
+                        kind=MediaKind.IMAGE,
+                        source_path=source,
+                        source_content_type="image/jpeg",
+                    )
+                )
+        finally:
+            settled.set()
+
+    async with create_task_group() as tasks:
+        tasks.start_soon(submit)
+        with fail_after(2):
+            while not started.is_set():
+                await sleep(0)
+
+        cancel_scope.cancel()
+        await sleep(0)
+        assert not settled.is_set()
+        release.set()
+        await settled.wait()
+
+
 @pytest.mark.parametrize(
     "error",
     [MediaDraftStateConflictError("processing"), MediaDraftNotFoundError(DRAFT_ID)],
@@ -626,7 +691,7 @@ async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -
     assert next(snapshot for snapshot in snapshots if snapshot.upload.id == first_id).status is MediaJobStatus.DISCARDED
 
 
-async def test_runner_persists_video_output_poster_and_report_then_cleans_raw_and_temp(tmp_path: Path) -> None:
+async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_path: Path) -> None:
     artifacts = MemoryArtifacts()
     repository = MemoryMediaJobs()
     jobs = MediaNormalizationJobService(repository, artifacts)
@@ -658,13 +723,21 @@ async def test_runner_persists_video_output_poster_and_report_then_cleans_raw_an
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.COMPLETED
     assert snapshot.upload.raw_deleted_at == NOW
-    assert {artifact.role for artifact in snapshot.artifacts} == set(MediaArtifactRole)
+    assert {artifact.role for artifact in snapshot.artifacts} == {
+        MediaArtifactRole.OUTPUT,
+        MediaArtifactRole.POSTER,
+        MediaArtifactRole.REPORT,
+    }
     assert snapshot.upload.source_object_key not in artifacts.objects
     assert all(artifact.object_key.endswith(artifact.sha256) for artifact in snapshot.artifacts)
     report = next(artifact for artifact in snapshot.artifacts if artifact.role is MediaArtifactRole.REPORT)
     report_payload = json.loads(artifacts.objects[report.object_key])
     assert report_payload["kind"] == "video"
     assert report_payload["actions"] == ["video_transcoded"]
+    assert "poster" in report_payload
+    assert "video_thumbnail" not in report_payload
+    thumbnail = next(artifact for artifact in snapshot.artifacts if artifact.role is MediaArtifactRole.POSTER)
+    assert thumbnail.object_key.startswith("media/posters/")
     assert not any(tmp_path.iterdir())
     assert all(not directory.exists() for directory in normalizer.seen_directories)
 
@@ -694,12 +767,13 @@ async def test_runner_heartbeats_while_normalization_is_still_running(tmp_path: 
         heartbeat_interval_seconds=0.01,
     )
 
-    processing = asyncio.create_task(runner.process_batch())
-    await asyncio.wait_for(normalizer.started.wait(), timeout=1)
-    await asyncio.sleep(0.035)
-    assert repository.heartbeat_calls >= 2
-    normalizer.resume.set()
-    await asyncio.wait_for(processing, timeout=1)
+    with fail_after(1):
+        async with create_task_group() as tasks:
+            tasks.start_soon(runner.process_batch)
+            await normalizer.started.wait()
+            await sleep(0.035)
+            assert repository.heartbeat_calls >= 2
+            normalizer.resume.set()
 
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
@@ -728,12 +802,13 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
         heartbeat_interval_seconds=0.01,
     )
 
-    processing = asyncio.create_task(runner.process_batch())
-    await asyncio.wait_for(normalizer.started.wait(), timeout=1)
-    assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
-    await asyncio.sleep(0.02)
-    normalizer.resume.set()
-    await asyncio.wait_for(processing, timeout=1)
+    with fail_after(1):
+        async with create_task_group() as tasks:
+            tasks.start_soon(runner.process_batch)
+            await normalizer.started.wait()
+            assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
+            await sleep(0.02)
+            normalizer.resume.set()
 
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
@@ -741,6 +816,41 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
     assert snapshot.attempts == 0
     assert snapshot.artifacts == ()
     assert set(artifacts.objects) == {snapshot.upload.source_object_key}
+
+
+async def test_cancelling_runner_stops_heartbeat_and_cleans_private_working_tree(tmp_path: Path) -> None:
+    artifacts = MemoryArtifacts()
+    repository = MemoryMediaJobs()
+    jobs = MediaNormalizationJobService(repository, artifacts)
+    await jobs.submit(
+        MediaUploadSubmission(
+            draft_id=DRAFT_ID,
+            kind=MediaKind.IMAGE,
+            source=b"raw-image",
+            source_content_type="image/jpeg",
+            upload_id=UPLOAD_ID,
+        )
+    )
+    normalizer = BlockingNormalizer(MediaKind.IMAGE)
+    runner = MediaNormalizationJobRunner(
+        jobs,
+        artifacts,
+        MediaNormalizationService(normalizer),
+        working_directory=tmp_path,
+        heartbeat_interval_seconds=0.01,
+    )
+
+    with fail_after(1):
+        async with create_task_group() as tasks:
+            tasks.start_soon(runner.process_batch)
+            await normalizer.started.wait()
+            await sleep(0.025)
+            tasks.cancel_scope.cancel()
+
+    heartbeat_calls = repository.heartbeat_calls
+    await sleep(0.025)
+    assert repository.heartbeat_calls == heartbeat_calls
+    assert not any(tmp_path.iterdir())
 
 
 async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: Path) -> None:

@@ -17,18 +17,6 @@ from squid.minecraft_auth.domain import (
 )
 
 
-class AccountIdentityAuthorizer(Protocol):
-    """Authoritatively check current consent and verified Java identities."""
-
-    async def has_current_consent(self, account_id: int) -> bool:
-        """Return whether the account has accepted the current privacy notice."""
-        ...
-
-    async def can_approve(self, *, account_id: int, java_uuid: UUID) -> bool:
-        """Return whether the account currently consents and owns the identity."""
-        ...
-
-
 class MinecraftAuthorizationRepository(Protocol):
     """Atomic persistence operations required by Minecraft authorization."""
 

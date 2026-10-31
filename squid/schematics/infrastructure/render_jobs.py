@@ -1,4 +1,4 @@
-"""PostgreSQL adapter for durable build-render projections."""
+"""PostgreSQL adapter for durable build-preview publication intents."""
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 

@@ -9,6 +9,7 @@ from squid.schematics.domain.formats import (
     sniff_schematic_format,
 )
 from squid.schematics.domain.models import (
+    SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
     AnalyzerCapabilities,
     AutostackLattice,
     FingerprintPreset,
@@ -31,6 +32,7 @@ from squid.schematics.domain.values import RgbaColor, VerifiedResourcePack
 
 __all__ = [
     "SCHEMATIC_EXTENSIONS",
+    "SCHEMATIC_FILE_SCHEMA_MAX_BYTES",
     "AnalyzerCapabilities",
     "AutostackLattice",
     "Container",

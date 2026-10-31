@@ -1,5 +1,6 @@
 """Structured media validation and infrastructure errors."""
 
+from collections.abc import Sequence
 from enum import StrEnum
 from uuid import UUID
 
@@ -38,28 +39,36 @@ class MediaFailureReason(StrEnum):
 
 
 class MediaLimitExceededError(ValidationError):
-    """An upload, output, or decoded-work budget was exceeded."""
+    """One or more attachment or decoded-work budgets were exceeded."""
 
-    default_message = tr(t"The media exceeds a processing limit.")
+    default_message = tr(t"The attachment exceeds one or more processing limits.")
     default_code = ErrorCode.INVALID_REQUEST
     default_resource = "media"
-    default_end_user_action = tr(t"Choose a smaller or less resource-intensive file and try again.")
+    default_end_user_action = tr(t"Choose fewer, smaller, or less resource-intensive attachments and try again.")
 
-    def __init__(self, violation: MediaViolation) -> None:
-        measure = violation.measure.value
-        actual = violation.actual
-        limit = violation.limit
+    def __init__(self, violations: MediaViolation | Sequence[MediaViolation]) -> None:
+        ordered = (violations,) if isinstance(violations, MediaViolation) else tuple(violations)
+        if not ordered:
+            msg = "MediaLimitExceededError requires at least one violation."
+            raise ValueError(msg)
+        internal = [
+            {"measure": violation.measure.value, "actual": violation.actual, "limit": violation.limit}
+            for violation in ordered
+        ]
+        public = [{"measure": violation.measure.value, "limit": violation.limit} for violation in ordered]
         super().__init__(
-            tr(t"The media exceeds the {measure} limit: {actual} is greater than {limit}."),
             context={
                 "reason": "limit_exceeded",
-                "measure": violation.measure.value,
-                "actual": violation.actual,
-                "limit": violation.limit,
+                "violations": internal,
             },
-            public_context={"reason": "limit_exceeded", "measure": violation.measure.value, "limit": violation.limit},
+            public_context={"reason": "limit_exceeded", "violations": public},
         )
-        self.violation = violation
+        self.violations = ordered
+
+    @property
+    def violation(self) -> MediaViolation:
+        """Return the first violation for compatibility with single-limit callers."""
+        return self.violations[0]
 
 
 class MediaDraftStateConflictError(ConflictError):
@@ -74,15 +83,76 @@ class MediaDraftStateConflictError(ConflictError):
         super().__init__(public_context={"reason": "draft_state", "status": status})
 
 
+class MediaDraftRevisionConflictError(ConflictError):
+    """An authorized upload raced with another draft mutation."""
+
+    default_message = tr(t"The submission draft changed while its attachment was uploading.")
+    default_title = tr(t"Draft changed")
+    default_resource = "media"
+    default_end_user_action = tr(t"Reload the draft and upload the attachment again.")
+
+    def __init__(self, *, expected: int, actual: int) -> None:
+        super().__init__(
+            context={"expected_revision": expected, "actual_revision": actual},
+            public_context={"reason": "draft_revision", "actual_revision": actual},
+        )
+
+
 class MediaDraftNotFoundError(NotFoundError):
     """A media mutation cannot re-establish ownership after draft deletion."""
 
     default_message = tr(t"Submission draft not found.")
     default_title = tr(t"Draft not found")
     default_resource = "submission_draft"
+    default_end_user_action = tr(t"Reload your drafts before uploading the attachment again.")
 
     def __init__(self, draft_id: UUID) -> None:
         super().__init__(public_context={"draft_id": str(draft_id)})
+
+
+class DraftMediaRequestError(ValidationError):
+    """A raw attachment request is ambiguous or violates declared framing."""
+
+    default_message = tr(t"The draft attachment upload request is invalid.")
+    default_title = tr(t"Invalid attachment upload")
+    default_resource = "submission_media"
+    default_end_user_action = tr(t"Check the attachment type and upload it again.")
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(public_context={"reason": reason})
+
+
+class DraftMediaNotFoundError(NotFoundError):
+    """No owner-visible attachment upload matches the requested UUID."""
+
+    default_message = tr(t"Draft attachment not found.")
+    default_title = tr(t"Attachment not found")
+    default_resource = "submission_media"
+    default_end_user_action = tr(t"Reload the draft and choose one of its current attachments.")
+
+    def __init__(self, upload_id: UUID) -> None:
+        super().__init__(public_context={"upload_id": str(upload_id)})
+
+
+class DraftMediaConflictError(ConflictError):
+    """A caller-provided retry UUID was already used for different bytes."""
+
+    default_message = tr(t"The attachment upload identifier is already in use.")
+    default_title = tr(t"Attachment upload conflict")
+    default_resource = "submission_media"
+    default_end_user_action = tr(t"Retry the upload with a new attachment identifier.")
+
+    def __init__(self, upload_id: UUID) -> None:
+        super().__init__(public_context={"upload_id": str(upload_id)})
+
+
+class DraftMediaUnavailableError(ServiceUnavailableError):
+    """Draft attachment processing is not enabled for this API process."""
+
+    default_message = tr(t"Draft attachment processing is temporarily unavailable.")
+    default_title = tr(t"Attachment processing unavailable")
+    default_resource = "submission_media"
+    default_end_user_action = tr(t"Keep the attachment locally and try uploading it again later.")
 
 
 class InvalidMediaError(ValidationError):

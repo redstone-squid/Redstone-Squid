@@ -15,8 +15,9 @@ from squid.builds.domain import (
 )
 from squid.builds.errors import InvalidBuildError
 from squid.core.errors import InvalidStateError, JSONValue
-from squid.submissions.application.finalization import BuildSubmissionRejectedError
 from squid.submissions.domain.finalization import (
+    BuildSubmissionRejected,
+    BuildSubmissionResult,
     DoorSubmissionDetails,
     ExtenderOrientation,
     ExtenderSubmissionDetails,
@@ -90,16 +91,20 @@ class CanonicalBuildSubmissionWriter:
         self._tags = tags
         self._versions = versions
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> FinalizedBuild:
+    async def create_or_get(self, submission: NormalizedSubmission) -> BuildSubmissionResult:
         """Translate a normalized payload and delegate retry-safe creation to builds."""
         existing = await self._builds.get_by_source_submission_draft_id(submission.source_draft_id)
         if existing is not None:
             if existing.submitter_account_id != submission.owner_account_id or existing.sponsor != submission.sponsor:
-                raise _target_rejected()
+                return _target_rejected()
             return _target_result(existing)
 
-        await self._validate_source_version(submission.source_version)
+        version_rejection = await self._validate_source_version(submission.source_version)
+        if version_rejection is not None:
+            return version_rejection
         definitions = await self._resolve_tags(submission)
+        if isinstance(definitions, BuildSubmissionRejected):
+            return definitions
         build = _to_build(submission, definitions)
         try:
             persisted = await self._builds.submit_for_account(
@@ -109,20 +114,23 @@ class CanonicalBuildSubmissionWriter:
                 display_name=submission.display_name,
                 ai_generated=submission.ai_generated,
             )
-        except (InvalidBuildError, InvalidStateError) as error:
-            raise _target_rejected() from error
+        except InvalidBuildError, InvalidStateError:
+            return _target_rejected()
         if persisted.submitter_account_id != submission.owner_account_id or persisted.sponsor != submission.sponsor:
-            raise _target_rejected()
+            return _target_rejected()
         return _target_result(persisted)
 
-    async def _validate_source_version(self, source_version: str) -> None:
+    async def _validate_source_version(self, source_version: str) -> BuildSubmissionRejected | None:
         canonical_versions = {str(version) for version in await self._versions.list_all()}
         if source_version not in canonical_versions:
-            raise BuildSubmissionRejectedError(
+            return BuildSubmissionRejected(
                 (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
             )
+        return None
 
-    async def _resolve_tags(self, submission: NormalizedSubmission) -> Mapping[str, TagDefinition]:
+    async def _resolve_tags(
+        self, submission: NormalizedSubmission
+    ) -> Mapping[str, TagDefinition] | BuildSubmissionRejected:
         definitions = {
             definition.stable_key: definition
             for definition in await self._tags.public_definitions()
@@ -160,7 +168,7 @@ class CanonicalBuildSubmissionWriter:
         if not any(creator.strip() for creator in submission.creators):
             issues.append(SubmissionAttentionIssue("creators", SubmissionAttentionReason.TOO_SHORT))
         if issues:
-            raise BuildSubmissionRejectedError(tuple(issues))
+            return BuildSubmissionRejected(tuple(issues))
         return selected
 
 
@@ -240,10 +248,8 @@ def _target_result(build: Build) -> FinalizedBuild:
     return FinalizedBuild(build.id)
 
 
-def _target_rejected() -> BuildSubmissionRejectedError:
-    return BuildSubmissionRejectedError(
-        (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
-    )
+def _target_rejected() -> BuildSubmissionRejected:
+    return BuildSubmissionRejected((SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),))
 
 
 def _submission_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue]:

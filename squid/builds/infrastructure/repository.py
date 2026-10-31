@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import logging
 import uuid
-from collections.abc import Sequence
+from collections import defaultdict
+from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any, cast
 
 from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import raiseload, selectinload
 from sqlalchemy.orm.exc import StaleDataError
@@ -18,10 +21,20 @@ from whenever import Instant
 
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.infrastructure.models import Account, CreatorAlias
-from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
+from squid.builds.application.ports import SourceSubmissionBuildWrite
+from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort, PublicBuildSummary, PublicBuildTag
 from squid.builds.domain import (
+    BUILD_CLASS_BY_CATEGORY,
     Build,
+    BuildCategory,
+    DoorBuild,
+    ExtenderBuild,
+    Info,
     Status,
+    UnknownRestrictions,
+)
+from squid.builds.domain import (
+    BuildLink as DomainBuildLink,
 )
 from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.builds.infrastructure.mapping import SQL_CLASS_BY_CATEGORY, BuildMapper, category_values_from_domain
@@ -30,15 +43,23 @@ from squid.builds.infrastructure.models import (
 )
 from squid.builds.infrastructure.models import (
     BuildCreator,
-    BuildLink,
     BuildSourceMessage,
     BuildVersion,
 )
-from squid.core.errors import InvalidStateError, PersistenceError
+from squid.builds.infrastructure.models import (
+    BuildLink as SQLBuildLink,
+)
+from squid.builds.infrastructure.models import (
+    Door as SQLDoor,
+)
+from squid.builds.infrastructure.models import (
+    Extender as SQLExtender,
+)
+from squid.core.errors import DataIntegrityError, InvalidStateError, PersistenceError
 from squid.messages.infrastructure.models import Message
 from squid.persistence.types import now
 from squid.tags.domain import TagAssignment as DomainTagAssignment
-from squid.tags.domain import TagValueType
+from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
 from squid.tags.infrastructure.models import (
     BuildTagAssignment as SQLTagAssignment,
 )
@@ -91,6 +112,85 @@ def _write_load_options() -> tuple[Any, ...]:
     )
 
 
+def _public_summary_from_selected_row(
+    row: Mapping[str, Any],
+    *,
+    creators: Sequence[str],
+    versions: Sequence[str],
+    links: Sequence[DomainBuildLink],
+    tags: Sequence[PublicBuildTag],
+    taxonomy: Mapping[str, Sequence[str]],
+) -> PublicBuildSummary:
+    """Map only the columns selected by the public-summary read model."""
+    try:
+        category = BuildCategory(row["category"])
+        status = Status(row["submission_status"])
+    except (TypeError, ValueError) as exc:
+        msg = "A public build has invalid category or status metadata."
+        raise DataIntegrityError(msg, context={"build_id": row.get("id")}) from exc
+
+    unknown_restrictions = row["unknown_restrictions"]
+    unknown_patterns = row["unknown_patterns"]
+    if unknown_restrictions is not None and not isinstance(unknown_restrictions, dict):
+        msg = "A public build has malformed unknown restriction metadata."
+        raise DataIntegrityError(msg, context={"build_id": row["id"]})
+    if unknown_patterns is not None and not isinstance(unknown_patterns, list):
+        msg = "A public build has malformed unknown pattern metadata."
+        raise DataIntegrityError(msg, context={"build_id": row["id"]})
+    extra_info: Info = {}
+    if unknown_restrictions is not None:
+        extra_info["unknown_restrictions"] = cast(UnknownRestrictions, unknown_restrictions)
+    if unknown_patterns is not None:
+        extra_info["unknown_patterns"] = unknown_patterns
+
+    common: dict[str, Any] = {
+        "id": row["id"],
+        "revision": row["revision"],
+        "submission_status": status,
+        "versions": list(versions),
+        "version_spec": row["version_spec"],
+        "width": row["width"],
+        "height": row["height"],
+        "depth": row["depth"],
+        "patterns": list(taxonomy["patterns"]),
+        "wiring_placement_restrictions": list(taxonomy["wiring-placement"]),
+        "animated_restrictions": list(taxonomy["animated"]),
+        "component_restrictions": list(taxonomy["component"]),
+        "miscellaneous_restrictions": list(taxonomy["miscellaneous"]),
+        "extra_info": extra_info,
+        "creators_ign": list(creators),
+        "links": list(links),
+        "display_name": row["display_name"],
+        "submission_time": row["submission_time"],
+        "edited_time": row["edited_time"],
+        "ai_generated": row["ai_generated"],
+    }
+    if category is BuildCategory.DOOR:
+        build = DoorBuild(
+            **common,
+            orientation=row["door_orientation"],
+            door_width=row["door_width"],
+            door_height=row["door_height"],
+            door_depth=row["door_depth"],
+            normal_opening_time=row["normal_opening_time"],
+            normal_closing_time=row["normal_closing_time"],
+        )
+    elif category is BuildCategory.EXTENDER:
+        build = ExtenderBuild(
+            **common,
+            orientation=row["extender_orientation"],
+            extension_length=row["extension_length"],
+            extender_type=row["extender_type"],
+        )
+    else:
+        build = BUILD_CLASS_BY_CATEGORY[category](**common)
+    try:
+        return replace(PublicBuildSummary.from_build(build), tags=tuple(tags))
+    except InvalidBuildError as exc:
+        msg = "A public build cannot be rendered from its persisted category metadata."
+        raise DataIntegrityError(msg, context={"build_id": row["id"]}) from exc
+
+
 class BuildRepository:
     """Persistence and high-level operations on the Build domain object."""
 
@@ -133,6 +233,162 @@ class BuildRepository:
             )
             by_id = {build.id: build for build in await self._mapper.to_domain_many(session, rows)}
         return [by_id[build_id] for build_id in build_ids if build_id in by_id]
+
+    async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]:
+        """Return selected public fields for confirmed builds in requested order.
+
+        This is deliberately not implemented through ``get_many``: record details do not need
+        submitter identities, source messages, moderation notes, embeddings, or attachment
+        evidence, so those aggregate-only facts never cross this read boundary.
+        """
+        if not build_ids:
+            return ()
+        door = SQLDoor.__table__
+        extender = SQLExtender.__table__
+        async with self._session_factory() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(
+                            SQLBuild.id.label("id"),
+                            SQLBuild.revision.label("revision"),
+                            SQLBuild.submission_status.label("submission_status"),
+                            SQLBuild.category.label("category"),
+                            SQLBuild.width.label("width"),
+                            SQLBuild.height.label("height"),
+                            SQLBuild.depth.label("depth"),
+                            SQLBuild.display_name.label("display_name"),
+                            SQLBuild.version_spec.label("version_spec"),
+                            SQLBuild.submission_time.label("submission_time"),
+                            SQLBuild.edited_time.label("edited_time"),
+                            SQLBuild.ai_generated.label("ai_generated"),
+                            SQLBuild.extra_info["unknown_restrictions"].label("unknown_restrictions"),
+                            SQLBuild.extra_info["unknown_patterns"].label("unknown_patterns"),
+                            door.c.orientation.label("door_orientation"),
+                            door.c.door_width.label("door_width"),
+                            door.c.door_height.label("door_height"),
+                            door.c.door_depth.label("door_depth"),
+                            door.c.normal_opening_time.label("normal_opening_time"),
+                            door.c.normal_closing_time.label("normal_closing_time"),
+                            extender.c.orientation.label("extender_orientation"),
+                            extender.c.extension_length.label("extension_length"),
+                            extender.c.extender_type.label("extender_type"),
+                        )
+                        .select_from(SQLBuild)
+                        .outerjoin(door, door.c.build_id == SQLBuild.id)
+                        .outerjoin(extender, extender.c.build_id == SQLBuild.id)
+                        .where(SQLBuild.id.in_(build_ids), SQLBuild.submission_status == Status.CONFIRMED)
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            public_ids = tuple(row["id"] for row in rows)
+            if not public_ids:
+                return ()
+
+            creators: dict[int, list[str]] = defaultdict(list)
+            for build_id, name in await session.execute(
+                select(BuildCreator.build_id, CreatorAlias.name)
+                .join(CreatorAlias, CreatorAlias.id == BuildCreator.alias_id)
+                .where(BuildCreator.build_id.in_(public_ids))
+                .order_by(BuildCreator.build_id, BuildCreator.alias_id)
+            ):
+                creators[build_id].append(name)
+
+            versions: dict[int, list[str]] = defaultdict(list)
+            for build_id, edition, major, minor, patch in await session.execute(
+                select(
+                    BuildVersion.build_id,
+                    Version.edition,
+                    Version.major_version,
+                    Version.minor_version,
+                    Version.patch_number,
+                )
+                .join(Version, Version.id == BuildVersion.version_id)
+                .where(BuildVersion.build_id.in_(public_ids))
+                .order_by(BuildVersion.build_id, BuildVersion.version_id)
+            ):
+                versions[build_id].append(f"{edition} {major}.{minor}.{patch}")
+
+            links: dict[int, list[DomainBuildLink]] = defaultdict(list)
+            for build_id, url, media_type in await session.execute(
+                select(SQLBuildLink.build_id, SQLBuildLink.url, SQLBuildLink.media_type)
+                .where(
+                    SQLBuildLink.build_id.in_(public_ids),
+                    SQLBuildLink.media_type.in_(("render", "image")),
+                )
+                .order_by(SQLBuildLink.build_id, SQLBuildLink.url)
+            ):
+                if media_type in {"render", "image"}:
+                    links[build_id].append(DomainBuildLink(url=url, media_type=media_type))
+
+            public_tags: dict[int, list[PublicBuildTag]] = defaultdict(list)
+            title_taxonomy: dict[int, dict[str, list[str]]] = defaultdict(
+                lambda: {
+                    "patterns": [],
+                    "wiring-placement": [],
+                    "animated": [],
+                    "component": [],
+                    "miscellaneous": [],
+                }
+            )
+            tag_rows = await session.execute(
+                select(
+                    SQLTagAssignment.build_id,
+                    SQLTagDefinition.stable_key,
+                    SQLTagDefinition.display_name,
+                    SQLTagDefinition.authority,
+                    SQLTagDefinition.semantic_kind,
+                    SQLTagDefinition.restriction_type,
+                    SQLTagAssignment.numeric_value,
+                    SQLTagAssignment.text_value,
+                    SQLTagAssignment.boolean_value,
+                    SQLTagAssignment.display_unit_key,
+                )
+                .join(SQLTagDefinition, SQLTagDefinition.id == SQLTagAssignment.tag_id)
+                .where(SQLTagAssignment.build_id.in_(public_ids))
+                .order_by(
+                    SQLTagAssignment.build_id,
+                    func.coalesce(SQLTagAssignment.display_order, SQLTagDefinition.default_display_order),
+                    SQLTagAssignment.tag_id,
+                )
+            )
+            for tag_row in tag_rows:
+                value = (
+                    tag_row.numeric_value
+                    if tag_row.numeric_value is not None
+                    else tag_row.text_value
+                    if tag_row.text_value is not None
+                    else tag_row.boolean_value
+                )
+                public_tags[tag_row.build_id].append(
+                    PublicBuildTag(
+                        key=tag_row.stable_key,
+                        name=tag_row.display_name,
+                        value=value,
+                        unit=tag_row.display_unit_key,
+                    )
+                )
+                if tag_row.authority != TagAuthority.OFFICIAL:
+                    continue
+                if tag_row.semantic_kind == TagSemanticKind.PATTERN:
+                    title_taxonomy[tag_row.build_id]["patterns"].append(tag_row.display_name)
+                elif tag_row.semantic_kind == TagSemanticKind.RESTRICTION and tag_row.restriction_type is not None:
+                    title_taxonomy[tag_row.build_id][tag_row.restriction_type].append(tag_row.display_name)
+
+        by_id = {
+            row["id"]: _public_summary_from_selected_row(
+                cast(Mapping[str, Any], row),
+                creators=creators[row["id"]],
+                versions=versions[row["id"]],
+                links=links[row["id"]],
+                tags=public_tags[row["id"]],
+                taxonomy=title_taxonomy[row["id"]],
+            )
+            for row in rows
+        }
+        return tuple(by_id[build_id] for build_id in build_ids if build_id in by_id)
 
     async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:
         """Load the build already created from a synchronized submission draft."""
@@ -250,6 +506,21 @@ class BuildRepository:
                 build.revision = sql_build.revision
         else:
             await self._update_existing(build)
+
+    async def save_for_source_submission(self, build: Build) -> SourceSubmissionBuildWrite:
+        """Insert once by source draft, or return the transaction winner after a collision."""
+        draft_id = build.source_submission_draft_id
+        if build.id is not None or draft_id is None:
+            msg = "Source-submission creation requires a new build with a source draft ID."
+            raise InvalidStateError(msg)
+        try:
+            await self.save(build)
+        except IntegrityError:
+            existing = await self.get_by_source_submission_draft_id(draft_id)
+            if existing is None:
+                raise
+            return SourceSubmissionBuildWrite(existing, created=False)
+        return SourceSubmissionBuildWrite(build, created=True)
 
     async def _update_existing(self, build: Build) -> None:
         """Persist an existing build while its repository lease is held."""
@@ -394,7 +665,7 @@ class BuildRepository:
         sql_build.build_versions.extend(BuildVersion(version_id=version.id) for version in version_objects)
 
         # Handle links
-        sql_build.links.extend(BuildLink(url=link.url, media_type=link.media_type) for link in build.links)
+        sql_build.links.extend(SQLBuildLink(url=link.url, media_type=link.media_type) for link in build.links)
 
     async def _setup_tag_assignments(
         self,

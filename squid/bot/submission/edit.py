@@ -49,7 +49,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
 
         build = await self.builds.get(build_id)
         if build is None:
-            await request.respond(error_node(tr("Error"), tr("No build with that ID.")))
+            await request.respond(error_node(tr(t"Error"), tr(t"No build with that ID.")), audience="personal")
             return
 
         screen = await prepare_build_editor(request, build, self.builds)
@@ -80,14 +80,13 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         if inapplicable:
             # Dropping a typed option silently is the failure mode this command was merged to
             # end, so a door option on a build with no door is a refusal rather than a no-op.
+            fields = ", ".join(sorted(inapplicable))
             await request.respond(
                 error_node(
-                    tr("Not a field of this build"),
-                    tr(
-                        "This build has no {fields}. Open the workspace to see what it does have.",
-                        fields=", ".join(sorted(inapplicable)),
-                    ),
-                )
+                    tr(t"Not a field of this build"),
+                    tr(t"This build has no {fields}. Open the workspace to see what it does have."),
+                ),
+                audience="personal",
             )
             return
 
@@ -97,16 +96,16 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
     async def edit_context_menu(self, request: sd.Request[Self], message: discord.Message) -> sd.CommandResult:
         """A context menu command to edit a build."""
         if message.author.id != self.bot.user.id:  # type: ignore
-            return text_node(tr("This does not look like a build."))
+            return text_node(tr(t"This does not look like a build."))
 
         # Which build a card shows is a property of the post, not of the message: the
         # same message row is just a fact about a Discord message.
         post = await self.bot.services.posts.resolve(message.id)
         if post is None or post.resource_kind != "build":
-            return text_node(tr("This does not look like a build."))
+            return text_node(tr(t"This does not look like a build."))
 
         build = await self.builds.get(int(post.resource_key))
         if build is None:
-            return text_node(tr("This does not look like a build."))
+            return text_node(tr(t"This does not look like a build."))
         await open_build_editor(request, build)
         return None

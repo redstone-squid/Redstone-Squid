@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
-from squid.api.dependencies import BuildQueries, Records
+from squid.api.dependencies import PublicRecords, Records
 from squid.api.errors import responses
 from squid.api.pagination import (
     AfterIdParam,
@@ -19,8 +19,6 @@ from squid.api.pagination import (
 )
 from squid.api.v1.schemas.builds import BuildSummary
 from squid.api.v1.schemas.records import RecordDetail, RecordSummary
-from squid.builds.domain import Status
-from squid.core.errors import DataIntegrityError
 from squid.records.errors import RecordNotFoundError
 
 router = APIRouter(prefix="/records", tags=["records"])
@@ -35,28 +33,15 @@ _SORT_FIELDS = frozenset({"id"})
     operation_id="records_get",
     openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
-async def get_record(record_id: int, records: Records, build_queries: BuildQueries) -> RecordDetail:
+async def get_record(record_id: int, records: PublicRecords) -> RecordDetail:
     """Return one result only while its computation run is active."""
-    record = await records.get(record_id)
-    if record is None:
+    detail = await records.get(record_id)
+    if detail is None:
         raise RecordNotFoundError(record_id)
-
-    found = await build_queries.get_many(record.holder_build_ids)
-    public_builds = {
-        build.id: build for build in found if build.id is not None and build.submission_status is Status.CONFIRMED
-    }
-    unavailable_ids = [build_id for build_id in record.holder_build_ids if build_id not in public_builds]
-    if unavailable_ids:
-        msg = "A published record references holder builds that are unavailable to the public catalogue."
-        raise DataIntegrityError(
-            msg,
-            context={"record_id": record.id, "unavailable_holder_build_ids": unavailable_ids},
-        )
-
-    summary = RecordSummary.from_domain(record)
+    summary = RecordSummary.from_domain(detail.standing)
     return RecordDetail(
         **summary.model_dump(),
-        holder_builds=[BuildSummary.from_domain(public_builds[build_id]) for build_id in record.holder_build_ids],
+        holder_builds=[BuildSummary.from_public_summary(build) for build in detail.holder_builds],
     )
 
 

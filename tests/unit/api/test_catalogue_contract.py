@@ -1,6 +1,5 @@
 """Public catalogue API contract extensions."""
 
-from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
@@ -9,11 +8,11 @@ import pytest
 
 from squid.api.v1.records import get_record
 from squid.api.v1.schemas.builds import BuildDetail, BuildSummary, DoorDetails, ExtenderDetails, GeneralDetails
-from squid.builds.application import BuildQueryService
+from squid.builds.application import PublicBuildSummary
 from squid.builds.domain import Build, DoorBuild, ExtenderBuild, MediaTypeLiteral, Status, UtilityBuild
-from squid.core.errors import DataIntegrityError
-from squid.records.application.models import PublishedRecord
-from squid.records.application.services import RecordService
+from squid.records.application.models import PublicRecordDetail, PublishedRecord
+from squid.records.application.services import PublicRecordQueryService
+from squid.records.domain import BuildKind, RecordClass, ResolutionStatus, VersionScope
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import (
     TagAssignment,
@@ -62,31 +61,26 @@ def published_record(*holder_build_ids: int) -> PublishedRecord:
         competition_id=UUID("22222222-2222-2222-2222-222222222222"),
         title="Fastest 2x3 door",
         subtitle="All versions",
-        record_class="fastest",
-        build_kind="door",
-        version_scope="all-time",
-        status="resolved",
+        record_class=RecordClass.FASTEST,
+        build_kind=BuildKind.DOOR,
+        version_scope=VersionScope.ALL_TIME,
+        status=ResolutionStatus.RESOLVED,
         holder_build_ids=holder_build_ids,
         computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
     )
 
 
-class RecordFake(RecordService):
-    def __init__(self, record: PublishedRecord) -> None:
+class PublicRecordFake(PublicRecordQueryService):
+    def __init__(self, record: PublishedRecord, builds: list[Build]) -> None:
         self.record = record
+        self.builds = tuple(PublicBuildSummary.from_build(build) for build in builds)
+        self.requests: list[int] = []
 
-    async def get(self, result_id: int) -> PublishedRecord | None:
-        return self.record if result_id == self.record.id else None
-
-
-class BuildQueryFake(BuildQueryService):
-    def __init__(self, builds: list[Build]) -> None:
-        self.builds = builds
-        self.requests: list[tuple[int, ...]] = []
-
-    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
-        self.requests.append(tuple(build_ids))
-        return self.builds
+    async def get(self, standing_id: int) -> PublicRecordDetail | None:
+        self.requests.append(standing_id)
+        if standing_id != self.record.id:
+            return None
+        return PublicRecordDetail(standing=self.record, holder_builds=self.builds)
 
 
 def test_build_summary_exposes_catalogue_card_fields_and_stable_tag_keys() -> None:
@@ -108,6 +102,7 @@ def test_build_summary_exposes_catalogue_card_fields_and_stable_tag_keys() -> No
     )
 
     summary = BuildSummary.from_domain(build)
+    public_summary = BuildSummary.from_public_summary(PublicBuildSummary.from_build(build))
 
     assert summary.preview is not None
     assert summary.display_name == "Vault prototype"
@@ -117,6 +112,7 @@ def test_build_summary_exposes_catalogue_card_fields_and_stable_tag_keys() -> No
     assert summary.opening_time == 8
     assert summary.closing_time == 10
     assert summary.tags[0].key == "official_seamless"
+    assert public_summary == summary
 
 
 @pytest.mark.parametrize(
@@ -132,9 +128,12 @@ def test_build_summary_uses_only_valid_https_previews(
     images: list[str],
     expected: tuple[str, str] | None,
 ) -> None:
-    preview = BuildSummary.from_domain(catalogue_build(42, render_urls=renders, image_urls=images)).preview
+    build = catalogue_build(42, render_urls=renders, image_urls=images)
+    preview = BuildSummary.from_domain(build).preview
+    public_preview = BuildSummary.from_public_summary(PublicBuildSummary.from_build(build)).preview
 
     assert ((preview.kind, preview.url) if preview is not None else None) == expected
+    assert public_preview == preview
 
 
 def test_build_detail_inherits_card_fields_without_duplicate_constructor_values() -> None:
@@ -180,32 +179,13 @@ def test_build_detail_exposes_only_the_immutable_public_sponsor_projection() -> 
 @pytest.mark.asyncio
 async def test_record_detail_hydrates_holders_in_record_order() -> None:
     record = published_record(41, 42)
-    records = RecordFake(record)
-    build_queries = BuildQueryFake([catalogue_build(42), catalogue_build(41)])
+    records = PublicRecordFake(record, [catalogue_build(41), catalogue_build(42)])
 
-    detail = await get_record(7, records, build_queries)
+    detail = await get_record(7, records)
 
     assert detail.holder_build_ids == [41, 42]
     assert [build.id for build in detail.holder_builds] == [41, 42]
-    assert build_queries.requests == [(41, 42)]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "available",
-    [
-        [catalogue_build(41)],
-        [catalogue_build(41), catalogue_build(42, submission_status=Status.DENIED)],
-    ],
-)
-async def test_record_detail_rejects_unavailable_or_non_public_holders(available: list[Build]) -> None:
-    records = RecordFake(published_record(41, 42))
-    build_queries = BuildQueryFake(available)
-
-    with pytest.raises(DataIntegrityError) as exc_info:
-        await get_record(7, records, build_queries)
-
-    assert exc_info.value.context == {"record_id": 7, "unavailable_holder_build_ids": [42]}
+    assert records.requests == [7]
 
 
 def test_detail_details_are_keyed_by_the_build_category() -> None:

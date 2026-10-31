@@ -98,7 +98,8 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
         if account is None or account.public_creator_id is None:
             return sd.Response(
-                text_node(tr("{user} doesn't have a creator page.", user=user.display_name)), audience="personal"
+                text_node(_missing_creator_page(user.display_name)),
+                audience="personal",
             )
         return await self._public_profile_card(account.public_creator_id, user.display_name)
 
@@ -106,11 +107,11 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         """Render somebody else's page from the same filtered view the API serves."""
         public = await self.account_service.get_public_profile(public_id)
         if public is None:
-            return text_node(tr("That creator page could not be found."))
+            return text_node(tr(tr(t"That creator page could not be found.")))
         if public.hidden:
             return card_node(
-                tr("Hidden creator page"),
-                tr("This creator has hidden their page. Their build credit is still listed."),
+                tr(tr(t"Hidden creator page")),
+                tr(tr(t"This creator has hidden their page. Their build credit is still listed.")),
                 fields=public_profile_fields(public),
             )
         return card_node(
@@ -127,19 +128,16 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
         `discord.User`, so an avatar that would otherwise render as null gets filled in whenever
         someone looks at their own page.
         """
-        identity = next(
-            (
-                candidate
-                for candidate in account.identities
-                if candidate.provider is IdentityProvider.DISCORD and candidate.discord_id == user.id
-            ),
-            None,
-        )
+        identity = account.identity_for(IdentityProvider.DISCORD, str(user.id))
         if account.id is None or identity is None or identity.id is None:
             return
         key = user.avatar.key if user.avatar is not None else None
         if key != identity.avatar_key:
             await self.account_service.record_identity_avatar_key(account.id, identity.id, key)
+
+
+def _missing_creator_page(user: str) -> str:
+    return tr(tr(t"{user} doesn't have a creator page."))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

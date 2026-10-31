@@ -73,24 +73,12 @@ async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.Redst
             roles=False,
             replied_user=False,
         ),
-    )(
-        render_payload(
-            [
-                text_node(
-                    tr(
-                        "{owner}, {member} has removed their own redstoner role.",
-                        owner=owner.mention,
-                        member=member.mention,
-                    )
-                )
-            ]
-        )
-    )
+    )(render_payload([text_node(_removed_role_notice(owner.mention, member.mention))]))
     await anyio.sleep(10)
 
     await member.add_roles(redstoner_role)
     await request.respond(
-        text_node(tr("{member} — just kidding, here is your role back.", member=member.mention)),
+        text_node(_restored_role_notice(member.mention)),
         audience="personal",
     )
 
@@ -170,7 +158,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await enforce(request, REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC, mode="any")
         guild = request.guild
         if guild is None or guild.id != self.bot.owner_server_id:
-            return sd.Response(text_node(tr("This is only available in the bot's home server.")), audience="personal")
+            return sd.Response(text_node(tr(t"This is only available in the bot's home server.")), audience="personal")
 
         async def may_deploy() -> bool:
             return await allows(request, REDSTONER_PANEL_MANAGE)
@@ -217,9 +205,9 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         await enforce(request, REDSTONER_ROLE_RESYNC)
         guild = request.guild
         if guild is None or guild.id != self.bot.owner_server_id or message.guild != guild:
-            return text_node(tr("That message is not in the bot's home server."))
+            return text_node(tr(t"That message is not in the bot's home server."))
         await self.give_redstoner_from_message(message)
-        return text_node(tr("Redstoner automation resynced."))
+        return text_node(tr(t"Redstoner automation resynced."))
 
     async def give_redstoner_from_message(self, message: discord.Message) -> None:
         """Give the redstoner role to a user based on a Starboard message."""
@@ -234,10 +222,10 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
 
         locale = await resolve_locale(message, self.bot.services.settings)
         if decision.kind is RedstonerDecisionKind.MALFORMED:
+            reason = sl.raw_md(decision.reason)
+            url = sl.raw_md(message.jump_url)
             with localization_scope(localization_for(locale)):
-                payload = render_payload(
-                    [text_node(tr("{reason} in {url}", reason=decision.reason, url=message.jump_url))]
-                )
+                payload = render_payload([text_node(tr(tr(t"{reason} in {url}")))])
             await send_to(message.channel)(payload)
             return
 
@@ -248,32 +236,48 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         redstoner_role = message.guild.get_role(self.bot.community_config.redstoner_role_id)
         if redstoner_role is None:
             with localization_scope(localization_for(locale)):
-                payload = render_payload([text_node(tr("Could not find the redstoner role."))])
+                payload = render_payload([text_node(tr(tr(t"Could not find the redstoner role.")))])
             await send_to(message.channel)(payload)
             return
         await member.add_roles(redstoner_role)
         with localization_scope(localization_for(locale)):
-            payload = render_payload([text_node(tr("Gave {member} the redstoner role.", member=member.mention))])
+            payload = render_payload([text_node(_role_granted_notice(member.mention))])
         await send_to(message.channel)(payload)
 
         with localization_scope(localization_for(locale)):
+            role = redstoner_role.mention
+            url = decision.source_message_url
             presentation = render_payload(
-                [
-                    sl.primitives.Text(
-                        tr(
-                            "Hi {member}, you received the {role} role after reaching 15 upvotes in {url}.",
-                            member=member.mention,
-                            role=redstoner_role.mention,
-                            url=decision.source_message_url,
-                        )
-                    )
-                ],
+                [sl.primitives.Text(_role_award_notice(member.mention, role, url))],
                 locale=locale,
             )
         await send_to(
             self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id),
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),
         )(presentation)
+
+
+def _removed_role_notice(owner: str, member: str) -> str:
+    owner = sl.raw_md(owner)
+    member = sl.raw_md(member)
+    return tr(tr(t"{owner}, {member} has removed their own redstoner role."))
+
+
+def _restored_role_notice(member: str) -> str:
+    member = sl.raw_md(member)
+    return tr(tr(t"{member} — just kidding, here is your role back."))
+
+
+def _role_granted_notice(member: str) -> str:
+    member = sl.raw_md(member)
+    return tr(tr(t"Gave {member} the redstoner role."))
+
+
+def _role_award_notice(member: str, role: str, url: str) -> str:
+    member = sl.raw_md(member)
+    role = sl.raw_md(role)
+    url = sl.raw_md(url)
+    return tr(tr(t"Hi {member}, you received the {role} role after reaching 15 upvotes in {url}."))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

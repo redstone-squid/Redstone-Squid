@@ -51,6 +51,7 @@ _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9]
     "",
     response_model=BuildDetail,
     status_code=201,
+    deprecated=True,
     responses=responses(400, 401, 403, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
     operation_id="builds_create",
@@ -62,7 +63,14 @@ async def submit_build(
     builds: BuildCommands,
     caller: UserWriter,
 ) -> BuildDetail:
-    """Submit a door build for Discord moderation."""
+    """Submit a door build for Discord moderation.
+
+    Deprecated: create a revisioned submission draft, apply changes, then start
+    `POST /v1/submissions/drafts/{draft_id}/submission`. That replacement returns
+    `202` and exposes durable finalization status at the same submission URL.
+    Legacy remote attachment URLs cannot be mapped losslessly to uploaded artifacts,
+    so this route retains its existing `201` behavior until the next API version.
+    """
     account_id = require_consented_account(caller)
     if submission.category.casefold() != "door":
         msg = "Only door submissions are supported."

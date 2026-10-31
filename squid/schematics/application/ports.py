@@ -2,8 +2,11 @@
 
 from typing import Protocol
 
+from whenever import Instant
+
+from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.application.queries import SchematicPublication, StoredRender, StoredSchematic
+from squid.schematics.application.previews import PreviewObjectReservation, StoredRender
 from squid.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -99,7 +102,9 @@ class SchematicStore(Protocol):
 
     async def get_for_build(self, build_id: int, schematic_id: int) -> StoredSchematic | None: ...
 
-    async def get_primary(self, build_id: int) -> StoredSchematic | None: ...
+    async def get_featured(self, build_id: int) -> StoredSchematic | None:
+        """Return the attachment selected to supply a build's generated preview."""
+        ...
 
     async def find_file_matches(
         self,
@@ -145,9 +150,27 @@ class SchematicStore(Protocol):
         """
         ...
 
+    async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
+        """Persist moderator-facing simulation evidence for one attachment."""
+        ...
+
+
+class SchematicPreviewPublisher(Protocol):
+    """Persistence operations for generated preview recipes and publication."""
+
     async def get_render(self, schematic_id: int, recipe_hash: str) -> StoredRender | None: ...
 
-    async def record_render(
+    async def reserve_preview_object(
+        self,
+        object_key: str,
+        *,
+        byte_size: int,
+        sha256: str,
+    ) -> PreviewObjectReservation: ...
+
+    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None: ...
+
+    async def publish_fresh_preview(
         self,
         schematic_id: int,
         recipe_hash: str,
@@ -158,18 +181,16 @@ class SchematicStore(Protocol):
         height: int,
         byte_size: int,
     ) -> StoredRender | None:
-        """Record and project a render only while its schematic remains primary."""
+        """Record and publish a generated preview only while its source remains featured."""
         ...
 
-    async def project_render(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
-        """Project a cached render only while its schematic remains primary."""
+    async def publish_cached_preview(self, schematic_id: int, recipe_hash: str, url: str) -> bool:
+        """Publish a cached generated preview only while its source remains featured."""
         ...
 
     async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None: ...
 
-    async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
-        """Persist moderator-facing simulation evidence for one attachment."""
-        ...
+    async def cleanup_unreferenced_preview_objects(self, *, older_than: Instant, limit: int) -> int: ...
 
 
 class SchematicResourcePackProvider(Protocol):

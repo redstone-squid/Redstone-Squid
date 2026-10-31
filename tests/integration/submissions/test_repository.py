@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.infrastructure.models import Account
+from squid.media.application.jobs import MediaJobStatus
+from squid.media.domain import MediaKind
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
@@ -22,6 +24,7 @@ from squid.submissions.domain import (
     DraftStatus,
     FieldOperation,
     FieldOperationKind,
+    FinalizationJobStatus,
     SubmissionOrigin,
 )
 from squid.submissions.errors import DraftStateConflictError
@@ -300,7 +303,7 @@ async def test_expiry_fences_finalization_and_discards_media(
                 draft_revision=0,
                 payload=None,
                 payload_sha256=None,
-                status="needs_attention",
+                status=FinalizationJobStatus.NEEDS_ATTENTION,
                 available_at=NOW,
                 attention_at=NOW,
                 attention_issues=[{"field_id": "schematic", "reason": "schematic_required"}],
@@ -312,7 +315,7 @@ async def test_expiry_fences_finalization_and_discards_media(
             MediaUploadRecord(
                 id=upload_id,
                 draft_id=DRAFT_ID,
-                kind="image",
+                kind=MediaKind.IMAGE,
                 source_content_type="image/png",
                 source_byte_size=3,
                 source_sha256="a" * 64,
@@ -322,7 +325,7 @@ async def test_expiry_fences_finalization_and_discards_media(
             )
         )
         await session.flush()
-        session.add(MediaNormalizationJobRecord(upload_id=upload_id, status="pending", available_at=NOW))
+        session.add(MediaNormalizationJobRecord(upload_id=upload_id, status=MediaJobStatus.PENDING, available_at=NOW))
 
     assert await repository.expire_due(now=NOW.add(seconds=2)) == 1
     async with async_session_factory() as session:

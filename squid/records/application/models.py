@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
+from squid.builds.application.queries import PublicBuildSummary
 from squid.records.domain import (
     BuildKind,
     CategoryText,
@@ -16,6 +17,7 @@ from squid.records.domain import (
     RecordCandidate,
     RecordClass,
     RecordResolution,
+    ResolutionStatus,
     VersionScope,
 )
 
@@ -165,12 +167,20 @@ class PublishedRecord:
     competition_id: UUID
     title: str
     subtitle: str | None
-    record_class: str
-    build_kind: str
-    version_scope: str
-    status: str
+    record_class: RecordClass
+    build_kind: BuildKind
+    version_scope: VersionScope
+    status: ResolutionStatus
     holder_build_ids: tuple[int, ...]
     computed_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class PublicRecordDetail:
+    """One published standing with its complete ordered public holders."""
+
+    standing: PublishedRecord
+    holder_builds: tuple[PublicBuildSummary, ...]
 
 
 @dataclass(frozen=True, slots=True)

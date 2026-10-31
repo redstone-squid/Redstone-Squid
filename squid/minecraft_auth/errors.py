@@ -1,13 +1,12 @@
 """Deterministic errors for Minecraft client authorization."""
 
 from collections.abc import Mapping
-from typing import ClassVar
+from enum import StrEnum
 
 from squid.core.errors import (
     AuthenticationError,
     AuthorizationError,
     ConflictError,
-    DomainError,
     JSONValue,
     NotFoundError,
     RateLimitedError,
@@ -16,97 +15,138 @@ from squid.core.errors import (
 from squid.core.i18n import tr
 
 
-class MinecraftAuthorizationError(DomainError):
-    """Base error carrying a stable machine-readable code."""
+class MinecraftAuthReason(StrEnum):
+    """Stable Minecraft authorization reasons exposed in problem details."""
 
-    code: ClassVar[str] = "minecraft_authorization_error"  # pyrefly: ignore[bad-override]
+    INSTALLATION_UNAVAILABLE = "installation_unavailable"
+    ACCOUNT_CONSENT_REQUIRED = "account_consent_required"
+    INVALID_INSTALLATION_CREDENTIAL = "invalid_installation_credential"
+    INVALID_CHALLENGE = "invalid_challenge"
+    AUTHORIZATION_PENDING = "authorization_pending"
+    CHALLENGE_EXPIRED = "challenge_expired"
+    CHALLENGE_ALREADY_EXCHANGED = "challenge_already_exchanged"
+    CHALLENGE_APPROVAL_DENIED = "challenge_approval_denied"
+    TOO_MANY_ACTIVE_CHALLENGES = "too_many_active_challenges"
+    INVALID_PKCE = "invalid_pkce"
+    INVALID_PLAYER_TOKEN = "invalid_player_token"
 
-    def __init__(
-        self,
-        message: str | None = None,
-        *,
-        public_context: Mapping[str, JSONValue] | None = None,
-    ) -> None:
-        context = {"minecraft_auth_code": type(self).code, **(public_context or {})}
-        super().__init__(message, public_context=context)
+
+def _reason_context(
+    reason: MinecraftAuthReason,
+    context: Mapping[str, JSONValue] | None = None,
+) -> dict[str, JSONValue]:
+    # Keep the established field name for existing clients while replacing the
+    # parallel exception hierarchy with a closed reason vocabulary.
+    return {"minecraft_auth_code": reason.value, **(context or {})}
 
 
-class InstallationUnavailableError(MinecraftAuthorizationError, NotFoundError):
+class InstallationUnavailableError(NotFoundError):
     """The requested installation is absent, unowned, revoked, or stale."""
 
-    code = "installation_unavailable"  # pyrefly: ignore[bad-override]
     default_message = tr(t"The Paper installation is unavailable.")
+    default_resource = "minecraft_auth"
+
+    def __init__(self) -> None:
+        super().__init__(public_context=_reason_context(MinecraftAuthReason.INSTALLATION_UNAVAILABLE))
 
 
-class AccountConsentRequiredError(MinecraftAuthorizationError, AuthorizationError):
+class AccountConsentRequiredError(AuthorizationError):
     """An account lacks the currently required privacy consent receipt."""
 
-    code = "account_consent_required"  # pyrefly: ignore[bad-override]
     default_message = tr(t"Current privacy consent is required.")
+    default_resource = "minecraft_auth"
+
+    def __init__(self) -> None:
+        super().__init__(public_context=_reason_context(MinecraftAuthReason.ACCOUNT_CONSENT_REQUIRED))
 
 
-class InvalidInstallationCredentialError(MinecraftAuthorizationError, AuthenticationError):
+class InvalidInstallationCredentialError(AuthenticationError):
     """A Paper installation credential could not be authenticated."""
 
-    code = "invalid_installation_credential"  # pyrefly: ignore[bad-override]
     default_message = tr(t"The Paper installation credential is invalid.")
+    default_resource = "minecraft_auth"
+
+    def __init__(self) -> None:
+        super().__init__(public_context=_reason_context(MinecraftAuthReason.INVALID_INSTALLATION_CREDENTIAL))
 
 
-class InvalidChallengeError(MinecraftAuthorizationError, ValidationError):
+class InvalidChallengeError(ValidationError):
     """A device or user code does not identify an available challenge."""
 
-    code = "invalid_challenge"  # pyrefly: ignore[bad-override]
     default_message = tr(t"The authorization challenge is invalid.")
+    default_resource = "minecraft_auth"
+
+    def __init__(self) -> None:
+        super().__init__(public_context=_reason_context(MinecraftAuthReason.INVALID_CHALLENGE))
 
 
-class AuthorizationPendingError(MinecraftAuthorizationError, ConflictError):
+class AuthorizationPendingError(ConflictError):
     """A valid challenge is still waiting for account approval."""
 
-    code = "authorization_pending"  # pyrefly: ignore[bad-override]
     default_message = tr(t"The authorization challenge is awaiting approval.")
+    default_resource = "minecraft_auth"
+
+    def __init__(self) -> None:
+        super().__init__(public_context=_reason_context(MinecraftAuthReason.AUTHORIZATION_PENDING))
 
 
-class ChallengeExpiredError(MinecraftAuthorizationError, ConflictError):
+class ChallengeExpiredError(ConflictError):
     """A challenge passed its short expiry window."""
 
-    code = "challenge_expired"  # pyrefly: ignore[bad-override]
     default_message = tr(t"The authorization challenge has expired.")
+    default_resource = "minecraft_auth"
+
+    def __init__(self) -> None:
+        super().__init__(public_context=_reason_context(MinecraftAuthReason.CHALLENGE_EXPIRED))
 
 
-class ChallengeAlreadyExchangedError(MinecraftAuthorizationError, ConflictError):
+class ChallengeAlreadyExchangedError(ConflictError):
     """An approved challenge already yielded its one-time token response."""
 
-    code = "challenge_already_exchanged"  # pyrefly: ignore[bad-override]
     default_message = tr(t"The authorization challenge was already exchanged.")
+    default_resource = "minecraft_auth"
+
+    def __init__(self) -> None:
+        super().__init__(public_context=_reason_context(MinecraftAuthReason.CHALLENGE_ALREADY_EXCHANGED))
 
 
-class ChallengeApprovalDeniedError(MinecraftAuthorizationError, AuthorizationError):
+class ChallengeApprovalDeniedError(AuthorizationError):
     """The approving account cannot represent the requested Java identity."""
 
-    code = "challenge_approval_denied"  # pyrefly: ignore[bad-override]
     default_message = tr(t"This account cannot approve the requested Java identity.")
+    default_resource = "minecraft_auth"
+
+    def __init__(self) -> None:
+        super().__init__(public_context=_reason_context(MinecraftAuthReason.CHALLENGE_APPROVAL_DENIED))
 
 
-class TooManyActiveChallengesError(RateLimitedError, MinecraftAuthorizationError):
+class TooManyActiveChallengesError(RateLimitedError):
     """An initiator reached its bounded active-challenge allowance."""
 
-    code = "too_many_active_challenges"  # pyrefly: ignore[bad-override]
     default_message = tr(t"Too many authorization challenges are active.")
-    _RATE_LIMIT_RETRY_SECONDS: ClassVar[int] = 60
+    default_resource = "minecraft_auth"
+    _RATE_LIMIT_RETRY_SECONDS = 60
 
     def __init__(self) -> None:
         super().__init__(self._RATE_LIMIT_RETRY_SECONDS)
+        self.with_context(public_context=_reason_context(MinecraftAuthReason.TOO_MANY_ACTIVE_CHALLENGES))
 
 
-class InvalidPkceError(MinecraftAuthorizationError, ValidationError):
+class InvalidPkceError(ValidationError):
     """A Fabric PKCE value is malformed or does not match."""
 
-    code = "invalid_pkce"  # pyrefly: ignore[bad-override]
     default_message = tr(t"The Fabric PKCE proof is invalid.")
+    default_resource = "minecraft_auth"
+
+    def __init__(self) -> None:
+        super().__init__(public_context=_reason_context(MinecraftAuthReason.INVALID_PKCE))
 
 
-class InvalidPlayerTokenError(MinecraftAuthorizationError, AuthenticationError):
+class InvalidPlayerTokenError(AuthenticationError):
     """A player token is malformed, expired, revoked, stale, or mismatched."""
 
-    code = "invalid_player_token"  # pyrefly: ignore[bad-override]
     default_message = tr(t"The Minecraft player token is invalid.")
+    default_resource = "minecraft_auth"
+
+    def __init__(self) -> None:
+        super().__init__(public_context=_reason_context(MinecraftAuthReason.INVALID_PLAYER_TOKEN))

@@ -52,10 +52,7 @@ from squid.messages.application import MessageService
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
-from squid.minecraft_auth.infrastructure import (
-    PostgresAccountIdentityAuthorizer,
-    PostgresMinecraftAuthorizationRepository,
-)
+from squid.minecraft_auth.infrastructure import PostgresMinecraftAuthorizationRepository
 from squid.notifications import NotificationService
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.application import (
@@ -73,7 +70,7 @@ from squid.persistence.engine import DatabaseEngine
 from squid.persistence.wake_listener import PostgresWakeListener
 from squid.posts.application import PostService
 from squid.posts.infrastructure.repository import PostRepository
-from squid.records.application import RecordComputationService, RecordService
+from squid.records.application import PublicRecordQueryService, RecordComputationService, RecordService
 from squid.records.infrastructure.repository import PostgresRecordRepository
 from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
 from squid.schematics.application import (
@@ -86,8 +83,9 @@ from squid.schematics.application import (
 from squid.schematics.domain.models import SchematicLimits
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer
 from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
+from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
 from squid.schematics.infrastructure.render_jobs import PostgresSchematicRenderJobRepository
-from squid.schematics.infrastructure.repository import SchematicRepository
+from squid.schematics.infrastructure.repository import PostgresSchematicStore
 from squid.schematics.infrastructure.resource_pack import ResourcePackLoader
 from squid.schematics.infrastructure.version_resolver import PostgresSchematicVersionResolver
 from squid.search.application import SearchEmbeddingService, SearchQueryParser, SearchService
@@ -170,9 +168,11 @@ def create_schematic_service(
             expected_sha256=config.render_pack_sha256,
             cache_dir=config.render_cache_dir,
         )
+    previews = PostgresSchematicPreviewPublisher(db.async_session, artifacts)
     return SchematicService(
         analyzer,
-        SchematicRepository(db.async_session, artifacts),
+        PostgresSchematicStore(db.async_session, artifacts, previews),
+        previews,
         PostgresSchematicVersionResolver(db.async_session),
         limits=SchematicLimits(
             max_upload_bytes=config.max_upload_bytes,
@@ -324,6 +324,10 @@ class _ServiceGraph:
     @cached_property
     def records(self) -> RecordService:
         return RecordService(self.record_repository, self.record_repository, self.record_computation)
+
+    @cached_property
+    def public_records(self) -> PublicRecordQueryService:
+        return PublicRecordQueryService(self.record_repository, self.build_queries)
 
     @cached_property
     def artifacts(self) -> ArtifactStore:
@@ -537,11 +541,15 @@ class _ServiceGraph:
         return resolver
 
     @cached_property
+    def account_repository(self) -> AccountRepository:
+        return AccountRepository(self.db.async_session, self.config.verification_code_pepper.get_secret_value())
+
+    @cached_property
     def accounts(self) -> AccountService:
         mojang = MojangClient(profile_url=str(self.config.upstream_http.mojang_profile_url))
         self.resources.push_async_callback(mojang.aclose)
         return AccountService(
-            AccountRepository(self.db.async_session, self.config.verification_code_pepper.get_secret_value()),
+            self.account_repository,
             mojang.get_username,
             generate_verification_code,
         )
@@ -555,10 +563,9 @@ class _ServiceGraph:
         pepper = self.config.minecraft_auth.pepper
         if pepper is None:
             return None
-        accounts = PostgresAccountIdentityAuthorizer(self.db.async_session)
         return InstallationCredentialService(
             self.minecraft_repository,
-            accounts,
+            self.account_repository,
             MinecraftSecretCodec(pepper.get_secret_value().encode()),
         )
 
@@ -567,10 +574,9 @@ class _ServiceGraph:
         pepper = self.config.minecraft_auth.pepper
         if pepper is None:
             return None
-        accounts = PostgresAccountIdentityAuthorizer(self.db.async_session)
         return PlayerAuthorizationService(
             self.minecraft_repository,
-            accounts,
+            self.account_repository,
             MinecraftSecretCodec(pepper.get_secret_value().encode()),
         )
 
@@ -610,7 +616,7 @@ class _ServiceGraph:
             return None
         return CliAuthorizationService(
             PostgresCliAuthorizationRepository(self.db.async_session),
-            PostgresAccountIdentityAuthorizer(self.db.async_session),
+            self.account_repository,
             CliSecretCodec(pepper.get_secret_value().encode()),
         )
 
@@ -656,6 +662,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         permissions=graph.permissions,
         permission_epoch=graph.permission_epoch,
         records=graph.records,
+        public_records=graph.public_records,
         schematics=graph.schematics,
         search=graph.search,
         tags=graph.tags,

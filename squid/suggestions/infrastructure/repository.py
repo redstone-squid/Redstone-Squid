@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.infrastructure.models import Account, CreatorAlias
 from squid.records.domain import VersionScope
-from squid.records.infrastructure.models import RecordCompetition, RecordDefinition
+from squid.records.infrastructure.models import RecordRule, RecordSeries
 from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
 from squid.tags.infrastructure.models import TagApplicability, TagDefinition
 from squid.versions.infrastructure.models import Version
@@ -140,16 +140,16 @@ class PostgresSuggestionRepository:
         Only the all-time scope is offered: every current-scope category has an all-time twin, and
         `/records lookup` materializes the all-time definition regardless of which id it gets.
         """
-        statement = select(RecordDefinition.id, RecordDefinition.title, RecordDefinition.build_kind).where(
-            RecordDefinition.version_scope == VersionScope.ALL_TIME.value
+        statement = select(RecordRule.id, RecordRule.title, RecordRule.build_kind).where(
+            RecordRule.version_scope == VersionScope.ALL_TIME
         )
         terms = query.strip()
         if terms:
-            condition = RecordDefinition.title.ilike(f"%{terms}%")
+            condition = RecordRule.title.ilike(f"%{terms}%")
             if terms.isdigit():
-                condition = or_(condition, RecordDefinition.id == int(terms))
+                condition = or_(condition, RecordRule.id == int(terms))
             statement = statement.where(condition)
-        statement = statement.order_by(RecordDefinition.title, RecordDefinition.id).limit(limit)
+        statement = statement.order_by(RecordRule.title, RecordRule.id).limit(limit)
         async with self._session_factory() as session:
             return [(row.id, row.title, row.build_kind) for row in (await session.execute(statement)).all()]
 
@@ -219,18 +219,18 @@ class PostgresSuggestionRepository:
         competition has at least one definition because both are only ever created together.
         """
         latest = (
-            select(RecordDefinition.competition_id, RecordDefinition.title, RecordDefinition.subtitle)
-            .distinct(RecordDefinition.competition_id)
-            .order_by(RecordDefinition.competition_id, RecordDefinition.id.desc())
+            select(RecordRule.competition_id, RecordRule.title, RecordRule.subtitle)
+            .distinct(RecordRule.competition_id)
+            .order_by(RecordRule.competition_id, RecordRule.id.desc())
             .subquery()
         )
-        statement = select(RecordCompetition.public_id, latest.c.title, latest.c.subtitle).join(
-            latest, latest.c.competition_id == RecordCompetition.public_id
+        statement = select(RecordSeries.public_id, latest.c.title, latest.c.subtitle).join(
+            latest, latest.c.competition_id == RecordSeries.public_id
         )
         terms = query.strip()
         if terms:
             statement = statement.where(or_(latest.c.title.ilike(f"%{terms}%"), latest.c.subtitle.ilike(f"%{terms}%")))
-        statement = statement.order_by(latest.c.title, RecordCompetition.public_id).limit(limit)
+        statement = statement.order_by(latest.c.title, RecordSeries.public_id).limit(limit)
         async with self._session_factory() as session:
             rows = (await session.execute(statement)).all()
         return [(str(row.public_id), row.title, row.subtitle) for row in rows]

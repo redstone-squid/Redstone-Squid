@@ -142,32 +142,40 @@ def _preview(*, held_elsewhere: bool = False) -> LinkPreview:
 
 
 def test_a_fresh_link_has_no_conflict() -> None:
-    assert link_conflict(_preview(), None) is None
+    assert link_conflict(_preview(), ()) is None
 
 
 def test_relinking_the_same_uuid_is_not_a_conflict() -> None:
     """It is how a renamed player refreshes their name, so it must not be refused."""
     existing = AccountIdentity.java(JAVA_UUID, username="OldName")
 
-    assert link_conflict(_preview(held_elsewhere=True), existing) is None
+    assert link_conflict(_preview(held_elsewhere=True), (existing,)) is None
 
 
 def test_holding_a_different_java_identity_conflicts() -> None:
     existing = AccountIdentity.java(OTHER_UUID, username="Other")
 
-    assert link_conflict(_preview(), existing) == OTHER_UUID
+    assert link_conflict(_preview(), (existing,)) == OTHER_UUID
 
 
 def test_a_uuid_linked_to_somebody_else_conflicts() -> None:
     """Detected before the prompt now; it used to surface only after consent was given."""
-    assert link_conflict(_preview(held_elsewhere=True), None) == JAVA_UUID
+    assert link_conflict(_preview(held_elsewhere=True), ()) == JAVA_UUID
 
 
 def test_a_uuid_linked_elsewhere_conflicts_even_with_another_identity_held() -> None:
     existing = AccountIdentity.java(OTHER_UUID, username="Other")
 
     # The caller's own mismatch is reported, because unlinking that is the action they must take.
-    assert link_conflict(_preview(held_elsewhere=True), existing) == OTHER_UUID
+    assert link_conflict(_preview(held_elsewhere=True), (existing,)) == OTHER_UUID
+
+
+def test_multiple_java_identities_report_the_first_persisted_mismatch() -> None:
+    first = AccountIdentity.java(OTHER_UUID, username="Other")
+    second_uuid = UUID("00000000-0000-4000-8000-000000000777")
+    second = AccountIdentity.java(second_uuid, username="Second")
+
+    assert link_conflict(_preview(), (first, second)) == OTHER_UUID
 
 
 def _claim(claimant: Account | None) -> AliasClaim:

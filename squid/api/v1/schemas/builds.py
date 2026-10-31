@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
 from squid.api.v1.schemas import FromDomain
+from squid.builds.application.queries import PublicBuildSummary
 from squid.builds.domain import Build, DoorBuild, ExtenderBuild, Status
 
 type InputDimensions = tuple[int | None, int | None, int | None]
@@ -256,6 +257,30 @@ class BuildSummary(FromDomain[Build]):
             closing_time=build.normal_closing_time if isinstance(build, DoorBuild) else None,
             created_at=build.submission_time.to_stdlib() if build.submission_time is not None else None,
             updated_at=build.edited_time.to_stdlib() if build.edited_time is not None else None,
+        )
+
+    @classmethod
+    def from_public_summary(cls, build: PublicBuildSummary, /) -> Self:
+        """Serialize a build-owned public summary without loading an aggregate."""
+        return cls(
+            id=build.id,
+            revision=build.revision,
+            title=build.title,
+            display_name=build.display_name,
+            status=build.status,
+            category=build.category,
+            dimensions=Dimensions(width=build.dimensions[0], height=build.dimensions[1], depth=build.dimensions[2]),
+            creators=list(build.creators),
+            tags=[BuildTag(key=tag.key, name=tag.name, value=tag.value, unit=tag.unit) for tag in build.tags],
+            preview=(
+                BuildPreview(kind=build.preview.kind, url=build.preview.url) if build.preview is not None else None
+            ),
+            version_spec=build.version_spec,
+            versions=list(build.versions),
+            opening_time=build.opening_time,
+            closing_time=build.closing_time,
+            created_at=build.created_at,
+            updated_at=build.updated_at,
         )
 
 
