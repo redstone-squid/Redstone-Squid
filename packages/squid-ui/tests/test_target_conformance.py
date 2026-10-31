@@ -21,9 +21,9 @@ from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.palette import Palette
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.discord import classic_target, components_v2_target
-from squid_ui.planning.types import DiscordAdapter, SlackAdapter
 from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
 from squid_ui.semantic import PortableNode
+from squid_ui.target_types import DiscordAdapter, SlackAdapter
 from squid_ui.temporal import ZonedDateTime
 
 

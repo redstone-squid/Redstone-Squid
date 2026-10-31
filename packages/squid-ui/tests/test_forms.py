@@ -13,7 +13,7 @@ from squid_ui.interactions import ActionMode
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import LIMITS, V2Limits
-from squid_ui.planning.types import DiscordAdapter
+from squid_ui.target_types import DiscordAdapter
 
 
 def _target(name: str, *, capabilities: frozenset[AdapterCapability] = frozenset(), limits: V2Limits = LIMITS):

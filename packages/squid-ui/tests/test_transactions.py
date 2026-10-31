@@ -7,17 +7,11 @@ from typing import Any, override
 
 import pytest
 
+from squid_reactivity.actions import ActionCommit
+from squid_reactivity.core import block_writes, export_state, on_action_commit, readonly_transaction, restore_state
 from squid_ui import Component, DiscordTarget, computed, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import ComponentRuntime, ReactiveWriteError, UndeclaredStateError, enlist, transaction
-from squid_ui.runtime.reactivity import (
-    ActionCommit,
-    block_writes,
-    export_state,
-    on_action_commit,
-    readonly_transaction,
-    restore_state,
-)
 
 
 class Uncopyable:

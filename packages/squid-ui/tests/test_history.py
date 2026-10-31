@@ -19,6 +19,7 @@ from squid_reactivity import (
     on_action_commit,
 )
 from squid_reactivity.actions import ChangeToken
+from squid_reactivity.core import readonly_transaction
 from squid_reactivity.operations import OperationContext
 from squid_ui import Component, DiscordTarget, state
 from squid_ui.primitives import Text
@@ -44,7 +45,6 @@ from squid_ui.runtime import (
     inspect_cells,
     transaction,
 )
-from squid_ui.runtime.reactivity import readonly_transaction
 from squid_ui.semantic import ActionControl
 
 

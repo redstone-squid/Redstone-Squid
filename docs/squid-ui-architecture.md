@@ -87,7 +87,7 @@ flowchart TB
     scene -->|mechanical draw| html
 
     subgraph discord_runtime[Discord live runtime]
-        invocation[Owner-scoped DiscordUI and DiscordRequest<br/>source · audience · localization · acknowledgement]
+        invocation[Owner-scoped Scope and Request<br/>source · audience · localization · acknowledgement]
         root[MessageRoot<br/>owns one message and one ComponentRuntime]
         session[SessionManager and Session<br/>own a graph of roots]
         router[Router and RouteGroup<br/>stateless durable route identity]
@@ -170,12 +170,12 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Need | API | Result |
 |---|---|---|
 | Runtime for one discord.py client | `runtime = sd.install(client, config)` | `DiscordUIRuntime`: scopes, sessions, scheduler, challenges, and localization |
-| Authority for one application owner | `ui = runtime.scope(owner, defaults=...)` | an identity-bound `DiscordUI[OwnerT]` closed with its owner |
-| Current command or routed action | `request = await ui.resolve(source)` | typed owner/source, localization, user, guild, and acknowledgement state |
-| Terminal response | `await ui.respond(source, content, audience=...)` | `Sent`, `Presented`, `Rejected`, or `Abandoned` |
-| Plain live panel | `await ui.respond(source, component, access=...)` | a `Presented` outcome with its `MessageRoot` and delivery |
-| Reusable application screen | `await ui.respond(source, MyScreen(...))` | screen class policy composed with scope and call policy |
-| Dynamic session composition | `await ui.respond(source, component, session=spec)` | a typed presentation or admission rejection |
+| Authority for one application owner | `ui = runtime.scope(owner, defaults=...)` | an identity-bound `Scope[OwnerT]` closed with its owner |
+| Current command or routed action | `request = await ui.request(source)` | typed owner/source, localization, user, guild, and acknowledgement state |
+| Terminal response | `await request.respond(content, audience=...)` | `Sent`, `Presented`, `Rejected`, or `Abandoned` |
+| Plain live panel | `await request.respond(component, access=...)` | a `Presented` outcome with its `MessageRoot` and delivery |
+| Reusable application screen | `await request.respond(MyScreen(...))` | screen class policy composed with scope and call policy |
+| Dynamic session composition | `await request.respond(component, session=spec)` | a typed presentation or admission rejection |
 | Low-level root composition | `MessageRoot(...)`, then `root.send(destination)` | explicit message-root and delivery ownership when a higher entry point cannot express it |
 | Low-level Discord destination | `sd.reply_to`, `sd.respond_to`, `sd.send_to` | a `MessageDestination` for framework internals and transport adapters |
 | Static Components V2 message | sd.render_static(document) | MessagePayload |
@@ -201,7 +201,7 @@ output object, so unknown pre-existing controls cannot undermine measurement.
 
 `DiscordUIRuntime.scope` is the product ownership boundary. It keys scopes by exact object identity;
 re-registering the same owner and defaults returns the live scope, while conflicting defaults fail.
-`DiscordUI.resolve` creates a `DiscordRequest` once for a Discord source. The request reconciles its
+`Scope.request` creates a `Request` once for a Discord source. The request reconciles its
 acknowledgement ledger with discord.py before each response, so Squid never assumes it was the only
 responder. `tr(...)` resolves strings leaving the layout system, such as autocomplete or a native
 modal API; layout nodes retain deferred `TextLike` values and resolve them when their root renders.
@@ -218,7 +218,7 @@ only when the screen reaches its first render.
 `admission` decides what happens on collision, `capacity` and `quota` bound membership, and `access`
 builds the root policy from the open context. `SessionSpec.open`/`respond`, `SessionManager`, raw
 `MessageRoot`, and `reply_to`/`respond_to` remain public lower layers for framework extensions and
-transport adapters. Application handlers normally enter through an owner-scoped `DiscordUI`, which
+transport adapters. Application handlers normally enter through an owner-scoped `Scope`, which
 derives destination, sessions, open context, and localization from one source.
 
 ## Semantic authoring, adaptation, and exact primitives

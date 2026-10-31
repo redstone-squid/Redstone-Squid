@@ -12,6 +12,8 @@ import squid_ui as sl
 import squid_ui.runtime.component as component_module
 import squid_ui.runtime.owner as owner_module
 import squid_ui_discord as sd
+from squid_reactivity.shared_state import SharedState
+from squid_reactivity.topics import CellAddress, LocalTopicBus
 from squid_ui import Component, ContextKey, PressEvent, state
 from squid_ui.document import Asset, Document, InlineAsset
 from squid_ui.errors import LayoutInvariantError
@@ -32,8 +34,6 @@ from squid_ui.primitives import (
 )
 from squid_ui.runtime.component import render_component_tree
 from squid_ui.runtime.owner import ComponentRuntime
-from squid_ui.runtime.shared import SharedState
-from squid_ui.runtime.topics import CellAddress, LocalTopicBus
 from squid_ui.semantic import (
     ActionControl,
     ActionControls,

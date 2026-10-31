@@ -67,10 +67,10 @@ def _outside(panel: Panel) -> str:
     """Read the resource as a task with no transaction of its own would."""
     import contextvars
 
-    from squid_ui.runtime.reactivity import _CURRENT
+    from squid_reactivity.internals import CURRENT_TRANSACTION
 
     context = contextvars.copy_context()
-    context.run(_CURRENT.set, None)
+    context.run(CURRENT_TRANSACTION.set, None)
     return context.run(lambda: panel.value.value)
 
 

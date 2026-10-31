@@ -393,8 +393,8 @@ def text_component(*lines: Line, **declared: object) -> AnyComponent:
 
         subject = text_component(lambda self: f"count {self.count}", count=0)
     """
+    from squid_reactivity.core import state
     from squid_ui.factories import paragraph
-    from squid_ui.runtime.reactivity import state
 
     def render(self: Any) -> list[Any]:
         return [paragraph(line(self) if callable(line) else line) for line in lines]

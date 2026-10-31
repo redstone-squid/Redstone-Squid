@@ -43,7 +43,7 @@ ROOT_NAMESPACES = (
 RENAMED_SUBMODULES = (
     "squid_ui.planning.layout_measurement.solver",
     "squid_ui.runtime.histories",
-    "squid_ui.runtime.topics",
+    "squid_reactivity.topics",
 )
 
 
@@ -87,8 +87,8 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
             "squid_ui.planning",
             "squid_ui.profiling",
             "squid_ui.runtime",
-            "squid_ui.runtime.shared",
-            "squid_ui.runtime.topics",
+            "squid_reactivity.shared_state",
+            "squid_reactivity.topics",
         ],
         "discord",
         "anyio",

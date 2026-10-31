@@ -27,8 +27,8 @@ import squid_ui as sl
 # either a deferred annotation or inside a function body, so nothing resolves at import.
 import squid_ui_discord
 from squid_reactivity.actions import ActionLedger
+from squid_reactivity.topics import BusSnapshot
 from squid_ui.profiling import RuntimeSnapshot, RuntimeTrace
-from squid_ui.runtime.topics import BusSnapshot
 from squid_ui_discord.devtools_runtime import DevToolsAction, DevToolsRuntime, DurableRecordInspection
 
 if TYPE_CHECKING:

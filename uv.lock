@@ -3389,11 +3389,15 @@ name = "squid-ui-widgets"
 version = "0.1.0a1"
 source = { editable = "packages/squid-ui-widgets" }
 dependencies = [
+    { name = "squid-reactivity" },
     { name = "squid-ui" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "squid-ui", editable = "packages/squid-ui" }]
+requires-dist = [
+    { name = "squid-reactivity", editable = "packages/squid-reactivity" },
+    { name = "squid-ui", editable = "packages/squid-ui" },
+]
 
 [[package]]
 name = "starlette"

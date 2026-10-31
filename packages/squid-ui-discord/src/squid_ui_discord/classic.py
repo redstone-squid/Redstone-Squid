@@ -23,9 +23,8 @@ from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
-from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
-from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.target import Target
 from squid_ui.primitives.constraints import Never, Overflow
 from squid_ui.primitives.nodes import (
@@ -236,7 +235,7 @@ def contribute(
     to: MessagePayload,
     followed_by: Sequence[discord.Embed] = (),
     followed_by_controls: Sequence[discord.ui.Item[Any]] = (),
-    reserve: ResourceCost = EMPTY_RESERVATION,
+    reserve: ResourceCost = EMPTY_COST,
     attachments: int = 0,
     target: Target = DISCORD_V1_DPY27,
     chrome: Chrome = DEFAULT_CHROME,

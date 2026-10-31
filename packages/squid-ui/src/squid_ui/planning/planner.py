@@ -18,8 +18,6 @@ from squid_ui.scene.model import PlanResult
 from squid_ui.sources import Position
 from squid_ui.text import NEUTRAL, Localization
 
-EMPTY_RESERVATION = EMPTY_COST
-
 
 def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     rendered: DocumentLike[RenderTargetT] | PortableDocumentLike,
@@ -29,7 +27,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
-    reservation: ResourceCost = EMPTY_RESERVATION,
+    reservation: ResourceCost = EMPTY_COST,
     positions: Mapping[str, Position] | None = None,
     nav: PlannedNav | None = None,
     session: PresentationState | None = None,
@@ -70,4 +68,4 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     return backend.plan(rendered, request, cache=cache, memo=memo)
 
 
-__all__ = ["EMPTY_RESERVATION", "plan", "plan_request"]
+__all__ = ["plan", "plan_request"]

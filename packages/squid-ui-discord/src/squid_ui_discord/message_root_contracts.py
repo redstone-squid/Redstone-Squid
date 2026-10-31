@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Protocol, Self, TypedDict, Unpack, cast, 
 
 import discord
 
+from squid_reactivity.topics import Address, TopicBus
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.guards import Challenge
@@ -22,7 +23,6 @@ from squid_ui.planning.navigation import NavFactory
 from squid_ui.planning.target import Target
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.services import UIExecutionHost
-from squid_ui.runtime.topics import Address, TopicBus
 from squid_ui.scene.model import PlanMetrics, PlanReport
 from squid_ui.target_types import (
     ComponentsV2Target,

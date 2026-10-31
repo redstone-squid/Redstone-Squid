@@ -32,7 +32,8 @@ from squid_ui.planning.search import (
     iter_assignments,
 )
 from squid_ui.planning.target import PreparedExtension, Target
-from squid_ui.planning.types import (
+from squid_ui.sources import POSITION_RESOLVER, Position, PositionResolver
+from squid_ui.target_types import (
     ClassicTarget,
     ComponentsV2Target,
     DiscordAdapter,
@@ -51,7 +52,6 @@ from squid_ui.planning.types import (
     SlackSdkAdapter,
     SlackTarget,
 )
-from squid_ui.sources import POSITION_RESOLVER, Position, PositionResolver
 
 __all__ = [
     "CLASSIC_PROTOCOL_CAPABILITIES",

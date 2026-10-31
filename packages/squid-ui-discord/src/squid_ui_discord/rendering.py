@@ -14,9 +14,8 @@ from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.limits import V2Limits
-from squid_ui.planning.planner import EMPTY_RESERVATION
 from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
-from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.target import Target
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
@@ -112,7 +111,7 @@ def render_item(
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
-    reservation: ResourceCost = EMPTY_RESERVATION,
+    reservation: ResourceCost = EMPTY_COST,
 ) -> discord.ui.Item[Any]:
     """Render one node to a detached item, for composition into a host-assembled view.
 

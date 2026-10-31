@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 
 import discord
 
+from squid_reactivity.core import state
 from squid_ui.assets import Asset, StoredAsset
 from squid_ui.document import Document
 from squid_ui.emoji import Emoji, normalize_emoji
@@ -48,7 +49,6 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.reactivity import state
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.actions import ActionResponder, responder, selected_entities
 from squid_ui_discord.message_root_wiring import _CONVERSATION_TYPES

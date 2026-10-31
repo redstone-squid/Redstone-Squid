@@ -155,7 +155,7 @@ class Scope[OwnerT = Any]:
         session_key: Hashable | None = None,
         **overrides: Unpack[ResponseOverrides],
     ) -> ResponseResult:
-        """Transitional: `(await scope.request(source)).respond(...)` for call sites not yet ported."""
+        """Respond through the request bound to this scope and source."""
         request = await self.request(source)
         return await request.respond(content, files=files, parent=parent, session_key=session_key, **overrides)
 
@@ -363,7 +363,4 @@ class Scope[OwnerT = Any]:
         self._closed = True
 
 
-# Transitional name; removed once the bot is ported.
-DiscordUI = Scope
-
-__all__ = ["DiscordUI", "Scope"]
+__all__ = ["Scope"]

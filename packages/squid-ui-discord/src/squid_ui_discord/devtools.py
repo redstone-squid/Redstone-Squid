@@ -21,11 +21,11 @@ from squid_reactivity.actions import (
     ResourceEventSnapshot,
     add_action_result_sink,
 )
+from squid_reactivity.topics import BusSnapshot, TopicBus
 from squid_ui.document import InlineAsset
 from squid_ui.factories import code, paragraph, section
 from squid_ui.profiling import AttributeValue, OperationAggregate, OperationKind, Profiler, RuntimeTrace
 from squid_ui.runtime.histories import HistorySnapshot
-from squid_ui.runtime.topics import BusSnapshot, TopicBus
 from squid_ui.semantic import LayoutNode
 from squid_ui_discord import delivery
 from squid_ui_discord.devtools_runtime import (

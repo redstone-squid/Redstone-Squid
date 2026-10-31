@@ -60,7 +60,7 @@ Ordinary state and rendering do not require this optional AnyIO backend. The Dis
 includes and integrates it automatically.
 
 Most Discord applications should install `squid-ui-discord`, which brings this package with it
-and provides owner-scoped `DiscordUI`, `DiscordRequest`, and `Screen` entry points.
+and provides owner-scoped `Scope`, `Request`, and `Screen` entry points.
 Applications compiling Block Kit should install `squid-ui-slack`, which adds Slack SDK drawing
 without a listener or delivery runtime.
 

@@ -22,6 +22,9 @@ from squid_reactivity.core import (
     observe_render,
 )
 from squid_reactivity.internals import RENDER_OBSERVATION as _RENDER_OBSERVATION
+from squid_reactivity.internals import AtomicResourcePending
+from squid_reactivity.resources import AsyncBinding, observe_async_bindings, unique_async_bindings
+from squid_reactivity.topics import Address
 from squid_ui.document import Asset, Document, DocumentLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.constraints import Paginate
@@ -46,14 +49,7 @@ from squid_ui.runtime._tree import (
     map_layout_children,
 )
 from squid_ui.runtime.context import ContextKey
-from squid_ui.runtime.resources import (
-    AsyncBinding,
-    _AtomicResourcePending,
-    observe_async_bindings,
-    unique_async_bindings,
-)
 from squid_ui.runtime.services import ManagedService, ServiceOwner
-from squid_ui.runtime.topics import Address
 from squid_ui.semantic import (
     ActionControl as SemanticActionControl,
 )
@@ -443,7 +439,7 @@ class _TreeRender[RenderTargetT: RenderTarget]:
                 nodes = tuple(self.expand(self.root, "$", self.context or {}))
             else:
                 nodes = spliced.subtree.nodes
-        except _AtomicResourcePending as pending:
+        except AtomicResourcePending as pending:
             # Atomic state is never rendered while pending. Keep the resource observation from
             # the aborted discovery pass so the frontend can settle it before retrying.
             self.observed_bindings.append(pending.resource)
