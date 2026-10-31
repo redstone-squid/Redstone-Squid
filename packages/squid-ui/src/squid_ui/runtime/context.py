@@ -2,7 +2,6 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import cast
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -19,7 +18,7 @@ class ContextKey[ValueT]:
     name: str
     cache_version: Callable[[ValueT], object] | None = field(default=None, repr=False)
 
-    def matches(self, left: object, right: object) -> bool:
+    def matches(self, left: ValueT, right: ValueT) -> bool:
         """Whether two provided values may share a cached component render."""
         if left is right:
             return True
@@ -27,6 +26,6 @@ class ContextKey[ValueT]:
             return False
         try:
             version = self.cache_version
-            return version(cast(ValueT, left)) == version(cast(ValueT, right))
+            return version(left) == version(right)
         except Exception:
             return False

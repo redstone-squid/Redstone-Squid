@@ -2,12 +2,13 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from typing import Literal, cast
+from typing import Literal, assert_never, cast
 
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.palette import DEFAULT_PALETTE, AccentDefault, Palette
+from squid_ui.factories import is_builtin_layout_node
+from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cursors import CursorCoordinator
 from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
@@ -25,12 +26,6 @@ from squid_ui.planning.semantic_adaptation.controls import (
     _toggle,
     _with_best_effort,
     _with_overflow,
-)
-from squid_ui.planning.semantic_adaptation.decisions import (
-    branch_paths as _branch_paths,
-)
-from squid_ui.planning.semantic_adaptation.decisions import (
-    fallback_rung as _fallback_rung,
 )
 from squid_ui.planning.semantic_adaptation.model import (
     LoweringContext as _Context,
@@ -53,6 +48,21 @@ from squid_ui.planning.semantic_adaptation.structures import (
     _roster,
     _table,
 )
+from squid_ui.planning.structure import (
+    branch_paths as _branch_paths,
+)
+from squid_ui.planning.structure import (
+    fallback_rung as _fallback_rung,
+)
+from squid_ui.planning.structure import (
+    indexed_children as _indexed_children,
+)
+from squid_ui.planning.structure import (
+    resolve_accent as _resolve_accent,
+)
+from squid_ui.planning.structure import (
+    scoped_palette as _scoped_palette,
+)
 from squid_ui.primitives.constraints import (
     Alt,
     Condense,
@@ -64,6 +74,7 @@ from squid_ui.primitives.constraints import (
     alts,
 )
 from squid_ui.primitives.nodes import (
+    Boundary,
     Break,
     Budget,
     Button,
@@ -90,6 +101,7 @@ from squid_ui.primitives.nodes import (
     RoutedSelect,
     Row,
     SelectMenu,
+    Sep,
     Text,
     Thumbnail,
     Time,
@@ -124,6 +136,7 @@ from squid_ui.semantic import (
     BestEffort,
     Block,
     Budgeted,
+    BuiltinLayoutNode,
     Choices,
     Cluster,
     Code,
@@ -227,6 +240,13 @@ def _panel_children(children: Sequence[LayoutNode], path: str, context: _Context
 
 
 def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
+    if not is_builtin_layout_node(node):
+        message = f"{path}: {type(node).__name__} is neither a semantic node nor a Discord primitive"
+        raise LayoutInvariantError(message)
+    return _concrete(node, path, context)
+
+
+def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Node]:
     match node:
         case Truncated(node=child, keep=keep):
             return [
@@ -275,16 +295,12 @@ def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
         case ActionControls():
             return _actions(node, path, context)
         case Themed(children=children, palette=palette):
-            previous = context.palette
-            context.palette = palette
-            try:
+            with _scoped_palette(context, palette):
                 return _children(children, path, context)
-            finally:
-                context.palette = previous
         case Group(children=children) | Stack(children=children) | Cluster(children=children):
             return _children(children, path, context)
         case Block(children=children, accent=accent):
-            resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
+            resolved_accent = _resolve_accent(accent, context.palette)
             if _cards(context):
                 return [_region(Card(accent=resolved_accent), _children(children, path, context), context)]
             nested = context.panel_depth > 0
@@ -295,7 +311,7 @@ def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
             | Article(children=children, heading=heading, accent=accent, thumbnail=thumbnail)
         ):
             resolved_heading = _resolve(heading.content, context)
-            resolved_accent = context.palette.brand if accent is AccentDefault.INHERIT else accent
+            resolved_accent = _resolve_accent(accent, context.palette)
             if _cards(context):
                 # One semantic region, one card: its heading is the embed title, its accent is
                 # the embed colour, and its lead image is the thumbnail. Nothing has to be
@@ -467,8 +483,44 @@ def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
             # dialect refuses it by name. Quietly turning an author's `Panel` into an embed
             # would be reinterpreting a shape they chose for its own sake.
             return [Panel(tuple(_children(children, path, context)), accent)]
-        case _:
-            return [_primitive(cast(Node, node), context)]
+        case (
+            Text()
+            | PrimitiveHeading()
+            | Footer()
+            | PrimitiveCode()
+            | Lines()
+            | Time()
+            | ZonedTime()
+            | PrimitiveFile()
+            | Sep()
+            | Row()
+            | PrimitiveActionGroup()
+            | Button()
+            | LinkButton()
+            | SelectMenu()
+            | EntitySelect()
+            | RoutedSelect()
+            | RoutedButton()
+            | PremiumButton()
+            | Thumbnail()
+            | Gallery()
+            | MediaCollection()
+            | PrimitiveSection()
+            | Budget()
+            | Break()
+            | RawItem()
+            | Boundary()
+            | Card()
+            | Content()
+            | Extension()
+            | Variants()
+        ):
+            # An exact primitive is the author's shape already; only its deferred text resolves.
+            # `Panel` is claimed above because its children may carry semantic nodes to lower,
+            # so this arm must stay after it.
+            return [_primitive(node, context)]
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
@@ -601,8 +653,12 @@ def _primitive(node: Node, context: _Context) -> Node:
                     for variant in variants
                 ),
             )
-        case _:
+        case Time() | ZonedTime() | PrimitiveFile() | Sep() | RawItem() | Boundary() | PremiumButton():
+            # Nothing on these carries author text; stated by name so a new primitive that
+            # does carry some cannot slip through unresolved.
             return node
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 def _card_text(value: CardText | None, context: _Context) -> Text | None:
@@ -664,6 +720,6 @@ def _field_entry(field: Field, context: _Context) -> str | Alt:
 
 def _children(children: Sequence[AnyLayoutNode], path: str, context: _Context) -> list[Node]:
     lowered: list[Node] = []
-    for index, child in enumerate(children):
-        lowered.extend(_node(child, f"{path}.{index}", context))
+    for child, child_path in _indexed_children(children, path):
+        lowered.extend(_node(child, child_path, context))
     return _fold(lowered, context) if _cards(context) else lowered

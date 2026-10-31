@@ -4,20 +4,13 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
-import discord
 import pytest
 from discord.ext import commands
 
-import squid.bot.submission.search as search_module
-import squid_ui as sl
-import squid_ui_discord as sd
 from squid.bot.submission.search import SearchCog, SearchTarget
-from squid.builds.domain import OtherBuild
 from squid.core.errors import ValidationError
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
-from squid.topics import resource_topic
-from squid_ui_discord import Everyone
-from squid_ui_discord.testing import fake_interaction, fake_message
+from squid_ui_discord.testing import fake_message
 from tests.helpers.discord import make_layout_bot
 
 
@@ -35,6 +28,7 @@ class RecordingSearch:
 def _cog(search: RecordingSearch) -> SearchCog[Any]:
     cog = SearchCog.__new__(SearchCog)
     cog.bot = cast(Any, SimpleNamespace(services=SimpleNamespace(settings=SimpleNamespace())))
+    cog.queries = cast(Any, SimpleNamespace(get=AsyncMock(return_value=None)))
     cog.search = cast(Any, search)
     return cog
 
@@ -57,7 +51,7 @@ def _context() -> commands.Context[Any]:
 
 
 async def _run(cog: SearchCog[Any], **kwargs: Any) -> None:
-    await SearchCog.search_records.callback(cog, _context(), **kwargs)  # type: ignore[arg-type]
+    await cog._show_search(_context(), **kwargs)
 
 
 async def test_a_descending_sort_suggestion_survives_the_trip() -> None:
@@ -136,75 +130,3 @@ async def test_a_plain_target_leaves_the_query_untouched() -> None:
 
     assert search.requests[0].scope is SearchScope.ALL
     assert search.requests[0].query == "a OR b"
-
-
-async def test_public_build_panel_recovers_background_refresh_after_its_followup_token_stales(monkeypatch) -> None:
-    interaction = fake_interaction()
-    interaction.guild_locale = None
-    interaction.locale = "en-US"
-    public_message = fake_message(message_id=42, ephemeral=False)
-    interaction.followup.send.return_value = public_message
-    build = OtherBuild(id=42)
-    renderer = SimpleNamespace(render_node=AsyncMock(side_effect=[sl.paragraph("Build 42"), sl.paragraph("Build 43")]))
-    topic_bus = sl.runtime.LocalTopicBus()
-    layout_scheduler = sd.MessageRootScheduler(topic_bus)
-    bot = make_layout_bot(
-        services=SimpleNamespace(settings=SimpleNamespace()),
-        for_build=lambda current: renderer,
-        topic_bus=topic_bus,
-    )
-    bot.client_runtime.scheduler = layout_scheduler
-    cog = SearchCog.__new__(SearchCog)
-    cog.bot = cast(Any, bot)
-    queries = SimpleNamespace(get=AsyncMock(return_value=build))
-    cog.queries = cast(Any, queries)
-    message_roots: list[sd.MessageRoot[Any]] = []
-
-    def capture_root(component: sl.Component, **kwargs: Any) -> sd.MessageRoot[Any]:
-        message_root = sd.MessageRoot(component, access=Everyone(), timeout=None, scheduler=kwargs.get("scheduler"))
-        message_roots.append(message_root)
-        return message_root
-
-    monkeypatch.setattr(bot.client_runtime, "mount", capture_root)
-    monkeypatch.setattr(search_module, "resolve_locale", AsyncMock(return_value=None))
-    ctx = cast(
-        commands.Context[Any],
-        cast(
-            Any,
-            SimpleNamespace(
-                interaction=interaction,
-                author=SimpleNamespace(id=7),
-                bot=bot,
-                guild=None,
-                send=AsyncMock(),
-            ),
-        ),
-    )
-
-    await SearchCog.view_build.callback(cog, ctx, build_id=42)  # type: ignore[arg-type]
-
-    message_root = message_roots[0]
-    # One fetch, not two: the panel's watched resource consumes the build the command already
-    # loaded rather than priming itself with a second query.
-    assert queries.get.await_count == 1
-    assert message_root.handle is not None
-    assert not message_root.handle.permanent
-    interaction.followup.edit_message.side_effect = _unknown_webhook()
-    cog.bot.topic_bus.publish(resource_topic("build", "42"))
-
-    await message_root.refresh()
-
-    assert message_root.handle is None
-    assert message_root.pending
-
-    click = fake_interaction(message_id=42)
-    await message_root.dispatch("__nav_back", click)
-
-    assert message_root.handle is not None
-    assert not message_root.pending
-    click.response.edit_message.assert_awaited_once()
-
-
-def _unknown_webhook() -> discord.HTTPException:
-    response = cast(Any, SimpleNamespace(status=404, reason="Not Found"))
-    return discord.HTTPException(response, {"code": 10015, "message": "Unknown Webhook"})

@@ -8,7 +8,7 @@ from copy import deepcopy
 from typing import Any, cast
 
 from squid_ui.emoji import Emoji
-from squid_ui.entity import ChannelType, EntityKind, EntityRef, EntityType
+from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
 from squid_ui.errors import SquidUiError
 from squid_ui.interactions import ActionMode
 from squid_ui.primitives.styles import ActionStyle
@@ -63,6 +63,8 @@ from squid_ui.scene.model import (
     ZonedTime,
 )
 from squid_ui.scene.schema import SCHEMA
+from squid_ui.scene.slack import SlackHomeView, SlackMessage, SlackModalView
+from squid_ui.scene.slack_codec import SlackSceneCodecError, slack_body_from_dict, slack_body_to_dict
 from squid_ui.text import Markup
 
 
@@ -183,6 +185,8 @@ def _body_to_dict(body: Body) -> dict[str, Any]:
                 "children": [_html_node_to_dict(child) for child in children],
                 "locale": locale,
             }
+        case SlackMessage() | SlackModalView() | SlackHomeView():
+            return slack_body_to_dict(body)
 
 
 def _body_from_dict(raw: Mapping[str, Any]) -> Body:
@@ -214,6 +218,11 @@ def _body_from_dict(raw: Mapping[str, Any]) -> Body:
                 tuple(_html_node_from_dict(_object(child)) for child in children),
                 locale=_optional_string(raw, "locale"),
             )
+        case SlackMessage.KIND | SlackModalView.KIND | SlackHomeView.KIND:
+            try:
+                return slack_body_from_dict(raw)
+            except SlackSceneCodecError as error:
+                raise CodecError(str(error)) from error
         case _:
             msg = f"unknown scene body kind {kind!r}"
             raise CodecError(msg)
@@ -518,7 +527,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
             action=action,
             placeholder=placeholder,
             default_values=default_values,
-            channel_types=channel_types,
+            conversation_types=conversation_types,
             min_values=min_values,
             max_values=max_values,
             disabled=disabled,
@@ -530,7 +539,7 @@ def _node_to_dict(node: Node | Link | PremiumButton | Button | RoutedButton) -> 
                 "action": action,
                 "placeholder": placeholder,
                 "default_values": [{"kind": value.kind.value, "id": value.id} for value in default_values],
-                "channel_types": [value.value for value in channel_types],
+                "conversation_types": [value.value for value in conversation_types],
                 "min_values": min_values,
                 "max_values": max_values,
                 "disabled": disabled,
@@ -679,10 +688,10 @@ def _node_from_dict(
                 action=_string(raw, "action"),
                 placeholder=_optional_string(raw, "placeholder"),
                 default_values=tuple(
-                    EntityRef(EntityKind(_string(_object(value), "kind")), _integer(_object(value), "id"))
+                    EntityRef(EntityKind(_string(_object(value), "kind")), _entity_id(_object(value)))
                     for value in defaults
                 ),
-                channel_types=tuple(ChannelType(value) for value in _string_array(raw, "channel_types")),
+                conversation_types=tuple(ConversationType(value) for value in _string_array(raw, "conversation_types")),
                 min_values=_integer(raw, "min_values"),
                 max_values=_integer(raw, "max_values"),
                 disabled=_boolean(raw, "disabled"),
@@ -794,6 +803,14 @@ def _integer(raw: Mapping[str, Any], key: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool):
         msg = f"{key} must be an integer"
         raise CodecError(msg)
+    return value
+
+
+def _entity_id(raw: Mapping[str, Any]) -> int | str:
+    value = raw.get("id")
+    if isinstance(value, bool) or not isinstance(value, int | str):
+        message = "id must be an integer or string"
+        raise CodecError(message)
     return value
 
 

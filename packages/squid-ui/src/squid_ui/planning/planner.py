@@ -33,8 +33,8 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     positions: Mapping[str, Position] | None = None,
     nav: PlannedNav | None = None,
     session: PresentationState | None = None,
-    cache: PlanCache | None = None,
-    memo: PlanMemo | None = None,
+    cache: PlanCache[BodyT] | None = None,
+    memo: PlanMemo[BodyT] | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> PlanResult[BodyT]:
     """Resolve a logical document through the selected target's planner backend."""
@@ -57,8 +57,8 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     rendered: DocumentLike[RenderTargetT] | PortableDocumentLike,
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     *,
-    cache: PlanCache | None = None,
-    memo: PlanMemo | None = None,
+    cache: PlanCache[BodyT] | None = None,
+    memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     """Plan against an already-assembled request.
 

@@ -10,7 +10,7 @@ from enum import StrEnum
 
 class Capability(StrEnum):
     ACTIONS_BUTTONS = "actions.buttons"
-    ACTIONS_DISCORD_ENTITY = "actions.discord.entity"
+    ACTIONS_ENTITY = "actions.entity"
     ACTIONS_DISCORD_PREMIUM = "actions.discord.premium"
     ACTIONS_SELECT = "actions.select"
     FORMS_DISCORD_CHECKBOX_GROUP = "forms.discord.checkbox_group"
@@ -19,9 +19,13 @@ class Capability(StrEnum):
     FORMS_MODAL = "forms.modal"
     FORMS_INLINE = "forms.inline"
     LAYOUT_CONTAINER = "layout.container"
+    LAYOUT_ALERT = "layout.alert"
+    LAYOUT_CARD = "layout.card"
+    LAYOUT_CAROUSEL = "layout.carousel"
     LAYOUT_EMBED = "layout.embed"
     LAYOUT_EMBED_FIELDS = "layout.embed_fields"
     LAYOUT_GALLERY = "layout.gallery"
     LAYOUT_SECTION = "layout.section"
     LAYOUT_SEMANTIC = "layout.semantic"
+    LAYOUT_TABLE = "layout.table"
     MESSAGE_CONTENT = "message.content"

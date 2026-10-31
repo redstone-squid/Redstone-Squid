@@ -2,26 +2,28 @@
 
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Literal, Protocol, overload, runtime_checkable
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, choice, choices, controlled, form, routed_action_control, routed_choices
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.interactions import ActionEvent, SubmitEvent
-from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.runtime.component import Component
 from squid_ui.runtime.reactivity import state
 from squid_ui.semantic import (
     ActionControl,
-    AnyLayoutNode,
     Choice,
     ChoiceEvent,
     Choices,
     Emphasis,
     FormTrigger,
+    LayoutNode,
     RoutedActionControl,
     RoutedChoices,
     Tone,
 )
+from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentItem
 
@@ -56,13 +58,22 @@ type TransitionHandler[StateT] = Callable[[TransitionEvent[StateT]], Awaitable[N
 type RouteEncoder[StateT] = Callable[[TransitionRoute[StateT]], str]
 
 
-class StateMachine[StateT](Protocol):
+class _MissingInitialState:
+    pass
+
+
+_MISSING_INITIAL_STATE = _MissingInitialState()
+
+
+class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol):
     """A pure state machine that describes a tree through injected controls."""
 
     @property
     def initial_state(self) -> StateT: ...
 
-    def render(self, state: StateT, controls: MachineControls[StateT]) -> RenderResult: ...
+    def render(
+        self, state: StateT, controls: MachineControls[StateT, RenderTargetT]
+    ) -> DocumentLike[RenderTargetT]: ...
 
     def transition(
         self,
@@ -75,7 +86,9 @@ class StateMachine[StateT](Protocol):
 
 
 @runtime_checkable
-class FormPresentingMachine[StateT](StateMachine[StateT], Protocol):
+class FormPresentingMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](
+    StateMachine[StateT, RenderTargetT], Protocol
+):
     """A machine that can answer one of its own actions with a form.
 
     Not every machine has forms, so this is a separate shape rather than an optional method
@@ -85,13 +98,15 @@ class FormPresentingMachine[StateT](StateMachine[StateT], Protocol):
     def form_for(self, state: StateT, action: str) -> FormSpec | None: ...
 
 
-class MachineControls[StateT](Protocol):
+class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol):
     """Control and content construction injected into a pure machine render."""
 
     @property
     def chrome(self) -> Chrome: ...
 
-    def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[AnyLayoutNode, ...]: ...
+    def content(
+        self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
+    ) -> tuple[LayoutNode[RenderTargetT], ...]: ...
 
     def action_control(
         self,
@@ -129,29 +144,50 @@ class MachineControls[StateT](Protocol):
     ) -> FormTrigger | RoutedActionControl: ...
 
 
-class ComponentDriver[StateT](Component):
+class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Component[RenderTargetT]):
     """Store machine state in ``sl.state`` and inject closure-backed controls."""
 
     # RouteDriver is the restart boundary; a generic state dataclass has no honest JSON
     # decoder for durable component restoration.
-    machine_state: Any = state(persist=False)
+    machine_state: StateT = state(persist=False)
+
+    @overload
+    def __init__(
+        self,
+        machine: StateMachine[StateT, RenderTargetT],
+        *,
+        on_change: TransitionHandler[StateT] | None = None,
+        handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
+        finish_actions: Collection[str] = (),
+    ) -> None: ...
+
+    @overload
+    def __init__(
+        self,
+        machine: StateMachine[StateT, RenderTargetT],
+        *,
+        initial: StateT,
+        on_change: TransitionHandler[StateT] | None = None,
+        handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
+        finish_actions: Collection[str] = (),
+    ) -> None: ...
 
     def __init__(
         self,
-        machine: StateMachine[StateT],
+        machine: StateMachine[StateT, RenderTargetT],
         *,
-        initial: StateT | None = None,
+        initial: StateT | _MissingInitialState = _MISSING_INITIAL_STATE,
         on_change: TransitionHandler[StateT] | None = None,
         handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
         finish_actions: Collection[str] = (),
     ) -> None:
         self.machine = machine
-        self.machine_state = machine.initial_state if initial is None else initial
+        self.machine_state = machine.initial_state if isinstance(initial, _MissingInitialState) else initial
         self.on_change = on_change
         self.handlers = dict(handlers or {})
         self.finish_actions = frozenset(finish_actions)
 
-    def render(self) -> RenderResult:
+    def render(self) -> DocumentLike[RenderTargetT]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         return self.machine.render(self.machine_state, _ComponentControls(self, chrome))
 
@@ -175,12 +211,14 @@ class ComponentDriver[StateT](Component):
             await event.finish()
 
 
-class _ComponentControls[StateT]:
-    def __init__(self, owner: ComponentDriver[StateT], chrome: Chrome) -> None:
+class _ComponentControls[StateT, RenderTargetT: RenderTarget]:
+    def __init__(self, owner: ComponentDriver[StateT, RenderTargetT], chrome: Chrome) -> None:
         self.owner = owner
         self.chrome = chrome
 
-    def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[AnyLayoutNode, ...]:
+    def content(
+        self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
+    ) -> tuple[LayoutNode[RenderTargetT], ...]:
         return tuple(
             self.owner.boundary(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
             for index, item in enumerate(content)
@@ -248,7 +286,7 @@ class _ComponentControls[StateT]:
 
 
 @dataclass(frozen=True, slots=True)
-class RouteDriver[StateT]:
+class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
     """Inject route-backed controls into a stateless machine render.
 
     A host route decodes ``TransitionRoute.state``, calls :meth:`transition` when the
@@ -258,12 +296,12 @@ class RouteDriver[StateT]:
     route: RouteEncoder[StateT]
     chrome: Chrome = DEFAULT_CHROME
 
-    def render(self, machine: StateMachine[StateT], state: StateT) -> RenderResult:
+    def render(self, machine: StateMachine[StateT, RenderTargetT], state: StateT) -> DocumentLike[RenderTargetT]:
         return machine.render(state, _RoutedControls(machine, state, self.route, self.chrome))
 
     def transition(
         self,
-        machine: StateMachine[StateT],
+        machine: StateMachine[StateT, RenderTargetT],
         state: StateT,
         action_name: str,
         *,
@@ -274,10 +312,10 @@ class RouteDriver[StateT]:
         return machine.transition(state, action_name, values=values, submitted=submitted)
 
 
-class _RoutedControls[StateT]:
+class _RoutedControls[StateT, RenderTargetT: RenderTarget]:
     def __init__(
         self,
-        machine: StateMachine[StateT],
+        machine: StateMachine[StateT, RenderTargetT],
         current: StateT,
         route: RouteEncoder[StateT],
         chrome: Chrome,
@@ -287,9 +325,11 @@ class _RoutedControls[StateT]:
         self.route = route
         self.chrome = chrome
 
-    def content(self, content: Sequence[ContentItem], *, prefix: str) -> tuple[AnyLayoutNode, ...]:
+    def content(
+        self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
+    ) -> tuple[LayoutNode[RenderTargetT], ...]:
         del prefix
-        nodes: list[AnyLayoutNode] = []
+        nodes: list[LayoutNode[RenderTargetT]] = []
         for item in content:
             if isinstance(item, Component):
                 message = (

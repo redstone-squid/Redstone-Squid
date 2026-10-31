@@ -3,14 +3,20 @@
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
 from squid_ui.forms import ChoiceOption, FormSpec, MultiChoiceField
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import Choice, ControlDisplay, FormTrigger, Tone, fallback
-from squid_ui.sources import Position
 from squid_ui.text import TextLike
+from squid_ui_widgets._actions import (
+    MachineKeySegment,
+    PageAction,
+    PageDirection,
+    keyed_action,
+    match_keyed_action,
+)
 from squid_ui_widgets._content import display_text, require_key
-from squid_ui_widgets._paging import window
+from squid_ui_widgets._paging import PagePosition, window
 from squid_ui_widgets.commit import CommitMode
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionEvent
 
@@ -19,10 +25,10 @@ from squid_ui_widgets.drivers import ComponentDriver, MachineControls, Transitio
 class MultiChoiceGroup:
     """One labelled option group and the groups it excludes."""
 
-    key: str
+    key: MachineKeySegment
     label: TextLike
     choices: tuple[Choice, ...]
-    exclusive_with: tuple[str, ...] = ()
+    exclusive_with: tuple[MachineKeySegment, ...] = ()
 
     def __init__(
         self,
@@ -32,7 +38,7 @@ class MultiChoiceGroup:
         *,
         exclusive_with: Iterable[str] = (),
     ) -> None:
-        require_key(key, name="MultiChoiceGroup.key")
+        key = MachineKeySegment(key, name="MultiChoiceGroup.key")
         entries = tuple(choices)
         keys = [entry.key for entry in entries]
         if not entries:
@@ -44,7 +50,11 @@ class MultiChoiceGroup:
         object.__setattr__(self, "key", key)
         object.__setattr__(self, "label", label)
         object.__setattr__(self, "choices", entries)
-        object.__setattr__(self, "exclusive_with", tuple(exclusive_with))
+        object.__setattr__(
+            self,
+            "exclusive_with",
+            tuple(MachineKeySegment(rival, name="MultiChoiceGroup.exclusive_with") for rival in exclusive_with),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +63,7 @@ class MultiChoiceState:
 
     staged: tuple[str, ...] = ()
     committed: tuple[str, ...] = ()
-    pages: tuple[tuple[str, int], ...] = ()
+    pages: tuple[tuple[MachineKeySegment, int], ...] = ()
 
 
 type MultiChoiceCommitHandler = Callable[[TransitionEvent[MultiChoiceState], tuple[str, ...]], Awaitable[None]]
@@ -133,6 +143,8 @@ class MultiChoice:
             if on_commit is not None and event.state.committed != event.previous.committed:
                 await on_commit(event, event.state.committed)
 
+        if initial is None:
+            return ComponentDriver(self, on_change=changed)
         return ComponentDriver(self, initial=initial, on_change=changed)
 
     def _ordered(self, selected: Iterable[str]) -> tuple[str, ...]:
@@ -142,7 +154,7 @@ class MultiChoice:
         )
 
     @staticmethod
-    def _pages(state: MultiChoiceState) -> dict[str, int]:
+    def _pages(state: MultiChoiceState) -> dict[MachineKeySegment, int]:
         return dict(state.pages)
 
     def _window(
@@ -151,14 +163,14 @@ class MultiChoice:
         visible, position, extent = window(
             group.choices,
             key=f"{self.key}.{group.key}",
-            position=Position(offset=self._pages(state).get(group.key, 0)),
+            position=PagePosition(self._pages(state).get(group.key, 0)),
             per_page=self.window_size,
             chrome=controls.chrome,
             identity=lambda entry: entry.key,
         )
-        return visible, position.offset, extent
+        return visible, position.index, extent
 
-    def _rivals(self, group_key: str) -> frozenset[str]:
+    def _rivals(self, group_key: MachineKeySegment) -> frozenset[MachineKeySegment]:
         direct = next(group.exclusive_with for group in self.groups if group.key == group_key)
         inverse = tuple(group.key for group in self.groups if group_key in group.exclusive_with)
         return frozenset((*direct, *inverse))
@@ -202,16 +214,21 @@ class MultiChoice:
             )
             selected = tuple(key for key in self._choice_order if key in values)
             return self._commit_valid(MultiChoiceState(selected, state.committed, state.pages))
-        if action.startswith("page:"):
-            _prefix, group_key, direction = action.split(":", 2)
+        if page_action := PageAction.parse(action):
+            group = next((group for group in self.groups if group.key == page_action.key), None)
+            if group is None:
+                return state
             pages = self._pages(state)
-            delta = -1 if direction == "previous" else 1
-            pages[group_key] = max(0, pages.get(group_key, 0) + delta)
+            last_page = (len(group.choices) - 1) // self.window_size
+            pages[page_action.key] = min(
+                last_page,
+                max(0, pages.get(page_action.key, 0) + page_action.direction.delta),
+            )
             return MultiChoiceState(state.staged, state.committed, tuple(pages.items()))
-        if not action.startswith("select:"):
+        group_key = match_keyed_action(action, "select")
+        if group_key is None:
             return state
 
-        group_key = action.removeprefix("select:")
         group = next((item for item in self.groups if item.key == group_key), None)
         if group is None:
             return state
@@ -264,7 +281,7 @@ class MultiChoice:
             prefill={"selection": state.staged},
         )
 
-    def render(self, state: MultiChoiceState, controls: MachineControls[MultiChoiceState]) -> RenderResult:
+    def render(self, state: MultiChoiceState, controls: MachineControls[MultiChoiceState]) -> DocumentLike:
         group_nodes = []
         staged = set(state.staged)
         for group in self.groups:
@@ -275,7 +292,7 @@ class MultiChoice:
             picker = (
                 controls.choices(
                     visible,
-                    f"select:{group.key}",
+                    keyed_action("select", group.key),
                     key=f"{self.key}.{group.key}.select",
                     selected=tuple(key for key in state.staged if key in visible_keys),
                     minimum=0,
@@ -289,13 +306,13 @@ class MultiChoice:
                 action_controls(
                     controls.action_control(
                         controls.chrome.previous,
-                        f"page:{group.key}:previous",
+                        PageAction(group.key, PageDirection.PREVIOUS).encode(),
                         key=f"{self.key}.{group.key}.previous",
                         available=page > 0,
                     ),
                     controls.action_control(
                         controls.chrome.next,
-                        f"page:{group.key}:next",
+                        PageAction(group.key, PageDirection.NEXT).encode(),
                         key=f"{self.key}.{group.key}.next",
                         available=page < pages - 1,
                     ),

@@ -129,6 +129,7 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
                 chrome.back,
                 chrome.home,
                 chrome.close,
+                chrome.cancel,
                 chrome.page_footer(1, 2),
                 chrome.and_n_more(2),
             ),

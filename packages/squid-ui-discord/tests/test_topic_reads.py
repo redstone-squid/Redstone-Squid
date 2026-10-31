@@ -9,7 +9,6 @@ read still reaches the render that used the value.
 import asyncio
 from typing import Any
 
-import anyio
 import discord
 
 import squid_ui as sl
@@ -17,6 +16,7 @@ from squid_ui import Component, resource, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import LocalTopicBus, PendingMode, Topic
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
+from squid_ui_discord import testing as sd
 from squid_ui_discord.delivery import DeliveryResult, handle_for
 from squid_ui_discord.testing import delivered_to, fake_message
 
@@ -57,16 +57,9 @@ def counting_loader(values: list[str]):
     return load, lambda: loads
 
 
-async def drain(scheduler: MessageRootScheduler, bus: LocalTopicBus) -> None:
-    del bus
-    async with anyio.create_task_group() as tasks:
-        tasks.start_soon(scheduler.run)
-        await asyncio.wait_for(scheduler._queue.join(), timeout=1)
-        tasks.cancel_scope.cancel()
-
-
 def texts(view: discord.ui.LayoutView) -> str:
-    return "\n".join(item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+    """This file reads the whole render as one blob; the walk itself is `sd.payload_texts`."""
+    return "\n".join(sd.payload_texts(view))
 
 
 async def mounted(
@@ -133,7 +126,7 @@ async def test_one_publish_refreshes_a_watching_message_root_exactly_once() -> N
     message_root.refresh = refresh  # pyrefly: ignore
 
     bus.publish(BUILD)
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
     assert refreshes == 1
 
@@ -146,7 +139,7 @@ async def test_a_publish_reloads_the_resource_and_redraws_the_new_value() -> Non
     assert loads() == 1
 
     bus.publish(BUILD)
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
     assert loads() == 2
     assert "ready:second" in texts(message.edit.await_args.kwargs["view"])
@@ -159,7 +152,7 @@ async def test_an_unrelated_publish_does_not_reload() -> None:
     await mounted(Watcher(load), bus, scheduler)
 
     bus.publish(OTHER)
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
     assert loads() == 1
 
@@ -209,7 +202,7 @@ async def test_a_publish_during_the_load_is_not_lost() -> None:
     await message_root.send(destination)
 
     assert released.is_set()
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
     # The stale value never reached Discord at all: an atomic resource re-settles before it
     # draws, so the publish is absorbed inside the send rather than costing a second edit.

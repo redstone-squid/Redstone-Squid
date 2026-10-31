@@ -2,7 +2,8 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from squid_ui.planning.adapter import AdapterProfile
+from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
+from squid_ui.planning.resources import Axis
 from squid_ui.planning.target import PreparedExtension, ResourceCost
 from squid_ui.planning.types import DiscordAdapter
 
@@ -17,7 +18,7 @@ class ExampleExtension:
 
 
 def test_adapter_profile_freezes_capabilities_and_extensions() -> None:
-    capabilities = {"adapter.discord.dispatch"}
+    capabilities = {AdapterCapability.DISPATCH}
     extensions = {"example": ExampleExtension()}
     profile = AdapterProfile(
         AlternateAdapter,
@@ -27,7 +28,7 @@ def test_adapter_profile_freezes_capabilities_and_extensions() -> None:
         extensions,
     )
 
-    capabilities.add("later")
+    capabilities.add(AdapterCapability.RENDER_HTML)
     extensions["later"] = ExampleExtension()
 
     assert profile.capabilities == frozenset({"adapter.discord.dispatch"})
@@ -40,6 +41,13 @@ def test_adapter_profile_freezes_capabilities_and_extensions() -> None:
         profile.extensions["new"] = ExampleExtension()  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):
         profile.name = "changed"  # type: ignore[misc]
+
+
+def test_resource_cost_values_are_immutable() -> None:
+    cost = ResourceCost()
+
+    with pytest.raises(TypeError):
+        cost.values[Axis.COMPONENTS] = 1  # type: ignore[index]
 
 
 @pytest.mark.parametrize("name, expression", [("", ">=1"), ("example", "")])

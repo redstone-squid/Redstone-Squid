@@ -1,9 +1,9 @@
 """Resource-backed master-detail browsing."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Any
 
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
+from squid_ui.document import DocumentLike
 from squid_ui.factories import (
     action_control,
     action_controls,
@@ -19,12 +19,12 @@ from squid_ui.factories import (
 from squid_ui.interactions import ActionEvent
 from squid_ui.planning.navigation import (
     NAV_FACTORY_CONTEXT,
+    MountNavNode,
     NavigationContext,
     NavigationState,
-    NavNode,
     default_nav,
 )
-from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.runtime.component import Component
 from squid_ui.runtime.reactivity import state
 from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
@@ -37,6 +37,7 @@ from squid_ui.sources import (
     WindowSource,
     window_footer,
 )
+from squid_ui.target_types import DiscordTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentLike, normalize_content, render_content, require_key
 from squid_ui_widgets._window import (
@@ -47,17 +48,19 @@ from squid_ui_widgets._window import (
     load_window,
 )
 
-type BrowserDetail[ItemT] = Callable[[ItemT], ContentLike | Component[Any]]
+type BrowserDetail[ItemT, RenderTargetT: DiscordTarget = DiscordTarget] = Callable[[ItemT], ContentLike[RenderTargetT]]
 type BrowserOpenHandler[ItemT] = Callable[[ActionEvent, ItemT], Awaitable[None]]
-type BrowserOverview[ItemT] = Callable[[LoadedWindow[ItemT]], ContentLike]
+type BrowserOverview[ItemT, RenderTargetT: DiscordTarget = DiscordTarget] = Callable[
+    [LoadedWindow[ItemT]], ContentLike[RenderTargetT]
+]
 
 
-class Browser[ItemT](Component[Any]):
+class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[RenderTargetT]):
     """Browse a remote window, open one item, and act within its detail."""
 
     _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
     opened: ItemT | None = state(None, persist=False, opaque=True)
-    _detail_value: object | None = state(None, persist=False, opaque=True)
+    _detail_value: ContentLike[RenderTargetT] | None = state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -66,14 +69,14 @@ class Browser[ItemT](Component[Any]):
         key: str = "browser",
         identity: Callable[[ItemT], str],
         label: Callable[[ItemT], TextLike],
-        detail: BrowserDetail[ItemT],
+        detail: BrowserDetail[ItemT, RenderTargetT],
         summary: Callable[[ItemT], TextLike] | None = None,
         entry_actions: Callable[[ItemT], Sequence[ActionControl | Link]] | None = None,
-        overview: BrowserOverview[ItemT] | None = None,
+        overview: BrowserOverview[ItemT, RenderTargetT] | None = None,
         page_size: int = 10,
         on_open: BrowserOpenHandler[ItemT] | None = None,
         title: TextLike | None = None,
-        empty: ContentLike = "No entries",
+        empty: ContentLike[RenderTargetT] = "No entries",
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
     ) -> None:
         self.key = require_key(key, name="Browser.key")
@@ -167,7 +170,7 @@ class Browser[ItemT](Component[Any]):
     async def _next_item(self, event: ActionEvent) -> None:
         await self._adjacent(event, 1)
 
-    def render(self) -> RenderResult[Any]:
+    def render(self) -> DocumentLike[RenderTargetT]:
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
         # checker saw a path with no return on a shape that cannot occur.
@@ -183,7 +186,7 @@ class Browser[ItemT](Component[Any]):
                     return self._status(self.copy.failed, retry=True)
                 return self._render_loaded(previous.value, status_text=self.copy.failed, retry=True)
 
-    def _status(self, message: TextLike, *, retry: bool = False) -> RenderResult[Any]:
+    def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT]:
         return stack(
             heading(self.title) if self.title is not None else None,
             note(message),
@@ -200,7 +203,7 @@ class Browser[ItemT](Component[Any]):
         *,
         status_text: TextLike | None = None,
         retry: bool = False,
-    ) -> RenderResult[Any]:
+    ) -> DocumentLike[RenderTargetT]:
         opened = None
         if self.opened is not None:
             opened = next(
@@ -217,7 +220,7 @@ class Browser[ItemT](Component[Any]):
         *,
         status_text: TextLike | None,
         retry: bool,
-    ) -> RenderResult[Any]:
+    ) -> DocumentLike[RenderTargetT]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         extra = (
@@ -257,7 +260,7 @@ class Browser[ItemT](Component[Any]):
             note(footer) if (footer := window_footer(chrome, self.source, loaded, self.page_size)) else None,
         )
 
-    def _navigation(self, loaded: LoadedWindow[ItemT]) -> tuple[NavNode, ...]:
+    def _navigation(self, loaded: LoadedWindow[ItemT]) -> tuple[MountNavNode, ...]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)
         window = loaded.window
@@ -312,16 +315,18 @@ class Browser[ItemT](Component[Any]):
         *,
         status_text: TextLike | None,
         retry: bool,
-    ) -> RenderResult[Any]:
+    ) -> DocumentLike[RenderTargetT]:
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
         index = next(index for index, candidate in enumerate(items) if self.identity(candidate) == self.identity(item))
+        detail_value = self._detail_value
+        assert detail_value is not None
         detail = (
-            (self.boundary(self._detail_value, key=f"detail-{self.identity(item)}"),)
-            if isinstance(self._detail_value, Component)
+            (self.boundary(detail_value, key=f"detail-{self.identity(item)}"),)
+            if isinstance(detail_value, Component)
             else render_content(
                 self,
-                normalize_content(self._detail_value, name="Browser.detail"),
+                normalize_content(detail_value, name="Browser.detail"),
                 prefix=f"detail-{self.identity(item)}",
             )
         )

@@ -1,86 +1,40 @@
 """A cog for verifying minecraft accounts."""
 
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-import anyio
 import discord
 from discord import app_commands
-from discord.ext.commands import Cog, Context, hybrid_group
+from discord.ext.commands import Cog
 
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import (
-    CURRENT_CONSENT_VERSION,
     Account,
+    AccountConsent,
     AccountIdentity,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
 )
-from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
-from squid.bot.account_view import AccountPanel
-from squid.bot.claims_view import ClaimReviewComponent
-from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent
+from squid.bot.account_workspace import AccountWorkspace
+from squid.bot.consent import request_consent
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.profile_render import (
     public_profile_fields,
 )
-from squid.bot.ui import L, card_node, text_node
-from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import PermissionNodeRequired, requires, subject_for
+from squid.bot.ui import card_node, text_node
+from squid.bot.utils.permissions import allows
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
     ACCOUNT_CLAIM_REJECT,
-    ACCOUNT_IDENTITY_REFRESH_ANY,
 )
 
 if TYPE_CHECKING:
     import squid.bot.app
-
-
-class MergeConfirmation(sl.Component[sl.ComponentsV2Target]):
-    """A short-lived semantic confirmation for account merges."""
-
-    value: bool | None = sl.state(None)
-
-    def __init__(self, prompt: sl.TextLike, *, author_id: int, timeout: float = 60) -> None:
-        self.prompt = prompt
-        self.author_id = author_id
-        self._timeout = timeout
-        self._done = anyio.Event()
-
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-        return (
-            sl.section(sl.heading(L("Confirm account merge")), sl.paragraph(self.prompt)),
-            sl.action_controls(
-                sl.action_control(
-                    L("Confirm"),
-                    self._confirm,
-                    key="confirm",
-                    tone=sl.Tone.SUCCESS,
-                ),
-                sl.action_control(L("Cancel"), self._cancel, key="cancel"),
-                key="merge-actions",
-            ),
-        )
-
-    async def _confirm(self, event: sl.PressEvent) -> None:
-        self.value = True
-        self._done.set()
-        await event.finish()
-
-    async def _cancel(self, event: sl.PressEvent) -> None:
-        self.value = False
-        self._done.set()
-        await event.finish()
-
-    async def wait(self) -> bool | None:
-        with anyio.move_on_after(self._timeout) as scope:
-            await self._done.wait()
-        return None if scope.cancel_called else self.value
 
 
 class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
@@ -88,43 +42,64 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         self.bot = bot
         self.account_service = bot.services.accounts
 
-    @hybrid_group(name="account", fallback="show")
+    @app_commands.command(name="account", description="Manage your account or view a creator page")
     @app_commands.describe(user=app_commands.locale_str(_("Whose creator page to show. Defaults to your own account.")))
-    async def account_group(self, ctx: Context[BotT], user: discord.Member | discord.User | None = None) -> None:
+    async def account(
+        self, interaction: discord.Interaction[BotT], user: discord.Member | discord.User | None = None
+    ) -> None:
         """Show your account, or somebody else's creator page."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        if user is not None and user.id != ctx.author.id:
-            await self._show_creator_page(ctx, user, locale)
+        locale = await resolve_locale(interaction, self.bot.services.settings)
+        if user is not None and user.id != interaction.user.id:
+            await self._show_creator_page(interaction, user, locale)
             return
 
-        # Read without creating: looking at your own account is not evidence that anybody asked
-        # to be remembered, and there is nothing to show for someone with no account anyway.
-        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
-        if account is None or account.id is None:
-            await invocation.reply(
-                text_node(t(locale, _("You don't have any linked accounts yet. Link one with `/account link`."))),
-                visibility="personal",
+        account = await self.account_service.get_account_by_identity(
+            IdentityProvider.DISCORD,
+            str(interaction.user.id),
+        )
+        if account is not None:
+            await self._refresh_discord_avatar_key(account, interaction.user)
+
+        async def open_consent(
+            event: sl.ActionEvent,
+            answered: Callable[[AccountConsent | None], Awaitable[None]],
+        ) -> None:
+            message_root = sd.responder(event).message_root
+
+            async def completed(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+                await answered(consent)
+                if consent is not None:
+                    await message_root.schedule()
+
+            await request_consent(
+                sd.native(event),
+                user_id=interaction.user.id,
+                on_answer=completed,
+                parent=message_root,
             )
-            return
 
-        await self._refresh_discord_avatar_key(account, ctx.author)
-        component = AccountPanel(
+        async def authorize_claim(node) -> bool:
+            return await allows(interaction, node)
+
+        await AccountWorkspace(
             accounts=self.account_service,
-            account_id=account.id,
-            author_id=ctx.author.id,
-        )
-        message_root = await invocation.mount(
-            component,
-            access=sd.Owner(ctx.author.id),
-            visibility="personal",
-            timeout=300,
-        )
-        component._root = message_root
+            actor_id=interaction.user.id,
+            account=account,
+            request_consent=open_consent,
+            can_review_claims=await allows(interaction, ACCOUNT_CLAIM_LIST),
+            can_approve_claims=await allows(interaction, ACCOUNT_CLAIM_APPROVE),
+            can_reject_claims=await allows(interaction, ACCOUNT_CLAIM_REJECT),
+            authorize_claim=authorize_claim,
+        ).show(interaction)
 
-    async def _show_creator_page(self, ctx: Context[BotT], user: discord.Member | discord.User, locale: str) -> None:
+    async def _show_creator_page(
+        self,
+        interaction: discord.Interaction[BotT],
+        user: discord.Member | discord.User,
+        locale: str,
+    ) -> None:
         """Show somebody else's page, which is shared content and answers where the channel sees it."""
-        invocation = await sd.Invocation.of(ctx)
+        invocation = await sd.Invocation.of(interaction)
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
         if account is None or account.public_creator_id is None:
             await invocation.reply(
@@ -134,97 +109,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
             return
         node = await self._public_profile_card(account.public_creator_id, user.display_name, locale)
         await invocation.reply(node)
-
-    @account_group.command(name="link")
-    @app_commands.describe(code=app_commands.locale_str(_("The code you received by running /link in the game.")))
-    async def link(self, ctx: Context[BotT], code: str):
-        """Link your minecraft account."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        attempted_by = (IdentityProvider.DISCORD, str(ctx.author.id))
-
-        # Read without creating: nobody gets an account row for typing a code that turns out to be
-        # wrong, and the conflict checks below need whatever they already have.
-        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
-        existing_java = None if account is None else account.identity(IdentityProvider.JAVA)
-
-        # Hold the code before prompting, so a wrong code fails here rather than after the notice has
-        # been read and agreed to, and so the prompt can say what it is actually asking about.
-        reservation = await self.account_service.reserve_minecraft_link(code, attempted_by=attempted_by)
-        committed = False
-        try:
-            conflict = _link_conflict(reservation.preview, existing_java)
-            if conflict is not None:
-                raise AccountAlreadyLinkedError(
-                    minecraft_uuid=conflict,
-                    account_id=None if account is None else account.id,
-                    provider=IdentityProvider.DISCORD,
-                    subject=str(ctx.author.id),
-                )
-
-            consent = await prompt_for_consent(ctx, user_id=ctx.author.id, preview=reservation.preview)
-            if consent is NOT_ASKED:
-                # The user was never asked and already knows why; a cancellation notice here
-                # would be reporting something that did not happen.
-                return
-            if consent is None:
-                await invocation.reply(
-                    text_node(t(locale, _("Account linking cancelled. No user account information was stored."))),
-                    visibility="personal",
-                )
-                return
-
-            # The account is created here rather than by the redemption, which is evidence of a
-            # Java subject and of nothing else. This command is reached over the gateway, so it
-            # genuinely holds the Discord identity it is about to mint, and it carries the receipt
-            # into the same write so a row never exists without one.
-            account = await self.account_service.get_or_create_identity(
-                IdentityProvider.DISCORD, str(ctx.author.id), consent=consent
-            )
-            assert account.id is not None, "get_or_create_identity always returns a persisted account"
-            account_id = account.id
-            refresh = await self.account_service.link_minecraft_account(
-                account_id,
-                code,
-                consent=consent,
-                attempted_by=attempted_by,
-                reservation=reservation,
-            )
-            committed = True
-        finally:
-            # Every exit that did not redeem gives the code back, so a conflict, a cancellation or a
-            # timeout can be retried at once instead of waiting out the hold.
-            if not committed:
-                await self.account_service.release_minecraft_link(code, reservation)
-
-        await invocation.reply(text_node(_link_message(refresh, locale)), visibility="personal")
-
-    @account_group.command(name="consent")
-    async def consent(self, ctx: Context[BotT]) -> None:
-        """Read the privacy notice and accept it."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
-        if account is not None and account.id is not None and not account.needs_consent_refresh:
-            await invocation.reply(
-                text_node(
-                    t(
-                        locale,
-                        _("You have already accepted notice `{version}`. Press the button to read it again."),
-                        version=CURRENT_CONSENT_VERSION,
-                    )
-                ),
-                visibility="personal",
-            )
-            return
-
-        account_id = await ensure_consented_account(ctx, self.account_service)
-        if account_id is None:
-            return
-        await invocation.reply(
-            text_node(t(locale, _("Thanks. You can use the bot's other commands now."))),
-            visibility="personal",
-        )
 
     async def _public_profile_card(self, public_id: UUID, fallback_name: str, locale: str):
         """Render somebody else's page from the same filtered view the API serves."""
@@ -264,153 +148,6 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="verify"):
         key = user.avatar.key if user.avatar is not None else None
         if key != identity.avatar_key:
             await self.account_service.record_identity_avatar_key(account.id, identity.id, key)
-
-    @account_group.command(name="refresh")
-    @app_commands.describe(
-        user=app_commands.locale_str(_("Whose linked account to refresh. Staff only; defaults to you."))
-    )
-    async def refresh(self, ctx: Context[BotT], user: discord.Member | discord.User | None = None) -> None:
-        """Re-read your Minecraft name after a rename and update your creator credit."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        target = user or ctx.author
-        if target.id != ctx.author.id:
-            # Checked here rather than by `@requires`, because refreshing your own account is
-            # allowed by default and only the staff form needs the moderation node.
-            subject = await subject_for(ctx)
-            if not await self.bot.services.permissions.allows(subject, ACCOUNT_IDENTITY_REFRESH_ANY):
-                raise PermissionNodeRequired((ACCOUNT_IDENTITY_REFRESH_ANY.name,))
-        account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(target.id))
-        if account is None or account.id is None:
-            raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(target.id))
-
-        refresh = await self.account_service.refresh_java_identity(account.id)
-        await invocation.reply(text_node(_refresh_message(refresh, locale)), visibility="personal")
-
-    @account_group.command(name="merge-code")
-    async def merge_code(self, ctx: Context[BotT]) -> None:
-        """Offer this account up to be absorbed by another account you hold."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.account_service)
-        if account_id is None:
-            return
-        code, ticket = await self.account_service.create_merge_code(account_id)
-        # The comment here used to say "always ephemeral, even from a prefix invocation", which
-        # `Context.send` cannot honour: it drops the flag without an interaction, so `!account
-        # merge-code` posted an account-takeover credential into the channel.
-        await invocation.reply(
-            card_node(
-                t(locale, _("Merge code")),
-                t(
-                    locale,
-                    _(
-                        "Run `/account merge {code}` while signed in as the account you want to **keep**. "
-                        "This account is the one that will be absorbed."
-                    ),
-                    code=code,
-                ),
-                footer=t(
-                    locale,
-                    _("Expires {expiry}. Give it to nobody but yourself: it hands this account over."),
-                    expiry=discord.utils.format_dt(ticket.expires_at.to_stdlib(), style="R"),
-                ),
-            ),
-            visibility=sd.Private(
-                t(locale, _("A merge code hands this account over, so it is never posted in a channel."))
-            ),
-        )
-
-    @account_group.command(name="merge")
-    @app_commands.describe(code=app_commands.locale_str(_("A code from `/account merge-code` on your other account.")))
-    async def merge(self, ctx: Context[BotT], code: str) -> None:
-        """Absorb another account you hold into this one."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.account_service)
-        if account_id is None:
-            return
-        preview = await self.account_service.preview_merge(account_id, code)
-
-        confirmation = MergeConfirmation(
-            L(
-                "Merging will move {aliases} creator name(s) and {identities} linked account(s) "
-                "onto this account, along with {builds} build credit(s).\n\n"
-                "This cannot be undone: the other account's creator page will permanently "
-                "redirect here.",
-                aliases=len(preview.alias_names),
-                identities=preview.identity_count,
-                builds=preview.build_count,
-            ),
-            author_id=ctx.author.id,
-        )
-        await invocation.mount(
-            confirmation,
-            access=sd.Owner(ctx.author.id),
-            visibility="personal",
-            timeout=60,
-        )
-        await confirmation.wait()
-
-        if confirmation.value is None:
-            message = t(locale, _("The confirmation expired, so nothing was merged."))
-        elif not confirmation.value:
-            message = t(locale, _("Cancelled. Nothing was merged."))
-        else:
-            merge = await self.account_service.complete_merge(account_id, code)
-            message = t(
-                locale,
-                _("Merged. `{redirected}` now redirects to your creator page."),
-                redirected=merge.redirected_public_creator_id,
-            )
-        await invocation.reply(text_node(message), visibility="personal")
-
-    @autocompletes(name="creators")
-    @account_group.command(name="claim")
-    @app_commands.describe(name=app_commands.locale_str(_("A creator name credited on builds you worked on.")))
-    async def claim(self, ctx: Context[BotT], *, name: str) -> None:
-        """Ask staff to credit you with an older creator name."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.account_service)
-        if account_id is None:
-            return
-        claim = await self.account_service.request_alias_claim(account_id, name)
-        await invocation.reply(
-            text_node(
-                t(
-                    locale,
-                    _("Claim #{id} for **{name}** is awaiting staff approval."),
-                    id=claim.id,
-                    name=claim.alias_name,
-                )
-            ),
-            visibility="personal",
-        )
-
-    @account_group.command(name="claims")
-    @requires(ACCOUNT_CLAIM_LIST)
-    async def pending_claims(self, ctx: Context[BotT]) -> None:
-        """Review the creator credit claims awaiting a decision."""
-        invocation = await sd.Invocation.of(ctx)
-        claims = await self.account_service.pending_alias_claims(with_claimants=True)
-        subject = await subject_for(ctx)
-        approve, reject = await self.bot.services.permissions.decisions(
-            subject, (ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT)
-        )
-        component = ClaimReviewComponent(
-            self.account_service,
-            claims,
-            author_id=ctx.author.id,
-            can_approve=approve.allowed,
-            can_reject=reject.allowed,
-        )
-        await invocation.mount(
-            component,
-            access=sd.Owner(ctx.author.id),
-            visibility="personal",
-            timeout=300,
-        )
 
 
 def _link_conflict(preview: LinkPreview, existing_java: AccountIdentity | None) -> UUID | None:

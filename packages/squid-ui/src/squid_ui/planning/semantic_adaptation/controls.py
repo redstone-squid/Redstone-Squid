@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import replace
 
 from squid_ui.capabilities import Capability
-from squid_ui.entity import EntityKind, EntityRef
+from squid_ui.entity import decode_entity_ref, encode_entity_ref
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.forms import FormBinding
 from squid_ui.planning.semantic_adaptation.common import (
@@ -12,9 +12,6 @@ from squid_ui.planning.semantic_adaptation.common import (
     _page_items,
     _resolve,
     _select_strategy,
-)
-from squid_ui.planning.semantic_adaptation.decisions import (
-    item_state as _item_state,
 )
 from squid_ui.planning.semantic_adaptation.decisions import (
     items_axis as _items_axis,
@@ -41,6 +38,17 @@ from squid_ui.planning.semantic_adaptation.handlers import (
 )
 from squid_ui.planning.semantic_adaptation.model import (
     LoweringContext as _Context,
+)
+from squid_ui.planning.structure import (
+    disclosure_state,
+    toggle_action_key,
+    toggle_state,
+)
+from squid_ui.planning.structure import (
+    item_state as _item_state,
+)
+from squid_ui.planning.structure import (
+    navigation_current as _navigation_current,
 )
 from squid_ui.primitives.constraints import (
     Never,
@@ -191,27 +199,18 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     return result
 
 
-def _entity_key(ref: EntityRef) -> str:
-    return f"{ref.kind.value}:{ref.id}"
-
-
-def _entity_ref(key: str) -> EntityRef:
-    kind, raw_id = key.split(":", 1)
-    return EntityRef(EntityKind(kind), int(raw_id))
-
-
 def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
     match node.selection:
         case Controlled(value=value):
             previous = tuple(value)
         case Uncontrolled(initial=initial):
-            initial_keys = tuple(_entity_key(value) for value in initial)
+            initial_keys = tuple(encode_entity_ref(value) for value in initial)
             stored = context.session.selection(node.key, initial=initial_keys).selected
-            previous = tuple(_entity_ref(key) for key in stored)
+            previous = tuple(decode_entity_ref(key) for key in stored)
 
     commit = EntityCommit(node.selection, node.key, previous, context.session)
 
-    if Capability.ACTIONS_DISCORD_ENTITY in context.capabilities:
+    if Capability.ACTIONS_ENTITY in context.capabilities:
         return [
             EntitySelect(
                 node.entity_type,
@@ -219,28 +218,28 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
                 node.key,
                 placeholder=_resolve(node.placeholder, context) if node.placeholder is not None else None,
                 default_values=previous,
-                channel_types=node.channel_types,
+                conversation_types=node.conversation_types,
                 min_values=node.minimum,
                 max_values=node.maximum,
             )
         ]
     if not node.choices:
-        message = f"{path}: Entities requires actions.discord.entity or enumerated fallback choices"
+        message = f"{path}: Entities requires actions.entity or enumerated fallback choices"
         raise LayoutInvariantError(message)
 
     available = tuple(choice for choice in node.choices if choice.available)
-    by_key = {_entity_key(choice.ref): choice.ref for choice in available}
-    previous = tuple(value for value in previous if _entity_key(value) in by_key)
+    by_key = {encode_entity_ref(choice.ref): choice.ref for choice in available}
+    previous = tuple(value for value in previous if encode_entity_ref(value) in by_key)
     commit = EntityCommit(node.selection, node.key, previous, context.session)
 
     fallback = Choices(
         key=node.key,
         choices=tuple(
-            Choice(_entity_key(choice.ref), choice.label, choice.description, choice.available)
+            Choice(encode_entity_ref(choice.ref), choice.label, choice.description, choice.available)
             for choice in node.choices
         ),
         selection=Controlled(
-            tuple(_entity_key(value) for value in previous),
+            tuple(encode_entity_ref(value) for value in previous),
             SelectEntityFallback(commit, by_key),
         ),
         minimum=node.minimum,
@@ -321,18 +320,7 @@ def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
     strategy = _select_strategy(_navigation_axis(node, path, context.limits, context.session), context)
     grouped = strategy == "grouped"
 
-    match node.current:
-        case Controlled(value=value):
-            current = value
-        case Uncontrolled(initial=initial):
-            # A remembered destination that has since gone unavailable is the engine's own
-            # stale data, so drop it. An author's value is theirs to be wrong about.
-            keys = {destination.key for destination in available}
-            seed = () if initial is None else (initial,)
-            remembered = context.session.selection(node.key, initial=seed).selected
-            current = remembered[0] if remembered and remembered[0] in keys else None
-    if current is None and available:
-        current = available[0].key
+    current = _navigation_current(node, context.session)
     commit = NavigationCommit(node.current, node.key, context.session)
 
     if grouped:
@@ -373,11 +361,7 @@ def _details(
     context: _Context,
     lower_children: Callable[[Sequence[LayoutNode], str, _Context], list[Node]],
 ) -> list[Node]:
-    match node.open:
-        case Controlled(value=value):
-            open_ = value
-        case Uncontrolled(initial=initial):
-            open_ = context.session.disclosure(node.key, initial=initial).open
+    open_ = disclosure_state(node, context.session)
 
     result: list[Node] = [
         Row(
@@ -385,7 +369,7 @@ def _details(
                 Button(
                     _resolve(node.summary.content, context),
                     ToggleDetails(node, open_, context.session),
-                    f"{node.key}.toggle",
+                    toggle_action_key(node.key),
                 ),
             )
         )
@@ -396,11 +380,7 @@ def _details(
 
 
 def _toggle(node: Toggle, context: _Context) -> list[Node]:
-    match node.on:
-        case Controlled(value=value):
-            on = value
-        case Uncontrolled(initial=initial):
-            on = context.session.toggle(node.key, initial=initial).on
+    on = toggle_state(node, context.session)
 
     state_label = node.on_label if on else node.off_label
     if state_label is None:

@@ -1,9 +1,9 @@
 """Native semantic-document planning for the HTML target."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, time
-from typing import Any, cast
+from typing import Any, assert_never, cast
 
 from squid_ui import forms as form_types
 from squid_ui import scene
@@ -11,11 +11,16 @@ from squid_ui import semantic as sem
 from squid_ui.assets import Asset
 from squid_ui.chrome import Chrome
 from squid_ui.document import DocumentLike, as_document
-from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
+from squid_ui.entity import EntityRef, encode_entity_ref
+from squid_ui.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.factories import is_builtin_layout_node, is_portable_node
 from squid_ui.forms import FormBinding
-from squid_ui.interactions import ActionBinding, ActionMode
-from squid_ui.palette import AccentDefault, Palette
+from squid_ui.guards import Guard
+from squid_ui.interactions import ActionBinding, ActionEvent, ActionMode, BusySpec
+from squid_ui.palette import Palette
+from squid_ui.planning.breaking import BreakItem, balanced_breaks
 from squid_ui.planning.cache import CachedPlan, PlanCache, PlanMemo
+from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.semantic_adaptation.handlers import (
@@ -32,8 +37,20 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     SelectEntities,
     ToggleDetails,
 )
+from squid_ui.planning.structure import (
+    branch_paths,
+    disclosure_state,
+    indexed_children,
+    item_state,
+    navigation_current,
+    resolve_accent,
+    scoped_palette,
+    toggle_action_key,
+    toggle_state,
+)
 from squid_ui.planning.target import Target
-from squid_ui.planning.text_allocation import allocate_pages, truncate_text
+from squid_ui.planning.text_allocation import truncate_text
+from squid_ui.runtime.histories import History
 from squid_ui.runtime.presentation_state import (
     ActivePagers,
     CursorState,
@@ -42,11 +59,58 @@ from squid_ui.runtime.presentation_state import (
     SessionUpdate,
 )
 from squid_ui.scene.model import PlanEvent, PlanMetrics, PlanReport, PlanResult, PlanReuse, PlanSeverity
-from squid_ui.sources import POSITION_RESOLVER, Direction, Position
+from squid_ui.sources import Direction, Position
 from squid_ui.target_types import HtmlTarget
 from squid_ui.text import Localization, TextLike, resolve_text
 
 type HtmlTargetT = Target[Any, scene.HtmlBody, HtmlTarget, Any]
+
+# The compiler's partition of the portable union, grouped by what compiling a member needs.
+# Private to this backend: the grouping is HTML's, not the vocabulary's. `compile` checks the
+# partition in both directions -- a member missing from its grouping arm fails `assert_never`,
+# and a member routed to a stage whose sub-union omits it fails at the call.
+type _Container = (
+    sem.Group[Any]
+    | sem.Stack[Any]
+    | sem.Cluster[Any]
+    | sem.Themed[Any]
+    | sem.Block[Any]
+    | sem.Section[Any]
+    | sem.Article[Any]
+    | sem.Aside[Any]
+)
+type _Display = (
+    sem.Heading
+    | sem.Paragraph
+    | sem.Note
+    | sem.List
+    | sem.Fields
+    | sem.Table
+    | sem.Quote
+    | sem.Code
+    | sem.Figure
+    | sem.Media
+    | sem.Status
+    | sem.ProgressBar
+    | sem.Roster
+    | sem.Grid
+    | sem.Metric
+    | sem.Timestamp
+    | sem.ZonedTimestamp
+)
+type _Interactive = (
+    sem.Details[Any]
+    | sem.Toggle
+    | sem.Download
+    | sem.FormTrigger
+    | sem.ActionControls
+    | sem.Choices
+    | sem.Entities
+    | sem.RoutedChoices
+    | sem.Items[Any]
+    | sem.Navigation
+)
+type _Adapted = sem.Adaptation[Any] | sem.FallbackContent[Any]
 
 
 def _attribute(name: scene.HtmlAttributeName, value: scene.HtmlAttributeValue) -> scene.HtmlAttribute:
@@ -60,6 +124,8 @@ def _attributes(
 
 
 def _entity_key(ref: object) -> str:
+    if isinstance(ref, EntityRef):
+        return encode_entity_ref(ref)
     kind = getattr(getattr(ref, "kind", None), "value", "entity")
     return f"{kind}:{getattr(ref, 'id', '')}"
 
@@ -164,63 +230,119 @@ class _Compiler:
             asset,
         )
 
-    def bind(
+    def bind[EventT: ActionEvent](
         self,
         key: str,
-        handler: object,
+        handler: Callable[[EventT], Awaitable[None]],
         *,
         mode: ActionMode = ActionMode.EXCLUSIVE,
         routes: Mapping[str, ActionBinding] | None = None,
-        guard: object | None = None,
-        busy: object | None = None,
+        guard: Guard | None = None,
+        busy: BusySpec | None = None,
         label: TextLike = "",
-        record: object | None = None,
+        record: History | None = None,
     ) -> scene.HtmlActionRef:
         if key in self.bindings:
             message = f"duplicate action key {key!r}"
             raise LayoutInvariantError(message)
         self.bindings[key] = ActionBinding(
             key,
-            cast(Any, handler),
+            handler,
             mode,
             {} if routes is None else routes,
-            cast(Any, guard),
-            cast(Any, busy),
+            guard,
+            busy,
             label,
-            cast(Any, record),
+            record,
         )
         return scene.HtmlActionRef(key, mode)
 
     def compile_children(self, children: Sequence[sem.AnyLayoutNode], path: str) -> tuple[scene.HtmlNode, ...]:
         return tuple(
-            compiled for index, child in enumerate(children) for compiled in self.compile(child, f"{path}.{index}")
+            compiled
+            for child, child_path in indexed_children(children, path)
+            for compiled in self.compile(child, child_path)
         )
 
     def compile(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...]:
         """Resolve one semantic node into the HTML nodes that stand for it.
 
-        The stages partition the semantic union by what compiling a member actually needs:
-        a wrapper around compiled children, a self-contained display element, a binding into
-        session state, or an adaptation to unwrap. Each returns `None` for a node it does not
-        claim — not an empty tuple, which is a legitimate result — so a union member added
-        without an arm still reaches the same rejection one long `match` gave it.
+        The stages partition the portable union by what compiling a member actually needs: a
+        wrapper around compiled children, a self-contained display element, a binding into
+        session state, or an adaptation to unwrap. The open `Renderable` escape is rejected
+        before the match, so the match is over the closed union and provably exhaustive.
         """
-        compiled = self._container(node, path)
-        if compiled is not None:
-            return compiled
-        compiled = self._display(node)
-        if compiled is not None:
-            return compiled
-        compiled = self._interactive(node, path)
-        if compiled is not None:
-            return compiled
-        compiled = self._adapted(node, path)
-        if compiled is not None:
-            return compiled
-        message = f"HTML planning accepts semantic nodes, not Discord-shaped primitive {type(node).__name__}"
-        raise LayoutInvariantError(message)
+        if not is_portable_node(node):
+            if is_builtin_layout_node(node):
+                message = (
+                    f"{path}: HTML planning accepts semantic nodes, not Discord-shaped primitive "
+                    f"{type(node).__name__}; author the portable vocabulary, or give the primitive "
+                    "a portable branch with fallback()"
+                )
+            else:
+                message = f"{path}: {type(node).__name__} is not a semantic layout node"
+            raise LayoutInvariantError(message)
+        match node:
+            case (
+                sem.Group()
+                | sem.Stack()
+                | sem.Cluster()
+                | sem.Themed()
+                | sem.Block()
+                | sem.Section()
+                | sem.Article()
+                | sem.Aside()
+            ):
+                return self._container(node, path)
+            case (
+                sem.Heading()
+                | sem.Paragraph()
+                | sem.Note()
+                | sem.List()
+                | sem.Fields()
+                | sem.Table()
+                | sem.Quote()
+                | sem.Code()
+                | sem.Figure()
+                | sem.Media()
+                | sem.Status()
+                | sem.ProgressBar()
+                | sem.Roster()
+                | sem.Grid()
+                | sem.Metric()
+                | sem.Timestamp()
+                | sem.ZonedTimestamp()
+            ):
+                return self._display(node)
+            case (
+                sem.Details()
+                | sem.Toggle()
+                | sem.Download()
+                | sem.FormTrigger()
+                | sem.ActionControls()
+                | sem.Choices()
+                | sem.Entities()
+                | sem.RoutedChoices()
+                | sem.Items()
+                | sem.Navigation()
+            ):
+                return self._interactive(node, path)
+            case (
+                sem.Truncated()
+                | sem.Spilled()
+                | sem.OptionalContent()
+                | sem.BestEffort()
+                | sem.Budgeted()
+                | sem.Unbreakable()
+                | sem.KeepWithNext()
+                | sem.Paged()
+                | sem.FallbackContent()
+            ):
+                return self._adapted(node, path)
+            case _ as unreachable:
+                assert_never(unreachable)
 
-    def _container(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...] | None:
+    def _container(self, node: _Container, path: str) -> tuple[scene.HtmlNode, ...]:
         """Wrap compiled children in the element carrying the node's grouping semantics."""
         match node:
             case sem.Group(children=children):
@@ -248,12 +370,8 @@ class _Compiler:
                     ),
                 )
             case sem.Themed(children=children, palette=palette):
-                previous = self.palette
-                self.palette = palette
-                try:
+                with scoped_palette(self, palette):
                     compiled = self.compile_children(children, path)
-                finally:
-                    self.palette = previous
                 return (
                     self.element(
                         scene.HtmlTag.DIV,
@@ -262,7 +380,7 @@ class _Compiler:
                     ),
                 )
             case sem.Block(children=children, accent=accent):
-                colour = self.palette.brand if accent is AccentDefault.INHERIT else accent
+                colour = resolve_accent(accent, self.palette)
                 return (
                     self.element(
                         scene.HtmlTag.SECTION,
@@ -272,7 +390,7 @@ class _Compiler:
                     ),
                 )
             case sem.Section(heading=heading, children=children, accent=accent, thumbnail=thumbnail):
-                colour = self.palette.brand if accent is AccentDefault.INHERIT else accent
+                colour = resolve_accent(accent, self.palette)
                 content = [self._heading(heading), *self.compile_children(children, path)]
                 if thumbnail is not None:
                     content.insert(
@@ -292,7 +410,7 @@ class _Compiler:
                     ),
                 )
             case sem.Article(heading=heading, children=children, accent=accent, thumbnail=thumbnail):
-                colour = self.palette.brand if accent is AccentDefault.INHERIT else accent
+                colour = resolve_accent(accent, self.palette)
                 content = [self._heading(heading), *self.compile_children(children, path)]
                 if thumbnail is not None:
                     content.insert(
@@ -323,10 +441,10 @@ class _Compiler:
                         colour=self.palette.tone(tone),
                     ),
                 )
-            case _:
-                return None
+            case _ as unreachable:
+                assert_never(unreachable)
 
-    def _display(self, node: sem.AnyLayoutNode) -> tuple[scene.HtmlNode, ...] | None:
+    def _display(self, node: _Display) -> tuple[scene.HtmlNode, ...]:
         """Resolve a node that draws itself: no children to compile, no state to bind."""
         match node:
             case sem.Heading():
@@ -465,15 +583,15 @@ class _Compiler:
                     time_ref=scene.HtmlTimeRef(value.instant.isoformat(), timezone=value.timezone),
                 )
                 return self._labelled_time(label, time_node)
-            case _:
-                return None
+            case _ as unreachable:
+                assert_never(unreachable)
 
-    def _interactive(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...] | None:
+    def _interactive(self, node: _Interactive, path: str) -> tuple[scene.HtmlNode, ...]:
         """Resolve a node whose HTML depends on session state, a binding, or a route."""
         match node:
             case sem.Details(key=key, summary=summary, children=children):
-                open_ = self._disclosure(node)
-                action = self.bind(f"{key}.toggle", ToggleDetails(node, open_, self.presentation))
+                open_ = disclosure_state(node, self.presentation)
+                action = self.bind(toggle_action_key(key), ToggleDetails(node, open_, self.presentation))
                 return (
                     self.element(
                         scene.HtmlTag.DETAILS,
@@ -484,7 +602,7 @@ class _Compiler:
                     ),
                 )
             case sem.Toggle(key=key, label=label, available=available):
-                on = self._toggle_state(node)
+                on = toggle_state(node, self.presentation)
                 action = self.bind(key, FlipToggle(node, on, self.presentation), label=label)
                 checkbox = self.element(
                     scene.HtmlTag.INPUT,
@@ -540,10 +658,10 @@ class _Compiler:
                 return (self._items(node, path),)
             case sem.Navigation():
                 return (self._navigation(node),)
-            case _:
-                return None
+            case _ as unreachable:
+                assert_never(unreachable)
 
-    def _adapted(self, node: sem.AnyLayoutNode, path: str) -> tuple[scene.HtmlNode, ...] | None:
+    def _adapted(self, node: _Adapted, path: str) -> tuple[scene.HtmlNode, ...]:
         """Unwrap a planner adaptation.
 
         HTML has no message budget to overflow, so most of these compile straight through to
@@ -567,8 +685,8 @@ class _Compiler:
                 return self._paged(node, path)
             case sem.Unbreakable(node=child) | sem.KeepWithNext(node=child):
                 return self.compile(child, path)
-            case _:
-                return None
+            case _ as unreachable:
+                assert_never(unreachable)
 
     def _resolved(self, value: TextLike) -> str:
         return resolve_text(value, self.localization).content
@@ -611,9 +729,10 @@ class _Compiler:
         self, fallback: sem.FallbackContent[Any], capacity: int, path: str
     ) -> tuple[scene.HtmlNode, ...]:
         branches = (fallback.primary, *fallback.alternates)
+        paths = branch_paths(path, len(branches))
         for index, branch in enumerate(branches):
             candidate = self._fork()
-            compiled = candidate.compile(branch, f"{path}.fallback.{index}")
+            compiled = candidate.compile(branch, paths[index])
             if index:
                 self.states_explored += 1
             if sum(_html_size(node) for node in compiled) <= capacity:
@@ -630,7 +749,7 @@ class _Compiler:
                         )
                     )
                 return compiled
-        compiled = self.compile(fallback.primary, f"{path}.fallback.0")
+        compiled = self.compile(fallback.primary, paths[0])
         return self._fit_budget(compiled, capacity, path)
 
     def _heading(self, heading: sem.Heading) -> scene.HtmlElement:
@@ -654,20 +773,6 @@ class _Compiler:
             message = f"asset key {asset.key!r} identifies two different assets"
             raise LayoutInvariantError(message)
         self.assets.setdefault(asset.key, asset)
-
-    def _disclosure(self, node: sem.Details) -> bool:
-        match node.open:
-            case sem.Controlled(value=value):
-                return value
-            case sem.Uncontrolled(initial=initial):
-                return self.presentation.disclosure(node.key, initial=initial).open
-
-    def _toggle_state(self, node: sem.Toggle) -> bool:
-        match node.on:
-            case sem.Controlled(value=value):
-                return value
-            case sem.Uncontrolled(initial=initial):
-                return self.presentation.toggle(node.key, initial=initial).on
 
     def _labelled_time(self, label: TextLike | None, time_node: scene.HtmlElement) -> tuple[scene.HtmlNode, ...]:
         if label is None:
@@ -1021,7 +1126,10 @@ class _Compiler:
         metadata = _attributes(
             (scene.HtmlAttributeName.NAME, node.key),
             (scene.HtmlAttributeName.ENTITY_TYPE, node.entity_type.value),
-            (scene.HtmlAttributeName.CHANNEL_TYPES, ",".join(value.value for value in node.channel_types)),
+            (
+                scene.HtmlAttributeName.CONVERSATION_TYPES,
+                ",".join(value.value for value in node.conversation_types),
+            ),
             (scene.HtmlAttributeName.SELECTION_MIN, node.minimum),
             (scene.HtmlAttributeName.SELECTION_MAX, node.maximum),
             (scene.HtmlAttributeName.ARIA_LABEL, self._optional_text(node.placeholder) or node.key),
@@ -1087,12 +1195,7 @@ class _Compiler:
         )
 
     def _items(self, node: sem.Items, path: str) -> scene.HtmlElement:
-        match node.opened:
-            case sem.Controlled(value=value):
-                opened = value
-            case sem.Uncontrolled(initial=initial):
-                selected = self.presentation.selection(node.key, initial=() if initial is None else (initial,)).selected
-                opened = selected[0] if selected else None
+        opened, _fixed = item_state(node, self.presentation)
         commit = ItemCommit(node.opened, node.key, self.presentation)
         rendered: list[scene.HtmlNode] = []
         for index, item in enumerate(node.items):
@@ -1124,16 +1227,7 @@ class _Compiler:
 
     def _navigation(self, node: sem.Navigation) -> scene.HtmlElement:
         available = tuple(option for option in node.options if option.available)
-        match node.current:
-            case sem.Controlled(value=value):
-                current = value
-            case sem.Uncontrolled(initial=initial):
-                remembered = self.presentation.selection(
-                    node.key, initial=() if initial is None else (initial,)
-                ).selected
-                current = remembered[0] if remembered else None
-        if current is None and available:
-            current = available[0].key
+        current = navigation_current(node, self.presentation)
         commit = NavigationCommit(node.current, node.key, self.presentation)
         return self.element(
             scene.HtmlTag.NAV,
@@ -1162,22 +1256,31 @@ class _Compiler:
     def _paged(self, node: sem.Paged, path: str) -> tuple[scene.HtmlNode, ...]:
         children = getattr(node.node, "children", (node.node,))
         compiled = tuple(self.compile(child, f"{path}.page.{index}") for index, child in enumerate(children))
-        pages = allocate_pages(
-            compiled,
-            size=lambda group: sum(_html_size(item) for item in group),
-            capacity=node.chars,
-            widows=node.widows,
-        )
+        sizes = [sum(_html_size(item) for item in group) for group in compiled]
+        if compiled:
+            try:
+                cuts = balanced_breaks(
+                    [BreakItem(size) for size in sizes],
+                    max_chars=node.chars,
+                    min_fill=node.min_fill,
+                    widows=node.widows,
+                    ideal_total=sum(sizes),
+                )
+            except ValueError as error:
+                message = f"{path}: region has no feasible break set within its {node.chars}-character page budget"
+                raise UnsolvableLayoutError(message) from error
+            bounds = (0, *cuts)
+            pages = tuple(compiled[start:end] for start, end in zip(bounds, cuts, strict=False))
+        else:
+            pages = ((),)
         fingerprint = stable_fingerprint((compiled,))
         extent = len(pages)
-        cursor = self.presentation.cursor(node.key)
-        position = POSITION_RESOLVER.resolve(
-            override=None if self.positions is None else self.positions.get(node.key),
-            stale=bool(cursor.fingerprint and cursor.fingerprint != fingerprint),
-            stored=cursor.position if node.key in self.presentation.cursors else None,
-            initial=Position(offset=extent - 1 if node.initial == "end" else 0),
-            upper_bound=extent - 1,
-        )
+        # Resolution goes through the shared coordinator so both targets obey one precedence
+        # policy; staging stays on the compiler's forked lists because a speculative branch
+        # that is discarded must leave no cursor behind, which a stateful coordinator shared
+        # across forks cannot promise.
+        request = MaterializedCursorRequest(node.key, extent, fingerprint, initial=node.initial)
+        position = CursorCoordinator(self.presentation, self.chrome, overrides=self.positions).grant(request).position
         if extent > 1:
             resolved = Position(offset=position.offset, direction=Direction.AROUND)
             self.pagers.append(scene.Pager(node.key, position.offset, extent, fingerprint))
@@ -1202,8 +1305,8 @@ class HtmlPlanner:
         rendered: DocumentLike[HtmlTarget],
         request: PlanRequest[scene.HtmlBody, HtmlTarget, Any],
         *,
-        cache: PlanCache | None = None,
-        memo: PlanMemo | None = None,
+        cache: PlanCache[scene.HtmlBody] | None = None,
+        memo: PlanMemo[scene.HtmlBody] | None = None,
     ) -> PlanResult[scene.HtmlBody]:
         # HTML has neither a bounded document nor a global resource budget, so the two request
         # fields that exist to bound one are refused rather than quietly ignored.
@@ -1228,7 +1331,7 @@ class HtmlPlanner:
             )
         )
         if memo is not None and (exact := memo.replay(rendered, key, presentation)) is not None:
-            return cast(PlanResult[scene.HtmlBody], exact)
+            return exact
         document = as_document(rendered)
         compiler = _Compiler(target, request.chrome, localization, palette, presentation, positions, strict)
         for asset in document.assets:
@@ -1253,7 +1356,7 @@ class HtmlPlanner:
         )
         cached = cache.get(key) if cache is not None else None
         if cached is not None:
-            planned = cast(scene.Scene[scene.HtmlBody], cached.scene)
+            planned = cached.scene
             report = cached.report
         actions, forms = _action_keys(planned.body.children)
         result = PlanResult(

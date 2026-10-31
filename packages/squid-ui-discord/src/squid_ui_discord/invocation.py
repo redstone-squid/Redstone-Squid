@@ -24,10 +24,10 @@ from squid_ui_discord.delivery import (
 )
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
-from squid_ui_discord.message_root_options import MessageRootOptions
+from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
 from squid_ui_discord.rendering import render_static
 from squid_ui_discord.runtime import ClientRuntime, InvocationSource
-from squid_ui_discord.session_specs import OpenContext, SessionSpec
+from squid_ui_discord.session_specs import OpenContext, SessionOptions, SessionSpec
 from squid_ui_discord.sessions import OpenResult, Rejected
 
 
@@ -85,11 +85,11 @@ class Invocation:
         cell = current_cell()
         if cell is not None and cell.source is source:
             if cell.value is not None:
-                return cast(Invocation, cell.value)
+                return cell.value
             async with cell.lock:
                 if cell.value is None:
                     cell.value = await cls._resolve(source)
-            return cast(Invocation, cell.value)
+            return cell.value
         return await cls._resolve(source)
 
     @classmethod
@@ -162,18 +162,19 @@ class Invocation:
             allowed_mentions=allowed_mentions,
         )(self.render(*nodes))
 
-    async def mount[RenderTargetT](
+    async def mount(
         self,
-        component: Component[RenderTargetT],
+        component: Component[ComponentsV2Target],
         *,
         access: AccessPolicy,
         visibility: Visibility = "public",
-        **options: Unpack[MessageRootOptions],
-    ) -> MessageRoot[RenderTargetT]:
+        wait: bool = False,
+        **options: Unpack[MessageRootBehaviorOptions],
+    ) -> MessageRoot:
         """Construct and deliver a plain message root through this invocation."""
-        configured = cast(MessageRootOptions, {**options, "localization": self.localization})
+        configured = cast(MessageRootBehaviorOptions, {**options, "localization": self.localization})
         message_root = self.runtime.mount(component, access=access, **configured)
-        await message_root.send(self.destination(visibility))
+        await message_root.send(self.destination(visibility, wait=wait))
         return message_root
 
     async def open(
@@ -185,12 +186,12 @@ class Invocation:
         parent: MessageRoot | None = None,
         wait: bool = False,
         key: Hashable | None = None,
-        **options: Unpack[MessageRootOptions],
+        **options: Unpack[SessionOptions],
     ) -> OpenResult:
         """Open or attach a session screen, rendering any policy-authored rejection notice."""
         open_context = OpenContext.of(self.source)
         destination = self.destination(visibility, wait=wait)
-        configured = cast(MessageRootOptions, {**options, "localization": self.localization})
+        configured = cast(SessionOptions, {**options, "localization": self.localization})
         if parent is None:
             result = await spec.open(
                 component,
@@ -290,7 +291,7 @@ class Invocation:
 def current_invocation() -> Invocation | None:
     """Return the resolved ambient invocation, or `None` before its first use or outside a scope."""
     cell = current_cell()
-    return None if cell is None else cast(Invocation | None, cell.value)
+    return None if cell is None else cell.value
 
 
 @contextmanager

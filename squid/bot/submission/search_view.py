@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from discord.utils import escape_markdown
 
 import squid_ui as sl
+import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import DISCORD_GREEN, L
 from squid.builds.domain import Build
@@ -99,7 +100,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
             *(
                 (
                     sl.action_controls(
-                        sl.action_control(L("View build"), self._open_build, key="open-build"),
+                        sl.action_control(L(t"View build"), self._open_build, key="open-build"),
                         key="build-actions",
                     ),
                 )
@@ -111,17 +112,21 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
     async def _open_build(self, event: sl.ActionEvent) -> None:
         build_id = _build_id(self.hit)
         if build_id is None or self._load_build is None or self._render_build is None:
-            await event.notice(L("That build is no longer available."))
+            await event.notice(L(t"That build is no longer available."))
             return
         build = await self._load_build(build_id)
         if build is None:
-            await event.notice(L("That build is no longer available."))
+            await event.notice(L(t"That build is no longer available."))
             return
         self._build_node = await self._render_build(build)
 
 
-class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
-    """Compatibility wrapper around the shared resource-backed Browser pattern."""
+class SearchScreen(sd.Screen):
+    """A resource-backed search workspace that ends when closed, replaced, or timed out."""
+
+    session_name = "search"
+    timeout = 180
+    visibility = "public"
 
     closed: bool = sl.state(default=False)
 
@@ -131,12 +136,10 @@ class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
         request: SearchRequest,
         page: SearchPage,
         *,
-        author_id: int,
         load_build: BuildLoader | None = None,
         render_build: BuildRenderer | None = None,
     ) -> None:
         self._source = _SearchSource(service, request, page)
-        self._author_id = author_id
         self._load_build = load_build
         self._render_build = render_build
         self._browser = sp.Browser(
@@ -148,12 +151,12 @@ class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
             detail=self._detail,
             overview=self._overview,
             page_size=request.page_size,
-            title=L("Search results"),
-            empty=L("No results match this query."),
+            title=L(t"Search results"),
+            empty=L(t"No results match this query."),
             copy=sp.LoadingCopy(
-                loading=L("Loading search results…"),
-                failed=L("Could not load search results."),
-                retry=L("Retry"),
+                loading=L(t"Loading search results…"),
+                failed=L(t"Could not load search results."),
+                retry=L(t"Retry"),
             ),
         )
         self._browser.window.replace(self._source.initial_loaded())
@@ -227,13 +230,13 @@ class SearchResultsView(sl.Component[sl.ComponentsV2Target]):
         if self.closed:
             return (
                 sl.section(
-                    sl.heading(L("Search closed")),
-                    sl.truncate(sl.paragraph(L("This search is closed."))),
+                    sl.heading(L(t"Search closed")),
+                    sl.truncate(sl.paragraph(L(t"This search is closed."))),
                 ),
             )
         return (
             self.boundary(self._browser, key="results"),
-            sl.action_controls(sl.action_control(L("Close"), self._close, key="close"), key="search-actions"),
+            sl.action_controls(sl.action_control(L(t"Close"), self._close, key="close"), key="search-actions"),
         )
 
     async def _close(self, event: sl.PressEvent) -> None:
@@ -256,53 +259,58 @@ def _detail_title(hit: SearchHit) -> str:
 def _metadata_label(kind: str) -> sl.TextLike:
     match kind:
         case "restriction":
-            return L("Restriction")
+            return L(t"Restriction")
         case "pattern":
-            return L("Pattern")
+            return L(t"Pattern")
         case "showcase":
-            return L("Showcase tag")
+            return L(t"Showcase tag")
         case "creator":
-            return L("Creator")
+            return L(t"Creator")
         case "version":
-            return L("Version")
+            return L(t"Version")
         case "tag":
-            return L("Tag")
+            return L(t"Tag")
         case _:
             return kind
 
 
 def _result_description(hit: SearchHit) -> sl.TextLike:
     if isinstance(hit, RecordSearchHit):
-        return L("Record · {record_class} · {build_title}", record_class=hit.record_class, build_title=hit.build_title)
+        record_class = hit.record_class
+        build_title = hit.build_title
+        return L(t"Record · {record_class} · {build_title}")
     if isinstance(hit, BuildSearchHit):
-        return L("Build · {status}", status=hit.status)
+        status = hit.status
+        return L(t"Build · {status}")
     return _metadata_label(hit.metadata_kind)
 
 
 def _detail_text(hit: SearchHit) -> sl.TextLike:
     if isinstance(hit, RecordSearchHit):
         tags = ", ".join(escape_markdown(tag) for tag in hit.tags)
-        fields = L(
-            "**Build**\n{build_title} ({build_id})\n**Class**\n{record_class} · {version_scope}",
-            build_title=hit.build_title,
-            build_id=hit.build_id,
-            record_class=hit.record_class,
-            version_scope=hit.version_scope,
-        )
+        build_title = hit.build_title
+        build_id = hit.build_id
+        record_class = hit.record_class
+        version_scope = hit.version_scope
+        fields = L(t"**Build**\n{build_title} ({build_id})\n**Class**\n{record_class} · {version_scope}")
         if hit.metrics:
             metrics = ", ".join(
                 f"{escape_markdown(key)}: {escape_markdown(str(value))}" for key, value in hit.metrics.items()
             )
-            fields = L("{fields}\n**Metrics**\n{metrics}", fields=fields, metrics=sl.md(metrics))
+            metrics = sl.md(metrics)
+            fields = L(t"{fields}\n**Metrics**\n{metrics}")
         description = hit.subtitle or ""
     elif isinstance(hit, BuildSearchHit):
         tags = ", ".join(escape_markdown(tag) for tag in hit.tags)
-        fields = L("**Status**\n{status}", status=hit.status)
+        status = hit.status
+        fields = L(t"**Status**\n{status}")
         description = hit.description or ""
     else:
         tags = ", ".join(escape_markdown(alias) for alias in hit.aliases)
-        fields = L("**Kind**\n{kind}", kind=_metadata_label(hit.metadata_kind))
+        kind = _metadata_label(hit.metadata_kind)
+        fields = L(t"**Kind**\n{kind}")
         description = hit.description or ""
     if tags:
-        fields = L("{fields}\n**Tags**\n{tags}", fields=fields, tags=sl.md(tags))
-    return L("{description}\n{fields}", description=description, fields=fields)
+        tags = sl.md(tags)
+        fields = L(t"{fields}\n**Tags**\n{tags}")
+    return L(t"{description}\n{fields}")

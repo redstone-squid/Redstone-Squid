@@ -62,7 +62,7 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Current command or routed action | `inv = await sd.Invocation.of(source)` | source, runtime, localization, user, guild, and source-aware delivery |
 | Terminal command reply | `await inv.reply(*nodes, visibility=...)` | a localized public, personal, or `sd.Private(reason)` response |
 | Plain live panel | `await inv.mount(component, access=..., visibility=...)` | a delivered `MessageRoot` without session policy |
-| Reusable application screen | `await MyScreen.show(source, ...)` | the prepared screen, or `None` after a policy-authored rejection |
+| Reusable application screen | `await MyScreen(...).show(source)` | the prepared screen, or `None` after a policy-authored rejection |
 | Dynamic session composition | `await inv.open(component, spec, visibility=...)` | `Opened` or `Rejected`; destination and open context come from the invocation |
 | Low-level root composition | `runtime.mount(...)`, then `root.send(inv.destination(...))` | explicit message-root and delivery ownership when a higher entry point cannot express it |
 | Low-level Discord destination | `sd.reply_to`, `sd.respond_to`, `sd.send_to` | a `MessageDestination` for framework internals and transport adapters |
@@ -95,11 +95,15 @@ one. `inv.t(...)` is only for strings leaving the layout system, such as autocom
 modal API; layout nodes retain `TextLike` values and resolve them when their message root renders.
 
 `Screen` is the declarative application layer over `Invocation`. A subclass places stable policy in
-class variables: `session`, `scope`, `admission`, `capacity`, `quota`, `domain`, `visibility`,
-`timeout`, `expiry`, `follow_topics`, and root `options`. `show()` constructs the instance, records
-its opening invocation, awaits `prepare()`, and then mounts or opens it. A rejected session returns
-`None` only after its deferred policy notice has already been answered. Override cached `spec()`
-only when the derived `SessionSpec` cannot express the screen.
+class variables. Root policy — `access`, `visibility`, `timeout`, `expiry`, `follow_topics`, and
+`root_options` — applies to both direct and session openings. Setting `session_name` enables session
+policy through `scope`, `admission`, `capacity`, `quota`, and `domain`; those fields are rejected on
+a direct screen instead of being ignored. A fixed `access` policy defaults to the opener, while an
+instance can override `resolve_access(invocation)` when constructor state or invocation context
+decides access. `show()` claims one instance for one opening attempt and records its `opening`
+invocation before delivery. Invocation-dependent loading uses the ordinary component `on_load()`
+hook and therefore runs only when the screen reaches its first render. A rejected session returns
+`None` only after its deferred policy notice has already been answered.
 
 `SessionSpec` remains the composition recipe for dynamic policy: `scope` picks the collision key,
 `admission` decides what happens on collision, `capacity` and `quota` bound membership, and `access`
@@ -250,6 +254,39 @@ the planner rejects it at runtime. And widget content slots are dialect-erased, 
 Planning internals that walk any document take `AnyLayoutNode`, which is the deliberate
 opt-out: they rewrite whatever they are handed and leave the dialect judgement to the
 target's dialect.
+
+### Renderable is a capability; Node is a stage
+
+Two words for nodes run through the package, on different axes, and keeping them apart is
+what keeps the vocabulary readable.
+
+`Renderable[RenderTargetT]` is a **capability**: the class claims to be drawable, and its
+parameter says in which dialects. It is what a class inherits, including one a frontend
+writes itself, and it is the only arm `LayoutNode` has.
+
+`Node` is a **stage**. There are three, and each has its own name:
+
+| Stage | Type | What it is |
+|---|---|---|
+| Authored | `LayoutNode[T]` | what `render` returns; exactly `Renderable[T]` |
+| Lowered | `Node` | the closed primitive IR the Discord planner rewrites |
+| Planned | `scene.Node` | the serializable scene a renderer draws |
+
+`LayoutNode` is an alias for `Renderable` and keeps its own name because a field or a
+parameter wants to say *which stage* a value is at, not that it happens to be drawable.
+
+Two closed unions sit beside the open one, each for a job `Renderable` cannot do:
+
+- `PortableNode` — the semantic vocabulary every backend must answer for. A traversal that
+  matches over it is provably exhaustive, which is why `html_planner` excludes the open arm
+  with `is_portable_node` before its `match`.
+- `BuiltinLayoutNode` — every node class this package ships, flattened into a tuple an
+  `isinstance` can test. Behind `is_builtin_layout_node`.
+
+So the two predicates answer different questions, on purpose. `is_layout_node` is open: a
+caller's own `Renderable` is a layout node, and a container factory accepts it. Lowering
+asks `is_builtin_layout_node`, because it cannot draw a node it has never heard of and has
+to say so by name.
 
 ## Patterns: one state machine, two shells
 
@@ -723,7 +760,8 @@ It is useful for Discord tooling but is not an HTML planning target and cannot d
 
 Every node representation here — semantic, primitive, scene, and each renderer's private draw
 program — is a closed PEP 695 union of behaviour-free frozen dataclasses, and every pass over one is
-a `match` closing with a structured raise. Nodes carry no `accept` method and there is no
+a `match` proven exhaustive by an `assert_never` terminal arm where the walked union is closed, or
+closing with a structured raise where it is not. Nodes carry no `accept` method and there is no
 type-to-handler registry; a pass that needs a different shape lowers to a new union instead. Extend
 the open node set through `target.extensions`, and attach per-case behaviour through
 `GeneratedHandler`. See [ADR 0075](decisions/0075-planner-dispatch-style.md) for why, and for what
@@ -896,11 +934,11 @@ with `prepare`.
 ### Naming
 
 **The full dictionary is [squid-vocabulary.md](squid-vocabulary.md)**, which supersedes this
-section's "verbs closed, nouns open" position and was applied across the six packages on
+section's "verbs closed, nouns open" position and was applied across the suite packages on
 2026-08-26. What follows is the part that did not move.
 
 Lifetime is carried by verbs, not nouns. A closed noun vocabulary was designed and rejected
-twice, on the same measurement each time: the six packages export 555 classes with 273
+twice, on the same measurement each time: the original six packages exported 555 classes with 273
 distinct last words, 179 used exactly once, so the table would have had to reject
 `Component`, `MessageRoot`, `SessionSpec` and `Chrome` or grow until it was not a table. What nouns
 owe instead is consistency, which needs no dictionary:
@@ -935,9 +973,9 @@ to describe, and saying so is noise.
 - HTML action transport is not prescribed. Markup exposes action IDs; HTTP or WebSocket
   routing and authentication belong to the host. Action and form callbacks remain only in
   `PlanResult.bindings` and never enter a scene.
-- The engine depends directly on `squid-reactivity` and `markdown-it-py`. Two leaf packages sit on
-  it as independent siblings: `squid-ui-discord` for the discord.py adapter -- message roots,
-  sessions, routing, durability, with `squid-ui-discord[durable]` adding `squid-storage` -- and
-  `squid-ui-widgets` for the reusable application state machines. Neither imports the other.
-  Discord protocol knowledge stays behind `DiscordPlanner`; HTML planning and drawing do not
-  import Discord limits, primitives, or measured-layout types.
+- The engine depends directly on `squid-reactivity` and `markdown-it-py`. Three independent leaves
+  sit on it: `squid-ui-discord` for the discord.py runtime, `squid-ui-slack` for mechanical Slack
+  SDK drawing, and `squid-ui-widgets` for reusable application state machines. The Slack leaf owns
+  no Bolt app, listener, HTTP client, dispatch, or delivery lifecycle. Discord protocol knowledge
+  stays behind `DiscordPlanner`; Slack lowers through its own Block Kit dialect; HTML planning and
+  drawing import neither frontend SDK.

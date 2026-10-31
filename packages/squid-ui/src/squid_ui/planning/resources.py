@@ -3,6 +3,7 @@
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Protocol, Self
 
 from squid_ui.errors import LayoutInvariantError
@@ -19,6 +20,7 @@ class Axis(StrEnum):
     EMBEDS = "embeds"
     ROWS = "rows"
     CONTROLS = "controls"
+    BLOCKS = "blocks"
 
 
 TEXT_AXES = frozenset({Axis.DISPLAY_TEXT, Axis.CONTENT_TEXT, Axis.EMBED_TEXT})
@@ -36,7 +38,8 @@ class ResourceCost:
         if negative:
             message = f"resource {negative[0]!r} cannot cost {self.values[negative[0]]}"
             raise LayoutInvariantError(message)
-        object.__setattr__(self, "values", dict(sorted((name, value) for name, value in self.values.items() if value)))
+        values = dict(sorted((name, value) for name, value in self.values.items() if value))
+        object.__setattr__(self, "values", MappingProxyType(values))
 
     def get(self, name: Axis) -> int:
         return self.values.get(name, 0)

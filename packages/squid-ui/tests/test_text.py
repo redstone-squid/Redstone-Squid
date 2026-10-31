@@ -4,7 +4,18 @@ from datetime import UTC, datetime
 
 import pytest
 
-from squid_ui.text import Localization, Markup, Message, discord_text, md, plain, raw_md, resolve_text
+from squid_ui.text import (
+    Localization,
+    Markup,
+    Message,
+    current_localization,
+    discord_text,
+    localization_scope,
+    md,
+    plain,
+    raw_md,
+    resolve_text,
+)
 
 
 def test_bare_markdown_is_trusted() -> None:
@@ -31,6 +42,26 @@ def test_translated_format_strings_escape_named_values() -> None:
     text = md("Build {title} by {author}", title="[x](bad)", author="@here")
 
     assert text.content == "Build \\[x\\]\\(bad\\) by @\u200bhere"
+
+
+def test_translated_format_strings_apply_specs_before_escaping() -> None:
+    text = md("Took {seconds:.1f}s", seconds=2.54)
+
+    assert text.content == "Took 2\\.5s"
+
+
+def test_localization_scope_is_nested_and_reset_safe() -> None:
+    first = Localization("first")
+    second = Localization("second")
+    original = current_localization()
+
+    with localization_scope(first):
+        assert current_localization() is first
+        with localization_scope(second):
+            assert current_localization() is second
+        assert current_localization() is first
+
+    assert current_localization() is original
 
 
 def test_plain_text_is_escaped_only_when_drawn_for_discord() -> None:

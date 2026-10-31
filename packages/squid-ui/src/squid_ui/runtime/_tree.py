@@ -6,7 +6,6 @@ from dataclasses import dataclass, fields, is_dataclass, replace
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.nodes import Break, Budget, Card, Extension, Panel, Variants
 from squid_ui.semantic import (
-    AnyLayoutNode,
     Article,
     Aside,
     BestEffort,
@@ -18,6 +17,7 @@ from squid_ui.semantic import (
     Group,
     Items,
     KeepWithNext,
+    LayoutNode,
     OptionalContent,
     Paged,
     Section,
@@ -27,10 +27,15 @@ from squid_ui.semantic import (
     Truncated,
     Unbreakable,
 )
+from squid_ui.target_types import RenderTarget
 
-type LayoutTransform = Callable[[AnyLayoutNode, str], Sequence[AnyLayoutNode]]
+type LayoutTransform[RenderTargetT: RenderTarget] = Callable[
+    [LayoutNode[RenderTargetT], str], Sequence[LayoutNode[RenderTargetT]]
+]
 type _LayoutRoute = tuple[_FieldStep | _IndexStep | _SequenceStep, ...]
-type _RoutedLayoutTransform = Callable[[AnyLayoutNode, str, _LayoutRoute], Sequence[AnyLayoutNode]]
+type _RoutedLayoutTransform[RenderTargetT: RenderTarget] = Callable[
+    [LayoutNode[RenderTargetT], str, _LayoutRoute], Sequence[LayoutNode[RenderTargetT]]
+]
 
 _CHILD_FIELD_NAMES = frozenset({"children", "node", "primary", "alternates", "fallback", "variants"})
 
@@ -52,7 +57,9 @@ class _SequenceStep:
     start: int
 
 
-def map_layout_children(node: AnyLayoutNode, path: str, transform: LayoutTransform) -> AnyLayoutNode:
+def map_layout_children[RenderTargetT: RenderTarget](
+    node: LayoutNode[RenderTargetT], path: str, transform: LayoutTransform[RenderTargetT]
+) -> LayoutNode[RenderTargetT]:
     """Rebuild ``node`` after transforming each of its direct layout children.
 
     Sequence positions accept a transform that splices zero or more nodes. Singular positions
@@ -63,29 +70,39 @@ def map_layout_children(node: AnyLayoutNode, path: str, transform: LayoutTransfo
     return _map_layout_children_routed(node, path, (), lambda child, child_path, _route: transform(child, child_path))
 
 
-def _map_layout_children_routed(
-    node: AnyLayoutNode,
+def _map_layout_children_routed[RenderTargetT: RenderTarget](
+    node: LayoutNode[RenderTargetT],
     path: str,
     route: _LayoutRoute,
-    transform: _RoutedLayoutTransform,
-) -> AnyLayoutNode:
+    transform: _RoutedLayoutTransform[RenderTargetT],
+) -> LayoutNode[RenderTargetT]:
     """Rebuild a node while identifying where each transformed child lands."""
 
-    def many(children: Sequence[AnyLayoutNode], parent_path: str, field: str) -> tuple[AnyLayoutNode, ...]:
-        transformed: list[AnyLayoutNode] = []
+    def many(
+        children: Sequence[LayoutNode[RenderTargetT]], parent_path: str, field: str
+    ) -> tuple[LayoutNode[RenderTargetT], ...]:
+        transformed: list[LayoutNode[RenderTargetT]] = []
         for index, child in enumerate(children):
             transformed.extend(
                 transform(child, f"{parent_path}.{index}", (*route, _SequenceStep(field, len(transformed))))
             )
         return tuple(transformed)
 
-    def one(child: AnyLayoutNode, child_path: str, child_route: _LayoutRoute) -> AnyLayoutNode:
+    def one(child: LayoutNode[RenderTargetT], child_path: str, child_route: _LayoutRoute) -> LayoutNode[RenderTargetT]:
         transformed = tuple(transform(child, child_path, child_route))
         if len(transformed) != 1:
             message = f"{child_path}: this structural position requires exactly one node"
             raise LayoutInvariantError(message)
         return transformed[0]
 
+    # The suppressions below all name one mismatch, not four. This walker rewrites the
+    # *authored* tree, so it speaks `LayoutNode[RenderTargetT]` -- open, and parameterized by
+    # the caller's dialect. But the primitive containers it has to rebuild (`Break`, `Budget`,
+    # `Extension.fallback`, `Variant.nodes`) declare their child fields as `Node`: the closed,
+    # already-lowered union, which is what lets the planner match over them exhaustively. The
+    # two are the same objects at runtime and neither declaration is wrong for its own job.
+    # Closing the gap means making those containers generic in their children's target, which
+    # is a change to the primitive vocabulary rather than to this traversal.
     match node:
         case (
             Group(children=children)
@@ -148,7 +165,7 @@ def _map_layout_children_routed(
             return replace(
                 node,
                 fallback=one(  # pyrefly: ignore[bad-argument-type]
-                    fallback,
+                    fallback,  # pyrefly: ignore[bad-argument-type]
                     f"{path}.fallback",
                     (*route, _FieldStep("fallback")),
                 ),
@@ -164,7 +181,7 @@ def _map_layout_children_routed(
                             f"{path}.variant.{index}",
                             (*route, _IndexStep("variants", index)),
                             "nodes",
-                            transform,
+                            transform,  # pyrefly: ignore[bad-argument-type]
                         ),
                     )
                     for index, variant in enumerate(variants)
@@ -183,14 +200,14 @@ def _map_layout_children_routed(
             return node
 
 
-def _map_many_at(
-    children: Sequence[AnyLayoutNode],
+def _map_many_at[RenderTargetT: RenderTarget](
+    children: Sequence[LayoutNode[RenderTargetT]],
     path: str,
     route: _LayoutRoute,
     field: str,
-    transform: _RoutedLayoutTransform,
-) -> tuple[AnyLayoutNode, ...]:
-    transformed: list[AnyLayoutNode] = []
+    transform: _RoutedLayoutTransform[RenderTargetT],
+) -> tuple[LayoutNode[RenderTargetT], ...]:
+    transformed: list[LayoutNode[RenderTargetT]] = []
     for index, child in enumerate(children):
         transformed.extend(transform(child, f"{path}.{index}", (*route, _SequenceStep(field, len(transformed)))))
     return tuple(transformed)

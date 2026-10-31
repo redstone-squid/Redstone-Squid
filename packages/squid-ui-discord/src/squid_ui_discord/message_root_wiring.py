@@ -16,7 +16,8 @@ import discord
 from discord.ui.select import BaseSelect
 
 from squid_ui import scene
-from squid_ui.entity import ChannelType, EntityKind, EntityRef, EntityType
+from squid_ui.entity import ConversationType, EntityKind, EntityRef, EntityType
+from squid_ui.errors import DrawInvariantError
 from squid_ui_discord.emoji import discord_emoji
 
 if TYPE_CHECKING:
@@ -124,17 +125,17 @@ class _WiredSelect(discord.ui.Select[AnyMountedView]):
         await self._root.dispatch(self._key, interaction, self.values, generation=self._generation)
 
 
-_CHANNEL_TYPES = {
-    ChannelType.TEXT: discord.ChannelType.text,
-    ChannelType.VOICE: discord.ChannelType.voice,
-    ChannelType.CATEGORY: discord.ChannelType.category,
-    ChannelType.ANNOUNCEMENT: discord.ChannelType.news,
-    ChannelType.ANNOUNCEMENT_THREAD: discord.ChannelType.news_thread,
-    ChannelType.PUBLIC_THREAD: discord.ChannelType.public_thread,
-    ChannelType.PRIVATE_THREAD: discord.ChannelType.private_thread,
-    ChannelType.STAGE_VOICE: discord.ChannelType.stage_voice,
-    ChannelType.FORUM: discord.ChannelType.forum,
-    ChannelType.MEDIA: discord.ChannelType.media,
+_CONVERSATION_TYPES = {
+    ConversationType.GUILD_TEXT: discord.ChannelType.text,
+    ConversationType.GUILD_VOICE: discord.ChannelType.voice,
+    ConversationType.GUILD_CATEGORY: discord.ChannelType.category,
+    ConversationType.GUILD_ANNOUNCEMENT: discord.ChannelType.news,
+    ConversationType.GUILD_ANNOUNCEMENT_THREAD: discord.ChannelType.news_thread,
+    ConversationType.GUILD_PUBLIC_THREAD: discord.ChannelType.public_thread,
+    ConversationType.GUILD_PRIVATE_THREAD: discord.ChannelType.private_thread,
+    ConversationType.GUILD_STAGE_VOICE: discord.ChannelType.stage_voice,
+    ConversationType.GUILD_FORUM: discord.ChannelType.forum,
+    ConversationType.GUILD_MEDIA: discord.ChannelType.media,
 }
 
 
@@ -142,8 +143,11 @@ def _default_value(value: EntityRef) -> discord.SelectDefaultValue:
     kind = {
         EntityKind.USER: discord.SelectDefaultValueType.user,
         EntityKind.ROLE: discord.SelectDefaultValueType.role,
-        EntityKind.CHANNEL: discord.SelectDefaultValueType.channel,
+        EntityKind.CONVERSATION: discord.SelectDefaultValueType.channel,
     }[value.kind]
+    if not isinstance(value.id, int):
+        message = "discord.py entity selects require integer snowflake ids"
+        raise DrawInvariantError(message)
     return discord.SelectDefaultValue(id=value.id, type=kind)
 
 
@@ -153,7 +157,7 @@ def _entity_ref(value: object) -> EntityRef:
     if isinstance(value, discord.User | discord.Member):
         return EntityRef(EntityKind.USER, value.id)
     if isinstance(value, discord.abc.GuildChannel | discord.Thread):
-        return EntityRef(EntityKind.CHANNEL, value.id)
+        return EntityRef(EntityKind.CONVERSATION, value.id)
     message = f"unsupported resolved entity {type(value).__name__}"
     raise TypeError(message)
 
@@ -244,8 +248,13 @@ def _wired_entity_select(
         item = _WiredUserSelect(**kwargs)
     elif node.entity_type is EntityType.ROLE:
         item = _WiredRoleSelect(**kwargs)
-    elif node.entity_type is EntityType.CHANNEL:
-        item = _WiredChannelSelect(channel_types=[_CHANNEL_TYPES[value] for value in node.channel_types], **kwargs)
+    elif node.entity_type is EntityType.CONVERSATION:
+        try:
+            channel_types = [_CONVERSATION_TYPES[value] for value in node.conversation_types]
+        except KeyError as error:
+            message = f"discord.py does not support conversation type {error.args[0].value!r}"
+            raise DrawInvariantError(message) from error
+        item = _WiredChannelSelect(channel_types=channel_types, **kwargs)
     else:
         item = _WiredMentionableSelect(**kwargs)
     item._wire(message_root, key, generation)

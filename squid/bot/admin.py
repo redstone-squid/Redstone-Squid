@@ -10,23 +10,25 @@ from discord.ext.commands import Context, Greedy
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.consent import ensure_consented_account
+from squid.accounts.domain import IdentityProvider
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.ui import info_node, link_node, text_node
+from squid.bot.tags_view import TagsScreen
+from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.permissions import hide_unless, requires
+from squid.bot.utils.permissions import allows, enforce
 from squid.core.i18n import _
+from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
+    RESTRICTION_ALIAS_CREATE,
     TAG_PROPOSAL_APPROVE,
     TAG_PROPOSAL_ARCHIVE,
     TAG_PROPOSAL_LIST,
     TAG_PROPOSAL_REJECT,
 )
-from squid.tags.domain import TagValueType
-from squid_ui.runtime.component import RenderResult
+from squid_ui.document import DocumentLike
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -38,155 +40,74 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.tags = bot.services.tags
+        self.restrictions = bot.services.restrictions
         self._archive_header_pattern = re.compile(r"^<@!?(\d+)>.*wrote:")
         self.bot.reactions.subscribe(self)
+        self.archive_ctx_menu = app_commands.ContextMenu(
+            name="Archive Message",
+            callback=self.archive_message_context,
+        )
+        self.archive_ctx_menu.default_permissions = discord.Permissions(manage_messages=True)
+        self.bot.tree.add_command(self.archive_ctx_menu)
 
     @override
     async def cog_unload(self) -> None:
         self.bot.reactions.unsubscribe(self)
+        self.bot.tree.remove_command(self.archive_ctx_menu.name, type=self.archive_ctx_menu.type)
 
-    @commands.hybrid_group(name="tag")
-    async def tag_group(self, ctx: Context[BotT]) -> None:
-        """Propose, apply, and review build tags."""
-        await ctx.send_help("tag")
-
-    @autocompletes(query_name="search_fields")
-    @tag_group.command(name="propose")
-    @app_commands.describe(
-        name=app_commands.locale_str(_("Public display name.")),
-        value_type=app_commands.locale_str(_("Whether the tag carries a number, text, yes/no value, or no value.")),
-        query_name=app_commands.locale_str(_("Optional search and sort field, for example closing_delay.")),
-    )
-    async def propose_tag(
-        self,
-        ctx: Context[BotT],
-        name: str,
-        value_type: TagValueType = TagValueType.NONE,
-        query_name: str | None = None,
-    ) -> None:
-        """Propose a build tag for staff review."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.bot.services.accounts)
-        if account_id is None:
-            return
-        definition = await self.tags.propose_showcase(
-            name,
-            value_type=value_type,
-            query_name=query_name,
-            created_by_account_id=account_id,
-        )
-        await invocation.reply(
-            info_node(
-                t(locale, _("Tag proposed")),
-                t(locale, _("Tag #{id} is awaiting staff approval."), id=definition.id),
-            ),
-            visibility="personal",
+    @autocompletes(build_id="builds")
+    @app_commands.command(name="tags", description="Browse, apply, propose, and moderate build tags")
+    @app_commands.rename(build_id="build")
+    async def tags_workspace(self, interaction: discord.Interaction[BotT], build_id: int | None = None) -> None:
+        """Open the capability-aware build tag workspace."""
+        nodes = (
+            TAG_PROPOSAL_LIST,
+            TAG_PROPOSAL_APPROVE,
+            TAG_PROPOSAL_REJECT,
+            TAG_PROPOSAL_ARCHIVE,
+            RESTRICTION_ALIAS_CREATE,
         )
 
-    @autocompletes(build_id="builds", tag_id="showcase_tag_ids")
-    @tag_group.command(name="apply")
-    @app_commands.describe(
-        build_id=app_commands.locale_str(_("A build you submitted.")),
-        tag_id=app_commands.locale_str(_("An approved build tag.")),
-        value=app_commands.locale_str(_("The tag value, omitted for plain tags.")),
-    )
-    async def tag_build(
-        self,
-        ctx: Context[BotT],
-        build_id: int,
-        tag_id: int,
-        value: str | None = None,
-    ) -> None:
-        """Apply an approved tag to one of your builds."""
-        invocation = await sd.Invocation.of(ctx)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.bot.services.accounts)
-        if account_id is None:
-            return
-        tag = await self.tags.assign_showcase(
-            build_id,
-            tag_id,
-            value,
+        async def authorize(node: PermissionNode) -> bool:
+            return await allows(interaction, node)
+
+        granted: set[PermissionNode] = set()
+        for node in nodes:
+            if await authorize(node):
+                granted.add(node)
+        capabilities = frozenset(granted)
+        account = await self.bot.services.accounts.get_account_by_identity(
+            IdentityProvider.DISCORD,
+            str(interaction.user.id),
+        )
+        account_id = (
+            account.id if account is not None and account.id is not None and not account.needs_consent_refresh else None
+        )
+        await TagsScreen(
+            self.tags,
+            self.restrictions,
+            build_id=build_id,
             actor_account_id=account_id,
-        )
-        await invocation.reply(
-            info_node(
-                t(locale, _("Build tagged")),
-                t(locale, _("Attached **{name}** to build #{id}."), name=tag.display_name, id=build_id),
-            ),
-            visibility="personal",
-        )
+            capabilities=capabilities,
+            authorize=authorize,
+        ).show(interaction)
 
-    @tag_group.command(name="pending")
-    @requires(TAG_PROPOSAL_LIST)
-    async def pending_tags(self, ctx: Context[BotT]) -> None:
-        """List user tags awaiting moderation."""
-        invocation = await sd.Invocation.of(ctx)
-        definitions = await self.tags.pending()
-        body = "\n".join(
-            f"**#{tag.id}** {tag.display_name} ({tag.value_type.value}; `{tag.query_name or 'no field'}`)"
-            for tag in definitions
-        )
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        await invocation.reply(
-            info_node(
-                t(locale, _("Pending tags")),
-                body or t(locale, _("No tags are awaiting review.")),
-            ),
-            visibility="personal",
-        )
+    async def archive_message_context(
+        self,
+        interaction: discord.Interaction[BotT],
+        message: discord.Message,
+    ) -> None:
+        """Archive the message selected through Discord's Apps menu."""
+        await enforce(interaction, MESSAGE_ARCHIVE_CREATE)
+        if interaction.guild is None or message.guild != interaction.guild:
+            await interaction.response.send_message("That message is not from this server.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        await self._archive_message(message)
+        await interaction.followup.send("Message archived.", ephemeral=True)
 
-    @autocompletes(tag_id="tags_pending")
-    @tag_group.command(name="approve")
-    @requires(TAG_PROPOSAL_APPROVE)
-    async def approve_tag(self, ctx: Context[BotT], tag_id: int) -> None:
-        """Publish a proposed showcase tag."""
-        invocation = await sd.Invocation.of(ctx)
-        tag = await self.tags.approve(tag_id)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        await invocation.reply(
-            info_node(
-                t(locale, _("Tag approved")),
-                t(locale, _("Published **{name}**."), name=tag.display_name),
-            ),
-        )
-
-    @autocompletes(tag_id="tags_pending")
-    @tag_group.command(name="reject")
-    @requires(TAG_PROPOSAL_REJECT)
-    async def reject_tag(self, ctx: Context[BotT], tag_id: int) -> None:
-        """Reject a proposed showcase tag."""
-        invocation = await sd.Invocation.of(ctx)
-        tag = await self.tags.reject(tag_id)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        await invocation.reply(
-            info_node(
-                t(locale, _("Tag rejected")),
-                t(locale, _("Rejected **{name}**."), name=tag.display_name),
-            ),
-        )
-
-    @autocompletes(tag_id="showcase_tag_ids")
-    @tag_group.command(name="archive")
-    @requires(TAG_PROPOSAL_ARCHIVE)
-    async def archive_tag(self, ctx: Context[BotT], tag_id: int) -> None:
-        """Archive a published tag."""
-        invocation = await sd.Invocation.of(ctx)
-        tag = await self.tags.archive(tag_id)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        await invocation.reply(
-            info_node(
-                t(locale, _("Tag archived")),
-                t(locale, _("Archived **{name}**."), name=tag.display_name),
-            ),
-        )
-
-    @commands.hybrid_command(name="archive")
-    @requires(MESSAGE_ARCHIVE_CREATE, guild_only=True)
-    @hide_unless(manage_messages=True)
-    async def archive_message(self, ctx: Context[BotT], message: discord.Message, delete_original: bool = True):
-        """Makes a copy of the message in the current channel."""
+    async def _archive_message(self, message: discord.Message) -> None:
+        """Copy one message in place and remove the original."""
         if isinstance(message.author, discord.User):
             user = message.author
         else:
@@ -194,7 +115,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         username_description = f" (username: {user.name})" if user else ""
         reaction_count = sum(reaction.count for reaction in message.reactions)
 
-        sent_message = await ctx.send(
+        sent_message = await message.channel.send(
             content=(
                 f"{message.author.mention}{username_description} wrote:"
                 f"\nReactions: {reaction_count}"
@@ -209,8 +130,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             ),
         )
         await sent_message.add_reaction("❌")
-        if delete_original:
-            await message.delete()
+        await message.delete()
 
     async def on_reaction_add(self, event: ReactionEvent) -> None:
         payload = event.payload
@@ -315,7 +235,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.command(name="raise-error", aliases=["e"], hidden=True)
     @commands.is_owner()
     @managed_result(dismiss_on_success=True)
-    async def raise_error(self, ctx: Context[BotT]) -> RenderResult[sl.ComponentsV2Target]:
+    async def raise_error(self, ctx: Context[BotT]) -> DocumentLike[sl.ComponentsV2Target]:
         """Raises an error for testing purposes."""
         msg = "This is a test error."
         raise ValueError(msg)

@@ -1,11 +1,12 @@
 """Native semantic planning for the first-class HTML target."""
 
 from datetime import UTC, date, datetime, time
+from typing import Any, cast
 
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene
+from squid_ui import scene, testing
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
 from squid_ui.forms import (
     BoolField,
@@ -30,7 +31,9 @@ from squid_ui.interactions import ActionEvent, SelectionEvent, SubmitEvent
 from squid_ui.planning import PlanCache, PlanMemo, ResourceCost
 from squid_ui.planning.limits import Axis
 from squid_ui.rosters import RosterEntry, RosterSlot, place_roster
+from squid_ui.runtime.presentation_state import PresentationState, SelectionState
 from squid_ui.sources import Position
+from squid_ui.target_types import HtmlTarget, Renderable
 from squid_ui.temporal import ZonedDateTime
 
 
@@ -46,15 +49,8 @@ async def _submitted(_event: SubmitEvent) -> None:
     return None
 
 
-def _walk(nodes: tuple[scene.HtmlNode, ...]):
-    for node in nodes:
-        yield node
-        if isinstance(node, scene.HtmlElement):
-            yield from _walk(node.children)
-
-
 def _elements(result: scene.PlanResult[scene.HtmlBody]) -> tuple[scene.HtmlElement, ...]:
-    return tuple(node for node in _walk(result.scene.body.children) if isinstance(node, scene.HtmlElement))
+    return testing.find_all(result.scene.body.children, scene.HtmlElement)
 
 
 def test_html_target_has_an_unbounded_semantic_identity() -> None:
@@ -70,8 +66,18 @@ def test_html_target_has_an_unbounded_semantic_identity() -> None:
 
 
 def test_discord_primitives_are_rejected_by_html_planning() -> None:
-    with pytest.raises(LayoutInvariantError, match="Discord-shaped primitive Text"):
+    with pytest.raises(LayoutInvariantError, match=r"Discord-shaped primitive Text.*fallback\(\)"):
         sl.planning.plan(sl.primitives.Text("exact"), target=sl.html.target())  # type: ignore[arg-type]
+
+
+def test_unknown_renderables_are_rejected_by_html_planning() -> None:
+    class Unregistered(Renderable[HtmlTarget]):
+        pass
+
+    # A Renderable subclass nobody taught the vocabulary about is refused by name, not
+    # misdescribed as a Discord primitive.
+    with pytest.raises(LayoutInvariantError, match="Unregistered is not a semantic layout node"):
+        sl.planning.plan(cast(Any, Unregistered()), target=sl.html.target())
 
 
 def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
@@ -184,6 +190,11 @@ def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
 class _PortableExtension(ExtensionField[str]):
     capability = "forms.test.native"
 
+    def parse(self, raw: object) -> str | None:
+        # Never reached in this test: the target lacks the capability, so the portable
+        # fallback stands in and it is the fallback's parse that runs.
+        return None if raw is None else str(raw)
+
 
 def test_html_planner_renders_portable_forms_inline_with_prefill() -> None:
     spec = FormSpec(
@@ -246,7 +257,11 @@ def test_html_planner_renders_portable_forms_inline_with_prefill() -> None:
 def test_html_only_applies_authored_budgets_and_paging() -> None:
     unconstrained = sl.planning.plan(sl.paragraph("x" * 8000), target=sl.html.target())
     assert (
-        sum(len(node.content) for node in _walk(unconstrained.scene.body.children) if isinstance(node, scene.HtmlText))
+        sum(
+            len(node.content)
+            for node in testing.walk(unconstrained.scene.body.children)
+            if isinstance(node, scene.HtmlText)
+        )
         == 8000
     )
     assert unconstrained.scene.pagers == ()
@@ -257,7 +272,7 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
     )
     assert any(event.code == "html.budget.truncated" for event in constrained.report.events)
     assert "abcd" in [
-        node.content for node in _walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
     ]
     with pytest.raises(LayoutDegradedError, match="omitted 6"):
         sl.planning.plan(
@@ -273,9 +288,11 @@ def test_html_only_applies_authored_budgets_and_paging() -> None:
     )
     second = sl.planning.plan(paged, target=sl.html.target(), positions={"manual": Position(offset=1)})
     assert second.scene.pagers[0].page == 1
-    assert "bbbb" in [node.content for node in _walk(second.scene.body.children) if isinstance(node, scene.HtmlText)]
+    assert "bbbb" in [
+        node.content for node in testing.walk(second.scene.body.children) if isinstance(node, scene.HtmlText)
+    ]
     assert "aaaa" not in [
-        node.content for node in _walk(second.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(second.scene.body.children) if isinstance(node, scene.HtmlText)
     ]
 
 
@@ -286,10 +303,10 @@ def test_html_searches_authored_fallbacks_only_under_an_explicit_budget() -> Non
     constrained = sl.planning.plan(sl.budget(fallback, min=3, prefer=5), target=sl.html.target())
 
     assert "preferred is too long" in [
-        node.content for node in _walk(preferred.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(preferred.scene.body.children) if isinstance(node, scene.HtmlText)
     ]
     assert "short" in [
-        node.content for node in _walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
+        node.content for node in testing.walk(constrained.scene.body.children) if isinstance(node, scene.HtmlText)
     ]
     assert constrained.metrics.states_explored == 2
     assert any(event.code == "html.budget.fallback" for event in constrained.report.events)
@@ -316,3 +333,51 @@ def test_html_plans_assets_and_rebuilds_ephemeral_bindings_on_cache_hits() -> No
     assert first.scene.assets == (scene.Asset("report", "report.txt", "text/plain"),)
     assert first.resources["asset:report"] == asset
     assert exact.metrics.cache_hit
+
+
+def test_stale_remembered_selections_are_dropped_by_html_planning() -> None:
+    # The engine's own stale memory -- a remembered key whose entry or destination no
+    # longer exists -- must not survive into the scene; only an author's controlled value
+    # may be wrong. Discord already validated these reads; HTML now shares them.
+    session = PresentationState()
+    session.selections["entries"] = SelectionState(("gone",))
+    session.selections["nav"] = SelectionState(("gone",))
+    document = sl.group(
+        sl.items(sl.item(sl.item_label("One"), sl.paragraph("first"), key="one"), key="entries"),
+        sl.navigation(sl.nav_option("Home", key="home"), sl.nav_option("Away", key="away"), key="nav"),
+    )
+
+    result = sl.planning.plan(document, target=sl.html.target(), session=session)
+
+    current = [
+        attribute.value
+        for element in _elements(result)
+        if element.tag is scene.HtmlTag.BUTTON
+        for attribute in element.attributes
+        if attribute.name is scene.HtmlAttributeName.ARIA_CURRENT
+    ]
+    assert current == ["page"], "navigation falls back to the first available destination"
+
+
+def test_html_paging_honors_min_fill() -> None:
+    # Four 4-character pages under a 12-character budget balance to 8/8; a 9-character
+    # fill floor forbids the 8-character first page, forcing 12/4. Before HTML adopted
+    # balanced_breaks, min_fill was silently ignored here.
+    def build(min_fill: int) -> sl.semantic.Paged:
+        return sl.semantic.Paged(
+            sl.stack(sl.paragraph("aaaa"), sl.paragraph("bbbb"), sl.paragraph("cccc"), sl.paragraph("dddd")),
+            key="filled",
+            chars=12,
+            min_fill=min_fill,
+        )
+
+    def first_page_text(result) -> str:
+        return "".join(
+            node.content for node in testing.walk(result.scene.body.children) if isinstance(node, scene.HtmlText)
+        )
+
+    balanced = sl.planning.plan(build(0), target=sl.html.target())
+    assert first_page_text(balanced) == "aaaabbbb"
+
+    filled = sl.planning.plan(build(9), target=sl.html.target())
+    assert first_page_text(filled) == "aaaabbbbcccc"

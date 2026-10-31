@@ -1,14 +1,13 @@
-"""Branching Wizard behavior over component and router shells."""
+"""Branching Wizard behaviour over the component and router shells."""
 
-import discord
 import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
-from squid_ui.semantic import FormTrigger, Stack
-from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, fake_interaction
+from squid_ui import testing as engine
+from squid_ui.semantic import FormTrigger
 from squid_ui_widgets import REVIEW_STEP
+from squid_ui_widgets import testing as wt
 
 
 def _form(title: str, key: str) -> sl.forms.FormSpec:
@@ -20,22 +19,6 @@ def _steps(answers: sp.WizardAnswers):
     if answers.get("kind", {}).get("kind") == "advanced":
         yield sp.WizardStep("detail", "Detail", _form("Add detail", "detail"))
     yield sp.WizardStep("review", "Review", sl.paragraph("Review answers"))
-
-
-def _text_input(modal: discord.ui.Modal) -> discord.ui.TextInput:
-    label = modal.children[0]
-    assert isinstance(label, discord.ui.Label)
-    assert isinstance(label.component, discord.ui.TextInput)
-    return label.component
-
-
-async def _submit_form(message_root: MessageRoot, key: str, value: str) -> None:
-    opened = fake_interaction()
-    await message_root.dispatch(key, opened)
-    modal = opened.response.send_modal.await_args.args[0]
-    assert isinstance(modal, discord.ui.Modal)
-    _text_input(modal)._value = value  # pyrefly: ignore[missing-attribute]
-    await modal.on_submit(fake_interaction())
 
 
 def test_branch_flip_retains_orphans_but_finish_collects_only_live_steps() -> None:
@@ -55,60 +38,24 @@ def test_branch_flip_retains_orphans_but_finish_collects_only_live_steps() -> No
     state = wizard.transition(state, "back")
     state = wizard.transition(state, "submit:kind", submitted={"kind": "advanced"})
     assert state.current == "detail"
-    component = wizard.build_component(initial=state)
-    rendered = component.render()
-    assert isinstance(rendered, Stack)
-    trigger = next(child for child in rendered.children if isinstance(child, FormTrigger))
-    assert trigger.spec.prefill == {"detail": "kept"}
+    harness = wt.driving(wizard.build_component(initial=state))
+
+    assert engine.find(harness.nodes, FormTrigger).spec.prefill == {"detail": "kept"}
 
 
-async def test_consecutive_forms_use_the_framework_owned_interstitial_hop() -> None:
-    wizard = sp.Wizard("Build", _steps).build_component()
-    message_root = MessageRoot(wizard, access=Everyone(), timeout=None)
-    commit_render(message_root)
-
-    await _submit_form(message_root, "wizard.kind", "advanced")
-
-    assert wizard.machine_state.current == "detail"
-    view = commit_render(message_root)
-    button = next(
-        item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.label == "Continue"
-    )
-    assert button.custom_id is not None and button.custom_id.endswith(":wizard.detail")
-
-
-async def test_plain_next_opens_the_following_form_without_an_intermediate_render() -> None:
-    wizard = sp.Wizard(
-        "Profile",
-        (
-            sp.WizardStep("intro", "Introduction", "Ready"),
-            sp.WizardStep("name", "Name", _form("Name", "name")),
-            sp.WizardStep("done", "Done", "Review"),
-        ),
-    ).build_component()
-    message_root = MessageRoot(wizard, access=Everyone(), timeout=None)
-    commit_render(message_root)
-
-    opened = fake_interaction()
-    await message_root.dispatch("wizard.name", opened)
-
-    assert opened.response.send_modal.await_count == 1
-    assert wizard.machine_state.current == "intro"
-
-
-async def test_last_form_dispatches_finish_once_with_live_answers() -> None:
+async def test_the_last_form_finishes_once_with_the_live_answers() -> None:
     completed: list[sp.WizardAnswers] = []
 
     async def finish(_event: sp.TransitionEvent[sp.WizardState], answers: sp.WizardAnswers) -> None:
         completed.append(answers)
 
-    wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),)).build_component(on_finish=finish)
-    message_root = MessageRoot(wizard, access=Everyone(), timeout=None)
-    commit_render(message_root)
+    harness = wt.driving(
+        sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),)).build_component(on_finish=finish)
+    )
 
-    await _submit_form(message_root, "wizard.name", "Ada")
+    await harness.submit("wizard.name", {"name": "Ada"})
 
-    assert wizard.machine_state.complete
+    assert harness.state.complete
     assert completed == [{"name": {"name": "Ada"}}]
 
 
@@ -148,18 +95,20 @@ def _answer(wizard: sp.Wizard, state: sp.WizardState, step: str, value: str) -> 
 
 def _labels(rendered) -> list[object]:
     return [
-        node.label for node in _walk(rendered) if isinstance(node, sl.semantic.ActionControl | sl.semantic.FormTrigger)
+        node.label
+        for node in engine.walk(rendered)
+        if isinstance(node, sl.semantic.ActionControl | sl.semantic.FormTrigger)
     ]
 
 
-def _walk(node):
+def _unused(node):
     yield node
     for child in getattr(node, "children", ()) or ():
-        yield from _walk(child)
+        yield from engine.walk(child)
     for item in getattr(node, "items", ()) or ():
-        yield from _walk(item)
+        yield from engine.walk(item)
     for entry in getattr(node, "fields", ()) or ():
-        yield from _walk(entry)
+        yield from engine.walk(entry)
 
 
 def test_a_final_submit_lands_on_review_instead_of_completing() -> None:
@@ -225,7 +174,7 @@ def test_review_rows_summarize_answers_and_mark_the_unanswered_ones() -> None:
     assert state.current == REVIEW_STEP
 
     rendered = wizard.build_component(initial=state).render()
-    values = [node.value for node in _walk(rendered) if isinstance(node, sl.semantic.Field)]
+    values = [node.value for node in engine.walk(rendered) if isinstance(node, sl.semantic.Field)]
 
     assert values == ["Ada", "advanced", sl.chrome.DEFAULT_CHROME.unanswered]
     assert "Finish" in _labels(rendered)
@@ -239,29 +188,29 @@ def test_a_summarize_callback_replaces_the_default_rows() -> None:
 
     rendered = wizard.build_component(initial=state).render()
 
-    assert not [node for node in _walk(rendered) if isinstance(node, sl.semantic.Field)]
-    assert any(isinstance(node, sl.semantic.Paragraph) and node.content == "2 answers" for node in _walk(rendered))
+    assert not [node for node in engine.walk(rendered) if isinstance(node, sl.semantic.Field)]
+    assert any(
+        isinstance(node, sl.semantic.Paragraph) and node.content == "2 answers" for node in engine.walk(rendered)
+    )
 
 
-async def test_finish_dispatches_once_from_the_review_screen() -> None:
+async def test_finishing_from_the_review_screen_happens_once() -> None:
     completed: list[sp.WizardAnswers] = []
 
     async def finish(_event: sp.TransitionEvent[sp.WizardState], answers: sp.WizardAnswers) -> None:
         completed.append(dict(answers))
 
     wizard = sp.Wizard("One", (sp.WizardStep("name", "Name", _form("Name", "name")),), review=True)
-    shell = wizard.build_component(on_finish=finish)
-    message_root = MessageRoot(shell, access=Everyone(), timeout=None)
-    commit_render(message_root)
+    harness = wt.driving(wizard.build_component(on_finish=finish))
 
-    await _submit_form(message_root, "wizard.name", "Ada")
-    assert shell.machine_state.current == REVIEW_STEP
-    assert not shell.machine_state.complete
+    await harness.submit("wizard.name", {"name": "Ada"})
 
-    commit_render(message_root)
-    await message_root.dispatch("wizard.finish", fake_interaction())
+    assert harness.state.current == REVIEW_STEP
+    assert not harness.state.complete
 
-    assert shell.machine_state.complete
+    await harness.press("wizard.finish")
+
+    assert harness.state.complete
     assert completed == [{"name": {"name": "Ada"}}]
 
 

@@ -6,20 +6,17 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import discord
-import pytest
-from discord.ext.commands import Context
 from whenever import Instant
 
-import squid.bot.app
 from squid.bot.diagnostics import Diagnostics
-from squid.bot.diagnostics_view import ErrorReportBrowser, report_attachment
+from squid.bot.diagnostics_view import ErrorReportOperations, ErrorReportScreen, report_attachment
 from squid.diagnostics.domain import ErrorReport
 from squid_ui.sources import Position
+from squid_ui.testing import labels, render_tree
 from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_ui_discord import MessageRoot, Owner
-from squid_ui_discord.message_root_wiring import MountedView
+from squid_ui_discord import MessageRoot, Owner, Private
 from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
 from tests.helpers.discord import make_layout_bot
 
@@ -47,46 +44,40 @@ def make_report(
     )
 
 
-def make_context(
+def make_screen(
+    reports: tuple[ErrorReport, ...] = (),
     *,
-    slash: bool = False,
-    in_guild: bool = True,
-    dm_raises: Exception | None = None,
-    bot: Any = None,
-) -> Any:
-    """A context stub exposing only what the cog's delivery path touches."""
-    author_send = AsyncMock(side_effect=dm_raises, return_value=AsyncMock(spec=discord.Message))
-    interaction = SimpleNamespace(
-        guild_locale=None,
-        locale="en-US",
-        expires_at=None,
-        is_expired=lambda: False,
-        response=SimpleNamespace(is_done=lambda: False),
-    )
-    return SimpleNamespace(
-        bot=bot if bot is not None else make_layout_bot(),
-        interaction=interaction if slash else None,
-        guild=SimpleNamespace(id=5, preferred_locale="en-US") if in_guild else None,
-        author=SimpleNamespace(id=1, send=author_send),
-        send=AsyncMock(return_value=AsyncMock(spec=discord.Message)),
-    )
-
-
-def make_cog(*, report: ErrorReport | None = None, reports: tuple[ErrorReport, ...] = ()) -> Diagnostics[Any]:
-    error_reports = SimpleNamespace(
-        lookup=AsyncMock(return_value=(report, 1)),
+    report: ErrorReport | None = None,
+    matches: int = 1,
+    can_clear: bool = False,
+) -> ErrorReportScreen:
+    operations = SimpleNamespace(
+        lookup=AsyncMock(return_value=(report, matches)),
         recent=AsyncMock(return_value=reports),
         clear_all=AsyncMock(return_value=3),
     )
-    settings = SimpleNamespace(get_locale=AsyncMock(return_value=None))
-    bot = make_layout_bot(services=SimpleNamespace(error_reports=error_reports, settings=settings))
-    return Diagnostics(cast("squid.bot.app.RedstoneSquid", bot))
+    return ErrorReportScreen(
+        cast(ErrorReportOperations, operations),
+        reference=report.reference if report is not None else None,
+        can_clear=can_clear,
+        authorize_clear=AsyncMock(return_value=True) if can_clear else None,
+    )
 
 
-def message_root_browser(browser: ErrorReportBrowser) -> tuple[MessageRoot, discord.ui.LayoutView]:
+async def message_root_browser(browser: ErrorReportScreen) -> tuple[MessageRoot, discord.ui.LayoutView]:
+    await browser.on_load()
     bot = make_layout_bot()
     message_root = bot.client_runtime.mount(browser, access=Owner(1), chrome=browser.chrome())
+    if browser._browser is not None:
+        await browser._browser.window._load()
     return message_root, commit_render(message_root)
+
+
+async def open_report(message_root: MessageRoot, interaction: discord.Interaction, reference: str) -> None:
+    """Use the Browser's semantic action whether the planner chose buttons or a select."""
+    key = next(key for key in message_root._handlers if "error-reports.open" in key)
+    values = None if key.endswith(f".{reference}") else [reference]
+    await message_root.dispatch(key, interaction, values)
 
 
 def _texts(view: discord.ui.LayoutView) -> list[str]:
@@ -113,20 +104,21 @@ def _code_pages(message_root: MessageRoot) -> list[str]:
 async def test_recent_list_offers_every_entry_for_opening() -> None:
     """The audit's complaint: a listed reference could only be read, then retyped."""
     reports = (make_report("aaa111"), make_report("bbb222", work_lost=True))
-    _, view = message_root_browser(ErrorReportBrowser(reports))
+    browser = make_screen(reports)
+    await message_root_browser(browser)
 
-    payload = view.to_components()
-    select = payload[1]["components"][0]
-    assert [option["label"] for option in select["options"]] == ["aaa111", "bbb222"]
-    assert "aaa111" in str(payload[0])
+    assert browser._browser is not None
+    rendered_labels = labels(render_tree(browser._browser))
+    assert "aaa111" in rendered_labels
+    assert "bbb222" in rendered_labels
 
 
 async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
-    browser = ErrorReportBrowser((make_report("aaa111"),))
-    message_root, _ = message_root_browser(browser)
+    browser = make_screen((make_report("aaa111"),))
+    message_root, _ = await message_root_browser(browser)
     interaction = fake_interaction()
 
-    await message_root.dispatch("open", interaction, ["0"])
+    await open_report(message_root, interaction, "aaa111")
 
     payload = str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
     assert "Error aaa111" in payload
@@ -137,8 +129,8 @@ async def test_opening_a_listed_report_replaces_the_list_in_place() -> None:
 async def test_a_long_traceback_is_readable_past_one_page() -> None:
     """Previously the card showed a fixed 1200-character tail and nothing could reach the rest."""
     frames = "\n".join(f"  File 'module{index}.py', line {index}, in frame{index}" for index in range(300))
-    browser = ErrorReportBrowser(report=make_report(traceback=f"Traceback:\n{frames}\nValueError: boom"))
-    message_root, view = message_root_browser(browser)
+    browser = make_screen(report=make_report(traceback=f"Traceback:\n{frames}\nValueError: boom"))
+    message_root, view = await message_root_browser(browser)
 
     # The failing frame is at the end, so that is where the report opens.
     first_shown = next(text for text in _texts(view) if text.startswith("```"))
@@ -153,7 +145,7 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
 
 
 async def test_paging_controls_absent_for_a_short_traceback() -> None:
-    _, view = message_root_browser(ErrorReportBrowser(report=make_report(traceback="one frame")))
+    _, view = await message_root_browser(make_screen(report=make_report(traceback="one frame")))
 
     buttons = [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
     assert "Earlier" not in buttons
@@ -162,8 +154,8 @@ async def test_paging_controls_absent_for_a_short_traceback() -> None:
 
 async def test_paging_stops_at_both_ends() -> None:
     frames = "\n".join("frame " + "x" * 90 for _ in range(200))
-    browser = ErrorReportBrowser(report=make_report(traceback=frames))
-    message_root, view = message_root_browser(browser)
+    browser = make_screen(report=make_report(traceback=frames))
+    message_root, view = await message_root_browser(browser)
 
     nav = [item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.custom_id]
     later = next(item for item in nav if ":__cursor_next" in (item.custom_id or ""))
@@ -174,8 +166,8 @@ async def test_paging_stops_at_both_ends() -> None:
 
 
 async def test_the_log_tail_is_shown_and_keeps_its_last_lines() -> None:
-    browser = ErrorReportBrowser(report=make_report(log_tail=("first line", "second line")))
-    _, view = message_root_browser(browser)
+    browser = make_screen(report=make_report(log_tail=("first line", "second line")))
+    _, view = await message_root_browser(browser)
 
     text = "\n".join(_texts(view))
     assert "Log tail" in text
@@ -185,8 +177,8 @@ async def test_the_log_tail_is_shown_and_keeps_its_last_lines() -> None:
 async def test_every_page_fits_the_real_display_budget() -> None:
     """The PAGE_CHARS killer: each page, chrome and footer included, fits the actual budget."""
     long_line = "x" * 9001
-    browser = ErrorReportBrowser(report=make_report(traceback=f"{long_line}\nValueError: boom"))
-    message_root, _ = message_root_browser(browser)
+    browser = make_screen(report=make_report(traceback=f"{long_line}\nValueError: boom"))
+    message_root, _ = await message_root_browser(browser)
 
     message_root.presentation.move_cursor("traceback", Position())
     pages = _code_pages(message_root)
@@ -203,77 +195,75 @@ async def test_every_page_fits_the_real_display_budget() -> None:
 
 
 async def test_choosing_a_report_attaches_its_full_text() -> None:
-    browser = ErrorReportBrowser((make_report("aaa111"),))
-    message_root, _ = message_root_browser(browser)
+    browser = make_screen((make_report("aaa111"),))
+    message_root, _ = await message_root_browser(browser)
     interaction = fake_interaction()
 
-    await message_root.dispatch("open", interaction, ["0"])
+    await open_report(message_root, interaction, "aaa111")
 
     attachments = interaction.response.edit_message.await_args.kwargs["attachments"]
     assert [file.filename for file in attachments] == ["error-aaa111.txt"]
 
 
 async def test_going_back_removes_the_attachment() -> None:
-    browser = ErrorReportBrowser((make_report("aaa111"),))
-    message_root, _ = message_root_browser(browser)
-    await message_root.dispatch("open", fake_interaction(), ["0"])
+    browser = make_screen((make_report("aaa111"),))
+    message_root, _ = await message_root_browser(browser)
+    opened = fake_interaction()
+    await open_report(message_root, opened, "aaa111")
     interaction = fake_interaction()
+    back_key = next(key for key in message_root._handlers if key.endswith("error-reports.back"))
 
-    await message_root.dispatch("back", interaction)
+    await message_root.dispatch(back_key, interaction)
 
     assert interaction.response.edit_message.await_args.kwargs["attachments"] == []
 
 
-async def test_prefix_invocation_does_not_post_a_traceback_in_the_channel() -> None:
-    """`Context.send` drops `ephemeral` without an interaction, so the report goes to DMs."""
-    report = make_report()
-    cog = make_cog(report=report)
-    ctx = make_context(bot=cog.bot)
-
-    await Diagnostics.error_group.callback(cog, cast(Context[Any], ctx), "abc123")  # type: ignore[arg-type]
-
-    ctx.author.send.assert_awaited_once()
-    assert isinstance(ctx.author.send.await_args.kwargs["view"], MountedView)
-    assert "view" in ctx.send.await_args.kwargs
-    assert not isinstance(ctx.send.await_args.kwargs["view"], MountedView)
+def test_errors_are_one_app_only_command_and_one_private_session() -> None:
+    diagnostics = cast(Any, Diagnostics)
+    assert [command.qualified_name for command in diagnostics.__cog_app_commands__] == ["errors"]
+    assert not diagnostics.__cog_commands__
+    assert ErrorReportScreen.session_name == "errors"
+    assert ErrorReportScreen.timeout == 300
+    assert isinstance(ErrorReportScreen.visibility, Private)
 
 
-async def test_a_closed_dm_is_reported_rather_than_worked_around() -> None:
-    cog = make_cog(report=make_report())
-    ctx = make_context(
-        bot=cog.bot, dm_raises=discord.Forbidden(cast(Any, SimpleNamespace(status=403, reason="")), "no dms")
-    )
+async def test_filtering_reloads_from_the_service() -> None:
+    screen = make_screen((make_report(),))
+    await screen.on_load()
+    event = SimpleNamespace(acknowledge=AsyncMock())
 
-    await Diagnostics.error_group.callback(cog, cast(Context[Any], ctx), "abc123")  # type: ignore[arg-type]
+    await screen._toggle_filter(cast(Any, event))
 
-    assert not isinstance(ctx.send.await_args.kwargs["view"], MountedView)
-    assert "direct message" in str(ctx.send.await_args.kwargs["view"].to_components())
-
-
-async def test_slash_invocation_stays_ephemeral_in_the_channel() -> None:
-    cog = make_cog(report=make_report())
-    ctx = make_context(bot=cog.bot, slash=True)
-
-    await Diagnostics.error_group.callback(cog, cast(Context[Any], ctx), "abc123")  # type: ignore[arg-type]
-
-    ctx.author.send.assert_not_awaited()
-    assert ctx.send.await_args.kwargs["ephemeral"] is True
+    assert screen.work_lost_only is True
+    cast(Any, screen._operations).recent.assert_awaited_with(limit=100, work_lost_only=True)
 
 
-@pytest.mark.parametrize("in_guild", [True, False])
-async def test_recent_delivers_the_view_privately(in_guild: bool) -> None:
-    cog = make_cog(reports=(make_report(),))
-    ctx = make_context(bot=cog.bot, in_guild=in_guild)
+async def test_clear_finishes_once_with_a_terminal_count() -> None:
+    screen = make_screen((make_report(),), can_clear=True)
+    await screen.on_load()
+    source = SimpleNamespace(finish=AsyncMock())
 
-    await Diagnostics.recent_errors.callback(cog, cast(Context[Any], ctx), work_lost=False)  # type: ignore[arg-type]
+    await screen._clear(cast(Any, SimpleNamespace(source=source)))
 
-    # In a direct message the channel already is private, so the view stays where it was asked for.
-    sender = ctx.author.send if in_guild else ctx.send
-    assert isinstance(sender.await_args.kwargs["view"], MountedView)
+    assert screen.cleared_count == 3
+    source.finish.assert_awaited_once()
+
+
+async def test_clear_rechecks_permission_before_deleting() -> None:
+    screen = make_screen((make_report(),), can_clear=True)
+    await screen.on_load()
+    screen._authorize_clear = AsyncMock(return_value=False)
+    source = SimpleNamespace(finish=AsyncMock(), notice=AsyncMock())
+
+    await screen._clear(cast(Any, SimpleNamespace(source=source)))
+
+    cast(Any, screen._operations).clear_all.assert_not_awaited()
+    source.notice.assert_awaited_once()
+    source.finish.assert_not_awaited()
 
 
 async def test_a_fence_inside_a_traceback_cannot_close_the_card_fence() -> None:
-    _, view = message_root_browser(ErrorReportBrowser(report=make_report(traceback="ValueError: ```not markdown```")))
+    _, view = await message_root_browser(make_screen(report=make_report(traceback="ValueError: ```not markdown```")))
 
     fenced = next(text for text in _texts(view) if "not markdown" in text)
     assert "```not" not in fenced

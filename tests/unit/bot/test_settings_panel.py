@@ -59,6 +59,7 @@ def make_component_panel(
         votes=cast(Any, votes),
         guild=make_guild(channels=channels if channels is not None else {12: "general"}),
         capabilities=EVERYTHING,
+        authorize=AsyncMock(return_value=True),
     )
     bot = make_layout_bot()
     message_root = sd.ClientRuntime.of(bot).defaults.mount(panel, access=sd.Owner(1), timeout=300)
@@ -195,14 +196,14 @@ async def test_the_undo_control_appears_only_once_there_is_something_to_undo() -
     assert "Undo" in _button_labels(commit_render(message_root))
 
 
-async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_undo_is_refused_when_the_permission_was_revoked() -> None:
     panel, settings, _ = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
     with sl.runtime.transaction():
         await panel.set_channel("Vote", 12)
     writes = settings.set_channel.await_count
 
-    monkeypatch.setattr(settings_view, "allows", AsyncMock(return_value=False))
+    panel._authorize = AsyncMock(return_value=False)
     notices: list[Any] = []
     event = cast(
         Any,
@@ -212,8 +213,6 @@ async def test_undo_is_refused_when_the_permission_was_revoked(monkeypatch: pyte
             context={"frontend": "discord"},
         ),
     )
-    monkeypatch.setattr(sd, "native", lambda _event: SimpleNamespace())
-
     with sl.runtime.transaction():
         await panel._undo(event)
 
@@ -233,9 +232,7 @@ async def test_a_large_guild_still_fits_one_message() -> None:
     assert len([item for item in view.walk_children() if isinstance(item, discord.ui.ChannelSelect)]) == 5
 
 
-async def test_each_channel_picker_writes_its_own_setting(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings_view, "allows", AsyncMock(return_value=True))
-    monkeypatch.setattr(sd, "native", lambda _event: SimpleNamespace())
+async def test_each_channel_picker_writes_its_own_setting() -> None:
     panel, settings, _ = make_component_panel(stored={"Vote": 3}, channels={3: "vote", 12: "general"})
     await panel.open_server()
 
@@ -244,7 +241,7 @@ async def test_each_channel_picker_writes_its_own_setting(monkeypatch: pytest.Mo
             cast(
                 Any,
                 SimpleNamespace(
-                    selected=(sl.entity.EntityRef(sl.entity.EntityKind.CHANNEL, 12),),
+                    selected=(sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, 12),),
                     context={},
                 ),
             ),

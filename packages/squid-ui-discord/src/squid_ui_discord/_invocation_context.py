@@ -4,6 +4,10 @@ import asyncio
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from squid_ui_discord.invocation import Invocation
 
 
 class InvocationCell:
@@ -11,7 +15,7 @@ class InvocationCell:
 
     def __init__(self, source: object) -> None:
         self.source = source
-        self.value: object | None = None
+        self.value: Invocation | None = None
         self.lock = asyncio.Lock()
 
 

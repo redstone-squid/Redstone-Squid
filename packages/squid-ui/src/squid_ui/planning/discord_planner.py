@@ -54,7 +54,7 @@ from squid_ui.planning.semantic_adaptation.lowering import (
     lower_semantics,
 )
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions, SemanticLowering
-from squid_ui.planning.target import AnyTarget
+from squid_ui.planning.target import AnyTarget, Target
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
     Break,
@@ -129,17 +129,23 @@ def _dynamic_values(value: object) -> tuple[object, ...]:
 def _program_dynamic_values(
     document: Document[Any],
     *,
-    target: object,
-    limits: object,
+    target: AnyTarget,
+    limits: MessageLimits,
     chrome: Chrome,
-    localization: object,
-    palette: object,
-    presentation: object,
-    positions: object,
+    localization: Localization,
+    palette: Palette,
+    presentation: PresentationState,
+    positions: Mapping[str, Position] | None,
     nav: PlannedNav | None,
-    capabilities: object,
+    capabilities: frozenset[str],
     planned: scene.Scene[Any],
 ) -> tuple[object, ...]:
+    """Every process-local value a compiled template must be handed back to be replayed.
+
+    Typed even though the result is a heterogeneous tuple: seven of these were `object`
+    only because of where they end up, and seven interchangeable `object` keywords is
+    exactly the shape in which a swapped argument goes unnoticed.
+    """
     external = (
         target,
         limits,
@@ -365,7 +371,7 @@ class _Expansion:
 
 
 @dataclass(frozen=True, slots=True)
-class _Compilation:
+class _Compilation[BodyT: scene.Body, RenderTargetT, AdapterT]:
     """One document compiled for one target: everything that does not vary between candidates.
 
     The target is already reserved and the chrome already localized, which is the whole reason
@@ -374,16 +380,20 @@ class _Compilation:
     set of inputs instead of three re-spreadings of the same eight fields.
     """
 
-    request: PlanRequest[Any, Any, Any]
-    document: Document[Any]
-    target: AnyTarget
+    request: PlanRequest[BodyT, RenderTargetT, AdapterT]
+    document: Document[RenderTargetT]
+    target: Target[Any, BodyT, RenderTargetT, AdapterT]
     chrome: Chrome
 
     @classmethod
-    def resolve(cls, document: Document[Any], request: PlanRequest[Any, Any, Any]) -> _Compilation:
+    def resolve[ResolvedBodyT: scene.Body, ResolvedRenderTargetT, ResolvedAdapterT](
+        cls,
+        document: Document[ResolvedRenderTargetT],
+        request: PlanRequest[ResolvedBodyT, ResolvedRenderTargetT, ResolvedAdapterT],
+    ) -> _Compilation[ResolvedBodyT, ResolvedRenderTargetT, ResolvedAdapterT]:
         """Withhold the reservation and localize the chrome, once, for every phase below."""
         # Every axis is withheld the same way: by planning against a smaller target.
-        return cls(
+        return _Compilation(
             request=request,
             document=document,
             target=request.target.reserve(request.reservation),
@@ -395,8 +405,8 @@ class _Compilation:
         return self.target.limits
 
     @property
-    def dialect(self) -> DiscordDialect[Any, Any, Any]:
-        return cast(DiscordDialect[Any, Any, Any], self.target.dialect)
+    def dialect(self) -> DiscordDialect[MessageLimits, BodyT, RenderTargetT]:
+        return cast(DiscordDialect[MessageLimits, BodyT, RenderTargetT], self.target.dialect)
 
     @property
     def localization(self) -> Localization:
@@ -421,7 +431,7 @@ class _Compilation:
     def coordinator(self) -> CursorCoordinator:
         return CursorCoordinator(self.presentation, self.chrome, self.nav, self.positions)
 
-    def replay(self, cached: CachedPlan) -> PlanResult[Any]:
+    def replay(self, cached: CachedPlan[BodyT]) -> PlanResult[BodyT]:
         """Rebuild a result around a cached scene, recovering only what could not be cached.
 
         The scene, its report and its staged session updates come back untouched. Callbacks
@@ -466,7 +476,7 @@ class _Compilation:
             session_updates=cached.session_updates,
         )
 
-    def _materialized(self, cached: CachedPlan) -> tuple[Node, ...] | None:
+    def _materialized(self, cached: CachedPlan[BodyT]) -> tuple[Node, ...] | None:
         """The cached primitive tree with this render's live values bound back into it."""
         if cached.lowered_template is None:
             return None
@@ -477,7 +487,7 @@ class _Compilation:
             return None
         return cast(tuple[Node, ...], restored) if isinstance(restored, tuple) else None
 
-    def dynamic_values(self, planned: scene.Scene[Any]) -> tuple[object, ...]:
+    def dynamic_values(self, planned: scene.Scene[BodyT]) -> tuple[object, ...]:
         """The process-local values a compiled template holds slots for."""
         return _program_dynamic_values(
             self.document,
@@ -719,7 +729,7 @@ def _fallback_notes(occurrences: Sequence[FallbackAxis], selected: Mapping[str, 
     return notes
 
 
-def _search(search: _Compilation, *, search_budget: int) -> _Candidate:
+def _search(search: _Compilation[Any, Any, Any], *, search_budget: int) -> _Candidate:
     """Explore one conditional decision graph best-first and return the least degraded fit.
 
     Strategies, semantic fallbacks, and primitive ladders are all decisions in the same
@@ -793,8 +803,8 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     rendered: DocumentLike[RenderTargetT],
     request: PlanRequest[BodyT, RenderTargetT, AdapterT],
     *,
-    cache: PlanCache | None = None,
-    memo: PlanMemo | None = None,
+    cache: PlanCache[BodyT] | None = None,
+    memo: PlanMemo[BodyT] | None = None,
 ) -> PlanResult[BodyT]:
     """Resolve a complete logical document for one target.
 
@@ -806,7 +816,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     """
     exact_key = request.exact_key()
     if memo is not None and (exact := memo.replay(rendered, exact_key, request.presentation)) is not None:
-        return cast(PlanResult[BodyT], exact)
+        return exact
     compilation = _Compilation.resolve(as_document(rendered), request)
     cache_context = request.cache_context(target=compilation.target, chrome=compilation.chrome)
     cache_key = _plan_cache_key((compilation.document,), context=cache_context)
@@ -818,7 +828,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     )
     cached = cache.get(cache_key) if cache is not None else None
     if cached is not None:
-        result = cast(PlanResult[BodyT], compilation.replay(cached))
+        result = compilation.replay(cached)
         if memo is not None:
             memo.store(rendered, exact_key, request.presentation, result)
         return result
@@ -834,14 +844,14 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
 
 
 def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
-    compilation: _Compilation,
+    compilation: _Compilation[BodyT, RenderTargetT, AdapterT],
     *,
     rendered: DocumentLike[RenderTargetT],
     exact_key: tuple[object, ...],
-    cache: PlanCache | None,
+    cache: PlanCache[BodyT] | None,
     cache_key: str,
     incremental_key: str | None,
-    memo: PlanMemo | None,
+    memo: PlanMemo[BodyT] | None,
 ) -> PlanResult[BodyT]:
     """Search the layout space, assemble the scene, and record what may be reused."""
     request = compilation.request
@@ -927,7 +937,7 @@ def _compile[RenderTargetT, AdapterT, BodyT: scene.Body](
         protocol=scene.Codec.protocol,
         target=target.id,
         target_version=target.version,
-        body=cast(BodyT, body),
+        body=body,
         assets=tuple(scene.Asset(asset.key, asset.name, asset.media_type) for asset in assets),
         pagers=broker.pagers,
     )

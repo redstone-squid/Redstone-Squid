@@ -17,6 +17,7 @@ SCAN_ROOTS = (
     Path("packages/squid-reactivity/src"),
     Path("packages/squid-ui/src"),
     Path("packages/squid-ui-discord/src"),
+    Path("packages/squid-ui-slack/src"),
     Path("packages/squid-ui-widgets/src"),
     Path("packages/squid-replication/src"),
     Path("packages/squid-storage/src"),
@@ -31,11 +32,13 @@ FRAMEWORK_DISTRIBUTIONS = {
     "loro": "loro",
     "packaging": "packaging",
     "pycrdt": "pycrdt",
+    "slack_sdk": "slack-sdk",
     "squid_reactivity": "squid-reactivity",
     "squid_replication": "squid-replication",
     "squid_storage": "squid-storage",
     "squid_ui": "squid-ui",
     "squid_ui_discord": "squid-ui-discord",
+    "squid_ui_slack": "squid-ui-slack",
     "squid_ui_widgets": "squid-ui-widgets",
 }
 
@@ -47,6 +50,7 @@ FRAMEWORK_PACKAGE_NAMES = frozenset(
         "squid-storage",
         "squid-ui",
         "squid-ui-discord",
+        "squid-ui-slack",
         "squid-ui-widgets",
     }
 )
@@ -209,6 +213,7 @@ def test_layouts_package_stays_standalone() -> None:
         .should_not_import("fastapi*")
         .should_not_import("nucleation*")
         .should_not_import("squid_ui_discord*")
+        .should_not_import("squid_ui_slack*")
         .should_not_import("squid_ui_widgets*")
         .check("squid_ui", only_direct_imports=True)
     )
@@ -228,6 +233,21 @@ def test_discord_package_stays_a_leaf() -> None:
     )
 
 
+def test_slack_package_stays_a_leaf() -> None:
+    """The Slack SDK renderer depends on the engine, never a host or sibling adapter."""
+    (
+        archrule("squid-ui-slack depends on the engine, not on runtimes or the host")
+        .match("squid_ui_slack*")
+        .should_not_import("squid")
+        .should_not_import("squid.*")
+        .should_not_import("squid_ui_discord*")
+        .should_not_import("squid_ui_widgets*")
+        .should_not_import("squid_storage*")
+        .should_not_import("anyio*")
+        .check("squid_ui_slack", only_direct_imports=True)
+    )
+
+
 def test_private_names_do_not_cross_distribution_boundaries() -> None:
     """A leading-underscore name imported from a sibling distribution is an undocumented ABI.
 
@@ -242,6 +262,7 @@ def test_private_names_do_not_cross_distribution_boundaries() -> None:
         "squid_storage",
         "squid_ui",
         "squid_ui_discord",
+        "squid_ui_slack",
         "squid_ui_widgets",
     }
     violations: list[tuple[str, int, str]] = []
@@ -304,10 +325,10 @@ def test_patterns_package_is_transport_free() -> None:
 
 
 def test_only_the_bot_transport_uses_the_ui_packages() -> None:
-    """Presentation is `squid.bot`'s business; no other layer may reach for a UI package."""
-    for package in ("squid_ui*", "squid_ui_discord*", "squid_ui_widgets*"):
+    """Presentation is `squid.bot`'s business; no other host layer may reach for UI packages."""
+    for package in ("squid_ui*", "squid_ui_discord*", "squid_ui_slack*", "squid_ui_widgets*"):
         (
-            archrule(f"{package} is a Discord presentation concern")
+            archrule(f"{package} is a presentation concern")
             .match("squid*")
             .exclude("squid.bot*")
             .should_not_import(package)
@@ -331,7 +352,7 @@ def test_layouts_package_carries_no_translation_markers() -> None:
 def test_deferred_messages_are_present_in_the_catalog_template() -> None:
     with Path("locales/squid.pot").open(encoding="utf-8") as fileobj:
         catalog = read_po(fileobj)
-    msgids = {message.id for message in catalog if isinstance(message.id, str)}
+    msgids = {message.id for message in catalog}
     deferred = {
         msgid
         for path in Path("squid").rglob("*.py")
@@ -741,7 +762,15 @@ def test_the_engine_needs_no_transport_install() -> None:
     TYPE_CHECKING, which is where a back-edge would hide from a plain dependency check.
     """
     root = Path("packages/squid-ui/src/squid_ui")
-    blocked = {"anyio", "discord", "squid_storage", "squid_ui_discord", "squid_ui_widgets"}
+    blocked = {
+        "anyio",
+        "discord",
+        "slack_sdk",
+        "squid_storage",
+        "squid_ui_discord",
+        "squid_ui_slack",
+        "squid_ui_widgets",
+    }
     violations: list[str] = []
     for path in root.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -753,5 +782,42 @@ def test_the_engine_needs_no_transport_install() -> None:
                 continue
             if found := imported & blocked:
                 violations.append(f"{path}:{node.lineno}: {sorted(found)}")
+
+    assert violations == []
+
+
+def _irrefutable(pattern: ast.pattern) -> bool:
+    return isinstance(pattern, ast.MatchAs) and (pattern.pattern is None or _irrefutable(pattern.pattern))
+
+
+def test_planner_traversals_keep_their_exhaustiveness_proof() -> None:
+    """A traversal's terminal catch-all must be assert_never or a raise, never a quiet default.
+
+    The planner dispatches are proven exhaustive by `assert_never` final arms (ADR 0075);
+    the proof dies silently if someone reintroduces `case _: return ...`. Scoped to the
+    three traversal files on purpose -- `case _:` is legitimate everywhere else.
+    """
+    traversals = (
+        COMPILER_PASS_ROOT / "html_planner.py",
+        COMPILER_PASS_ROOT / "semantic_adaptation" / "lowering.py",
+        COMPILER_PASS_ROOT / "semantic_adaptation" / "decisions.py",
+    )
+    violations: list[tuple[Path, int]] = []
+    for path in traversals:
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Match):
+                continue
+            last = node.cases[-1]
+            if not _irrefutable(last.pattern):
+                continue
+            statement = last.body[0] if len(last.body) == 1 else None
+            proves = isinstance(statement, ast.Raise) or (
+                isinstance(statement, ast.Expr)
+                and isinstance(statement.value, ast.Call)
+                and isinstance(statement.value.func, ast.Name)
+                and statement.value.func.id == "assert_never"
+            )
+            if not proves:
+                violations.append((path, node.lineno))
 
     assert violations == []

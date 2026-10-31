@@ -14,13 +14,14 @@ from squid_reactivity.operations import (
     Succeeded,
     operation,
 )
-from squid_ui.runtime.component import Component, RenderResult
+from squid_ui.document import DocumentLike
+from squid_ui.runtime.component import Component
 from squid_ui_discord.delivery import Delivered, MessageDestination, SendResult
 from squid_ui_discord.message_root import MessageRoot
 
 type Work[ValueT] = Callable[[], Awaitable[ValueT]]
-type SuccessRenderer[ValueT] = Callable[[ValueT], RenderResult]
-type ErrorRenderer = Callable[[Exception], RenderResult]
+type SuccessRenderer[ValueT] = Callable[[ValueT], DocumentLike]
+type ErrorRenderer = Callable[[Exception], DocumentLike]
 type ErrorObserver = Callable[[ManagedError], Awaitable[None]]
 type MessageRootFactory = Callable[[Component], MessageRoot]
 type ManagedDelivery = SendResult | None
@@ -37,10 +38,10 @@ class ManagedError:
 class _Scene(Component):
     """A component containing one already-rendered scene."""
 
-    def __init__(self, scene: RenderResult) -> None:
+    def __init__(self, scene: DocumentLike) -> None:
         self._scene = scene
 
-    def render(self) -> RenderResult:
+    def render(self) -> DocumentLike:
         return self._scene
 
 
@@ -53,7 +54,7 @@ class _ManagedResult[ValueT](Component):
         self,
         work: Work[ValueT],
         *,
-        initial: RenderResult,
+        initial: DocumentLike,
         render_success: SuccessRenderer[ValueT],
         render_error: ErrorRenderer | None,
     ) -> None:
@@ -64,7 +65,7 @@ class _ManagedResult[ValueT](Component):
         self.execution = self._run.start()
 
     @property
-    def initial(self) -> RenderResult:
+    def initial(self) -> DocumentLike:
         """Return the scene shown while the callback is running."""
         return self._initial
 
@@ -73,7 +74,7 @@ class _ManagedResult[ValueT](Component):
         """Return the optional failure renderer."""
         return self._render_error
 
-    def render(self) -> RenderResult:
+    def render(self) -> DocumentLike:
         """Render the pending or terminal result."""
         match self.execution.status:
             case Pending():
@@ -93,22 +94,22 @@ class _ManagedResult[ValueT](Component):
         return await self._work()
 
 
-def _identity[ValueT](value: ValueT) -> RenderResult:
-    return cast(RenderResult, value)
+def _identity[ValueT](value: ValueT) -> DocumentLike:
+    return cast(DocumentLike, value)
 
 
 @overload
 async def run_managed_result(
-    work: Work[RenderResult],
+    work: Work[DocumentLike],
     *,
     message_destination: MessageDestination,
     make_root: MessageRootFactory,
-    initial: RenderResult | None = None,
+    initial: DocumentLike | None = None,
     render_success: None = None,
     render_error: ErrorRenderer | None = None,
     on_error: ErrorObserver | None = None,
     dismiss_on_success: bool = False,
-) -> RenderResult: ...
+) -> DocumentLike: ...
 
 
 @overload
@@ -117,7 +118,7 @@ async def run_managed_result[ValueT](
     *,
     message_destination: MessageDestination,
     make_root: MessageRootFactory,
-    initial: RenderResult | None = None,
+    initial: DocumentLike | None = None,
     render_success: SuccessRenderer[ValueT],
     render_error: ErrorRenderer | None = None,
     on_error: ErrorObserver | None = None,
@@ -130,7 +131,7 @@ async def run_managed_result[ValueT](
     *,
     message_destination: MessageDestination,
     make_root: MessageRootFactory,
-    initial: RenderResult | None = None,
+    initial: DocumentLike | None = None,
     render_success: SuccessRenderer[ValueT] | None = None,
     render_error: ErrorRenderer | None = None,
     on_error: ErrorObserver | None = None,

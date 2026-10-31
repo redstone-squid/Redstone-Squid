@@ -1,7 +1,5 @@
 """Public namespace and packaging contracts for the portable engine."""
 
-import subprocess
-import sys
 import tomllib
 from pathlib import Path
 from types import ModuleType
@@ -9,6 +7,7 @@ from types import ModuleType
 import pytest
 
 import squid_ui as sl
+from squid_ui import testing
 
 # ~115 names: the authoring vocabulary. See docs/plans/squid-ui-redesign/58-public-api-narrowing.md
 # for the promotion rule and the grouped rationale (namespaces, component model, document,
@@ -51,6 +50,10 @@ ROOT_API = frozenset(
         "ScaleEvent",
         "SelectionEvent",
         "SquidUiError",
+        "SlackHomeTarget",
+        "SlackMessageTarget",
+        "SlackModalTarget",
+        "SlackTarget",
         "SubmitEvent",
         "TextLike",
         "TextValue",
@@ -128,6 +131,7 @@ ROOT_API = frozenset(
         "scene",
         "section",
         "semantic",
+        "slack",
         "sources",
         "spill",
         "stack",
@@ -149,12 +153,17 @@ ROOT_API = frozenset(
 )
 
 ROOT_NAMESPACES = (
+    "chrome",
+    "document",
+    "emoji",
+    "entity",
     "errors",
     "forms",
     "guards",
     "html",
     "interactions",
     "operations",
+    "palette",
     "planning",
     "primitives",
     "profiling",
@@ -163,6 +172,7 @@ ROOT_NAMESPACES = (
     "runtime",
     "scene",
     "semantic",
+    "slack",
     "sources",
     "temporal",
     "text",
@@ -269,29 +279,22 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
     `squid_storage` joins `discord` and `anyio` on the blocked list because it was a mandatory
     dependency of this package while only the Discord durability modules imported it.
     """
-    code = """
-import importlib.abc
-import sys
-
-class BlockDownstream(importlib.abc.MetaPathFinder):
-    def find_spec(self, fullname, path=None, target=None):
-        if fullname.split(".", 1)[0] in {"discord", "anyio", "squid_storage", "squid_ui_discord", "squid_ui_widgets"}:
-            raise ModuleNotFoundError(fullname)
-        return None
-
-sys.meta_path.insert(0, BlockDownstream())
-import squid_ui
-import squid_ui.html
-import squid_ui.planning
-import squid_ui.profiling
-import squid_ui.runtime
-import squid_ui.runtime.shared
-import squid_ui.runtime.topics
-assert squid_ui.runtime.shared.SharedState
-assert squid_ui.runtime.shared.SharedStatePool
-assert not {"discord", "anyio", "squid_storage", "squid_ui_discord", "squid_ui_widgets"} & set(sys.modules)
-"""
-    subprocess.run([sys.executable, "-c", code], check=True)
+    testing.assert_imports_without(
+        [
+            "squid_ui",
+            "squid_ui.html",
+            "squid_ui.planning",
+            "squid_ui.profiling",
+            "squid_ui.runtime",
+            "squid_ui.runtime.shared",
+            "squid_ui.runtime.topics",
+        ],
+        "discord",
+        "anyio",
+        "squid_storage",
+        "squid_ui_discord",
+        "squid_ui_widgets",
+    )
 
 
 def test_package_metadata_names_only_the_reactive_kernel() -> None:

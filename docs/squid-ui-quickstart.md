@@ -45,10 +45,24 @@ class Counter(sd.Screen):
 
 @bot.tree.command()
 async def counter(interaction: discord.Interaction) -> None:
-    await Counter.show(interaction)
+    await Counter().show(interaction)
 ```
 
-`Screen.show()` resolves the installed runtime, localization, user, destination, and access policy.
+`screen.show()` resolves the installed runtime, localization, user, destination, and access policy.
+Omit `access` for an owner-only screen. For a logical session, declare `session_name` and its policy
+alongside the common root policy:
+
+```python
+class Lobby(sd.Screen):
+    session_name = "lobby"
+    scope = sd.ScopeKind.GUILD
+    access = sd.Everyone()
+    visibility = "public"
+    capacity = 8
+```
+
+Override `resolve_access(invocation)` when access depends on constructor state. Use `on_load()` for
+invocation-dependent loading before the first render; `opening` is available inside that hook.
 For one-off output, resolve an invocation directly:
 
 ```python

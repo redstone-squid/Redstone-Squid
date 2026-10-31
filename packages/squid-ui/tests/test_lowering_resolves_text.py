@@ -6,7 +6,12 @@ type is ever added that carries text through lowering untouched, an unresolved `
 reach those readers and raise there instead of here.
 """
 
+from typing import Any, cast
+
+import pytest
+
 from squid_ui.chrome import DEFAULT_CHROME
+from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.limits import LIMITS
 from squid_ui.planning.semantic_adaptation.lowering import lower_semantics
 from squid_ui.primitives.nodes import (
@@ -31,6 +36,7 @@ from squid_ui.primitives.nodes import (
     Thumbnail,
 )
 from squid_ui.runtime.presentation_state import PresentationState
+from squid_ui.target_types import DiscordTarget, Renderable
 from squid_ui.text import NEUTRAL, Message
 
 _TEXT_FIELDS = ("content", "label", "description", "placeholder")
@@ -114,3 +120,19 @@ def test_lowering_leaves_no_deferred_text_behind() -> None:
         "Card",
     ]
     assert [name for node in lowered.nodes for name in _deferred_text_in(node)] == []
+
+
+def test_unknown_renderables_are_rejected_with_their_path() -> None:
+    class Unregistered(Renderable[DiscordTarget]):
+        pass
+
+    # An unhandled node used to be cast into the primitive stream and drift downstream
+    # unresolved; now lowering refuses it by name, at its position.
+    with pytest.raises(LayoutInvariantError, match=r"\$\.0: Unregistered is neither"):
+        lower_semantics(
+            [cast(Any, Unregistered())],
+            limits=LIMITS,
+            chrome=DEFAULT_CHROME,
+            localization=NEUTRAL,
+            session=PresentationState(),
+        )

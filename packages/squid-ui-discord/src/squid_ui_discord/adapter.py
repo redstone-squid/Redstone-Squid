@@ -1,6 +1,6 @@
 """The verified discord.py adapter profile and boundary checks."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import cache
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, cast
@@ -10,6 +10,7 @@ from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
 from squid_ui.errors import LayoutInvariantError
+from squid_ui.extensions import ExtensionKind
 from squid_ui.planning.adapter import (
     AdapterCapability,
     AdapterProfile,
@@ -20,9 +21,20 @@ from squid_ui.planning.target import AnyTarget
 from squid_ui.target_types import DiscordPy27Adapter, DiscordPyAdapter
 from squid_ui_discord.inspection import cost
 
+type ItemFactory = Callable[[], discord.ui.Item[Any]]
+
+DISCORD_ITEM = ExtensionKind[ItemFactory, discord.ui.Item[Any]]("discord.item")
+"""Embed one discord.py item, measured, behind a portable fallback.
+
+The pairing the kind string could not state: authored with a zero-argument factory,
+drawn as the `discord.ui.Item` that factory returns.
+"""
+
 
 class _DiscordItemExtension:
-    def prepare(self, payload: object) -> PreparedExtension[discord.ui.Item[Any]]:
+    def prepare(self, payload: ItemFactory) -> PreparedExtension[discord.ui.Item[Any]]:
+        # Still checked, though `ExtensionKind` now states it: a scene can be authored from
+        # untyped code, and "not a factory" is a better report than "the factory failed".
         if not callable(payload):
             message = "discord.item extension payload must be a zero-argument factory"
             raise LayoutInvariantError(message)
@@ -44,7 +56,7 @@ DISCORD_PY_27_ADAPTER = AdapterProfile(
     "discord.py",
     ">=2.7,<2.8",
     DISCORD_PY_BEHAVIOR_CAPABILITIES,
-    {"discord.item": _DiscordItemExtension()},
+    {DISCORD_ITEM.name: _DiscordItemExtension()},
 )
 
 
@@ -62,8 +74,8 @@ def discord_py_adapter_profile(
     name: str,
     version_expression: str,
     *,
-    capabilities: frozenset[str] = DISCORD_PY_BEHAVIOR_CAPABILITIES,
-    extensions: Mapping[str, ExtensionAdapter[Any]] | None = None,
+    capabilities: frozenset[AdapterCapability] = DISCORD_PY_BEHAVIOR_CAPABILITIES,
+    extensions: Mapping[str, ExtensionAdapter[Any, Any]] | None = None,
 ) -> AdapterProfile[DiscordPyAdapter]:
     """Declare an application-verified discord.py adapter profile."""
     return AdapterProfile(
@@ -75,7 +87,9 @@ def discord_py_adapter_profile(
     )
 
 
-def require_discord_py_capability(profile: AdapterProfile[DiscordPyAdapter], capability: str, operation: str) -> None:
+def require_discord_py_capability(
+    profile: AdapterProfile[DiscordPyAdapter], capability: AdapterCapability, operation: str
+) -> None:
     """Verify the selected profile and installed discord.py at an adapter boundary."""
     if capability not in profile.capabilities:
         message = f"adapter profile {profile.name!r} cannot {operation}; it lacks {capability!r}"
@@ -94,7 +108,9 @@ def require_discord_py_capability(profile: AdapterProfile[DiscordPyAdapter], cap
         raise LayoutInvariantError(message)
 
 
-def require_discord_py_target(target: AnyTarget, capability: str, operation: str) -> AdapterProfile[DiscordPyAdapter]:
+def require_discord_py_target(
+    target: AnyTarget, capability: AdapterCapability, operation: str
+) -> AdapterProfile[DiscordPyAdapter]:
     """Extract and verify the discord.py profile bound to a target."""
     profile = target.adapter
     if profile is None or not issubclass(profile.family, DiscordPyAdapter):

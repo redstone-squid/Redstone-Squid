@@ -112,6 +112,7 @@ jobs:
           fi
           uv pip install --python "$smoke_python" --find-links dist \
             "squid-ui-discord[postgres]==$FRAMEWORK_VERSION" \
+            "squid-ui-slack==$FRAMEWORK_VERSION" \
             "squid-ui-widgets==$FRAMEWORK_VERSION" \
             "squid-replication[loro,pycrdt]==$FRAMEWORK_VERSION"
           "$smoke_python" scripts/smoke_squid_ui_install.py

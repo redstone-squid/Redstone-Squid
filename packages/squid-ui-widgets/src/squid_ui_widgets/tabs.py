@@ -3,23 +3,24 @@
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
+from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, choice, heading, stack
-from squid_ui.runtime.component import RenderResult
 from squid_ui.semantic import ControlDisplay
+from squid_ui.target_types import RenderTarget
 from squid_ui.text import TextLike
 from squid_ui_widgets._content import ContentItem, ContentLike, normalize_content, require_key
 from squid_ui_widgets.drivers import ComponentDriver, MachineControls, TransitionHandler
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class Tab:
+class Tab[RenderTargetT: RenderTarget = RenderTarget]:
     """One tab and the content shown while it is selected."""
 
     key: str
     label: TextLike
-    content: tuple[ContentItem, ...]
+    content: tuple[ContentItem[RenderTargetT], ...]
 
-    def __init__(self, key: str, label: TextLike, content: ContentLike) -> None:
+    def __init__(self, key: str, label: TextLike, content: ContentLike[RenderTargetT]) -> None:
         require_key(key, name="Tab.key")
         object.__setattr__(self, "key", key)
         object.__setattr__(self, "label", label)
@@ -33,16 +34,16 @@ class TabsState:
     selected: str
 
 
-class Tabs:
+class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
     """A pure keyed tab machine with generic component and router shells."""
 
     def __init__(
         self,
-        tabs: Iterable[Tab],
+        tabs: Iterable[Tab[RenderTargetT]],
         *,
         key: str,
         initial: str | None = None,
-        heading: TextLike | None = None,
+        title: TextLike | None = None,
     ) -> None:
         self.key = require_key(key, name="Tabs.key")
         self.tabs = tuple(tabs)
@@ -56,7 +57,7 @@ class Tabs:
         if initial is not None and initial not in keys:
             message = f"Tabs.initial {initial!r} is not one of the tab keys"
             raise ValueError(message)
-        self.heading = heading
+        self.title = title
         self._initial_state = TabsState(initial or self.tabs[0].key)
 
     @property
@@ -68,8 +69,10 @@ class Tabs:
         *,
         initial: TabsState | None = None,
         on_change: TransitionHandler[TabsState] | None = None,
-    ) -> ComponentDriver[TabsState]:
+    ) -> ComponentDriver[TabsState, RenderTargetT]:
         """Build the in-memory shell for this tab set."""
+        if initial is None:
+            return ComponentDriver(self, on_change=on_change)
         return ComponentDriver(self, initial=initial, on_change=on_change)
 
     def transition(
@@ -88,7 +91,9 @@ class Tabs:
             return state
         return TabsState(selected)
 
-    def render(self, state: TabsState, controls: MachineControls[TabsState]) -> RenderResult:
+    def render(
+        self, state: TabsState, controls: MachineControls[TabsState, RenderTargetT]
+    ) -> DocumentLike[RenderTargetT]:
         current = next((tab for tab in self.tabs if tab.key == state.selected), self.tabs[0])
         if len(self.tabs) <= 5:
             selector = action_controls(
@@ -115,7 +120,7 @@ class Tabs:
                 placeholder=current.label,
             )
         return stack(
-            heading(self.heading) if self.heading is not None else None,
+            heading(self.title) if self.title is not None else None,
             selector,
             *controls.content(current.content, prefix=f"tab-{current.key}"),
         )

@@ -12,6 +12,7 @@ from squid_ui.planning import (
     measure,
 )
 from squid_ui.primitives import (
+    Budget,
     Code,
     Drop,
     Footer,
@@ -35,30 +36,18 @@ from squid_ui_discord import (
     V2_LIMITS as LIMITS,
 )
 from squid_ui_discord import conform, render_static
+from squid_ui_discord import testing as sd
 from squid_ui_discord.conformance import ELLIPSIS
 from squid_ui_discord.testing import assert_within_limits
 
 
-def _static_view(*args, **kwargs) -> discord.ui.LayoutView:
-    """The drawn layout of a sessionless V2 document, for tests that only read components."""
-    return render_static(*args, **kwargs).layout
-
-
 def _text_of(view: discord.ui.LayoutView) -> str:
-    return "\n".join(c["content"] for c in _flat(view.to_components()) if c.get("type") == 10)
-
-
-def _flat(components):
-    for component in components:
-        yield component
-        yield from _flat(component.get("components", []))
-        if component.get("accessory"):
-            yield component["accessory"]
+    return "\n".join(sd.payload_texts(view))
 
 
 class TestFitting:
     def test_small_document_renders_verbatim(self):
-        view = _static_view(
+        view = sd.static_view(
             [
                 Heading("Build 123"),
                 Text("A very nice piston door."),
@@ -77,7 +66,7 @@ class TestFitting:
         lang = "py"
         fence_cost = len(f"```{lang}\n") + len("\n```")
         content = "x" * (LIMITS.total_text - fence_cost)
-        view = _static_view([Code(content, lang=lang)])
+        view = sd.static_view([Code(content, lang=lang)])
         assert ELLIPSIS not in _text_of(view)
         assert conform(view) == []
 
@@ -85,7 +74,7 @@ class TestFitting:
         lang = "py"
         fence_cost = len(f"```{lang}\n") + len("\n```")
         content = "x" * (LIMITS.total_text - fence_cost + 1)
-        view = _static_view([Code(content, lang=lang)])
+        view = sd.static_view([Code(content, lang=lang)])
         assert ELLIPSIS in _text_of(view)
         assert conform(view) == []
 
@@ -143,29 +132,29 @@ class TestFitting:
         assert isinstance(solved.failures[0].code, str)
 
     def test_truncate_tail_keeps_the_end(self):
-        view = _static_view([Text("start " + "x" * 4000 + " end", overflow=Truncate(keep="tail"))])
+        view = sd.static_view([Text("start " + "x" * 4000 + " end", overflow=Truncate(keep="tail"))])
         text = _text_of(view)
         assert text.startswith(ELLIPSIS)
         assert text.endswith(" end")
 
     def test_spill_line_appears_with_count(self):
         lines = tuple(f"entry {index:03d} " + "x" * 90 for index in range(60))
-        view = _static_view([Lines(lines)])
+        view = sd.static_view([Lines(lines)])
         text = _text_of(view)
         assert "entry 000" in text
         assert "more" in text
         assert conform(view) == []
 
     def test_spill_fits_everything_when_it_can(self):
-        view = _static_view([Lines(("a", "b", "c"))])
+        view = sd.static_view([Lines(("a", "b", "c"))])
         assert _text_of(view) == "a\nb\nc"
 
     def test_code_fences_cannot_be_broken_out_of(self):
-        view = _static_view([Code("evil\n```\n@everyone")])
+        view = sd.static_view([Code("evil\n```\n@everyone")])
         assert "\n```\n@everyone" not in _text_of(view)
 
     def test_empty_nodes_vanish(self):
-        view = _static_view([Text(""), Lines(()), Text("real")])
+        view = sd.static_view([Text(""), Lines(()), Text("real")])
         assert _text_of(view) == "real"
 
     def test_raw_item_text_cost_reserves_budget(self):
@@ -173,10 +162,22 @@ class TestFitting:
         solved = measure([Text("x" * 4000), raw])
         assert len(solved.children[0].content) <= LIMITS.total_text - 100  # pyrefly: ignore
 
+    def test_a_budget_region_leaves_its_unbudgeted_siblings_alone(self):
+        """A capped region is a sibling, not a claim on everything the document has."""
+        heading = Heading("Kept")
+        capped = Budget((Text("x" * 2000, overflow=Truncate()),), 120, 320)
+        footer = Footer("also kept")
+        solved = measure([heading, capped, footer])
+        contents = [child.content for child in solved.children]  # pyrefly: ignore
+
+        assert contents[0] == "## Kept"
+        assert len(contents[1]) <= 320, "the region is still held to its own ceiling"
+        assert contents[2] == "-# also kept"
+
 
 class TestStructure:
     def test_full_card_shape(self):
-        view = _static_view(
+        view = sd.static_view(
             [
                 Panel(
                     children=(
@@ -194,7 +195,7 @@ class TestStructure:
         )
         payload = view.to_components()
         assert payload[0]["type"] == 17
-        types = [c["type"] for c in _flat(payload)]
+        types = [c["type"] for c in sd.iter_component_payloads(payload)]
         assert types.count(12) == 2  # semantic media collection lowered to two valid galleries
         assert conform(view) == []
         assert_within_limits(view)
@@ -255,7 +256,7 @@ def _draw_node(draw, kind: str):
 
 @given(documents())
 def test_rendered_documents_always_fit(nodes):
-    view = _static_view(nodes)
+    view = sd.static_view(nodes)
     assert_within_limits(view)
 
 
@@ -263,5 +264,5 @@ def test_rendered_documents_always_fit(nodes):
 def test_measurement_needs_no_conform_interventions(nodes):
     # The engine must measure exactly: the boundary gate should never have to intervene.
     measure(nodes)
-    view = _static_view(nodes)
+    view = sd.static_view(nodes)
     assert conform(view) == []

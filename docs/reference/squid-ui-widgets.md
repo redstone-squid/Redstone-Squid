@@ -79,6 +79,14 @@ import squid_ui_widgets as sw
 
 ::: squid_ui_widgets.DEFAULT_LOADING_COPY
 
+## Shared machine values
+
+::: squid_ui_widgets.MachineKeySegment
+
+::: squid_ui_widgets.PageDirection
+
+::: squid_ui_widgets.PagePosition
+
 ## Decisions and votes
 
 ::: squid_ui_widgets.Decision
@@ -158,3 +166,4 @@ The machinery beneath the widgets, for building your own.
 | Module | Purpose |
 |---|---|
 | `squid_ui_widgets.guards` | The one guard whose refusal is a rendered question. |
+| `squid_ui_widgets.testing` | Drive a machine's two shells with no frontend attached. |

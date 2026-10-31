@@ -9,6 +9,7 @@ from whenever import Instant
 import squid_ui_discord as sd
 from squid.accounts.domain import Account, AccountIdentity, AliasClaim, ClaimStatus
 from squid.bot.claims_view import ClaimReviewComponent
+from squid.permissions.domain import PermissionNode
 from squid_ui_discord.testing import commit_render
 from tests.helpers.discord import make_layout_bot
 
@@ -27,12 +28,17 @@ def make_component(claims: tuple[AliasClaim, ...]) -> ClaimReviewComponent:
         approve_alias_claim=AsyncMock(return_value=claims[0] if claims else None),
         reject_alias_claim=AsyncMock(return_value=claims[0] if claims else None),
     )
+
+    async def authorize(_node: PermissionNode) -> bool:
+        return True
+
     return ClaimReviewComponent(
         cast(Any, accounts),
         claims,
         author_id=AUTHOR_ID,
         can_approve=True,
         can_reject=True,
+        authorize=authorize,
     )
 
 

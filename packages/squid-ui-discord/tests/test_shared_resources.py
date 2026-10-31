@@ -5,15 +5,12 @@ same idea: a computed, which is a pure function of cells and needs no address of
 a resource, which is loaded and therefore can move on its own -- so it publishes.
 """
 
-import asyncio
-
-import anyio
-import discord
 import pytest
 
 import squid_ui as sl
 from squid_ui.runtime.shared import describe
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
+from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import delivered_to, fake_message
 
 
@@ -52,10 +49,6 @@ class Reader(sl.Component[sl.ComponentsV2Target]):
                 return sl.paragraph("loading")
 
 
-def texts(view: discord.ui.LayoutView) -> list[str]:
-    return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
-
-
 async def mounted(catalog: Catalog, scheduler: MessageRootScheduler, message: object) -> MessageRoot:
     """Send a reader, and hand the mount back so the caller keeps it alive.
 
@@ -65,14 +58,6 @@ async def mounted(catalog: Catalog, scheduler: MessageRootScheduler, message: ob
     message_root = MessageRoot(Reader(catalog), access=Everyone(), scheduler=scheduler, timeout=None)
     await message_root.send(delivered_to(message))
     return message_root
-
-
-async def drain(scheduler: MessageRootScheduler, bus: sl.runtime.LocalTopicBus) -> None:
-    del bus
-    async with anyio.create_task_group() as tasks:
-        tasks.start_soon(scheduler.run)
-        await asyncio.wait_for(scheduler._queue.join(), timeout=1)
-        tasks.cancel_scope.cancel()
 
 
 @pytest.fixture
@@ -120,10 +105,10 @@ async def test_a_message_root_reading_a_namespace_computed_follows_the_cells_beh
 
     with sl.runtime.transaction():
         prefs.first = "Grace"
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
     await message_root.refresh()
 
-    assert texts(message.edit.await_args.kwargs["view"]) == ["Grace Lovelace"]
+    assert sd.payload_texts(message.edit.await_args.kwargs["view"]) == ["Grace Lovelace"]
 
 
 # --- Resource on a namespace ----------------------------------------------------------
@@ -161,9 +146,9 @@ async def test_an_out_of_band_reload_redraws_every_root(bus: sl.runtime.LocalTop
     message_roots = [await mounted(catalog, scheduler, message) for message in messages]
 
     await catalog.entries.reload()
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
-    assert [texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k1#2"], ["k1#2"]]
+    assert [sd.payload_texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k1#2"], ["k1#2"]]
     assert all(message_root.followed for message_root in message_roots)
 
 
@@ -175,12 +160,12 @@ async def test_a_write_to_a_cell_the_loader_read_reloads_once_for_everyone(bus: 
 
     with sl.runtime.transaction():
         catalog.key = "k2"
-    await drain(scheduler, bus)
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
+    await sd.drain(scheduler)
 
     assert catalog._loads == 2, "one reload served both mounts"
     assert all(message_root.followed for message_root in message_roots)
-    assert [texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k2#2"], ["k2#2"]]
+    assert [sd.payload_texts(message.edit.await_args.kwargs["view"]) for message in messages] == [["k2#2"], ["k2#2"]]
 
 
 async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.LocalTopicBus) -> None:
@@ -191,9 +176,9 @@ async def test_a_replace_publishes_when_its_action_commits(bus: sl.runtime.Local
 
     with sl.runtime.transaction():
         catalog.entries.replace("installed")
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
-    assert texts(message.edit.await_args.kwargs["view"]) == ["installed"]
+    assert sd.payload_texts(message.edit.await_args.kwargs["view"]) == ["installed"]
     assert message_root.followed
 
 
@@ -209,7 +194,7 @@ async def test_a_rolled_back_replace_publishes_nothing(bus: sl.runtime.LocalTopi
         catalog.entries.replace("installed")
         failure = "handler failed"
         raise RuntimeError(failure)
-    await drain(scheduler, bus)
+    await sd.drain(scheduler)
 
     assert catalog.entries.value == "k1#1"
     assert message.edit.await_count == edits

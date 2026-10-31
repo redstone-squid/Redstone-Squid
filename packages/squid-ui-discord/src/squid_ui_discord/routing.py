@@ -48,6 +48,7 @@ from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.profiling import NoOpProfiler, OperationKind, OperationRecorder, Profiler, TraceResult, TraceStatus
 from squid_ui.routing import Route
 from squid_ui.target_types import DiscordPyAdapter
+from squid_ui.text import NEUTRAL, localization_scope
 from squid_ui_discord._invocation_context import invocation_scope
 from squid_ui_discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_ui_discord.message_root_contracts import ErrorHook
@@ -720,13 +721,21 @@ class Router[BotT: discord.Client]:
 
             async def dispatch_operation() -> None:
                 with invocation_scope(interaction):
+                    from squid_ui_discord.invocation import Invocation
+                    from squid_ui_discord.runtime import ClientRuntimeMissing
+
                     try:
-                        handled = await self._run_middleware(middleware, request, endpoint, profile=profile)
+                        localization = (await Invocation.of(interaction)).localization
+                    except ClientRuntimeMissing:
+                        localization = NEUTRAL
+                    try:
+                        with localization_scope(localization):
+                            handled = await self._run_middleware(middleware, request, endpoint, profile=profile)
                     except Exception as error:
                         profile.set_result(
                             TraceResult(TraceStatus.FAILED, f"{type(error).__module__}.{type(error).__qualname__}")
                         )
-                        with profile.span("error_hook"):
+                        with localization_scope(localization), profile.span("error_hook"):
                             await self._handle_error(interaction, error, source)
                         finish_acknowledgement("error_hook")
                     else:

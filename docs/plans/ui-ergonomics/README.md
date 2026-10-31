@@ -6,4 +6,4 @@ The design spike recorded in `363e4932` is superseded by the shipped `Invocation
 
 Keep this directory only as the historical pointer for decisions made during the spike;
 new application code should enter through `Invocation.reply`/`mount`/`open` or a declarative
-`Screen.show`.
+`screen.show`.
