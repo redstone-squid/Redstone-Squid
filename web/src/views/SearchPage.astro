@@ -6,6 +6,7 @@ import SearchComposer from "../components/SearchComposer";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { asCatalogueError, fetchSearch } from "../lib/api";
 import { localizePath, translate, type Locale } from "../lib/i18n";
+import { PAGE_PARAMS, readOffset } from "../lib/pagination";
 import { composeGuidedQuery, queryFromUrl } from "../lib/search";
 
 type Props = { locale: Locale };
@@ -13,14 +14,14 @@ const { locale } = Astro.props;
 const guided = queryFromUrl(Astro.url.searchParams);
 const q = Astro.url.searchParams.get("q")?.trim() || composeGuidedQuery(guided);
 const sort = Astro.url.searchParams.get("sort")?.trim() || undefined;
-const cursor = Astro.url.searchParams.get("cursor")?.trim() || undefined;
+const offset = readOffset(Astro.url.searchParams);
 const canonicalUrl = new URL(Astro.url);
-canonicalUrl.searchParams.delete("cursor");
+for (const name of PAGE_PARAMS) canonicalUrl.searchParams.delete(name);
 let error;
 let page;
 if (q) {
   try {
-    page = await fetchSearch(locale, { q, sort, cursor });
+    page = await fetchSearch(locale, { q, sort, offset });
   } catch (caught) {
     error = asCatalogueError(caught);
     Astro.locals.responseStatus = error.status;
@@ -33,7 +34,7 @@ if (q) {
   description={translate(locale, "meta.searchDescription")}
   locale={locale}
   canonicalPath={`${canonicalUrl.pathname}${canonicalUrl.search}`}
-  noindex={Boolean(cursor || error)}
+  noindex={Boolean(offset || error)}
 >
   <div class="page-shell section-stack">
     <header class="page-heading">
@@ -95,7 +96,7 @@ if (q) {
               );
             })}
           </div>
-          <Pagination locale={locale} cursor={page!.next_cursor} url={Astro.url} />
+          <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
         </section>
       )
     }

@@ -5,6 +5,7 @@ import os
 import threading
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
+from contextvars import ContextVar, Token
 from typing import TYPE_CHECKING, Any, override
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
@@ -16,6 +17,25 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 type SpanAttribute = str | bool | int | float
+
+# Request-scoped correlation id, bound by the API's RequestContextMiddleware. When set it wins
+# over the trace-derived id so a whole request shares one id even without the observability extra.
+_bound_correlation_id: ContextVar[str | None] = ContextVar("squid_bound_correlation_id", default=None)
+
+
+def bind_correlation_id(value: str) -> Token[str | None]:
+    """Bind a request-scoped correlation id consulted by ``correlation_id``."""
+    return _bound_correlation_id.set(value)
+
+
+def unbind_correlation_id(token: Token[str | None]) -> None:
+    """Restore the correlation binding captured at bind time."""
+    _bound_correlation_id.reset(token)
+
+
+def active_trace_id() -> str | None:
+    """Return the active 128-bit OpenTelemetry trace id, or ``None`` without telemetry."""
+    return _current_trace_id()
 
 
 class TraceSpan:
@@ -51,6 +71,8 @@ class TraceContextFilter(logging.Filter):
             record.trace_id = trace_id
         if not hasattr(record, "span_id"):
             record.span_id = span_id
+        if not hasattr(record, "request_id"):
+            record.request_id = _bound_correlation_id.get()
         return True
 
 
@@ -118,7 +140,7 @@ def configure_observability(config: ObservabilityConfig, *, service_name: str) -
         return handle
 
 
-def instrument_api_app(app: "FastAPI", config: ObservabilityConfig) -> None:
+def instrument_api_app(app: FastAPI, config: ObservabilityConfig) -> None:
     """Instrument one FastAPI application when observability is enabled and installed."""
     if not config.enabled:
         return
@@ -134,7 +156,10 @@ def instrument_api_app(app: "FastAPI", config: ObservabilityConfig) -> None:
 
 
 def correlation_id() -> str:
-    """Return the active 128-bit trace ID, with a local fallback when tracing is absent."""
+    """Return the request-scoped id when bound, else the active trace ID, else a local fallback."""
+    bound = _bound_correlation_id.get()
+    if bound is not None:
+        return bound
     trace_id = _current_trace_id()
     return trace_id if trace_id is not None else uuid4().hex[:12]
 
@@ -331,7 +356,7 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
     SQLAlchemyInstrumentor().instrument()
     AioHttpClientInstrumentor().instrument()
     HTTPXClientInstrumentor().instrument()
-    _install_trace_log_filter()
+    install_trace_context_log_filter()
 
     def shutdown() -> None:
         try:
@@ -353,12 +378,12 @@ def _resource_attributes(config: ObservabilityConfig, component: str) -> dict[st
     return attributes
 
 
-def _install_trace_log_filter() -> None:
-    trace_filter = TraceContextFilter()
+def install_trace_context_log_filter() -> None:
+    """Attach trace/request-id log correlation to every named handler, at most once each."""
     for handler_name in logging.getHandlerNames():
         handler = logging.getHandlerByName(handler_name)
-        if handler is not None:
-            handler.addFilter(trace_filter)
+        if handler is not None and not any(isinstance(existing, TraceContextFilter) for existing in handler.filters):
+            handler.addFilter(TraceContextFilter())
 
 
 def _trace_endpoint(endpoint: str) -> str:
@@ -379,14 +404,18 @@ __all__ = [
     "ObservabilityHandle",
     "TraceContextFilter",
     "TraceSpan",
+    "active_trace_id",
     "add_counter",
+    "bind_correlation_id",
     "configure_observability",
     "correlation_id",
     "extracted_trace_span",
     "inject_trace_context",
+    "install_trace_context_log_filter",
     "instrument_api_app",
     "record_current_exception",
     "record_gauge",
     "record_histogram",
     "trace_span",
+    "unbind_correlation_id",
 ]

@@ -60,7 +60,6 @@ class ProblemDetail(BaseModel):
     code: ErrorCode | None = None
     resource: str | None = None
     context: dict[str, JSONValue] | None = None
-    error_id: str | None = None
 
 
 def responses(*statuses: int) -> dict[int | str, dict[str, Any]]:
@@ -83,8 +82,6 @@ def _problem_response(
 ) -> Response:
     headers = {"Content-Language": locale}
     headers.update(extra_headers or {})
-    if problem.error_id is not None:
-        headers["X-Error-ID"] = problem.error_id
     return Response(
         status_code=problem.status,
         content=problem.model_dump_json(exclude_none=True),
@@ -137,10 +134,10 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
             extra_headers={"Retry-After": str(exc.retry_after)} if isinstance(exc, RateLimitedError) else None,
         )
 
-    error_id = correlation_id()
+    request_id = correlation_id()
     logger.error(
-        "Application failure [error_id=%s code=%s context=%r]",
-        error_id,
+        "Application failure [request_id=%s code=%s context=%r]",
+        request_id,
         exc.code,
         exc.context,
         exc_info=exc,
@@ -154,9 +151,9 @@ async def handle_squid_error(request: Request, exc: Exception) -> Response:
             instance=str(request.url),
             code=exc.code if service_unavailable else ErrorCode.INTERNAL_ERROR,
             resource=exc.resource if service_unavailable else None,
-            error_id=error_id,
         ),
         locale,
+        extra_headers={"Request-Id": request_id},
     )
 
 
@@ -214,8 +211,8 @@ async def handle_http_error(request: Request, exc: Exception) -> Response:
 async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
     """Log and redact an unexpected exception."""
     locale = locale_for_request(request)
-    error_id = correlation_id()
-    logger.error("Unhandled HTTP exception [error_id=%s]", error_id, exc_info=exc)
+    request_id = correlation_id()
+    logger.error("Unhandled HTTP exception [request_id=%s]", request_id, exc_info=exc)
     return _problem_response(
         ProblemDetail(
             title=translate(locale, _("Internal server error")),
@@ -223,9 +220,9 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> Response:
             detail=translate(locale, INTERNAL_ERROR_DETAIL),
             instance=str(request.url),
             code=ErrorCode.INTERNAL_ERROR,
-            error_id=error_id,
         ),
         locale,
+        extra_headers={"Request-Id": request_id},
     )
 
 

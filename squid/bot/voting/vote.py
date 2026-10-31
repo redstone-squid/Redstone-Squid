@@ -2,22 +2,19 @@
 
 import contextlib
 import logging
-from typing import TYPE_CHECKING, Literal, cast, override
+from typing import TYPE_CHECKING, override
 
 import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
-from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import build_subject
-from squid.bot.voting.base_session import AbstractVoteSession
-from squid.bot.voting.build_session import BuildVoteSession
-from squid.bot.voting.delete_log_session import DeleteLogVoteSession
-from squid.bot.voting.generic_session import GenericVoteSession
 from squid.bot.voting.poll_wizard import PollModal
+from squid.bot.voting.publisher import DiscordPollPublisher
+from squid.bot.voting.sessions import start_delete_log_vote
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     VOTE_LOG_DELETE_CAST,
@@ -25,8 +22,7 @@ from squid.permissions.domain.catalogue import (
     VOTE_WEIGHT_STAFF,
 )
 from squid.runtime import JobHandle
-from squid.voting.domain import VoteActor, VoteChoice, VoteKindLiteral, VoteOption
-from squid.voting.errors import InvalidVoteConfigurationError
+from squid.voting.domain import VoteActor, VoteKind, VoteRejection
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -34,11 +30,38 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+REJECTION_MESSAGES = {
+    VoteRejection.NOT_FOUND: _("That message is not an open vote."),
+    VoteRejection.CLOSED: _("That vote is already closed."),
+    VoteRejection.NOT_ELIGIBLE: _("You do not have a trusted role."),
+    VoteRejection.INVALID_OPTION: _("That option is not available on this vote."),
+    VoteRejection.WRONG_GUILD: _("That vote belongs to a different server."),
+    VoteRejection.NOT_AUTHORIZED: _("Only the poll creator or staff can do that."),
+}
+"""One localizable sentence per typed rejection.
+
+Keyed by the enum rather than formatted from it, so adding a rejection to the domain
+fails the lookup here instead of leaking `not_eligible` into a user's channel.
+"""
+
+_QUIET_REJECTIONS = frozenset({VoteRejection.NOT_FOUND, VoteRejection.CLOSED, VoteRejection.INVALID_OPTION})
+"""Refusals a reaction should not be answered with.
+
+Racing a close, or reacting with an emoji that is not an option, is ordinary and
+would otherwise put a bot message in the channel for every stray reaction.
+"""
+
+
+def describe_rejection(locale: str | None, rejection: VoteRejection) -> str:
+    """Render a typed rejection as a localized sentence."""
+    return t(locale, REJECTION_MESSAGES[rejection])
+
 
 class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     def __init__(self, bot: BotT):
         self.bot = bot
         self.vote_service = bot.services.votes
+        self.publisher = DiscordPollPublisher(bot)
         self._background_tasks: set[JobHandle] = set()
         self.vote_service.set_actor_resolver(self)
         self.bot.reactions.subscribe(self)
@@ -57,114 +80,57 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         self._background_tasks = {tracked for tracked in self._background_tasks if not tracked.finished.is_set()}
         self._background_tasks.add(handle)
 
-    async def get_vote_session(
-        self, message_id: int, *, status: Literal["open", "closed"] | None = None
-    ) -> AbstractVoteSession | GenericVoteSession | None:
-        """Gets a vote session from the database.
-
-        Args:
-            message_id: The message ID of the vote session.
-            status: The status of the vote session. If None, it will get any status.
-        """
-        snapshot = await self.vote_service.get_session(message_id)
-        if snapshot is None or (status is not None and snapshot.status != status):
-            return None
-        if snapshot.kind == "build":
-            return await BuildVoteSession.from_id(self.bot, snapshot.id)
-        if snapshot.kind == "delete_log":
-            return await DeleteLogVoteSession.from_id(self.bot, snapshot.id)
-        if snapshot.kind == "generic":
-            return await GenericVoteSession.from_id(self.bot, snapshot.id)
-        logger.error("Unknown vote session kind: %s", snapshot.kind)
-        msg = f"Unknown vote session kind: {snapshot.kind}"
-        raise NotImplementedError(msg)
-
     async def on_reaction_add(self, event: ReactionEvent) -> None:
-        """Handles reactions to update vote counts anonymously."""
+        """Record a ballot, keeping it secret unless the poll publishes ballots."""
         payload = event.payload
         # This must be before the removal of the reaction to prevent the bot from removing its own reaction
-        if payload.user_id == self.bot.user.id:  # type: ignore
+        if self.bot.user is not None and payload.user_id == self.bot.user.id:
             return
 
-        vote_session = await self.get_vote_session(payload.message_id, status="open")
-        if vote_session is None:
+        snapshot = await self.vote_service.get_session(payload.message_id)
+        if snapshot is None or not snapshot.is_open:
             return
 
         message = await event.message()
         user = await event.resolve_member()
-        if message is None or user is None:
+        if message is None or user is None or user.bot:
             return
-        channel = cast(GuildMessageable, message.channel)
-        if user.bot:
-            return  # Ignore bot reactions
 
         emoji_name = str(payload.emoji)
-        snapshot = await self.vote_service.get_session(payload.message_id)
-        if snapshot is None:
+        if snapshot.option_by_emoji(emoji_name, payload.guild_id or 0) is None:
             return
-        guild_options = snapshot.options_for_guild(payload.guild_id or 0)
-        if emoji_name not in {option.emoji for option in guild_options}:
-            return
-        user_id = payload.user_id
 
-        anonymous = snapshot.kind != "generic" or snapshot.poll is None or snapshot.poll.visibility != "visible_live"
-        if anonymous:
-            remove_reaction_task = self.bot.background_tasks.start(
-                message.remove_reaction(payload.emoji, user),
-                name=f"remove-vote-reaction-{payload.message_id}-{payload.user_id}",
+        if snapshot.should_remove_reaction_on_cast():
+            self._track(
+                self.bot.background_tasks.start(
+                    self._remove_reaction(message, payload.emoji, user),
+                    name=f"remove-vote-reaction-{payload.message_id}-{payload.user_id}",
+                )
             )
-            self._track(remove_reaction_task)
 
-        if isinstance(vote_session, DeleteLogVoteSession) and payload.guild_id is None:
-            # Voting in DMs is not implemented
-            return
+        if payload.guild_id is None:
+            return  # Voting in DMs is not implemented.
 
-        guild = self.bot.get_guild(payload.guild_id) if payload.guild_id is not None else None
-        member = guild.get_member(user_id) if guild is not None else None
-        if member is None:
+        actor = await self._actor(user, snapshot.kind)
+        previous = snapshot.selection_for(actor.account_id)
+        result = await self.vote_service.cast_vote(payload.message_id, actor, emoji_name)
+        if result.rejection is not None:
+            await self._report_rejection(message, result.rejection)
             return
-        actor = await self._actor(member, snapshot.kind)
-        previous = next(
-            (selection for selection in snapshot.selections if selection.account_id == actor.account_id), None
-        )
-        result = await self.vote_service.cast_vote(
-            payload.message_id,
-            actor,
-            emoji_name,
-        )
-        if result.rejection == "not_eligible":
-            locale = await resolve_locale(message, self.bot.services.settings)
-            await channel.send(
-                view=text_layout(t(locale, _("You do not have a trusted role."))),
-                allowed_mentions=no_mentions(),
-            )
-            return
-        if not result.accepted or result.session is None:
+        if result.session is None:
             return
 
-        vote_session.apply_persisted_state(result.session)
-        if (
-            snapshot.kind == "generic"
-            and snapshot.poll is not None
-            and snapshot.poll.visibility == "visible_live"
-            and previous is not None
-            and previous.emoji != emoji_name
-        ):
-            with contextlib.suppress(discord.NotFound, discord.Forbidden):
-                await message.remove_reaction(previous.emoji, user)
-        await vote_session.update_messages()
+        # A public poll keeps reactions as the visible ballot, so a changed vote has
+        # to have its previous reaction taken back or the message would show both.
+        if not result.session.is_anonymous and previous is not None and previous.emoji != emoji_name:
+            await self._remove_reaction(message, previous.emoji, user)
+        await self.bot.refresh_posts("vote_session", str(snapshot.id))
 
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
         """Synchronize reaction removal for polls that publicly retain reactions."""
         payload = event.payload
         snapshot = await self.vote_service.get_session(payload.message_id)
-        if (
-            snapshot is None
-            or snapshot.kind != "generic"
-            or snapshot.status != "open"
-            or snapshot.poll is None
-            or snapshot.poll.visibility != "visible_live"
-        ):
+        if snapshot is None or not snapshot.is_open or snapshot.is_anonymous:
             return
         selection = next((item for item in snapshot.selections if item.discord_id == payload.user_id), None)
         if selection is None or selection.emoji != str(payload.emoji):
@@ -173,110 +139,126 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if member is None or member.bot:
             return
         actor = await self._actor(member, snapshot.kind)
+        # Re-casting the same option toggles it off, which is what removing the
+        # reaction means for a poll whose reactions are the ballots.
         result = await self.vote_service.cast_vote(payload.message_id, actor, selection.emoji)
         if result.accepted and result.session is not None:
-            session = GenericVoteSession(self.bot, result.session)
-            await session.update_messages()
+            await self.bot.refresh_posts("vote_session", str(result.session.id))
 
     async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
-        """Ignore reaction clears; vote sessions remove anonymous reactions eagerly."""
+        """Restore the offered options after a moderator clears a vote card."""
+        await self._restore_reactions(event.payload.message_id)
 
     async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
-        """Ignore emoji clears; vote sessions remove anonymous reactions eagerly."""
+        """Restore the offered options after one emoji is cleared from a vote card."""
+        await self._restore_reactions(event.payload.message_id)
+
+    async def _restore_reactions(self, message_id: int) -> None:
+        """Put the configured baseline reactions back, without inferring lost ballots.
+
+        Ballots live in the database, so a clear costs the affordance and not the
+        vote. Nothing here tries to reconstruct who had reacted: for an anonymous
+        session that information was never on the message to begin with.
+        """
+        snapshot = await self.vote_service.get_session(message_id)
+        if snapshot is None or not snapshot.is_open:
+            return
+        location = next((item for item in snapshot.messages if item.id == message_id), None)
+        if location is None:
+            return
+        message = await self.bot.get_or_fetch_message(location.channel_id, message_id)
+        if message is None:
+            return
+        for option in snapshot.options_for_guild(location.guild_id):
+            with contextlib.suppress(discord.NotFound, discord.Forbidden, discord.HTTPException):
+                await message.add_reaction(option.emoji)
+
+    @staticmethod
+    async def _remove_reaction(
+        message: discord.Message, emoji: discord.PartialEmoji | str, user: discord.abc.Snowflake
+    ) -> None:
+        """Take one reaction off a message, tolerating a message or permission that is gone."""
+        with contextlib.suppress(discord.NotFound, discord.Forbidden):
+            await message.remove_reaction(emoji, user)
+
+    async def _report_rejection(self, message: discord.Message, rejection: VoteRejection) -> None:
+        """Tell a voter why their ballot was refused, in their server's language."""
+        if rejection in _QUIET_REJECTIONS:
+            return
+        locale = await resolve_locale(message, self.bot.services.settings)
+        with contextlib.suppress(discord.Forbidden, discord.NotFound):
+            await message.channel.send(
+                view=text_layout(describe_rejection(locale, rejection)),
+                allowed_mentions=no_mentions(),
+            )
 
     @hybrid_group(name="vote")
     async def vote_group(self, ctx: Context[BotT]) -> None:
         """Start and manage votes."""
         await ctx.send_help("vote")
 
+    @hybrid_group(name="poll")
+    @guild_only()
+    async def poll_group(self, ctx: Context[BotT]) -> None:
+        """Create and manage multi-option polls."""
+        await ctx.send_help("poll")
+
+    async def _open_poll_wizard(self, ctx: Context[BotT]) -> None:
+        """Open the ephemeral wizard, shared by `/poll create` and its old alias."""
+        if ctx.interaction is None:
+            await ctx.send("Use the slash command `/poll create` to open the poll editor.")
+            return
+        await ctx.interaction.response.send_modal(PollModal(self.publisher))  # pyrefly: ignore[no-matching-overload]
+
+    @poll_group.command(name="create")
+    @guild_only()
+    async def create_poll(self, ctx: Context[BotT]) -> None:
+        """Create a multi-option poll through an ephemeral preview wizard."""
+        await self._open_poll_wizard(ctx)
+
     @vote_group.command(name="poll")
     @guild_only()
-    async def poll(self, ctx: Context[BotT]) -> None:
-        """Create a multi-option poll through an ephemeral preview wizard."""
-        if ctx.interaction is None:
-            await ctx.send("Use the slash command `/vote poll` to open the poll editor.")
-            return
-        await ctx.interaction.response.send_modal(PollModal(self))  # pyrefly: ignore[no-matching-overload]
+    async def poll_alias(self, ctx: Context[BotT]) -> None:
+        """Deprecated alias for `/poll create`."""
+        await self._open_poll_wizard(ctx)
 
-    @vote_group.command(name="close")
+    @poll_group.command(name="close")
     @guild_only()
     async def close_poll(self, ctx: Context[BotT], message: discord.Message) -> None:
         """Close a poll early as its creator or a configured staff member."""
         assert ctx.guild is not None and isinstance(ctx.author, discord.Member)
-        result = await self.vote_service.close(message.id, await self._actor(ctx.author, "generic"))
-        if not result.accepted or result.session is None:
-            await ctx.send(f"Could not close poll: {result.rejection}.", ephemeral=True)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        result = await self.vote_service.close(message.id, await self._actor(ctx.author, VoteKind.GENERIC))
+        if result.rejection is not None or result.session is None:
+            await ctx.send(describe_rejection(locale, result.rejection or VoteRejection.NOT_FOUND), ephemeral=True)
             return
-        await GenericVoteSession(self.bot, result.session).update_messages()
-        await ctx.send("Poll closed.", ephemeral=True)
+        await self.bot.refresh_posts("vote_session", str(result.session.id))
+        await ctx.send(t(locale, _("Poll closed.")), ephemeral=True)
 
-    @vote_group.command(name="refresh")
+    @poll_group.command(name="refresh")
     @guild_only()
     async def refresh_poll(self, ctx: Context[BotT], message: discord.Message) -> None:
         """Refresh a poll's cached role weights."""
         assert ctx.guild is not None and isinstance(ctx.author, discord.Member)
+        locale = await resolve_locale(ctx, self.bot.services.settings)
         snapshot = await self.vote_service.get_session(message.id)
-        if snapshot is None or snapshot.kind != "generic" or snapshot.poll is None:
-            await ctx.send("That message is not a poll.", ephemeral=True)
+        if snapshot is None:
+            await ctx.send(describe_rejection(locale, VoteRejection.NOT_FOUND), ephemeral=True)
             return
-        actor = await self._actor(ctx.author, "generic")
-        if snapshot.poll.guild_id != ctx.guild.id or (
-            snapshot.author_account_id != actor.account_id and VOTE_POLL_CLOSE_ANY.name not in actor.capabilities
-        ):
-            await ctx.send("Only the poll creator or staff can refresh it.", ephemeral=True)
+        actor = await self._actor(ctx.author, VoteKind.GENERIC)
+        # Refreshing recomputes the weights a close would act on, so it is gated by the
+        # same rule rather than a second copy of it.
+        rejection = snapshot.can_close(actor)
+        if rejection is not None:
+            await ctx.send(describe_rejection(locale, rejection), ephemeral=True)
             return
         result = await self.vote_service.refresh(message.id)
         if result.session is not None:
-            await GenericVoteSession(self.bot, result.session).update_messages()
+            await self.bot.refresh_posts("vote_session", str(result.session.id))
         suffix = "" if result.complete else f" Some accounts could not be resolved: {result.unresolved_account_ids}."
-        await ctx.send(f"Poll weights refreshed.{suffix}", ephemeral=True)
+        await ctx.send(f"{t(locale, _('Poll weights refreshed.'))}{suffix}", ephemeral=True)
 
-    async def parse_poll_options(self, interaction: discord.Interaction, value: str) -> tuple[VoteOption, ...]:
-        """Validate wizard option lines and fill missing aliases from the guild palette."""
-        if interaction.guild is None:
-            msg = "Polls can only be created in a server."
-            raise InvalidVoteConfigurationError(msg)
-        lines = [line.strip() for line in value.splitlines() if line.strip()]
-        if not 2 <= len(lines) <= 10:
-            msg = "Enter between 2 and 10 option lines."
-            raise InvalidVoteConfigurationError(msg)
-        palette = (await self.vote_service.emoji_preset(interaction.guild.id, "generic")).options
-        options: list[VoteOption] = []
-        for index, line in enumerate(lines):
-            if "|" in line:
-                emoji, label = (part.strip() for part in line.split("|", 1))
-            else:
-                if index >= len(palette):
-                    msg = "The configured generic emoji palette does not have enough entries for these options."
-                    raise InvalidVoteConfigurationError(msg)
-                emoji, label = palette[index].emoji, line
-            if not emoji or not label:
-                msg = "Each option needs a non-empty emoji and label."
-                raise InvalidVoteConfigurationError(msg)
-            parsed = discord.PartialEmoji.from_str(emoji)
-            if parsed.is_custom_emoji():
-                custom = interaction.guild.get_emoji(parsed.id or 0)
-                if custom is None or not custom.is_usable():
-                    msg = f"The custom emoji {emoji} is not accessible to this bot."
-                    raise InvalidVoteConfigurationError(msg)
-            options.append(
-                VoteOption(
-                    emoji,
-                    VoteChoice.GENERIC,
-                    identifier=str(index + 1),
-                    guild_id=interaction.guild.id,
-                    label=label,
-                    position=index,
-                )
-            )
-        if len({option.emoji for option in options}) != len(options):
-            msg = "Poll option emojis must be unique."
-            raise InvalidVoteConfigurationError(msg)
-        return tuple(options)
-
-    async def _actor(
-        self, member: discord.Member, kind: VoteKindLiteral, *, account_id: int | None = None
-    ) -> VoteActor:
+    async def _actor(self, member: discord.Member, kind: VoteKind, *, account_id: int | None = None) -> VoteActor:
         """Resolve one member's vote capabilities in a single permission load.
 
         The tiers this replaces cost up to four round trips here -- a global
@@ -300,7 +282,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             capabilities=capabilities,
         )
 
-    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
+    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
         """Resolve current member facts for a service-level weight refresh."""
         guild = self.bot.get_guild(guild_id)
         if guild is None:
@@ -309,7 +291,7 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if member is None:
             try:
                 member = await guild.fetch_member(discord_id)
-            except (discord.NotFound, discord.Forbidden):
+            except discord.NotFound, discord.Forbidden:
                 return None
         return await self._actor(member, kind, account_id=account_id)
 
@@ -328,11 +310,14 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             return
 
         async with self.bot.get_running_message(ctx, locale=locale) as message:
-            await DeleteLogVoteSession.create(
-                self.bot, [message], author_id=ctx.author.id, target_message=target_message
+            await start_delete_log_vote(
+                self.bot,
+                author_id=ctx.author.id,
+                target_message=target_message,
+                published_message=message,
             )
 
 
-async def setup(bot: "squid.bot.app.RedstoneSquid"):
+async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
     await bot.add_cog(VoteCog(bot))

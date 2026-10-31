@@ -14,6 +14,8 @@ from squid.accounts.domain import (
     ClaimStatus,
     CreatorAlias,
     CreatorProfile,
+    IdentityProvider,
+    IdentityRefresh,
     RecentAccountProof,
 )
 from squid.accounts.errors import (
@@ -24,6 +26,7 @@ from squid.accounts.errors import (
     InvalidMergeProofError,
     InvalidVerificationCodeError,
     MinecraftAccountNotFoundError,
+    NoLinkedMinecraftAccountError,
 )
 
 
@@ -53,11 +56,15 @@ class AccountService:
         return await self._repository.get_or_create_discord(discord_id)
 
     async def grant_current_consent(self, discord_id: int) -> Account:
-        """Record acceptance of the current privacy notice."""
+        """Record acceptance of the current privacy notice for a Discord-identified caller."""
         account = await self._repository.get_by_discord_id(discord_id)
         if account is None or account.id is None:
             raise AccountNotFoundError(discord_id=discord_id)
         return await self._repository.update_consent(account.id, AccountConsent.grant_current())
+
+    async def grant_current_consent_for_account(self, account_id: int) -> Account:
+        """Record consent for any authenticated caller, however they proved their identity."""
+        return await self._repository.update_consent(account_id, AccountConsent.grant_current())
 
     async def merge_accounts(
         self,
@@ -96,12 +103,47 @@ class AccountService:
         if result.account is None:
             raise InvalidVerificationCodeError
         if result.conflicting_java_uuid is not None:
-            raise AccountAlreadyLinkedError(discord_id, result.conflicting_java_uuid)
+            raise AccountAlreadyLinkedError(
+                discord_id=discord_id,
+                minecraft_uuid=result.conflicting_java_uuid,
+            )
         return result.claimed_alias
 
     async def unlink_minecraft_account(self, discord_id: int) -> bool:
         """Unlink every Java identity from the Discord-linked account."""
         return await self._repository.unlink_java_identity(discord_id)
+
+    async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
+        """Re-read the linked Java name from Mojang and reconcile the creator credit.
+
+        Keyed on the account rather than a Discord ID: this is reachable from Discord, from an
+        API session, and from a CLI device, and only the first of those has a Discord ID.
+
+        Raises `MinecraftAccountNotFoundError` when no Java identity is linked or the UUID no
+        longer resolves, and `MinecraftServiceUnavailableError` when Mojang cannot be reached.
+        """
+        account = await self._repository.get_by_id(account_id)
+        if account is None:
+            raise AccountNotFoundError(account_id)
+        identity = next(
+            (
+                candidate
+                for candidate in account.identities
+                if candidate.provider is IdentityProvider.JAVA
+                and (java_uuid is None or candidate.java_uuid == java_uuid)
+            ),
+            None,
+        )
+        if identity is None or identity.java_uuid is None:
+            raise NoLinkedMinecraftAccountError(account_id=account_id)
+        username = await self._minecraft_username_lookup(identity.java_uuid)
+        if username is None:
+            raise MinecraftAccountNotFoundError(identity.java_uuid)
+        return await self._repository.refresh_java_identity(
+            account_id=account_id,
+            java_uuid=identity.java_uuid,
+            username=username,
+        )
 
     async def request_alias_claim(self, discord_id: int, name: str) -> AliasClaim:
         """Open a staff-reviewed request to be credited under a creator name."""
@@ -112,19 +154,29 @@ class AccountService:
             raise ConsentRequiredError(discord_id)
         return await self._repository.request_claim(name=name, account_id=account.id)
 
-    async def pending_alias_claims(self) -> Sequence[AliasClaim]:
-        """List creator credit claims awaiting staff review."""
-        return await self._repository.pending_claims()
+    async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
+        """List creator credit claims awaiting staff review.
 
-    async def approve_alias_claim(self, claim_id: int, *, staff_account_id: int) -> AliasClaim:
-        """Credit the claimant with the alias and close the request."""
-        return await self._resolve_claim(claim_id, ClaimStatus.APPROVED, staff_account_id)
+        *with_claimants* loads each claimant's account for presentation, at a fixed cost
+        rather than one query per claim.
+        """
+        return await self._repository.pending_claims(with_claimants=with_claimants)
+
+    async def approve_alias_claim(self, claim_id: int, *, staff_account_id: int, reassign: bool = False) -> AliasClaim:
+        """Credit the claimant with the alias and close the request.
+
+        *reassign* is required to take a name that is currently credited to someone else, which
+        is what a rename into a contested name produces.
+        """
+        return await self._resolve_claim(claim_id, ClaimStatus.APPROVED, staff_account_id, reassign=reassign)
 
     async def reject_alias_claim(self, claim_id: int, *, staff_account_id: int) -> AliasClaim:
         """Close the request without crediting the claimant."""
         return await self._resolve_claim(claim_id, ClaimStatus.REJECTED, staff_account_id)
 
-    async def _resolve_claim(self, claim_id: int, status: ClaimStatus, staff_account_id: int) -> AliasClaim:
+    async def _resolve_claim(
+        self, claim_id: int, status: ClaimStatus, staff_account_id: int, *, reassign: bool = False
+    ) -> AliasClaim:
         claim = await self._repository.get_claim(claim_id)
         if claim is None or claim.status is not ClaimStatus.PENDING:
             raise ClaimNotFoundError(claim_id)
@@ -132,6 +184,7 @@ class AccountService:
             claim_id=claim_id,
             status=status,
             resolved_by_account_id=staff_account_id,
+            reassign=reassign,
         )
 
     async def generate_verification_code(self, minecraft_uuid: UUID) -> int:

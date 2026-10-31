@@ -156,29 +156,51 @@ function problem(request: Request, status: number, code: string): Response {
     status,
     detail: chinese ? "请检查搜索语法后重试。" : "Check the search syntax and try again.",
     code: code as ProblemDetail["code"],
-    error_id: "fixture-error-001",
   };
-  return json(body, status, "application/problem+json");
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/problem+json",
+      "Cache-Control": "no-store",
+      "Request-Id": "fixture-error-001",
+    },
+  });
 }
 
 function buildPage(url: URL): PageBuildSummary {
-  if (url.searchParams.get("cursor") === "build-page-2") {
-    return { items: [builds[2]], next_cursor: null, has_more: false };
+  if (url.searchParams.get("after_id") === "2") {
+    return {
+      items: [builds[2]],
+      total: 3,
+      next: null,
+      prev: { offset: null, after_id: null, before_id: builds[2].id },
+    };
   }
   const query = url.searchParams.get("q") ?? "";
   const selected = query.includes("Space Builder") ? [builds[1]] : builds.slice(0, 2);
   return {
     items: selected,
-    next_cursor: selected.length > 1 ? "build-page-2" : null,
-    has_more: selected.length > 1,
+    total: selected.length > 1 ? 3 : 1,
+    next: selected.length > 1 ? { offset: null, after_id: 2, before_id: null } : null,
+    prev: null,
   };
 }
 
 function recordPage(url: URL): PageRecordSummary {
-  if (url.searchParams.get("cursor") === "record-page-2") {
-    return { items: [records[1]], next_cursor: null, has_more: false };
+  if (url.searchParams.get("after_id") === "1") {
+    return {
+      items: [records[1]],
+      total: 2,
+      next: null,
+      prev: { offset: null, after_id: null, before_id: records[1].id },
+    };
   }
-  return { items: [records[0]], next_cursor: "record-page-2", has_more: true };
+  return {
+    items: [records[0]],
+    total: 2,
+    next: { offset: null, after_id: 1, before_id: null },
+    prev: null,
+  };
 }
 
 async function routeRequest(request: Request): Promise<Response> {
@@ -198,7 +220,7 @@ async function routeRequest(request: Request): Promise<Response> {
   }
   if (url.pathname === "/v1/builds/998/schematics") {
     await new Promise((resolve) => setTimeout(resolve, 5_500));
-    return json({ items: [], next_cursor: null, has_more: false } satisfies PageSchematicSummary);
+    return json({ items: [], total: 0, next: null, prev: null } satisfies PageSchematicSummary);
   }
   if (url.pathname === "/v1/builds/1") return json(detail satisfies BuildDetail);
   if (url.pathname === "/v1/builds/1/schematics") {
@@ -223,8 +245,9 @@ async function routeRequest(request: Request): Promise<Response> {
           download_url: "/v1/builds/1/schematics/8/content",
         },
       ],
-      next_cursor: null,
-      has_more: false,
+      total: 1,
+      next: null,
+      prev: null,
     } satisfies PageSchematicSummary);
   }
   if (/^\/v1\/builds\/\d+(?:\/schematics)?$/.test(url.pathname))
@@ -273,8 +296,9 @@ async function routeRequest(request: Request): Promise<Response> {
           },
         },
       ],
-      next_cursor: null,
-      has_more: false,
+      total: 1,
+      next: null,
+      prev: null,
     };
     return json(page);
   }

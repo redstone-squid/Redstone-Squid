@@ -33,7 +33,19 @@ def collect_asgi_portals():
 
 
 @schema.parametrize()
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(
+    suppress_health_check=[
+        HealthCheck.function_scoped_fixture,
+        # Flaky otherwise, and for a reason that has nothing to do with what this asserts.
+        # Operations whose fields carry a narrow pattern plus a long minimum -- the worst is
+        # `PaperChallengeExchangeRequest.device_code`, `^[A-Za-z0-9_-]+$` with `minLength: 32`
+        # -- have most generated strings filtered out, and whether that crosses the health
+        # check's threshold depends on the seed, so it fails under some test orderings and not
+        # others. Generation efficiency does not affect the property here: every example that
+        # does survive still has to come back as something other than a 5xx.
+        HealthCheck.filter_too_much,
+    ]
+)
 # Schemathesis's ASGI transport opens a fresh Starlette TestClient per generated example, and its
 # AnyIO portal is only torn down when garbage collected. Force collection before the test ends so
 # that cleanup, and the ResourceWarning it emits, stays inside this test's ignore scope instead of

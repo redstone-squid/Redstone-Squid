@@ -17,6 +17,9 @@ x-app: &app
   volumes:
     - ./logs:/var/log/app
     - squid-objects:/var/lib/app/objects
+  depends_on:
+    db:
+      condition: service_healthy
   stop_grace_period: 20s
 
 services:
@@ -91,6 +94,45 @@ services:
       retries: 3
       start_period: 60s
 
+  db:
+    image: pgvector/pgvector:pg18@sha256:2ba9ca5f2e7daa0f0e7723cba1ee9167bab54efd3640516a44ac1a928dd67e7a
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-redstone_squid}
+    ports:
+      # Loopback-only so IntelliJ's database tools can attach without exposing Postgres.
+      - "127.0.0.1:${SQUID_DB_PORT:-5432}:5432"
+    volumes:
+      # PG18 keeps its cluster under /var/lib/postgresql/18/docker, so the whole
+      # /var/lib/postgresql tree is the volume — not the pre-18 .../data path.
+      - squid-pgdata:/var/lib/postgresql
+    shm_size: 256mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # SIGTERM is a smart shutdown that waits out open sessions; SIGINT ends them promptly.
+    stop_signal: SIGINT
+    stop_grace_period: 30s
+
+  pgweb:
+    image: sosedoff/pgweb:0.17.0@sha256:a5256d416e2e8b92d69a4459058e3eca33a9f075d8325491644411d0bc3bd70b
+    restart: unless-stopped
+    profiles:
+      - tools
+    environment:
+      PGWEB_DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-redstone_squid}?sslmode=disable
+    ports:
+      - "127.0.0.1:${SQUID_PGWEB_PORT:-8081}:8081"
+    depends_on:
+      db:
+        condition: service_healthy
+    stop_grace_period: 10s
+
   redis:
     image: redis:8.8.0-alpine@sha256:9d317178eceac8454a2284a9e6df2466b93c745529947f0cd42a0fa9609d7005
     restart: unless-stopped
@@ -129,3 +171,4 @@ services:
 
 volumes:
   squid-objects:
+  squid-pgdata:

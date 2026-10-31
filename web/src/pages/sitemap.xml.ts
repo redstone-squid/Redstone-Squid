@@ -34,29 +34,31 @@ async function cataloguePaths(locale: Locale): Promise<{ path: string; modified?
     { path: "/search/help" },
     { path: "/about" },
   ];
-  let buildCursor: string | undefined;
+  // Identifier anchors, not offsets: a full crawl has to survive collections deeper than the
+  // API's offset clamp, and only the keyset chain is unbounded.
+  let buildAfterId: number | undefined;
   do {
-    const page = await fetchBuilds(locale, { cursor: buildCursor, pageSize: 50 });
+    const page = await fetchBuilds(locale, { afterId: buildAfterId, pageSize: 50 });
     paths.push(
       ...page.items.map((build) => ({
         path: `/builds/${build.id}`,
         ...(build.updated_at ? { modified: build.updated_at } : {}),
       })),
     );
-    buildCursor = page.next_cursor ?? undefined;
-  } while (buildCursor);
+    buildAfterId = page.next?.after_id ?? undefined;
+  } while (buildAfterId);
 
-  let recordCursor: string | undefined;
+  let recordAfterId: number | undefined;
   do {
-    const page = await fetchRecords(locale, recordCursor, 50);
+    const page = await fetchRecords(locale, { afterId: recordAfterId, pageSize: 50 });
     paths.push(
       ...page.items.map((record) => ({
         path: `/records/${record.id}`,
         modified: record.computed_at,
       })),
     );
-    recordCursor = page.next_cursor ?? undefined;
-  } while (recordCursor);
+    recordAfterId = page.next?.after_id ?? undefined;
+  } while (recordAfterId);
   return paths;
 }
 

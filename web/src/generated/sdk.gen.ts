@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AccountBuildsListData, AccountBuildsListErrors, AccountBuildsListResponses, AccountConsentGrantData, AccountConsentGrantErrors, AccountConsentGrantResponses, AccountGetData, AccountGetErrors, AccountGetResponses, BrowserAuthorizationCallbackData, BrowserAuthorizationCallbackErrors, BrowserAuthorizationStartData, BrowserAuthorizationStartErrors, BrowserCsrfGetData, BrowserCsrfGetErrors, BrowserCsrfGetResponses, BrowserSessionRevokeData, BrowserSessionRevokeErrors, BrowserSessionRevokeResponses, BuildSchematicContentGetData, BuildSchematicContentGetErrors, BuildSchematicContentGetResponses, BuildSchematicsListData, BuildSchematicsListErrors, BuildSchematicsListResponses, BuildsCreateData, BuildsCreateErrors, BuildsCreateResponses, BuildsGetData, BuildsGetErrors, BuildsGetResponses, BuildsListData, BuildsListErrors, BuildsListResponses, BuildsUpdateData, BuildsUpdateErrors, BuildsUpdateResponses, CapabilitiesGetData, CapabilitiesGetErrors, CapabilitiesGetResponses, CliDeviceRevokeData, CliDeviceRevokeErrors, CliDeviceRevokeResponses, CliDevicesListData, CliDevicesListErrors, CliDevicesListResponses, CliEnrollmentApproveData, CliEnrollmentApproveErrors, CliEnrollmentApproveResponses, CliEnrollmentExchangeData, CliEnrollmentExchangeErrors, CliEnrollmentExchangeResponses, CliEnrollmentPreviewData, CliEnrollmentPreviewErrors, CliEnrollmentPreviewResponses, CliEnrollmentStartData, CliEnrollmentStartErrors, CliEnrollmentStartResponses, CliSessionChallengeStartData, CliSessionChallengeStartErrors, CliSessionChallengeStartResponses, CliSessionExchangeData, CliSessionExchangeErrors, CliSessionExchangeResponses, CliSessionRevokeData, CliSessionRevokeErrors, CliSessionRevokeResponses, CreatorAliasGetData, CreatorAliasGetErrors, CreatorAliasGetResponses, CreatorProfileGetData, CreatorProfileGetErrors, CreatorProfileGetResponses, FabricChallengeExchangeData, FabricChallengeExchangeErrors, FabricChallengeExchangeResponses, FabricChallengeStartData, FabricChallengeStartErrors, FabricChallengeStartResponses, HealthLiveData, HealthLiveResponses, HealthReadyCompatibilityData, HealthReadyCompatibilityResponses, HealthReadyData, HealthReadyResponses, MinecraftChallengeApproveData, MinecraftChallengeApproveErrors, MinecraftChallengeApproveResponses, MinecraftGrantRevokeData, MinecraftGrantRevokeErrors, MinecraftGrantRevokeResponses, MinecraftVersionsListData, MinecraftVersionsListErrors, MinecraftVersionsListResponses, NotificationConsentGrantData, NotificationConsentGrantErrors, NotificationConsentGrantResponses, NotificationInboxListData, NotificationInboxListErrors, NotificationInboxListResponses, NotificationInboxMarkReadData, NotificationInboxMarkReadErrors, NotificationInboxMarkReadResponses, NotificationPreferencesGetData, NotificationPreferencesGetErrors, NotificationPreferencesGetResponses, NotificationPreferencesUpdateData, NotificationPreferencesUpdateErrors, NotificationPreferencesUpdateResponses, NotificationSubscriptionCreateData, NotificationSubscriptionCreateErrors, NotificationSubscriptionCreateResponses, NotificationSubscriptionDeleteData, NotificationSubscriptionDeleteErrors, NotificationSubscriptionDeleteResponses, NotificationSubscriptionsListData, NotificationSubscriptionsListErrors, NotificationSubscriptionsListResponses, PaperChallengeExchangeData, PaperChallengeExchangeErrors, PaperChallengeExchangeResponses, PaperChallengeStartData, PaperChallengeStartErrors, PaperChallengeStartResponses, PaperInstallationCreateData, PaperInstallationCreateErrors, PaperInstallationCreateResponses, PaperInstallationProfileUpdateData, PaperInstallationProfileUpdateErrors, PaperInstallationProfileUpdateResponses, PaperInstallationRevokeData, PaperInstallationRevokeErrors, PaperInstallationRevokeResponses, PaperInstallationRotateData, PaperInstallationRotateErrors, PaperInstallationRotateResponses, PaperInstallationsListData, PaperInstallationsListErrors, PaperInstallationsListResponses, RecordsGetData, RecordsGetErrors, RecordsGetResponses, RecordsListData, RecordsListErrors, RecordsListResponses, SchematicRenderContentGetData, SchematicRenderContentGetErrors, SchematicRenderContentGetResponses, SearchExecuteData, SearchExecuteErrors, SearchExecuteResponses, SearchFieldsListData, SearchFieldsListErrors, SearchFieldsListResponses, SearchTermsSuggestData, SearchTermsSuggestErrors, SearchTermsSuggestResponses, SubmissionDraftChangeData, SubmissionDraftChangeErrors, SubmissionDraftChangeResponses, SubmissionDraftCreateData, SubmissionDraftCreateErrors, SubmissionDraftCreateResponses, SubmissionDraftDeleteData, SubmissionDraftDeleteErrors, SubmissionDraftDeleteResponses, SubmissionDraftGetData, SubmissionDraftGetErrors, SubmissionDraftGetResponses, SubmissionDraftsListData, SubmissionDraftsListErrors, SubmissionDraftsListResponses, SubmissionFinalizationGetData, SubmissionFinalizationGetErrors, SubmissionFinalizationGetResponses, SubmissionFinalizationStartData, SubmissionFinalizationStartErrors, SubmissionFinalizationStartResponses, SubmissionFormCurrentData, SubmissionFormCurrentErrors, SubmissionFormCurrentResponses, SubmissionFormOptionsGetData, SubmissionFormOptionsGetErrors, SubmissionFormOptionsGetResponses, SubmissionFormRevisionGetData, SubmissionFormRevisionGetErrors, SubmissionFormRevisionGetResponses, SubmissionMediaDiscardData, SubmissionMediaDiscardErrors, SubmissionMediaDiscardResponses, SubmissionMediaGetData, SubmissionMediaGetErrors, SubmissionMediaGetResponses, SubmissionMediaListData, SubmissionMediaListErrors, SubmissionMediaListResponses, SubmissionMediaUploadData, SubmissionMediaUploadErrors, SubmissionMediaUploadResponses, TagsGetData, TagsGetErrors, TagsGetResponses, TagsListData, TagsListErrors, TagsListResponses, VerificationCreateCompatibilityData, VerificationCreateCompatibilityErrors, VerificationCreateCompatibilityResponses, VerificationCreateData, VerificationCreateErrors, VerificationCreateResponses, VoteCastData, VoteCastErrors, VoteCastResponses, VoteSessionGetData, VoteSessionGetErrors, VoteSessionGetResponses } from './types.gen';
+import type { AccountBuildsListData, AccountBuildsListErrors, AccountBuildsListResponses, AccountConsentGrantData, AccountConsentGrantErrors, AccountConsentGrantResponses, AccountGetData, AccountGetErrors, AccountGetResponses, BrowserAuthorizationCallbackData, BrowserAuthorizationCallbackErrors, BrowserAuthorizationStartData, BrowserAuthorizationStartErrors, BrowserCsrfGetData, BrowserCsrfGetErrors, BrowserCsrfGetResponses, BrowserSessionRevokeData, BrowserSessionRevokeErrors, BrowserSessionRevokeResponses, BuildSchematicContentGetData, BuildSchematicContentGetErrors, BuildSchematicContentGetResponses, BuildSchematicsListData, BuildSchematicsListErrors, BuildSchematicsListResponses, BuildsCreateData, BuildsCreateErrors, BuildsCreateResponses, BuildsGetData, BuildsGetErrors, BuildsGetResponses, BuildsListData, BuildsListErrors, BuildsListResponses, BuildsUpdateData, BuildsUpdateErrors, BuildsUpdateResponses, CapabilitiesGetData, CapabilitiesGetErrors, CapabilitiesGetResponses, CliDeviceRevokeData, CliDeviceRevokeErrors, CliDeviceRevokeResponses, CliDevicesListData, CliDevicesListErrors, CliDevicesListResponses, CliEnrollmentApproveData, CliEnrollmentApproveErrors, CliEnrollmentApproveResponses, CliEnrollmentExchangeData, CliEnrollmentExchangeErrors, CliEnrollmentExchangeResponses, CliEnrollmentPreviewData, CliEnrollmentPreviewErrors, CliEnrollmentPreviewResponses, CliEnrollmentStartData, CliEnrollmentStartErrors, CliEnrollmentStartResponses, CliSessionChallengeStartData, CliSessionChallengeStartErrors, CliSessionChallengeStartResponses, CliSessionExchangeData, CliSessionExchangeErrors, CliSessionExchangeResponses, CliSessionRevokeData, CliSessionRevokeErrors, CliSessionRevokeResponses, CreatorAliasGetData, CreatorAliasGetErrors, CreatorAliasGetResponses, CreatorProfileGetData, CreatorProfileGetErrors, CreatorProfileGetResponses, FabricChallengeExchangeData, FabricChallengeExchangeErrors, FabricChallengeExchangeResponses, FabricChallengeStartData, FabricChallengeStartErrors, FabricChallengeStartResponses, HealthLiveData, HealthLiveResponses, HealthReadyCompatibilityData, HealthReadyCompatibilityResponses, HealthReadyData, HealthReadyResponses, MinecraftChallengeApproveData, MinecraftChallengeApproveErrors, MinecraftChallengeApproveResponses, MinecraftGrantRevokeData, MinecraftGrantRevokeErrors, MinecraftGrantRevokeResponses, MinecraftVersionsListData, MinecraftVersionsListErrors, MinecraftVersionsListResponses, NotificationConsentGrantData, NotificationConsentGrantErrors, NotificationConsentGrantResponses, NotificationInboxListData, NotificationInboxListErrors, NotificationInboxListResponses, NotificationInboxMarkReadData, NotificationInboxMarkReadErrors, NotificationInboxMarkReadResponses, NotificationPreferencesGetData, NotificationPreferencesGetErrors, NotificationPreferencesGetResponses, NotificationPreferencesUpdateData, NotificationPreferencesUpdateErrors, NotificationPreferencesUpdateResponses, NotificationSubscriptionCreateData, NotificationSubscriptionCreateErrors, NotificationSubscriptionCreateResponses, NotificationSubscriptionDeleteData, NotificationSubscriptionDeleteErrors, NotificationSubscriptionDeleteResponses, NotificationSubscriptionsListData, NotificationSubscriptionsListErrors, NotificationSubscriptionsListResponses, PaperChallengeExchangeData, PaperChallengeExchangeErrors, PaperChallengeExchangeResponses, PaperChallengeStartData, PaperChallengeStartErrors, PaperChallengeStartResponses, PaperInstallationCreateData, PaperInstallationCreateErrors, PaperInstallationCreateResponses, PaperInstallationProfileUpdateData, PaperInstallationProfileUpdateErrors, PaperInstallationProfileUpdateResponses, PaperInstallationRevokeData, PaperInstallationRevokeErrors, PaperInstallationRevokeResponses, PaperInstallationRotateData, PaperInstallationRotateErrors, PaperInstallationRotateResponses, PaperInstallationsListData, PaperInstallationsListErrors, PaperInstallationsListResponses, RecordsGetData, RecordsGetErrors, RecordsGetResponses, RecordsListData, RecordsListErrors, RecordsListResponses, SchematicRenderContentGetData, SchematicRenderContentGetErrors, SchematicRenderContentGetResponses, SearchExecuteData, SearchExecuteErrors, SearchExecuteResponses, SearchFieldsListData, SearchFieldsListErrors, SearchFieldsListResponses, SearchTermsSuggestData, SearchTermsSuggestErrors, SearchTermsSuggestResponses, SubmissionDraftChangeData, SubmissionDraftChangeErrors, SubmissionDraftChangeResponses, SubmissionDraftCreateData, SubmissionDraftCreateErrors, SubmissionDraftCreateResponses, SubmissionDraftDeleteData, SubmissionDraftDeleteErrors, SubmissionDraftDeleteResponses, SubmissionDraftGetData, SubmissionDraftGetErrors, SubmissionDraftGetResponses, SubmissionDraftsListData, SubmissionDraftsListErrors, SubmissionDraftsListResponses, SubmissionFinalizationGetData, SubmissionFinalizationGetErrors, SubmissionFinalizationGetResponses, SubmissionFinalizationStartData, SubmissionFinalizationStartErrors, SubmissionFinalizationStartResponses, SubmissionFormCurrentData, SubmissionFormCurrentErrors, SubmissionFormCurrentResponses, SubmissionFormOptionsGetData, SubmissionFormOptionsGetErrors, SubmissionFormOptionsGetResponses, SubmissionFormRevisionGetData, SubmissionFormRevisionGetErrors, SubmissionFormRevisionGetResponses, SubmissionMediaDiscardData, SubmissionMediaDiscardErrors, SubmissionMediaDiscardResponses, SubmissionMediaGetData, SubmissionMediaGetErrors, SubmissionMediaGetResponses, SubmissionMediaListData, SubmissionMediaListErrors, SubmissionMediaListResponses, SubmissionMediaUploadData, SubmissionMediaUploadErrors, SubmissionMediaUploadResponses, SuggestionsGetData, SuggestionsGetErrors, SuggestionsGetResponses, SuggestionSourcesListData, SuggestionSourcesListErrors, SuggestionSourcesListResponses, TagsGetData, TagsGetErrors, TagsGetResponses, TagsListData, TagsListErrors, TagsListResponses, VerificationCreateCompatibilityData, VerificationCreateCompatibilityErrors, VerificationCreateCompatibilityResponses, VerificationCreateData, VerificationCreateErrors, VerificationCreateResponses, VoteCastData, VoteCastErrors, VoteCastResponses, VoteSessionGetData, VoteSessionGetErrors, VoteSessionGetResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -52,7 +52,7 @@ export const verificationCreate = <ThrowOnError extends boolean = false>(options
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -80,7 +80,7 @@ export const verificationCreateCompatibility = <ThrowOnError extends boolean = f
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -134,7 +134,7 @@ export const browserSessionRevoke = <ThrowOnError extends boolean = false>(optio
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/auth/logout',
     ...options
 });
@@ -172,7 +172,7 @@ export const buildsCreate = <ThrowOnError extends boolean = false>(options: Opti
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/builds',
     ...options,
     headers: {
@@ -198,7 +198,7 @@ export const buildsUpdate = <ThrowOnError extends boolean = false>(options: Opti
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/builds/{build_id}',
     ...options,
     headers: {
@@ -267,7 +267,7 @@ export const cliEnrollmentApprove = <ThrowOnError extends boolean = false>(optio
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/cli/auth/enrollments/approval',
     ...options,
     headers: {
@@ -329,7 +329,7 @@ export const cliDeviceRevoke = <ThrowOnError extends boolean = false>(options: O
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/cli/auth/devices/{device_id}',
     ...options
 });
@@ -374,7 +374,7 @@ export const accountConsentGrant = <ThrowOnError extends boolean = false>(option
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/consent',
     ...options
 });
@@ -422,7 +422,7 @@ export const paperInstallationCreate = <ThrowOnError extends boolean = false>(op
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations',
     ...options,
     headers: {
@@ -441,7 +441,7 @@ export const paperInstallationRotate = <ThrowOnError extends boolean = false>(op
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations/{installation_id}/rotate',
     ...options
 });
@@ -456,7 +456,7 @@ export const paperInstallationProfileUpdate = <ThrowOnError extends boolean = fa
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations/{installation_id}/profile',
     ...options,
     headers: {
@@ -475,7 +475,7 @@ export const paperInstallationRevoke = <ThrowOnError extends boolean = false>(op
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/installations/{installation_id}',
     ...options
 });
@@ -486,7 +486,7 @@ export const paperInstallationRevoke = <ThrowOnError extends boolean = false>(op
  * Start player authorization bound to the authenticated Paper credential generation.
  */
 export const paperChallengeStart = <ThrowOnError extends boolean = false>(options: Options<PaperChallengeStartData, ThrowOnError>): RequestResult<PaperChallengeStartResponses, PaperChallengeStartErrors, ThrowOnError> => (options.client ?? client).post<PaperChallengeStartResponses, PaperChallengeStartErrors, ThrowOnError>({
-    security: [{ name: 'X-Squid-Installation-ID', type: 'apiKey' }, { name: 'X-Squid-Installation-Secret', type: 'apiKey' }],
+    security: [{ name: 'Squid-Installation-ID', type: 'apiKey' }, { name: 'Squid-Installation-Secret', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/challenges',
     ...options,
     headers: {
@@ -501,7 +501,7 @@ export const paperChallengeStart = <ThrowOnError extends boolean = false>(option
  * Exchange one approved Paper challenge on the same authenticated installation.
  */
 export const paperChallengeExchange = <ThrowOnError extends boolean = false>(options: Options<PaperChallengeExchangeData, ThrowOnError>): RequestResult<PaperChallengeExchangeResponses, PaperChallengeExchangeErrors, ThrowOnError> => (options.client ?? client).post<PaperChallengeExchangeResponses, PaperChallengeExchangeErrors, ThrowOnError>({
-    security: [{ name: 'X-Squid-Installation-ID', type: 'apiKey' }, { name: 'X-Squid-Installation-Secret', type: 'apiKey' }],
+    security: [{ name: 'Squid-Installation-ID', type: 'apiKey' }, { name: 'Squid-Installation-Secret', type: 'apiKey' }],
     url: '/v1/minecraft/auth/paper/challenges/exchange',
     ...options,
     headers: {
@@ -548,7 +548,7 @@ export const minecraftChallengeApprove = <ThrowOnError extends boolean = false>(
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/challenges/approval',
     ...options,
     headers: {
@@ -567,7 +567,7 @@ export const minecraftGrantRevoke = <ThrowOnError extends boolean = false>(optio
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/minecraft/auth/grants/{grant_id}',
     ...options
 });
@@ -597,7 +597,7 @@ export const notificationPreferencesUpdate = <ThrowOnError extends boolean = fal
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/preferences',
     ...options,
     headers: {
@@ -616,7 +616,7 @@ export const notificationConsentGrant = <ThrowOnError extends boolean = false>(o
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/consent',
     ...options,
     headers: {
@@ -650,7 +650,7 @@ export const notificationSubscriptionCreate = <ThrowOnError extends boolean = fa
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/subscriptions',
     ...options,
     headers: {
@@ -669,7 +669,7 @@ export const notificationSubscriptionDelete = <ThrowOnError extends boolean = fa
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/subscriptions/{subscription_id}',
     ...options
 });
@@ -699,7 +699,7 @@ export const notificationInboxMarkRead = <ThrowOnError extends boolean = false>(
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/inbox/{notification_id}/read',
     ...options
 });
@@ -799,7 +799,7 @@ export const submissionDraftCreate = <ThrowOnError extends boolean = false>(opti
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -852,7 +852,7 @@ export const submissionDraftDelete = <ThrowOnError extends boolean = false>(opti
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -907,7 +907,7 @@ export const submissionDraftChange = <ThrowOnError extends boolean = false>(opti
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -966,7 +966,7 @@ export const submissionFinalizationStart = <ThrowOnError extends boolean = false
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -995,7 +995,7 @@ export const submissionMediaUpload = <ThrowOnError extends boolean = false>(opti
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -1054,7 +1054,7 @@ export const submissionMediaDiscard = <ThrowOnError extends boolean = false>(opt
             name: '__Host-squid_session',
             type: 'apiKey'
         },
-        { name: 'X-CSRF-Token', type: 'apiKey' },
+        { name: 'CSRF-Token', type: 'apiKey' },
         {
             key: 'DeviceSession',
             scheme: 'bearer',
@@ -1096,6 +1096,24 @@ export const submissionMediaGet = <ThrowOnError extends boolean = false>(options
     url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}',
     ...options
 });
+
+/**
+ * List Sources
+ *
+ * Publish the registered sources and how to drive each one.
+ */
+export const suggestionSourcesList = <ThrowOnError extends boolean = false>(options?: Options<SuggestionSourcesListData, ThrowOnError>): RequestResult<SuggestionSourcesListResponses, SuggestionSourcesListErrors, ThrowOnError> => (options?.client ?? client).get<SuggestionSourcesListResponses, SuggestionSourcesListErrors, ThrowOnError>({ url: '/v1/suggest', ...options });
+
+/**
+ * Suggest
+ *
+ * Return ranked completions for a partially typed value.
+ *
+ * An unknown source is a 404, because that is a bad URL. Anything else — a gated source the
+ * caller cannot read, a provider that failed — is an empty list, matching what the other
+ * surfaces do: a dropdown with nothing in it, not an error under a half-typed word.
+ */
+export const suggestionsGet = <ThrowOnError extends boolean = false>(options: Options<SuggestionsGetData, ThrowOnError>): RequestResult<SuggestionsGetResponses, SuggestionsGetErrors, ThrowOnError> => (options.client ?? client).get<SuggestionsGetResponses, SuggestionsGetErrors, ThrowOnError>({ url: '/v1/suggest/{source}', ...options });
 
 /**
  * List Tags
@@ -1165,7 +1183,7 @@ export const voteCast = <ThrowOnError extends boolean = false>(options: Options<
             in: 'cookie',
             name: '__Host-squid_session',
             type: 'apiKey'
-        }, { name: 'X-CSRF-Token', type: 'apiKey' }],
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/vote-sessions/{vote_session_id}/votes',
     ...options,
     headers: {

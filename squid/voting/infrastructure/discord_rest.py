@@ -9,7 +9,7 @@ import httpx
 
 from squid.permissions.application.ports import ActorCapabilityResolver
 from squid.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
-from squid.voting.domain import VoteActor, VoteKindLiteral
+from squid.voting.domain import VoteActor, VoteKind
 from squid.voting.errors import DiscordMemberServiceUnavailableError
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class DiscordRestActorResolver:
         self._cache: dict[tuple[int, int], tuple[float, VoteActor | None]] = {}
         self._api_url = api_url.rstrip("/")
 
-    async def member(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
+    async def member(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
         """Return current member facts, raising when Discord cannot answer reliably."""
         del kind  # Every kind's nodes resolve together, so one load answers all of them.
         cache_key = (guild_id, discord_id)
@@ -61,7 +61,7 @@ class DiscordRestActorResolver:
         self._cache[cache_key] = (now + self._cache_ttl_seconds, actor)
         return actor
 
-    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKindLiteral) -> VoteActor | None:
+    async def resolve(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
         """Resolve refresh facts, retaining cached vote weight on any failure."""
         try:
             return await self.member(account_id, discord_id, guild_id, kind)

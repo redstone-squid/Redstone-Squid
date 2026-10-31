@@ -1,10 +1,12 @@
 package com.redstonesquid.minecraft.core.command
 
 import com.mojang.brigadier.Command
+import com.mojang.brigadier.LiteralMessage
 import com.mojang.brigadier.arguments.StringArgumentType
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import com.mojang.brigadier.builder.RequiredArgumentBuilder
 import com.mojang.brigadier.context.CommandContext
+import com.mojang.brigadier.suggestion.SuggestionProvider
 
 public enum class CommandAudience {
     PLAYER,
@@ -42,11 +44,15 @@ public fun interface CommandActions<S> {
 
 /** Builds one native Brigadier tree for Paper and Fabric to register themselves. */
 public object SquidCommandTree {
-    public fun <S> build(access: CommandAccess<S>, actions: CommandActions<S>): LiteralArgumentBuilder<S> {
+    public fun <S> build(
+        access: CommandAccess<S>,
+        actions: CommandActions<S>,
+        suggestions: SquidSuggestions<S> = noSuggestions(),
+    ): LiteralArgumentBuilder<S> {
         val root = LiteralArgumentBuilder.literal<S>("squid")
         SquidCommandAction.entries
             .filter { it.audience == CommandAudience.PLAYER }
-            .forEach { action -> root.then(playerActionNode(action, access, actions)) }
+            .forEach { action -> root.then(playerActionNode(action, access, actions, suggestions)) }
 
         val server = LiteralArgumentBuilder.literal<S>("server")
             .requires { source ->
@@ -76,6 +82,7 @@ public object SquidCommandTree {
         action: SquidCommandAction,
         access: CommandAccess<S>,
         actions: CommandActions<S>,
+        suggestions: SquidSuggestions<S>,
     ): LiteralArgumentBuilder<S> {
         val node = actionNode(action, access, actions)
         when (action) {
@@ -83,27 +90,72 @@ public object SquidCommandTree {
                 RequiredArgumentBuilder.argument<S, String>(
                     "target",
                     StringArgumentType.word(),
-                ).executes { actions.execute(action, it) },
+                ).suggests(provider(suggestions, SuggestionSlot.SUBMIT_TARGET))
+                    .executes { actions.execute(action, it) },
             )
             SquidCommandAction.SET -> node.then(
                 RequiredArgumentBuilder.argument<S, String>(
                     "field",
                     StringArgumentType.word(),
-                ).then(
+                ).suggests(provider(suggestions, SuggestionSlot.SET_FIELD)).then(
                     RequiredArgumentBuilder.argument<S, String>(
                         "value",
                         StringArgumentType.greedyString(),
-                    ).executes { actions.execute(action, it) },
+                    ).suggests(provider(suggestions, SuggestionSlot.SET_VALUE))
+                        .executes { actions.execute(action, it) },
                 ),
             )
             SquidCommandAction.UNSET -> node.then(
                 RequiredArgumentBuilder.argument<S, String>(
                     "field",
                     StringArgumentType.word(),
-                ).executes { actions.execute(action, it) },
+                ).suggests(provider(suggestions, SuggestionSlot.UNSET_FIELD))
+                    .executes { actions.execute(action, it) },
             )
             else -> Unit
         }
         return node
     }
+
+    /**
+     * Adapt a [SquidSuggestions] to Brigadier.
+     *
+     * Filtering happens here rather than in each implementation so every slot matches the same
+     * way, and completing is failure-tolerant: a player mid-word must get an empty dropdown rather
+     * than a red error, so anything thrown while gathering candidates is swallowed.
+     */
+    private fun <S> provider(
+        suggestions: SquidSuggestions<S>,
+        slot: SuggestionSlot,
+    ): SuggestionProvider<S> = SuggestionProvider { context, builder ->
+        val typed = builder.remainingLowerCase
+        val candidates = runCatching {
+            suggestions.candidates(context.source, slot, fieldArgument(context))
+        }.getOrDefault(emptyList())
+        candidates
+            .filter { it.value.lowercase().startsWith(typed) }
+            .forEach { candidate ->
+                val tooltip = candidate.tooltip
+                // `LiteralMessage` rather than a SAM-converted lambda: the overload taking a
+                // `Message` is what carries hover text, and naming the concrete type keeps which
+                // overload is selected obvious.
+                if (tooltip == null) {
+                    builder.suggest(candidate.value)
+                } else {
+                    builder.suggest(candidate.value, LiteralMessage(tooltip))
+                }
+            }
+        builder.buildFuture()
+    }
+
+    /**
+     * The field name already typed, when there is one.
+     *
+     * `/squid set <field> <value>` needs it to know which field's values to offer, and Brigadier
+     * has parsed preceding arguments by the time it asks about a later one. It throws rather than
+     * returning null when the argument is absent, which is the ordinary case for the slots that
+     * have no field in front of them.
+     */
+    private fun <S> fieldArgument(context: CommandContext<S>): String? =
+        runCatching { StringArgumentType.getString(context, "field") }.getOrNull()
 }

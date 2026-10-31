@@ -2,19 +2,19 @@
 
 from typing import Annotated, cast
 
-from fastapi import Depends, Query, Request
+from fastapi import Depends, Request
 
 from squid.accounts.application import AccountService
 from squid.api.security import Principal, current_principal
 from squid.auth.application.web import DiscordOAuthService
 from squid.builds.application import BuildQueryService, BuildService
-from squid.core.pagination import SignedCursor
 from squid.notifications import NotificationService
 from squid.permissions.application import PermissionService
 from squid.records.application import RecordService
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.application import SchematicService
 from squid.search.application import SearchService
+from squid.suggestions.application import SuggestionService
 from squid.tags.application import TagService
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
@@ -54,6 +54,10 @@ def get_search(services: Services) -> SearchService:
     return services.search
 
 
+def get_suggestions(services: Services) -> SuggestionService:
+    return services.suggestions
+
+
 def get_tags(services: Services) -> TagService:
     return services.tags
 
@@ -82,22 +86,15 @@ def get_permissions(services: Services) -> PermissionService:
     return services.permissions
 
 
-async def cursor_signer(request: Request) -> SignedCursor:
-    """Return a collection cursor signer using shared runtime configuration."""
-    config = request.app.state.config
-    return SignedCursor(config.runtime.cursor_secret.get_secret_value().encode())
-
-
-PageSize = Annotated[int, Query(ge=1, le=50)]
 Permissions = Annotated[PermissionService, Depends(get_permissions)]
 BuildCommands = Annotated[BuildService, Depends(get_builds)]
 BuildQueries = Annotated[BuildQueryService, Depends(get_build_queries)]
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]
-CursorSigner = Annotated[SignedCursor, Depends(cursor_signer)]
 Records = Annotated[RecordService, Depends(get_records)]
 Notifications = Annotated[NotificationService, Depends(get_notifications)]
 Schematics = Annotated[SchematicService, Depends(get_schematics)]
 Search = Annotated[SearchService, Depends(get_search)]
+Suggestions = Annotated[SuggestionService, Depends(get_suggestions)]
 Tags = Annotated[TagService, Depends(get_tags)]
 Accounts = Annotated[AccountService, Depends(get_accounts)]
 Versions = Annotated[VersionService, Depends(get_versions)]

@@ -14,9 +14,10 @@ from squid.accounts.domain.models import (
     CreatorAlias,
     CreatorProfile,
     IdentityProvider,
+    IdentityRefresh,
     RecentAccountProof,
     VerificationCode,
-    normalize_ign,
+    fold_creator_name,
 )
 
 __all__ = [
@@ -33,7 +34,8 @@ __all__ = [
     "CreatorAlias",
     "CreatorProfile",
     "IdentityProvider",
+    "IdentityRefresh",
     "RecentAccountProof",
     "VerificationCode",
-    "normalize_ign",
+    "fold_creator_name",
 ]

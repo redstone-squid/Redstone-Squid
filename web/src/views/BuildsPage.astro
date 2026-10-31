@@ -6,6 +6,7 @@ import SearchComposer from "../components/SearchComposer";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { asCatalogueError, fetchBuilds } from "../lib/api";
 import { localizePath, translate, type Locale } from "../lib/i18n";
+import { isPaged, PAGE_PARAMS, readPageParams } from "../lib/pagination";
 import { composeGuidedQuery, queryFromUrl } from "../lib/search";
 
 type Props = { locale: Locale };
@@ -14,15 +15,17 @@ const guided = queryFromUrl(Astro.url.searchParams);
 const guidedQuery = composeGuidedQuery(guided);
 const q = Astro.url.searchParams.get("q")?.trim() || guidedQuery || undefined;
 const sort = Astro.url.searchParams.get("sort")?.trim() || undefined;
-const cursor = Astro.url.searchParams.get("cursor")?.trim() || undefined;
+const page_ = readPageParams(Astro.url.searchParams);
 const hasGuidedParameters = Object.values(guided).some(Boolean);
 const initialMode = q && !hasGuidedParameters ? "advanced" : "guided";
 const canonicalUrl = new URL(Astro.url);
-canonicalUrl.searchParams.delete("cursor");
+for (const name of PAGE_PARAMS) canonicalUrl.searchParams.delete(name);
 let error;
 let page;
 try {
-  page = await fetchBuilds(locale, { q, sort, cursor });
+  // The composer's sort vocabulary is the search field registry's, which the catalogue listing
+  // does not share: without a query, its allowlist is the indexed columns only.
+  page = await fetchBuilds(locale, { q, sort: q ? sort : undefined, ...page_ });
 } catch (caught) {
   error = asCatalogueError(caught);
   Astro.locals.responseStatus = error.status;
@@ -34,7 +37,7 @@ try {
   description={translate(locale, "meta.buildsDescription")}
   locale={locale}
   canonicalPath={`${canonicalUrl.pathname}${canonicalUrl.search}`}
-  noindex={Boolean(cursor)}
+  noindex={isPaged(page_)}
 >
   <div class="page-shell section-stack">
     <header class="page-heading">
@@ -68,7 +71,7 @@ try {
               <BuildCard build={build} locale={locale} />
             ))}
           </div>
-          <Pagination locale={locale} cursor={page!.next_cursor} url={Astro.url} />
+          <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
         </section>
       ) : (
         <div class="empty-state">{translate(locale, "builds.empty")}</div>

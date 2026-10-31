@@ -46,7 +46,7 @@ _TABLES = (
 
 
 @pytest.fixture
-async def draft_tables(async_engine: AsyncEngine) -> AsyncGenerator[None, None]:
+async def draft_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     async with async_engine.begin() as connection:
         for table in _TABLES:
             await connection.run_sync(table.create)

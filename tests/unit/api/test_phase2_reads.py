@@ -1,16 +1,20 @@
 """Focused contracts for the remaining public read resources."""
 
+from collections.abc import Sequence
 from types import SimpleNamespace
-from typing import cast
+from typing import cast, override
 from uuid import UUID
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from whenever import Instant
 
+from squid.accounts.application import AccountService
 from squid.accounts.domain import CreatorAlias, CreatorProfile
 from squid.api.dependencies import get_services
 from squid.runtime import ApiServices
+from squid.schematics.application import SchematicService
+from squid.schematics.errors import SchematicNotFoundError
+from squid.tags.application import TagService
 from squid.tags.domain import (
     TagAuthority,
     TagDefinition,
@@ -18,55 +22,90 @@ from squid.tags.domain import (
     TagSemanticKind,
     TagValueType,
 )
+from squid.versions.application.services import VersionService
 from squid.versions.domain import MinecraftVersion
-from squid.voting.domain import GenericPoll, VoteChoice, VoteOption, VoteSelection, VoteSessionSnapshot, VoteTarget
+from squid.voting.application import VoteService
+from squid.voting.domain import VoteChoice, VoteOption, VoteSelection, VoteSessionSnapshot, VoteVisibility
+from tests.helpers.voting import poll_snapshot
 from tests.unit.api.fakes import MockDatabaseManager
 
+CREATOR_PUBLIC_ID = UUID("22222222-2222-2222-2222-222222222222")
+RENDER_RECIPE_HASH = "b" * 64
 
-class PublicTagFake:
+# Each fake subclasses the service it replaces and marks its methods `@override`, so a
+# renamed method or a changed return type fails the type check here instead of leaving
+# these route tests green against a contract the routes no longer have. None of them run
+# the real `__init__`: the fakes replace every method a route reaches, so a service's
+# repositories are exactly what they must not have.
+
+
+class PublicTagFake(TagService):
     def __init__(self, definition: TagDefinition) -> None:
         self.definition = definition
 
-    async def public_definitions(self):
+    @override
+    async def public_definitions(self) -> Sequence[TagDefinition]:
         return (self.definition,)
 
-    async def public_definition(self, tag_id: int):
+    @override
+    async def public_definition(self, tag_id: int) -> TagDefinition | None:
         return self.definition if tag_id == self.definition.id else None
 
 
-class VersionFake:
-    async def list_all(self):
+class VersionFake(VersionService):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def list_all(self) -> list[MinecraftVersion]:
         return [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
 
 
-class AccountFake:
-    async def get_creator_alias(self, name: str):
-        creator_id = UUID("22222222-2222-2222-2222-222222222222")
-        return (
-            CreatorAlias(7, "Builder", account_id=42, public_creator_id=creator_id)
-            if name.casefold() == "builder"
-            else None
-        )
+class AccountFake(AccountService):
+    def __init__(self) -> None:
+        pass
 
-    async def get_creator_profile(self, public_id: UUID):
-        expected = UUID("22222222-2222-2222-2222-222222222222")
-        return CreatorProfile(expected, ("Builder", "OldBuilder")) if public_id == expected else None
+    @override
+    async def get_creator_alias(self, name: str) -> CreatorAlias | None:
+        if name.casefold() != "builder":
+            return None
+        return CreatorAlias(7, "Builder", account_id=42, public_creator_id=CREATOR_PUBLIC_ID)
 
-
-class SchematicFake:
-    async def render_content(self, recipe_hash: str):
-        return b"\x89PNG\r\n\x1a\npreview" if recipe_hash == "b" * 64 else None
+    @override
+    async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
+        if public_id != CREATOR_PUBLIC_ID:
+            return None
+        return CreatorProfile(CREATOR_PUBLIC_ID, ("Builder", "OldBuilder"))
 
 
-class VoteFake:
+class SchematicFake(SchematicService):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def render_content(self, recipe_hash: str, *, max_bytes: int = 8 * 1024 * 1024) -> bytes:
+        # Raising rather than returning None, because that is what the real service does
+        # when the hash is unknown, and the route has no branch for a missing preview.
+        if recipe_hash != RENDER_RECIPE_HASH:
+            raise SchematicNotFoundError(context={"recipe_hash": recipe_hash})
+        return b"\x89PNG\r\n\x1a\npreview"
+
+
+class VoteFake(VoteService):
     def __init__(self, session: VoteSessionSnapshot) -> None:
         self.session = session
 
-    async def get_session_by_id(self, vote_session_id: int):
+    @override
+    async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         return self.session if vote_session_id == self.session.id else None
 
 
 def _override(app: FastAPI, **services: object) -> None:
+    """Install partial services for the routes under test.
+
+    `ApiServices` has two dozen required capabilities and a route reaches one of them, so
+    the namespace stays partial; the fakes above are where the shape is actually checked.
+    """
     fake_services = cast(ApiServices, SimpleNamespace(**services))
     app.dependency_overrides[get_services] = lambda: fake_services
 
@@ -109,7 +148,8 @@ def test_tag_and_version_collections_use_page_envelope(
             "numeric_quantum": None,
         }
     ]
-    assert tags.json()["has_more"] is False
+    assert tags.json()["total"] == 1
+    assert tags.json()["next"] is None
     assert [item["display_name"] for item in versions.json()["items"]] == ["Java 1.21.5", "Bedrock 1.21.50"]
 
 
@@ -150,7 +190,7 @@ def test_schematic_render_content_is_immutable_png(app_factory: tuple[FastAPI, M
     _override(app, schematics=SchematicFake())
 
     with TestClient(app) as client:
-        response = client.get(f"/v1/schematic-renders/{'b' * 64}/content")
+        response = client.get(f"/v1/schematic-renders/{RENDER_RECIPE_HASH}/content")
 
     assert response.status_code == 200
     assert response.content == b"\x89PNG\r\n\x1a\npreview"
@@ -162,20 +202,14 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
     app_factory: tuple[FastAPI, MockDatabaseManager],
 ) -> None:
     app, _database = app_factory
-    session = VoteSessionSnapshot(
+    session = poll_snapshot(
         id=9,
         author_account_id=123,
-        kind="generic",
-        status="open",
-        result="pending",
-        pass_threshold=1,
-        fail_threshold=1,
-        votes={111: 2.5},
-        messages=(),
+        question="Pick a color",
+        visibility=VoteVisibility.ANONYMOUS_HIDDEN,
+        guild_id=99,
         options=(VoteOption("1", VoteChoice.GENERIC, identifier="red", label="Red"),),
-        target=VoteTarget(),
         selections=(VoteSelection(111, 222, 99, "red", "1", 2.5),),
-        poll=GenericPoll("Pick a color", "anonymous_hidden", 99, Instant.now().add(hours=1)),
     )
     _override(app, votes=VoteFake(session))
 

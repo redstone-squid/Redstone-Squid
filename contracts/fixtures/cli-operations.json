@@ -9,6 +9,10 @@
       "success": {"status": 204, "body": null},
       "problem": {"status": 401, "body": {"title": "Authentication required", "status": 401, "code": "UNAUTHORIZED"}}
     },
+    "account_minecraft_refresh": {
+      "success": {"status": 200, "body": {"minecraft_uuid": "11111111-1111-1111-1111-111111111111", "ign": "NewName", "previous_ign": "OldName", "renamed": true, "claimed_creator_name": "NewName", "retained_creator_names": ["OldName"], "contested_creator_name": null, "pending_claim_id": null}},
+      "problem": {"status": 404, "body": {"title": "No Minecraft account linked", "status": 404, "code": "MINECRAFT_ACCOUNT_NOT_FOUND"}}
+    },
     "submission_drafts_list": {
       "success": {"status": 200, "body": {"drafts": []}},
       "problem": {"status": 401, "body": {"title": "Authentication required", "status": 401, "code": "UNAUTHORIZED"}}

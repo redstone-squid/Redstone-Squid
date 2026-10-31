@@ -9,10 +9,10 @@ then
 fi
 
 echo "Running ruff format..."
-if ! ruff format squid scripts tests --check --target-version py312 --quiet
+if ! ruff format squid scripts tests --check --target-version py314 --quiet
 then
     exit=1
-    ruff format squid scripts tests --target-version py312
+    ruff format squid scripts tests --target-version py314
 fi
 
 if [ $exit -ne 0 ]

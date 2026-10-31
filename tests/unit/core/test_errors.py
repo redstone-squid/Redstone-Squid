@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from squid.accounts.domain import IdentityProvider
 from squid.accounts.errors import AccountAlreadyLinkedError
 from squid.builds.errors import BuildNotFoundError, InvalidBuildError
 from squid.core.errors import ErrorCode, InvalidStateError
@@ -20,6 +21,16 @@ def test_error_separates_backend_and_public_details() -> None:
     assert error.public_detail() == "Build dimensions are invalid. Enter width, height, and depth."
 
 
+def test_a_listed_message_keeps_the_developer_action_on_its_own_line() -> None:
+    """Configuration failures render one finding per line; the action is not a list item."""
+    error = InvalidBuildError(
+        "Two dimensions are invalid:\n  - width\n  - depth",
+        developer_action="Inspect the parsed dimensions.",
+    )
+
+    assert str(error).splitlines()[-1] == "Inspect the parsed dimensions."
+
+
 def test_with_context_mutates_exception_without_changing_type() -> None:
     error = BuildNotFoundError(42)
 
@@ -32,9 +43,13 @@ def test_with_context_mutates_exception_without_changing_type() -> None:
 
 
 def test_context_and_public_context_are_separate() -> None:
-    error = AccountAlreadyLinkedError(123, MINECRAFT_UUID)
+    error = AccountAlreadyLinkedError(discord_id=123, minecraft_uuid=MINECRAFT_UUID)
 
-    assert error.context == {"discord_id": 123, "minecraft_uuid": str(MINECRAFT_UUID)}
+    assert error.context == {
+        "provider": IdentityProvider.DISCORD,
+        "subject": "123",
+        "minecraft_uuid": str(MINECRAFT_UUID),
+    }
     assert error.public_context == {}
     assert str(MINECRAFT_UUID) not in error.public_detail()
 

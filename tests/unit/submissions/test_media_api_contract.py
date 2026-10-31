@@ -209,7 +209,7 @@ async def test_upload_streams_to_private_file_and_returns_only_safe_state() -> N
 
     assert response.status_code == 202
     assert response.headers["Cache-Control"] == "no-store"
-    assert response.headers["X-Squid-Max-Upload-Bytes"] == "8"
+    assert response.headers["Squid-Max-Upload-Bytes"] == "8"
     assert response.json() == {
         "id": str(UPLOAD_ID),
         "draft_id": str(DRAFT_ID),

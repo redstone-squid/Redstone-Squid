@@ -10,7 +10,7 @@ from whenever import Instant
 from squid.api.security import UNBOUNDED, Principal
 from squid.api.v1.notifications import accept_notice, create_subscription, list_inbox
 from squid.api.v1.schemas.notifications import NotificationPreferenceUpdate, NotificationSubscriptionCreate
-from squid.core.pagination import SignedCursor
+from squid.core.pagination import Page, PageSelector
 from squid.notifications import (
     CURRENT_NOTIFICATION_NOTICE_VERSION,
     InboxNotification,
@@ -23,7 +23,6 @@ from squid.notifications import (
 from squid.notifications.domain import NotificationKind
 
 ACCOUNT = Principal(kind="account", subject="account:7", nodes=UNBOUNDED, discord_id=123, account_id=7)
-SIGNER = SignedCursor(b"notification-api-test-secret")
 
 
 async def test_notification_consent_is_independent_and_defaults_channels_off() -> None:
@@ -88,17 +87,16 @@ def test_empty_record_filter_is_rejected_at_the_api_boundary() -> None:
 async def test_staff_inbox_access_is_rechecked_on_each_read() -> None:
     notifications = AsyncMock()
     notifications.can_view_staff.return_value = True
-    notifications.inbox.return_value = (
-        InboxNotification(
-            id=3,
-            kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-            payload={"build_id": 42},
-            created_at=Instant.now(),
-        ),
+    item = InboxNotification(
+        id=3,
+        kind=NotificationKind.STAFF_BUILD_SUBMITTED,
+        payload={"build_id": 42},
+        created_at=Instant.now(),
     )
+    notifications.inbox.return_value = Page(items=(item,), total=1, next=None, prev=None)
 
-    page = await list_inbox(cast(Any, notifications), SIGNER, ACCOUNT)
+    page = await list_inbox(cast(Any, notifications), ACCOUNT)
 
     assert page.items[0].kind == "staff_build_submitted"
     notifications.can_view_staff.assert_awaited_once_with(123)
-    notifications.inbox.assert_awaited_once_with(7, after_id=None, limit=21, include_staff=True)
+    notifications.inbox.assert_awaited_once_with(7, selector=PageSelector(), page_size=20, include_staff=True)

@@ -8,6 +8,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from squid.bot.utils.autocomplete import autocompletes
 from squid.notifications import (
     NotificationSubscription,
     PendingNotificationDelivery,
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 class NotificationCog(commands.GroupCog, group_name="notifications", group_description="Manage notification opt-ins"):
     """Manage notification state and deliver queued DMs without prefix commands."""
 
-    def __init__(self, bot: "RedstoneSquid") -> None:
+    def __init__(self, bot: RedstoneSquid) -> None:
         self.bot = bot
         self._delivery_task: JobHandle | None = None
 
@@ -71,6 +72,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         await self.bot.services.notifications.set_preferences(account.id, web_enabled=web, dm_enabled=dm)
         await interaction.response.send_message("Notification channels updated.", ephemeral=True)
 
+    @autocompletes(creator_id="creator_profiles")
     @app_commands.command(name="follow-creator", description="Follow a public creator profile UUID")
     async def follow_creator(self, interaction: discord.Interaction, creator_id: str) -> None:
         account_id = await self._account_id(interaction)
@@ -81,6 +83,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         )
         await interaction.response.send_message(f"Creator subscription #{subscription.id} saved.", ephemeral=True)
 
+    @autocompletes(competition_id="competitions")
     @app_commands.command(name="follow-record", description="Follow one stable record competition UUID")
     async def follow_record(self, interaction: discord.Interaction, competition_id: str) -> None:
         account_id = await self._account_id(interaction)
@@ -91,6 +94,12 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         )
         await interaction.response.send_message(f"Record subscription #{subscription.id} saved.", ephemeral=True)
 
+    @autocompletes(
+        build_kind="build_kinds",
+        record_class="record_classes",
+        version_scope="version_scopes",
+        tag_id="showcase_tag_ids",
+    )
     @app_commands.command(name="follow-records", description="Follow records matching broad structured predicates")
     async def follow_records(
         self,
@@ -127,6 +136,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         )
         await interaction.response.send_message(content or "You have no subscriptions.", ephemeral=True)
 
+    @autocompletes(subscription_id="notification_subscriptions")
     @app_commands.command(name="unfollow", description="Remove one notification subscription")
     async def unfollow(self, interaction: discord.Interaction, subscription_id: int) -> None:
         await self.bot.services.notifications.unsubscribe(await self._account_id(interaction), subscription_id)
@@ -191,5 +201,5 @@ def _subscription_target(subscription: NotificationSubscription) -> str:
     return str(subscription.record_filter.as_dict()) if subscription.record_filter is not None else ""
 
 
-async def setup(bot: "RedstoneSquid") -> None:
+async def setup(bot: RedstoneSquid) -> None:
     await bot.add_cog(NotificationCog(bot))

@@ -11,7 +11,6 @@ import time
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import psycopg2
 from psycopg2 import sql
@@ -48,7 +47,7 @@ class DatabaseCredentials:
     observer_password: str = field(repr=False)
 
     @classmethod
-    def generate(cls) -> "DatabaseCredentials":
+    def generate(cls) -> DatabaseCredentials:
         """Generate coordinator-owned passwords independent of container-visible identity."""
         return cls(
             administrator_password=secrets.token_urlsafe(32),
@@ -520,19 +519,23 @@ class DatabaseController:
             "PYTHONUTF8": "1",
             "SQUID_DATABASE_URL": migration_url,
         }
-        with TemporaryDirectory(prefix="squid-api-fuzz-migration-") as working_directory:
-            result = subprocess.run(
-                [sys.executable, "-m", "alembic", "-c", str(_ROOT / "alembic.ini"), "upgrade", "head"],
-                cwd=working_directory,
-                env=environment,
-                stdin=subprocess.DEVNULL,
-                capture_output=True,
-                text=True,
-                timeout=MIGRATION_SECONDS,
-                check=False,
-            )
+        # Run from the repository root: `script_location` lives in `[tool.alembic]` in
+        # pyproject.toml, which Alembic resolves relative to the working directory, so a
+        # scratch cwd makes it fail with "No 'script_location' key found".
+        result = subprocess.run(
+            [sys.executable, "-m", "alembic", "-c", str(_ROOT / "alembic.ini"), "upgrade", "head"],
+            cwd=_ROOT,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=MIGRATION_SECONDS,
+            check=False,
+        )
         if result.returncode != 0:
-            msg = "Disposable PostgreSQL template migration failed."
+            # Include the child's output: swallowing it turned every migration problem
+            # into the same opaque sentence.
+            msg = f"Disposable PostgreSQL template migration failed.\n{result.stdout}\n{result.stderr}"
             raise RuntimeError(msg)
 
     def _install_control_sentinel(self) -> None:

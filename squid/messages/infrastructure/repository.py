@@ -1,183 +1,89 @@
-"""SQLAlchemy tracked message repository."""
+"""SQLAlchemy Discord message fact repository."""
 
-from collections.abc import Sequence
-from typing import Literal, cast
+from typing import Any, cast
 
-from advanced_alchemy.exceptions import NotFoundError
 from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.messages.domain import MessagePurposeLiteral, MessageRecord, ProjectionResourceKind
-from squid.messages.errors import MessageNotFoundError
+from squid.messages.domain import MessageFact, MessageRecord
 from squid.messages.infrastructure.models import Message
-from squid.persistence.repository import BaseAsyncRepository
-
-
-class _MessageModelRepository(BaseAsyncRepository[Message]):
-    model_type = Message
 
 
 class MessageRepository:
-    """Repository for pure database operations on messages."""
+    """Repository for pure database operations on Discord message facts."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]):
         self._session_factory = session_factory
 
-    async def insert(
-        self,
-        message_id: int,
-        server_id: int,
-        channel_id: int,
-        author_id: int,
-        purpose: MessagePurposeLiteral,
-        content: str | None,
-        *,
-        build_id: int | None = None,
-        vote_session_id: int | None = None,
-    ) -> None:
-        """Insert a message record into the database.
+    async def upsert_fact(self, fact: MessageFact) -> None:
+        """Insert or refresh the canonical row for one Discord message.
 
-        Args:
-            message_id: The Discord message ID.
-            server_id: The server ID where the message was sent.
-            channel_id: The channel ID where the message was sent.
-            author_id: The author ID of the message.
-            purpose: The purpose of the message.
-            content: The content of the message.
-            build_id: The associated build id, can be None.
-            vote_session_id: The vote session id of the message.
+        `observed_at` is only set on insert: it records when the bot first saw the
+        message, which a later sighting must not overwrite.
         """
-        async with self._session_factory() as session:
-            repository = _MessageModelRepository(session=session, auto_commit=True)
-            projection_resource_kind: ProjectionResourceKind | None = None
-            projection_source_key: str | None = None
-            if purpose != "build_original_message":
-                if vote_session_id is not None:
-                    projection_resource_kind = "vote_session"
-                    projection_source_key = str(vote_session_id)
-                elif build_id is not None:
-                    projection_resource_kind = "build"
-                    projection_source_key = str(build_id)
-            await repository.add(
-                Message(
-                    id=message_id,
-                    server_id=server_id,
-                    channel_id=channel_id,
-                    author_id=author_id,
-                    purpose=purpose,
-                    content=content,
-                    build_id=build_id,
-                    vote_session_id=vote_session_id,
-                    projection_resource_kind=projection_resource_kind,
-                    projection_source_key=projection_source_key,
-                )
-            )
-
-    async def update_edited_time(self, message_id: int) -> None:
-        """Update the edited time of a message.
-
-        Args:
-            message_id: The message ID to update.
-        """
-        async with self._session_factory() as session:
-            repository = _MessageModelRepository(session=session, auto_commit=True)
-            message = await repository.get_one_or_none(id=message_id)
-            if message is not None:
-                message.updated_at = Instant.now()
-                await repository.update(message)
-
-    async def get_by_id(self, message_id: int) -> MessageRecord | None:
-        """Get a message by its ID.
-
-        Args:
-            message_id: The message ID to retrieve.
-
-        Returns:
-            The Message object if found, otherwise None.
-        """
-        async with self._session_factory() as session:
-            repository = _MessageModelRepository(session=session)
-            message = await repository.get_one_or_none(id=message_id)
-            return None if message is None else self._to_record(message)
-
-    async def delete_by_id(self, message_id: int) -> MessageRecord:
-        """Delete a message from the database by ID.
-
-        Args:
-            message_id: The message ID to delete.
-
-        Returns:
-            The deleted Message object.
-
-        Raises:
-            MessageNotFoundError: If the message is not found.
-        """
-        async with self._session_factory() as session:
-            repository = _MessageModelRepository(session=session, auto_commit=True)
-            try:
-                return self._to_record(await repository.delete(message_id))
-            except NotFoundError as exc:
-                raise MessageNotFoundError(message_id) from exc
-
-    async def list_for_build(self, build_id: int, author_id: int) -> Sequence[MessageRecord]:
-        """Return messages for a build created by one Discord author."""
-        stmt = select(Message).where(Message.build_id == build_id, Message.author_id == author_id)
-        async with self._session_factory() as session:
-            result = await session.execute(stmt)
-            return [self._to_record(message) for message in result.scalars().all()]
-
-    async def list_for_build_purpose(self, build_id: int, purpose: MessagePurposeLiteral) -> Sequence[MessageRecord]:
-        """Return every tracked message serving one purpose for a build."""
-        stmt = select(Message).where(Message.build_id == build_id, Message.purpose == purpose)
-        async with self._session_factory() as session:
-            result = await session.execute(stmt)
-            return [self._to_record(message) for message in result.scalars().all()]
-
-    async def list_projection(self, resource_kind: ProjectionResourceKind, source_key: str) -> Sequence[MessageRecord]:
-        """Return actual Discord targets retained for one desired resource."""
-        statement = select(Message).where(
-            Message.projection_resource_kind == resource_kind,
-            Message.projection_source_key == source_key,
-        )
-        async with self._session_factory() as session:
-            rows = (await session.scalars(statement)).all()
-            return [self._to_record(message) for message in rows]
-
-    async def mark_projection_applied(
-        self,
-        resource_kind: ProjectionResourceKind,
-        source_key: str,
-        generation: int,
-    ) -> None:
-        """Fence acknowledgement on the exact desired generation that was rendered."""
         statement = (
-            update(Message)
-            .where(
-                Message.projection_resource_kind == resource_kind,
-                Message.projection_source_key == source_key,
-                Message.desired_revision == generation,
+            pg_insert(Message)
+            .values(
+                id=fact.id,
+                guild_id=fact.guild_id,
+                channel_id=fact.channel_id,
+                author_id=fact.author_id,
+                content=fact.content,
+                created_at=fact.created_at,
+                observed_at=Instant.now(),
             )
-            .values(applied_revision=generation)
+            .on_conflict_do_update(
+                index_elements=[Message.id],
+                set_={
+                    "guild_id": fact.guild_id,
+                    "channel_id": fact.channel_id,
+                    "author_id": fact.author_id,
+                    "content": fact.content,
+                    "created_at": fact.created_at,
+                },
+            )
         )
         async with self._session_factory.begin() as session:
             await session.execute(statement)
+
+    async def record_edit(self, message_id: int, content: str | None, edited_at: Instant) -> bool:
+        """Refresh stored content, reporting whether the message was known."""
+        statement = update(Message).where(Message.id == message_id).values(content=content, edited_at=edited_at)
+        async with self._session_factory.begin() as session:
+            result = cast(CursorResult[Any], await session.execute(statement))
+            return bool(result.rowcount)
+
+    async def mark_deleted(self, message_id: int, deleted_at: Instant) -> bool:
+        """Tombstone a message, reporting whether it was known.
+
+        Only the first deletion wins, so a redelivered raw event cannot move the
+        timestamp forward.
+        """
+        statement = (
+            update(Message).where(Message.id == message_id, Message.deleted_at.is_(None)).values(deleted_at=deleted_at)
+        )
+        async with self._session_factory.begin() as session:
+            result = cast(CursorResult[Any], await session.execute(statement))
+            return bool(result.rowcount)
+
+    async def get_by_id(self, message_id: int) -> MessageRecord | None:
+        async with self._session_factory() as session:
+            message = await session.scalar(select(Message).where(Message.id == message_id))
+        return None if message is None else self._to_record(message)
 
     @staticmethod
     def _to_record(message: Message) -> MessageRecord:
         return MessageRecord(
             id=message.id,
-            server_id=message.server_id,
             channel_id=message.channel_id,
             author_id=message.author_id,
-            purpose=cast(MessagePurposeLiteral, message.purpose),
+            guild_id=message.guild_id,
             content=message.content,
-            build_id=message.build_id,
-            vote_session_id=message.vote_session_id,
-            updated_at=message.updated_at,
-            projection_resource_kind=cast(ProjectionResourceKind | None, message.projection_resource_kind),
-            projection_source_key=message.projection_source_key,
-            desired_action=cast(Literal["refresh", "delete"], message.desired_action),
-            desired_revision=message.desired_revision,
-            applied_revision=message.applied_revision,
+            created_at=message.created_at,
+            observed_at=message.observed_at,
+            edited_at=message.edited_at,
+            deleted_at=message.deleted_at,
         )

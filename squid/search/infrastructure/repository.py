@@ -5,13 +5,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol, cast, override
 
-from sqlalchemy import case, func, literal, or_, select, true, tuple_
+from sqlalchemy import case, func, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement
 
 from squid.search.application import (
-    CursorCodec,
     RankedCandidate,
     RankingBranch,
     SearchBackend,
@@ -24,7 +22,6 @@ from squid.search.application import (
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldType
 from squid.search.domain import (
     BuildSearchHit,
-    CursorPosition,
     MetadataSearchHit,
     RecordSearchHit,
     SearchHit,
@@ -79,9 +76,10 @@ class PostgresSearchBackend(SearchBackend):
         self,
         request: SearchRequest,
         query: SearchQuery,
-        cursor: CursorPosition | None,
+        *,
+        offset: int,
     ) -> SearchSlice:
-        """Search indexed documents and return one stable page."""
+        """Search indexed documents and return the window starting at `offset`."""
         registry = DEFAULT_FIELD_REGISTRY if self._fields is None else await self._fields.registry()
         compiler = self._compiler if self._fields is None else PostgresSearchQueryCompiler(registry)
         predicate = self.compile_predicate(request, query, compiler=compiler)
@@ -91,10 +89,10 @@ class PostgresSearchBackend(SearchBackend):
                 if field is None or not field.supports_sort:
                     msg = f"Search field {request.sort.field!r} cannot be sorted."
                     raise ValueError(msg)
-                return await self._sorted(session, request, predicate, cursor, field)
+                return await self._sorted(session, request, predicate, offset, field)
             if is_filter_only(query):
-                return await self._filter_only(session, request, predicate, cursor)
-            return await self._ranked(session, request, query, predicate, cursor)
+                return await self._filter_only(session, request, predicate, offset)
+            return await self._ranked(session, request, query, predicate, offset)
 
     def compile_predicate(
         self,
@@ -120,53 +118,54 @@ class PostgresSearchBackend(SearchBackend):
         session: AsyncSession,
         request: SearchRequest,
         predicate: ColumnElement[bool],
-        cursor: CursorPosition | None,
+        offset: int,
         field: FieldDefinition,
     ) -> SearchSlice:
-        facet = aliased(SearchDocumentFacet)
-        value_column = {
-            FieldType.TEXT: func.lower(facet.text_value),
-            FieldType.NUMBER: facet.numeric_value,
-            FieldType.TIMESTAMP: facet.timestamp_value,
-            FieldType.BOOLEAN: facet.boolean_value,
+        """Page documents by one scalar facet field, with no depth limit.
+
+        A document may hold several values for the same field -- facets are unique per
+        `(document_id, field_name, ordinal)` -- so joining the facet table directly would repeat
+        the document once per value and put OFFSET arithmetic out by however many duplicates fell
+        before the window. Aggregating to one row per document first makes the offset exact, and
+        picks the value a caller would expect to sort on: the smallest ascending, the largest
+        descending.
+        """
+        ascending = request.sort is None or request.sort.direction is SortDirection.ASCENDING
+        value_source = {
+            FieldType.TEXT: func.lower(SearchDocumentFacet.text_value),
+            FieldType.NUMBER: SearchDocumentFacet.numeric_value,
+            FieldType.TIMESTAMP: SearchDocumentFacet.timestamp_value,
+            FieldType.BOOLEAN: SearchDocumentFacet.boolean_value,
         }[field.value_type]
-        ordered_value = (
-            value_column.asc()
-            if request.sort is None or request.sort.direction is SortDirection.ASCENDING
-            else value_column.desc()
+        if field.value_type is FieldType.BOOLEAN:
+            # PostgreSQL has no min/max over boolean; these are the same aggregate on false < true.
+            aggregate = func.bool_and(value_source) if ascending else func.bool_or(value_source)
+        else:
+            aggregate = func.min(value_source) if ascending else func.max(value_source)
+        anchor = (
+            select(SearchDocumentFacet.document_id.label("document_id"), aggregate.label("sort_value"))
+            .where(SearchDocumentFacet.field_name == (field.storage_name or field.name))
+            .group_by(SearchDocumentFacet.document_id)
+            .subquery("sort_anchor")
         )
+        sort_value = anchor.c.sort_value
         statement = (
             select(SearchDocument)
-            .outerjoin(
-                facet,
-                (facet.document_id == SearchDocument.id) & (facet.field_name == (field.storage_name or field.name)),
-            )
+            .outerjoin(anchor, anchor.c.document_id == SearchDocument.id)
             .where(predicate)
             .order_by(
-                value_column.is_(None),
-                ordered_value,
+                sort_value.is_(None),
+                sort_value.asc() if ascending else sort_value.desc(),
                 SearchDocument.normalized_title,
                 SearchDocument.resource_kind,
                 SearchDocument.source_key,
             )
-            .limit(_CANDIDATE_LIMIT)
+            .offset(offset)
+            .limit(request.page_size)
         )
-        documents = list((await session.scalars(statement)).unique().all())
-        start = 0
-        if cursor is not None:
-            raw_identity = _raw_identity(cursor.resource_kind, cursor.source_id)
-            start = next(
-                (
-                    index + 1
-                    for index, document in enumerate(documents)
-                    if (document.resource_kind, document.source_key) == raw_identity
-                ),
-                len(documents),
-            )
-        selected = documents[start : start + request.page_size + 1]
-        has_more = len(selected) > request.page_size
-        hits = tuple(_to_hit(document, None) for document in selected[: request.page_size])
-        return SearchSlice(hits, has_more, _last_position(request, hits))
+        documents = (await session.scalars(statement)).unique().all()
+        total = await self._count(session, predicate)
+        return SearchSlice(tuple(_to_hit(document, None) for document in documents), total)
 
     @override
     async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]:
@@ -189,8 +188,15 @@ class PostgresSearchBackend(SearchBackend):
         request: SearchRequest,
         query: SearchQuery,
         predicate: ColumnElement[bool],
-        cursor: CursorPosition | None,
+        offset: int,
     ) -> SearchSlice:
+        """Page the fused relevance ranking.
+
+        `total` is the size of the fused candidate list, not of the corpus: ranking materializes at
+        most `_CANDIDATE_LIMIT` candidates per branch, so a query matching more documents than that
+        reports the capped figure and runs out of pages there. Deep relevance pages are not useful
+        enough to justify ranking the whole corpus, and an honest end beats a silently empty page.
+        """
         terms = _ranking_text(query)
         branches: dict[RankingBranch, Sequence[RankedCandidate]] = {
             RankingBranch.EXACT: await self._exact_candidates(session, predicate, terms),
@@ -210,40 +216,23 @@ class PostgresSearchBackend(SearchBackend):
                     logger.exception("Semantic search candidate generation failed")
                     warnings = (_SEMANTIC_WARNING,)
         ranked = reciprocal_rank_fusion(branches)
-        start = _ranked_start(ranked, cursor)
-        selected = ranked[start : start + request.page_size + 1]
-        has_more = len(selected) > request.page_size
-        page_candidates = selected[: request.page_size]
+        page_candidates = ranked[offset : offset + request.page_size]
         documents = await self._documents_by_candidate(session, page_candidates)
         hits = tuple(
             _to_hit(documents[(candidate.resource_kind, candidate.source_id)], candidate.score)
             for candidate in page_candidates
             if (candidate.resource_kind, candidate.source_id) in documents
         )
-        last = _last_position(request, hits)
-        return SearchSlice(hits, has_more, last, warnings)
+        return SearchSlice(hits, len(ranked), warnings)
 
     async def _filter_only(
         self,
         session: AsyncSession,
         request: SearchRequest,
         predicate: ColumnElement[bool],
-        cursor: CursorPosition | None,
+        offset: int,
     ) -> SearchSlice:
-        if cursor is not None:
-            last_title = await self._cursor_title(session, cursor)
-            if last_title is None:
-                return SearchSlice((), has_more=False, last_position=None)
-            raw_kind, raw_key = _raw_identity(cursor.resource_kind, cursor.source_id)
-            predicate &= tuple_(
-                SearchDocument.normalized_title,
-                SearchDocument.resource_kind,
-                SearchDocument.source_key,
-            ) > tuple_(
-                literal(last_title),
-                literal(raw_kind),
-                literal(raw_key),
-            )
+        """Page a query with nothing to rank by, ordered by title."""
         statement = (
             select(SearchDocument)
             .where(predicate)
@@ -252,12 +241,21 @@ class PostgresSearchBackend(SearchBackend):
                 SearchDocument.resource_kind,
                 SearchDocument.source_key,
             )
-            .limit(request.page_size + 1)
+            .offset(offset)
+            .limit(request.page_size)
         )
-        documents = list((await session.scalars(statement)).all())
-        has_more = len(documents) > request.page_size
-        hits = tuple(_to_hit(document, None) for document in documents[: request.page_size])
-        return SearchSlice(hits, has_more, _last_position(request, hits))
+        documents = (await session.scalars(statement)).all()
+        total = await self._count(session, predicate)
+        return SearchSlice(tuple(_to_hit(document, None) for document in documents), total)
+
+    @staticmethod
+    async def _count(session: AsyncSession, predicate: ColumnElement[bool]) -> int:
+        """Count matching documents.
+
+        The compiled predicate stands alone -- it never reaches through a join -- so a total needs
+        no facet join even when the page it accompanies was ordered through one.
+        """
+        return await session.scalar(select(func.count()).select_from(SearchDocument).where(predicate)) or 0
 
     async def _exact_candidates(
         self, session: AsyncSession, predicate: ColumnElement[bool], terms: str
@@ -365,16 +363,6 @@ class PostgresSearchBackend(SearchBackend):
         }
 
     @staticmethod
-    async def _cursor_title(session: AsyncSession, cursor: CursorPosition) -> str | None:
-        resource_kind, source_key = _raw_identity(cursor.resource_kind, cursor.source_id)
-        return await session.scalar(
-            select(SearchDocument.normalized_title).where(
-                SearchDocument.resource_kind == resource_kind,
-                SearchDocument.source_key == source_key,
-            )
-        )
-
-    @staticmethod
     def _scope_predicate(scope: SearchScope) -> ColumnElement[bool]:
         if scope is SearchScope.RECORDS:
             return SearchDocument.resource_kind == "record"
@@ -393,33 +381,6 @@ def _ranking_text(query: SearchQuery) -> str:
         elif not isinstance(expression.value, bool | int | float):
             values.append(str(expression.value))
     return " ".join(values)
-
-
-def _ranked_start(candidates: Sequence[RankedCandidate], cursor: CursorPosition | None) -> int:
-    if cursor is None:
-        return 0
-    return next(
-        (
-            index + 1
-            for index, candidate in enumerate(candidates)
-            if candidate.resource_kind == cursor.resource_kind and candidate.source_id == cursor.source_id
-        ),
-        len(candidates),
-    )
-
-
-def _last_position(request: SearchRequest, hits: Sequence[SearchHit]) -> CursorPosition | None:
-    if not hits:
-        return None
-    last = hits[-1]
-    return CursorPosition(
-        query_hash=CursorCodec.request_hash(request),
-        scope=request.scope,
-        mode=request.mode,
-        score=last.score,
-        resource_kind=last.resource_kind,
-        source_id=last.source_id,
-    )
 
 
 def _group_kind(resource_kind: str) -> ResourceKind:

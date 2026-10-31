@@ -59,7 +59,7 @@ class MediaPreviewClient:
                 allow_redirects=False,
             ) as response:
                 preview = await _preview_response(url, response)
-        except (aiohttp.ClientError, TimeoutError):
+        except aiohttp.ClientError, TimeoutError:
             logger.debug("Trusted media preview request failed", exc_info=True)
             preview = _empty_preview()
         self._cache[url] = preview

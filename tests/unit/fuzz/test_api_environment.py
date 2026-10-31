@@ -308,7 +308,6 @@ def test_synthetic_environment_is_allowlisted_and_uses_only_supplied_endpoints()
         "SQUID_STRICT_UNKNOWN_KEYS",
         "SQUID_DATABASE_URL",
         "SQUID_VERIFICATION_CODE_PEPPER",
-        "SQUID_CURSOR_SECRET",
         "SQUID_API_SECRET",
         "SQUID_API_KEY_PEPPER",
         "SQUID_API_SESSION_PEPPER",

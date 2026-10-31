@@ -19,6 +19,7 @@ from squid.bootstrap import create_bot_runtime
 from squid.bot._types import MessageableChannel
 from squid.bot.errors import SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator
+from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
@@ -34,10 +35,12 @@ from squid.config import (
     CommunityConfig,
     NotificationConfig,
     load_bot_process_config,
+    load_or_exit,
 )
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
 from squid.observability import configure_observability
+from squid.posts.domain import ResourceKind
 from squid.runtime import BackgroundTaskSupervisor, BotServices, start_permission_epoch_watch
 
 logger = logging.getLogger(__name__)
@@ -96,6 +99,10 @@ class RedstoneSquid(Bot):
         self.source_code_url = config.source_code_url
         self.background_tasks = BackgroundTaskSupervisor()
         self.reactions = ReactionRouter(self)
+        self.post_reconciler = PostReconciler(
+            self,
+            [BuildCardRenderer(self), VoteSessionRenderer(self), StarboardEntryRenderer(self)],
+        )
         self.catbox = CatboxClient(catbox_config)
         self.media_previews = MediaPreviewClient()
         # Permission checks resolve a Discord id to an account on every command,
@@ -126,6 +133,7 @@ class RedstoneSquid(Bot):
 
         extensions = [
             "squid.bot.reactions",
+            "squid.bot.messages",
             "squid.bot.misc_commands",
             "squid.bot.settings",
             "squid.bot.submission",
@@ -163,18 +171,21 @@ class RedstoneSquid(Bot):
         if channel is None:
             try:
                 channel = await self.fetch_channel(channel_id)
-            except (discord.NotFound, discord.Forbidden):
+            except discord.NotFound, discord.Forbidden:
                 return None
         if not isinstance(channel, MessageableChannel):
             logger.warning("Channel %s is not messageable.", channel_id)
             return None
         return channel
 
-    async def get_or_fetch_message(
-        self, channel_id: int, message_id: int, *, untrack_if_missing: bool = True
-    ) -> discord.Message | None:
+    async def get_or_fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
         """
         Fetches a message from the cache or the API.
+
+        Purely a read. This used to delete the message's tracking row when Discord
+        answered 404, which made a lookup quietly destroy state and forced four of its
+        eight callers to opt out. Deleted messages are now recorded by the raw delete
+        event, and by the reconciler when it finds a post missing.
 
         Raises:
             discord.HTTPException: Fetching the channel or message failed.
@@ -186,8 +197,6 @@ class RedstoneSquid(Bot):
             return await channel.fetch_message(message_id)
         except discord.NotFound:
             logger.debug("Message %s not found in channel %s.", message_id, channel_id)
-            if untrack_if_missing:
-                await self.services.messages.untrack(message_id)
         except discord.Forbidden:
             pass
         return None
@@ -228,13 +237,25 @@ class RedstoneSquid(Bot):
         """A helper function to create a BuildHandler with the bot instance."""
         return BuildHandler(self, build)
 
+    async def refresh_posts(self, resource_kind: ResourceKind, resource_key: str) -> None:
+        """Render a resource's posts now instead of waiting for the reconciler.
+
+        A latency nudge into the same diff loop the background job uses, not a second
+        way to publish: the write that prompted it already enqueued durable work, so a
+        failure here is retried rather than lost, and a duplicate run is a no-op.
+        """
+        generation = await self.services.posts.pending_generation(resource_kind, resource_key)
+        if generation is None:
+            return
+        await self.post_reconciler.reconcile(resource_kind, resource_key, generation)
+
 
 async def main(
     process_config: BotProcessConfig | None = None,
     identity_config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
 ) -> None:
     """Main entry point for the bot."""
-    resolved_config = process_config or load_bot_process_config()
+    resolved_config = process_config or load_or_exit(load_bot_process_config)
     queue_listener = configure_bot_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="bot")
 

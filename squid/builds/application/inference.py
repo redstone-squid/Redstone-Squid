@@ -12,8 +12,8 @@ from squid.builds.domain import (
     BuildCategory,
     BuildDraft,
     DoorOrientationLiteral,
-    OriginalMessage,
     RestrictionTypeLiteral,
+    SourceMessage,
     UnknownRestrictions,
     parse_time_string,
 )
@@ -104,7 +104,7 @@ class BuildInferenceInput:
         timestamp: str = "",
         attachment_summary: str = "",
         images: Sequence[InlineImage] = (),
-    ) -> "BuildInferenceInput":
+    ) -> BuildInferenceInput:
         """Create the common one-primary-message form used by simple callers."""
         message = ContextMessage(
             message_id=message_id,
@@ -200,14 +200,19 @@ class BuildInferenceService:
                 )
                 continue
             resolved.sort(key=lambda message: source.primary.index(message))
-            origin = resolved[0]
+            # Every primary message is retained, not just the first: a bundle routinely
+            # spans a body message plus follow-up images, and each keeps its own content
+            # rather than being concatenated into one.
             build = BuildDraft(
-                original_message=OriginalMessage(
-                    message_id=origin.message_id,
-                    server_id=source.server_id,
-                    channel_id=source.channel_id,
-                    author_id=origin.author_id,
-                    content="\n".join(message.content for message in resolved),
+                source_messages=tuple(
+                    SourceMessage(
+                        message_id=message.message_id,
+                        guild_id=source.server_id,
+                        channel_id=source.channel_id,
+                        author_id=message.author_id,
+                        content=message.content,
+                    )
+                    for message in resolved
                 ),
                 ai_generated=True,
             )

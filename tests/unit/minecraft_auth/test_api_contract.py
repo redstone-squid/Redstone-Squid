@@ -285,7 +285,7 @@ async def test_openapi_declares_paper_headers_and_server_scoped_idempotency() ->
     paper_start = paths["/minecraft/auth/paper/challenges"]["post"]
     header_names = {parameter["name"] for parameter in paper_start["parameters"] if parameter["in"] == "header"}
 
-    assert {"X-Squid-Installation-ID", "X-Squid-Installation-Secret"} <= header_names
+    assert {"Squid-Installation-ID", "Squid-Installation-Secret"} <= header_names
     assert "Idempotency-Key" in header_names
     mutations = (
         ("/minecraft/auth/paper/installations", "post"),
@@ -312,8 +312,8 @@ async def test_routes_derive_account_origin_and_paper_installation_from_dependen
     players = FakePlayers()
     app = app_with_fakes(installations, players)
     paper_headers = {
-        "X-Squid-Installation-ID": str(INSTALLATION_ID),
-        "X-Squid-Installation-Secret": INSTALLATION_SECRET,
+        "Squid-Installation-ID": str(INSTALLATION_ID),
+        "Squid-Installation-Secret": INSTALLATION_SECRET,
     }
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -397,8 +397,8 @@ async def test_one_time_device_responses_use_server_derived_idempotency_namespac
     idempotency = RecordingIdempotency()
     app = app_with_fakes(FakeInstallations(), FakePlayers(), idempotency=idempotency)
     paper_headers = {
-        "X-Squid-Installation-ID": str(INSTALLATION_ID),
-        "X-Squid-Installation-Secret": INSTALLATION_SECRET,
+        "Squid-Installation-ID": str(INSTALLATION_ID),
+        "Squid-Installation-Secret": INSTALLATION_SECRET,
         "Idempotency-Key": "paper-retry-key",
     }
 

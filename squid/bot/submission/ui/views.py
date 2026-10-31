@@ -116,7 +116,7 @@ class SubmissionModal(ErrorHandledModal):
         self,
         build: BuildDraft,
         builds: BuildService,
-        parent: "BuildSubmissionForm | None" = None,
+        parent: BuildSubmissionForm | None = None,
         *,
         locale: str | None = None,
     ) -> None:
@@ -198,7 +198,7 @@ class SubmissionModal(ErrorHandledModal):
 class SubmissionDetailsModal(ErrorHandledModal):
     """Collect optional restrictions, links, and notes in an explicit format."""
 
-    def __init__(self, parent: "BuildSubmissionForm") -> None:
+    def __init__(self, parent: BuildSubmissionForm) -> None:
         super().__init__(title=t(parent.locale, _("Links and optional details")))
         self.parent = parent
         build = parent.build
@@ -278,7 +278,7 @@ class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
     """This is a modal that allows users to edit a build. Exclusively for BuildEditView."""
 
     def __init__(
-        self, parent: "BuildEditView[BotT]", title: str, timeout: float | None = 60, custom_id: str | None = None
+        self, parent: BuildEditView[BotT], title: str, timeout: float | None = 60, custom_id: str | None = None
     ):
         self.parent = parent
         if custom_id:
@@ -578,7 +578,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
 
     def get_handler(
         self, interaction: discord.Interaction[BotT]
-    ) -> "squid.bot.submission.build_handler.BuildHandler[BotT]":
+    ) -> squid.bot.submission.build_handler.BuildHandler[BotT]:
         return interaction.client.for_build(self.build)
 
     def summary_text(self) -> str:
@@ -659,7 +659,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         else:
             async with self.builds.edit(self.build.id, patch) as edit:
                 self.build = await edit.commit()
-            await interaction.client.for_build(self.build).update_messages()
+            await interaction.client.refresh_posts("build", str(self.build.id))
         self.stop()
         success = StaticLayout(
             discord.ui.TextDisplay(t(self.locale, _("## Changes saved"))),

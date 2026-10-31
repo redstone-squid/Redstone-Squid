@@ -5,16 +5,17 @@ import Pagination from "../components/Pagination.astro";
 import BaseLayout from "../layouts/BaseLayout.astro";
 import { asCatalogueError, fetchBuilds } from "../lib/api";
 import { localizePath, translate, type Locale } from "../lib/i18n";
+import { isPaged, readPageParams } from "../lib/pagination";
 import { creatorQuery } from "../lib/search";
 
 type Props = { locale: Locale; name: string };
 const { locale, name } = Astro.props;
-const cursor = Astro.url.searchParams.get("cursor")?.trim() || undefined;
+const page_ = readPageParams(Astro.url.searchParams);
 const canonicalPath = localizePath(`/creators/${encodeURIComponent(name)}`, locale);
 let error;
 let page;
 try {
-  page = await fetchBuilds(locale, { q: creatorQuery(name), cursor });
+  page = await fetchBuilds(locale, { q: creatorQuery(name), ...page_ });
 } catch (caught) {
   error = asCatalogueError(caught);
   Astro.locals.responseStatus = error.status;
@@ -26,7 +27,7 @@ try {
   description={translate(locale, "builds.byCreatorIntro")}
   locale={locale}
   canonicalPath={canonicalPath}
-  noindex={Boolean(cursor)}
+  noindex={isPaged(page_)}
 >
   <div class="page-shell section-stack">
     <header class="page-heading">
@@ -44,7 +45,7 @@ try {
               <BuildCard build={build} locale={locale} />
             ))}
           </div>
-          <Pagination locale={locale} cursor={page!.next_cursor} url={Astro.url} />
+          <Pagination locale={locale} next={page!.next} prev={page!.prev} url={Astro.url} />
         </>
       ) : (
         <div class="empty-state">{translate(locale, "builds.empty")}</div>

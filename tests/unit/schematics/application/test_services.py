@@ -65,7 +65,7 @@ def service(
     limits: SchematicLimits | None = None,
     engine_installed: bool = True,
     render_enabled: bool = False,
-    resource_pack: "FakeResourcePack | None" = None,
+    resource_pack: FakeResourcePack | None = None,
     render_max_block_count: int = 400_000,
 ) -> tuple[SchematicService, FakeSchematicAnalyzer, FakeSchematicStore]:
     analyzer = analyzer or FakeSchematicAnalyzer()

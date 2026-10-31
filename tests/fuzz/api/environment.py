@@ -130,7 +130,7 @@ class ResetHooks:
     resume: AsyncAction
     reset_fakes: AsyncAction
     checksum: Checksum
-    seeded_ids: "SeededIds"
+    seeded_ids: SeededIds
     baseline_checksum: str
 
 
@@ -157,7 +157,6 @@ class SyntheticSecrets:
     """Per-run synthetic credentials derived without consulting host configuration."""
 
     verification_code_pepper: str = field(repr=False)
-    cursor_secret: str = field(repr=False)
     api_secret: str = field(repr=False)
     api_key_pepper: str = field(repr=False)
     session_pepper: str = field(repr=False)
@@ -170,7 +169,7 @@ class SyntheticSecrets:
     service_api_key_secret: str = field(repr=False)
 
     @classmethod
-    def for_identity(cls, identity: RunIdentity) -> "SyntheticSecrets":
+    def for_identity(cls, identity: RunIdentity) -> SyntheticSecrets:
         """Derive domain-separated credentials from the run's random sentinel."""
 
         def derive(label: str, *, size: int = 32) -> str:
@@ -182,7 +181,6 @@ class SyntheticSecrets:
         ).decode()
         return cls(
             verification_code_pepper=f"fuzz-verification-{derive('verification')}",
-            cursor_secret=f"fuzz-cursor-{derive('cursor')}",
             api_secret=f"fuzz-bootstrap-{derive('bootstrap')}",
             api_key_pepper=f"fuzz-api-key-{derive('api-key-pepper')}",
             session_pepper=f"fuzz-session-{derive('session-pepper')}",
@@ -310,7 +308,6 @@ def synthetic_api_environment(
         "SQUID_STRICT_UNKNOWN_KEYS": "true",
         "SQUID_DATABASE_URL": endpoints.postgres_url,
         "SQUID_VERIFICATION_CODE_PEPPER": resolved_secrets.verification_code_pepper,
-        "SQUID_CURSOR_SECRET": resolved_secrets.cursor_secret,
         "SQUID_API_SECRET": resolved_secrets.api_secret,
         "SQUID_API_KEY_PEPPER": resolved_secrets.api_key_pepper,
         "SQUID_API_SESSION_PEPPER": resolved_secrets.session_pepper,

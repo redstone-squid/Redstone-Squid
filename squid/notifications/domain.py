@@ -108,7 +108,7 @@ class RecordSubscriptionFilter:
         }
 
     @classmethod
-    def from_dict(cls, value: dict[str, object]) -> "RecordSubscriptionFilter":
+    def from_dict(cls, value: dict[str, object]) -> RecordSubscriptionFilter:
         """Parse trusted persisted JSON, raising when it no longer matches the contract."""
         raw_tags_value = value.get("tags", [])
         if not isinstance(raw_tags_value, list):

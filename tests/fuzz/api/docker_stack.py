@@ -676,7 +676,7 @@ def _wait_for_api(base_url: str) -> None:
             with urllib.request.urlopen(f"{base_url}/readyz", timeout=0.5) as response:
                 if response.status == 200 and len(response.read(1024)) < 1024:
                     return
-        except (OSError, urllib.error.HTTPError):
+        except OSError, urllib.error.HTTPError:
             time.sleep(0.1)
     msg = "Disposable API container did not become ready."
     raise TimeoutError(msg)
