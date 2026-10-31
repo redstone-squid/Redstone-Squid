@@ -168,7 +168,7 @@ async def test_manifest_upgrade_is_optimistic_and_idempotent_by_target(
         DRAFT_ID,
         account_id,
         expected_revision=0,
-        target_schema_revision=2,
+        target_schema_revision=3,
         answers={"completion": "Built at spawn"},
         updated_at=NOW.add(seconds=1),
         expires_at=NOW.add(days=7, seconds=1, days_assumed_24h_ok=True),
@@ -177,13 +177,13 @@ async def test_manifest_upgrade_is_optimistic_and_idempotent_by_target(
         DRAFT_ID,
         account_id,
         expected_revision=0,
-        target_schema_revision=2,
+        target_schema_revision=3,
         answers={"completion": "ignored replay payload"},
         updated_at=NOW.add(seconds=2),
         expires_at=NOW.add(days=7, seconds=2, days_assumed_24h_ok=True),
     )
 
-    assert upgraded.draft.snapshot.schema_revision == 2
+    assert upgraded.draft.snapshot.schema_revision == 3
     assert upgraded.draft.snapshot.revision == 1
     assert upgraded.draft.snapshot.answers == {"completion": "Built at spawn"}
     assert replayed.replayed

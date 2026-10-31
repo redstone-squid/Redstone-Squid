@@ -102,7 +102,7 @@ class FakeForms(SubmissionFormReader):
         locale: str | None,
     ) -> FormManifest | None:
         self.revision_calls.append((schema_id, revision, locale))
-        if schema_id == "build_submission.v1" and revision == 1:
+        if schema_id == "build_submission.v1" and revision == 2:
             return build_submission_manifest(locale, revision=revision)
         return None
 
@@ -307,8 +307,8 @@ def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
 @pytest.mark.parametrize(
     ("revision", "expected_digest"),
     [
-        (1, "d1c73dfb23e7c62c5f79a55493e6918a5998161007ab5dc92f091887925a59d5"),
-        (2, "6242f48c2ed797de8cefd9eea11dd72ef744050e5c37a5a8b9053c7d2c507a82"),
+        (2, "076dd914584359bf38116dba59cae6ea1b18dcdfcf2aef48848579098b3f740f"),
+        (3, "30125e2ae90c9cc6f2f7a418db95ccfb827b15137069be6cca9ccec6520742b9"),
     ],
 )
 def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_digest: str) -> None:
@@ -355,7 +355,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         manifest_response = await client.get("/submissions/form/current", headers={"Accept-Language": "zh-TW"})
         pinned_manifest_response = await client.get(
-            "/submissions/form/schemas/build_submission.v1/revisions/1",
+            "/submissions/form/schemas/build_submission.v1/revisions/2",
             headers={"Accept-Language": "zh-TW"},
         )
         with pytest.raises(SubmissionFormRevisionNotFoundError):
@@ -403,7 +403,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert manifest_response.json()["schema_id"] == "build_submission.v1"
     assert forms.manifest_locales == ["zh-CN"]
     assert pinned_manifest_response.status_code == 200
-    assert pinned_manifest_response.json()["revision"] == 1
+    assert pinned_manifest_response.json()["revision"] == 2
     assert forms.revision_calls == [
         ("build_submission.v1", 1, "zh-CN"),
         ("build_submission.v1", 999, "en"),

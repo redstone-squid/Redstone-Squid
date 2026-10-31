@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass
+from typing import Any
 
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, heading, paragraph, stack, status
@@ -269,7 +270,7 @@ class MultiChoice:
         return FormSpec(
             "Select options",
             (
-                MultiChoiceField(
+                MultiChoiceField[str, Any](
                     key="selection",
                     label="Options",
                     required=self.minimum > 0,

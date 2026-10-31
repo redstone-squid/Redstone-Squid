@@ -733,7 +733,7 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
     fields: list[sl.forms.FormField[Any]] = []
     for item in page_items:
         spec = item.spec
-        field_type = sl.forms.TextAreaField if spec.display is FieldDisplay.PARAGRAPH else sl.forms.TextField
+        field_type = sl.forms.TextAreaField[Any] if spec.display is FieldDisplay.PARAGRAPH else sl.forms.TextField[Any]
         fields.append(
             field_type(
                 key=item.key,

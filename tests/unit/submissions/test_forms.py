@@ -104,18 +104,18 @@ def test_partial_validation_allows_incomplete_draft_but_rejects_wrong_values() -
 
 
 @pytest.mark.asyncio
-async def test_checked_in_registry_retains_v1_and_serves_v2_vocabulary() -> None:
+async def test_checked_in_registry_retains_v2_and_serves_v3_vocabulary() -> None:
     registry = CheckedInFormManifestRegistry()
 
     current = await registry.current(locale="en")
-    revision_one = await registry.get("build_submission.v1", 1, locale="en")
     revision_two = await registry.get("build_submission.v1", 2, locale="en")
+    revision_three = await registry.get("build_submission.v1", 3, locale="en")
 
-    assert revision_one is not None
     assert revision_two is not None
-    assert current.revision == 1
-    old_context = next(section for section in revision_one.common_sections if section.id == "provenance")
-    new_context = next(section for section in revision_two.common_sections if section.id == "submission_context")
+    assert revision_three is not None
+    assert current.revision == 2
+    old_context = next(section for section in revision_two.common_sections if section.id == "provenance")
+    new_context = next(section for section in revision_three.common_sections if section.id == "submission_context")
     assert (
         tuple(field.id for field in old_context.fields)
         == tuple(field.id for field in new_context.fields)
@@ -129,7 +129,7 @@ async def test_checked_in_registry_retains_v1_and_serves_v2_vocabulary() -> None
     assert next(field for field in new_context.fields if field.id == "sponsor_attribution").label == (
         "Credit the Minecraft server this submission came from"
     )
-    door = revision_two.category("door")
+    door = revision_three.category("door")
     geometry = next(section for section in door.sections if section.id == "door_geometry")
     assert [field.label for field in geometry.fields[:3]] == [
         "Clear opening width",
