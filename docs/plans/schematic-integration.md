@@ -173,8 +173,8 @@ class SchematicAnalysis:
     metrics: SchematicMetrics
     fingerprints: SchematicFingerprints
     lattice: AutostackLattice | None
-    analyzer_version: str          # "nucleation-0.10.1"
-    analysis_schema_version: int   # ours, bumped when we change what we compute
+    analyzer_version: str  # "nucleation-0.10.1"
+    analysis_schema_version: int  # ours, bumped when we change what we compute
 ```
 
 `analyzer_version` is load-bearing: **fingerprints are not stable across nucleation
@@ -186,17 +186,16 @@ correctness regression.
 
 ```python
 class SchematicAnalyzer(Protocol):
-    async def analyze(self, data: bytes, *, limits: SchematicLimits,
-                      with_lattice: bool = False) -> SchematicAnalysis: ...
-    async def convert(self, data: bytes, *, target: SchematicFormat,
-                      data_version: int | None = None
-                      ) -> tuple[bytes, tuple[VersionLossEntry, ...]]: ...
-    async def compare(self, left: bytes, right: bytes, *,
-                      preset: FingerprintPreset) -> SchematicComparison: ...
+    async def analyze(
+        self, data: bytes, *, limits: SchematicLimits, with_lattice: bool = False
+    ) -> SchematicAnalysis: ...
+    async def convert(
+        self, data: bytes, *, target: SchematicFormat, data_version: int | None = None
+    ) -> tuple[bytes, tuple[VersionLossEntry, ...]]: ...
+    async def compare(self, left: bytes, right: bytes, *, preset: FingerprintPreset) -> SchematicComparison: ...
     async def render(self, data: bytes, *, request: RenderRequest) -> bytes: ...
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult: ...
-    async def autostack(self, data: bytes, *, lattice: AutostackLattice,
-                        counts: tuple[int, ...]) -> bytes: ...
+    async def autostack(self, data: bytes, *, lattice: AutostackLattice, counts: tuple[int, ...]) -> bytes: ...
     async def capabilities(self) -> AnalyzerCapabilities: ...
 ```
 
@@ -673,9 +672,13 @@ The real import happens only in `worker_main.py`, in the child, where failure is
 
 ```python
 def test_native_schematic_engine_stays_in_its_adapter() -> None:
-    (archrule("only the schematic adapter may import the native engine")
-        .match("squid*").exclude("squid.schematics.infrastructure*")
-        .should_not_import("nucleation*").check("squid", only_direct_imports=True))
+    (
+        archrule("only the schematic adapter may import the native engine")
+        .match("squid*")
+        .exclude("squid.schematics.infrastructure*")
+        .should_not_import("nucleation*")
+        .check("squid", only_direct_imports=True)
+    )
 ```
 
 Plus `.should_not_import("nucleation*")` appended to the three existing layer rules

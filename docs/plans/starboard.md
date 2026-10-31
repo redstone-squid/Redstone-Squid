@@ -89,6 +89,7 @@ New context `squid/reactions/` following the repo's domain/application layering.
 @dataclass(frozen=True, slots=True)
 class ReactionActor:
     """Framework-neutral member facts used to authorise and weight a reaction."""
+
     user_id: int
     guild_id: int = 0
     role_ids: frozenset[int] = frozenset()
@@ -99,8 +100,9 @@ class ReactionActor:
 @dataclass(frozen=True, slots=True)
 class WeightScope:
     """The configuration bucket a weight lookup belongs to."""
+
     guild_id: int
-    kind: str                    # "build" | "delete_log" | "generic" | "starboard"
+    kind: str  # "build" | "delete_log" | "generic" | "starboard"
     scope_id: int | None = None  # starboard id; None for the guild-wide vote kinds
 
 
@@ -141,7 +143,8 @@ class ReactionEvent:
     payload: discord.RawReactionActionEvent
     emoji: str
     member: discord.Member | None
-    async def message(self) -> discord.Message | None: ...   # memoised fetch
+
+    async def message(self) -> discord.Message | None: ...  # memoised fetch
 
 
 class ReactionSubscriber(Protocol):

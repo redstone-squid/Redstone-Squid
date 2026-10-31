@@ -139,9 +139,10 @@ class ContextMessage:
     author_name: str
     author_id: int
     content: str
-    timestamp: str                                        # ISO-8601, shown to the model
+    timestamp: str  # ISO-8601, shown to the model
     kind: Literal["primary", "reply_parent", "preceding"]
-    attachment_summary: str                               # "2 images, 1 .litematic"
+    attachment_summary: str  # "2 images, 1 .litematic"
+
 
 @dataclass(frozen=True, slots=True)
 class InlineImage:
@@ -150,10 +151,11 @@ class InlineImage:
     source_message_id: int
     origin: Literal["attachment", "video_frame"]
 
+
 @dataclass(frozen=True, slots=True)
 class BuildInferenceInput:
-    primary: tuple[ContextMessage, ...]     # the candidate group, chronological
-    context: tuple[ContextMessage, ...]     # reply ancestry + lookback, never a build source
+    primary: tuple[ContextMessage, ...]  # the candidate group, chronological
+    context: tuple[ContextMessage, ...]  # reply ancestry + lookback, never a build source
     images: tuple[InlineImage, ...]
     channel_id: int
     server_id: int | None

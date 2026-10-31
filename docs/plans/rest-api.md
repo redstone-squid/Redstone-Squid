@@ -124,7 +124,7 @@ squid/sync/         # NEW context: discord reconciliation queue
    transport sets and the caller cannot:
 
    ```python
-   visible_statuses: frozenset[str] | None = None   # None = backend default
+   visible_statuses: frozenset[str] | None = None  # None = backend default
    ```
 
    ANDed unconditionally in `squid/search/infrastructure/repository.py`, taking precedence over
@@ -203,8 +203,9 @@ Two narrow additions to `BuildQueryRepository` (`squid/builds/application/querie
 
 ```python
 async def get_many(self, build_ids: Sequence[int]) -> list[Build]: ...
-async def list_page(self, *, statuses: frozenset[Status], submitter_id: int | None,
-                    after_id: int | None, limit: int) -> list[Build]: ...
+async def list_page(
+    self, *, statuses: frozenset[Status], submitter_id: int | None, after_id: int | None, limit: int
+) -> list[Build]: ...
 ```
 
 Keyset on `id DESC`. No arbitrary predicates — the authoritative path offers *identity and status*,
@@ -256,18 +257,14 @@ tuple, and generic polls may have none). One service method, no repository chang
 
 ```python
 # squid/voting/application/services.py
-async def cast_vote_by_session(
-    self, vote_session_id: int, actor: VoteActor, option_id: str
-) -> CastVoteResult:
+async def cast_vote_by_session(self, vote_session_id: int, actor: VoteActor, option_id: str) -> CastVoteResult:
     snapshot = await self._repository.get_by_id(vote_session_id)
     if snapshot is None:
         return CastVoteResult(session=None, rejection="not_found")
     message = next((m for m in snapshot.messages if m.guild_id == actor.guild_id), None)
     if message is None:
         return CastVoteResult(session=snapshot, rejection="wrong_guild")
-    option = next(
-        (o for o in snapshot.options_for_guild(message.guild_id) if o.identifier == option_id), None
-    )
+    option = next((o for o in snapshot.options_for_guild(message.guild_id) if o.identifier == option_id), None)
     if option is None:
         return CastVoteResult(session=snapshot, rejection="invalid_option")
     return await self.cast_vote(message.id, actor, option.emoji)
@@ -408,13 +405,14 @@ reads still work. That is what the `CONSENT_CUTOFF` grandfathering is for.
 Config (`squid/config.py`) — mind `env_nested_max_split=1`, so only one nesting level resolves:
 
 ```python
-class OAuthConfig(_FrozenModel):        # SQUID_OAUTH_DISCORD_CLIENT_ID -> oauth.discord_client_id
+class OAuthConfig(_FrozenModel):  # SQUID_OAUTH_DISCORD_CLIENT_ID -> oauth.discord_client_id
     discord_client_id: str | None = None
     discord_client_secret: SecretStr | None = None
     redirect_uri: AnyHttpUrl | None = None
     session_ttl_hours: int = Field(default=336, ge=1)
 
-class ApiConfig(_FrozenModel):          # add
+
+class ApiConfig(_FrozenModel):  # add
     key_pepper: SecretStr
     session_pepper: SecretStr
     cors_origins: tuple[str, ...] = ()

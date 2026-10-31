@@ -46,10 +46,12 @@ In `squid/api/pagination.py`:
 ```python
 class PageAnchor(BaseModel):
     """Plain query-parameter values addressing an adjacent page. Exactly one field is set."""
+
     model_config = ConfigDict(extra="forbid")
     offset: int | None = None
     after_id: int | None = None
     before_id: int | None = None
+
 
 class Page[ItemT](BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -106,7 +108,7 @@ statement = (
     .outerjoin(anchor, anchor.c.document_id == SearchDocument.id)
     .where(predicate)
     .order_by(
-        anchor.c.sort_value.is_(None),           # facet-less documents last, as today
+        anchor.c.sort_value.is_(None),  # facet-less documents last, as today
         anchor.c.sort_value.asc() if ascending else anchor.c.sort_value.desc(),
         SearchDocument.normalized_title,
         SearchDocument.resource_kind,

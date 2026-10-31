@@ -101,14 +101,15 @@ Registration and constant are the same expression, so duplicates raise at import
 ```python
 _b = CatalogueBuilder()
 
-BUILD_APPROVE = _b.node("build.submission.approve", Scope.GLOBAL,
-                        _("Approve pending build submissions."), tags=(Tag.MODERATION,))
-BUILD_READ    = _b.node("build.submission.read", Scope.GLOBAL,
-                        _("View published builds."), default=Default.ALLOW, tags=(Tag.READONLY,))
-VOTE_CAST     = _b.node("vote.poll.cast", Scope.GUILD,
-                        _("Vote in polls."), default=Default.ALLOW)
+BUILD_APPROVE = _b.node(
+    "build.submission.approve", Scope.GLOBAL, _("Approve pending build submissions."), tags=(Tag.MODERATION,)
+)
+BUILD_READ = _b.node(
+    "build.submission.read", Scope.GLOBAL, _("View published builds."), default=Default.ALLOW, tags=(Tag.READONLY,)
+)
+VOTE_CAST = _b.node("vote.poll.cast", Scope.GUILD, _("Vote in polls."), default=Default.ALLOW)
 
-CATALOGUE = _b.build()   # freezes; validates grammar, depth, uniqueness, tag membership
+CATALOGUE = _b.build()  # freezes; validates grammar, depth, uniqueness, tag membership
 ```
 
 `PermissionNode` is `@dataclass(frozen=True, slots=True)`: `name`, `scope`, `description`,
