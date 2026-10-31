@@ -20,12 +20,15 @@ from typing import Any
 
 import discord
 
-from squid_layouts.actions import ActionBinding
+from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_layouts.discord.attachments import attachment_assets
+from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.inspection import audit_classic_payload
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.discord.renderer import RoutedItem, RoutedSelectItem
 from squid_layouts.errors import DrawInvariantError
+from squid_layouts.interactions import ActionBinding
+from squid_layouts.planning.adapter import ADAPTER_RENDER_CLASSIC, AdapterProfile
 from squid_layouts.planning.limits import CLASSIC_LIMITS, ClassicLimits
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
@@ -36,14 +39,17 @@ from squid_layouts.scene.model import (
     SceneControl,
     SceneDocument,
     SceneEmbed,
+    SceneEntitySelect,
     SceneExtension,
     SceneLink,
+    ScenePremiumButton,
     SceneRoutedButton,
     SceneRoutedSelect,
     SceneSelect,
 )
+from squid_layouts.target_types import DiscordPyAdapter
 
-type Control = SceneButton | SceneSelect
+type Control = SceneButton | SceneSelect | SceneEntitySelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
 type ClassicViewFactory = Callable[[], discord.ui.View]
 
@@ -65,7 +71,9 @@ class ClassicRenderer:
         audit: bool = True,
         view_factory: ClassicViewFactory = StaticClassicView,
         always_view: bool = False,
+        adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     ) -> None:
+        require_discord_py_capability(adapter, ADAPTER_RENDER_CLASSIC, "render a classic message")
         self.limits = limits
         self.audit = audit
         self.view_factory = view_factory
@@ -79,9 +87,9 @@ class ClassicRenderer:
 
     def draw(
         self,
-        scene: SceneDocument,
+        scene: SceneDocument[SceneClassicMessage],
         *,
-        plan: PlanResult | None = None,
+        plan: PlanResult[SceneClassicMessage] | None = None,
         wire: Wire | None = None,
     ) -> DiscordPresentation:
         body = self._body(scene)
@@ -103,7 +111,7 @@ class ClassicRenderer:
                 raise DrawInvariantError(message)
         return presentation
 
-    def _body(self, scene: SceneDocument) -> SceneClassicMessage:
+    def _body(self, scene: SceneDocument[SceneClassicMessage]) -> SceneClassicMessage:
         if scene.protocol != SceneCodec.protocol:
             message = f"ClassicRenderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
@@ -172,7 +180,9 @@ class ClassicRenderer:
         plan: PlanResult | None,
         wire: Wire | None,
     ) -> list[discord.ui.Item[Any]]:
-        selects = sum(isinstance(control, SceneSelect | SceneRoutedSelect) for control in row.controls)
+        selects = sum(
+            isinstance(control, SceneSelect | SceneRoutedSelect | SceneEntitySelect) for control in row.controls
+        )
         if selects and len(row.controls) > 1:
             message = f"row {index} mixes a select with other controls; a select occupies its whole row"
             raise DrawInvariantError(message)
@@ -194,13 +204,21 @@ class ClassicRenderer:
     ) -> discord.ui.Item[Any]:
         match control:
             case SceneLink(label=label, url=url):
-                return discord.ui.Button(style=discord.ButtonStyle.link, label=label, url=url)
+                return discord.ui.Button(
+                    style=discord.ButtonStyle.link,
+                    label=label,
+                    url=url,
+                    emoji=discord_emoji(control.emoji),
+                    disabled=control.disabled,
+                )
+            case ScenePremiumButton(sku_id=sku_id):
+                return discord.ui.Button(sku_id=sku_id)
             case SceneRoutedButton(label=label, route_id=route_id):
                 return RoutedItem(
                     style=getattr(discord.ButtonStyle, control.style.value),
                     label=label,
                     custom_id=route_id,
-                    emoji=control.emoji,
+                    emoji=discord_emoji(control.emoji),
                     disabled=control.disabled,
                 )
             case SceneRoutedSelect(options=options, route_id=route_id):
@@ -212,7 +230,7 @@ class ClassicRenderer:
                     max_values=control.max_values,
                     disabled=control.disabled,
                 )
-            case SceneButton() | SceneSelect():
+            case SceneButton() | SceneSelect() | SceneEntitySelect():
                 if plan is None or wire is None:
                     message = "interactive scene controls require a mounted Discord frontend"
                     raise TypeError(message)
@@ -232,4 +250,5 @@ def _option(option: object) -> discord.SelectOption:
         value=option.value,  # type: ignore[attr-defined]
         description=option.description,  # type: ignore[attr-defined]
         default=option.default,  # type: ignore[attr-defined]
+        emoji=discord_emoji(option.emoji),  # type: ignore[attr-defined]
     )

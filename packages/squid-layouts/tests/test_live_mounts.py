@@ -5,7 +5,8 @@ import gc
 import pytest
 
 from squid_layouts import Component, PressEvent, state
-from squid_layouts.discord import DeliveryReceipt, Everyone, Mount, Owner, live
+from squid_layouts.discord import Everyone, Mount, Owner, live
+from squid_layouts.discord.delivery import DeliveryReceipt
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row, Text
 

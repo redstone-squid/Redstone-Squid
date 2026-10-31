@@ -22,7 +22,6 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.schematics import BuildSchematicCommands
 from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
-from squid.bot.topics import follow_resource, resource_topic
 from squid.bot.ui import PagedList, create_mount, destination
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import (
@@ -286,8 +285,15 @@ class SearchCog[
                 return None
 
             node = await self.bot.for_build(build).render_node()
-            component = BuildInfoComponent(build, node, locale=locale)
-            navigator = sl.discord.Navigator(component)
+
+            async def refresh(current_id: int) -> tuple[Build, sl.LayoutNode] | None:
+                latest = await self.queries.get(current_id)
+                if latest is None:
+                    return None
+                return latest, await self.bot.for_build(latest).render_node()
+
+            component = BuildInfoComponent(build, node, refresh=refresh, locale=locale)
+            navigator = sl.discord.navigation.Navigator(component)
             mount = create_mount(
                 navigator,
                 access=sl.discord.Everyone(),
@@ -295,21 +301,6 @@ class SearchCog[
                 timeout=300,
                 reactor=self.bot.layout_reactor,
             )
-
-            async def reload(current: BuildInfoComponent) -> None:
-                latest = await self.queries.get(build_id)
-                if latest is not None:
-                    current.replace(latest, await self.bot.for_build(latest).render_node())
-
-            follow_resource(
-                self.bot.topic_bus,
-                self.bot.layout_reactor,
-                mount,
-                resource_topic("build", str(build_id)),
-                component,
-                reload,
-            )
-            await reload(component)
             await mount.send(sl.discord.respond_to(interaction, ephemeral=False, wait=True))
             return None
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:

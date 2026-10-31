@@ -11,8 +11,7 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts import Action, Actions, Component, Heading, Paragraph
-from squid_layouts.actions import ActionEvent
+from squid_layouts import Component
 from squid_layouts.discord import CLASSIC_TARGET, V2_TARGET, Everyone, Mount, Owner
 from squid_layouts.discord.mount import ClassicMountedView, MountedView
 from squid_layouts.discord.presentation import DiscordMode
@@ -23,6 +22,8 @@ from squid_layouts.discord.testing import (
     fake_interaction,
     fake_message,
 )
+from squid_layouts.interactions import ActionEvent
+from squid_layouts.semantic import Action, Actions, Heading, Paragraph
 
 TARGETS = [pytest.param(V2_TARGET, id="v2"), pytest.param(CLASSIC_TARGET, id="classic")]
 

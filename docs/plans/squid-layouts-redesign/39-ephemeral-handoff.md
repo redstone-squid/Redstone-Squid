@@ -234,6 +234,6 @@ commit.
 
 ## Status
 
-Proposed 2026-08-22. Supersedes plan 26 §D's rejection of a dedicated control and the resolved
+Implemented 2026-08-23. Supersedes plan 26 §D's rejection of a dedicated control and the resolved
 ephemeral-handoff entry in plan 90. It builds on plans 07, 23, and 26; it does not depend on
 CascadeUI-compatible view reconstruction.

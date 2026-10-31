@@ -61,6 +61,8 @@ class PresentationOutcome(StrEnum):
     NOT_REQUIRED = "not_required"
     ACKNOWLEDGED = "acknowledged"
     NO_CHANGE = "no_change"
+    UNCHANGED = "unchanged"
+    """A dirty render was staged and found identical to the one on screen, so nothing was written."""
     WRITTEN = "written"
     ABANDONED = "abandoned"
     FAILED = "failed"

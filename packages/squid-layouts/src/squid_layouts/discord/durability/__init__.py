@@ -20,7 +20,7 @@ from squid_layouts.runtime.presentation import (
 from squid_layouts.runtime.reactivity import export_state, restore_state
 from squid_layouts.sources import Direction, Position
 
-from .postgres import PostgresSnapshotStore
+from .postgres import PostgresSnapshotStore, PostgresTopicBridge, TopicBridgeSnapshot
 from .stores import (
     AdmissionToken,
     ClaimToken,
@@ -44,6 +44,7 @@ __all__ = [
     "DurableMountRecord",
     "DurableMountState",
     "DurableOpenResult",
+    "DurableRuntimeSnapshot",
     "DurableSession",
     "DurableSessionCodec",
     "DurableSessionRecord",
@@ -55,8 +56,10 @@ __all__ = [
     "MountSnapshot",
     "NotDurable",
     "PostgresSnapshotStore",
+    "PostgresTopicBridge",
     "PresentationSnapshot",
     "Promoted",
+    "PurgeResult",
     "Reconnected",
     "RecoveredBinding",
     "RecoveryItem",
@@ -67,6 +70,7 @@ __all__ = [
     "SnapshotError",
     "StoredSessionRecord",
     "TargetRegistry",
+    "TopicBridgeSnapshot",
     "Unreachable",
     "encode_session_scope",
 ]
@@ -101,6 +105,7 @@ class MountSnapshot:
     target_id: str = V2_TARGET.id
     target_version: int = V2_TARGET.version
     target_fingerprint: str = ""
+    target_adapter_capabilities: tuple[str, ...] = ()
     """A digest of the profile this mount was planned against.
 
     Recorded beside the id because an id alone does not pin the budgets. Recovery refuses a
@@ -182,13 +187,9 @@ class DurableMountCodec:
 
 
 class SnapshotCodec:
-    """Canonical JSON codec for durable mount state protocol 2.
+    """Canonical JSON codec for the current pre-release mount snapshot shape."""
 
-    Protocol 2 adds the target identity. A protocol 1 record has no way to say which message
-    mode it was planned for, so it is refused rather than assumed to be Components V2.
-    """
-
-    protocol = 2
+    protocol = 1
 
     @classmethod
     def dumps(cls, snapshot: MountSnapshot) -> str:
@@ -208,6 +209,7 @@ class SnapshotCodec:
                 "id": snapshot.target_id,
                 "version": snapshot.target_version,
                 "fingerprint": snapshot.target_fingerprint,
+                "adapter_capabilities": list(snapshot.target_adapter_capabilities),
             },
         }
         try:
@@ -249,6 +251,15 @@ class SnapshotCodec:
                 )
             )
         target = _object(raw.get("target"))
+        adapter_capabilities = target.get("adapter_capabilities")
+        if not isinstance(adapter_capabilities, list) or not all(
+            isinstance(capability, str) for capability in adapter_capabilities
+        ):
+            message = "mount snapshot target adapter_capabilities must be a string list"
+            raise SnapshotError(message)
+        if adapter_capabilities != sorted(set(adapter_capabilities)):
+            message = "mount snapshot target adapter_capabilities must be sorted and unique"
+            raise SnapshotError(message)
         return MountSnapshot(
             protocol,
             _string(raw, "component_key"),
@@ -258,6 +269,7 @@ class SnapshotCodec:
             _string(target, "id"),
             _integer(target, "version"),
             _string(target, "fingerprint"),
+            tuple(adapter_capabilities),
         )
 
 
@@ -411,6 +423,7 @@ class ComponentRegistry:
             mount.target.id,
             mount.target.version,
             mount.target.fingerprint,
+            tuple(sorted(mount.target.adapter_capabilities)),
         )
         SnapshotCodec.dumps(snapshot)
         return snapshot
@@ -429,7 +442,12 @@ class ComponentRegistry:
         profile fails while the record is still just data — not after a mount exists and a
         reader could already be clicking it.
         """
-        target = targets.resolve(snapshot.target_id, snapshot.target_version, snapshot.target_fingerprint)
+        target = targets.resolve(
+            snapshot.target_id,
+            snapshot.target_version,
+            snapshot.target_fingerprint,
+            snapshot.target_adapter_capabilities,
+        )
         mount_options.setdefault("target", target)
         registration = self._registrations.get(snapshot.component_key)
         if registration is None:
@@ -578,8 +596,10 @@ from .frontend import (
 from .runtime import (
     DurabilityHealth,
     DurableOpenResult,
+    DurableRuntimeSnapshot,
     DurableSession,
     DurableSessionRuntime,
+    PurgeResult,
     RecoveryItem,
     RecoveryReport,
 )

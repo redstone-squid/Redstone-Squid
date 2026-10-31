@@ -2,8 +2,10 @@
 
 import asyncio
 import inspect
+import math
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
@@ -16,50 +18,20 @@ from discord.webhook.async_ import AsyncWebhookAdapter, async_context
 import squid_layouts as sl
 from squid_layouts import (
     ActionEvent,
-    ActionKind,
-    ActionMiddleware,
-    ActionPolicy,
-    ActionProceed,
-    ActionRequest,
-    Asset,
     Component,
     Document,
-    Failed,
-    FormField,
-    FormSpec,
-    InlineAsset,
-    LayoutInvariantError,
     LayoutNode,
-    Localization,
-    Message,
-    Paragraph,
-    Pending,
     PressEvent,
-    ReactiveWriteError,
-    Ready,
-    ResourceDelivery,
     SelectionEvent,
-    TextField,
-    batch,
     computed,
     resource,
     state,
-    transaction,
 )
 from squid_layouts import form as sl_form
 from squid_layouts.chrome import LOCALIZATION_CONTEXT, Chrome
-from squid_layouts.discord import (
-    Allowed,
-    Check,
-    Denied,
-    Everyone,
-    Mount,
-    Owner,
-    Reactor,
-    Users,
-    delivery,
-)
-from squid_layouts.discord.mount import _BusyPaint, _custom_id
+from squid_layouts.discord import Everyone, Mount, Owner, PauseUpdates, Reactor, RenewEphemeral, Users, delivery
+from squid_layouts.discord.access import Allowed, Check, Denied
+from squid_layouts.discord.mount import MountLifecycle, _BusyPaint, _custom_id
 from squid_layouts.discord.testing import (
     assert_within_limits,
     commit_render,
@@ -67,6 +39,10 @@ from squid_layouts.discord.testing import (
     fake_interaction,
     fake_message,
 )
+from squid_layouts.document import Asset, InlineAsset
+from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.forms import FormField, FormSpec, TextField
+from squid_layouts.interactions import ActionKind, ActionMiddleware, ActionPolicy, ActionProceed, ActionRequest
 from squid_layouts.primitives import (
     ActionGroup,
     Button,
@@ -87,8 +63,19 @@ from squid_layouts.profiling import (
     RuntimeTrace,
     TraceOutcome,
 )
-from squid_layouts.runtime import ComponentRuntime
+from squid_layouts.runtime import (
+    ComponentRuntime,
+    Failed,
+    Pending,
+    ReactiveWriteError,
+    Ready,
+    ResourceDelivery,
+    batch,
+    transaction,
+)
 from squid_layouts.runtime.reactivity import _CURRENT
+from squid_layouts.semantic import Paragraph
+from squid_layouts.text import Localization, Message
 
 
 class Counter(Component):
@@ -103,6 +90,217 @@ class Counter(Component):
 
     async def increment(self, event: PressEvent) -> None:
         self.count += 1
+
+
+@pytest.mark.parametrize("warning", [0, -1, math.inf, -math.inf, math.nan])
+def test_expiry_policies_require_a_finite_positive_warning(warning: float) -> None:
+    with pytest.raises(ValueError, match="finite positive"):
+        PauseUpdates(warning)
+    with pytest.raises(ValueError, match="finite positive"):
+        RenewEphemeral(warning)
+
+
+def test_renewal_policy_requires_an_expiry_supervisor() -> None:
+    with pytest.raises(TypeError, match="scheduler"):
+        Mount(Counter(), access=Everyone(), expiry=RenewEphemeral())
+
+
+async def test_mount_snapshot_reports_lifecycle_and_handle_expiry() -> None:
+    now = datetime.now(UTC)
+    reactor = Reactor(clock=lambda: now)
+    interaction = fake_interaction()
+    interaction.expires_at = now + timedelta(seconds=45)
+    mount = Mount(Counter(), access=Everyone(), scheduler=reactor)
+    await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+
+    snapshot = mount.snapshot()
+
+    assert snapshot.lifecycle is MountLifecycle.ACTIVE
+    assert snapshot.handle_expires_in == pytest.approx(45)
+
+
+async def _armed_mount(
+    component: Component | None = None,
+    *,
+    access: sl.discord.AccessPolicy | None = None,
+    on_error: sl.discord.mount.ErrorHook | None = None,
+) -> tuple[Mount, Any, Reactor]:
+    now = datetime.now(UTC)
+    reactor = Reactor(clock=lambda: now)
+    interaction = fake_interaction()
+    interaction.expires_at = now + timedelta(seconds=30)
+    mount = Mount(
+        Counter() if component is None else component,
+        access=Everyone() if access is None else access,
+        scheduler=reactor,
+        timeout=None,
+        expiry=RenewEphemeral(warning=60),
+        on_error=on_error,
+    )
+    await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+    assert mount.handle is not None
+    mount._queue_expiry_arm(mount.handle)
+    await mount.refresh_now()
+    return mount, interaction, reactor
+
+
+class TestEphemeralRenewal:
+    async def test_arming_replaces_a_full_layout_without_committing_application_state(self) -> None:
+        component = RootToolbar()
+        subject, interaction, _ = await _armed_mount(component)
+        runtime_revision = subject.runtime.revision
+
+        written = interaction.response.edit_message.await_args.kwargs
+        payload = str(written["view"].to_components())
+
+        assert "This session is about to expire" in payload
+        assert "Continue Session" in payload
+        assert "attachments" not in written
+        assert subject.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+        assert subject.runtime.revision == runtime_revision
+        assert subject.pending is False
+        assert subject.generation == 2
+
+    async def test_refreshes_freeze_behind_the_renewal_screen_without_rendering(self) -> None:
+        class Counting(Component):
+            def __init__(self) -> None:
+                self.renders = 0
+
+            def render(self):
+                self.renders += 1
+                return Text(f"render {self.renders}")
+
+        component = Counting()
+        mount, interaction, _ = await _armed_mount(component)
+        rendered = component.renders
+        interaction.response.edit_message.reset_mock()
+
+        mount.invalidate()
+        await mount.refresh_now()
+
+        assert component.renders == rendered
+        assert mount.pending
+        interaction.response.edit_message.assert_not_awaited()
+        assert mount.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+
+    async def test_renewal_restores_latest_state_on_the_same_message(self) -> None:
+        component = Counter()
+        mount, _, _ = await _armed_mount(component)
+        component.count = 7
+        generation = mount.generation
+        interaction = fake_interaction(message_id=99)
+
+        await mount.dispatch("__squid_continue_session", interaction, generation=generation)
+
+        payload = str(interaction.response.edit_message.await_args.kwargs["view"].to_components())
+        assert "count: 7" in payload
+        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
+        assert mount.handle is not None and mount.handle.expires_at == interaction.expires_at
+        assert not mount.pending
+
+    async def test_denied_renewal_keeps_the_screen_and_old_authority(self) -> None:
+        mount, _, _ = await _armed_mount(access=Owner(1))
+        original = mount.handle
+        interaction = fake_interaction(user_id=2)
+
+        await mount.dispatch("__squid_continue_session", interaction, generation=mount.generation)
+
+        interaction.response.send_message.assert_awaited_once()
+        assert mount.handle is original
+        assert mount.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+
+    async def test_failed_renewal_keeps_fresh_authority_and_is_retryable(self) -> None:
+        errors = AsyncMock()
+        mount, _, _ = await _armed_mount(on_error=errors)
+        generation = mount.generation
+        failed = fake_interaction()
+        failed.response.edit_message.side_effect = RuntimeError("Discord refused the restore")
+
+        await mount.dispatch("__squid_continue_session", failed, generation=generation)
+
+        errors.assert_awaited_once()
+        assert errors.await_args is not None
+        assert errors.await_args.args[2] == "renewal"
+        assert mount.handle is not None and mount.handle.expires_at == failed.expires_at
+        assert mount.snapshot().lifecycle is MountLifecycle.RENEWAL_ARMED
+        retry = fake_interaction()
+        await mount.dispatch("__squid_continue_session", retry, generation=generation)
+        retry.response.edit_message.assert_awaited_once()
+        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
+
+    async def test_repeated_renewal_click_is_acknowledged_without_a_second_commit(self) -> None:
+        mount, _, _ = await _armed_mount()
+        generation = mount.generation
+        first = fake_interaction()
+        await mount.dispatch("__squid_continue_session", first, generation=generation)
+        active_generation = mount.generation
+        repeated = fake_interaction()
+
+        await mount.dispatch("__squid_continue_session", repeated, generation=generation)
+
+        repeated.response.defer.assert_awaited_once()
+        repeated.response.edit_message.assert_not_awaited()
+        assert mount.generation == active_generation
+
+    async def test_permanent_authority_disarms_and_restores_the_application(self) -> None:
+        component = Counter()
+        mount, _, _ = await _armed_mount(component)
+        component.count = 4
+        message = fake_message(ephemeral=False)
+
+        await mount.adopt_handle(delivery.handle_for(message))
+
+        payload = str(message.edit.await_args.kwargs["view"].to_components())
+        assert "count: 4" in payload
+        assert mount.handle is not None and mount.handle.permanent
+        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
+
+    async def test_finishing_while_armed_does_not_reconstruct_the_hidden_tree(self) -> None:
+        class Counting(Component):
+            def __init__(self) -> None:
+                self.renders = 0
+
+            def render(self):
+                self.renders += 1
+                return Text(f"render {self.renders}")
+
+        component = Counting()
+        mount, _, _ = await _armed_mount(component)
+        rendered = component.renders
+
+        await mount.finish()
+
+        assert component.renders == rendered
+        assert mount.finished
+
+    async def test_stale_arming_leaves_the_application_generation_pending(self) -> None:
+        mount, interaction, _ = await _armed_mount()
+        # Restore active state so this test can exercise the stale arm branch independently.
+        await mount.dispatch("__squid_continue_session", fake_interaction(), generation=mount.generation)
+        active_generation = mount.generation
+
+        class StaleHandle:
+            permanent = False
+            expires_at: datetime | None = datetime.now(UTC) + timedelta(seconds=30)
+            mode = sl.discord.DiscordMode.COMPONENTS_V2
+
+            def expired(self) -> bool:
+                return False
+
+            async def write(self, *args: Any, **kwargs: Any) -> None:
+                raise delivery.StaleHandleError("expired")
+
+        stale = StaleHandle()
+        mount._handle = stale
+        mount._queue_expiry_arm(stale)
+        interaction.response.edit_message.reset_mock()
+
+        await mount.refresh_now()
+
+        assert mount.snapshot().lifecycle is MountLifecycle.ACTIVE
+        assert mount.generation == active_generation
+        assert mount.pending
+        assert mount.handle is None
 
 
 class RootToolbar(Component):
@@ -832,6 +1030,78 @@ class TestFinishHooks:
         assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
 
 
+class TestPresentedHooks:
+    async def test_written_and_suppressed_renders_have_distinct_observer_boundaries(self) -> None:
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        committed: list[Mount] = []
+        presented: list[Mount] = []
+        mount.on_committed(committed.append)
+        mount.on_presented(presented.append)
+
+        await mount.send(delivered_to(fake_message()))
+
+        assert committed == [mount]
+        assert presented == [mount]
+        committed.clear()
+        presented.clear()
+
+        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+        assert committed == [mount]
+        assert presented == []
+
+    async def test_a_hook_can_invalidate_and_the_mount_remains_usable(self) -> None:
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        message = fake_message()
+        calls = 0
+
+        def invalidate_once(presented: Mount) -> None:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                presented.invalidate()
+
+        mount.on_presented(invalidate_once)
+
+        await mount.send(delivered_to(message))
+        assert calls == 1
+        assert mount.pending
+
+        await mount.refresh_now()
+        assert calls == 1
+        assert not mount.pending
+        assert mount.snapshot().suppressed == 1
+
+    async def test_a_suppressed_refresh_does_not_fire_presented_hooks(self) -> None:
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        presented: list[Mount] = []
+        mount.on_presented(presented.append)
+        await mount.send(delivered_to(fake_message()))
+        presented.clear()
+
+        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+
+        assert presented == []
+
+    async def test_a_raising_hook_is_logged_and_does_not_stop_later_hooks(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        seen: list[Mount] = []
+
+        def explode(_: Mount) -> None:
+            raise RuntimeError("observer is broken")
+
+        mount.on_presented(explode)
+        mount.on_presented(seen.append)
+
+        with caplog.at_level("ERROR"):
+            await mount.send(delivered_to(fake_message()))
+
+        assert seen == [mount]
+        assert "presented hook failed" in caplog.text
+        assert not mount.pending
+
+
 async def _record(seen: list[Mount], mount: Mount) -> None:
     seen.append(mount)
 
@@ -890,7 +1160,7 @@ class TestActionPolicy:
 
             def render(self):
                 handler = self.new if self.current else self.old
-                return sl_form(spec, key="rename", on_submit=handler, policy=ActionPolicy.REBASE)
+                return sl_form("Rename", spec, key="rename", on_submit=handler, policy=ActionPolicy.REBASE)
 
             async def old(self, event) -> None:
                 calls.append("old")
@@ -924,7 +1194,7 @@ class TestActionPolicy:
 
         class Trigger(Component):
             def render(self):
-                return sl_form(spec, key="rename", on_submit=self.submit, policy=ActionPolicy.REBASE)
+                return sl_form("Rename", spec, key="rename", on_submit=self.submit, policy=ActionPolicy.REBASE)
 
             async def submit(self, event) -> None:
                 submitted.append("submit")
@@ -955,7 +1225,7 @@ class TestActionPolicy:
 
         class Reshaped(Component):
             def render(self):
-                return sl_form(reshaped, key="rename", on_submit=self.new, policy=ActionPolicy.REBASE)
+                return sl_form("Rename", reshaped, key="rename", on_submit=self.new, policy=ActionPolicy.REBASE)
 
             async def old(self, event) -> None:
                 calls.append(dict(event.values))
@@ -1424,8 +1694,7 @@ class TestLifecycle:
             now = 100.0 + elapsed
             await mount.refresh_now()
 
-        written = message.edit.await_args.kwargs["view"]
-        assert written.timeout == 20
+        message.edit.assert_not_awaited()
         assert mount.snapshot().idle == 10
         assert mount.snapshot().expires_in == 20
 
@@ -1599,8 +1868,8 @@ class TestDeliveryAtomicity:
             def render(self):
                 return Row(
                     (
-                        Button("a", self.click, "a", policy=ActionPolicy.IMMEDIATE),
-                        Button("b", self.click, "b", policy=ActionPolicy.IMMEDIATE),
+                        Button(f"a:{self.count}", self.click, "a", policy=ActionPolicy.IMMEDIATE),
+                        Button(f"b:{self.count}", self.click, "b", policy=ActionPolicy.IMMEDIATE),
                     )
                 )
 
@@ -1694,7 +1963,7 @@ class _Destination:
         self.raises = raises
         self.calls: list[tuple[discord.ui.LayoutView, list[discord.File]]] = []
 
-    async def __call__(self, presentation: sl.discord.DiscordPresentation) -> Any:
+    async def __call__(self, presentation: sl.discord.presentation.DiscordPresentation) -> Any:
         self.calls.append((presentation.layout, presentation.files()))
         if self.raises is not None:
             raise self.raises
@@ -1708,6 +1977,17 @@ class Report(Component):
         return Document(
             (Text("summary"),),
             (Asset("report", "report.txt", "text/plain", InlineAsset(b"full report")),),
+        )
+
+
+class MutableReport(Component):
+    def __init__(self) -> None:
+        self.contents = b"first"
+
+    def render(self):
+        return Document(
+            (Text("summary"),),
+            (Asset("report", "report.txt", "text/plain", InlineAsset(self.contents)),),
         )
 
 
@@ -1840,6 +2120,85 @@ class TestSend:
 
         _, files = destination.calls[0]
         assert [file.filename for file in files] == ["report.txt"]
+
+    async def test_changed_asset_content_prevents_scene_suppression(self) -> None:
+        component = MutableReport()
+        message: Any = fake_message()
+        mount = Mount(component, access=Everyone(), timeout=None)
+        await mount.send(_Destination(message))
+        component.contents = b"second"
+
+        outcome = await mount.refresh_now()
+
+        assert outcome is PresentationOutcome.WRITTEN
+        message.edit.assert_awaited_once()
+
+    async def test_changed_handler_identity_is_published_without_repainting(self) -> None:
+        class FreshHandler(Component):
+            version = 0
+            invoked: list[int] = []
+
+            def render(self):
+                version = self.version
+
+                async def click(event: PressEvent) -> None:
+                    self.invoked.append(version)
+
+                return Row((Button("same", click, "same"),))
+
+        message: Any = fake_message()
+        component = FreshHandler()
+        mount = Mount(component, access=Everyone(), timeout=None)
+        await mount.send(_Destination(message))
+        generation = mount._generation
+        view = mount._view
+        component.version = 1
+        mount.invalidate()
+
+        outcome = await mount.refresh_now()
+
+        assert outcome is PresentationOutcome.UNCHANGED
+        message.edit.assert_not_awaited()
+        assert mount._generation == generation
+        assert mount._view is view
+
+        await mount.dispatch("same", fake_interaction(), generation=generation)
+
+        assert component.invoked == [1]
+
+    async def test_suppression_publishes_runtime_only_action_semantics(self) -> None:
+        class Guarded(Component):
+            allowed = True
+            invoked = 0
+
+            async def click(self, event: ActionEvent) -> None:
+                self.invoked += 1
+
+            def render(self):
+                return sl.actions(
+                    sl.action(
+                        "same",
+                        self.click,
+                        key="same",
+                        guard=sl.guards.when(lambda event: self.allowed, reason="Closed."),
+                    ),
+                    key="guarded",
+                )
+
+        component = Guarded()
+        message: Any = fake_message()
+        mount = Mount(component, access=Everyone(), timeout=None)
+        await mount.send(_Destination(message))
+        component.allowed = False
+        mount.invalidate()
+
+        assert await mount.refresh_now() is PresentationOutcome.UNCHANGED
+
+        interaction = fake_interaction()
+        await mount.dispatch("same", interaction, generation=mount._generation)
+
+        assert component.invoked == 0
+        interaction.response.send_message.assert_awaited_once()
 
     async def test_send_supersedes_a_render_that_was_only_staged(self):
         component = Counter()
@@ -1999,8 +2358,10 @@ class TestStateDescriptor:
             def render(self):
                 return Text("")
 
-        with pytest.raises(RuntimeError, match=r"Cyclic\.first reads itself"):
+        # Neither computed reads itself; the pair is the mistake, so the ring is what is named.
+        with pytest.raises(sl.runtime.ReactiveCycleError) as raised:
             _ = Cyclic().first
+        assert raised.value.path == ("Cyclic.first", "Cyclic.second", "Cyclic.first")
 
     def test_batch_coalesces_invalidations(self):
         class Pair(Component):
@@ -2417,8 +2778,6 @@ class AtomicResourcePanel(Component):
 
     def render(self):
         match self.value.state:
-            case Pending():
-                return Text("pending")
             case Failed(error=error):
                 return Text(f"failed:{error}")
             case Ready(value=value):
@@ -2446,6 +2805,25 @@ class TestResourceLoading:
         trace = _operation_trace(profiler, OperationKind.SEND)
         assert "resource_settle.visible" in {span.name for span in trace.spans}
 
+    async def test_visible_resource_suppresses_an_identical_settled_scene(self) -> None:
+        class UnprojectedResource(Component):
+            @resource
+            async def value(self) -> str:
+                return "loaded"
+
+            def render(self):
+                _ = self.value.state
+                return Text("constant")
+
+        message: Any = fake_message()
+        mount = Mount(UnprojectedResource(), access=Everyone(), timeout=None)
+
+        await mount.send(_Destination(message))
+
+        message.edit.assert_not_awaited()
+        assert mount.snapshot().suppressed == 1
+        assert not mount.pending
+
     async def test_atomic_resource_delivers_only_the_settled_render(self) -> None:
         async def load() -> str:
             return "loaded"
@@ -2462,6 +2840,21 @@ class TestResourceLoading:
         message.edit.assert_not_awaited()
         trace = _operation_trace(profiler, OperationKind.SEND)
         assert "resource_settle.atomic" in {span.name for span in trace.spans}
+
+    async def test_atomic_state_excludes_pending_and_keeps_previous_ready_value(self) -> None:
+        async def load() -> str:
+            return "loaded"
+
+        panel = AtomicResourcePanel(load)
+        with pytest.raises(sl.runtime.ResourceNotReadyError, match=r"atomic resource .* pending"):
+            _ = panel.value.state
+
+        await panel.value.reload()
+        assert panel.value.state == Ready("loaded")
+
+        panel.value.invalidate()
+        assert panel.value.pending
+        assert panel.value.state == Ready("loaded")
 
     async def test_visible_failure_is_rendered_as_state(self) -> None:
         async def load(_key: str) -> str:
@@ -3000,8 +3393,8 @@ class _GuardedPanel(Component):
     def __init__(
         self,
         *,
-        guard: sl.Guard | None = None,
-        feedback: sl.Feedback | None = None,
+        guard: sl.guards.Guard | None = None,
+        feedback: sl.interactions.Feedback | None = None,
         policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
         run: Callable[[], Awaitable[Any]] | None = None,
     ) -> None:
@@ -3156,7 +3549,7 @@ class TestGuards:
                         for index in range(8)
                     ),
                     key="crowd",
-                    display=sl.ActionDisplay.GROUPED,
+                    display=sl.semantic.ActionDisplay.GROUPED,
                 )
 
             async def act(self, event: ActionEvent) -> None:
@@ -3181,7 +3574,7 @@ class TestGuards:
             seen: int = state(0)
 
             def render(self):
-                return sl_form(spec, key="rename", on_submit=submitted, guard=sl.guards.once())
+                return sl_form("Rename", spec, key="rename", on_submit=submitted, guard=sl.guards.once())
 
         mount = Mount(Panel(), access=Everyone(), timeout=None)
         commit_render(mount)
@@ -3217,8 +3610,8 @@ class TestBusyFeedback:
                 await asyncio.sleep(0)
             release.set()
 
-    async def test_a_fast_handler_paints_nothing(self):
-        panel = _GuardedPanel(feedback=sl.Feedback())
+    async def test_a_fast_handler_suppresses_an_unchanged_finished_render(self):
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback())
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=30)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3226,13 +3619,13 @@ class TestBusyFeedback:
         await mount.dispatch("go", interaction)
 
         assert panel.count == 1
-        # One write, and it is the finished render: no interim ever reached Discord.
-        assert interaction.response.edit_message.await_count == 1
-        assert self._labels(interaction.response.edit_message.await_args.kwargs["view"]) == [("Go", False)]
+        interaction.response.edit_message.assert_not_awaited()
+        interaction.response.defer.assert_awaited_once()
+        assert mount.snapshot().suppressed == 1
 
     async def test_a_slow_handler_disables_the_panel_and_relabels_the_press(self):
         release = asyncio.Event()
-        panel = _GuardedPanel(feedback=sl.Feedback(pending="Rendering…"), run=release.wait)
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback(pending="Rendering…"), run=release.wait)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3247,9 +3640,73 @@ class TestBusyFeedback:
         final = interaction.followup.edit_message.await_args.kwargs["view"]
         assert self._labels(final) == [("Go", False)]
 
+    async def test_a_blocked_busy_paint_cannot_delay_acknowledgement(self) -> None:
+        release_lock = asyncio.Event()
+        release_handler = asyncio.Event()
+
+        class Idle(Component):
+            def render(self):
+                return sl.actions(
+                    sl.action("Go", self.go, key="go", feedback=sl.interactions.Feedback(pending="Working…")),
+                    key="panel",
+                )
+
+            async def go(self, event: ActionEvent) -> None:
+                await release_handler.wait()
+
+        mount = Mount(
+            Idle(),
+            access=Everyone(),
+            timeout=None,
+            pending_after=0,
+            acknowledgement_timeout=0.01,
+        )
+        commit_render(mount)
+        interaction = fake_interaction()
+        lock_held = asyncio.Event()
+
+        async def hold_render_lock() -> None:
+            async with mount._render_lock:
+                lock_held.set()
+                await release_lock.wait()
+
+        async def dispatch() -> None:
+            await mount.dispatch("go", interaction)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(hold_render_lock)
+            await lock_held.wait()
+            tasks.start_soon(dispatch)
+            with anyio.fail_after(0.2):
+                while not interaction.response.defer.await_count:
+                    await asyncio.sleep(0)
+
+            assert interaction.response.edit_message.await_count == 0
+            assert interaction.followup.edit_message.await_count == 0
+            release_lock.set()
+            with anyio.fail_after(0.2):
+                while not interaction.followup.edit_message.await_count:
+                    await asyncio.sleep(0)
+
+            interim = interaction.followup.edit_message.await_args_list[0].kwargs["view"]
+            assert self._labels(interim) == [("Working…", True)]
+            release_handler.set()
+
+        assert interaction.response.defer.await_count == 1
+        assert interaction.followup.edit_message.await_count == 2
+        restored = interaction.followup.edit_message.await_args_list[1].kwargs["view"]
+        assert self._labels(restored) == [("Go", False)]
+
+    def test_acknowledgement_timeout_must_precede_discords_deadline(self) -> None:
+        with pytest.raises(
+            ValueError,
+            match="a mount acknowledgement timeout must be greater than zero and below Discord's 3-second limit",
+        ):
+            Mount(Counter(), access=Everyone(), acknowledgement_timeout=3.5)
+
     async def test_the_pending_label_falls_back_to_chrome(self):
         release = asyncio.Event()
-        panel = _GuardedPanel(feedback=sl.Feedback(), run=release.wait)
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback(), run=release.wait)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3270,7 +3727,7 @@ class TestBusyFeedback:
         async def hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
             order.append(f"hook:{source}")
 
-        panel = _GuardedPanel(feedback=sl.Feedback(), run=fail)
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback(), run=fail)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0, on_error=hook)
         commit_render(mount)
         interaction = fake_interaction()
@@ -3289,7 +3746,7 @@ class TestBusyFeedback:
             await release.wait()
             raise RuntimeError("render failed")
 
-        panel = _GuardedPanel(feedback=sl.Feedback(restore_on_error=False), run=fail)
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback(restore_on_error=False), run=fail)
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0, on_error=AsyncMock())
         commit_render(mount)
         interaction = fake_interaction()
@@ -3305,7 +3762,7 @@ class TestBusyFeedback:
 
         class Idle(Component):
             def render(self):
-                return sl.actions(sl.action("Go", self.go, key="go", feedback=sl.Feedback()), key="panel")
+                return sl.actions(sl.action("Go", self.go, key="go", feedback=sl.interactions.Feedback()), key="panel")
 
             async def go(self, event: ActionEvent) -> None:
                 await release.wait()
@@ -3324,11 +3781,11 @@ class TestBusyFeedback:
         assert self._labels(restored) == [("Go", False)]
 
     async def test_a_late_watchdog_paints_nothing_over_the_finished_render(self):
-        panel = _GuardedPanel(feedback=sl.Feedback())
+        panel = _GuardedPanel(feedback=sl.interactions.Feedback())
         mount = Mount(panel, access=Everyone(), timeout=None, pending_after=0)
         commit_render(mount)
         interaction = fake_interaction()
-        busy = _BusyPaint(mount, "go", sl.Feedback(), interaction)
+        busy = _BusyPaint(mount, "go", sl.interactions.Feedback(), interaction)
         profile = SimpleNamespace(acknowledge=lambda source: None)
 
         assert await busy.close() is False

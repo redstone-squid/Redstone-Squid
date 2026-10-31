@@ -2,12 +2,13 @@
 
 import pytest
 
-from squid_layouts import ActionPolicy, Component, FormLike, PressEvent, SubmitHandler, TextLike
-from squid_layouts.actions import ActionResponder as ActionResponderProtocol
-from squid_layouts.actions import Actor, Visibility
+from squid_layouts import Component, PressEvent, TextLike
 from squid_layouts.discord import Everyone, Mount, native, responder
 from squid_layouts.discord.actions import ActionResponder
 from squid_layouts.discord.testing import commit_render, fake_interaction
+from squid_layouts.forms import FormLike, SubmitHandler
+from squid_layouts.interactions import ActionPolicy, Actor, Visibility
+from squid_layouts.interactions import ActionResponder as ActionResponderProtocol
 from squid_layouts.primitives import Button, Row
 
 

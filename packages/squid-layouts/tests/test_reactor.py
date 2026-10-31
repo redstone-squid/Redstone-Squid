@@ -10,10 +10,11 @@ from unittest.mock import AsyncMock
 import anyio
 import pytest
 
-from squid_layouts import Component, TopicBus
-from squid_layouts.discord import Everyone, Mount, Reactor, delivery
+from squid_layouts import Component
+from squid_layouts.discord import Everyone, Mount, PauseUpdates, Reactor, RenewEphemeral, delivery
 from squid_layouts.discord.testing import delivered_to, fake_interaction, fake_message
 from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceLink
+from squid_layouts.runtime import Topic, TopicBus
 
 
 class Empty(Component):
@@ -139,9 +140,9 @@ async def test_follow_coalesces_topics_and_unsubscribes_on_finish() -> None:
     reactor = Reactor(bus)
     mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
     mount.refresh_now = AsyncMock()  # pyrefly: ignore
-    reactor.follow(mount, ("build", "42"), ("group", "7"), ("index", "recent"))
+    reactor.follow(mount, Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
 
-    bus.publish(("build", "42"), ("group", "7"), ("index", "recent"))
+    bus.publish(Topic("build", "42"), Topic("group", "7"), Topic("index", "recent"))
     await bus.drain()
 
     assert reactor._queue.qsize() == 1
@@ -157,7 +158,7 @@ async def test_follow_rejects_a_mount_that_already_finished() -> None:
     await mount.finish(disable=False)
 
     with pytest.raises(ValueError, match="finished"):
-        reactor.follow(mount, "build")
+        reactor.follow(mount, Topic("build", "42"))
 
 
 async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() -> None:
@@ -165,10 +166,11 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     interaction = fake_interaction()
     interaction.expires_at = now + timedelta(seconds=30)
     bus = TopicBus()
-    reactor = Reactor(bus, expiry_margin=60, clock=lambda: now)
-    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
-    reactor.follow(mount, "build")
+    reactor = Reactor(bus, clock=lambda: now)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor, expiry=PauseUpdates(warning=60))
     await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+
+    assert mount in reactor._watched
 
     reactor._sweep_once()
     await _drain_reactor(reactor)
@@ -194,11 +196,97 @@ async def test_expiry_sweep_flushes_pause_chrome_once_and_renewal_rearms_it() ->
     assert reactor._queue.qsize() == 1
 
 
+async def test_expiry_watch_does_not_require_a_topic_follow_and_stops_on_finish() -> None:
+    reactor = Reactor()
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
+
+    await mount.send(delivered_to(fake_message()))
+
+    assert mount in reactor._watched
+    assert mount not in reactor._followed
+    await mount.finish(disable=False)
+    assert mount not in reactor._watched
+
+
+async def test_expiry_none_never_schedules_pre_expiry_chrome() -> None:
+    now = datetime.now(UTC)
+    interaction = fake_interaction()
+    interaction.expires_at = now + timedelta(seconds=5)
+    reactor = Reactor(clock=lambda: now)
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor, expiry=None)
+    await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+
+    reactor._sweep_once()
+
+    assert reactor._queue.empty()
+
+
+@pytest.mark.parametrize("authority", ["permanent", "unknown_deadline"])
+async def test_expiry_sweep_ignores_authority_without_a_temporary_deadline(authority: str) -> None:
+    now = datetime.now(UTC)
+    reactor = Reactor(clock=lambda: now)
+    if authority == "permanent":
+        mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
+        await mount.send(delivered_to(fake_message()))
+    else:
+        interaction = fake_interaction()
+        handle = delivery.handle_from(interaction)
+        assert handle is not None
+        handle.expires_at = None
+        mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
+        await mount.send(delivered_to(fake_message(ephemeral=True), handle=handle))
+
+    reactor._sweep_once()
+
+    assert reactor._queue.empty()
+
+
+async def test_expiry_sweep_queues_several_arms_without_waiting_for_discord() -> None:
+    now = datetime.now(UTC)
+    reactor = Reactor(concurrency=2, clock=lambda: now)
+    mounts = []
+    for _ in range(4):
+        interaction = fake_interaction()
+        interaction.expires_at = now + timedelta(seconds=30)
+        mount = Mount(Empty(), access=Everyone(), scheduler=reactor, timeout=None)
+        await mount.send(delivered_to(fake_message(ephemeral=True), handle=delivery.handle_from(interaction)))
+        mounts.append(mount)
+
+    reactor._sweep_once()
+
+    assert reactor._queue.qsize() == len(mounts)
+
+
+@pytest.mark.parametrize(
+    ("ephemeral", "timeout", "expected"),
+    [(False, None, 0), (True, 10, 0), (True, None, 1)],
+)
+async def test_renewal_sweep_requires_ephemeral_visibility_and_time_to_renew(
+    ephemeral: bool, timeout: float | None, expected: int
+) -> None:
+    now = datetime.now(UTC)
+    interaction = fake_interaction()
+    interaction.expires_at = now + timedelta(seconds=30)
+    reactor = Reactor(clock=lambda: now)
+    mount = Mount(
+        Empty(),
+        access=Everyone(),
+        scheduler=reactor,
+        timeout=timeout,
+        expiry=RenewEphemeral(warning=60),
+    )
+    await mount.send(delivered_to(fake_message(ephemeral=ephemeral), handle=delivery.handle_from(interaction)))
+
+    reactor._sweep_once()
+
+    assert reactor._queue.qsize() == expected
+
+
 def test_collected_mount_unsubscribes() -> None:
     bus = TopicBus()
     reactor = Reactor(bus)
     mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
-    reactor.follow(mount, "build")
+    reactor.follow(mount, Topic("build", "42"))
     reference = weakref.ref(mount)
 
     del mount
@@ -208,13 +296,26 @@ def test_collected_mount_unsubscribes() -> None:
     assert bus.snapshot().topics == ()
 
 
+async def test_collected_delivered_mount_leaves_the_expiry_watch() -> None:
+    reactor = Reactor()
+    mount = Mount(Empty(), access=Everyone(), scheduler=reactor)
+    await mount.send(delivered_to(fake_message()))
+    reference = weakref.ref(mount)
+
+    del mount
+    gc.collect()
+
+    assert reference() is None
+    assert not reactor._watched
+
+
 def test_follow_requires_its_bus_and_scheduler() -> None:
     mount = Mount(Empty(), access=Everyone())
 
     with pytest.raises(RuntimeError, match="topic bus"):
-        Reactor().follow(mount, "build")
+        Reactor().follow(mount, Topic("build", "42"))
     with pytest.raises(ValueError, match="scheduler"):
-        Reactor(TopicBus()).follow(mount, "build")
+        Reactor(TopicBus()).follow(mount, Topic("build", "42"))
 
 
 @pytest.mark.parametrize(
@@ -222,7 +323,6 @@ def test_follow_requires_its_bus_and_scheduler() -> None:
     [
         {"concurrency": 0},
         {"sweep_interval": 0},
-        {"expiry_margin": -1},
     ],
 )
 def test_reactor_rejects_invalid_settings(options: dict[str, Any]) -> None:

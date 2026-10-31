@@ -1,7 +1,16 @@
-"""Optional asyncpg fenced durable-session store."""
+"""Optional asyncpg adapters: the fenced durable-session store and the topic bridge."""
 
 import asyncio
-from typing import TYPE_CHECKING
+import logging
+import uuid
+from collections.abc import Awaitable, Callable
+from contextlib import suppress
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Protocol
+
+import anyio
+
+from squid_layouts.runtime.topics import Address, KindKeyCodec, Topic, TopicBus, TopicCodec
 
 from .stores import (
     _LEGACY_SCHEMA_KEY,
@@ -27,7 +36,22 @@ else:
         Connection = Pool = Record = object
 
 
+logger = logging.getLogger(__name__)
+
+
+class _NotifyConnection(Protocol):
+    """The small asyncpg connection surface needed for transactional notifications."""
+
+    async def execute(self, query: str, *args: object) -> object: ...
+
+
 _DEFAULT_TABLE_NAME = "squid_layout_snapshots"
+_DEFAULT_TOPIC_CHANNEL = "squid_topics"
+_ORIGIN_SEPARATOR = ":"
+_NORMAL_DELIVERY = "normal"
+_TRANSACTION_DELIVERY = "transaction"
+_MAX_NOTIFY_PAYLOAD = 8000
+"""PostgreSQL refuses a NOTIFY payload of 8000 bytes or more, counting the terminator."""
 
 
 class PostgresSnapshotStore:
@@ -420,3 +444,247 @@ def _stored_record(row: Record) -> StoredSessionRecord:
         summary_payload=str(row["summary_payload"]),
         snapshot_payload=str(row["snapshot_payload"]),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class TopicBridgeSnapshot:
+    """One immutable diagnostic view of a cross-process topic bridge."""
+
+    origin: str
+    channel: str
+    published: int
+    local_only: int
+    notified: int
+    undelivered: int
+    received: int
+    ignored: int
+    undecodable: int
+
+
+class PostgresTopicBridge:
+    """Carry encodable host topics between processes over PostgreSQL LISTEN/NOTIFY.
+
+    The bridge is one more caller of `TopicBus.publish`, never a relay attached to the bus:
+    a remote notification becomes a local publish, so the bus contract composes unchanged,
+    and nothing loops back out. The payload is an encoded *address* and never application
+    state, so subscribers still re-read their source of truth.
+
+    Delivery is exactly as durable as the bus itself, which is to say not at all. NOTIFY is
+    delivered only to processes listening at commit time, so a restart, a dropped connection
+    or a full outbound queue costs latency rather than correctness; every consumer must still
+    have a path that converges without a notification.
+
+    Args:
+        pool: An asyncpg connection pool. `run` holds one connection for the whole process.
+        bus: The local bus that receives remote publishes and this host's own.
+        codec: The wire form for this channel. Defaults to `kind:key`, which carries
+            every `Topic`; supply one only to speak a format someone else defined.
+        channel: PostgreSQL channel name shared by every process in the deployment.
+        on_resync: Awaited after each successful (re)connection, for hosts that want to
+            republish their coarse topics once notifications may have been missed.
+        reconnect_seconds: Delay before rebuilding a lost listener connection.
+        queue_size: Outbound notifications held while the sender is busy or stopped.
+        origin: This process's identity, used to drop its own notifications. Defaults to a
+            fresh UUID, which is what every process should use.
+    """
+
+    def __init__(
+        self,
+        pool: Pool,
+        bus: TopicBus,
+        codec: TopicCodec | None = None,
+        *,
+        channel: str = _DEFAULT_TOPIC_CHANNEL,
+        on_resync: Callable[[], Awaitable[None]] | None = None,
+        reconnect_seconds: float = 5.0,
+        queue_size: int = 1024,
+        origin: str | None = None,
+    ) -> None:
+        if not channel:
+            message = "topic bridge channel must be a non-empty name"
+            raise ValueError(message)
+        if queue_size < 1:
+            message = "topic bridge queue size must be at least one"
+            raise ValueError(message)
+        if origin is not None and _ORIGIN_SEPARATOR in origin:
+            message = f"topic bridge origin cannot contain {_ORIGIN_SEPARATOR!r}"
+            raise ValueError(message)
+        self.pool = pool
+        self.bus = bus
+        self.codec: TopicCodec = KindKeyCodec() if codec is None else codec
+        self.channel = channel
+        self.on_resync = on_resync
+        self.reconnect_seconds = reconnect_seconds
+        self.origin = origin or uuid.uuid4().hex
+        self._queue: asyncio.Queue[str] = asyncio.Queue(maxsize=queue_size)
+        self._pending: set[str] = set()
+        self._listener_ready = asyncio.Event()
+        self._running = False
+        self._published = 0
+        self._local_only = 0
+        self._notified = 0
+        self._undelivered = 0
+        self._received = 0
+        self._ignored = 0
+        self._undecodable = 0
+
+    def publish(self, *addresses: Address) -> None:
+        """Publish on the local bus now, and queue a notification for the named topics.
+
+        Synchronous like `TopicBus.publish`, and with the same guarantee for local
+        subscribers. The notification leaves on the bridge's own connection shortly after
+        this returns, so it is *not* ordered against a write the caller has not committed
+        yet. Use `publish_in()` when the notification must be ordered with an application
+        transaction.
+        """
+        self.bus.publish(*addresses)
+        for address in addresses:
+            self._published += 1
+            # A `CellAddress` names a live object, so it has no wire form to look for.
+            payload = self._wire_payload(address, _NORMAL_DELIVERY) if isinstance(address, Topic) else None
+            if payload is None:
+                self._local_only += 1
+                continue
+            if payload in self._pending:
+                continue
+            try:
+                self._queue.put_nowait(payload)
+            except asyncio.QueueFull:
+                self._undelivered += 1
+                logger.warning("topic bridge outbound queue is full; dropped a notification for %r", address)
+                continue
+            self._pending.add(payload)
+
+    async def publish_in(self, connection: _NotifyConnection, topic: Topic) -> None:
+        """Publish `topic` when the supplied PostgreSQL transaction commits.
+
+        The supplied connection owns the `pg_notify` call, so PostgreSQL holds the
+        notification until its current transaction commits. The bridge listener then
+        publishes it to this process's bus as well as to listeners in other processes.
+        This method does not commit the transaction.
+
+        Raises:
+            RuntimeError: If the bridge has not been started with :meth:`run`.
+            ValueError: If the topic cannot fit on the configured NOTIFY channel.
+        """
+        payload = self._wire_payload(topic, _TRANSACTION_DELIVERY)
+        if payload is None:
+            message = f"topic {topic!r} cannot be carried over PostgreSQL NOTIFY"
+            raise ValueError(message)
+        if not self._running:
+            message = "topic bridge must be running before publish_in()"
+            raise RuntimeError(message)
+        await self._listener_ready.wait()
+        if not self._running:
+            message = "topic bridge stopped before publish_in() could notify"
+            raise RuntimeError(message)
+        await connection.execute("SELECT pg_notify($1, $2)", self.channel, payload)
+        self._notified += 1
+
+    def _wire_payload(self, topic: Topic, delivery: str) -> str | None:
+        """Return a tagged wire payload, or `None` when the topic cannot be carried."""
+        encoded = self.codec.encode(topic)
+        if encoded is None:
+            return None
+        payload = f"{self.origin}{_ORIGIN_SEPARATOR}{delivery}{_ORIGIN_SEPARATOR}{encoded}"
+        if len(payload.encode()) >= _MAX_NOTIFY_PAYLOAD:
+            logger.warning("topic bridge payload for %r exceeds the %d byte NOTIFY limit", topic, _MAX_NOTIFY_PAYLOAD)
+            return None
+        return payload
+
+    async def run(self) -> None:
+        """Serve the channel in both directions until the host cancels this coroutine.
+
+        A process that only publishes still has to run the bridge: the outbound sender lives
+        here. Its listener is then harmless, and keeps the process ready to consume topics
+        the day it grows a subscriber.
+        """
+        if self._running:
+            message = "topic bridge is already running"
+            raise RuntimeError(message)
+        self._running = True
+        try:
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(self._listen)
+                tasks.start_soon(self._send)
+        finally:
+            self._listener_ready.clear()
+            self._running = False
+
+    def snapshot(self) -> TopicBridgeSnapshot:
+        """Return outbound, inbound, and rejection counters for this process."""
+        return TopicBridgeSnapshot(
+            origin=self.origin,
+            channel=self.channel,
+            published=self._published,
+            local_only=self._local_only,
+            notified=self._notified,
+            undelivered=self._undelivered,
+            received=self._received,
+            ignored=self._ignored,
+            undecodable=self._undecodable,
+        )
+
+    async def _listen(self) -> None:
+        while True:
+            try:
+                async with self.pool.acquire() as connection:
+                    disconnected = asyncio.Event()
+                    await connection.add_listener(self.channel, self._notified_by)
+                    try:
+                        # After LISTEN, never before: a resync that ran first would leave
+                        # the window it exists to close still open.
+                        connection.add_termination_listener(lambda _connection, event=disconnected: event.set())
+                        if self.on_resync is not None:
+                            await self.on_resync()
+                        self._listener_ready.set()
+                        await disconnected.wait()
+                        self._listener_ready.clear()
+                        logger.warning("topic bridge listener on %r disconnected; reconnecting", self.channel)
+                    finally:
+                        self._listener_ready.clear()
+                        # The pool resets a released connection anyway, but asyncpg warns
+                        # about the listener it still holds. Shielded so shutdown -- the
+                        # usual reason for landing here -- still unsubscribes.
+                        with anyio.move_on_after(1.0, shield=True), suppress(Exception):
+                            await connection.remove_listener(self.channel, self._notified_by)
+            except Exception:
+                logger.exception("topic bridge listener on %r failed; reconnecting", self.channel)
+            await anyio.sleep(self.reconnect_seconds)
+
+    async def _send(self) -> None:
+        while True:
+            payload = await self._queue.get()
+            self._pending.discard(payload)
+            try:
+                await self.pool.execute("SELECT pg_notify($1, $2)", self.channel, payload)
+            except Exception:
+                self._undelivered += 1
+                logger.exception("topic bridge could not notify %r", self.channel)
+            else:
+                self._notified += 1
+            finally:
+                self._queue.task_done()
+
+    def _notified_by(self, _connection: object, _process_id: int, _channel: str, payload: str) -> None:
+        """Republish one remote notification locally, on the event loop thread."""
+        origin, separator, remainder = payload.partition(_ORIGIN_SEPARATOR)
+        if not separator:
+            self._undecodable += 1
+            logger.warning("topic bridge received an unattributed payload on %r", self.channel)
+            return
+        delivery, separator, encoded = remainder.partition(_ORIGIN_SEPARATOR)
+        if not separator or delivery not in {_NORMAL_DELIVERY, _TRANSACTION_DELIVERY}:
+            self._undecodable += 1
+            logger.debug("topic bridge received an unknown delivery mode from %s", origin)
+            return
+        if origin == self.origin and delivery == _NORMAL_DELIVERY:
+            self._ignored += 1
+            return
+        topic = self.codec.decode(encoded)
+        if topic is None:
+            self._undecodable += 1
+            logger.debug("topic bridge could not decode %r from %s", encoded, origin)
+            return
+        self._received += 1
+        self.bus.publish(topic)

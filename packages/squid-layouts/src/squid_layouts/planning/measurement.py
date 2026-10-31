@@ -53,6 +53,7 @@ from squid_layouts.primitives.nodes import (
     CardText,
     Code,
     Content,
+    EntitySelect,
     File,
     Footer,
     Gallery,
@@ -63,6 +64,7 @@ from squid_layouts.primitives.nodes import (
     Node,
     Option,
     Panel,
+    PremiumButton,
     RawItem,
     RoutedButton,
     RoutedSelect,
@@ -112,6 +114,7 @@ class SolveNoteCode(StrEnum):
     BEST_EFFORT_FLOOR = "degradation.best_effort_floor"
     VARIANT_STEP = "adaptation.variant_step"
     SEMANTIC_FALLBACK = "degradation.semantic_fallback"
+    OPTIONAL_DROPPED = "degradation.optional_dropped"
     VARIANT_REFORMATTED = "degradation.variant_reformatted"
     VARIANT_LOSSY = "degradation.variant_lossy"
     PAGINATE_PER_FALLBACK = "degradation.paginate_per_fallback"
@@ -193,13 +196,14 @@ class RZonedTime:
 @dataclass(frozen=True, slots=True)
 class RSection:
     texts: list[RText]
-    accessory: Thumbnail | LinkButton | RawItem
+    accessory: Thumbnail | LinkButton | PremiumButton | RoutedButton | RawItem
 
 
 @dataclass(frozen=True, slots=True)
 class RPanel:
     children: list[Realized]
     accent: Color | None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -256,6 +260,7 @@ type Realized = (
     | Sep
     | Row
     | SelectMenu
+    | EntitySelect
     | RoutedSelect
     | Thumbnail
     | Gallery
@@ -568,10 +573,10 @@ def measure_nodes(nodes: Sequence[Node], *, limits: DiscordLimits = LIMITS) -> R
                     Row(tuple(items[start : start + limits.row_buttons]))
                     for start in range(0, len(items), limits.row_buttons)
                 ]
-            case MediaCollection(urls=urls):
+            case MediaCollection(items=items):
                 return [
-                    Gallery(tuple(urls[start : start + limits.gallery_items]))
-                    for start in range(0, len(urls), limits.gallery_items)
+                    Gallery(tuple(items[start : start + limits.gallery_items]))
+                    for start in range(0, len(items), limits.gallery_items)
                 ]
             case (
                 Panel(children=children)
@@ -722,6 +727,8 @@ class _Builder:
         )
 
     def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
+        if button.label is None:
+            return button
         if len(button.label) <= self.limits.button_label:
             return button
         self.notes.append(
@@ -776,6 +783,19 @@ class _Builder:
             max_values=min(select.max_values, len(clamped_options) or 1),
         )
 
+    def _clamp_entity_select(self, select: EntitySelect) -> EntitySelect:
+        placeholder = select.placeholder
+        if placeholder is not None and len(placeholder) > self.limits.select_placeholder:
+            self.notes.append(
+                _note(
+                    SolveNoteCode.CLAMP_SELECT_PLACEHOLDER,
+                    f"select placeholder clamped from {len(placeholder)}",
+                    SolveNoteSeverity.CLAMP,
+                )
+            )
+            placeholder = _trim_keep(placeholder, self.limits.select_placeholder, "head")
+        return replace(select, placeholder=placeholder)
+
     def realize_children(self, nodes: Sequence[Node]) -> list[Realized]:
         return [self.realize(node) for node in nodes]
 
@@ -820,8 +840,8 @@ class _Builder:
             case Card():
                 with self.pool(EMBED_TEXT):
                     return self.card(node)
-            case Panel(children=children, accent=accent):
-                return RPanel(children=self.realize_children(children), accent=accent)
+            case Panel(children=children, accent=accent, spoiler=spoiler):
+                return RPanel(children=self.realize_children(children), accent=accent, spoiler=spoiler)
             case Budget(
                 children=children,
                 minimum=minimum,
@@ -835,16 +855,16 @@ class _Builder:
                 return RGroup(realized)
             case Break(children=children):
                 return RGroup(self.realize_children(children))
-            case Gallery(urls=urls):
-                if len(urls) > 10:
+            case Gallery(items=items):
+                if len(items) > 10:
                     self.notes.append(
                         _note(
                             SolveNoteCode.CLAMP_GALLERY_ITEMS,
-                            f"gallery holds {len(urls)} items; keeping 10",
+                            f"gallery holds {len(items)} items; keeping 10",
                             SolveNoteSeverity.CLAMP,
                         )
                     )
-                    node = Gallery(urls=urls[:10])
+                    node = Gallery(items=items[:10])
                 return node
             case Row(items=items):
                 self.charge(sum(item.text_cost for item in items if isinstance(item, RawItem)))
@@ -855,6 +875,8 @@ class _Builder:
                 return Row(items=clamped)
             case SelectMenu() | RoutedSelect():
                 return self._clamp_select(node)
+            case EntitySelect():
+                return self._clamp_entity_select(node)
             case RawItem(text_cost=text_cost):
                 self.charge(text_cost)
                 return node
@@ -1304,10 +1326,10 @@ def _prune(children: list[Realized]) -> list[Realized]:
                 pruned.append(replace(child, blocks=_prune(blocks)))
             case RContent(slot=slot) if slot.dropped:
                 continue
-            case RPanel(children=inner, accent=accent):
+            case RPanel(children=inner, accent=accent, spoiler=spoiler):
                 kept = _prune(inner)
                 if kept:
-                    pruned.append(RPanel(children=kept, accent=accent))
+                    pruned.append(RPanel(children=kept, accent=accent, spoiler=spoiler))
             case RGroup(children=inner):
                 pruned.extend(_prune(inner))
             case RSection(texts=texts, accessory=accessory):
@@ -1316,7 +1338,7 @@ def _prune(children: list[Realized]) -> list[Realized]:
                 # alone as a top-level component, so an emptied section drops whole.
                 if kept_texts:
                     pruned.append(RSection(texts=kept_texts, accessory=accessory))
-            case Gallery(urls=()) | Row(items=()):
+            case Gallery(items=()) | Row(items=()):
                 continue
             case _:
                 pruned.append(child)
@@ -1352,7 +1374,9 @@ def _validated_nav(nodes: Sequence[NavNode]) -> list[Node]:
         match node:
             case Row(items=items) if not any(isinstance(item, RawItem) and item.text_cost for item in items):
                 continue
-            case SelectMenu() | RoutedSelect() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0):
+            case (
+                SelectMenu() | RoutedSelect() | EntitySelect() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0)
+            ):
                 continue
             case _:
                 message = f"nav factories may only return component-bearing nodes, got {type(node).__name__}"
@@ -1395,7 +1419,7 @@ def _structural_cost(children: Sequence[Realized]) -> dict[str, int]:
                     totals[COMPONENTS] += 1 + sum(_item_component_cost(item) for item in items)
                     totals[ROWS] += 1
                     totals[CONTROLS] += len(items)
-                case SelectMenu() | RoutedSelect():
+                case SelectMenu() | RoutedSelect() | EntitySelect():
                     totals[COMPONENTS] += 2  # the implicit ActionRow plus the select itself
                     totals[ROWS] += 1  # a select always occupies a whole row
                     totals[CONTROLS] += 1

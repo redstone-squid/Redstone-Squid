@@ -18,11 +18,18 @@ from squid.accounts.domain import (
 )
 from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
-from squid.bot.ui import create_mount
+from squid.bot.ui import localization_for
 from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions, text_layout
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_layouts.discord import Opened, Reject, Rejected, SessionKey, SessionPolicy, SessionRegistry
+from squid_layouts.discord import Screen, SessionRegistry
+from squid_layouts.discord.sessions import Opened, Opener, Reject, Rejected, SessionPolicy
+
+CONSENT_SCREEN = Screen(
+    "consent",
+    policy=SessionPolicy(collision=Reject()),
+    options={"timeout": 120},
+)
 
 
 class NotAskedType(Enum):
@@ -70,7 +77,6 @@ class ConsentPrompt(sl.Component):
         self._timeout = timeout
         self._consent: AccountConsent | None = None
         self._done = anyio.Event()
-        self._mount: sl.discord.Mount | None = None
 
     @property
     def consent(self) -> AccountConsent | None:
@@ -84,11 +90,11 @@ class ConsentPrompt(sl.Component):
         card_fields = tuple(sl.field(field.name, field.value) for field in self._fields)
         return (
             sl.section(
+                sl.heading(self._title),
                 # The summary is the card's shock absorber: truncate lets it give up
                 # characters under pressure before a field loses any.
                 sl.truncate(sl.paragraph(self._summary)),
                 bool(card_fields) and sl.fields(*card_fields),
-                heading=self._title,
             ),
             sl.primitives.Row(
                 (
@@ -127,32 +133,18 @@ class ConsentPrompt(sl.Component):
         self._done.set()
         await event.finish()
 
-    async def abandon(self, mount: sl.discord.Mount) -> None:
-        """Stop waiting: the prompt is gone and no answer is ever coming.
+    def on_unmount(self) -> None:
+        """Stop waiting when the prompt leaves its mount for any reason.
 
-        The prompt is awaited, so ending its mount without ending its wait strands the caller
-        -- and the handler blocked on that caller -- for the rest of the timeout. Every way a
-        mount dies that is not the user answering comes through here: a cascade from a closing
-        parent, shutdown, an error.
+        Deliberately do not touch ``closed`` here: unmounting runs outside an action
+        transaction, while waking the local waiter is ordinary lifecycle cleanup.
         """
-        # Deliberately not touching `closed`: that is reactive state, and a finish hook runs
-        # outside the transaction a handler gets. The write would raise, be swallowed by the
-        # hook runner, and leave the waiter stranded for the whole timeout.
         self._done.set()
 
     async def wait(self) -> AccountConsent | None:
         with anyio.move_on_after(self._timeout) as scope:
             await self._done.wait()
         return None if scope.cancel_called else self._consent
-
-    def mount(self) -> sl.discord.Mount:
-        self._mount = create_mount(
-            self,
-            access=sl.discord.Owner(self.user_id),
-            locale=self.locale,
-            timeout=self._timeout,
-        )
-        return self._mount
 
 
 class ConsentPromptView(ExpiringLayoutView):
@@ -372,7 +364,7 @@ def _destination(target: ConsentTarget) -> sl.discord.Destination:
 
 async def _send(target: ConsentTarget, view: discord.ui.LayoutView) -> None:
     """Send one plain layout where the prompt itself would have gone."""
-    await _destination(target)(sl.discord.DiscordPresentation.components_v2(view))
+    await _destination(target)(sl.discord.presentation.DiscordPresentation.components_v2(view))
 
 
 def _default_ephemeral(target: ConsentTarget) -> bool:
@@ -520,23 +512,16 @@ async def prompt_for_consent(
             locale=locale,
             timeout=timeout,
         )
-    mount = component.mount()
-    # Registered before the send: everything that ends this mount short of an answer has to
-    # end the wait too, or the caller blocks for the rest of the timeout on a dead prompt.
-    mount.on_finish(component.abandon)
     registry = _registry_of(target)
-    key = SessionKey.user("consent", user_id)
-    parent_session = None if parent is None else registry.session_for(parent)
-    if parent_session is None:
-        opened = await registry.open(
-            mount,
-            _destination(target),
-            key=key,
-            policy=SessionPolicy(collision=Reject()),
-            actor_id=user_id,
-        )
-    else:
-        opened = await parent_session.attach(mount, _destination(target), actor_id=user_id, parent=parent)
+    opened = await CONSENT_SCREEN.open(
+        registry,
+        component,
+        _destination(target),
+        opener=Opener(user_id),
+        parent=parent,
+        localization=localization_for(locale),
+        timeout=timeout,
+    )
     if isinstance(opened, Rejected):
         await _send(
             target,

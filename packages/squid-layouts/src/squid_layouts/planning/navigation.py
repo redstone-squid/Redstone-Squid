@@ -3,8 +3,8 @@
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
-from squid_layouts.actions import SelectionEvent
 from squid_layouts.chrome import Chrome
+from squid_layouts.interactions import SelectionEvent
 from squid_layouts.primitives.nodes import (
     Button,
     Gallery,

@@ -1,5 +1,6 @@
 """The owner-only mount inspector: what it lists, what it opens, and what it refuses."""
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import discord
@@ -63,8 +64,8 @@ class TestList:
     def test_the_inspector_authors_high_level_semantic_nodes(self) -> None:
         nodes = MountInspector().render()
 
-        assert isinstance(nodes[0], sl.Section)
-        assert isinstance(nodes[-1], sl.Actions)
+        assert isinstance(nodes[0], sl.semantic.Section)
+        assert isinstance(nodes[-1], sl.semantic.Actions)
 
     async def test_it_lists_a_live_mount_with_a_link_to_its_message(self) -> None:
         subject = await live_subject()
@@ -102,6 +103,7 @@ class TestList:
 class TestDetail:
     async def test_a_detail_view_reports_state_plan_and_handlers(self) -> None:
         subject = await live_subject(access=Owner(7))
+        await subject.refresh_now()
         _, view = mount_inspector(MountInspector(focus=subject.id))
 
         body = "\n".join(_texts(view))
@@ -109,6 +111,37 @@ class TestDetail:
         assert "<@7>" in body
         assert "open" in body
         assert "states explored" in body
+        assert "1 suppressed" in body
+
+    async def test_a_detail_view_distinguishes_an_armed_dirty_application(self) -> None:
+        now = datetime.now(UTC)
+        reactor = sl.discord.Reactor(clock=lambda: now)
+        interaction = fake_interaction(message_id=42)
+        interaction.expires_at = now + timedelta(seconds=30)
+        subject = Mount(
+            Subject(),
+            access=Everyone(),
+            scheduler=reactor,
+            timeout=None,
+            expiry=sl.discord.RenewEphemeral(warning=60),
+        )
+        await subject.send(
+            delivered_to(
+                sl.discord.testing.fake_message(message_id=42, ephemeral=True),
+                handle=sl.discord.delivery.handle_from(interaction),
+            )
+        )
+        assert subject.handle is not None
+        subject._queue_expiry_arm(subject.handle)
+        await subject.refresh_now()
+        subject.invalidate()
+
+        _, view = mount_inspector(MountInspector(focus=subject.id))
+        body = "\n".join(_texts(view))
+
+        assert "renewal armed" in body
+        assert "dirty" in body
+        assert "edit handle 30s left" in body
 
     async def test_a_detail_view_reports_cell_versions_and_computed_sources(self) -> None:
         subject = await live_subject()
@@ -177,7 +210,7 @@ class TestSceneDump:
 
         assert asset is not None
         assert asset.name.endswith(".json")
-        assert isinstance(asset.source, sl.InlineAsset)
+        assert isinstance(asset.source, sl.document.InlineAsset)
         assert sl.scene.Codec.loads(asset.source.data.decode()) == subject.snapshot().scene
 
     def test_a_mount_with_no_committed_render_has_no_scene(self) -> None:

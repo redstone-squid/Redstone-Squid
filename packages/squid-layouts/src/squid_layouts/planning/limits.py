@@ -57,6 +57,7 @@ class DiscordLimits:
     row_buttons: int = 5
     """Buttons per action row; a select occupies the entire row."""
     button_label: int = 80
+    link_url: int = 512
 
     # Select menus.
     select_options: int = 25
@@ -68,6 +69,7 @@ class DiscordLimits:
     # Modals.
     modal_title: int = 45
     modal_components: int = 5
+    modal_text: int = 4000
     label_text: int = 45
     label_description: int = 100
     text_input_placeholder: int = 100
@@ -120,7 +122,7 @@ class V2Limits(DiscordLimits):
     section_texts: int = 3
     """TextDisplay children per Section, excluding the accessory."""
     gallery_items: int = 10
-    gallery_item_description: int = 256
+    gallery_item_description: int = 1024
 
     @property
     def budgets(self) -> Mapping[str, str]:

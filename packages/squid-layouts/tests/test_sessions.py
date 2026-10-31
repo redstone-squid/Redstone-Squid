@@ -1,5 +1,7 @@
 """Session identity, structured outcomes, cardinality, and attachment lifetime."""
 
+import inspect
+from dataclasses import fields
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -7,23 +9,20 @@ import anyio
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import (
-    Abandoned,
-    Everyone,
+from squid_layouts.discord import Everyone, MountDefaults, Owner, SessionKey, SessionRegistry
+from squid_layouts.discord.delivery import Abandoned
+from squid_layouts.discord.sessions import (
     Opened,
-    Owner,
+    OpeningRequest,
     ProtectCrossUserAttachments,
     Reject,
     Rejected,
     RejectionReason,
     Replace,
-    SessionKey,
     SessionPolicy,
-    SessionRegistry,
     Unprotected,
     open_personal,
 )
-from squid_layouts.discord.sessions import OpeningRequest
 from squid_layouts.discord.testing import fake_interaction, fake_message
 from squid_layouts.primitives import Button, Heading, Row
 
@@ -46,31 +45,31 @@ _DEFAULT_MESSAGE = object()
 def to_message(message: Any = _DEFAULT_MESSAGE) -> sl.discord.Destination:
     delivered = fake_message() if message is _DEFAULT_MESSAGE else message
 
-    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.presentation.DiscordPresentation) -> sl.discord.delivery.DeliveryReceipt:
         handle = None if delivered is None else sl.discord.delivery.handle_for(delivered)
-        return sl.discord.DeliveryReceipt(delivered, handle)
+        return sl.discord.delivery.DeliveryReceipt(delivered, handle)
 
     return send
 
 
 def slowly() -> sl.discord.Destination:
-    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.presentation.DiscordPresentation) -> sl.discord.delivery.DeliveryReceipt:
         await anyio.sleep(0)
         message = fake_message()
-        return sl.discord.DeliveryReceipt(message, sl.discord.delivery.handle_for(message))
+        return sl.discord.delivery.DeliveryReceipt(message, sl.discord.delivery.handle_for(message))
 
     return send
 
 
 def abandoning() -> sl.discord.Destination:
-    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
-        raise sl.discord.DeliveryAbandoned
+    async def send(presentation: sl.discord.presentation.DiscordPresentation) -> sl.discord.delivery.DeliveryReceipt:
+        raise sl.discord.delivery.DeliveryAbandoned
 
     return send
 
 
 def failing(error: Exception) -> sl.discord.Destination:
-    async def send(presentation: sl.discord.DiscordPresentation) -> sl.discord.DeliveryReceipt:
+    async def send(presentation: sl.discord.presentation.DiscordPresentation) -> sl.discord.delivery.DeliveryReceipt:
         raise error
 
     return send
@@ -80,12 +79,44 @@ KEY = SessionKey.user_guild("panel", 7, 42)
 
 
 def test_session_keys_use_typed_frozen_scopes() -> None:
-    assert SessionKey.user("account", 7).scope == sl.discord.UserScope(7)
-    assert SessionKey.guild("roles", 42).scope == sl.discord.GuildScope(42)
-    assert SessionKey.user_guild("settings", 7, 42).scope == sl.discord.UserGuildScope(7, 42)
-    assert SessionKey.global_("status").scope == sl.discord.GlobalScope()
-    assert SessionKey.custom("edit", (7, 99)).scope == sl.discord.CustomScope((7, 99))
+    assert SessionKey.user("account", 7).scope == sl.discord.sessions.UserScope(7)
+    assert SessionKey.guild("roles", 42).scope == sl.discord.sessions.GuildScope(42)
+    assert SessionKey.user_guild("settings", 7, 42).scope == sl.discord.sessions.UserGuildScope(7, 42)
+    assert SessionKey.global_("status").scope == sl.discord.sessions.GlobalScope()
+    assert SessionKey.custom("edit", (7, 99)).scope == sl.discord.sessions.CustomScope((7, 99))
     assert len({SessionKey.global_("status"), SessionKey.global_("status")}) == 1
+
+
+def test_mount_defaults_fields_track_mount_keyword_options() -> None:
+    mount_keywords = {
+        name
+        for name, parameter in inspect.signature(sl.discord.Mount.__init__).parameters.items()
+        if parameter.kind is inspect.Parameter.KEYWORD_ONLY
+    }
+
+    assert {field.name for field in fields(MountDefaults)} == mount_keywords - {"access"}
+
+
+def test_mount_defaults_apply_overrides_without_mutating_the_defaults() -> None:
+    defaults = MountDefaults(timeout=30, strict=True)
+
+    mount = defaults.mount(Panel(), access=Everyone(), timeout=None)
+
+    assert mount.timeout is None
+    assert mount.strict is True
+    assert defaults.timeout == 30
+
+
+async def test_registry_opens_components_through_its_mount_defaults() -> None:
+    on_error = AsyncMock()
+    registry = SessionRegistry(MountDefaults(timeout=30, on_error=on_error))
+
+    result = await registry.open(Panel(), to_message(), access=Owner(7), timeout=None)
+
+    assert isinstance(result, Opened)
+    assert result.session.root.timeout is None
+    assert result.session.root.on_error is on_error
+    assert result.session.root.access == Owner(7)
 
 
 async def test_any_hashable_key_can_name_a_session() -> None:
@@ -219,7 +250,7 @@ class TestCardinality:
 
     async def test_a_custom_collision_policy_selects_exact_victims(self) -> None:
         class ReplaceNewest:
-            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.SessionSummary, ...]):
+            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.sessions.SessionSummary, ...]):
                 return Replace(occupants[-request.required_victims :])
 
         registry = SessionRegistry()
@@ -239,7 +270,7 @@ class TestCardinality:
 
     async def test_a_custom_policy_must_select_the_exact_required_victims(self) -> None:
         class SelectNobody:
-            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.SessionSummary, ...]):
+            async def select(self, request: OpeningRequest, occupants: tuple[sl.discord.sessions.SessionSummary, ...]):
                 return Replace(())
 
         registry = SessionRegistry()
@@ -376,7 +407,8 @@ class TestRacesAndCleanup:
 
 
 async def test_open_personal_owns_access_audience_and_registration() -> None:
-    registry = SessionRegistry()
+    on_error = AsyncMock()
+    registry = SessionRegistry(MountDefaults(on_error=on_error))
     interaction = fake_interaction(user_id=7)
 
     result = await open_personal(registry, Panel(), interaction, key=SessionKey.user("panel", 7), timeout=None)
@@ -384,6 +416,7 @@ async def test_open_personal_owns_access_audience_and_registration() -> None:
     assert isinstance(result, Opened)
     assert result.session.participants == frozenset({7})
     assert result.session.root.access == Owner(7)
+    assert result.session.root.on_error is on_error
     assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
 
 

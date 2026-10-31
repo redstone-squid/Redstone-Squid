@@ -10,11 +10,12 @@ from datetime import UTC, date, tzinfo
 from datetime import datetime as DateTimeValue
 from datetime import time as TimeValue
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Any, ClassVar, NoReturn, Self, overload
 
-from squid_layouts.actions import ActionPolicy, SubmitEvent
+from squid_layouts.emoji import EmojiLike, normalize_emoji
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.frozen import FrozenMapping
+from squid_layouts.interactions import ActionPolicy, SubmitEvent
 from squid_layouts.temporal import (
     AmbiguousLocalTimeError,
     AmbiguousTimePolicy,
@@ -61,6 +62,13 @@ class FormValueError(ValueError):
     field raises is a bug, and propagates to the mount's error hook rather than being shown to
     the reader as if they had typed something wrong.
     """
+
+
+@dataclass(frozen=True, slots=True)
+class FormText:
+    """Static text placed in a form's declaration order."""
+
+    content: TextLike
 
 
 def _invalid(message: str) -> NoReturn:
@@ -467,6 +475,10 @@ class ChoiceOption[ValueT]:
     label: TextLike
     value: ValueT
     description: TextLike | None = None
+    emoji: EmojiLike | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "emoji", normalize_emoji(self.emoji))
 
 
 @dataclass(frozen=True, slots=True)
@@ -513,9 +525,11 @@ class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
             message = "MultiChoiceField bounds must satisfy 0 <= minimum <= maximum <= len(options)"
             raise ValueError(message)
 
-    def parse(self, raw: object) -> tuple[ValueT, ...] | None:
-        if self._optional(raw):
-            return None
+    def parse(self, raw: object) -> tuple[ValueT, ...]:
+        if self._missing(raw):
+            if self.required:
+                _invalid("This field is required.")
+            return ()
         submitted = tuple(str(value) for value in raw) if isinstance(raw, list | tuple) else (str(raw),)
         by_key = {option.key: option for option in self.options}
         if any(key not in by_key for key in submitted):
@@ -595,50 +609,56 @@ class FormSpec:
     """A frontend-neutral, immutable form schema."""
 
     title: TextLike
-    fields: tuple[FormField[Any], ...]
+    items: tuple[FormField[Any] | FormText, ...]
     prefill: Mapping[str, object] = dataclass_field(default_factory=dict)
     validator: FormValidator | None = dataclass_field(default=None, repr=False, compare=False)
     validation_policy: FormValidationPolicy = FormValidationPolicy.RETRY
 
     def __post_init__(self) -> None:
-        normalized = tuple(self.fields)
-        keys = [field.key for field in normalized]
+        normalized = tuple(self.items)
+        fields = tuple(item for item in normalized if isinstance(item, FormField))
+        if not fields:
+            message = "FormSpec needs at least one field"
+            raise ValueError(message)
+        keys = [field.key for field in fields]
         if any(not key for key in keys):
             message = "FormSpec fields need explicit keys"
             raise ValueError(message)
         if len(set(keys)) != len(keys):
             message = f"FormSpec field keys must be unique: {keys!r}"
             raise ValueError(message)
-        if any(field.label is None for field in normalized):
+        if any(field.label is None for field in fields):
             message = "FormSpec fields need labels"
             raise ValueError(message)
         unknown = set(self.prefill) - set(keys)
         if unknown:
             message = f"FormSpec prefill contains unknown keys: {sorted(unknown)!r}"
             raise ValueError(message)
-        object.__setattr__(self, "fields", normalized)
-        object.__setattr__(self, "prefill", FrozenMapping(self.prefill))
+        object.__setattr__(self, "items", normalized)
+        object.__setattr__(self, "prefill", MappingProxyType(dict(self.prefill)))
 
     @property
     def field_keys(self) -> tuple[str, ...]:
         """The submitted keys this schema parses, in declaration order."""
-        return tuple(field.key for field in self.fields)
+        return tuple(field.key for field in self.items if isinstance(field, FormField))
 
     async def evaluate(self, attempted: Mapping[str, object]) -> FormEvaluation:
         """Parse every field, then run cross-field validation only after parsing succeeds."""
-        raw = FrozenMapping(attempted)
+        raw = MappingProxyType(dict(attempted))
         values: dict[str, object] = {}
         errors: list[FormIssue] = []
-        for field in self.fields:
+        for field in self.items:
+            if not isinstance(field, FormField):
+                continue
             try:
                 values[field.key] = field.parse(raw.get(field.key))
             except FormValueError as error:
                 errors.append(FieldError(field.key, str(error)))
         if not errors and self.validator is not None:
-            validated = self.validator(FrozenMapping(values))
+            validated = self.validator(MappingProxyType(values))
             issues = await validated if inspect.isawaitable(validated) else validated
             errors.extend(issues)
-        return FormEvaluation(FrozenMapping(values), raw, tuple(errors))
+        return FormEvaluation(MappingProxyType(values), raw, tuple(errors))
 
     def prefill_for(self, field: FormField[Any]) -> object:
         """Return the serialized prefill for one field."""
@@ -647,16 +667,19 @@ class FormSpec:
 
     def with_prefill(self, values: Mapping[str, object]) -> FormSpec:
         """Return the same schema seeded with one attempted submission."""
-        known = {field.key for field in self.fields}
+        known = {field.key for field in self.items if isinstance(field, FormField)}
         return replace(self, prefill={key: value for key, value in values.items() if key in known})
 
     def adapt(self, capabilities: frozenset[str], *, maximum_fields: int | None = None) -> FormSpec:
         """Resolve extension fallbacks and enforce a target's explicit form budget."""
-        if maximum_fields is not None and not 1 <= len(self.fields) <= maximum_fields:
-            message = f"form has {len(self.fields)} fields; target permits 1-{maximum_fields}"
+        if maximum_fields is not None and len(self.items) > maximum_fields:
+            message = f"form has {len(self.items)} components; target permits 1-{maximum_fields}"
             raise LayoutInvariantError(message)
-        adapted: list[FormField[Any]] = []
-        for field in self.fields:
+        adapted: list[FormField[Any] | FormText] = []
+        for field in self.items:
+            if isinstance(field, FormText):
+                adapted.append(field)
+                continue
             if not isinstance(field, ExtensionField) or field.capability in capabilities:
                 adapted.append(field)
                 continue
@@ -672,7 +695,7 @@ class FormSpec:
                     description=fallback.description if fallback.description is not None else field.description,
                 )
             )
-        return replace(self, fields=tuple(adapted))
+        return replace(self, items=tuple(adapted))
 
 
 class Form:
@@ -793,3 +816,51 @@ DateTime = DateTimeField
 Choice = ChoiceField
 MultiChoice = MultiChoiceField
 Bool = BoolField
+
+__all__ = [
+    "AmbiguousTimePolicy",
+    "Bool",
+    "BoolField",
+    "Choice",
+    "ChoiceField",
+    "ChoiceOption",
+    "Date",
+    "DateField",
+    "DateTime",
+    "DateTimeField",
+    "Duration",
+    "DurationField",
+    "ExtensionField",
+    "FieldError",
+    "Float",
+    "FloatField",
+    "Form",
+    "FormBinding",
+    "FormError",
+    "FormEvaluation",
+    "FormField",
+    "FormIssue",
+    "FormLike",
+    "FormSpec",
+    "FormText",
+    "FormValidationPolicy",
+    "FormValidator",
+    "FormValueError",
+    "Int",
+    "IntField",
+    "MultiChoice",
+    "MultiChoiceField",
+    "NonexistentTimePolicy",
+    "Scale",
+    "ScaleField",
+    "SubmitHandler",
+    "Text",
+    "TextArea",
+    "TextAreaField",
+    "TextField",
+    "Time",
+    "TimeField",
+    "UploadedFile",
+    "ZonedDateTimeField",
+    "bind_form",
+]

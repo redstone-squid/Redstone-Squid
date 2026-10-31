@@ -140,7 +140,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     interaction.followup.send.return_value = public_message
     build = OtherBuild(id=42)
     renderer = SimpleNamespace(render_node=AsyncMock(return_value=sl.paragraph("Build 42")))
-    topic_bus = sl.TopicBus()
+    topic_bus = sl.runtime.TopicBus()
     layout_reactor = sl.discord.Reactor(topic_bus)
     bot = SimpleNamespace(
         services=SimpleNamespace(settings=SimpleNamespace()),
@@ -169,7 +169,9 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     await SearchCog.view_build.callback(cog, ctx, build_id=42)  # type: ignore[arg-type]
 
     mount = mounts[0]
-    assert queries.get.await_count == 2
+    # One fetch, not two: the panel's watched resource consumes the build the command already
+    # loaded rather than priming itself with a second query.
+    assert queries.get.await_count == 1
     assert mount.handle is not None
     assert not mount.handle.permanent
     interaction.followup.edit_message.side_effect = _unknown_webhook()

@@ -10,7 +10,7 @@ from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursor
 from squid_layouts.planning.dialect import SceneBindings
 from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.limits import V2Limits
-from squid_layouts.planning.measure import (
+from squid_layouts.planning.measurement import (
     MeasuredLayout,
     Realized,
     RPanel,
@@ -29,6 +29,7 @@ from squid_layouts.primitives.nodes import (
     Break,
     Budget,
     Button,
+    EntitySelect,
     Extension,
     File,
     Footer,
@@ -37,6 +38,7 @@ from squid_layouts.primitives.nodes import (
     MediaCollection,
     Node,
     Panel,
+    PremiumButton,
     RawItem,
     RoutedButton,
     RoutedSelect,
@@ -51,6 +53,7 @@ from squid_layouts.primitives.nodes import (
 from squid_layouts.scene.model import (
     SceneButton,
     SceneComponentsV2,
+    SceneEntitySelect,
     SceneExtension,
     SceneFile,
     SceneGallery,
@@ -59,6 +62,7 @@ from squid_layouts.scene.model import (
     SceneNode,
     SceneOption,
     ScenePanel,
+    ScenePremiumButton,
     SceneRoutedButton,
     SceneRoutedSelect,
     SceneRow,
@@ -77,7 +81,9 @@ from squid_layouts.sources import Position
 class _V2Converter:
     bindings: SceneBindings
 
-    def accessory(self, node: Thumbnail | LinkButton | Button | RoutedButton | RawItem, path: str) -> SceneNode:
+    def accessory(
+        self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str
+    ) -> SceneNode:
         return self.bindings.control(node, path)
 
     def node(self, node: Realized, path: str) -> SceneNode:
@@ -88,11 +94,11 @@ class _V2Converter:
                 return SceneTime(instant.astimezone(UTC).isoformat(), style, prefix)
             case RZonedTime(value=value, prefix=prefix):
                 return SceneZonedTime(value.instant.isoformat(), value.timezone, prefix)
-            case File(asset_key=asset_key, name=name, media_type=media_type):
-                return SceneFile(asset_key, name, media_type)
-            case RPanel(children=children, accent=accent):
+            case File(asset_key=asset_key, name=name, media_type=media_type, spoiler=spoiler):
+                return SceneFile(asset_key, name, media_type, spoiler)
+            case RPanel(children=children, accent=accent, spoiler=spoiler):
                 return ScenePanel(
-                    tuple(self.node(child, f"{path}.{index}") for index, child in enumerate(children)), accent
+                    tuple(self.node(child, f"{path}.{index}") for index, child in enumerate(children)), accent, spoiler
                 )
             case RSection(texts=texts, accessory=accessory):
                 return SceneSection(
@@ -104,7 +110,8 @@ class _V2Converter:
             case Row(items=items):
                 converted = tuple(self.accessory(item, f"{path}.{index}") for index, item in enumerate(items))
                 if not all(
-                    isinstance(item, SceneLink | SceneButton | SceneRoutedButton | SceneExtension) for item in converted
+                    isinstance(item, SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension)
+                    for item in converted
                 ):
                     message = f"row {path} contains an unsupported item"
                     raise LayoutInvariantError(message)
@@ -112,7 +119,7 @@ class _V2Converter:
             case SelectMenu(options=options):
                 return SceneSelect(
                     options=tuple(
-                        SceneOption(option.label, option.value, option.description, option.default)
+                        SceneOption(option.label, option.value, option.description, option.default, option.emoji)
                         for option in options
                     ),
                     action=self.bindings.action(node),
@@ -122,10 +129,22 @@ class _V2Converter:
                     disabled=node.disabled,
                     policy=node.policy,
                 )
+            case EntitySelect():
+                return SceneEntitySelect(
+                    entity_type=node.entity_type,
+                    action=self.bindings.action(node),
+                    placeholder=node.placeholder,
+                    default_values=node.default_values,
+                    channel_types=node.channel_types,
+                    min_values=node.min_values,
+                    max_values=node.max_values,
+                    disabled=node.disabled,
+                    policy=node.policy,
+                )
             case RoutedSelect(options=options):
                 return SceneRoutedSelect(
                     options=tuple(
-                        SceneOption(option.label, option.value, option.description, option.default)
+                        SceneOption(option.label, option.value, option.description, option.default, option.emoji)
                         for option in options
                     ),
                     route_id=node.route_id,
@@ -134,13 +153,13 @@ class _V2Converter:
                     max_values=node.max_values,
                     disabled=node.disabled,
                 )
-            case Thumbnail(url=url, description=description):
-                return SceneThumbnail(url, description)
-            case Gallery(urls=urls):
-                return SceneGallery(tuple(SceneGalleryItem(url) for url in urls))
+            case Thumbnail(url=url, description=description, spoiler=spoiler):
+                return SceneThumbnail(url, description, spoiler)
+            case Gallery(items=items):
+                return SceneGallery(tuple(SceneGalleryItem(item.url, item.description, item.spoiler) for item in items))
             case RawItem():
                 return self.accessory(node, path)
-            case LinkButton() | RoutedButton():
+            case LinkButton() | PremiumButton() | RoutedButton():
                 return self.accessory(node, path)
 
     def children(self, children: Sequence[Realized]) -> tuple[SceneNode, ...]:
@@ -155,15 +174,27 @@ def _lower(
     lowered: list[Node] = []
     for node in nodes:
         match node:
+            case PremiumButton() if "actions.discord.premium" not in target.capabilities:
+                message = "premium buttons require an explicit Variants fallback on this target"
+                raise LayoutInvariantError(message)
+            case Row(items=items) | ActionGroup(items=items) if (
+                "actions.discord.premium" not in target.capabilities
+                and any(isinstance(item, PremiumButton) for item in items)
+            ):
+                message = "premium buttons require an explicit Variants fallback on this target"
+                raise LayoutInvariantError(message)
+            case Section(accessory=PremiumButton()) if "actions.discord.premium" not in target.capabilities:
+                message = "premium buttons require an explicit Variants fallback on this target"
+                raise LayoutInvariantError(message)
             case ActionGroup(items=items):
                 lowered.extend(
                     Row(tuple(items[start : start + limits.row_buttons]))
                     for start in range(0, len(items), limits.row_buttons)
                 )
-            case MediaCollection(urls=urls):
+            case MediaCollection(items=items):
                 lowered.extend(
-                    Gallery(tuple(urls[start : start + limits.gallery_items]))
-                    for start in range(0, len(urls), limits.gallery_items)
+                    Gallery(tuple(items[start : start + limits.gallery_items]))
+                    for start in range(0, len(items), limits.gallery_items)
                 )
             case Panel(children=children, accent=accent):
                 lowered.append(Panel(_lower(children, target, limits), accent))
@@ -231,14 +262,26 @@ def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
                 fail(path, f"duplicate pager key {overflow.key!r}")
             pager_keys.add(overflow.key)
         match node:
-            case Button(label=label):
-                if len(label) > limits.button_label:
+            case Button(label=label) | RoutedButton(label=label):
+                if label is None and node.emoji is None:
+                    fail(path, "interactive button needs a label or emoji")
+                if label is not None and len(label) > limits.button_label:
                     fail(path, f"button label exceeds {limits.button_label}")
+            case LinkButton(label=label, url=url):
+                if label is None and node.emoji is None:
+                    fail(path, "link button needs a label or emoji")
+                if label is not None and len(label) > limits.button_label:
+                    fail(path, f"button label exceeds {limits.button_label}")
+                if len(url) > limits.link_url:
+                    fail(path, f"link URL exceeds {limits.link_url}")
+            case PremiumButton(sku_id=sku_id):
+                if sku_id <= 0:
+                    fail(path, "premium button SKU must be positive")
             case Row(items=items):
                 if len(items) > limits.row_buttons:
                     fail(path, f"row has {len(items)} controls; maximum is {limits.row_buttons}")
                 for index, item in enumerate(items):
-                    if isinstance(item, Button):
+                    if isinstance(item, Button | RoutedButton | LinkButton | PremiumButton):
                         walk(item, f"{path}.{index}")
             case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum) | (
                 RoutedSelect(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum)
@@ -263,9 +306,27 @@ def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
                         fail(f"{path}.option.{index}", f"value exceeds {limits.option_value}")
                     if option.description is not None and len(option.description) > limits.option_description:
                         fail(f"{path}.option.{index}", f"description exceeds {limits.option_description}")
-            case Gallery(urls=urls):
-                if len(urls) > limits.gallery_items:
-                    fail(path, f"gallery has {len(urls)} items; use MediaCollection")
+            case EntitySelect(
+                placeholder=placeholder,
+                default_values=defaults,
+                min_values=minimum,
+                max_values=maximum,
+            ):
+                if placeholder is not None and len(placeholder) > limits.select_placeholder:
+                    fail(path, f"select placeholder exceeds {limits.select_placeholder}")
+                if minimum < 0 or maximum < minimum or maximum > limits.select_options:
+                    fail(path, "entity select value bounds are invalid")
+                if len(defaults) > maximum:
+                    fail(path, "entity select has more defaults than max_values")
+            case Gallery(items=items):
+                if len(items) > limits.gallery_items:
+                    fail(path, f"gallery has {len(items)} items; use MediaCollection")
+                for index, item in enumerate(items):
+                    if item.description is not None and len(item.description) > limits.gallery_item_description:
+                        fail(
+                            f"{path}.{index}",
+                            f"media description exceeds {limits.gallery_item_description}",
+                        )
             case Section(texts=texts):
                 if len(texts) > limits.section_texts:
                     fail(path, f"section has {len(texts)} text slots; maximum is {limits.section_texts}")

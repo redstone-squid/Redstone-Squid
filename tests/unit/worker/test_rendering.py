@@ -195,3 +195,47 @@ async def test_disabled_rendering_leaves_durable_intents_unclaimed() -> None:
 
     assert jobs.completed == []
     assert jobs.failed == []
+
+
+class FakeTopics:
+    def __init__(self) -> None:
+        self.published: list[object] = []
+
+    def publish(self, *topics: object) -> None:
+        self.published.extend(topics)
+
+
+async def test_a_finished_render_publishes_the_builds_resource_topic() -> None:
+    """The panels live in the bot process, so the render has to say it landed."""
+    job = ClaimedRenderJob(7, 0, uuid.uuid4())
+    jobs = FakeJobs(job)
+    topics = FakeTopics()
+    projector = SchematicRenderProjector(
+        cast(Any, jobs),
+        cast(Any, FakeSchematics(FreshRender(3, RECIPE_HASH, 768, 768, PNG))),
+        cast(Any, FakeArtifacts()),
+        "https://api.example",
+        enabled=True,
+        topics=topics,
+    )
+
+    await projector.process_batch()
+
+    assert topics.published == [("build", "7")]
+
+
+async def test_a_skipped_render_changes_nothing_to_publish() -> None:
+    job = ClaimedRenderJob(7, 0, uuid.uuid4())
+    topics = FakeTopics()
+    projector = SchematicRenderProjector(
+        cast(Any, FakeJobs(job)),
+        cast(Any, FakeSchematics(SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC))),
+        cast(Any, FakeArtifacts()),
+        "https://api.example",
+        enabled=True,
+        topics=topics,
+    )
+
+    await projector.process_batch()
+
+    assert topics.published == []

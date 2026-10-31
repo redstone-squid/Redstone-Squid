@@ -17,22 +17,24 @@ extract it instead.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 
-from squid_layouts.actions import ActionBinding
 from squid_layouts.chrome import Chrome
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.forms import FormBinding
+from squid_layouts.interactions import ActionBinding
 from squid_layouts.planning.cursors import CursorCoordinator
 from squid_layouts.planning.limits import DiscordLimits
-from squid_layouts.planning.measure import MeasuredLayout, Realized
+from squid_layouts.planning.measurement import MeasuredLayout, Realized
 from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.target import TargetProfile
 from squid_layouts.primitives.nodes import (
     Button,
+    EntitySelect,
     FormButton,
     LinkButton,
     Node,
+    PremiumButton,
     RawItem,
     RoutedButton,
     SelectMenu,
@@ -44,6 +46,7 @@ from squid_layouts.scene.model import (
     SceneExtension,
     SceneLink,
     SceneNode,
+    ScenePremiumButton,
     SceneRoutedButton,
     SceneThumbnail,
 )
@@ -61,7 +64,7 @@ class SceneBindings:
     form_bindings: dict[str, FormBinding] = field(default_factory=dict)
     resources: dict[str, object] = field(default_factory=dict)
 
-    def action(self, node: Button | SelectMenu) -> str:
+    def action(self, node: Button | SelectMenu | EntitySelect) -> str:
         key = node.key
         if isinstance(node, FormButton) and node.form is not None:
             # Recorded beside the binding, not in place of it: the button presents the form
@@ -72,27 +75,40 @@ class SceneBindings:
             raise LayoutInvariantError(message)
         handler = node.on_click if isinstance(node, Button) else node.on_select
         routes = node.routes if isinstance(node, SelectMenu) else {}
-        # Only buttons carry admission and busy feedback; a select's guards, if any, live on
-        # the route bindings its grouped actions were lowered into.
+        # Only buttons carry admission, busy feedback and recording; a select's guards and
+        # histories, if any, live on the route bindings its grouped actions were lowered into.
         guard = node.guard if isinstance(node, Button) else None
         feedback = node.feedback if isinstance(node, Button) else None
+        label = node.label if isinstance(node, Button) else ""
+        record = node.record if isinstance(node, Button) else None
         for route_key, binding in routes.items():
             if route_key in self.bindings:
                 message = f"duplicate action key {route_key!r}"
                 raise LayoutInvariantError(message)
             self.bindings[route_key] = binding
         self.bindings[key] = ActionBinding(
-            key=key, handler=handler, policy=node.policy, routes=routes, guard=guard, feedback=feedback
+            key=key,
+            handler=handler,
+            policy=node.policy,
+            routes=routes,
+            guard=guard,
+            feedback=feedback,
+            label=label,
+            record=record,
         )
         return key
 
-    def control(self, node: Thumbnail | LinkButton | Button | RoutedButton | RawItem, path: str) -> SceneNode:
+    def control(
+        self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str
+    ) -> SceneNode:
         """Convert one leaf every target draws the same way."""
         match node:
-            case Thumbnail(url=url, description=description):
-                return SceneThumbnail(url, description)
-            case LinkButton(label=label, url=url):
-                return SceneLink(label, url)
+            case Thumbnail(url=url, description=description, spoiler=spoiler):
+                return SceneThumbnail(url, description, spoiler)
+            case LinkButton(label=label, url=url, emoji=emoji, disabled=disabled):
+                return SceneLink(label, url, emoji, disabled)
+            case PremiumButton(sku_id=sku_id):
+                return ScenePremiumButton(sku_id)
             case RoutedButton(label=label, route_id=route_id):
                 # No binding: the router owns dispatch, so the scene is complete without one.
                 return SceneRoutedButton(
@@ -120,7 +136,9 @@ class SceneBindings:
 class TargetDialect(Protocol):
     """One target's shape, isolated from everything the targets share."""
 
-    def normalize(self, nodes: Sequence[Node], target: TargetProfile, limits: DiscordLimits) -> tuple[Node, ...]:
+    def normalize(
+        self, nodes: Sequence[Node], target: TargetProfile[Any, Any, Any], limits: DiscordLimits
+    ) -> tuple[Node, ...]:
         """Rewrite semantically lowered nodes into this target's own primitive shape."""
         ...
 

@@ -7,7 +7,7 @@ from pathlib import Path
 import anyio
 import pytest
 
-from squid_layouts import Component, Position, state
+from squid_layouts import Component, state
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.durability import (
     ComponentRegistry,
@@ -19,6 +19,7 @@ from squid_layouts.discord.durability import (
 )
 from squid_layouts.discord.testing import commit_render
 from squid_layouts.primitives import Lines, Paginate, Text
+from squid_layouts.sources import Position
 
 
 class DurableChild(Component):

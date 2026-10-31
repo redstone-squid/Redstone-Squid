@@ -2,7 +2,16 @@
 
 from squid_layouts.runtime.component import Component
 from squid_layouts.runtime.context import ContextKey
-from squid_layouts.runtime.history import History, HistoryEntry, HistoryError, history, history_actions
+from squid_layouts.runtime.histories import (
+    History,
+    HistoryEntry,
+    HistoryEntrySnapshot,
+    HistoryError,
+    HistorySnapshot,
+    history,
+    history_actions,
+    inspect_histories,
+)
 from squid_layouts.runtime.presentation import (
     ActivePagers,
     CursorState,
@@ -21,11 +30,14 @@ from squid_layouts.runtime.reactivity import (
     ActionParticipant,
     CellReport,
     ComputedReport,
-    MutableStateError,
+    Observation,
+    ReactiveCycleError,
     ReactiveWriteError,
+    SharedStateConflictError,
     StateChange,
     StateDelta,
     UndeclaredStateError,
+    addresses,
     batch,
     block_writes,
     computed,
@@ -40,6 +52,8 @@ from squid_layouts.runtime.reactivity import (
     untracked,
 )
 from squid_layouts.runtime.resources import (
+    AtomicResource,
+    AtomicResourceState,
     Failed,
     Pending,
     Ready,
@@ -48,6 +62,19 @@ from squid_layouts.runtime.resources import (
     ResourceNotReadyError,
     ResourceState,
     resource,
+)
+from squid_layouts.runtime.shared import Shared
+from squid_layouts.runtime.topics import (
+    Address,
+    BusSnapshot,
+    CellAddress,
+    KindKeyCodec,
+    Subscriber,
+    Topic,
+    TopicBus,
+    TopicCodec,
+    TopicSnapshot,
+    watch,
 )
 
 
@@ -62,6 +89,11 @@ def __getattr__(name: str):
 __all__ = [
     "ActionParticipant",
     "ActivePagers",
+    "Address",
+    "AtomicResource",
+    "AtomicResourceState",
+    "BusSnapshot",
+    "CellAddress",
     "CellReport",
     "Component",
     "ComponentRuntime",
@@ -73,10 +105,14 @@ __all__ = [
     "Failed",
     "History",
     "HistoryEntry",
+    "HistoryEntrySnapshot",
     "HistoryError",
-    "MutableStateError",
+    "HistorySnapshot",
+    "KindKeyCodec",
+    "Observation",
     "Pending",
     "PresentationSession",
+    "ReactiveCycleError",
     "ReactiveWriteError",
     "Ready",
     "Resource",
@@ -85,13 +121,21 @@ __all__ = [
     "ResourceState",
     "SelectionState",
     "SessionUpdate",
+    "Shared",
+    "SharedStateConflictError",
     "StateChange",
     "StateDelta",
     "StrategyState",
     "StrategyUpdate",
+    "Subscriber",
     "ToggleState",
     "ToggleUpdate",
+    "Topic",
+    "TopicBus",
+    "TopicCodec",
+    "TopicSnapshot",
     "UndeclaredStateError",
+    "addresses",
     "apply_updates",
     "batch",
     "block_writes",
@@ -101,6 +145,7 @@ __all__ = [
     "history_actions",
     "inspect_cells",
     "inspect_computed",
+    "inspect_histories",
     "join_action",
     "on_action_commit",
     "resource",
@@ -108,4 +153,5 @@ __all__ = [
     "state",
     "transaction",
     "untracked",
+    "watch",
 ]

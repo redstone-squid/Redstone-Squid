@@ -47,7 +47,7 @@ class ErrorReportBrowser(sl.Component):
         """The reports the list offers."""
         return self._reports
 
-    def chrome(self) -> sl.Chrome:
+    def chrome(self) -> sl.chrome.Chrome:
         """This browser's chrome: temporal paging labels and a footer that names the attachment."""
         return dataclasses.replace(
             CHROME,
@@ -69,7 +69,7 @@ class ErrorReportBrowser(sl.Component):
     def _render_list(self) -> Sequence[sl.LayoutNode]:
         entries = tuple(_list_line(report) for report in self._reports)
         body: sl.TextLike = "\n".join(entries) or L(t"Nothing has failed within the retention window.")
-        nodes: list[sl.LayoutNode] = [sl.section(sl.truncate(sl.paragraph(body)), heading=L(t"Recent errors"))]
+        nodes: list[sl.LayoutNode] = [sl.section(sl.heading(L(t"Recent errors")), sl.truncate(sl.paragraph(body)))]
         if self._reports:
             nodes.append(
                 sl.primitives.SelectMenu(
@@ -110,13 +110,15 @@ class ErrorReportBrowser(sl.Component):
             )
         children.append(sl.fields(*_summary_fields(report, self.matches)))
         children.append(
-            sl.download(L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.Emphasis.STRONG)
+            sl.download(
+                L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG
+            )
         )
         controls: list[sl.primitives.Button] = []
         if self._reports:
             controls.append(sl.primitives.Button(label=L(t"Back"), on_click=self._back, key="back"))
         controls.append(self._close_button())
-        return [sl.section(*children), sl.primitives.Row(tuple(controls))]
+        return [sl.stack(*children), sl.primitives.Row(tuple(controls))]
 
     def _close_button(self) -> sl.primitives.Button:
         return sl.primitives.Button(
@@ -141,11 +143,11 @@ class ErrorReportBrowser(sl.Component):
 def report_attachment(report: ErrorReport) -> discord.File:
     """Bundle the traceback and the log tail, for reading outside Discord."""
     asset = report_asset(report)
-    assert isinstance(asset.source, sl.InlineAsset)
+    assert isinstance(asset.source, sl.document.InlineAsset)
     return discord.File(io.BytesIO(asset.source.data), filename=asset.name)
 
 
-def report_asset(report: ErrorReport) -> sl.Asset:
+def report_asset(report: ErrorReport) -> sl.document.Asset:
     """Describe the full report as a portable inline text asset."""
     lines = [
         f"reference: {report.reference}",
@@ -165,15 +167,15 @@ def report_asset(report: ErrorReport) -> sl.Asset:
         "log tail:",
         *report.log_tail,
     ]
-    return sl.Asset(
+    return sl.document.Asset(
         key="full-report",
         name=f"error-{report.reference}.txt",
         media_type="text/plain",
-        source=sl.InlineAsset("\n".join(lines).encode()),
+        source=sl.document.InlineAsset("\n".join(lines).encode()),
     )
 
 
-def _summary_fields(report: ErrorReport, matches: int) -> list[sl.Field]:
+def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field]:
     entries = [
         sl.field(
             L(t"When"),

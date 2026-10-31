@@ -658,20 +658,20 @@ async def _terminate(process: asyncio.subprocess.Process) -> None:
 def _apply_process_limits(limits: MediaProcessLimits, *, max_file_bytes: int) -> None:
     if resource is None:  # pragma: no cover - Windows has no rlimits
         return
-    _set_resource_limit(resource.RLIMIT_AS, limits.memory_bytes)
-    _set_resource_limit(resource.RLIMIT_CPU, limits.cpu_seconds)
-    _set_resource_limit(resource.RLIMIT_FSIZE, max_file_bytes)
-    _set_resource_limit(resource.RLIMIT_NOFILE, limits.max_open_files)
-    _set_resource_limit(resource.RLIMIT_CORE, 0)
+    _set_resource_limit(resource.RLIMIT_AS, limits.memory_bytes)  # pyrefly: ignore[missing-attribute]
+    _set_resource_limit(resource.RLIMIT_CPU, limits.cpu_seconds)  # pyrefly: ignore[missing-attribute]
+    _set_resource_limit(resource.RLIMIT_FSIZE, max_file_bytes)  # pyrefly: ignore[missing-attribute]
+    _set_resource_limit(resource.RLIMIT_NOFILE, limits.max_open_files)  # pyrefly: ignore[missing-attribute]
+    _set_resource_limit(resource.RLIMIT_CORE, 0)  # pyrefly: ignore[missing-attribute]
     with contextlib.suppress(OSError):
-        os.nice(5)
+        os.nice(5)  # pyrefly: ignore[missing-attribute]
 
 
 def _set_resource_limit(which: int, soft: int) -> None:
     assert resource is not None
     try:
-        _, hard = resource.getrlimit(which)
-        ceiling = soft if hard == resource.RLIM_INFINITY else min(soft, hard)
-        resource.setrlimit(which, (ceiling, hard))
+        _, hard = resource.getrlimit(which)  # pyrefly: ignore[missing-attribute]
+        ceiling = soft if hard == resource.RLIM_INFINITY else min(soft, hard)  # pyrefly: ignore[missing-attribute]
+        resource.setrlimit(which, (ceiling, hard))  # pyrefly: ignore[missing-attribute]
     except OSError, ValueError:
         pass

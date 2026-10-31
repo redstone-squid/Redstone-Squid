@@ -2,10 +2,13 @@
 
 from squid_layouts.discord import classic, delivery, devtools, durability, guards, live, presentation
 from squid_layouts.discord.access import AccessDecision, AccessPolicy, Allowed, Check, Denied, Everyone, Owner, Users
-from squid_layouts.discord.actions import ActionResponder, native, responder
+from squid_layouts.discord.actions import ActionResponder, native, responder, selected_entities
+from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, discord_py_adapter_profile
+from squid_layouts.discord.adoption import AdoptionError, adopt
 from squid_layouts.discord.classic_renderer import ClassicRenderer, StaticClassicView, audit_classic_payload
-from squid_layouts.discord.compose import Composition, compose, render_static
-from squid_layouts.discord.conform import ELLIPSIS, conform, conform_modal, trim
+from squid_layouts.discord.composition import Composition, compose, render_static
+from squid_layouts.discord.conformance import ELLIPSIS, conform, conform_modal, trim
+from squid_layouts.discord.defaults import MountDefaults, MountOptions
 from squid_layouts.discord.delivery import (
     Abandoned,
     Delivered,
@@ -13,10 +16,12 @@ from squid_layouts.discord.delivery import (
     DeliveryReceipt,
     Destination,
     EditHandle,
+    Messageable,
     SendResult,
     StaleHandleError,
     reply_to,
     respond_to,
+    send_to,
 )
 from squid_layouts.discord.fragments import (
     AttachedFragment,
@@ -38,6 +43,7 @@ from squid_layouts.discord.inspection import (
 )
 from squid_layouts.discord.live import mounts
 from squid_layouts.discord.modal import (
+    CheckboxGroupField,
     EntityField,
     EntityType,
     FileField,
@@ -49,14 +55,34 @@ from squid_layouts.discord.modal import (
 )
 from squid_layouts.discord.mount import (
     ErrorHook,
+    ExpiryPolicy,
     FinishHook,
     Mount,
     MountAddress,
     MountedView,
+    MountLifecycle,
     MountSnapshot,
+    PauseUpdates,
+    RenewEphemeral,
     owned_mount,
 )
 from squid_layouts.discord.navigation import Navigator
+from squid_layouts.discord.operations import (
+    ActionDisabled,
+    ConfirmationRequired,
+    DevToolsAction,
+    DevToolsError,
+    DevToolsOperation,
+    DevToolsPolicy,
+    DevToolsRuntime,
+    DurableRecordInspection,
+    MountInspection,
+    OperationalSnapshot,
+    OperationResult,
+    RuntimeUnavailable,
+    SessionInspection,
+    TargetNotFound,
+)
 from squid_layouts.discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation, mode_of
 from squid_layouts.discord.reactor import Reactor, ReactorSnapshot
 from squid_layouts.discord.renderer import RoutedItem, StaticView, V2Renderer, Wire
@@ -72,6 +98,7 @@ from squid_layouts.discord.routing import (
     RouteRequest,
     routers,
 )
+from squid_layouts.discord.screens import Opener, Scope, Screen
 from squid_layouts.discord.sessions import (
     CollisionDecision,
     CollisionPolicy,
@@ -121,6 +148,7 @@ __all__ = [
     "CLASSIC_LIMITS",
     "CLASSIC_TARGET",
     "DEFAULT_TARGETS",
+    "DISCORD_PY_27_ADAPTER",
     "ELLIPSIS",
     "EMPTY_RESERVATION",
     "V2_LIMITS",
@@ -128,16 +156,20 @@ __all__ = [
     "Abandoned",
     "AccessDecision",
     "AccessPolicy",
+    "ActionDisabled",
     "ActionResponder",
+    "AdoptionError",
     "Allowed",
     "AttachedFragment",
     "AuditReport",
     "Check",
+    "CheckboxGroupField",
     "ClassicLimits",
     "ClassicRenderer",
     "CollisionDecision",
     "CollisionPolicy",
     "Composition",
+    "ConfirmationRequired",
     "CustomIdSite",
     "CustomScope",
     "Delivered",
@@ -145,17 +177,24 @@ __all__ = [
     "DeliveryReceipt",
     "Denied",
     "Destination",
+    "DevToolsAction",
+    "DevToolsError",
+    "DevToolsOperation",
+    "DevToolsPolicy",
+    "DevToolsRuntime",
     "DiscordLimits",
     "DiscordMode",
     "DiscordModeError",
     "DiscordPresentation",
     "DiscordReservation",
+    "DurableRecordInspection",
     "EditHandle",
     "EntityField",
     "EntityType",
     "ErrorHook",
     "Everyone",
     "ExistingLayoutError",
+    "ExpiryPolicy",
     "FileField",
     "FinishHook",
     "Fragment",
@@ -164,10 +203,15 @@ __all__ = [
     "GuildScope",
     "LabelSpec",
     "LimitViolationError",
+    "Messageable",
     "Middleware",
     "ModalSpec",
     "Mount",
     "MountAddress",
+    "MountDefaults",
+    "MountInspection",
+    "MountLifecycle",
+    "MountOptions",
     "MountSnapshot",
     "MountedView",
     "NativeItem",
@@ -177,8 +221,12 @@ __all__ = [
     "Navigator",
     "OpenResult",
     "Opened",
+    "Opener",
     "OpeningRequest",
+    "OperationResult",
+    "OperationalSnapshot",
     "Owner",
+    "PauseUpdates",
     "ProtectCrossUserAttachments",
     "Reactor",
     "ReactorSnapshot",
@@ -186,6 +234,7 @@ __all__ = [
     "Reject",
     "Rejected",
     "RejectionReason",
+    "RenewEphemeral",
     "Replace",
     "ReplaceOldest",
     "ReplacementProtection",
@@ -199,8 +248,12 @@ __all__ = [
     "RouteRequest",
     "RoutedItem",
     "Router",
+    "RuntimeUnavailable",
+    "Scope",
+    "Screen",
     "SendResult",
     "Session",
+    "SessionInspection",
     "SessionKey",
     "SessionPolicy",
     "SessionRegistry",
@@ -211,6 +264,7 @@ __all__ = [
     "StaticClassicView",
     "StaticView",
     "Target",
+    "TargetNotFound",
     "TargetRegistry",
     "TextInputSpec",
     "Unprotected",
@@ -222,6 +276,7 @@ __all__ = [
     "Violation",
     "ViolationCode",
     "Wire",
+    "adopt",
     "audit",
     "audit_classic_payload",
     "build_form_modal",
@@ -235,6 +290,7 @@ __all__ = [
     "default_nav",
     "delivery",
     "devtools",
+    "discord_py_adapter_profile",
     "durability",
     "fragment",
     "guards",
@@ -254,5 +310,7 @@ __all__ = [
     "responder",
     "routers",
     "seek_control",
+    "selected_entities",
+    "send_to",
     "trim",
 ]

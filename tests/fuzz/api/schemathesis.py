@@ -196,6 +196,15 @@ class WaitableProcess(Protocol):
 
 
 type GroupSignaler = Callable[[int, signal.Signals], None]
+FORCE_KILL_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
+
+
+def _kill_group(pid: int, sig: signal.Signals) -> None:
+    """Signal a process group on POSIX, or the child process on Windows."""
+    if hasattr(os, "killpg"):
+        os.killpg(pid, sig)  # pyrefly: ignore[missing-attribute]
+    else:
+        os.kill(pid, sig)
 
 
 class InvalidCampaignArtifactError(ValueError):
@@ -299,7 +308,7 @@ def supervise(
     *,
     budget_seconds: float,
     cleanup_grace_seconds: float,
-    signal_group: GroupSignaler = os.killpg,
+    signal_group: GroupSignaler = _kill_group,
 ) -> SupervisionResult:
     """Enforce a wall-clock budget over the complete Schemathesis process group."""
     try:
@@ -311,7 +320,7 @@ def supervise(
             returncode=process.wait(timeout=cleanup_grace_seconds), timed_out=True, forced_kill=False
         )
     except subprocess.TimeoutExpired:
-        signal_group(process.pid, signal.SIGKILL)
+        signal_group(process.pid, FORCE_KILL_SIGNAL)
         return SupervisionResult(returncode=process.wait(), timed_out=True, forced_kill=True)
 
 

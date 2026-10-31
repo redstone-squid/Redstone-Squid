@@ -4,10 +4,10 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_layouts.actions import ActionEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.factories import action, actions, bullet, bullets, choice, choices, controlled, heading, note, stack
+from squid_layouts.interactions import ActionEvent
 from squid_layouts.patterns._content import ContentLike, normalize_content, render_content, require_key
 from squid_layouts.planning.navigation import NAV_FACTORY_CONTEXT, NavigationContext, NavigationState, default_nav
 from squid_layouts.runtime.component import Component, RenderResult
@@ -103,7 +103,7 @@ class Browser[ItemT](Component):
     async def refresh(self) -> None:
         """Refresh around the visible anchor and wait for settlement."""
         self._request = _WindowRequest()
-        await self.window._settle()
+        await self.window._load()
 
     async def _previous(self, _event: ActionEvent) -> None:
         self._request = _WindowRequest("previous")

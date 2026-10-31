@@ -3,22 +3,9 @@
 from dataclasses import replace
 from time import perf_counter
 
-from squid_layouts import (
-    Action,
-    Actions,
-    List,
-    ListItem,
-    Localization,
-    Message,
-    Palette,
-    Paragraph,
-    Section,
-    Stack,
-    fallback,
-    plan,
-)
+from squid_layouts import Palette, fallback
 from squid_layouts.discord import V2_TARGET, compose
-from squid_layouts.planning import PlanCache
+from squid_layouts.planning import PlanCache, plan
 from squid_layouts.planning.cache import CachedPlan
 from squid_layouts.primitives import (
     Button,
@@ -32,6 +19,8 @@ from squid_layouts.primitives import (
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import PlanReport, SceneComponentsV2, SceneDocument, ScenePanel
+from squid_layouts.semantic import Action, Actions, Heading, List, ListItem, Paragraph, Section, Stack
+from squid_layouts.text import Localization, Message
 
 
 async def _first(_event) -> None: ...
@@ -48,7 +37,7 @@ async def _next(_event) -> None: ...
 
 def test_palette_is_part_of_plan_cache_identity() -> None:
     cache = PlanCache()
-    document = Section((Paragraph("brand"),))
+    document = Section(Heading("Brand"), (Paragraph("brand"),))
 
     first = plan(document, target=V2_TARGET, palette=Palette(brand=0x111111), cache=cache)
     second = plan(document, target=V2_TARGET, palette=Palette(brand=0x222222), cache=cache)

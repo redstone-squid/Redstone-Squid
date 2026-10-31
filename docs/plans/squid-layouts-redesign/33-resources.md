@@ -42,6 +42,10 @@ the previous `Ready[T]`, when one exists, so an author can keep stale content vi
 confusing it with fresh data. Loader exceptions become `Failed`; cancellation still propagates.
 Resource state is runtime-only and is never exported in component snapshots.
 
+Atomic resources narrow their public state to `Ready[T] | Failed[T]`: a refresh exposes the
+previous `Ready[T]` while it settles, and an initial pending read suspends discovery until the
+mount can retry. `Pending[T]` remains an internal state used by both delivery policies.
+
 `ResourceDelivery.VISIBLE` is the default. The mount commits a render containing `Pending`,
 awaits every pending resource observed by that render, then commits the settled render.
 `ResourceDelivery.ATOMIC` uses the same state machine but does not deliver its pending render:

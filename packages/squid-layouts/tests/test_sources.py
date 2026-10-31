@@ -6,14 +6,7 @@ from dataclasses import dataclass
 import anyio
 import pytest
 
-from squid_layouts import (
-    CountPrecision,
-    Direction,
-    Position,
-    SourceCapabilities,
-    Window,
-    WindowLoader,
-)
+from squid_layouts.sources import CountPrecision, Direction, Position, SourceCapabilities, Window, WindowLoader
 
 
 @dataclass(frozen=True, slots=True)

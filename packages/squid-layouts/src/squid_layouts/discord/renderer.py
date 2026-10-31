@@ -7,24 +7,30 @@ from urllib.parse import urlsplit
 
 import discord
 
-from squid_layouts.actions import ActionBinding
 from squid_layouts.assets import Asset, StoredAsset
+from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_layouts.discord.attachments import attachment_assets
-from squid_layouts.discord.conform import LimitViolationError, conform
+from squid_layouts.discord.conformance import LimitViolationError, conform
+from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.errors import DrawInvariantError
+from squid_layouts.interactions import ActionBinding
+from squid_layouts.planning.adapter import ADAPTER_RENDER_V2, AdapterProfile
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
     PlanResult,
     SceneButton,
+    SceneComponentsV2,
     SceneDocument,
+    SceneEntitySelect,
     SceneExtension,
     SceneFile,
     SceneGallery,
     SceneLink,
     SceneNode,
     ScenePanel,
+    ScenePremiumButton,
     SceneRoutedButton,
     SceneRoutedSelect,
     SceneRow,
@@ -36,10 +42,11 @@ from squid_layouts.scene.model import (
     SceneTime,
     SceneZonedTime,
 )
+from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import discord_text
 
-type Control = SceneButton | SceneSelect
+type Control = SceneButton | SceneSelect | SceneEntitySelect
 type Wire = Callable[[Control, ActionBinding], discord.ui.Item[Any]]
 type ViewFactory = Callable[[], discord.ui.LayoutView]
 
@@ -90,16 +97,18 @@ class V2Renderer:
         limits: V2Limits = LIMITS,
         audit: bool = True,
         view_factory: ViewFactory = StaticView,
+        adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     ) -> None:
+        require_discord_py_capability(adapter, ADAPTER_RENDER_V2, "render Components V2")
         self.limits = limits
         self.audit = audit
         self.view_factory = view_factory
 
     def draw(
         self,
-        scene: SceneDocument,
+        scene: SceneDocument[SceneComponentsV2],
         *,
-        plan: PlanResult | None = None,
+        plan: PlanResult[SceneComponentsV2] | None = None,
         wire: Wire | None = None,
     ) -> DiscordPresentation:
         """Draw the complete message this scene resolves to.
@@ -115,9 +124,9 @@ class V2Renderer:
 
     def view(
         self,
-        scene: SceneDocument,
+        scene: SceneDocument[SceneComponentsV2],
         *,
-        plan: PlanResult | None = None,
+        plan: PlanResult[SceneComponentsV2] | None = None,
         wire: Wire | None = None,
     ) -> discord.ui.LayoutView:
         if scene.protocol != SceneCodec.protocol:
@@ -154,13 +163,21 @@ class V2Renderer:
             return item
 
         def accessory(
-            node: SceneThumbnail | SceneLink | SceneButton | SceneRoutedButton | SceneExtension,
+            node: SceneThumbnail | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension,
         ) -> discord.ui.Item[Any]:
             match node:
-                case SceneThumbnail(url=url, description=description):
-                    return discord.ui.Thumbnail(url, description=description)
+                case SceneThumbnail(url=url, description=description, spoiler=spoiler):
+                    return discord.ui.Thumbnail(url, description=description, spoiler=spoiler)
                 case SceneLink(label=label, url=url):
-                    return discord.ui.Button(style=discord.ButtonStyle.link, label=label, url=url)
+                    return discord.ui.Button(
+                        style=discord.ButtonStyle.link,
+                        label=label,
+                        url=url,
+                        emoji=discord_emoji(node.emoji),
+                        disabled=node.disabled,
+                    )
+                case ScenePremiumButton(sku_id=sku_id):
+                    return discord.ui.Button(sku_id=sku_id)
                 case SceneRoutedButton(label=label, route_id=route_id):
                     # No binding to wire, so this draws in a sessionless document too. Not a
                     # DynamicItem: discord.py's dynamic dispatch finds the base item by custom
@@ -169,7 +186,7 @@ class V2Renderer:
                         style=getattr(discord.ButtonStyle, node.style.value),
                         label=label,
                         custom_id=route_id,
-                        emoji=node.emoji,
+                        emoji=discord_emoji(node.emoji),
                         disabled=node.disabled,
                     )
                 case SceneButton():
@@ -187,19 +204,24 @@ class V2Renderer:
                 case SceneZonedTime(instant=instant, timezone=timezone, prefix=prefix):
                     value = ZonedDateTime(datetime.fromisoformat(instant), timezone)
                     return discord.ui.TextDisplay(f"{prefix or ''}{value.isoformat()}")
-                case SceneFile(asset_key=asset_key, name=name):
+                case SceneFile(asset_key=asset_key, name=name, spoiler=spoiler):
                     resource = plan.resources.get(f"asset:{asset_key}") if plan is not None else None
                     if isinstance(resource, Asset) and isinstance(resource.source, StoredAsset):
                         parsed = urlsplit(resource.source.reference)
                         if parsed.scheme in {"http", "https"} and parsed.netloc:
+                            if spoiler:
+                                message = "stored-file link conversion cannot preserve spoiler metadata"
+                                raise DrawInvariantError(message)
                             return discord.ui.Button(
                                 style=discord.ButtonStyle.link,
                                 label=name,
                                 url=resource.source.reference,
                             )
-                    return discord.ui.File(f"attachment://{name}")
-                case ScenePanel(children=children, accent=accent):
-                    return discord.ui.Container(*(item(child) for child in children), accent_colour=accent)
+                    return discord.ui.File(f"attachment://{name}", spoiler=spoiler)
+                case ScenePanel(children=children, accent=accent, spoiler=spoiler):
+                    return discord.ui.Container(
+                        *(item(child) for child in children), accent_colour=accent, spoiler=spoiler
+                    )
                 case SceneSection(texts=texts, accessory=side):
                     return discord.ui.Section(
                         *(discord.ui.TextDisplay(discord_text(text)) for text in texts),
@@ -211,6 +233,8 @@ class V2Renderer:
                 case SceneRow(items=items):
                     return discord.ui.ActionRow(*(accessory(entry) for entry in items))
                 case SceneSelect():
+                    return discord.ui.ActionRow(control(node))
+                case SceneEntitySelect():
                     return discord.ui.ActionRow(control(node))
                 case SceneRoutedSelect(
                     options=options,
@@ -227,6 +251,7 @@ class V2Renderer:
                                 value=option.value,
                                 description=option.description,
                                 default=option.default,
+                                emoji=discord_emoji(option.emoji),
                             )
                             for option in options
                         ],
@@ -239,9 +264,12 @@ class V2Renderer:
                     return discord.ui.ActionRow(select)
                 case SceneGallery(items=items):
                     return discord.ui.MediaGallery(
-                        *(discord.MediaGalleryItem(entry.url, description=entry.description) for entry in items)
+                        *(
+                            discord.MediaGalleryItem(entry.url, description=entry.description, spoiler=entry.spoiler)
+                            for entry in items
+                        )
                     )
-                case SceneThumbnail() | SceneLink() | SceneButton() | SceneRoutedButton():
+                case SceneThumbnail() | SceneLink() | ScenePremiumButton() | SceneButton() | SceneRoutedButton():
                     return accessory(node)
                 case SceneExtension():
                     return extension(node)

@@ -36,7 +36,13 @@ class TargetRegistry:
         """Make `target` resolvable under its id, replacing any profile already there."""
         self._targets[target.id] = target
 
-    def resolve(self, target_id: str, version: int, fingerprint: str) -> Target:
+    def resolve(
+        self,
+        target_id: str,
+        version: int,
+        fingerprint: str,
+        adapter_capabilities: tuple[str, ...] | frozenset[str] | None = None,
+    ) -> Target:
         """The exact target a snapshot recorded.
 
         Raises:
@@ -51,13 +57,20 @@ class TargetRegistry:
         if target.version != version:
             message = f"target {target_id!r} is version {target.version}; the snapshot was planned at {version}"
             raise LayoutInvariantError(message)
-        if target.fingerprint != fingerprint:
+        recorded = target.adapter_capabilities if adapter_capabilities is None else frozenset(adapter_capabilities)
+        missing = recorded - target.adapter_capabilities
+        if missing:
+            names = ", ".join(sorted(missing))
+            message = f"target {target_id!r} adapter no longer provides recorded capabilities: {names}"
+            raise LayoutInvariantError(message)
+        restricted = target.restrict_adapter_capabilities(recorded)
+        if restricted.fingerprint != fingerprint:
             message = (
                 f"target {target_id!r} no longer matches the profile this snapshot was planned against; "
                 "its capabilities or limits changed, so the stored render was fitted to different budgets"
             )
             raise LayoutInvariantError(message)
-        return target
+        return restricted
 
     def __contains__(self, target_id: object) -> bool:
         return target_id in self._targets

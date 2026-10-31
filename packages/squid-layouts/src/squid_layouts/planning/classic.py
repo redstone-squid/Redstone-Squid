@@ -15,7 +15,7 @@ from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursor
 from squid_layouts.planning.dialect import SceneBindings
 from squid_layouts.planning.identity import stable_fingerprint
 from squid_layouts.planning.limits import ClassicLimits
-from squid_layouts.planning.measure import (
+from squid_layouts.planning.measurement import (
     MeasuredLayout,
     RCard,
     RContent,
@@ -36,13 +36,16 @@ from squid_layouts.primitives.nodes import (
     Card,
     CardMedia,
     Content,
+    EntitySelect,
     Extension,
+    File,
     Footer,
     Gallery,
     LinkButton,
     MediaCollection,
     Node,
     Panel,
+    PremiumButton,
     RawItem,
     RoutedButton,
     RoutedSelect,
@@ -63,9 +66,11 @@ from squid_layouts.scene.model import (
     SceneEmbedField,
     SceneEmbedFooter,
     SceneEmbedMedia,
+    SceneEntitySelect,
     SceneExtension,
     SceneLink,
     SceneOption,
+    ScenePremiumButton,
     SceneRoutedButton,
     SceneRoutedSelect,
     SceneSelect,
@@ -143,7 +148,7 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
         match node:
             case Boundary():
                 fail(path, "Boundary must be expanded by a component mount before planning")
-            case Panel() | Section() | Gallery() | MediaCollection():
+            case File() | Panel() | Section() | Gallery() | MediaCollection():
                 fail(
                     path,
                     f"{type(node).__name__} is a Components V2 structure with no classic form; "
@@ -166,14 +171,23 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
                     slot(f"{path}.author", author.name, limits.embed_author, "embed author")
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
-            case Button(label=label):
-                if len(label) > limits.button_label:
+            case Button(label=label) | RoutedButton(label=label):
+                if label is None and node.emoji is None:
+                    fail(path, "interactive button needs a label or emoji")
+                if label is not None and len(label) > limits.button_label:
                     fail(path, f"button label exceeds {limits.button_label}")
+            case LinkButton(label=label, url=url):
+                if label is None and node.emoji is None:
+                    fail(path, "link button needs a label or emoji")
+                if label is not None and len(label) > limits.button_label:
+                    fail(path, f"button label exceeds {limits.button_label}")
+                if len(url) > limits.link_url:
+                    fail(path, f"link URL exceeds {limits.link_url}")
             case Row(items=items):
                 if len(items) > limits.row_buttons:
                     fail(path, f"row has {len(items)} controls; maximum is {limits.row_buttons}")
                 for index, item in enumerate(items):
-                    if isinstance(item, Button):
+                    if isinstance(item, Button | RoutedButton | LinkButton | PremiumButton):
                         walk(item, f"{path}.{index}")
             case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum) | (
                 RoutedSelect(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum)
@@ -193,6 +207,18 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
                         fail(f"{path}.option.{index}", f"value exceeds {limits.option_value}")
                     if option.description is not None and len(option.description) > limits.option_description:
                         fail(f"{path}.option.{index}", f"description exceeds {limits.option_description}")
+            case EntitySelect(
+                placeholder=placeholder,
+                default_values=defaults,
+                min_values=minimum,
+                max_values=maximum,
+            ):
+                if placeholder is not None and len(placeholder) > limits.select_placeholder:
+                    fail(path, f"select placeholder exceeds {limits.select_placeholder}")
+                if minimum < 0 or maximum < minimum or maximum > limits.select_options:
+                    fail(path, "entity select value bounds are invalid")
+                if len(defaults) > maximum:
+                    fail(path, "entity select has more defaults than max_values")
             case Budget(children=children) | Break(children=children):
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
@@ -311,6 +337,24 @@ class _ClassicConverter:
                             )
                         )
                     )
+                case EntitySelect():
+                    self.rows.append(
+                        SceneClassicRow(
+                            (
+                                SceneEntitySelect(
+                                    entity_type=child.entity_type,
+                                    action=self.bindings.action(child),
+                                    placeholder=child.placeholder,
+                                    default_values=child.default_values,
+                                    channel_types=child.channel_types,
+                                    min_values=child.min_values,
+                                    max_values=child.max_values,
+                                    disabled=child.disabled,
+                                    policy=child.policy,
+                                ),
+                            )
+                        )
+                    )
                 case RoutedSelect(options=options):
                     self.rows.append(
                         SceneClassicRow(
@@ -388,13 +432,13 @@ def _timestamp(value: object) -> str | None:
 
 def _options(options: Sequence[object]) -> list[SceneOption]:
     return [
-        SceneOption(option.label, option.value, option.description, option.default)  # type: ignore[attr-defined]
+        SceneOption(option.label, option.value, option.description, option.default, option.emoji)  # type: ignore[attr-defined]
         for option in options
     ]
 
 
 def _as_control(node: object, path: str) -> SceneControl:
-    if not isinstance(node, SceneLink | SceneButton | SceneRoutedButton | SceneExtension):
+    if not isinstance(node, SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton | SceneExtension):
         message = f"{path}: an action row cannot hold {type(node).__name__}"
         raise LayoutInvariantError(message)
     return node

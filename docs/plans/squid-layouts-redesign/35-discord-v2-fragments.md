@@ -368,6 +368,7 @@ the legacy view as the sole owner and makes the Squid region stateless.
 
 ## Status
 
-Proposed 2026-08-22. Amended 2026-08-22 after verifying every claim against the tree: the
+Shipped 2026-08-22 — `contribute` lives at `discord/fragments.py:235`, with the classic-target
+form at `discord/classic.py:189`. Amended 2026-08-22 after verifying every claim against the tree: the
 reservation axes, the attachment limit, and the sessionless asset path do not exist yet, and
 the original preflight guarantee did not hold for either in-tree consumer.

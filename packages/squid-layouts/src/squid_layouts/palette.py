@@ -47,3 +47,12 @@ class Palette:
 
 
 DEFAULT_PALETTE = Palette()
+
+__all__ = [
+    "DEFAULT_PALETTE",
+    "INHERIT",
+    "Accent",
+    "AccentDefault",
+    "Palette",
+    "Tone",
+]

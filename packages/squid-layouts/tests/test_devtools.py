@@ -9,8 +9,9 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid_layouts.discord import Everyone, Mount, Owner, Router, live
+from squid_layouts.discord import Everyone, Mount, Owner, live
 from squid_layouts.discord.devtools import DevTools
+from squid_layouts.discord.routing import Router
 from squid_layouts.discord.testing import delivered_to, fake_message
 from squid_layouts.primitives import Heading
 from squid_layouts.profiling import MemoryProfiler, OperationKind
@@ -131,14 +132,14 @@ class TestRoutes:
 
 
 class TestProfiles:
-    async def test_empty_action_profiles_are_explicit(self) -> None:
+    async def test_profile_health_is_explicit(self) -> None:
         ctx = make_context()
         cog = DevTools(profiler=MemoryProfiler())
 
-        await run(cog.profile_actions, cog, ctx)
+        await run(cog.inspect_profile, cog, ctx)
 
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
-        assert "No action profiles have been observed" in rendered
+        assert "Profiler" in rendered
 
     async def test_action_aggregates_suppress_percentiles_below_sample_floor(self) -> None:
         profiler = MemoryProfiler()
@@ -147,7 +148,7 @@ class TestProfiles:
         ctx = make_context()
         cog = DevTools(profiler=profiler)
 
-        await run(cog.profile_actions, cog, ctx)
+        await run(cog.inspect_profile, cog, ctx)
 
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
         assert "save" in rendered
@@ -165,7 +166,7 @@ class TestProfiles:
         ctx = make_context()
         cog = DevTools(profiler=profiler)
 
-        await run(cog.profile_mount, cog, ctx, subject.id)
+        await run(cog.inspect_profile, cog, ctx, subject.id)
 
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
         assert f"Profile for mount {subject.id}" in rendered
@@ -174,23 +175,24 @@ class TestProfiles:
 
     async def test_queue_command_infers_bus_and_profiler_from_reactor(self) -> None:
         profiler = MemoryProfiler()
-        bus = sl.TopicBus(profiler=profiler)
+        bus = sl.runtime.TopicBus(profiler=profiler)
         reactor = sl.discord.Reactor(bus)
 
         async def refresh(topic) -> None:
             pass
 
-        bus.subscribe("build", refresh)
-        bus.publish("build")
+        bus.subscribe(sl.runtime.Topic("build", "devtools"), refresh)
+        bus.publish(sl.runtime.Topic("build", "devtools"))
         ctx = make_context()
         cog = DevTools(reactor=reactor)
 
-        await run(cog.profile_queues, cog, ctx)
+        await run(cog.inspect_queues, cog, ctx)
 
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
         assert "reactor" in rendered
         assert "topics" in rendered
         assert "queued=1" in rendered
+        assert "build:devtools" in rendered
 
     async def test_profile_export_attaches_round_trippable_snapshot(self) -> None:
         profiler = MemoryProfiler()
@@ -199,10 +201,10 @@ class TestProfiles:
         ctx = make_context()
         cog = DevTools(profiler=profiler)
 
-        await run(cog.profile_export, cog, ctx)
+        await run(cog.export_ui, cog, ctx)
 
         file = ctx.send.await_args.kwargs["files"][0]
         payload = json.loads(file.fp.read().decode())
-        assert file.filename.startswith("runtime-profile-")
-        assert payload["schema_version"] == 2
-        assert payload["aggregates"][0]["key"]["name"] == "panel"
+        assert file.filename == "squid-operational-snapshot.json"
+        assert payload["profiler"]["schema_version"] == 2
+        assert payload["profiler"]["aggregates"][0]["key"]["name"] == "panel"

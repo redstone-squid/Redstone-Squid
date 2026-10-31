@@ -6,21 +6,18 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import LayoutDegradedError, plan
 from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_layouts.discord import (
-    V2_TARGET,
-    NavigationContext,
-    default_nav,
-    render_static,
-)
+from squid_layouts.discord import V2_TARGET, render_static
+from squid_layouts.discord.navigation import NavigationContext, default_nav
+from squid_layouts.errors import LayoutDegradedError
 from squid_layouts.planning import (
     SolveNoteCode,
     measure,
+    plan,
 )
-from squid_layouts.planning.measure import RPanel, RText
+from squid_layouts.planning.measurement import RPanel, RText
 from squid_layouts.primitives import (
     ActionGroup,
     Alt,

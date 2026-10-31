@@ -4,11 +4,11 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
-from squid_layouts.actions import ActionEvent, SubmitEvent
 from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.factories import action, actions, choice, choices, controlled, form, heading, note, paragraph, stack
 from squid_layouts.forms import FormSpec, TextField
+from squid_layouts.interactions import ActionEvent, SubmitEvent
 from squid_layouts.patterns._content import require_key
 from squid_layouts.runtime.component import Component, RenderResult
 from squid_layouts.runtime.reactivity import state
@@ -202,9 +202,9 @@ class Lookup[ItemT](Component):
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         search_form = FormSpec(chrome.search, (TextField(key="query", label=chrome.search),))
         search_control = form(
+            chrome.search,
             search_form,
             key=f"{self.key}.search",
-            label=chrome.search,
             on_submit=self._searched,
         )
         if self.query is None:

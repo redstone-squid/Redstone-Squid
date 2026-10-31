@@ -6,13 +6,13 @@ import time
 import weakref
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, overload
 
 import anyio
 
-from squid_layouts.profiling import NoOpProfiler, OperationKind, Profiler, TraceLink
-from squid_layouts.topics import Topic, TopicBus
+from squid_layouts.profiling import NoOpProfiler, OperationKind, PresentationOutcome, Profiler, TraceLink
+from squid_layouts.runtime.topics import Address, CellAddress, Topic, TopicBus
 
 if TYPE_CHECKING:
     from squid_layouts.discord.mount import Mount
@@ -32,10 +32,13 @@ class ReactorSnapshot:
     queued: int
     in_flight: int
     redeliver: int
+    watched: int
     scheduled: int
     coalesced: int
     delivered: int
     failed: int
+    unchanged: int = 0
+    """Refreshes that found the render identical to the live one and wrote nothing."""
 
 
 @dataclass(slots=True)
@@ -67,7 +70,6 @@ class Reactor:
             a standalone out-of-band refresh scheduler.
         concurrency: Maximum number of different mounts refreshed concurrently.
         sweep_interval: Seconds between interaction-token expiry checks.
-        expiry_margin: How far ahead of token expiry to show paused-update chrome.
         clock: UTC wall clock used to compare interaction-token deadlines.
         profiler: Runtime profiler. Defaults to the bus profiler when a bus is supplied.
         max_causal_links: Maximum distinct trigger links retained per coalesced refresh.
@@ -80,7 +82,6 @@ class Reactor:
         *,
         concurrency: int = 4,
         sweep_interval: float = 10.0,
-        expiry_margin: float = 60.0,
         clock: Callable[[], datetime] = _utc_now,
         profiler: Profiler | None = None,
         max_causal_links: int = 8,
@@ -92,9 +93,6 @@ class Reactor:
         if sweep_interval <= 0:
             message = "reactor sweep interval must be positive"
             raise ValueError(message)
-        if expiry_margin < 0:
-            message = "reactor expiry margin cannot be negative"
-            raise ValueError(message)
         if max_causal_links < 0:
             message = "reactor causal link limit cannot be negative"
             raise ValueError(message)
@@ -102,7 +100,6 @@ class Reactor:
         self.profiler = profiler if profiler is not None else bus.profiler if bus is not None else _NOOP_PROFILER
         self.concurrency = concurrency
         self.sweep_interval = sweep_interval
-        self.expiry_margin = timedelta(seconds=expiry_margin)
         self.clock = clock
         self.max_causal_links = max_causal_links
         self._monotonic = monotonic
@@ -113,12 +110,37 @@ class Reactor:
         self._queued_causes: weakref.WeakKeyDictionary[Mount, _Causes] = weakref.WeakKeyDictionary()
         self._redelivery_causes: weakref.WeakKeyDictionary[Mount, _Causes] = weakref.WeakKeyDictionary()
         self._followed: weakref.WeakKeyDictionary[Mount, int] = weakref.WeakKeyDictionary()
+        self._watched: weakref.WeakSet[Mount] = weakref.WeakSet()
         self._warned_handles: weakref.WeakKeyDictionary[Mount, object] = weakref.WeakKeyDictionary()
         self._running = False
         self._scheduled = 0
         self._coalesced = 0
         self._delivered = 0
         self._failed = 0
+        self._unchanged = 0
+
+    def watch(self, mount: Mount) -> Callable[[], None]:
+        """Observe a delivered mount's edit-authority deadline until it finishes."""
+        if mount.finished:
+            message = "cannot watch a finished mount"
+            raise ValueError(message)
+        if mount.scheduler is not self:
+            message = "a watched mount must use this reactor as its scheduler"
+            raise ValueError(message)
+        self._watched.add(mount)
+        active = True
+        mount_ref = weakref.ref(mount)
+
+        def unwatch() -> None:
+            nonlocal active
+            if not active:
+                return
+            active = False
+            if (current := mount_ref()) is not None:
+                self._watched.discard(current)
+                self._warned_handles.pop(current, None)
+
+        return unwatch
 
     def schedule(self, mount: Mount) -> None:
         """Enqueue a refresh while coalescing requests for the same mount."""
@@ -146,13 +168,34 @@ class Reactor:
             queued=len(self._queued),
             in_flight=len(self._in_flight),
             redeliver=len(self._redeliver),
+            watched=len(self._watched),
             scheduled=self._scheduled,
             coalesced=self._coalesced,
             delivered=self._delivered,
             failed=self._failed,
+            unchanged=self._unchanged,
         )
 
-    def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]:
+    async def wait_idle(self) -> None:
+        """Wait until every refresh queued before the call has settled.
+
+        A running reactor owns the queue workers. Calling this while it is stopped would
+        otherwise wait forever, so an operator gets an explicit lifecycle error instead.
+        """
+        if not self._running:
+            if self._queued or self._in_flight:
+                message = "cannot wait for a stopped reactor with pending work"
+                raise RuntimeError(message)
+            return
+        await self._queue.join()
+
+    @overload
+    def follow(self, mount: Mount, *topics: Topic) -> Callable[[], None]: ...
+
+    @overload
+    def follow(self, mount: Mount, *topics: CellAddress) -> Callable[[], None]: ...
+
+    def follow(self, mount: Mount, *topics: Address) -> Callable[[], None]:
         """Refresh ``mount`` when any exact topic changes, returning an unfollow callback.
 
         Call this before the mount's initial send so a write cannot land between its first
@@ -187,13 +230,12 @@ class Reactor:
                 count = self._followed.get(current, 0)
                 if count <= 1:
                     self._followed.pop(current, None)
-                    self._warned_handles.pop(current, None)
                 else:
                     self._followed[current] = count - 1
 
         mount_ref = weakref.ref(mount, lambda _: unfollow())
 
-        async def refresh(topic: Topic) -> None:
+        async def refresh(topic: Address) -> None:
             if (current := mount_ref()) is None:
                 unfollow()
                 return
@@ -251,7 +293,9 @@ class Reactor:
                     operation.increment("reactor.cause_links_omitted", causes.omitted_links)
                     link = self.profiler.capture_link()
                     try:
-                        await mount.refresh_now(links=() if link is None else (link,))
+                        outcome = await mount.refresh_now(links=() if link is None else (link,))
+                        if outcome is PresentationOutcome.UNCHANGED:
+                            self._unchanged += 1
                     finally:
                         if causes.last_triggered is not None:
                             operation.record_span("freshness", max(0.0, self._monotonic() - causes.last_triggered))
@@ -284,17 +328,13 @@ class Reactor:
     def _sweep_once(self) -> None:
         """Schedule the final honest refresh for handles approaching expiry."""
         now = self.clock()
-        for mount in tuple(self._followed):
+        for mount in tuple(self._watched):
             handle = mount.handle
-            if mount.finished or handle is None or handle.permanent or handle.expires_at is None:
-                self._warned_handles.pop(mount, None)
-                continue
-            if handle.expires_at - now > self.expiry_margin:
+            if handle is None or not mount._should_arm_expiry(handle, now):
                 self._warned_handles.pop(mount, None)
                 continue
             if self._warned_handles.get(mount) is handle:
                 continue
             self._warned_handles[mount] = handle
-            mount.status = mount.chrome.updates_paused
-            mount.invalidate()
+            mount._queue_expiry_arm(handle)
             self.schedule(mount)

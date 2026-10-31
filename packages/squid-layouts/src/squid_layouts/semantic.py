@@ -4,16 +4,21 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum, StrEnum
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal, overload
 
-from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
+from squid_layouts.entity import ChannelType, EntityRef, EntityType, supports_entity
 from squid_layouts.forms import FormSpec, SubmitHandler
 from squid_layouts.guards import Guard
+from squid_layouts.interactions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
+from squid_layouts.target_types import Renderable
 from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
+
+if TYPE_CHECKING:
+    from squid_layouts.runtime.histories import History
 
 
 class ActionDisplay(StrEnum):
@@ -111,6 +116,7 @@ so a node cannot be half-controlled and the mode is readable at the call site.
 
 
 type ChoiceOwnership = Ownership[tuple[str, ...], ChoiceEvent]
+type EntityOwnership = Ownership[tuple[EntityRef, ...], EntityEvent]
 type ItemOwnership = Ownership[str | None, OpenEvent[str | None]]
 type DisclosureOwnership = Ownership[bool, OpenEvent[bool]]
 type ToggleOwnership = Ownership[bool, ToggleEvent]
@@ -119,6 +125,7 @@ type NavOwnership = Ownership[str | None, NavigateEvent]
 
 # The engine-managed default of each stateful node, named for the state it seeds.
 UNSELECTED: ChoiceOwnership = Managed(())
+NO_ENTITIES: EntityOwnership = Managed(())
 UNOPENED: ItemOwnership = Managed(None)
 CLOSED: DisclosureOwnership = Managed(initial=False)
 OFF: ToggleOwnership = Managed(initial=False)
@@ -150,6 +157,14 @@ class Themed:
 
 
 @dataclass(frozen=True, slots=True)
+class Block:
+    """An untitled semantic region with an exact or inherited accent."""
+
+    children: tuple[LayoutNode, ...]
+    accent: Accent = INHERIT
+
+
+@dataclass(frozen=True, slots=True)
 class Section:
     """A titled block of related content.
 
@@ -159,12 +174,11 @@ class Section:
     *means* something — advisory, warning, failed — belongs on `Aside` or `Status` via
     `Tone`, which the active palette maps without discarding the semantic meaning.
 
-    ``thumbnail`` is a lead image shown beside the heading. With no heading there is
-    nothing to sit beside, so it lowers to a leading single-image gallery instead.
+    ``thumbnail`` is a lead image shown beside the required heading.
     """
 
+    heading: Heading
     children: tuple[LayoutNode, ...]
-    heading: TextLike | None = None
     accent: Accent = INHERIT
     thumbnail: str | None = None
 
@@ -173,8 +187,8 @@ class Section:
 class Article:
     """A self-contained block that stands on its own; see `Section` for the extras."""
 
+    heading: Heading
     children: tuple[LayoutNode, ...]
-    heading: TextLike | None = None
     accent: Accent = INHERIT
     thumbnail: str | None = None
 
@@ -238,7 +252,11 @@ class Fields:
 class Column:
     key: str
     heading: TextLike
-    importance: Importance = Importance.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class Columns:
+    columns: tuple[Column, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,11 +267,20 @@ class TableRow:
 
 @dataclass(frozen=True, slots=True)
 class Table:
-    columns: tuple[Column, ...]
+    columns: Columns
     rows: tuple[TableRow, ...]
     key: str
     display: TableDisplay = TableDisplay.AUTO
     flexibility: Flexibility = Flexibility.NORMAL
+
+    def __post_init__(self) -> None:
+        if not self.columns.columns:
+            message = "Table needs at least one column"
+            raise ValueError(message)
+        width = len(self.columns.columns)
+        if row := next((row for row in self.rows if len(row.cells) != width), None):
+            message = f"Table row {row.key!r} has {len(row.cells)} cells for {width} columns"
+            raise ValueError(message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,6 +308,7 @@ class MediaItem:
     key: str
     url: str
     description: TextLike | None = None
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -298,9 +326,14 @@ class Media:
 
 
 @dataclass(frozen=True, slots=True)
+class Summary:
+    content: TextLike
+
+
+@dataclass(frozen=True, slots=True)
 class Details:
     key: str
-    summary: TextLike
+    summary: Summary
     children: tuple[LayoutNode, ...]
     open: DisclosureOwnership = CLOSED
 
@@ -334,6 +367,7 @@ class Download:
     asset: Asset
     description: TextLike | None = None
     emphasis: Emphasis = Emphasis.NORMAL
+    spoiler: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -403,6 +437,8 @@ class Action:
     """Whether this press may execute now. `available` is the render-time question."""
     feedback: Feedback | None = None
     """Busy feedback for a handler slow enough that the reader needs to see it running."""
+    record: History | None = None
+    """History this press enters itself into, under `label`, before `on_trigger` runs."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -464,6 +500,21 @@ class ChoiceEvent(ActionEvent):
     removed: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True, slots=True)
+class EntityEvent(ActionEvent):
+    selected: tuple[EntityRef, ...] = ()
+    added: tuple[EntityRef, ...] = ()
+    removed: tuple[EntityRef, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EntityChoice:
+    ref: EntityRef
+    label: TextLike
+    description: TextLike | None = None
+    available: bool = True
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OpenEvent[ValueT](ActionEvent):
     """The reader asked to open something: one of N entries, or one disclosure."""
@@ -496,6 +547,29 @@ class Choices:
 
 
 @dataclass(frozen=True, slots=True)
+class Entities:
+    """A picker over frontend-resolved entities with an optional enumerated fallback."""
+
+    key: str
+    entity_type: EntityType
+    choices: tuple[EntityChoice, ...] = ()
+    selection: EntityOwnership = NO_ENTITIES
+    minimum: int = 1
+    maximum: int = 1
+    channel_types: tuple[ChannelType, ...] = ()
+    placeholder: TextLike | None = None
+    flexibility: Flexibility = Flexibility.NORMAL
+
+    def __post_init__(self) -> None:
+        if self.channel_types and self.entity_type is not EntityType.CHANNEL:
+            message = "channel_types is only valid for channel entity pickers"
+            raise ValueError(message)
+        if any(not supports_entity(self.entity_type, choice.ref.kind) for choice in self.choices):
+            message = f"fallback choice is incompatible with {self.entity_type.value} entity picker"
+            raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True)
 class RoutedChoices:
     """An explicitly stateless picker whose values are submitted to one route."""
 
@@ -509,9 +583,14 @@ class RoutedChoices:
 
 
 @dataclass(frozen=True, slots=True)
+class ItemLabel:
+    content: TextLike
+
+
+@dataclass(frozen=True, slots=True)
 class Item:
     key: str
-    label: TextLike
+    label: ItemLabel
     children: tuple[LayoutNode, ...]
     summary: TextLike | None = None
 
@@ -565,11 +644,11 @@ class OptionalContent:
 
 
 @dataclass(frozen=True, slots=True)
-class FallbackContent:
+class FallbackContent[ModeT = Any](Renderable[ModeT]):
     """Complete author-supplied representations of one region, best first."""
 
-    primary: LayoutNode
-    alternates: tuple[LayoutNode, ...]
+    primary: LayoutNode[ModeT]
+    alternates: tuple[LayoutNode[ModeT], ...]
 
     def __post_init__(self) -> None:
         if not self.alternates:
@@ -646,6 +725,7 @@ type SemanticNode = (
     | Stack
     | Cluster
     | Themed
+    | Block
     | Section
     | Article
     | Aside
@@ -670,15 +750,15 @@ type SemanticNode = (
     | FormTrigger
     | Actions
     | Choices
+    | Entities
     | RoutedChoices
     | Items
     | Navigation
 )
 
-type Adaptation = (
-    Truncated | Spilled | OptionalContent | FallbackContent | BestEffort | Budgeted | Unbreakable | KeepWithNext | Paged
-)
-type LayoutNode = SemanticNode | Adaptation | PrimitiveNode
+type Adaptation = Truncated | Spilled | OptionalContent | BestEffort | Budgeted | Unbreakable | KeepWithNext | Paged
+type ConcreteLayoutNode = SemanticNode | Adaptation | FallbackContent | PrimitiveNode
+type LayoutNode[ModeT = Any] = SemanticNode | Adaptation | FallbackContent[ModeT] | Renderable[ModeT]
 
 
 def truncate(node: LayoutNode, *, keep: str = "head") -> Truncated:
@@ -696,7 +776,42 @@ def optional(node: LayoutNode, *, importance: Importance = Importance.LOW) -> Op
     return OptionalContent(node, importance)
 
 
-def fallback(primary: LayoutNode, *alternates: LayoutNode) -> FallbackContent:
+@overload
+def fallback[FirstT, SecondT](  # pyrefly: ignore[inconsistent-overload]
+    primary: LayoutNode[FirstT], alternate: LayoutNode[SecondT]
+) -> FallbackContent[FirstT | SecondT]: ...
+
+
+@overload
+def fallback[FirstT, SecondT, ThirdT](  # pyrefly: ignore[inconsistent-overload]
+    primary: LayoutNode[FirstT], first: LayoutNode[SecondT], second: LayoutNode[ThirdT]
+) -> FallbackContent[FirstT | SecondT | ThirdT]: ...
+
+
+@overload
+def fallback[FirstT, SecondT, ThirdT, FourthT](  # pyrefly: ignore[inconsistent-overload]
+    primary: LayoutNode[FirstT],
+    first: LayoutNode[SecondT],
+    second: LayoutNode[ThirdT],
+    third: LayoutNode[FourthT],
+) -> FallbackContent[FirstT | SecondT | ThirdT | FourthT]: ...
+
+
+@overload
+def fallback[FirstT, SecondT, ThirdT, FourthT, FifthT](  # pyrefly: ignore[inconsistent-overload]
+    primary: LayoutNode[FirstT],
+    first: LayoutNode[SecondT],
+    second: LayoutNode[ThirdT],
+    third: LayoutNode[FourthT],
+    fourth: LayoutNode[FifthT],
+) -> FallbackContent[FirstT | SecondT | ThirdT | FourthT | FifthT]: ...
+
+
+@overload
+def fallback(primary: LayoutNode[Any], *alternates: LayoutNode[Any]) -> FallbackContent[Any]: ...
+
+
+def fallback(primary: LayoutNode[Any], *alternates: LayoutNode[Any]) -> FallbackContent[Any]:
     """Declare complete author-supplied alternate representations, in descending preference.
 
     Each alternate is a whole replacement for ``primary``, not a shortening of it; the planner
@@ -743,3 +858,111 @@ def paged(
     """Apply a preferred character budget and heterogeneous paging to ``node``."""
     region = Paged(node, key, chars, min_fill, widows, initial, footer)
     return Budgeted(region, min, chars, stretch)
+
+
+__all__ = [
+    "CLOSED",
+    "FIRST_DESTINATION",
+    "NO_ENTITIES",
+    "OFF",
+    "UNOPENED",
+    "UNRATED",
+    "UNSELECTED",
+    "Action",
+    "ActionDisplay",
+    "ActionGroup",
+    "Actions",
+    "Adaptation",
+    "Article",
+    "Aside",
+    "BestEffort",
+    "Block",
+    "Budgeted",
+    "Choice",
+    "ChoiceEvent",
+    "ChoiceOwnership",
+    "Choices",
+    "Cluster",
+    "Code",
+    "Column",
+    "Columns",
+    "Controlled",
+    "Destination",
+    "DetailLevel",
+    "Details",
+    "DisclosureOwnership",
+    "Download",
+    "Emphasis",
+    "Entities",
+    "EntityChoice",
+    "EntityEvent",
+    "EntityOwnership",
+    "FallbackContent",
+    "Field",
+    "Fields",
+    "Figure",
+    "Flexibility",
+    "FormTrigger",
+    "Group",
+    "Heading",
+    "Importance",
+    "Item",
+    "ItemDisplay",
+    "ItemLabel",
+    "ItemOwnership",
+    "Items",
+    "KeepWithNext",
+    "LayoutNode",
+    "Link",
+    "List",
+    "ListItem",
+    "Managed",
+    "Measure",
+    "Media",
+    "MediaDisplay",
+    "MediaItem",
+    "NavOwnership",
+    "NavigateEvent",
+    "Navigation",
+    "NavigationDisplay",
+    "Note",
+    "OpenEvent",
+    "OptionalContent",
+    "Ownership",
+    "Paged",
+    "Paragraph",
+    "Progress",
+    "Quote",
+    "RoutedAction",
+    "RoutedChoices",
+    "ScaleEvent",
+    "ScaleOwnership",
+    "Section",
+    "SemanticNode",
+    "Spilled",
+    "Stack",
+    "Status",
+    "Summary",
+    "Table",
+    "TableDisplay",
+    "TableRow",
+    "Themed",
+    "TimeStyle",
+    "Timestamp",
+    "Toggle",
+    "ToggleEvent",
+    "ToggleOwnership",
+    "Tone",
+    "Truncated",
+    "Unbreakable",
+    "ZonedTimestamp",
+    "best_effort",
+    "budget",
+    "fallback",
+    "keep_with_next",
+    "optional",
+    "paged",
+    "spill",
+    "truncate",
+    "unbreakable",
+]

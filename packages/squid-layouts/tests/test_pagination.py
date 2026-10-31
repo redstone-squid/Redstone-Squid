@@ -10,36 +10,21 @@ from discord.ui.view import ViewStore
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_layouts import (
-    DEFAULT_CHROME,
-    Component,
-    field,
-    fields,
-    paragraph,
-    section,
-    truncate,
-)
+import squid_layouts as sl
+from squid_layouts import Component, field, fields, paragraph, section, truncate
+from squid_layouts.chrome import DEFAULT_CHROME
 from squid_layouts.discord import (
     V2_LIMITS as LIMITS,
 )
-from squid_layouts.discord import (
-    Everyone,
-    LabelSpec,
-    ModalSpec,
-    Mount,
-    NavigationContext,
-    TextInputSpec,
-    build_modal,
-    conform,
-    default_nav,
-    page_select_nav,
-)
+from squid_layouts.discord import Everyone, Mount, conform
+from squid_layouts.discord.modals import LabelSpec, ModalSpec, TextInputSpec, build_modal
+from squid_layouts.discord.navigation import NavigationContext, default_nav, page_select_nav
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning import SolveNoteCode, measure
 from squid_layouts.planning.adaptation import lower_semantics
 from squid_layouts.planning.limits import COMPONENTS
-from squid_layouts.planning.measure import RText, _component_count, split_pages
+from squid_layouts.planning.measurement import RText, _component_count, split_pages
 from squid_layouts.primitives import (
     Button,
     Code,
@@ -209,7 +194,12 @@ class Catalog(Component):
 
     def render(self):
         keys = (*self.lead, *(str(index) for index in range(36)))
-        return [Items("catalog", tuple(Item(key, f"Item {key}", (Paragraph("detail"),)) for key in keys))]
+        return [
+            Items(
+                "catalog",
+                tuple(Item(key, sl.semantic.ItemLabel(f"Item {key}"), (Paragraph("detail"),)) for key in keys),
+            )
+        ]
 
 
 class TestMountPagination:
@@ -505,7 +495,7 @@ class TestBuildModal:
         # The live-bug shape: a default joined from unbounded user data.
         spec = ModalSpec(
             title="Edit Build " + "x" * 100,
-            labels=(
+            items=(
                 LabelSpec(
                     text="Image URLs " + "y" * 100,
                     input=TextInputSpec(label="urls", default=", ".join(f"https://e.invalid/{i}" for i in range(400))),
@@ -521,7 +511,7 @@ class TestBuildModal:
         async def on_submit(interaction, values):
             received.update(values)
 
-        spec = ModalSpec(title="T", labels=(LabelSpec(text="Name", input=TextInputSpec(label="n", key="name")),))
+        spec = ModalSpec(title="T", items=(LabelSpec(text="Name", input=TextInputSpec(label="n", key="name")),))
         modal = build_modal(spec, on_submit=on_submit)
         next(iter(modal._inputs.values()))._value = "steve"  # pyrefly: ignore
 
@@ -532,7 +522,7 @@ class TestBuildModal:
 
 @given(st.text(min_size=4500, max_size=9000, alphabet=st.characters(blacklist_categories=("Cs",))))
 def test_paginated_documents_fit_on_every_page(body):
-    card_node = section(truncate(paragraph("intro")), fields(field("k", "v")), heading="Title")
+    card_node = section(sl.heading("Title"), truncate(paragraph("intro")), fields(field("k", "v")))
     lowered = lower_semantics(
         [card_node],
         limits=LIMITS,

@@ -79,8 +79,8 @@ class TestBudgetContract:
         )
         target = sl.planning.TargetProfile("small", 1, V2_TARGET.capabilities, V2Limits(total_text=100))
 
-        with pytest.raises(sl.UnsolvableLayoutError, match="Budget floors need"):
-            sl.plan(document, target=target)
+        with pytest.raises(sl.errors.UnsolvableLayoutError, match="Budget floors need"):
+            sl.planning.plan(document, target=target)
 
     def test_best_effort_permits_its_floor_to_breach(self) -> None:
         document = (
@@ -89,7 +89,7 @@ class TestBudgetContract:
         )
         target = sl.planning.TargetProfile("small", 1, V2_TARGET.capabilities, V2Limits(total_text=100))
 
-        result = sl.plan(document, target=target)
+        result = sl.planning.plan(document, target=target)
 
         assert any("breached best-effort budget floor" in event.message for event in result.report.events)
 
@@ -104,7 +104,7 @@ class TestPaginateBreakPreferences:
 
 class TestRegionPagination:
     @staticmethod
-    def _texts(result: sl.PlanResult) -> list[str]:
+    def _texts(result: sl.scene.PlanResult) -> list[str]:
         panel = result.scene.components_v2.children[0]
         assert isinstance(panel, ScenePanel)
         return [child.content for child in panel.children if isinstance(child, SceneText)]
@@ -118,7 +118,7 @@ class TestRegionPagination:
             sl.paged(sl.paragraph("body"), key="body", chars=100, widows=0)
 
     def test_break_annotations_are_transparent_without_a_paged_region(self) -> None:
-        result = sl.plan(
+        result = sl.planning.plan(
             sl.group(sl.unbreakable(sl.paragraph("first")), sl.keep_with_next(sl.paragraph("second"))),
             target=V2_TARGET,
         )
@@ -130,13 +130,13 @@ class TestRegionPagination:
 
     def test_a_section_pages_heterogeneous_children(self) -> None:
         document = sl.paged(
-            sl.section(*(sl.paragraph(f"{index}: " + "x" * 30) for index in range(6)), heading="Report"),
+            sl.section(sl.heading("Report"), *(sl.paragraph(f"{index}: " + "x" * 30) for index in range(6))),
             key="report",
             chars=80,
         )
 
-        first = sl.plan(document, target=V2_TARGET)
-        second = sl.plan(document, target=V2_TARGET, positions={"report": sl.Position(offset=1)})
+        first = sl.planning.plan(document, target=V2_TARGET)
+        second = sl.planning.plan(document, target=V2_TARGET, positions={"report": sl.sources.Position(offset=1)})
 
         assert first.scene.pagers[0].pages == 3
         assert self._texts(first)[:3] == ["## Report", "0: " + "x" * 30, "1: " + "x" * 30]
@@ -145,7 +145,7 @@ class TestRegionPagination:
 
     def test_keep_with_next_moves_a_heading_to_its_content(self) -> None:
         document = sl.paged(
-            sl.section(
+            sl.block(
                 sl.paragraph("a" * 45),
                 sl.keep_with_next(sl.heading("Next")),
                 sl.paragraph("b" * 35),
@@ -154,27 +154,28 @@ class TestRegionPagination:
             chars=50,
         )
 
-        first = sl.plan(document, target=V2_TARGET)
-        second = sl.plan(document, target=V2_TARGET, positions={"chapters": sl.Position(offset=1)})
+        first = sl.planning.plan(document, target=V2_TARGET)
+        second = sl.planning.plan(document, target=V2_TARGET, positions={"chapters": sl.sources.Position(offset=1)})
 
         assert "## Next" not in self._texts(first)
         assert self._texts(second)[:2] == ["## Next", "b" * 35]
 
     def test_unbreakable_rejects_an_oversized_group(self) -> None:
         document = sl.paged(
-            sl.section(sl.unbreakable(sl.group(sl.paragraph("a" * 30), sl.paragraph("b" * 30)))),
+            sl.block(sl.unbreakable(sl.group(sl.paragraph("a" * 30), sl.paragraph("b" * 30)))),
             key="atomic",
             chars=50,
         )
 
-        with pytest.raises(sl.UnsolvableLayoutError, match="unbreakable region child"):
-            sl.plan(document, target=V2_TARGET)
+        with pytest.raises(sl.errors.UnsolvableLayoutError, match="unbreakable region child"):
+            sl.planning.plan(document, target=V2_TARGET)
 
     def test_an_oversized_text_child_splits_losslessly(self) -> None:
-        document = sl.paged(sl.section(sl.paragraph("x" * 120)), key="prose", chars=50)
+        document = sl.paged(sl.block(sl.paragraph("x" * 120)), key="prose", chars=50)
 
         pages = [
-            sl.plan(document, target=V2_TARGET, positions={"prose": sl.Position(offset=index)}) for index in range(3)
+            sl.planning.plan(document, target=V2_TARGET, positions={"prose": sl.sources.Position(offset=index)})
+            for index in range(3)
         ]
 
         assert pages[0].scene.pagers[0].pages == 3
@@ -183,24 +184,24 @@ class TestRegionPagination:
 
     def test_widows_keep_three_children_on_the_last_page(self) -> None:
         document = sl.paged(
-            sl.section(*(sl.paragraph(str(index) * 20) for index in range(5))),
+            sl.block(*(sl.paragraph(str(index) * 20) for index in range(5))),
             key="widows",
             chars=65,
             widows=3,
         )
 
-        last = sl.plan(document, target=V2_TARGET, positions={"widows": sl.Position(offset=1)})
+        last = sl.planning.plan(document, target=V2_TARGET, positions={"widows": sl.sources.Position(offset=1)})
 
         assert self._texts(last)[:3] == ["2" * 20, "3" * 20, "4" * 20]
 
     def test_a_large_region_is_broken_without_a_size_dependent_heuristic(self) -> None:
         document = sl.paged(
-            sl.section(*(sl.paragraph("x" * 10) for _ in range(100))),
+            sl.block(*(sl.paragraph("x" * 10) for _ in range(100))),
             key="large-region",
             chars=100,
         )
 
-        first = sl.plan(document, target=V2_TARGET)
+        first = sl.planning.plan(document, target=V2_TARGET)
 
         assert first.scene.pagers[0].pages == 10
         assert self._texts(first)[:10] == ["x" * 10] * 10

@@ -20,12 +20,13 @@ from squid_layouts.discord.durability import (
 
 
 components = ComponentRegistry()
+defaults = sl.discord.MountDefaults()
 
 
 def restore_review(context: RestoreContext) -> sl.discord.Mount:
     if context.actor_id is None:
         raise SnapshotError("review sessions require an owner")
-    return sl.discord.Mount(
+    return defaults.mount(
         ReviewPanel(review_service),
         access=sl.discord.Owner(context.actor_id),
         timeout=None,
@@ -33,7 +34,7 @@ def restore_review(context: RestoreContext) -> sl.discord.Mount:
 
 
 components.register("review", version=1, restore=restore_review)
-sessions = sl.discord.SessionRegistry()
+sessions = sl.discord.SessionRegistry(defaults)
 runtime = DurableSessionRuntime(
     sessions=sessions,
     components=components,
@@ -80,9 +81,11 @@ recoverable and therefore return `NotDurable` without replacing an incumbent. A 
 publishes the first whole-session record and retires any collision-policy victims. Attach child messages through
 the returned `DurableSession.attach(..., recipe=...)` so parent and actor attribution remain in the same record.
 
-Visible mount commits trigger whole-session checkpoints. A failed checkpoint leaves the live UI usable, marks
-`session.health` as `CHECKPOINT_PENDING`, and enters the runtime's retry queue. Finishing the root deletes the
-record; process shutdown releases its claim without deleting it.
+Application runtime commits trigger whole-session checkpoints. This includes a render whose Discord edit was
+suppressed because its scene matched the live generation: hidden component state and runtime-only action bindings
+still advanced. A failed checkpoint leaves the live UI usable, marks
+`session.health` as `CHECKPOINT_PENDING`, and enters the runtime's retry queue. Finishing the root deletes the record;
+process shutdown releases its claim without deleting it.
 
 `RecoveryReport` separates restored, missing, expired, unreachable, incompatible, failed, and claimed-elsewhere
 records. Missing roots and expired sessions are deleted. Missing child branches are pruned. Temporarily

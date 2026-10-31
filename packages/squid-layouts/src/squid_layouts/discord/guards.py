@@ -12,9 +12,9 @@ from collections.abc import Set as AbstractSet
 
 import discord
 
-from squid_layouts.actions import ActionEvent
 from squid_layouts.discord.actions import native
 from squid_layouts.guards import Guard, permission
+from squid_layouts.interactions import ActionEvent
 from squid_layouts.text import TextLike
 
 

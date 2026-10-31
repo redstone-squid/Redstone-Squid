@@ -28,9 +28,12 @@ from typing import Any, Protocol
 
 import discord
 
+from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_layouts.discord.presentation import DiscordMode, DiscordPresentation, mode_of
 from squid_layouts.errors import LayoutError, LimitViolationError
+from squid_layouts.planning.adapter import ADAPTER_INTERACTION_DELIVERY, AdapterProfile
 from squid_layouts.planning.limits import LIMITS
+from squid_layouts.target_types import DiscordPyAdapter
 
 # Discord's way of saying the credentials behind a handle are gone.
 _STALE_CODES = frozenset({10015, 10062, 50027})
@@ -361,12 +364,27 @@ class Destination(Protocol):
     async def __call__(self, presentation: DiscordPresentation, /) -> DeliveryReceipt: ...
 
 
+class Messageable(Protocol):
+    """The channel-shaped part of discord.py's messageable protocol."""
+
+    async def send(
+        self,
+        *,
+        files: Sequence[discord.File],
+        allowed_mentions: discord.AllowedMentions,
+        content: str | None = ...,
+        embeds: Sequence[discord.Embed] = ...,
+        view: Any = ...,
+    ) -> discord.Message: ...
+
+
 def reply_to(
     ctx: Replyable,
     *,
     ephemeral: bool = False,
     files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
+    adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> Destination:
     """Answer the command that asked, in whatever channel it asked from.
 
@@ -374,6 +392,7 @@ def reply_to(
     ping someone *and* be readable in the notification, so this has to be reachable — but a
     UI library that pings by default would eventually ping a whole server by accident.
     """
+    require_discord_py_capability(adapter, ADAPTER_INTERACTION_DELIVERY, "deliver a command reply")
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
@@ -396,12 +415,32 @@ def reply_to(
     return send
 
 
+def send_to(
+    channel: Messageable,
+    *,
+    allowed_mentions: discord.AllowedMentions | None = None,
+) -> Destination:
+    """Send a complete presentation to a channel and retain bot-token edit authority."""
+    mentions = no_mentions() if allowed_mentions is None else allowed_mentions
+
+    async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
+        message = await channel.send(
+            files=presentation.files(),
+            allowed_mentions=mentions,
+            **presentation._send_fields(),
+        )
+        return DeliveryReceipt(message, handle_for(message, mode=presentation.mode))
+
+    return send
+
+
 def respond_to(
     interaction: discord.Interaction[Any],
     *,
     ephemeral: bool = True,
     wait: bool = False,
     allowed_mentions: discord.AllowedMentions | None = None,
+    adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
 ) -> Destination:
     """Answer an interaction, whether or not it was already responded to.
 
@@ -409,6 +448,7 @@ def respond_to(
     remains writable through `@original` without fetching it. Mentions stay off unless asked
     for; see `reply_to` for why that default is not negotiable.
     """
+    require_discord_py_capability(adapter, ADAPTER_INTERACTION_DELIVERY, "deliver an interaction response")
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(presentation: DiscordPresentation) -> DeliveryReceipt:

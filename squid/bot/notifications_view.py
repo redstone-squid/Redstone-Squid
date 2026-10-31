@@ -83,7 +83,7 @@ class NotificationPanel(sl.Component):
         if self.closed:
             # DISCORD_BLUE is house chrome, not a Tone, so the exact colour needs sl.section's
             # accent rather than sl.status's fixed tone palette.
-            return (sl.section(sl.paragraph(t(self.locale, _("Notifications closed"))), accent=DISCORD_BLUE),)
+            return (sl.section(sl.heading(t(self.locale, _("Notifications closed"))), accent=DISCORD_BLUE),)
         on, off = t(self.locale, _("On")), t(self.locale, _("Off"))
         fields = (
             sl.field(t(self.locale, _("Web inbox")), on if self.web_enabled else off),
@@ -94,18 +94,18 @@ class NotificationPanel(sl.Component):
         suspension_note = self._suspension_note()
         nodes: list[sl.LayoutNode] = [
             sl.section(
+                sl.heading(t(self.locale, _("Notifications"))),
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(*fields),
                 suspension_note and sl.note(suspension_note),
-                heading=t(self.locale, _("Notifications")),
             )
         ]
         if self.subscriptions:
             nodes.append(
-                sl.Choices(
+                sl.semantic.Choices(
                     key="unfollow",
                     choices=tuple(
-                        sl.Choice(
+                        sl.semantic.Choice(
                             str(subscription.id),
                             self.describe(subscription),
                             self.detail(subscription),

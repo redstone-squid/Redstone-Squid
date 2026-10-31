@@ -44,9 +44,12 @@ from typing import Any, Concatenate, Self, cast, override
 import anyio
 import discord
 
+from squid_layouts.discord.adapter import DISCORD_PY_27_ADAPTER, require_discord_py_capability
 from squid_layouts.discord.mount import ErrorHook
+from squid_layouts.planning.adapter import ADAPTER_DISPATCH, AdapterProfile
 from squid_layouts.profiling import NoOpProfiler, OperationKind, OperationRecorder, Profiler, TraceOutcome, TraceResult
 from squid_layouts.routing import Route
+from squid_layouts.target_types import DiscordPyAdapter
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()
@@ -330,7 +333,9 @@ class Router[BotT: discord.Client]:
         on_error: ErrorHook | None = None,
         acknowledgement_timeout: float = 2.5,
         profiler: Profiler = _NOOP_PROFILER,
+        adapter: AdapterProfile[DiscordPyAdapter] = DISCORD_PY_27_ADAPTER,
     ) -> None:
+        require_discord_py_capability(adapter, ADAPTER_DISPATCH, "dispatch routed interactions")
         namespace_group = namespace if isinstance(namespace, RouteGroup) else None
         namespace_value = namespace if isinstance(namespace, str) else None
         if namespace_group is not None:

@@ -98,11 +98,11 @@ def apply_guardrails(limits: Mapping[str, int]) -> None:
     if resource is None:  # pragma: no cover - Windows
         return
 
-    _set_limit(resource.RLIMIT_AS, limits["memory_bytes"] + _current_address_space_bytes())
-    _set_limit(resource.RLIMIT_CPU, limits["cpu_seconds"])
-    _set_limit(resource.RLIMIT_FSIZE, limits["file_size_bytes"])
+    _set_limit(resource.RLIMIT_AS, limits["memory_bytes"] + _current_address_space_bytes())  # pyrefly: ignore[missing-attribute]
+    _set_limit(resource.RLIMIT_CPU, limits["cpu_seconds"])  # pyrefly: ignore[missing-attribute]
+    _set_limit(resource.RLIMIT_FSIZE, limits["file_size_bytes"])  # pyrefly: ignore[missing-attribute]
     try:
-        os.nice(5)
+        os.nice(5)  # pyrefly: ignore[missing-attribute]
     except OSError:  # pragma: no cover - permitted to fail in restricted sandboxes
         logger.debug("Could not lower worker priority.", exc_info=True)
 
@@ -127,16 +127,16 @@ def _current_address_space_bytes(statm_path: Path = STATM_PATH) -> int:
             size_pages = int(handle.readline().split()[0])
     except OSError, ValueError, IndexError:
         return 0
-    return size_pages * resource.getpagesize()
+    return size_pages * resource.getpagesize()  # pyrefly: ignore[missing-attribute]
 
 
 def _set_limit(which: int, soft: int) -> None:
     """Lower one resource limit, never raising it above the inherited hard limit."""
     assert resource is not None
     try:
-        _, hard = resource.getrlimit(which)
-        ceiling = soft if hard == resource.RLIM_INFINITY else min(soft, hard)
-        resource.setrlimit(which, (ceiling, hard))
+        _, hard = resource.getrlimit(which)  # pyrefly: ignore[missing-attribute]
+        ceiling = soft if hard == resource.RLIM_INFINITY else min(soft, hard)  # pyrefly: ignore[missing-attribute]
+        resource.setrlimit(which, (ceiling, hard))  # pyrefly: ignore[missing-attribute]
     except OSError, ValueError:  # pragma: no cover - depends on host policy
         logger.warning("Could not apply resource limit %s.", which, exc_info=True)
 

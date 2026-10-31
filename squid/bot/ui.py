@@ -24,6 +24,7 @@ DISCORD_YELLOW = 0xFAA61A
 DISCORD_GREEN = 0x43B581
 DISCORD_BLUE = 0x5865F2
 DISCORD_GREY = 0x4F545C
+_DEFAULT_EXPIRY = ui.discord.PauseUpdates()
 
 __all__ = [
     "CHROME",
@@ -32,6 +33,7 @@ __all__ = [
     "DISCORD_GREY",
     "DISCORD_RED",
     "DISCORD_YELLOW",
+    "MOUNT_DEFAULTS",
     "CardField",
     "CardSection",
     "L",
@@ -48,8 +50,10 @@ __all__ = [
     "link_layout",
     "localization_for",
     "render_item",
+    "render_presentation",
     "render_static",
     "reply",
+    "reply_presentation",
     "send_component",
     "text_layout",
     "truncate_display_text",
@@ -73,10 +77,10 @@ class CardSection:
     fields: Sequence[CardField]
 
 
-def L(message: str | Template, /, **params: object) -> ui.Message:
+def L(message: str | Template, /, **params: object) -> ui.text.Message:
     """Mark and defer a translatable string: ``L(t"Page {page} of {pages}")``."""
     if isinstance(message, str):
-        return ui.Message(message, params)
+        return ui.text.Message(message, params)
     if params:
         detail = "template strings already contain their interpolation values"
         raise TypeError(detail)
@@ -91,23 +95,23 @@ def L(message: str | Template, /, **params: object) -> ui.Message:
         parts.append("{" + name + "}")
         values[name] = interpolation.value
     parts.append(message.strings[-1])
-    return ui.Message("".join(parts), values)
+    return ui.text.Message("".join(parts), values)
 
 
-def localization_for(locale: str | None) -> ui.Localization:
+def localization_for(locale: str | None) -> ui.text.Localization:
     """Build the framework localization backed by the bot's negotiated catalogue."""
     resolved = negotiate_locale(locale)
     catalog = catalog_for(resolved)
-    return ui.Localization(locale=resolved, gettext=catalog.gettext, ngettext=catalog.ngettext)
+    return ui.text.Localization(locale=resolved, gettext=catalog.gettext, ngettext=catalog.ngettext)
 
 
-def _try_again_in(seconds: float) -> ui.Message:
+def _try_again_in(seconds: float) -> ui.text.Message:
     """Round a guard's remaining cooldown up to whole seconds before wording it."""
     whole = max(1, ceil(seconds))
     return L(t"Try again in {whole} seconds.")
 
 
-CHROME = ui.Chrome(
+CHROME = ui.chrome.Chrome(
     and_n_more=lambda count: L(t"…and {count} more."),
     not_yours=L(t"These list controls belong to someone else."),
     session_ended=L(t"This session has ended."),
@@ -115,6 +119,8 @@ CHROME = ui.Chrome(
     try_again_in=_try_again_in,
     working=L(t"Working…"),
     updates_paused=L(t"Live updates paused — press any control to resume."),
+    session_expiring=L(t"This session is about to expire."),
+    continue_session=L(t"Continue Session"),
     previous=L(t"Previous"),
     next=L(t"Next"),
     back=L(t"Back"),
@@ -176,6 +182,38 @@ async def reply(
     extra: dict[str, Any] = {"files": list(files)} if files else {}
     ephemeral = visibility == "personal" and personal(ctx)
     return await ctx.send(view=view, ephemeral=ephemeral, allowed_mentions=ui.discord.delivery.no_mentions(), **extra)
+
+
+async def reply_presentation(
+    ctx: Context[Any],
+    presentation: ui.discord.DiscordPresentation,
+    *,
+    visibility: Visibility = "public",
+    allowed_mentions: discord.AllowedMentions | None = None,
+) -> ui.discord.DeliveryReceipt:
+    """Deliver a complete Squid presentation through the selected command audience."""
+    from squid.bot.utils.visibility import personal
+
+    if isinstance(visibility, Private):
+        from squid.bot.utils.visibility import deliver_privately
+
+        message = await deliver_privately(
+            ctx,
+            presentation,
+            reason=visibility.reason,
+            allowed_mentions=allowed_mentions,
+        )
+        if message is None:
+            raise ui.discord.DeliveryAbandoned
+        handle = ui.discord.delivery.handle_for(message, mode=presentation.mode)
+        return ui.discord.DeliveryReceipt(message, handle)
+
+    destination = ui.discord.reply_to(
+        ctx,
+        ephemeral=visibility == "personal" and personal(ctx),
+        allowed_mentions=allowed_mentions,
+    )
+    return await destination(presentation)
 
 
 def destination(
@@ -279,6 +317,23 @@ def render_static(
     ).layout
 
 
+def render_presentation(
+    nodes: ui.DocumentLike,
+    *,
+    locale: str | None = None,
+    strict: bool = False,
+    reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
+) -> ui.discord.DiscordPresentation:
+    """Render a complete presentation for framework-owned delivery."""
+    return ui.discord.render_static(
+        nodes,
+        chrome=CHROME,
+        localization=localization_for(locale),
+        strict=strict,
+        reservation=reservation,
+    )
+
+
 def truncate_display_text(content: str, limit: int) -> str:
     """Fit text into a Discord display budget with an explicit marker."""
     if len(content) <= limit:
@@ -295,24 +350,28 @@ async def _component_error_hook(interaction: discord.Interaction, error: Excepti
     await handle_interaction_error(interaction, error, surface=f"component:{source}")
 
 
+MOUNT_DEFAULTS = ui.discord.MountDefaults(chrome=CHROME, on_error=_component_error_hook)
+
+
 def create_mount(
     component: ui.Component,
     *,
     access: ui.discord.AccessPolicy,
     locale: str | None = None,
-    chrome: ui.Chrome | None = None,
+    chrome: ui.chrome.Chrome | None = None,
     timeout: float = 180,
     reactor: ui.discord.Reactor | None = None,
+    expiry: ui.discord.ExpiryPolicy | None = _DEFAULT_EXPIRY,
 ) -> ui.discord.Mount:
     """A mount wired to the bot's chrome and shared interaction error handler."""
-    return ui.discord.Mount(
+    defaults = MOUNT_DEFAULTS if chrome is None else MOUNT_DEFAULTS.replace(chrome=chrome)
+    return defaults.mount(
         component,
         access=access,
-        chrome=chrome if chrome is not None else CHROME,
         localization=localization_for(locale),
         timeout=timeout,
-        on_error=_component_error_hook,
         scheduler=reactor,
+        expiry=expiry,
     )
 
 
@@ -324,9 +383,15 @@ async def send_component(
     locale: str | None = None,
     timeout: float = 180,
     visibility: Visibility = "public",
+    reactor: ui.discord.Reactor | None = None,
 ) -> ui.discord.Mount:
-    """Mount a component and send it as the reply to a command."""
-    mount = create_mount(component, access=access, locale=locale, timeout=timeout)
+    """Mount a component and send it as the reply to a command.
+
+    Pass ``reactor`` for a panel that must react to something another mount changes -- a
+    shared namespace, or a bot topic. Without one the mount is refreshed only by its own
+    clicks.
+    """
+    mount = create_mount(component, access=access, locale=locale, timeout=timeout, reactor=reactor)
     await mount.send(destination(ctx, visibility=visibility, locale=locale))
     return mount
 
@@ -374,7 +439,7 @@ class PagedList(ui.Component):
         )
         return [ui.primitives.Panel(children=(ui.primitives.Heading(self.title), body), accent=self.accent_colour)]
 
-    def _page_footer(self, page: int, pages: int) -> ui.Message:
+    def _page_footer(self, page: int, pages: int) -> ui.text.Message:
         total = len(self.entries)
         return L(t"Page {page} of {pages} · {total} in total")
 
@@ -389,14 +454,14 @@ class PagedList(ui.Component):
         )
 
 
-def _fields(fields: Sequence[CardField]) -> tuple[ui.Field, ...]:
+def _fields(fields: Sequence[CardField]) -> tuple[ui.semantic.Field, ...]:
     return tuple(ui.field(field.name, field.value) for field in fields)
 
 
-def _groups(sections: Sequence[CardSection]) -> tuple[ui.Section, ...]:
+def _groups(sections: Sequence[CardSection]) -> tuple[ui.semantic.Section, ...]:
     # A nested section per group: each field steps its own Condense ladder independently
     # rather than a whole group stepping in lockstep — finer-grained, not a regression.
-    return tuple(ui.section(ui.fields(*_fields(s.fields)), heading=s.title) for s in sections if s.fields)
+    return tuple(ui.section(ui.heading(s.title), ui.fields(*_fields(s.fields))) for s in sections if s.fields)
 
 
 def card_layout(
@@ -413,6 +478,7 @@ def card_layout(
     """Create a standalone V2 card."""
     extra_media = media[1:]
     node = ui.section(
+        ui.heading(title),
         # The body is the card's shock absorber: truncate lets it give up characters under
         # pressure before a field or the footer loses any.
         description and ui.truncate(ui.paragraph(description)),
@@ -422,7 +488,6 @@ def card_layout(
         *_groups(sections),
         bool(extra_media) and ui.media(*extra_media, key="media"),
         footer and ui.note(footer),
-        heading=title,
         accent=accent_colour,
         thumbnail=media[0] if media else None,
     )
@@ -437,16 +502,16 @@ def text_layout(
     # on an overlong message. This is the bot's most-used reply path, so it clips.
     node: ui.LayoutNode = ui.truncate(ui.paragraph(content))
     if accent_colour is not None:
-        node = ui.section(node, accent=accent_colour)
+        node = ui.block(node, accent=accent_colour)
     return render_static([node], locale=locale)
 
 
 def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
-    if isinstance(value, ui.Message):
+    if isinstance(value, ui.text.Message):
         plural = None if value.plural is None else prefix + value.plural
-        return ui.Message(prefix + value.template, value.params, value.dialect, plural)
-    if isinstance(value, ui.ResolvedText):
-        return ui.ResolvedText(prefix + value.content, value.dialect)
+        return ui.text.Message(prefix + value.template, value.params, value.dialect, plural)
+    if isinstance(value, ui.text.ResolvedText):
+        return ui.text.ResolvedText(prefix + value.content, value.dialect)
     return prefix + value
 
 
@@ -506,9 +571,9 @@ def link_layout(
 ) -> discord.ui.LayoutView:
     """Create a card whose primary action opens a URL."""
     node = ui.section(
+        ui.heading(title),
         description and ui.truncate(ui.paragraph(description)),
         ui.actions(ui.link(label, url, key="open-link"), key="link"),
-        heading=title,
         accent=DISCORD_GREEN,
     )
     return render_static([node], locale=locale)

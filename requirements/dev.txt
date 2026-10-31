@@ -1246,6 +1246,7 @@ packaging==26.3 \
     #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-sqlalchemy
     #   pytest
+    #   squid-layouts
     #   wheel
 parse==1.22.4 \
     --hash=sha256:706d458feed5a81b02768d3156e8070baf6cee7d150a3a3c0cd43101a875c3b5 \

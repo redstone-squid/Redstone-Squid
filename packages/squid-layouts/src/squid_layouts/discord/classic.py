@@ -15,6 +15,7 @@ import discord
 
 from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome
+from squid_layouts.discord.adapter import require_discord_py_target
 from squid_layouts.discord.attachments import files_for
 from squid_layouts.discord.classic_renderer import ClassicRenderer, Wire
 from squid_layouts.discord.fragments import _reject_dispatchable
@@ -31,6 +32,7 @@ from squid_layouts.discord.target import CLASSIC_TARGET, Target
 from squid_layouts.document import DocumentLike
 from squid_layouts.errors import ExistingLayoutError
 from squid_layouts.palette import DEFAULT_PALETTE, Palette
+from squid_layouts.planning.adapter import ADAPTER_RENDER_CLASSIC
 from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.limits import CLASSIC_LIMITS, CONTROLS, EMBED_TEXT, EMBEDS, ClassicLimits
 from squid_layouts.planning.navigation import PlannedNav
@@ -40,8 +42,9 @@ from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.profiling import OperationRecorder
 from squid_layouts.runtime.presentation import PresentationSession
-from squid_layouts.scene.model import PlanReport, PlanResult
+from squid_layouts.scene.model import PlanReport, PlanResult, SceneClassicMessage
 from squid_layouts.sources import Position
+from squid_layouts.target_types import ClassicTarget, DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization
 
 logger = logging.getLogger(__name__)
@@ -59,7 +62,7 @@ def compose(
     *,
     wire: Wire | None = None,
     renderer: ClassicRenderer | None = None,
-    target: Target = CLASSIC_TARGET,
+    target: Target[ClassicTarget, DiscordPyAdapter, SceneClassicMessage] = CLASSIC_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
@@ -73,8 +76,9 @@ def compose(
     profile: OperationRecorder | None = None,
 ):
     """Plan a logical document, then draw the complete classic message it resolves to."""
-    from squid_layouts.discord.compose import Composition, _span
+    from squid_layouts.discord.composition import Composition, _span
 
+    adapter = require_discord_py_target(target, ADAPTER_RENDER_CLASSIC, "compose a classic message")
     with _span(profile, "planner") as planner_span:
         result = plan_document(
             rendered,
@@ -99,7 +103,7 @@ def compose(
             profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
             profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
             profile.increment("planner.states_explored", result.metrics.states_explored)
-    drawer = renderer if renderer is not None else ClassicRenderer(limits=_classic_limits(target))
+    drawer = renderer if renderer is not None else ClassicRenderer(limits=_classic_limits(target), adapter=adapter)
     with _span(profile, "renderer"):
         presentation = drawer.draw(result.scene, plan=result, wire=wire)
     if result.report.events:
@@ -110,7 +114,7 @@ def compose(
 def render_static(
     nodes: DocumentLike,
     *,
-    target: Target = CLASSIC_TARGET,
+    target: Target[ClassicTarget, DiscordPyAdapter, SceneClassicMessage] = CLASSIC_TARGET,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
