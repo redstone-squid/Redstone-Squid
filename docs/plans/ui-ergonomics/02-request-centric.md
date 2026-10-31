@@ -55,8 +55,8 @@ it (`interaction.extras` for interactions; a weak table for `Context`, `Message`
 component events), so every layer that receives the source gets the same request:
 
 ```python
-req = await sd.request(interaction)          # anywhere: resolves or returns the memoized one
-req = sd.request(event)                      # component handlers: sync, the event carries it
+req = await sd.request(interaction)  # anywhere: resolves or returns the memoized one
+req = sd.request(event)  # component handlers: sync, the event carries it
 ```
 
 `Request` owns everything the old three surfaces shared:

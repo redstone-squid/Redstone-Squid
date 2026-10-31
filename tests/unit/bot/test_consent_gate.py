@@ -167,7 +167,9 @@ async def test_cancel_and_privacy_never_record_consent() -> None:
     assert privacy_prompt.consent is None
     assert not privacy_prompt.closed
     assert answers == [None]
-    assert privacy_responder.notices == [(resolve_text(tr(PRIVACY_NOTICE), NEUTRAL).content, sl.interactions.Visibility.PRIVATE)]
+    assert privacy_responder.notices == [
+        (resolve_text(tr(PRIVACY_NOTICE), NEUTRAL).content, sl.interactions.Visibility.PRIVATE)
+    ]
 
 
 def answer(view_holder: list[Any], *, agree: bool) -> None:

@@ -98,6 +98,7 @@ class _Telemetry:
     error_status: Callable[[], object]
     instrument_api_app: Callable[[FastAPI], None]
 
+
 CORRELATION_REFERENCE_LENGTH = 12
 """Hex characters shown to users: 48 bits, and the width of the untraced fallback.
 
@@ -403,9 +404,7 @@ def extracted_trace_span(
         yield TraceSpan()
         return
     parent = telemetry.propagator.extract(carrier)
-    with telemetry.worker_tracer.start_as_current_span(
-        name, context=parent, attributes=dict(attributes or {})
-    ) as span:
+    with telemetry.worker_tracer.start_as_current_span(name, context=parent, attributes=dict(attributes or {})) as span:
         facade = TraceSpan(span, telemetry.error_status)
         try:
             yield facade
