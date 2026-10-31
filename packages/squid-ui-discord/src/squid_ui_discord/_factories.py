@@ -1,4 +1,4 @@
-"""Shared factories for exact Discord layout nodes."""
+"""Factories shared by classic and Components V2 messages."""
 
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Literal
