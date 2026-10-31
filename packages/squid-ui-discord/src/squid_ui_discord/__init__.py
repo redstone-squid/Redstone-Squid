@@ -104,6 +104,8 @@ from squid_ui_discord.delivery import (
     respond_to,
     send_to,
 )
+from squid_ui_discord.devtools import open_devtools
+from squid_ui_discord.devtools_view import DevToolsSection
 from squid_ui_discord.facade import DiscordUI, Scope
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
@@ -247,6 +249,7 @@ __all__ = [
     "CommandPolicy",
     "CommandResult",
     "Deferral",
+    "DevToolsSection",
     "DialogPresenter",
     "DiscordUI",
     "DiscordUIConfig",
@@ -369,6 +372,7 @@ __all__ = [
     "native",
     "navigation",
     "navigation_controls",
+    "open_devtools",
     "owner_message_root",
     "prefix_command",
     "render_item",

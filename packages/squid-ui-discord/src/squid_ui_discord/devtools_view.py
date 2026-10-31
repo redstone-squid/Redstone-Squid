@@ -10,9 +10,15 @@ it prints is Python identifiers, state field names and planner event codes, whic
 catalogue would improve.
 """
 
+import dataclasses
+import json
 import pprint
-from collections.abc import Hashable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Hashable, Iterable, Sequence
+from datetime import datetime
+from enum import Enum, StrEnum
 from typing import TYPE_CHECKING, Any, override
+
+import discord
 
 import squid_ui as sl
 
@@ -20,9 +26,10 @@ import squid_ui as sl
 # a host would write it. Safe despite `__init__` importing this module: every use below is
 # either a deferred annotation or inside a function body, so nothing resolves at import.
 import squid_ui_discord
-from squid_ui.profiling import RuntimeSnapshot
+from squid_reactivity.actions import ActionLedger
+from squid_ui.profiling import RuntimeSnapshot, RuntimeTrace
 from squid_ui.runtime.topics import BusSnapshot
-from squid_ui_discord.devtools_runtime import DevToolsRuntime
+from squid_ui_discord.devtools_runtime import DevToolsAction, DevToolsRuntime, DurableRecordInspection
 
 if TYPE_CHECKING:
     # Annotations only; see the note in operations.py about the `durable` extra.
@@ -34,6 +41,19 @@ SESSION_SECONDS = 300
 
 _SELECT_LIMIT = 25
 """Discord's option cap. The list itself pages; the picker offers the newest of them."""
+
+
+class DevToolsSection(StrEnum):
+    """Stable deep-link targets in the operational dashboard."""
+
+    OVERVIEW = "overview"
+    ROOTS = "roots"
+    SESSIONS = "sessions"
+    ROUTES = "routes"
+    ACTIVITY = "activity"
+    QUEUES = "queues"
+    PROFILE = "profile"
+    PERSISTENCE = "persistence"
 
 
 class MessageRootInspector(sl.Component):
@@ -221,22 +241,41 @@ class OperationalInspector(sl.Component):
     revision: int = sl.state(0)
     notice: str | None = sl.state(None)
     confirming_session: str | None = sl.state(None)
+    confirming_action: str | None = sl.state(None)
+    selected_records: tuple[str, ...] = sl.state(())
 
-    def __init__(self, runtime: DevToolsRuntime) -> None:
+    def __init__(
+        self,
+        runtime: DevToolsRuntime,
+        *,
+        client: discord.Client | None = None,
+        action_ledger: ActionLedger | None = None,
+    ) -> None:
         self._devtools_runtime = runtime
+        self._client = client
+        self._action_ledger = action_ledger
+
+    @sl.resource(pending=sl.resources.PendingMode.EXPLICIT)
+    async def persistence_records(self) -> tuple[DurableRecordInspection, ...]:
+        """Load persisted record metadata while the persistence section exists."""
+        return await self._devtools_runtime.records()
 
     @override
     def render(self) -> Sequence[sl.LayoutNode]:
         snapshot = self._devtools_runtime.snapshot()
-        if self.section == "roots":
+        if self.section == DevToolsSection.ROOTS:
             nodes = self._roots(snapshot)
-        elif self.section == "sessions":
+        elif self.section == DevToolsSection.SESSIONS:
             nodes = self._sessions(snapshot)
-        elif self.section == "queues":
+        elif self.section == DevToolsSection.ROUTES:
+            nodes = self._routes()
+        elif self.section == DevToolsSection.ACTIVITY:
+            nodes = self._activity(snapshot)
+        elif self.section == DevToolsSection.QUEUES:
             nodes = self._queues(snapshot)
-        elif self.section == "profile":
+        elif self.section == DevToolsSection.PROFILE:
             nodes = self._profile(snapshot)
-        elif self.section == "persistence":
+        elif self.section == DevToolsSection.PERSISTENCE:
             nodes = self._persistence(snapshot)
         else:
             nodes = self._overview(snapshot)
@@ -254,7 +293,16 @@ class OperationalInspector(sl.Component):
             f"persistence {_durable_summary(snapshot.durable)}",
         ]
         return [
-            sl.section(sl.heading("Operational dashboard"), sl.code("\n".join(counts))),
+            sl.section(
+                sl.heading("Operational dashboard"),
+                sl.code("\n".join(counts)),
+                sl.download(
+                    "Download snapshot",
+                    operational_attachment(snapshot),
+                    key="operational-snapshot",
+                    description="Bounded JSON diagnostics from this refresh",
+                ),
+            ),
             self._section_choices(),
             self._controls(),
         ]
@@ -271,7 +319,7 @@ class OperationalInspector(sl.Component):
                     )
                     or "(none)"
                 )
-                return [
+                children: list[sl.LayoutNode] = [
                     sl.section(
                         sl.heading(f"MessageRoot {self.message_root_id}"),
                         sl.bullets(
@@ -283,8 +331,39 @@ class OperationalInspector(sl.Component):
                             key="root_detail",
                         ),
                     ),
-                    self._controls(back=True),
                 ]
+                children.extend(
+                    (
+                        sl.section(sl.heading("Plan"), sl.code(plan_text(detail.snapshot))),
+                        sl.section(
+                            sl.heading("Component state"),
+                            sl.code(_dump(_exported_state(message_root))),
+                        ),
+                        sl.section(sl.heading("Reactivity"), sl.code(_dump_lines(_reactivity(message_root)))),
+                        sl.section(
+                            sl.heading("Presentation"),
+                            sl.code(_dump(_presentation(message_root.presentation))),
+                        ),
+                    )
+                )
+                asset = scene_attachment(detail.snapshot)
+                if asset is not None:
+                    children.append(
+                        sl.download(
+                            "Download scene",
+                            asset,
+                            key="scene",
+                            description="Committed scene protocol JSON",
+                        )
+                    )
+                if self._devtools_runtime.policy.permits(DevToolsAction.REFRESH_MOUNT):
+                    children.append(
+                        sl.action_controls(
+                            sl.action_control("Refresh root", self._refresh_selected_root, key="refresh-root"),
+                            key="root-actions",
+                        )
+                    )
+                return (*children, self._controls(back=True))
             notice = f"MessageRoot `{self.message_root_id}` is no longer live."
         else:
             notice = None
@@ -320,19 +399,7 @@ class OperationalInspector(sl.Component):
         if self.session_id is not None:
             session = next((item for item in snapshot.sessions if item.id == self.session_id), None)
             if session is not None:
-                confirmation = (
-                    sl.action_controls(
-                        sl.action_control("Confirm close", self._confirm_close_session, key="confirm-close"),
-                        sl.action_control("Cancel", self._cancel_close_session, key="cancel-close"),
-                        key="confirmation",
-                    )
-                    if self.confirming_session == session.id
-                    else sl.action_controls(
-                        sl.action_control("Close session", self._request_close_session, key="close-session"),
-                        key="session-actions",
-                    )
-                )
-                return [
+                nodes: list[sl.LayoutNode] = [
                     sl.section(
                         sl.heading(f"Session {session.id}"),
                         sl.bullets(
@@ -344,9 +411,22 @@ class OperationalInspector(sl.Component):
                             key="session_detail",
                         ),
                     ),
-                    confirmation,
-                    self._controls(back=True),
                 ]
+                if self._devtools_runtime.policy.permits(DevToolsAction.CLOSE_SESSION):
+                    confirmation = (
+                        sl.action_controls(
+                            sl.action_control("Confirm close", self._confirm_close_session, key="confirm-close"),
+                            sl.action_control("Cancel", self._cancel_close_session, key="cancel-close"),
+                            key="confirmation",
+                        )
+                        if self.confirming_session == session.id
+                        else sl.action_controls(
+                            sl.action_control("Close session", self._request_close_session, key="close-session"),
+                            key="session-actions",
+                        )
+                    )
+                    nodes.append(confirmation)
+                return (*nodes, self._controls(back=True))
             notice = f"Session `{self.session_id}` is no longer live."
         else:
             notice = None
@@ -386,7 +466,14 @@ class OperationalInspector(sl.Component):
                 f"  {topic.topic} subscribers={topic.subscribers} queued={topic.queued} in_flight={topic.in_flight}"
                 for topic in snapshot.topics.topics
             )
-        return [sl.section(sl.heading("Queues and subscribers"), sl.code("\n".join(lines))), self._controls(back=True)]
+        nodes: list[sl.LayoutNode] = [sl.section(sl.heading("Queues and subscribers"), sl.code("\n".join(lines)))]
+        if self._devtools_runtime.policy.permits(DevToolsAction.WAIT_IDLE):
+            nodes.append(
+                sl.action_controls(
+                    sl.action_control("Wait for idle", self._wait_idle, key="wait-idle"), key="queue-actions"
+                )
+            )
+        return (*nodes, self._controls(back=True))
 
     def _profile(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         health = snapshot.profiler.health
@@ -398,10 +485,32 @@ class OperationalInspector(sl.Component):
             f"failed   {health.retained_failed}",
             f"deadline {health.retained_deadline_misses}",
         ]
-        return [sl.section(sl.heading("Profiler"), sl.code("\n".join(lines))), self._controls(back=True)]
+        retained = (
+            *snapshot.profiler.recent,
+            *snapshot.profiler.slow,
+            *snapshot.profiler.failed,
+            *snapshot.profiler.deadline_misses,
+        )
+        traces = sorted({trace.trace_id: trace for trace in retained}.values(), key=lambda trace: trace.started)[-12:]
+        nodes: list[sl.LayoutNode] = [
+            sl.section(sl.heading("Profiler"), sl.code("\n".join(lines))),
+            sl.section(
+                sl.heading("Recent traces"),
+                sl.code("\n".join(_trace_summary(trace) for trace in traces) or "No retained traces."),
+            ),
+        ]
+        if self._devtools_runtime.policy.permits(DevToolsAction.CLEAR_PROFILE):
+            nodes.append(
+                sl.action_controls(
+                    sl.action_control("Clear profile", self._clear_profile, key="clear-profile"),
+                    key="profile-actions",
+                )
+            )
+        return (*nodes, self._controls(back=True))
 
     def _persistence(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
         durable = snapshot.durable
+        record_nodes: list[sl.LayoutNode] = []
         if durable is None:
             body = "No durable session runtime is configured."
         else:
@@ -413,12 +522,129 @@ class OperationalInspector(sl.Component):
                     f"recovery {_recovery_summary(durable.last_recovery)}",
                 )
             )
-        return [sl.section(sl.heading("Persistence"), sl.code(body)), self._controls(back=True)]
+            record_state = self.persistence_records.status
+            previous = (
+                record_state.previous if isinstance(record_state, sl.resources.Pending | sl.resources.Failed) else None
+            )
+            if isinstance(record_state, sl.resources.Ready):
+                records = record_state.value
+            elif previous is not None:
+                records = previous.value
+            else:
+                records = ()
+            if isinstance(record_state, sl.resources.Pending) and previous is None:
+                record_nodes.append(sl.status("Loading persisted records."))
+            elif isinstance(record_state, sl.resources.Failed) and previous is None:
+                record_nodes.append(sl.status(f"Record load failed: {record_state.error}", tone=sl.Tone.WARNING))
+            else:
+                record_lines = (
+                    "No persisted records."
+                    if not records
+                    else "\n".join(
+                        f"{record.key} scope={record.scope} snapshot={record.snapshot_bytes}B record={record.record_bytes}B"
+                        for record in records
+                    )
+                )
+                record_nodes.append(sl.section(sl.heading("Persisted records"), sl.code(record_lines)))
+                if records and self._devtools_runtime.policy.permits(DevToolsAction.PURGE_PERSISTENCE):
+                    record_nodes.append(
+                        sl.choices(
+                            *(
+                                sl.choice(record.key, key=record.key, description=record.scope)
+                                for record in records[:25]
+                            ),
+                            key="purge-records",
+                            selection=sl.controlled(self.selected_records, self._select_records),
+                            minimum=0,
+                            maximum=min(25, len(records)),
+                        )
+                    )
+        nodes: list[sl.LayoutNode] = [sl.section(sl.heading("Persistence"), sl.code(body)), *record_nodes]
+        actions: list[sl.semantic.ActionControl] = []
+        if durable is not None and self._devtools_runtime.policy.permits(DevToolsAction.FLUSH_PERSISTENCE):
+            actions.append(sl.action_control("Flush", self._flush_persistence, key="flush"))
+        if durable is not None and self._devtools_runtime.policy.permits(DevToolsAction.RECOVER_PERSISTENCE):
+            if self.confirming_action == DevToolsAction.RECOVER_PERSISTENCE:
+                actions.extend(
+                    (
+                        sl.action_control("Confirm recovery", self._confirm_recovery, key="confirm-recovery"),
+                        sl.action_control("Cancel", self._cancel_action, key="cancel-recovery"),
+                    )
+                )
+            else:
+                actions.append(sl.action_control("Recover", self._request_recovery, key="recover"))
+        if (
+            durable is not None
+            and self.selected_records
+            and self._devtools_runtime.policy.permits(DevToolsAction.PURGE_PERSISTENCE)
+        ):
+            if self.confirming_action == DevToolsAction.PURGE_PERSISTENCE:
+                actions.extend(
+                    (
+                        sl.action_control("Confirm purge", self._confirm_purge, key="confirm-purge"),
+                        sl.action_control("Cancel", self._cancel_action, key="cancel-purge"),
+                    )
+                )
+            else:
+                actions.append(sl.action_control("Purge selected", self._request_purge, key="purge"))
+        if actions:
+            nodes.append(sl.action_controls(*actions, key="persistence-actions"))
+        return (*nodes, self._controls(back=True))
+
+    def _routes(self) -> Sequence[sl.LayoutNode]:
+        if self._client is None:
+            body = "Route inspection is unavailable because no Discord client was supplied."
+        else:
+            from squid_ui_discord.routing import routers
+
+            lines: list[str] = []
+            for index, router in enumerate(routers(self._client), start=1):
+                lines.append(f"router {index}: {type(router).__module__}.{type(router).__qualname__}")
+                for route in router.describe():
+                    group = route.group_prefix or "ungrouped"
+                    lines.append(
+                        f"  {route.component.value:6} {route.format} [{group}] -> "
+                        f"{route.handler_module}.{route.handler_qualname}"
+                    )
+                    if route.aliases:
+                        lines.append(f"         aliases: {', '.join(route.aliases)}")
+                    if route.middleware:
+                        lines.append(f"         middleware: {' -> '.join(route.middleware)}")
+            body = "No routers are installed on this client." if not lines else "\n".join(lines)
+        return (sl.section(sl.heading("Routed controls"), sl.code(body)), self._controls(back=True))
+
+    def _activity(self, snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot) -> Sequence[sl.LayoutNode]:
+        events = () if self._action_ledger is None else self._action_ledger.events[-20:]
+        event_text = (
+            "No retained causal events." if not events else "\n".join(_event_summary(event) for event in events)
+        )
+        retained = (
+            *snapshot.profiler.recent,
+            *snapshot.profiler.slow,
+            *snapshot.profiler.failed,
+            *snapshot.profiler.deadline_misses,
+        )
+        dispatches = sorted(
+            {
+                trace.trace_id: trace for trace in retained if trace.operation.value in {"dispatch", "route_dispatch"}
+            }.values(),
+            key=lambda trace: trace.started,
+        )[-20:]
+        timeline = (
+            "No retained dispatches." if not dispatches else "\n".join(_trace_summary(trace) for trace in dispatches)
+        )
+        return (
+            sl.section(sl.heading("Action results"), sl.code(event_text)),
+            sl.section(sl.heading("Dispatch timeline"), sl.code(timeline)),
+            self._controls(back=True),
+        )
 
     def _section_choices(self) -> sl.LayoutNode:
         return sl.choices(
             sl.choice("Roots", key="roots"),
             sl.choice("Sessions", key="sessions"),
+            sl.choice("Routes", key="routes"),
+            sl.choice("Activity", key="activity"),
             sl.choice("Queues", key="queues"),
             sl.choice("Profiler", key="profile"),
             sl.choice("Persistence", key="persistence"),
@@ -442,12 +668,18 @@ class OperationalInspector(sl.Component):
         self.section = event.selected[0]
         self.message_root_id = None
         self.session_id = None
+        self.selected_records = ()
+        self.confirming_action = None
 
     async def _open_root(self, event: sl.ChoiceEvent) -> None:
         self.message_root_id = event.selected[0]
 
     async def _open_session(self, event: sl.ChoiceEvent) -> None:
         self.session_id = event.selected[0]
+
+    async def _select_records(self, event: sl.ChoiceEvent) -> None:
+        self.selected_records = event.selected
+        self.confirming_action = None
 
     async def _request_close_session(self, event: sl.ActionEvent) -> None:
         self.confirming_session = self.session_id
@@ -475,13 +707,98 @@ class OperationalInspector(sl.Component):
         self.confirming_session = None
         event.on_success(close, name="Close session from devtools")
 
+    def _run_operation(
+        self,
+        event: sl.ActionEvent,
+        operation: Callable[[], Awaitable[str]],
+        *,
+        name: str,
+    ) -> None:
+        async def run() -> None:
+            try:
+                detail = await operation()
+            except Exception as error:
+                with sl.runtime.transaction():
+                    self.notice = f"{name} failed: {type(error).__name__}: {error}"
+                raise
+            else:
+                with sl.runtime.transaction():
+                    self.notice = detail
+                    self.revision += 1
+
+        event.on_success(run, name=f"{name} from devtools")
+
+    async def _refresh_selected_root(self, event: sl.ActionEvent) -> None:
+        message_root_id = self.message_root_id
+        if message_root_id is None:
+            return
+
+        async def refresh() -> str:
+            return (await self._devtools_runtime.refresh_root(message_root_id)).detail
+
+        self._run_operation(event, refresh, name="Refresh")
+
+    async def _wait_idle(self, event: sl.ActionEvent) -> None:
+        async def wait() -> str:
+            return (await self._devtools_runtime.wait_idle()).detail
+
+        self._run_operation(event, wait, name="Wait")
+
+    async def _clear_profile(self, event: sl.ActionEvent) -> None:
+        async def clear() -> str:
+            return self._devtools_runtime.clear_profile().detail
+
+        self._run_operation(event, clear, name="Clear")
+
+    async def _flush_persistence(self, event: sl.ActionEvent) -> None:
+        async def flush() -> str:
+            return (await self._devtools_runtime.flush_persistence()).detail
+
+        self._run_operation(event, flush, name="Flush")
+
+    async def _request_recovery(self, event: sl.ActionEvent) -> None:
+        del event
+        self.confirming_action = DevToolsAction.RECOVER_PERSISTENCE
+
+    async def _cancel_action(self, event: sl.ActionEvent) -> None:
+        del event
+        self.confirming_action = None
+
+    async def _confirm_recovery(self, event: sl.ActionEvent) -> None:
+        async def recover() -> str:
+            return (await self._devtools_runtime.recover_persistence(confirmed=True)).detail
+
+        self.confirming_action = None
+        self._run_operation(event, recover, name="Recovery")
+
+    async def _request_purge(self, event: sl.ActionEvent) -> None:
+        self.confirming_action = DevToolsAction.PURGE_PERSISTENCE
+
+    async def _confirm_purge(self, event: sl.ActionEvent) -> None:
+        record_keys = self.selected_records
+
+        async def purge() -> str:
+            results = await self._devtools_runtime.purge_persistence(record_keys, confirmed=True)
+            with sl.runtime.transaction():
+                self.selected_records = ()
+            await self.persistence_records.reload()
+            return f"Persistence purge completed; deleted={sum(result.deleted for result in results)}."
+
+        self.confirming_action = None
+        self._run_operation(event, purge, name="Purge")
+
     async def _back(self, event: sl.ActionEvent) -> None:
         self.message_root_id = None
         self.session_id = None
         self.confirming_session = None
-        self.section = "overview"
+        self.confirming_action = None
+        self.selected_records = ()
+        self.section = DevToolsSection.OVERVIEW
 
     async def _refresh(self, event: sl.ActionEvent) -> None:
+        del event
+        if self.section == DevToolsSection.PERSISTENCE and self._devtools_runtime.durable is not None:
+            await self.persistence_records.reload()
         self.revision += 1
 
     async def _close(self, event: sl.ActionEvent) -> None:
@@ -498,6 +815,38 @@ def scene_attachment(snapshot: squid_ui_discord.MessageRootSnapshot) -> sl.docum
         media_type="application/json",
         source=sl.document.InlineAsset(sl.scene.Codec.dumps(snapshot.scene).encode()),
     )
+
+
+def operational_attachment(
+    snapshot: squid_ui_discord.devtools_runtime.OperationalSnapshot,
+) -> sl.document.Asset:
+    """The bounded operational snapshot as an inline JSON download."""
+    encoded = json.dumps(dataclasses.asdict(snapshot), default=_json_default, indent=2, sort_keys=True).encode()
+    return sl.document.Asset(
+        key="operational-snapshot",
+        name="squid-operational-snapshot.json",
+        media_type="application/json",
+        source=sl.document.InlineAsset(encoded),
+    )
+
+
+def _json_default(value: object) -> object:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    return repr(value)
+
+
+def _trace_summary(trace: RuntimeTrace) -> str:
+    duration_ms = trace.duration * 1000
+    return f"{trace.operation.value}:{trace.name} {trace.result.status.value} {duration_ms:.1f}ms id={trace.trace_id}"
+
+
+def _event_summary(event: object) -> str:
+    action_id = getattr(event, "action_id", getattr(event, "execution_id", "unknown"))
+    status = getattr(event, "status", type(event).__name__)
+    return f"{action_id}: {status}"
 
 
 def plan_text(snapshot: squid_ui_discord.MessageRootSnapshot) -> str:
