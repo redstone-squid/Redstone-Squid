@@ -2,7 +2,7 @@
 
 import contextlib
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Self, override
 
 import discord
 from discord import app_commands
@@ -150,17 +150,17 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         starboard_id, origin_message_id = key
         await self.bot.refresh_posts("starboard_entry", starboard_entry_key(starboard_id, origin_message_id))
 
-    @app_commands.command(name="starboard", description="Configure this server's starboards")
+    @sd.command(name="starboard", description="Configure this server's starboards")
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
-    async def starboard(self, interaction: discord.Interaction[BotT]) -> None:
+    async def starboard(self, request: sd.Request[Self]) -> StarboardScreen:
         """Open capability-aware starboard configuration."""
-        await enforce(interaction, *STARBOARD_CAPABILITIES, mode="any")
-        guild = interaction.guild
+        await enforce(request, *STARBOARD_CAPABILITIES, mode="any")
+        guild = request.guild
         assert guild is not None
 
         async def authorize(node: PermissionNode) -> bool:
-            return await allows(interaction, node)
+            return await allows(request, node)
 
         granted: set[PermissionNode] = set()
         for node in STARBOARD_CAPABILITIES:
@@ -176,15 +176,12 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                 raise ValidationError(tr(t"I need View Channel, Send Messages, and Read Message History there."))
             return await self.service.create_starboard(guild.id, channel.id, name, required=required)
 
-        await self.ui.respond(
-            interaction,
-            StarboardScreen(
-                self.service,
-                guild_id=guild.id,
-                capabilities=frozenset(granted),
-                authorize=authorize,
-                create_board=create_board,
-            ),
+        return StarboardScreen(
+            self.service,
+            guild_id=guild.id,
+            capabilities=frozenset(granted),
+            authorize=authorize,
+            create_board=create_board,
         )
 
 

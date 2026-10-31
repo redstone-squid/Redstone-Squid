@@ -28,13 +28,12 @@ CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 @build_log_consents.route(build_log_consent)
 async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     """Open the ephemeral consent prompt behind the public banner button."""
-    ui = interaction.client.app_ui
+    request = await interaction.client.app_ui.request(interaction)
     accounts = interaction.client.services.accounts
 
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(interaction.user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
-        await ui.respond(
-            interaction,
+        await request.respond(
             text_node(
                 tr(
                     t"### Consent Already Granted\n"
@@ -72,7 +71,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         accept_label=tr(t"Agree & Enable Ingestion"),
         wait_timeout=120,
     )
-    outcome = await ui.respond(interaction, component)
+    outcome = await request.respond(component)
     if not isinstance(outcome, sd.Presented):
         return
     await component.wait()
@@ -81,8 +80,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await accounts.get_or_create_identity(
             IdentityProvider.DISCORD, str(interaction.user.id), consent=component.consent
         )
-        await ui.respond(
-            interaction,
+        await request.respond(
             text_node(
                 tr(
                     t"### Consent Recorded!\n"

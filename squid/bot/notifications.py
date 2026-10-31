@@ -1,7 +1,7 @@
 """Slash-only notification management and durable Discord DM delivery."""
 
 import logging
-from typing import Any, override
+from typing import Any, Self, override
 
 import discord
 from discord import app_commands
@@ -45,29 +45,26 @@ class NotificationCog(sd.Cog[Any]):
         if self._delivery_task is not None:
             await self.bot.background_tasks.cancel(self._delivery_task)
 
-    @app_commands.command(
+    @sd.command(
         name="notifications",
         description=app_commands.locale_str("Manage notification channels and subscriptions"),
     )
-    async def notifications(self, interaction: discord.Interaction[Any]) -> None:
+    async def notifications(self, request: sd.Request[Self]) -> NotificationScreen | None:
         """Open the notification preferences and subscription workspace."""
-        account_id = await self._account_id(interaction)
+        account_id = await self._account_id(request)
         if account_id is None:
-            return
-        await self.ui.respond(
-            interaction,
-            NotificationScreen(
-                notifications=self.bot.services.notifications,
-                account_id=account_id,
-                author_id=interaction.user.id,
-                visibility=await self._inbox_visibility(interaction),
-                visibility_resolver=lambda event: self._inbox_visibility(sd.native(event)),
-            ),
+            return None
+        return NotificationScreen(
+            notifications=self.bot.services.notifications,
+            account_id=account_id,
+            author_id=request.user.id,
+            visibility=await self._inbox_visibility(request),
+            visibility_resolver=lambda event: self._inbox_visibility(sd.native(event)),
         )
 
     @staticmethod
-    async def _inbox_visibility(interaction: discord.Interaction[Any]) -> InboxVisibility:
-        return InboxVisibility(include_staff=await allows(interaction, BUILD_SUBMISSION_VIEW_PENDING))
+    async def _inbox_visibility(caller: sd.Request[Any] | discord.Interaction[Any]) -> InboxVisibility:
+        return InboxVisibility(include_staff=await allows(caller, BUILD_SUBMISSION_VIEW_PENDING))
 
     async def process_deliveries(self) -> None:
         """Drain a bounded DM batch; retry ambiguous failures and suspend explicit forbiddens."""
@@ -92,9 +89,9 @@ class NotificationCog(sd.Cog[Any]):
             else:
                 await self.bot.services.notifications.complete_delivery(delivery)
 
-    async def _account_id(self, interaction: discord.Interaction) -> int | None:
+    async def _account_id(self, request: sd.Request[Self]) -> int | None:
         """The caller's consented account, or `None` once they have been told why not."""
-        return await ensure_consented_account(await sd.request(interaction), self.bot.services.accounts)
+        return await ensure_consented_account(request, self.bot.services.accounts)
 
 
 def delivery_message(delivery: PendingNotificationDelivery) -> Message:

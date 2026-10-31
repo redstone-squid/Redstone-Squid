@@ -1,6 +1,6 @@
 """Discord entry point for the canonical access-control workspace."""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 import discord
 from discord import app_commands
@@ -44,27 +44,27 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Per
         super().__init__(bot)
         self.admin: PermissionAdministrationService = bot.services.permission_admin
 
-    @app_commands.command(name="access", description="Inspect and manage this server's access controls")
+    @sd.command(name="access", description="Inspect and manage this server's access controls")
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
     async def access(
         self,
-        interaction: discord.Interaction[BotT],
+        request: sd.Request[Self],
         user: discord.Member | None = None,
         role: discord.Role | None = None,
-    ) -> None:
+    ) -> AccessScreen:
         """Open subject rules, internal roles, assignments, catalogue, and audit."""
         if user is not None and role is not None:
             message = "Choose either a user or a Discord role, not both."
             raise ValidationError(message)
-        await enforce(interaction, *ACCESS_NODES, mode="any")
-        guild = interaction.guild
+        await enforce(request, *ACCESS_NODES, mode="any")
+        guild = request.guild
         assert guild is not None
-        target = user or (None if role is not None else interaction.user)
+        target = user or (None if role is not None else request.user)
         account_id = await account_id_for(self.bot.services.accounts, target) if target is not None else None
         role_id = role.id if role is not None else None
         label = role.name if role is not None else target.display_name if target is not None else "unknown"
-        subject = await subject_for_interaction(interaction)
+        subject = await subject_for_interaction(request)
         capability_list: list[PermissionNode] = []
         for node in ACCESS_NODES:
             if await self.bot.services.permissions.allows(subject, node):
@@ -72,23 +72,20 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Per
         capabilities = frozenset(capability_list)
 
         async def actor():
-            return await self.admin.actor(await subject_for_interaction(interaction))
+            return await self.admin.actor(await subject_for_interaction(request))
 
         async def authorize(node: PermissionNode) -> bool:
-            return await allows(interaction, node)
+            return await allows(request, node)
 
-        await self.ui.respond(
-            interaction,
-            AccessScreen(
-                self.admin,
-                guild_id=guild.id,
-                account_id=account_id,
-                discord_role_id=role_id,
-                subject_label=label,
-                capabilities=capabilities,
-                actor=actor,
-                authorize=authorize,
-            ),
+        return AccessScreen(
+            self.admin,
+            guild_id=guild.id,
+            account_id=account_id,
+            discord_role_id=role_id,
+            subject_label=label,
+            capabilities=capabilities,
+            actor=actor,
+            authorize=authorize,
         )
 
 

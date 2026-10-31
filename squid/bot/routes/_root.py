@@ -65,8 +65,8 @@ async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> N
     from squid.bot.ui import text_node
     from squid.core.i18n import tr
 
-    await interaction.client.app_ui.respond(
-        interaction,
+    request = await interaction.client.app_ui.request(interaction)
+    await request.respond(
         text_node(tr(t"This control is no longer available.")),
         audience="personal",
     )

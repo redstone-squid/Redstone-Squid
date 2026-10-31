@@ -2,10 +2,9 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, override
+from typing import TYPE_CHECKING, Protocol, Self, override
 
 import discord
-from discord import app_commands
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -129,20 +128,17 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Ve
         super().__init__(bot)
         self.version_service = bot.services.versions
 
-    @app_commands.command(name="versions", description="Browse recognized Minecraft versions")
-    async def versions(self, interaction: discord.Interaction[BotT]) -> None:
+    @sd.command(name="versions", description="Browse recognized Minecraft versions")
+    async def versions(self, request: sd.Request[Self]) -> VersionScreen:
         """Open the paged version catalogue."""
 
         async def may_create() -> bool:
-            return await allows(interaction, VERSION_ENTRY_CREATE)
+            return await allows(request, VERSION_ENTRY_CREATE)
 
-        await self.ui.respond(
-            interaction,
-            VersionScreen(
-                self.version_service,
-                can_create=await may_create(),
-                authorize_create=may_create,
-            ),
+        return VersionScreen(
+            self.version_service,
+            can_create=await may_create(),
+            authorize_create=may_create,
         )
 
     @sd.Cog.listener(name="on_message")
