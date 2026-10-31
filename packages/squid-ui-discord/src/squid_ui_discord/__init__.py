@@ -54,6 +54,7 @@ from squid_ui_discord import (
     target,
     targets,
     testing,
+    v2,
 )
 from squid_ui_discord import (
     modal as modals,
@@ -388,4 +389,5 @@ __all__ = [
     "target",
     "targets",
     "testing",
+    "v2",
 ]
