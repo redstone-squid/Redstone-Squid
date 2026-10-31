@@ -85,11 +85,12 @@ does not already give, and costs debuggability and type-checker support.
 
 ```python
 class Panel(sl.Component):
-    filters: Filters = sl.state(Filters())        # frozen dataclass of immutable fields
+    filters: Filters = sl.state(Filters())  # frozen dataclass of immutable fields
     rows: tuple[str, ...] = sl.state(())
 
-panel.rows = [1, 2]          # MutableStateError
-panel.rows = (1, [2])        # MutableStateError -- an annotation check cannot see this
+
+panel.rows = [1, 2]  # MutableStateError
+panel.rows = (1, [2])  # MutableStateError -- an annotation check cannot see this
 panel.filters = replace(panel.filters, limit=25)
 ```
 
@@ -127,7 +128,7 @@ a render. The mechanism is the ContextVar the package already uses twice
 
 ```python
 with sl.untracked():
-    current = self.filters          # an action handler's read is not a dependency
+    current = self.filters  # an action handler's read is not a dependency
 ```
 
 `untracked()` is the one piece of ceremony this adds, and it is needed in exactly one
@@ -238,8 +239,8 @@ volume change:
 
 ```python
 if _CURRENT.get() is not None and name not in _FRAMEWORK_ATTRIBUTES and name not in type(self)._state_names:
-    report_undeclared_write(self, name)      # raises
-object.__setattr__(self, name, value)        # never reached
+    report_undeclared_write(self, name)  # raises
+object.__setattr__(self, name, value)  # never reached
 ```
 
 Under the warning path the write lands and is never rolled back, which is exactly the

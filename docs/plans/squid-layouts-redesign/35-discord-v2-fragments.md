@@ -157,8 +157,8 @@ The whole ritual is one call:
 ```python
 attached = sl.discord.contribute(
     document,
-    to=existing_view,           # measured, then appended to — named once
-    followed_by=(controls,),    # host items appended after the fragment, costed into the plan
+    to=existing_view,  # measured, then appended to — named once
+    followed_by=(controls,),  # host items appended after the fragment, costed into the plan
     localization=localization,
 )
 await interaction.response.edit_message(

@@ -57,8 +57,9 @@ A hand-built embed and a decorated view:
 class DoorView(discord.ui.View):
     @discord.ui.button(label="Approve")
     async def approve(self, interaction, button):
-        await approve_build(self.build_id)          # your service function
+        await approve_build(self.build_id)  # your service function
         await interaction.response.send_message("Approved", ephemeral=True)
+
 
 embed = discord.Embed(title="Piston door", description="A 2x2 flush door.")
 embed.add_field(name="Width", value="2")
@@ -101,7 +102,7 @@ class Door(sl.Component):
 
     def render(self):
         async def approve(event: sl.ActionEvent) -> None:
-            await approve_build(self.build_id)      # unchanged
+            await approve_build(self.build_id)  # unchanged
             self.approved = True
 
         return [
@@ -110,6 +111,7 @@ class Door(sl.Component):
             sl.fields(sl.field("Width", "2", key="width")),
             sl.actions(sl.action("Approve", approve, key="approve"), key="controls"),
         ]
+
 
 mount = sl.discord.Mount(Door(), target=CLASSIC_TARGET, access=sl.discord.Owner(user_id))
 await mount.send(sl.discord.reply_to(ctx))

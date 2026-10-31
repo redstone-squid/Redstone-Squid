@@ -257,9 +257,7 @@ payload value, so contributing to a host-owned classic message is a measured res
 value composition:
 
 ```python
-reservation = sl.discord.classic.measure(
-    content=content, embeds=existing_embeds, view=existing_view, attachments=2
-)
+reservation = sl.discord.classic.measure(content=content, embeds=existing_embeds, view=existing_view, attachments=2)
 composition = sl.discord.classic.compose(document, reservation=reservation)
 await ctx.send(**host.merged_with(composition.presentation).to_kwargs())
 ```
