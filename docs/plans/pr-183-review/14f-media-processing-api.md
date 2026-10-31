@@ -96,9 +96,7 @@ class StagedUpload:
 
 
 class DraftAttachmentService:
-    async def authorize_upload(
-        self, *, draft_id: UUID, account_id: int, kind: MediaKind
-    ) -> DraftUploadAuthority: ...
+    async def authorize_upload(self, *, draft_id: UUID, account_id: int, kind: MediaKind) -> DraftUploadAuthority: ...
 
     async def register(
         self,

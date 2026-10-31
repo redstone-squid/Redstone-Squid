@@ -114,9 +114,7 @@ class DraftChangeKey:
 
 class FormManifestRegistry(Protocol):
     async def current(self, *, locale: str | None) -> FormManifest: ...
-    async def get(
-        self, schema_id: str, revision: int, *, locale: str | None
-    ) -> FormManifest | None: ...
+    async def get(self, schema_id: str, revision: int, *, locale: str | None) -> FormManifest | None: ...
 
 
 class FormRevisionMigration(Protocol):
