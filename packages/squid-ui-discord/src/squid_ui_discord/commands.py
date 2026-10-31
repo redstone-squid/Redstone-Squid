@@ -24,9 +24,9 @@ from squid_reactivity.operations import Cancelled, Failed, Pending, Succeeded
 from squid_ui import paragraph
 from squid_ui.document import DocumentLike
 from squid_ui.forms import FormSpec
+from squid_ui_discord._pending import _ManagedResult
 from squid_ui_discord.access import Everyone
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, RequestSource
-from squid_ui_discord.managed import _ManagedResult
 from squid_ui_discord.modal import ModalSpec
 from squid_ui_discord.request import Deferral, Request, request
 from squid_ui_discord.response import Abandoned, Presented, Rejected, Response, ResponseResult, Sent

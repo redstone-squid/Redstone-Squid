@@ -214,11 +214,21 @@ class RouteGroup[BotT: discord.Client]:
         return child
 
     def define(self, format: str, *, aliases: tuple[str, ...] = ()) -> Route:
-        """Define and return one final, context-free route identity."""
+        """Return the existing identity for an identical definition, or define a new route.
+
+        Repeated definitions remain valid after registration so handler modules can reload.
+        Changing aliases or defining an overlapping route still fails.
+        """
+        route = Route(f"{self.prefix}:{format}", aliases=aliases)
+        for existing in self._definitions:
+            if existing.format == route.format:
+                if existing.aliases != route.aliases:
+                    message = f"redefined route {route.format!r} changed aliases"
+                    raise ValueError(message)
+                return existing
         if self._frozen:
             message = f"new route {format!r} must be defined before the route group is registered"
             raise RuntimeError(message)
-        route = Route(f"{self.prefix}:{format}", aliases=aliases)
         for existing in self._definitions:
             if route.overlaps(existing):
                 message = f"route {route.format!r} overlaps the group route {existing.format!r}"

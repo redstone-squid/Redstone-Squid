@@ -507,6 +507,7 @@ class TestRouteGroups:
         root = squid_ui_discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
+        assert polls.define("close") is route
         polls.add(route, _noop)
         router = Router(namespace=root, on_gone=_noop)
 
@@ -531,6 +532,9 @@ class TestRouteGroups:
         router = Router(namespace=root, on_gone=_noop)
         router.register(_FakeClient())  # type: ignore[arg-type]
 
+        assert polls.define("close") is route
+        with pytest.raises(ValueError, match="changed aliases"):
+            polls.define("close", aliases=("old:close",))
         with pytest.raises(RuntimeError, match="before the route group is registered"):
             polls.define("refresh")
         with pytest.raises(RuntimeError, match="before registration"):

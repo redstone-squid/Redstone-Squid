@@ -6,7 +6,7 @@ from uuid import UUID
 from discord import Interaction
 
 import squid_ui_discord as sd
-from squid.bot.routes._root import _feature_group, _feature_route
+from squid.bot.routes._root import _feature_group
 from squid.bot.ui import text_node
 from squid.core.i18n import tr
 
@@ -15,10 +15,10 @@ if TYPE_CHECKING:
 
 
 builds, _builds_created = _feature_group("builds")
-build_edit = _feature_route(builds, "{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
-build_edit_recovery = _feature_route(builds, "{build_id:int}:edit:recover")
-draft_reopen = _feature_route(builds, "draft:{draft_id}:reopen")
-revision_reopen = _feature_route(builds, "revision:{proposal_id}:reopen")
+build_edit = builds.define("{build_id:int}:edit", aliases=("edit:build:{build_id:int}",))
+build_edit_recovery = builds.define("{build_id:int}:edit:recover")
+draft_reopen = builds.define("draft:{draft_id}:reopen")
+revision_reopen = builds.define("revision:{proposal_id}:reopen")
 
 
 @builds.route(build_edit)
@@ -76,7 +76,7 @@ async def reopen_revision(interaction: Interaction[RedstoneSquid], proposal_id: 
     await request.respond(screen, audience="personal")
 
 
-inference_reopen = _feature_route(builds, "inference:{run_id}:reopen")
+inference_reopen = builds.define("inference:{run_id}:reopen")
 
 
 @builds.route(inference_reopen)

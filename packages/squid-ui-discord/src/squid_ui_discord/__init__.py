@@ -92,7 +92,7 @@ from squid_ui_discord.commands import (
     hybrid_group,
     prefix_command,
 )
-from squid_ui_discord.config import DiscordUIConfig, ErrorPolicy
+from squid_ui_discord.config import DiscordUIConfig, ErrorObserver, ErrorPolicy, ErrorRenderer
 from squid_ui_discord.conformance import conform
 from squid_ui_discord.contracts import LocalizationResolver, RequestSource, ResponseSource
 from squid_ui_discord.delivery import (
@@ -109,16 +109,6 @@ from squid_ui_discord.facade import Scope
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
 from squid_ui_discord.live import message_roots
-from squid_ui_discord.managed import (
-    ErrorObserver,
-    ErrorRenderer,
-    ManagedDelivery,
-    ManagedError,
-    MessageRootFactory,
-    SuccessRenderer,
-    Work,
-    run_managed_result,
-)
 from squid_ui_discord.message_payload import (
     MessageMode,
     MessageModeError,
@@ -192,6 +182,8 @@ from squid_ui_discord.runtime import (
 from squid_ui_discord.screen import Screen, SharedGuildSessionScreen, UserGuildSessionScreen, UserSessionScreen
 from squid_ui_discord.session_specs import OpenContext, ScopeKind, SessionOptions, SessionOptionsResolver, SessionSpec
 from squid_ui_discord.sessions import (
+    AdmissionSpec,
+    Reject,
     SessionKey,
     SessionManager,
 )
@@ -237,6 +229,7 @@ __all__ = [
     "V2_LIMITS",
     "Abandoned",
     "AccessPolicy",
+    "AdmissionSpec",
     "AdoptionError",
     "Audience",
     "Cardinality",
@@ -262,8 +255,6 @@ __all__ = [
     "HybridGroup",
     "LimitViolationError",
     "LocalizationResolver",
-    "ManagedDelivery",
-    "ManagedError",
     "MessageDestination",
     "MessageMode",
     "MessageModeError",
@@ -271,7 +262,6 @@ __all__ = [
     "MessageRoot",
     "MessageRootConfig",
     "MessageRootDefaults",
-    "MessageRootFactory",
     "MessageRootOptions",
     "MessageRootScheduler",
     "MessageRootSchedulerSnapshot",
@@ -287,6 +277,7 @@ __all__ = [
     "PendingCard",
     "Presented",
     "Private",
+    "Reject",
     "Rejected",
     "RenderedMessage",
     "RenewEphemeral",
@@ -320,12 +311,10 @@ __all__ = [
     "SessionSpec",
     "SharedGuildSessionScreen",
     "StackNavigator",
-    "SuccessRenderer",
     "UserGuildSessionScreen",
     "UserSessionScreen",
     "Users",
     "Visibility",
-    "Work",
     "access",
     "actions",
     "adapter",
@@ -385,7 +374,6 @@ __all__ = [
     "response",
     "roles",
     "routing",
-    "run_managed_result",
     "runtime",
     "screen",
     "send_to",

@@ -7,7 +7,6 @@ from discord.ext import commands
 
 import squid_ui as sl
 import squid_ui_discord as sd
-import squid_ui_discord.ext as sdx
 from squid_ui_discord.testing import ContextHarness, InteractionHarness
 
 
@@ -50,7 +49,7 @@ async def test_stage_drives_facade_dispatch_and_forms_by_semantic_key() -> None:
     owner = object()
     screen = Editor()
 
-    async with sdx.testing.stage(screen, owner=owner, user_id=7) as ui:
+    async with sd.testing.stage(screen, owner=owner, user_id=7) as ui:
         assert ui.result.component is screen
         assert ui.session is not None
         assert ui.root.access == sd.Owner(7)
@@ -98,12 +97,12 @@ class Commands(sd.Cog[commands.Bot]):
 async def test_invoke_uses_the_real_slash_and_prefix_wrappers() -> None:
     cog = Commands(_installed_bot())
 
-    slash = await sdx.testing.invoke(type(cog).inspect, 42, owner=cog, user_id=9)
+    slash = await sd.testing.invoke(type(cog).inspect, 42, owner=cog, user_id=9)
     assert isinstance(slash, InteractionHarness)
     assert cog.request is not None and cog.request.user.id == 9
     slash.edit_original_response.assert_awaited_once()
 
-    prefix = await sdx.testing.invoke(type(cog).prefix, owner=cog, user_id=10, source="context")
+    prefix = await sd.testing.invoke(type(cog).prefix, owner=cog, user_id=10, source="context")
     assert isinstance(prefix, ContextHarness)
     assert cog.request is not None and cog.request.user.id == 10
     prefix.send.assert_awaited_once()
