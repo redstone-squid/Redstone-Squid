@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from typing import Any, assert_type, override
 
+from squid_reactivity.topics import LocalTopicBus
 from squid_ui import Component, ContextKey, paragraph, resource, state
 from squid_ui.runtime import (
     AtomicResource,
@@ -22,7 +23,6 @@ from squid_ui.runtime import (
     SharedState,
     addresses,
 )
-from squid_ui.runtime.topics import LocalTopicBus
 from squid_ui.semantic import Paragraph
 
 bus = LocalTopicBus()

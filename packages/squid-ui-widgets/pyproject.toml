@@ -14,7 +14,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Typing :: Typed",
 ]
-dependencies = ["squid-ui==0.1.0a1"]
+dependencies = ["squid-ui==0.1.0a1", "squid-reactivity==0.1.0a1"]
 
 [project.urls]
 Changelog = "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md"

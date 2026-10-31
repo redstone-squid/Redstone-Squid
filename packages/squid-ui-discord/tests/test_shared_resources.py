@@ -10,7 +10,7 @@ from typing import override
 import pytest
 
 import squid_ui as sl
-from squid_ui.runtime.shared import describe
+from squid_reactivity.shared_state import describe
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import delivered_to, message_harness

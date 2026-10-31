@@ -4,8 +4,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from squid_reactivity.topics import TopicBus
 from squid_ui.profiling import Profiler
-from squid_ui.runtime.topics import TopicBus
 from squid_ui_discord.contracts import DocumentContent, LocalizationResolver
 from squid_ui_discord.delivery import DeliveryResult
 from squid_ui_discord.message_root_options import MessageRootDefaults

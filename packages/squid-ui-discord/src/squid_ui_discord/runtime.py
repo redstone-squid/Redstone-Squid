@@ -23,11 +23,11 @@ import anyio
 import discord
 from anyio.abc import TaskStatus
 
+from squid_reactivity.topics import TopicBus
 from squid_ui.errors import SquidUiError
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.services import UIExecutionHost
-from squid_ui.runtime.topics import TopicBus
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter

@@ -9,10 +9,10 @@ from typing import Any, override
 
 import pytest
 
+from squid_reactivity.topics import LocalTopicBus
 from squid_ui import Component, DiscordTarget, computed, state
 from squid_ui.primitives import Text
 from squid_ui.runtime import CellAddress, ReactiveConflictError, SharedState, transaction
-from squid_ui.runtime.topics import LocalTopicBus
 
 
 @dataclass(frozen=True, slots=True)

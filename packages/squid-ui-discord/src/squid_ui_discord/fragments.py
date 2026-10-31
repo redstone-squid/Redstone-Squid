@@ -23,8 +23,7 @@ from squid_ui.document import DocumentLike
 from squid_ui.errors import ExistingLayoutError, LayoutError
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.limits import LIMITS, Axis, V2Limits
-from squid_ui.planning.planner import EMPTY_RESERVATION
-from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui.planning.target import Target
 from squid_ui.scene.model import ComponentsV2, PlanReport, PlanResult
 from squid_ui.target_types import ComponentsV2Target
@@ -189,7 +188,7 @@ def fragment(
     document: DocumentLike[ComponentsV2Target],
     *,
     alongside: discord.ui.LayoutView | None = None,
-    reserve: ResourceCost = EMPTY_RESERVATION,
+    reserve: ResourceCost = EMPTY_COST,
     followed_by: Sequence[discord.ui.Item[Any]] = (),
     attachments: int = 0,
     target: Target = DISCORD_V2_DPY27,
@@ -240,7 +239,7 @@ def contribute(
     *,
     to: discord.ui.LayoutView,
     followed_by: Sequence[discord.ui.Item[Any]] = (),
-    reserve: ResourceCost = EMPTY_RESERVATION,
+    reserve: ResourceCost = EMPTY_COST,
     attachments: int = 0,
     target: Target = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,

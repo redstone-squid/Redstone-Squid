@@ -5,12 +5,12 @@ from typing import override
 
 import pytest
 
+from squid_reactivity.shared_state import describe
+from squid_reactivity.topics import LocalTopicBus, Topic
 from squid_ui import Component, DiscordTarget, computed, state
 from squid_ui.primitives import Boundary, Text
 from squid_ui.runtime import CellAddress, ReactiveWriteError, SharedState, addresses, transaction
 from squid_ui.runtime.component import render_component_tree
-from squid_ui.runtime.shared import describe
-from squid_ui.runtime.topics import LocalTopicBus, Topic
 
 
 @dataclass(frozen=True, slots=True)

@@ -6,9 +6,9 @@ from typing import Any, override
 
 import pytest
 
+from squid_reactivity.internals import Cell, StateDescriptor
 from squid_ui import Component, DiscordTarget, state
 from squid_ui.primitives import Text
-from squid_ui.runtime.reactivity import _Cell, _State
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,9 +20,9 @@ class Service:
     """A collaborator a component holds and never mutates."""
 
 
-def cell_of(component: Component[Any], name: str) -> _Cell:
+def cell_of(component: Component[Any], name: str) -> Cell:
     descriptor = next(
-        vars(klass)[name] for klass in type(component).__mro__ if isinstance(vars(klass).get(name), _State)
+        vars(klass)[name] for klass in type(component).__mro__ if isinstance(vars(klass).get(name), StateDescriptor)
     )
     return descriptor.cell(component)
 
@@ -98,7 +98,7 @@ class TestOpaqueFields:
         assert panel.service is service
 
     def test_they_are_not_persisted_by_default(self):
-        from squid_ui.runtime.reactivity import export_state
+        from squid_reactivity.core import export_state
 
         assert set(export_state(Panel(Service()))) == {"rows", "channels", "filters"}
 

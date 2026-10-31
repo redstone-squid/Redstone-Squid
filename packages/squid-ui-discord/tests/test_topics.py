@@ -7,9 +7,9 @@ from typing import Any, cast, override
 import anyio
 import pytest
 
+from squid_reactivity.topics import Address, CellAddress, KindKeyCodec, LocalTopicBus, Topic, TopicBus
 from squid_ui import state
 from squid_ui.runtime import SharedState
-from squid_ui.runtime.topics import Address, CellAddress, KindKeyCodec, LocalTopicBus, Topic, TopicBus
 from squid_ui_discord.durability import PostgresTopicBridge
 
 

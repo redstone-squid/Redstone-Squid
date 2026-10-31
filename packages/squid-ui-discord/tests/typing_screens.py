@@ -4,7 +4,7 @@ from typing import Any, assert_type, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid_ui_discord import DiscordUI, Screen
+from squid_ui_discord import Scope, Screen
 
 
 class RequiredArguments(Screen):
@@ -17,7 +17,7 @@ class RequiredArguments(Screen):
         return sl.heading(f"{self.label}: {self.count}")
 
 
-async def construction_and_presentation(ui: DiscordUI[object], source: Any) -> None:
+async def construction_and_presentation(ui: Scope[object], source: Any) -> None:
     await ui.respond(source, RequiredArguments("ready", count=2))
     await ui.respond(source, RequiredArguments(2, count="wrong"))  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
     await ui.respond(source, RequiredArguments("missing"))  # pyright: ignore[reportCallIssue]  # pyrefly: ignore[missing-argument]

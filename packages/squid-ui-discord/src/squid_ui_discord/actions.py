@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, Any, override
 import discord
 
 from squid_reactivity.actions import ActionContext, current_action
+from squid_reactivity.core import on_action_commit, on_action_rollback
 from squid_reactivity.operations import Cancelled
 from squid_ui.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
 from squid_ui.interactions import ActionEvent, ActionMode, Visibility
 from squid_ui.runtime.continuations import PostCommitOperation
-from squid_ui.runtime.reactivity import on_action_commit, on_action_rollback
 from squid_ui.text import TextLike, resolve_text
 from squid_ui_discord import delivery as deliver
 from squid_ui_discord.modal import ModalSpec, build_form_modal, build_modal

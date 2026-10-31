@@ -21,7 +21,7 @@ One runtime per Discord client. `install()` starts no background work; supervise
 ## Entry points
 
 `DiscordUIRuntime` owns process resources. Its exact-identity owner scopes provide delivery, while
-`DiscordRequest` normalizes one event and its acknowledgement state. `Screen` declares reusable
+`Request` normalizes one event and its acknowledgement state. `Screen` declares reusable
 opening policy and is always presented through an owner scope.
 
 ::: squid_ui_discord.Screen
@@ -32,9 +32,9 @@ opening policy and is always presented through an owner scope.
 
 ::: squid_ui_discord.SharedGuildSessionScreen
 
-::: squid_ui_discord.DiscordUI
+::: squid_ui_discord.Scope
 
-::: squid_ui_discord.DiscordRequest
+::: squid_ui_discord.Request
 
 ::: squid_ui_discord.DiscordAction
 
@@ -87,7 +87,7 @@ Every message root names who may use it.
 ## Message roots
 
 A `MessageRoot` owns one live Discord message for its whole life. Most hosts construct them
-through `DiscordUI.respond` or a session spec rather than directly.
+through `Request.respond` or a session spec rather than directly.
 
 ::: squid_ui_discord.MessageRoot
 
@@ -256,7 +256,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 
 ::: squid_ui_discord.conform
 
-::: squid_ui_discord.EMPTY_RESERVATION
+::: squid_ui_discord.EMPTY_COST
 
 ::: squid_ui_discord.button_grid
 

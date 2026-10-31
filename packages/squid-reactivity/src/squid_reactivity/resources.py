@@ -842,8 +842,3 @@ def unique_async_bindings(bindings: list[AsyncBinding]) -> tuple[AsyncBinding, .
             seen.add(identity)
             unique.append(binding)
     return tuple(unique)
-
-
-# Compatibility for integrations still naming the resource-only implementation detail.
-observe_resources = observe_async_bindings
-unique_resources = unique_async_bindings

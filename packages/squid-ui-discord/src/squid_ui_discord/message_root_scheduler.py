@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, overload
 
 import anyio
 
+from squid_reactivity.topics import Address, CellAddress, Topic, TopicBus
 from squid_ui.profiling import NoOpProfiler, OperationKind, PresentationStatus, Profiler, TraceLink
-from squid_ui.runtime.topics import Address, CellAddress, Topic, TopicBus
 
 if TYPE_CHECKING:
     from squid_ui_discord.message_root import MessageRoot

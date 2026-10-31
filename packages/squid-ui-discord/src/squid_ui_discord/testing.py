@@ -28,7 +28,7 @@ from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, MessageLimits, V2Limits
 from squid_ui.planning.target import Target
-from squid_ui.planning.types import DiscordAdapter
+from squid_ui.target_types import DiscordAdapter
 from squid_ui_discord.commands import bind_context_menu, context_menu_declaration
 from squid_ui_discord.delivery import DeliveryResult, EditHandle, MessageDestination, handle_for
 from squid_ui_discord.message_payload import MessagePayload

@@ -41,6 +41,8 @@ else:
     entity = import_module("squid_ui.entity")
     palette = import_module("squid_ui.palette")
 
+from squid_reactivity.core import computed, state
+from squid_reactivity.resources import resource
 from squid_ui.document import (
     Document,
     DocumentLike,
@@ -126,11 +128,6 @@ from squid_ui.interactions import (
 from squid_ui.palette import Palette, PaletteRegistry
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.context import ContextKey
-from squid_ui.runtime.reactivity import (
-    computed,
-    state,
-)
-from squid_ui.runtime.resources import resource
 from squid_ui.semantic import (
     ChoiceEvent,
     EntityEvent,

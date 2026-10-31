@@ -4,13 +4,13 @@ from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol, overload, override, runtime_checkable
 
+from squid_reactivity.core import state
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, choice, choices, controlled, form, routed_action_control, routed_choices
 from squid_ui.forms import Form, FormLike, FormSpec
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.reactivity import state
 from squid_ui.semantic import (
     ActionControl,
     Choice,

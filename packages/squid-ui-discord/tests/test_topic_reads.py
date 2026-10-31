@@ -278,12 +278,12 @@ def test_a_topic_nobody_watches_holds_no_cell() -> None:
 
 def test_watching_a_topic_installs_no_commit_precondition() -> None:
     """A watch is not an observation: nothing writes a topic, so nothing can lose an update."""
-    from squid_ui.runtime.reactivity import _CURRENT, _Transaction
+    from squid_reactivity.internals import CURRENT_TRANSACTION, Transaction
 
     with sl.runtime.transaction():
         sl.runtime.watch(BUILD)
-        current = _CURRENT.get()
-        assert isinstance(current, _Transaction)
+        current = CURRENT_TRANSACTION.get()
+        assert isinstance(current, Transaction)
         assert not current.observed
 
 

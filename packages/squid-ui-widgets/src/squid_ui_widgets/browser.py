@@ -3,6 +3,8 @@
 from collections.abc import Awaitable, Callable, Sequence
 from typing import override
 
+from squid_reactivity.core import state
+from squid_reactivity.resources import Failed, Pending, Ready, resource
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
 from squid_ui.factories import (
@@ -25,8 +27,6 @@ from squid_ui.planning.navigation import (
     default_nav,
 )
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.reactivity import state
-from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
 from squid_ui.sources import (
     ORIGIN,

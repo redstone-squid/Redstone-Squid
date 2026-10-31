@@ -15,7 +15,7 @@ from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
 from squid.records.domain import BuildKind
-from squid_ui_discord.ext import Cog
+from squid_ui_discord import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app

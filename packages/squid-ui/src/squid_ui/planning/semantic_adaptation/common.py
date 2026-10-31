@@ -10,15 +10,13 @@ from squid_ui.runtime.presentation_state import StrategyState, StrategyUpdate
 from squid_ui.semantic import Emphasis, Tone
 from squid_ui.text import TextLike, resolve_text
 
-_Context = LoweringContext
 
-
-def _remember(key: str, adapter_id: str, version: int, strategy: str, context: _Context) -> None:
+def _remember(key: str, adapter_id: str, version: int, strategy: str, context: LoweringContext) -> None:
     """Stage an adapter's sticky choice. Lowering reads the session and writes nothing."""
     context.updates.append(StrategyUpdate(key, StrategyState(key, adapter_id, version, strategy)))
 
 
-def _select_strategy(axis: StrategyAxis, context: _Context) -> str:
+def _select_strategy(axis: StrategyAxis, context: LoweringContext) -> str:
     selected = context.strategies.get(axis.path)
     if selected is None:
         choice = choose_strategy(
@@ -43,14 +41,14 @@ def _select_strategy(axis: StrategyAxis, context: _Context) -> str:
     return selected
 
 
-def _resolve(value: TextLike, context: _Context) -> str:
+def _resolve(value: TextLike, context: LoweringContext) -> str:
     return resolve_text(value, context.localization).content
 
 
 def _page_items[T](
     items: Sequence[T],
     pager_key: str,
-    context: _Context,
+    context: LoweringContext,
     *,
     identity: Callable[[T], str],
 ) -> tuple[tuple[T, ...], int, int]:

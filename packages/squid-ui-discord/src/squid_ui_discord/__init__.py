@@ -15,8 +15,7 @@ from squid_ui.errors import (
 from squid_ui.planning import limits as limits
 from squid_ui.planning import navigation as navigation_controls
 from squid_ui.planning.limits import LIMITS as V2_LIMITS
-from squid_ui.planning.planner import EMPTY_RESERVATION
-from squid_ui.planning.resources import ResourceCost
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui_discord import (
     access,
     actions,
@@ -106,7 +105,7 @@ from squid_ui_discord.delivery import (
 )
 from squid_ui_discord.devtools import open_devtools
 from squid_ui_discord.devtools_view import DevToolsSection
-from squid_ui_discord.facade import DiscordUI, Scope
+from squid_ui_discord.facade import Scope
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
 from squid_ui_discord.live import message_roots
@@ -233,7 +232,7 @@ __all__ = [
     "DEFAULT_MESSAGE_ROOT_CONFIG",
     "DISCORD_V1_DPY27",
     "DISCORD_V2_DPY27",
-    "EMPTY_RESERVATION",
+    "EMPTY_COST",
     "EXACTLY_ONE",
     "V2_LIMITS",
     "Abandoned",
@@ -251,7 +250,6 @@ __all__ = [
     "Deferral",
     "DevToolsSection",
     "DialogPresenter",
-    "DiscordUI",
     "DiscordUIConfig",
     "DiscordUIRuntime",
     "DiscordUIRuntimeMissing",
