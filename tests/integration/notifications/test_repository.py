@@ -1,7 +1,6 @@
 """Integration coverage for notification opt-ins and fenced DM delivery."""
 
 from collections.abc import AsyncGenerator
-from typing import cast
 from uuid import UUID
 
 import pytest

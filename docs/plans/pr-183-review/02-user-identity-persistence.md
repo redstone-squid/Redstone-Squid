@@ -218,9 +218,9 @@ The stored column derives from it without any caller's help:
 def _fold_from_name(context: DefaultExecutionContext) -> str:
     return fold_creator_name(context.get_current_parameters()["name"])
 
-normalized_name: Mapped[str] = mapped_column(
-    Text, nullable=False, insert_default=_fold_from_name, init=False
-)
+
+normalized_name: Mapped[str] = mapped_column(Text, nullable=False, insert_default=_fold_from_name, init=False)
+
 
 @event.listens_for(CreatorAlias, "before_update")
 def _refold_on_name_change(_mapper, _connection, target: CreatorAlias) -> None:
