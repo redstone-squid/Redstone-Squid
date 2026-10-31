@@ -11,6 +11,7 @@ degrades content the way its author said it should degrade.
 ```python
 import squid_layouts as sl
 
+
 class Counter(sl.Component):
     count: int = sl.state(0)
 
