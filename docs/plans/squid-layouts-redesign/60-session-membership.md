@@ -108,8 +108,8 @@ class MembershipStatus(StrEnum):
     LEFT = "left"
     NOT_MEMBER = "not_member"
     AT_CAPACITY = "at_capacity"
-    REFUSED = "refused"            # the caller's `when=` declined
-    CONFLICT = "conflict"          # `expect=` did not match
+    REFUSED = "refused"  # the caller's `when=` declined
+    CONFLICT = "conflict"  # `expect=` did not match
     SESSION_FINISHED = "session_finished"
 
 

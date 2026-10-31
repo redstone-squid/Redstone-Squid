@@ -118,17 +118,20 @@ So generalize what `Guard.admit` may return:
 ```python
 type GuardOutcome = GuardVerdict | Challenge
 
+
 @dataclass(frozen=True, slots=True)
 class Challenge:
     """Admission deferred to the actor. Approval re-enters the same press."""
 
     ask: Callable[[ChallengeResolver], Component]
     deadline: float | None = 120.0
-    on_decline: TextLike | None = None      # None -> say nothing; see §9
+    on_decline: TextLike | None = None  # None -> say nothing; see §9
+
 
 class ChallengeResolver(Protocol):
     async def approve(self) -> None: ...
     async def decline(self) -> None: ...
+
 
 # sl.guards
 def confirm(
