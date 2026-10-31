@@ -1330,44 +1330,46 @@ class MessageRoot[
 
     # --- Loading -----------------------------------------------------------------------
 
+    # Bind the target through self: Pyrefly otherwise substitutes the class default when
+    # comparing these overloads with their implementation.
     @overload
-    async def _stage_loaded(
-        self,
+    async def _stage_loaded[TargetT: DiscordTarget](
+        self: MessageRoot[TargetT, AdapterT],
         *,
         disabled: bool = False,
         profile: OperationRecorder | None = None,
         preflight: Literal[False] = False,
         reuse_committed: bool = False,
-    ) -> _Candidate[RenderTargetT]: ...
+    ) -> _Candidate[TargetT]: ...
 
     @overload
-    async def _stage_loaded(
-        self,
+    async def _stage_loaded[TargetT: DiscordTarget](
+        self: MessageRoot[TargetT, AdapterT],
         *,
         disabled: Literal[True],
         profile: OperationRecorder | None = None,
         preflight: bool,
         reuse_committed: bool = False,
-    ) -> _Candidate[RenderTargetT]: ...
+    ) -> _Candidate[TargetT]: ...
 
     @overload
-    async def _stage_loaded(
-        self,
+    async def _stage_loaded[TargetT: DiscordTarget](
+        self: MessageRoot[TargetT, AdapterT],
         *,
         disabled: bool = False,
         profile: OperationRecorder | None = None,
         preflight: bool,
         reuse_committed: bool = False,
-    ) -> _ApplicationCandidate[RenderTargetT]: ...
+    ) -> _ApplicationCandidate[TargetT]: ...
 
-    async def _stage_loaded(
-        self,
+    async def _stage_loaded[TargetT: DiscordTarget](
+        self: MessageRoot[TargetT, AdapterT],
         *,
         disabled: bool = False,
         profile: OperationRecorder | None = None,
         preflight: bool = False,
         reuse_committed: bool = False,
-    ) -> _ApplicationCandidate[RenderTargetT]:
+    ) -> _ApplicationCandidate[TargetT]:
         """Stage a candidate whose components and atomic resources are settled.
 
         One pass per embedding tier: the root is known without rendering anything, and each
