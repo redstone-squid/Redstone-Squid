@@ -399,7 +399,7 @@ class OperationalInspector(sl.Component):
         if self.session_id is not None:
             session = next((item for item in snapshot.sessions if item.id == self.session_id), None)
             if session is not None:
-                nodes: list[sl.LayoutNode] = [
+                detail_nodes: list[sl.LayoutNode] = [
                     sl.section(
                         sl.heading(f"Session {session.id}"),
                         sl.bullets(
@@ -425,8 +425,8 @@ class OperationalInspector(sl.Component):
                             key="session-actions",
                         )
                     )
-                    nodes.append(confirmation)
-                return (*nodes, self._controls(back=True))
+                    detail_nodes.append(confirmation)
+                return (*detail_nodes, self._controls(back=True))
             notice = f"Session `{self.session_id}` is no longer live."
         else:
             notice = None

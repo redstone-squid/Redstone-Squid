@@ -229,7 +229,7 @@ def _controls(items: tuple[object, ...], origin: str) -> tuple[Control, ...]:
     return tuple(collected)
 
 
-def _check_content(value: object, origin: str, index: int) -> None:
+def check_content(value: object, origin: str, index: int) -> None:
     if value is True:
         message = f"{origin} argument {index}: True is not content"
         raise TypeError(message)

@@ -369,12 +369,12 @@ async def test_persistence_records_load_on_demand_and_purge_after_confirmation()
         await root.send(delivered_to(sd.message_harness()))
         assert store.reads == 0
 
-        await root.dispatch("section", interaction_harness(), values=("persistence",))
+        await root.dispatch("section", interaction_harness(), values=["persistence"])
         assert store.reads == 1
         assert isinstance(inspector.persistence_records.status, sl.resources.Ready)
         assert inspector.persistence_records.status.value[0].key == "saved-panel"
 
-        await root.dispatch("purge-records", interaction_harness(), values=("saved-panel",))
+        await root.dispatch("purge-records", interaction_harness(), values=["saved-panel"])
         await root.dispatch("purge", interaction_harness())
         assert await store.load("saved-panel") is not None
         await root.dispatch("confirm-purge", interaction_harness())

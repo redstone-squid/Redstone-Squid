@@ -91,7 +91,8 @@ class _SessionScreen[OwnerT = Any](Screen[OwnerT]):
                 message = "Declare either session_name or session, not both"
                 raise TypeError(message)
             cls.session = SessionSpec(session_name, scope=cls._preset_scope, admission=cls._preset_admission)
-        if not _preset_base and (cls.session is None or not cls.session.name):
+        name = None if cls.session is None else cls.session.name
+        if not _preset_base and (not isinstance(name, str) or not name):
             message = f"{cls.__name__} requires a non-empty session_name or a named SessionSpec"
             raise TypeError(message)
         super().__init_subclass__(**kwargs)
