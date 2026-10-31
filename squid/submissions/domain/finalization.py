@@ -40,7 +40,7 @@ class ExtenderOrientation(StrEnum):
 
 
 class SubmissionSchematicVisibility(StrEnum):
-    """Submitter-selected visibility for a sanitized schematic."""
+    """Submitter-selected visibility for an uploaded schematic."""
 
     REVIEWER_ONLY = "reviewer_only"
     PUBLIC_DOWNLOAD = "public_download"
@@ -63,7 +63,7 @@ class SchematicArtifactState(StrEnum):
 
     ABSENT = "absent"
     PROCESSING = "processing"
-    SANITIZED = "sanitized"
+    READY = "ready"
     REJECTED = "rejected"
 
 
@@ -143,13 +143,11 @@ class SubmissionTaxonomy:
 
 @dataclass(frozen=True, slots=True)
 class SchematicRightsPolicy:
-    """Explicit publication grant and privacy-preserving sanitizer policy."""
+    """Explicit publication grant for the uploaded schematic."""
 
     visibility: SubmissionSchematicVisibility
     license: SubmissionSchematicLicense | None
     rights_attested: bool
-    include_inventories: bool
-    include_free_text: bool
 
     def __post_init__(self) -> None:
         if self.visibility is SubmissionSchematicVisibility.PUBLIC_DOWNLOAD:
@@ -166,10 +164,10 @@ class VerifiedSubmissionArtifacts:
     """Only artifacts whose readiness was established by backend-owned state."""
 
     normalized_media_upload_ids: tuple[UUID, ...] = ()
-    sanitized_schematic_id: UUID | None = None
+    schematic_id: UUID | None = None
 
     def __post_init__(self) -> None:
-        identifiers = (*self.normalized_media_upload_ids, self.sanitized_schematic_id)
+        identifiers = (*self.normalized_media_upload_ids, self.schematic_id)
         if any(identifier is not None and identifier.int == 0 for identifier in identifiers):
             msg = "verified artifact identifiers cannot be nil UUIDs"
             raise ValueError(msg)
@@ -183,20 +181,20 @@ class SubmissionArtifactReadiness:
     """Backend assessment of every artifact currently associated with a draft."""
 
     schematic_state: SchematicArtifactState = SchematicArtifactState.ABSENT
-    sanitized_schematic_id: UUID | None = None
+    schematic_id: UUID | None = None
     normalized_media_upload_ids: tuple[UUID, ...] = ()
     issues: tuple[SubmissionAttentionIssue, ...] = ()
 
     def __post_init__(self) -> None:
-        if (self.schematic_state is SchematicArtifactState.SANITIZED) != (self.sanitized_schematic_id is not None):
-            msg = "only a sanitized schematic assessment may expose an artifact ID"
+        if (self.schematic_state is SchematicArtifactState.READY) != (self.schematic_id is not None):
+            msg = "only a ready schematic assessment may expose an artifact ID"
             raise ValueError(msg)
-        VerifiedSubmissionArtifacts(self.normalized_media_upload_ids, self.sanitized_schematic_id)
+        VerifiedSubmissionArtifacts(self.normalized_media_upload_ids, self.schematic_id)
 
     @property
     def artifacts(self) -> VerifiedSubmissionArtifacts:
         """Project this assessment into references safe for build creation."""
-        return VerifiedSubmissionArtifacts(self.normalized_media_upload_ids, self.sanitized_schematic_id)
+        return VerifiedSubmissionArtifacts(self.normalized_media_upload_ids, self.schematic_id)
 
 
 @dataclass(frozen=True, slots=True)

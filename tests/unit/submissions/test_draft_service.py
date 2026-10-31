@@ -185,7 +185,7 @@ async def test_create_pins_schema_and_enforces_renderer_capabilities() -> None:
     )
 
     assert draft.snapshot.schema_id == "build_submission.v1"
-    assert draft.snapshot.schema_revision == 1
+    assert draft.snapshot.schema_revision == 2
     assert draft.expires_at == NOW.add(days=7, days_assumed_24h_ok=True)
 
 
@@ -286,7 +286,7 @@ async def test_finalization_validation_uses_complete_pinned_answers() -> None:
             id=DRAFT_ID,
             owner_account_id=7,
             schema_id="build_submission.v1",
-            schema_revision=1,
+            schema_revision=2,
             category="other",
             answers=_complete_answers(),
         ),

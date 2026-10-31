@@ -68,8 +68,6 @@ def test_manifest_validates_category_fields_and_server_defaults() -> None:
     assert manifest.validate_answers("door", answers, origin=SubmissionOrigin.FABRIC) == {}
     assert manifest.apply_defaults("door", answers, origin=SubmissionOrigin.FABRIC) | {
         "ai_generated": False,
-        "include_free_text": True,
-        "include_inventories": True,
     } == manifest.apply_defaults("door", answers, origin=SubmissionOrigin.FABRIC)
 
 
@@ -117,7 +115,7 @@ def test_draft_field_operations_are_atomic_and_revisioned() -> None:
         id=UUID("00000000-0000-4000-8000-000000000001"),
         owner_account_id=42,
         schema_id="build_submission.v1",
-        schema_revision=1,
+        schema_revision=2,
         category="other",
         answers={"display_name": "First"},
     )
@@ -157,7 +155,7 @@ def test_draft_lifecycle_prevents_edits_while_processing() -> None:
         id=UUID("00000000-0000-4000-8000-000000000004"),
         owner_account_id=42,
         schema_id="build_submission.v1",
-        schema_revision=1,
+        schema_revision=2,
         category="other",
     ).transition(DraftStatus.PROCESSING)
 

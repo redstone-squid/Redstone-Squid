@@ -51,7 +51,7 @@ def stored_draft(draft_id: UUID = DRAFT_ID) -> StoredDraft:
             id=draft_id,
             owner_account_id=ACCOUNT_ID,
             schema_id="build_submission.v1",
-            schema_revision=1,
+            schema_revision=2,
             category="door",
         ),
         origin=SubmissionOrigin.WEB,

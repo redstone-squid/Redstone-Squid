@@ -73,7 +73,7 @@ def _stored(account_id: int) -> StoredDraft:
             id=DRAFT_ID,
             owner_account_id=account_id,
             schema_id="build_submission.v1",
-            schema_revision=1,
+            schema_revision=2,
             category="other",
         ),
         origin=SubmissionOrigin.WEB,

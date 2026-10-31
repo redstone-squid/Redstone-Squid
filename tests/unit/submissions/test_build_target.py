@@ -110,7 +110,7 @@ def _submission(category: SubmissionCategory) -> NormalizedSubmission:
         owner_account_id=17,
         origin=SubmissionOrigin.WEB,
         schema_id="redstone_squid.submission",
-        schema_revision=1,
+        schema_revision=2,
         category=category,
         display_name="Workshop prototype",
         description="A synchronized submission",
@@ -123,8 +123,6 @@ def _submission(category: SubmissionCategory) -> NormalizedSubmission:
             visibility=SubmissionSchematicVisibility.REVIEWER_ONLY,
             license=None,
             rights_attested=False,
-            include_inventories=False,
-            include_free_text=False,
         ),
         completion="August 2026",
         ai_generated=False,
@@ -204,17 +202,15 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_pro
     assert isinstance(provenance, Mapping)
     assert provenance["artifacts"] == {
         "normalized_media_upload_ids": [str(MEDIA_ID)],
-        "sanitized_schematic_id": str(SCHEMATIC_ID),
+        "schematic_id": str(SCHEMATIC_ID),
     }
     assert provenance["schematic_policy"] == {
         "visibility": "reviewer_only",
         "license": None,
         "rights_attested": False,
-        "include_inventories": False,
-        "include_free_text": False,
     }
     assert result.provenance["normalized_media_upload_ids"] == [str(MEDIA_ID)]
-    assert result.provenance["sanitized_schematic_id"] == str(SCHEMATIC_ID)
+    assert result.provenance["schematic_id"] == str(SCHEMATIC_ID)
 
 
 async def test_extender_timing_is_retained_when_the_legacy_build_columns_have_no_slot() -> None:

@@ -289,7 +289,7 @@ def _stored(
             id=DRAFT_ID,
             owner_account_id=7,
             schema_id="build_submission.v1",
-            schema_revision=1,
+            schema_revision=2,
             category=category,
             answers=answers or _answers(),
         ),
@@ -327,7 +327,7 @@ async def _submit(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("origin", [SubmissionOrigin.PAPER, SubmissionOrigin.FABRIC])
-async def test_minecraft_origins_require_backend_verified_sanitized_schematic(origin: SubmissionOrigin) -> None:
+async def test_minecraft_origins_require_backend_verified_schematic(origin: SubmissionOrigin) -> None:
     result, jobs = await _submit(origin, SubmissionArtifactReadiness())
 
     assert result.status is FinalizationJobStatus.NEEDS_ATTENTION
@@ -351,7 +351,7 @@ async def test_web_can_omit_schematic_and_enqueues_typed_payload_without_type_la
 
 
 @pytest.mark.asyncio
-async def test_any_supplied_schematic_must_finish_server_sanitization() -> None:
+async def test_any_supplied_schematic_must_finish_server_validation() -> None:
     result, jobs = await _submit(
         SubmissionOrigin.DISCORD,
         SubmissionArtifactReadiness(schematic_state=SchematicArtifactState.PROCESSING),
@@ -362,34 +362,32 @@ async def test_any_supplied_schematic_must_finish_server_sanitization() -> None:
 
 
 @pytest.mark.asyncio
-async def test_server_sanitized_artifact_identity_reaches_target_payload() -> None:
+async def test_server_validated_artifact_identity_reaches_target_payload() -> None:
     result, jobs = await _submit(
         SubmissionOrigin.FABRIC,
         SubmissionArtifactReadiness(
-            schematic_state=SchematicArtifactState.SANITIZED,
-            sanitized_schematic_id=SCHEMATIC_ID,
+            schematic_state=SchematicArtifactState.READY,
+            schematic_id=SCHEMATIC_ID,
         ),
     )
 
     assert result.status is FinalizationJobStatus.PENDING
     assert jobs.enqueued is not None
-    assert jobs.enqueued.artifacts.sanitized_schematic_id == SCHEMATIC_ID
+    assert jobs.enqueued.artifacts.schematic_id == SCHEMATIC_ID
 
 
 @pytest.mark.asyncio
-async def test_public_license_rights_and_sanitizer_privacy_policy_are_retained() -> None:
+async def test_public_license_and_rights_are_retained() -> None:
     answers = _answers() | {
         "schematic_visibility": "public_download",
         "schematic_license": "cc_by_sa_4_0",
         "rights_attestation": True,
-        "include_inventories": False,
-        "include_free_text": False,
     }
     _, jobs = await _submit(
         SubmissionOrigin.WEB,
         SubmissionArtifactReadiness(
-            schematic_state=SchematicArtifactState.SANITIZED,
-            sanitized_schematic_id=SCHEMATIC_ID,
+            schematic_state=SchematicArtifactState.READY,
+            schematic_id=SCHEMATIC_ID,
         ),
         answers=answers,
     )
@@ -398,8 +396,6 @@ async def test_public_license_rights_and_sanitizer_privacy_policy_are_retained()
     assert jobs.enqueued.schematic_policy.license is not None
     assert jobs.enqueued.schematic_policy.license.value == "cc_by_sa_4_0"
     assert jobs.enqueued.schematic_policy.rights_attested is True
-    assert jobs.enqueued.schematic_policy.include_inventories is False
-    assert jobs.enqueued.schematic_policy.include_free_text is False
 
 
 @pytest.mark.asyncio

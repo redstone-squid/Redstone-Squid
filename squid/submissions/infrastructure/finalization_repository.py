@@ -557,7 +557,7 @@ def _encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
     else:
         details = {"kind": "general"}
     return {
-        "payload_schema": 1,
+        "payload_schema": 2,
         "source_draft_id": str(submission.source_draft_id),
         "owner_account_id": submission.owner_account_id,
         "origin": submission.origin.value,
@@ -581,18 +581,14 @@ def _encode_submission(submission: NormalizedSubmission) -> dict[str, object]:
                 submission.schematic_policy.license.value if submission.schematic_policy.license is not None else None
             ),
             "rights_attested": submission.schematic_policy.rights_attested,
-            "include_inventories": submission.schematic_policy.include_inventories,
-            "include_free_text": submission.schematic_policy.include_free_text,
         },
         "completion": submission.completion,
         "ai_generated": submission.ai_generated,
         "sponsor_attribution": submission.sponsor_attribution,
         "artifacts": {
             "normalized_media_upload_ids": [str(value) for value in submission.artifacts.normalized_media_upload_ids],
-            "sanitized_schematic_id": (
-                str(submission.artifacts.sanitized_schematic_id)
-                if submission.artifacts.sanitized_schematic_id is not None
-                else None
+            "schematic_id": (
+                str(submission.artifacts.schematic_id) if submission.artifacts.schematic_id is not None else None
             ),
         },
         "details": details,
@@ -634,8 +630,6 @@ def _decode_submission(value: Mapping[str, object]) -> NormalizedSubmission:
                     else None
                 ),
                 rights_attested=_boolean(policy["rights_attested"]),
-                include_inventories=_boolean(policy["include_inventories"]),
-                include_free_text=_boolean(policy["include_free_text"]),
             ),
             completion=_optional_string(value["completion"]),
             ai_generated=_boolean(value["ai_generated"]),
@@ -644,9 +638,9 @@ def _decode_submission(value: Mapping[str, object]) -> NormalizedSubmission:
                 normalized_media_upload_ids=tuple(
                     UUID(item) for item in _strings(artifacts["normalized_media_upload_ids"])
                 ),
-                sanitized_schematic_id=(
+                schematic_id=(
                     UUID(identifier)
-                    if (identifier := _optional_string(artifacts["sanitized_schematic_id"])) is not None
+                    if (identifier := _optional_string(artifacts["schematic_id"])) is not None
                     else None
                 ),
             ),
@@ -658,7 +652,7 @@ def _decode_submission(value: Mapping[str, object]) -> NormalizedSubmission:
 
 
 def _require_payload_schema(value: object) -> None:
-    if value != 1:
+    if value != 2:
         msg = "unknown normalized submission payload schema"
         raise ValueError(msg)
 

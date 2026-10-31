@@ -1,6 +1,5 @@
 """Backend-authoritative artifact readiness for synchronized drafts."""
 
-import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
@@ -20,7 +19,6 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 
-_STABLE_KEY = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _ACTIVE_MEDIA_STATES = {MediaJobStatus.PENDING, MediaJobStatus.CLAIMED, MediaJobStatus.COMPLETED}
 
 
@@ -31,114 +29,40 @@ class DraftMediaJobReader(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class SchematicSanitizationPolicyFacts:
-    """Exact backend policy applied by a format-aware schematic sanitizer."""
-
-    policy_key: str
-    include_inventories: bool
-    include_free_text: bool
-
-    def __post_init__(self) -> None:
-        if _STABLE_KEY.fullmatch(self.policy_key) is None:
-            msg = "Schematic sanitizer policy keys must be stable identifiers."
-            raise ValueError(msg)
-
-
-@dataclass(frozen=True, slots=True)
-class SchematicSanitizationReportFacts:
-    """Non-sensitive counts emitted by the sanitizer, never removed values."""
-
-    schema_version: int
-    action_counts: tuple[tuple[str, int], ...] = ()
-
-    def __post_init__(self) -> None:
-        keys = [key for key, _ in self.action_counts]
-        if self.schema_version < 1 or len(keys) != len(set(keys)):
-            msg = "Schematic sanitizer reports require a positive schema version and unique action keys."
-            raise ValueError(msg)
-        if any(_STABLE_KEY.fullmatch(key) is None or count < 0 for key, count in self.action_counts):
-            msg = "Schematic sanitizer report actions must be stable identifiers with nonnegative counts."
-            raise ValueError(msg)
-
-
-@dataclass(frozen=True, slots=True)
-class SanitizerIssuedSchematic:
-    """Opaque canonical artifact identity and its server-issued sanitization certificate."""
-
-    artifact_id: UUID
-    sanitizer_version: str
-    policy: SchematicSanitizationPolicyFacts
-    report: SchematicSanitizationReportFacts
-
-    def __post_init__(self) -> None:
-        if self.artifact_id.int == 0:
-            msg = "Sanitized schematic artifact identifiers cannot be nil UUIDs."
-            raise ValueError(msg)
-        if (
-            not self.sanitizer_version
-            or self.sanitizer_version != self.sanitizer_version.strip()
-            or len(self.sanitizer_version) > 120
-        ):
-            msg = "Schematic sanitizer versions must be 1-120 characters without surrounding whitespace."
-            raise ValueError(msg)
-
-
-@dataclass(frozen=True, slots=True)
 class DraftSchematicSnapshot:
-    """Backend state for one draft schematic and, only when complete, its certificate."""
+    """Backend state and stored artifact identity for one draft schematic."""
 
     state: SchematicArtifactState
-    sanitized: SanitizerIssuedSchematic | None = None
+    artifact_id: UUID | None = None
 
     def __post_init__(self) -> None:
-        if (self.state is SchematicArtifactState.SANITIZED) != (self.sanitized is not None):
-            msg = "Only a sanitized schematic state may carry a sanitizer-issued artifact."
+        if (self.state is SchematicArtifactState.READY) != (self.artifact_id is not None):
+            msg = "Only a ready schematic state may carry a stored artifact ID."
+            raise ValueError(msg)
+        if self.artifact_id is not None and self.artifact_id.int == 0:
+            msg = "Schematic artifact identifiers cannot be nil UUIDs."
             raise ValueError(msg)
 
 
 class DraftSchematicReader(Protocol):
-    """Future sanitizer repository port consumed by finalization.
+    """Read stored upload identity and validation status from backend-owned records.
 
-    ``read_for_draft`` must read backend-owned quarantine and worker records. It may
-    return ``SANITIZED`` only after a claim-fenced sanitizer transaction persisted a
-    canonical artifact UUID, sanitizer version, exact applied policy, and non-sensitive
-    report counts together. The applied inventory/text flags must match the current
-    persisted draft policy; those client choices are requirements, never evidence that
-    sanitization occurred. Implementations must never infer success from draft answers,
-    filenames, extensions, object keys, hashes, serialization, or format conversion.
-
-    The Nucleation-backed implementation should implement this exact port once
-    Schem-at/Nucleation#10 ships a released format-aware sanitizer.
+    A ready artifact must belong to the requested draft and have passed the file
+    format and resource limits. Client answers are never proof of an uploaded file.
     """
 
     async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot: ...
 
 
-class DraftSchematicPresenceReader(Protocol):
-    """Read whether backend quarantine has ever accepted a schematic for a draft."""
-
-    async def has_supplied_schematic(self, draft_id: UUID) -> bool: ...
-
-
-class FailClosedDraftSchematicReader:
-    """Reject quarantined schematics while Nucleation#10 is unavailable.
-
-    With no quarantine reader, the only truthful result is ``ABSENT``. If backend
-    quarantine reports that bytes were supplied, they are ``REJECTED`` because this
-    implementation has no sanitizer and deliberately has no ``SANITIZED`` path.
-    """
-
-    def __init__(self, presence: DraftSchematicPresenceReader | None = None) -> None:
-        self._presence = presence
+class EmptyDraftSchematicReader:
+    """Report no schematic while the draft upload endpoint is not implemented."""
 
     async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot:
-        if self._presence is not None and await self._presence.has_supplied_schematic(draft_id):
-            return DraftSchematicSnapshot(SchematicArtifactState.REJECTED)
         return DraftSchematicSnapshot(SchematicArtifactState.ABSENT)
 
 
 class AuthoritativeDraftArtifactReadiness:
-    """Assess only worker-owned media jobs and sanitizer-owned schematic state."""
+    """Assess only worker-owned media jobs and backend-owned schematic uploads."""
 
     def __init__(
         self,
@@ -158,7 +82,7 @@ class AuthoritativeDraftArtifactReadiness:
         media_ids, issues = _assess_media(draft_id, jobs, self._media_limits)
         return SubmissionArtifactReadiness(
             schematic_state=schematic.state,
-            sanitized_schematic_id=(schematic.sanitized.artifact_id if schematic.sanitized is not None else None),
+            schematic_id=schematic.artifact_id,
             normalized_media_upload_ids=media_ids,
             issues=issues,
         )

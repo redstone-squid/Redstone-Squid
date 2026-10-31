@@ -60,7 +60,7 @@ def stored_draft(
             id=UUID("64760b2f-b352-45e0-9ed1-67b9da901992"),
             owner_account_id=owner_account_id,
             schema_id="build_submission.v1",
-            schema_revision=1,
+            schema_revision=2,
             category=category,
         ),
         origin=origin,
@@ -167,9 +167,11 @@ def test_manifest_dto_is_stable_strict_and_json_safe() -> None:
     payload = response.model_dump(mode="json")
 
     assert payload["schema_id"] == "build_submission.v1"
+    assert payload["revision"] == 2
     assert payload["common_sections"][0]["fields"][0]["control"] == "text"
     assert payload["common_sections"][0]["fields"][0]["origins"] == ["discord", "fabric", "paper", "web"]
-    assert "type_label" not in {field["id"] for section in payload["common_sections"] for field in section["fields"]}
+    fields = {field["id"] for section in payload["common_sections"] for field in section["fields"]}
+    assert {"type_label", "include_inventories", "include_free_text"}.isdisjoint(fields)
 
     with pytest.raises(PydanticValidationError):
         DraftCreateRequest.model_validate(
@@ -193,7 +195,7 @@ def test_draft_change_rejects_non_json_and_client_schematic_assertions() -> None
     }
 
     with pytest.raises(PydanticValidationError):
-        DraftChangeRequest.model_validate({**base, "has_sanitized_schematic": True})
+        DraftChangeRequest.model_validate({**base, "has_ready_schematic": True})
 
     with pytest.raises(PydanticValidationError):
         DraftChangeRequest.model_validate(

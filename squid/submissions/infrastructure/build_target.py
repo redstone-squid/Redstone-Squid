@@ -253,15 +253,11 @@ def _submission_provenance(submission: NormalizedSubmission) -> dict[str, JSONVa
                 submission.schematic_policy.license.value if submission.schematic_policy.license is not None else None
             ),
             "rights_attested": submission.schematic_policy.rights_attested,
-            "include_inventories": submission.schematic_policy.include_inventories,
-            "include_free_text": submission.schematic_policy.include_free_text,
         },
         "artifacts": {
             "normalized_media_upload_ids": [str(value) for value in submission.artifacts.normalized_media_upload_ids],
-            "sanitized_schematic_id": (
-                str(submission.artifacts.sanitized_schematic_id)
-                if submission.artifacts.sanitized_schematic_id is not None
-                else None
+            "schematic_id": (
+                str(submission.artifacts.schematic_id) if submission.artifacts.schematic_id is not None else None
             ),
         },
     }
@@ -275,9 +271,7 @@ def _result_provenance(submission: NormalizedSubmission) -> dict[str, JSONValue]
         "schema_id": submission.schema_id,
         "schema_revision": submission.schema_revision,
         "normalized_media_upload_ids": [str(value) for value in submission.artifacts.normalized_media_upload_ids],
-        "sanitized_schematic_id": (
-            str(submission.artifacts.sanitized_schematic_id)
-            if submission.artifacts.sanitized_schematic_id is not None
-            else None
+        "schematic_id": (
+            str(submission.artifacts.schematic_id) if submission.artifacts.schematic_id is not None else None
         ),
     }

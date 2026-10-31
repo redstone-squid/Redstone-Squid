@@ -1,6 +1,5 @@
 """Authoritative submission artifact readiness."""
 
-from dataclasses import replace
 from uuid import UUID
 
 import pytest
@@ -22,10 +21,7 @@ from squid.submissions.domain import (
 from squid.submissions.infrastructure.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
     DraftSchematicSnapshot,
-    FailClosedDraftSchematicReader,
-    SanitizerIssuedSchematic,
-    SchematicSanitizationPolicyFacts,
-    SchematicSanitizationReportFacts,
+    EmptyDraftSchematicReader,
 )
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000601")
@@ -52,16 +48,6 @@ class FakeSchematics:
     async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot:
         self.requested.append(draft_id)
         return self.snapshot
-
-
-class FakePresence:
-    def __init__(self, *, supplied: bool) -> None:
-        self.supplied = supplied
-        self.requested: list[UUID] = []
-
-    async def has_supplied_schematic(self, draft_id: UUID) -> bool:
-        self.requested.append(draft_id)
-        return self.supplied
 
 
 def _artifact(
@@ -272,28 +258,14 @@ async def test_wrong_draft_media_is_rejected_and_never_exposed() -> None:
     assert readiness.issues == (SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_REJECTED),)
 
 
-async def test_sanitized_state_requires_and_projects_a_sanitizer_certificate() -> None:
-    issued = SanitizerIssuedSchematic(
-        artifact_id=SCHEMATIC_ID,
-        sanitizer_version="nucleation-0.11.0",
-        policy=SchematicSanitizationPolicyFacts(
-            policy_key="submission_v1",
-            include_inventories=False,
-            include_free_text=False,
-        ),
-        report=SchematicSanitizationReportFacts(
-            schema_version=1,
-            action_counts=(("inventory_items_removed", 3), ("text_fields_removed", 2)),
-        ),
-    )
-
+async def test_ready_state_projects_the_stored_schematic_identity() -> None:
     readiness = await AuthoritativeDraftArtifactReadiness(
         FakeMediaJobs(),
-        FakeSchematics(DraftSchematicSnapshot(SchematicArtifactState.SANITIZED, issued)),
+        FakeSchematics(DraftSchematicSnapshot(SchematicArtifactState.READY, SCHEMATIC_ID)),
     ).assess(DRAFT_ID)
 
-    assert readiness.schematic_state is SchematicArtifactState.SANITIZED
-    assert readiness.sanitized_schematic_id == SCHEMATIC_ID
+    assert readiness.schematic_state is SchematicArtifactState.READY
+    assert readiness.schematic_id == SCHEMATIC_ID
 
 
 @pytest.mark.parametrize(
@@ -310,33 +282,20 @@ async def test_nonterminal_schematic_state_never_exposes_an_identifier(snapshot:
     ).assess(DRAFT_ID)
 
     assert readiness.schematic_state is snapshot.state
-    assert readiness.sanitized_schematic_id is None
+    assert readiness.schematic_id is None
 
 
-async def test_fail_closed_reader_reports_absent_without_backend_presence() -> None:
-    presence = FakePresence(supplied=False)
-
-    snapshot = await FailClosedDraftSchematicReader(presence).read_for_draft(DRAFT_ID)
+async def test_empty_reader_reports_absent_until_draft_uploads_are_implemented() -> None:
+    snapshot = await EmptyDraftSchematicReader().read_for_draft(DRAFT_ID)
 
     assert snapshot == DraftSchematicSnapshot(SchematicArtifactState.ABSENT)
-    assert presence.requested == [DRAFT_ID]
 
 
-async def test_fail_closed_reader_rejects_supplied_bytes_without_a_sanitizer() -> None:
-    snapshot = await FailClosedDraftSchematicReader(FakePresence(supplied=True)).read_for_draft(DRAFT_ID)
-
-    assert snapshot == DraftSchematicSnapshot(SchematicArtifactState.REJECTED)
-    assert snapshot.sanitized is None
+def test_schematic_snapshot_cannot_claim_ready_without_a_stored_artifact() -> None:
+    with pytest.raises(ValueError, match="ready schematic state"):
+        DraftSchematicSnapshot(SchematicArtifactState.READY)
 
 
-def test_schematic_snapshot_cannot_claim_sanitized_without_a_certificate() -> None:
-    with pytest.raises(ValueError, match="sanitized schematic state"):
-        DraftSchematicSnapshot(SchematicArtifactState.SANITIZED)
-
-
-def test_sanitizer_report_rejects_sensitive_free_form_values_by_construction() -> None:
-    report = SchematicSanitizationReportFacts(schema_version=1, action_counts=(("text_removed", 1),))
-    assert report.action_counts == (("text_removed", 1),)
-
-    with pytest.raises(ValueError, match="stable identifiers"):
-        replace(report, action_counts=(("removed: secret sign text", 1),))
+def test_schematic_snapshot_rejects_a_nil_artifact_identifier() -> None:
+    with pytest.raises(ValueError, match="nil UUIDs"):
+        DraftSchematicSnapshot(SchematicArtifactState.READY, UUID(int=0))

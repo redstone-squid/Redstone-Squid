@@ -93,7 +93,7 @@ from squid.submissions.application import (
 )
 from squid.submissions.infrastructure.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
-    FailClosedDraftSchematicReader,
+    EmptyDraftSchematicReader,
 )
 from squid.submissions.infrastructure.build_target import BuildSubmissionTarget
 from squid.submissions.infrastructure.finalization_events import (
@@ -365,7 +365,7 @@ class _ServiceGraph:
     def submission_finalization(self) -> SubmissionFinalizationService:
         readiness = AuthoritativeDraftArtifactReadiness(
             self.media_repository,
-            FailClosedDraftSchematicReader(),
+            EmptyDraftSchematicReader(),
             media_limits=MediaLimits(),
         )
         return SubmissionFinalizationService(

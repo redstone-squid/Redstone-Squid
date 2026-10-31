@@ -274,3 +274,80 @@ def test_taxonomy_cutover_refuses_unimported_legacy_rows(
 
     with pytest.raises(DBAPIError, match="restriction definitions are not fully imported"):
         command.upgrade(config, "head")
+
+
+def test_submission_content_policy_migration_preserves_uploads_and_retry_identity(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Existing drafts and queued payloads survive removal of content filtering."""
+    import hashlib
+    import json
+    from uuid import uuid4
+
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config("alembic.ini", toml_file="pyproject.toml")
+    command.upgrade(config, "a3c5e7f9b1d2")
+    draft_id, job_id, artifact_id = uuid4(), uuid4(), uuid4()
+    payload = {
+        "payload_schema": 1,
+        "schema_id": "build_submission.v1",
+        "schema_revision": 1,
+        "schematic_policy": {
+            "visibility": "public_download",
+            "license": "cc_by_4_0",
+            "rights_attested": True,
+            "include_inventories": False,
+            "include_free_text": False,
+        },
+        "artifacts": {"sanitized_schematic_id": str(artifact_id), "normalized_media_upload_ids": []},
+    }
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO submission_drafts "
+                    "(id, owner_account_id, schema_id, schema_revision, category, revision, status, answers, "
+                    "origin, expires_at) VALUES (:id, :owner, 'build_submission.v1', 1, 'other', 7, 'processing', "
+                    "CAST(:answers AS jsonb), 'web', now() + interval '7 days')"
+                ),
+                {
+                    "id": draft_id,
+                    "owner": account_id,
+                    "answers": json.dumps({"display_name": "Door", "include_inventories": False}),
+                },
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO submission_finalization_jobs "
+                    "(id, draft_id, draft_revision, payload, payload_sha256, status, attention_issues) "
+                    "VALUES (:id, :draft, 7, CAST(:payload AS jsonb), :digest, 'pending', '[]'::jsonb)"
+                ),
+                {"id": job_id, "draft": draft_id, "payload": json.dumps(payload), "digest": "a" * 64},
+            )
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            draft = connection.execute(
+                text("SELECT schema_revision, revision, answers FROM submission_drafts WHERE id = :id"),
+                {"id": draft_id},
+            ).one()
+            job = connection.execute(
+                text("SELECT draft_revision, payload, payload_sha256 FROM submission_finalization_jobs WHERE id = :id"),
+                {"id": job_id},
+            ).one()
+        assert draft == (2, 8, {"display_name": "Door"})
+        assert job.draft_revision == draft.revision
+        assert job.payload["schema_revision"] == 2
+        assert job.payload["payload_schema"] == 2
+        assert job.payload["artifacts"] == {"schematic_id": str(artifact_id), "normalized_media_upload_ids": []}
+        assert job.payload["schematic_policy"] == {
+            "visibility": "public_download",
+            "license": "cc_by_4_0",
+            "rights_attested": True,
+        }
+        encoded = json.dumps(job.payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
+        assert job.payload_sha256 == hashlib.sha256(encoded).hexdigest()
+    finally:
+        engine.dispose()

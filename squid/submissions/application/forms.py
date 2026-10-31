@@ -21,7 +21,7 @@ from squid.submissions.domain import (
 
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
-CURRENT_SUBMISSION_SCHEMA_REVISION = 1
+CURRENT_SUBMISSION_SCHEMA_REVISION = 2
 
 
 class FormOptionCatalog(Protocol):
@@ -216,22 +216,6 @@ def build_submission_manifest(locale: str | None = None) -> FormManifest:
                     required=True,
                     constraints=FieldConstraints(must_equal=True),
                     visible_when=VisibilityRule("schematic_visibility", VisibilityOperator.EQUALS, "public_download"),
-                ),
-                FormField(
-                    id="include_inventories",
-                    label=localize(_("Include inventories and functional item contents")),
-                    help_text=localize(_("Review the disclosure preview before submitting.")),
-                    control=ControlKind.BOOLEAN,
-                    value_kind=ValueKind.BOOLEAN,
-                    default=True,
-                ),
-                FormField(
-                    id="include_free_text",
-                    label=localize(_("Include signs, books, names, and other free text")),
-                    help_text=localize(_("Review the disclosure preview before submitting.")),
-                    control=ControlKind.BOOLEAN,
-                    value_kind=ValueKind.BOOLEAN,
-                    default=True,
                 ),
             ),
         ),

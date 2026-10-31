@@ -128,7 +128,7 @@ class DraftArtifactReadiness(Protocol):
     """Read backend-owned artifact state for one draft.
 
     Implementations must inspect every associated upload. They may expose media UUIDs
-    only after normalization and a schematic UUID only after sanitization; pending or
+    only after normalization and a schematic UUID only after validation and storage; pending or
     rejected uploads must be represented by stable attention issues.
     """
 
@@ -443,7 +443,7 @@ def _artifact_issues(
             issues.append(SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING))
         case SchematicArtifactState.REJECTED:
             issues.append(SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_REJECTED))
-        case SchematicArtifactState.SANITIZED:
+        case SchematicArtifactState.READY:
             pass
     return _unique_issues(issues)
 
@@ -478,8 +478,6 @@ def _normalize(
         visibility=visibility,
         license=SubmissionSchematicLicense(license_value) if license_value is not None else None,
         rights_attested=_required_bool(answers, "rights_attestation") if public else False,
-        include_inventories=_required_bool(answers, "include_inventories"),
-        include_free_text=_required_bool(answers, "include_free_text"),
     )
     details: DoorSubmissionDetails | ExtenderSubmissionDetails | GeneralSubmissionDetails
     if category is SubmissionCategory.DOOR:
