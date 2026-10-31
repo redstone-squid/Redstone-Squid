@@ -9,7 +9,8 @@ import anyio
 import discord
 from discord.ext import commands
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
@@ -22,13 +23,12 @@ from squid.bot.i18n import t
 from squid.bot.ui import CardField, localization_for, text_layout
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_layouts.discord import Screen
-from squid_layouts.discord.screens import Opener
-from squid_layouts.discord.sessions import Opened, Reject, Rejected, SessionPolicy
+from squid_ui_discord import OpenContext, SessionSpec
+from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject, Rejected
 
-CONSENT_SCREEN = Screen(
+CONSENT_SESSION_SPEC = SessionSpec(
     "consent",
-    policy=SessionPolicy(collision=Reject()),
+    admission=AdmissionSpec(collision=Reject()),
     options={"timeout": 120},
 )
 
@@ -112,17 +112,16 @@ class ConsentPrompt(sl.Component):
                 sl.truncate(sl.paragraph(self._summary)),
                 bool(card_fields) and sl.fields(*card_fields),
             ),
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        self._accept_label,
-                        self._accept,
-                        "accept",
-                        style=sl.primitives.ActionStyle.SUCCESS,
-                    ),
-                    sl.primitives.Button(t(self.locale, _("Cancel")), self._cancel, "cancel"),
-                    sl.primitives.Button(t(self.locale, _("Privacy notice")), self._privacy, "privacy"),
-                )
+            sl.action_controls(
+                sl.action_control(
+                    self._accept_label,
+                    self._accept,
+                    key="accept",
+                    tone=sl.Tone.SUCCESS,
+                ),
+                sl.action_control(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                sl.action_control(t(self.locale, _("Privacy notice")), self._privacy, key="privacy"),
+                key="consent-actions",
             ),
         )
 
@@ -158,24 +157,24 @@ class ConsentPrompt(sl.Component):
 def _is_context(target: ConsentTarget) -> bool:
     """Whether this arrived as a command rather than as a bare interaction.
 
-    By shape, the way `sl.discord.deliver_to` dispatches: only a command context can `send`.
+    By shape, the way `sd.deliver_to` dispatches: only a command context can `send`.
     """
     return callable(getattr(target, "send", None))
 
 
-def _destination(target: ConsentTarget) -> sl.discord.Destination:
+def _destination(target: ConsentTarget) -> sd.MessageDestination:
     """Choose the reply transport for a consent prompt.
 
     Ephemeral wherever the surface allows it: a consent notice names what the bot would store
     about one reader, and a channel is not the audience for that.
     """
     ephemeral = not _is_context(target) or cast(commands.Context[Any], target).interaction is not None
-    return sl.discord.deliver_to(target, ephemeral=ephemeral, wait=True)
+    return sd.deliver_to(target, ephemeral=ephemeral, wait=True)
 
 
-async def _send(target: ConsentTarget, presentation: sl.discord.presentation.DiscordPresentation) -> None:
-    """Send a plain presentation where the prompt itself would have gone."""
-    await _destination(target)(presentation)
+async def _send(target: ConsentTarget, payload: sd.message_payload.MessagePayload) -> None:
+    """Send a plain payload where the prompt itself would have gone."""
+    await _destination(target)(payload)
 
 
 def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
@@ -291,18 +290,27 @@ async def _open_prompt(
     user_id: int,
     locale: str | None,
     timeout: float,
-    parent: sl.discord.Mount | None,
+    parent: sd.MessageRoot | None,
 ) -> bool:
     """Put the prompt on screen, telling the reader why not when it could not be opened."""
-    opened = await CONSENT_SCREEN.open(
-        component,
-        _destination(target),
-        sessions=target,
-        opener=Opener(user_id),
-        parent=parent,
-        localization=localization_for(locale),
-        timeout=timeout,
-    )
+    options: sd.MessageRootOptions = {"localization": localization_for(locale), "timeout": timeout}
+    if parent is None:
+        opened = await CONSENT_SESSION_SPEC.open(
+            component,
+            _destination(target),
+            sessions=target,
+            open_context=OpenContext(user_id),
+            **options,
+        )
+    else:
+        opened = await CONSENT_SESSION_SPEC.attach(
+            component,
+            _destination(target),
+            sessions=target,
+            open_context=OpenContext(user_id),
+            parent=parent,
+            **options,
+        )
     if isinstance(opened, Rejected):
         await _send(
             target, text_layout(t(locale, _("You already have a consent prompt open. Please answer that one.")))
@@ -318,7 +326,7 @@ async def prompt_for_consent(
     locale: str | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
-    parent: sl.discord.Mount | None = None,
+    parent: sd.MessageRoot | None = None,
 ) -> AccountConsent | NotAskedType | None:
     """Show the notice and wait, returning the consent the user granted.
 
@@ -340,7 +348,7 @@ async def request_consent(
     locale: str | None = None,
     preview: LinkPreview | None = None,
     timeout: float = 120.0,
-    parent: sl.discord.Mount | None = None,
+    parent: sd.MessageRoot | None = None,
 ) -> bool:
     """Show the notice and return, running `on_answer` from the prompt's own press.
 
@@ -377,13 +385,13 @@ async def with_consented_account(
     through its own handle: the prompt's interaction addresses the prompt's message, and
     flushing the panel through it would draw the panel into the dialog.
     """
-    interaction = sl.discord.native(event)
+    interaction = sd.native(event)
     user = interaction.user
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
         await work(event, account.id)
         return
-    mount = sl.discord.responder(event).mount
+    message_root = sd.responder(event).message_root
 
     async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
         if consent is None:
@@ -391,7 +399,7 @@ async def with_consented_account(
         granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)
         assert granted.id is not None, "get_or_create_identity always returns a persisted account"
         await work(prompt, granted.id)
-        await mount.refresh()
+        await message_root.schedule()
 
     await request_consent(
         interaction,
@@ -399,7 +407,7 @@ async def with_consented_account(
         on_answer=answered,
         locale=locale,
         timeout=timeout,
-        parent=mount,
+        parent=message_root,
     )
 
 
@@ -409,7 +417,7 @@ async def ensure_consented_account(
     *,
     locale: str | None = None,
     timeout: float = 120.0,
-    parent: sl.discord.Mount | None = None,
+    parent: sd.MessageRoot | None = None,
 ) -> int | None:
     """Return the user's account id after current consent has been granted.
 

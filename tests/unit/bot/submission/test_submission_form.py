@@ -4,11 +4,11 @@ from types import SimpleNamespace
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.submission.ui.views import SubmissionFormComponent, _submission_basics_form
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft
-from squid_layouts.discord.testing import commit_render
+from squid_ui_discord.testing import commit_render
 from tests.helpers.discord import make_layout_bot
 
 
@@ -23,7 +23,7 @@ def test_submission_form_uses_semantic_controls() -> None:
 
     assert isinstance(nodes[0], sl.semantic.Section)
     assert any(isinstance(node, sl.semantic.Choices) for node in nodes)
-    assert any(isinstance(node, sl.primitives.Row) for node in nodes)
+    assert any(isinstance(node, sl.semantic.ActionControls) for node in nodes)
 
 
 def test_basics_form_describes_portable_fields() -> None:
@@ -35,14 +35,14 @@ def test_basics_form_describes_portable_fields() -> None:
     assert first.label == "Door opening size"
 
 
-async def test_changing_the_door_type_marks_the_mount_dirty() -> None:
+async def test_changing_the_door_type_marks_the_message_root_dirty() -> None:
     component = _component()
-    mount = component.mount(source=make_layout_bot())
-    commit_render(mount)
+    message_root = component.mount(source=make_layout_bot())
+    commit_render(message_root)
 
     await component._door_changed(cast(sl.ChoiceEvent, SimpleNamespace(selected=("Door",))))
 
-    assert mount.pending is True
+    assert message_root.pending is True
     assert component.build.door_orientation == "Door"
 
 

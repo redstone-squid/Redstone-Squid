@@ -10,7 +10,8 @@ import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
@@ -21,7 +22,7 @@ from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import SubmissionFormComponent
-from squid.bot.ui import error_layout, render_presentation, respond_presentation, text_layout
+from squid.bot.ui import error_layout, render_payload, respond_payload, text_layout
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import enforce
 from squid.bot.utils.sticky_message import StickyMessage
@@ -116,7 +117,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if build_size is not None:
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
-            await respond_presentation(
+            await respond_payload(
                 interaction,
                 error_layout(t(locale, _("Check the dimensions")), str(error)),
             )
@@ -199,21 +200,21 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             locale=locale,
             on_submit=persist_draft,
         )
-        mount = component.mount(source=interaction)
-        delivered = await mount.send(sl.discord.respond_to(interaction, ephemeral=True, wait=True))
+        message_root = component.mount(source=interaction)
+        delivered = await message_root.send(sd.respond_to(interaction, ephemeral=True, wait=True))
         # `wait=True` fetches the message back, and a delivery that produced none would have
         # raised. The form edits this message three times below, so it needs the handle.
-        assert isinstance(delivered, sl.discord.delivery.Delivered), "the interaction response cannot be abandoned"
-        workspace_message = delivered.receipt.message
+        assert isinstance(delivered, sd.delivery.Delivered), "the interaction response cannot be abandoned"
+        workspace_message = delivered.result.message
         assert workspace_message is not None, "a waited response always hands back its message"
         await component.wait()
         if component.value is None:
             expired = text_layout(t(locale, _("Submission expired. Nothing was saved.")))
-            await sl.discord.delivery.handle_for(workspace_message, mode=expired.mode).write(expired)
+            await sd.delivery.handle_for(workspace_message, mode=expired.mode).write(expired)
             return
         if component.value is False:
             cancelled = text_layout(t(locale, _("Submission cancelled. Nothing was saved.")))
-            await sl.discord.delivery.handle_for(workspace_message, mode=cancelled.mode).write(cancelled)
+            await sd.delivery.handle_for(workspace_message, mode=cancelled.mode).write(cancelled)
             return
 
         assert submitted is not None, "The form only reports success once the build is persisted."
@@ -224,7 +225,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
             id=build.id,
         )
-        preview = render_presentation(
+        preview = render_payload(
             [
                 sl.primitives.Text(heading),
                 await self.bot.for_build(build).render_node(),
@@ -242,7 +243,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         )
         async with anyio.create_task_group() as tasks:
             tasks.start_soon(
-                sl.discord.delivery.handle_for(workspace_message, mode=preview.mode).write,
+                sd.delivery.handle_for(workspace_message, mode=preview.mode).write,
                 preview,
             )
             tasks.start_soon(self.bot.for_build(build).post_for_voting)
@@ -403,7 +404,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
         await enforce(interaction, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):
-            await respond_presentation(
+            await respond_payload(
                 interaction,
                 error_layout(
                     t(locale, _("Nothing to recalculate")),
@@ -416,7 +417,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             IdentityProvider.DISCORD, str(message.author.id)
         )
         if account is None or account.id is None or account.needs_consent_refresh:
-            await respond_presentation(
+            await respond_payload(
                 interaction,
                 error_layout(
                     t(locale, _("Author has not consented")),
@@ -435,4 +436,4 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             return
 
         await self.infer_build_from_message(message)
-        await respond_presentation(interaction, text_layout(t(locale, _("Build recalculated."))))
+        await respond_payload(interaction, text_layout(t(locale, _("Build recalculated."))))

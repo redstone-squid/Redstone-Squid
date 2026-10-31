@@ -1,0 +1,1017 @@
+"""Frontend-neutral semantic layout vocabulary."""
+
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
+from datetime import datetime
+from enum import IntEnum, StrEnum
+from typing import TYPE_CHECKING, Any, Literal, overload
+
+from squid_ui.assets import Asset
+from squid_ui.entity import ChannelType, EntityRef, EntityType, supports_entity
+from squid_ui.forms import FormSpec, SubmitHandler
+from squid_ui.grids import GridCell, validate_grid
+from squid_ui.guards import Guard
+from squid_ui.interactions import ActionEvent, ActionMode, BusySpec, PressHandler, SelectionEvent
+from squid_ui.palette import INHERIT, Accent, Palette, Tone
+from squid_ui.primitives.nodes import Node as PrimitiveNode
+from squid_ui.rosters import RosterPlacement
+from squid_ui.target_types import Renderable
+from squid_ui.temporal import ZonedDateTime
+from squid_ui.text import TextLike
+
+if TYPE_CHECKING:
+    from squid_ui.runtime.histories import History
+
+
+class ControlDisplay(StrEnum):
+    AUTO = "auto"
+    INDIVIDUAL = "individual"
+    GROUPED = "grouped"
+
+
+class NavigationDisplay(StrEnum):
+    AUTO = "auto"
+    INDIVIDUAL = "individual"
+    GROUPED = "grouped"
+
+
+class ItemDisplay(StrEnum):
+    AUTO = "auto"
+    OVERVIEW = "overview"
+    OPENED = "opened"
+
+
+class TableDisplay(StrEnum):
+    AUTO = "auto"
+    TABULAR = "tabular"
+    RECORDS = "records"
+    MATRIX = "matrix"
+
+
+class DetailLevel(StrEnum):
+    AUTO = "auto"
+    FULL = "full"
+    SUMMARY = "summary"
+
+
+class MediaDisplay(StrEnum):
+    AUTO = "auto"
+    COLLECTION = "collection"
+    FEATURED = "featured"
+
+
+class Flexibility(IntEnum):
+    FLEXIBLE = 0
+    NORMAL = 1
+    STABLE = 2
+
+
+class Importance(IntEnum):
+    LOW = -100
+    NORMAL = 0
+    HIGH = 100
+
+
+class Emphasis(StrEnum):
+    SUBTLE = "subtle"
+    NORMAL = "normal"
+    STRONG = "strong"
+
+
+class TimeStyle(StrEnum):
+    SHORT_TIME = "t"
+    LONG_TIME = "T"
+    SHORT_DATE = "d"
+    LONG_DATE = "D"
+    SHORT_DATETIME = "f"
+    FULL = "F"
+    RELATIVE = "R"
+
+
+# --- Who owns a node's value -----------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class Controlled[ValueT, EventT]:
+    """The author owns this value: authoritative on every render, never written by the engine."""
+
+    value: ValueT
+    on_change: Callable[[EventT], Awaitable[None]]
+
+
+@dataclass(frozen=True, slots=True)
+class Uncontrolled[ValueT]:
+    """The engine owns this value, in the presentation session under the node's key.
+
+    ``initial`` is a seed, not a value: it applies on a session miss and is ignored from
+    then on. An author who needs their value to keep winning wants `Controlled`.
+    """
+
+    initial: ValueT
+
+
+type Ownership[ValueT, EventT] = Controlled[ValueT, EventT] | Uncontrolled[ValueT]
+"""Every stateful semantic node takes one of these, and it is the whole ownership story.
+
+Ownership is a value rather than something inferred from whether a handler was passed,
+so a node cannot be half-controlled and the mode is readable at the call site.
+"""
+
+
+type ChoiceOwnership = Ownership[tuple[str, ...], ChoiceEvent]
+type EntityOwnership = Ownership[tuple[EntityRef, ...], EntityEvent]
+type ItemOwnership = Ownership[str | None, OpenEvent[str | None]]
+type DisclosureOwnership = Ownership[bool, OpenEvent[bool]]
+type ToggleOwnership = Ownership[bool, ToggleEvent]
+type ScaleOwnership = Ownership[int | None, ScaleEvent]
+type NavOwnership = Ownership[str | None, NavigateEvent]
+
+# The engine-managed default of each stateful node, named for the state it seeds.
+UNSELECTED: ChoiceOwnership = Uncontrolled(())
+NO_ENTITIES: EntityOwnership = Uncontrolled(())
+UNOPENED: ItemOwnership = Uncontrolled(None)
+CLOSED: DisclosureOwnership = Uncontrolled(initial=False)
+OFF: ToggleOwnership = Uncontrolled(initial=False)
+UNRATED: ScaleOwnership = Uncontrolled(None)
+FIRST_OPTION: NavOwnership = Uncontrolled(None)
+
+
+@dataclass(frozen=True, slots=True)
+class Group:
+    children: tuple[LayoutNode, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Stack:
+    children: tuple[LayoutNode, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Cluster:
+    children: tuple[LayoutNode, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Themed:
+    """A subtree planned with a presentation palette override."""
+
+    children: tuple[LayoutNode, ...]
+    palette: Palette
+
+
+@dataclass(frozen=True, slots=True)
+class Block:
+    """An untitled semantic region with an exact or inherited accent."""
+
+    children: tuple[LayoutNode, ...]
+    accent: Accent = INHERIT
+
+
+@dataclass(frozen=True, slots=True)
+class Section:
+    """A titled block of related content.
+
+    ``accent`` is an exact colour override, not a semantic fact. Omit it to inherit the
+    active `Palette.brand`, pass ``None`` to opt out of an inherited accent, and pass a
+    colour when the exact value is data (such as a guild's configured colour). Colour that
+    *means* something — advisory, warning, failed — belongs on `Aside` or `Status` via
+    `Tone`, which the active palette maps without discarding the semantic meaning.
+
+    ``thumbnail`` is a lead image shown beside the required heading.
+    """
+
+    heading: Heading
+    children: tuple[LayoutNode, ...]
+    accent: Accent = INHERIT
+    thumbnail: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Article:
+    """A self-contained block that stands on its own; see `Section` for the extras."""
+
+    heading: Heading
+    children: tuple[LayoutNode, ...]
+    accent: Accent = INHERIT
+    thumbnail: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Aside:
+    children: tuple[LayoutNode, ...]
+    tone: Tone = Tone.NEUTRAL
+
+
+@dataclass(frozen=True, slots=True)
+class Heading:
+    content: TextLike
+    level: int = 2
+    importance: Importance = Importance.HIGH
+
+
+@dataclass(frozen=True, slots=True)
+class Paragraph:
+    content: TextLike
+    importance: Importance = Importance.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class ListItem:
+    key: str
+    content: TextLike
+    importance: Importance = Importance.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class List:
+    items: tuple[ListItem, ...]
+    key: str
+    ordered: bool = False
+    page_size: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Field:
+    """One labelled value.
+
+    ``fallbacks`` are shorter forms of ``value``, tried in order when the block is under
+    budget pressure — a count where the full form is a hundred links. A field steps down
+    its own ladder independently of its neighbours and is never dropped whole.
+    """
+
+    key: str
+    label: TextLike
+    value: TextLike
+    importance: Importance = Importance.NORMAL
+    fallbacks: tuple[TextLike, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Fields:
+    fields: tuple[Field, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Column:
+    key: str
+    heading: TextLike
+
+
+@dataclass(frozen=True, slots=True)
+class Columns:
+    columns: tuple[Column, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TableRow:
+    key: str
+    cells: tuple[TextLike, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Table:
+    columns: Columns
+    rows: tuple[TableRow, ...]
+    key: str
+    display: TableDisplay = TableDisplay.AUTO
+    flexibility: Flexibility = Flexibility.NORMAL
+
+    def __post_init__(self) -> None:
+        if not self.columns.columns:
+            message = "Table needs at least one column"
+            raise ValueError(message)
+        width = len(self.columns.columns)
+        if row := next((row for row in self.rows if len(row.cells) != width), None):
+            message = f"Table row {row.key!r} has {len(row.cells)} cells for {width} columns"
+            raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class Note:
+    """Small print: an id, a timestamp, a caveat the reader may skip."""
+
+    content: TextLike
+    importance: Importance = Importance.LOW
+
+
+@dataclass(frozen=True, slots=True)
+class Quote:
+    content: TextLike
+    attribution: TextLike | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Code:
+    content: str
+    language: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class MediaItem:
+    key: str
+    url: str
+    description: TextLike | None = None
+    spoiler: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Figure:
+    media: MediaItem
+    caption: TextLike | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Media:
+    items: tuple[MediaItem, ...]
+    key: str
+    display: MediaDisplay = MediaDisplay.AUTO
+    flexibility: Flexibility = Flexibility.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class Summary:
+    content: TextLike
+
+
+@dataclass(frozen=True, slots=True)
+class Details:
+    key: str
+    summary: Summary
+    children: tuple[LayoutNode, ...]
+    open: DisclosureOwnership = CLOSED
+
+
+@dataclass(frozen=True, slots=True)
+class ToggleEvent(ActionEvent):
+    """The reader requested a new boolean value."""
+
+    value: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Toggle:
+    """One keyed boolean control with explicit state ownership."""
+
+    key: str
+    label: TextLike
+    on: ToggleOwnership = OFF
+    on_label: TextLike | None = None
+    off_label: TextLike | None = None
+    tone: Tone = Tone.NEUTRAL
+    available: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class Download:
+    """A visible file control whose asset is declared at its point of use."""
+
+    key: str
+    label: TextLike | None
+    asset: Asset
+    description: TextLike | None = None
+    emphasis: Emphasis = Emphasis.NORMAL
+    spoiler: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Status:
+    content: TextLike
+    tone: Tone = Tone.NEUTRAL
+    emphasis: Emphasis = Emphasis.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class ProgressBar:
+    value: float
+    label: TextLike | None = None
+    maximum: float = 1.0
+
+
+@dataclass(frozen=True, slots=True)
+class Roster:
+    """A host-owned roster allocation rendered with active localized chrome."""
+
+    key: str
+    placement: RosterPlacement
+    on_join: Callable[[SelectionEvent], Awaitable[None]] | None = None
+    routes: Mapping[str, str] | None = None
+    locked: bool = False
+    show_waitlist: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            message = "Roster key must not be empty"
+            raise ValueError(message)
+        if self.on_join is not None and self.routes is not None:
+            message = "Roster takes on_join or routes, not both"
+            raise ValueError(message)
+        slot_keys = {group.slot.key for group in self.placement.groups}
+        if self.routes is not None and set(self.routes) != slot_keys:
+            message = "Roster routes must contain exactly one route for every slot"
+            raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class Grid:
+    """A selectable spatial collection with target-shaped fallback strategies."""
+
+    key: str
+    cells: tuple[GridCell, ...]
+    columns: int
+    on_pick: Callable[[SelectionEvent], Awaitable[None]]
+    flexibility: Flexibility = Flexibility.NORMAL
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            message = "Grid key must not be empty"
+            raise ValueError(message)
+        validate_grid(self.cells, self.columns)
+
+
+@dataclass(frozen=True, slots=True)
+class Metric:
+    value: int | float | str
+    label: TextLike
+    unit: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Timestamp:
+    """An aware instant plus a portable display preference."""
+
+    instant: datetime
+    style: TimeStyle = TimeStyle.SHORT_DATETIME
+    label: TextLike | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ZonedTimestamp:
+    """An exact instant rendered visibly in its named timezone."""
+
+    value: ZonedDateTime
+    label: TextLike | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FormTrigger:
+    """A content entry point that presents a portable form."""
+
+    key: str
+    label: TextLike
+    spec: FormSpec
+    on_submit: SubmitHandler
+    mode: ActionMode = ActionMode.EXCLUSIVE
+    tone: Tone = Tone.NEUTRAL
+    emphasis: Emphasis = Emphasis.NORMAL
+    guard: Guard | None = None
+    """Admission for the press that opens the form; the submission is not re-admitted."""
+    record: History | None = None
+    """History the successful submission enters under this trigger's label."""
+
+
+@dataclass(frozen=True, slots=True)
+class ActionControl:
+    key: str
+    label: TextLike
+    on_trigger: PressHandler
+    tone: Tone = Tone.NEUTRAL
+    emphasis: Emphasis = Emphasis.NORMAL
+    available: bool = True
+    allow_grouping: bool | None = None
+    mode: ActionMode = ActionMode.EXCLUSIVE
+    guard: Guard | None = None
+    """Whether this press may execute now. `available` is the render-time question."""
+    busy: BusySpec | None = None
+    """Busy busy for a handler slow enough that the reader needs to see it running."""
+    record: History | None = None
+    """History this press enters itself into, under `label`, before `on_trigger` runs."""
+
+
+@dataclass(frozen=True, slots=True)
+class Link:
+    key: str
+    label: TextLike
+    url: str
+    emphasis: Emphasis = Emphasis.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class RoutedActionControl:
+    """A control whose custom id is its state, dispatched by a router rather than a mount.
+
+    For the buttons on mass-posted cards that must still work after a restart: no
+    in-process handler, so a sessionless document may carry one. Build ``route_id`` with
+    a `squid_ui.routing.Route`, which validates it against Discord's budget at
+    authoring time rather than at send time.
+
+    `ActionControl` remains the right node whenever a session is already in play; this one buys
+    survival at the price of every guarantee the mount's funnel provides.
+    """
+
+    key: str
+    label: TextLike
+    route_id: str
+    tone: Tone = Tone.NEUTRAL
+    emphasis: Emphasis = Emphasis.NORMAL
+    available: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class ControlGroup:
+    key: str
+    controls: tuple[ActionControl | Link | RoutedActionControl, ...]
+    label: TextLike | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ActionControls:
+    items: tuple[ActionControl | Link | RoutedActionControl | ControlGroup, ...]
+    key: str
+    display: ControlDisplay = ControlDisplay.AUTO
+    flexibility: Flexibility = Flexibility.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class Choice:
+    key: str
+    label: TextLike
+    description: TextLike | None = None
+    available: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class ChoiceEvent(ActionEvent):
+    selected: tuple[str, ...] = ()
+    added: tuple[str, ...] = ()
+    removed: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EntityEvent(ActionEvent):
+    selected: tuple[EntityRef, ...] = ()
+    added: tuple[EntityRef, ...] = ()
+    removed: tuple[EntityRef, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EntityChoice:
+    ref: EntityRef
+    label: TextLike
+    description: TextLike | None = None
+    available: bool = True
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OpenEvent[ValueT](ActionEvent):
+    """The reader asked to open something: one of N entries, or one disclosure."""
+
+    opened: ValueT
+
+
+@dataclass(frozen=True, slots=True)
+class ScaleEvent(ActionEvent):
+    """The reader picked one point on an ordinal scale."""
+
+    value: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class Choices:
+    """A picker over `choices`, backed by buttons or a select depending on shape.
+
+    `minimum` defaults to 1, so the picker cannot be cleared to nothing without setting
+    it to 0 explicitly; a small (2-5 choice) single-select (`maximum=1`) renders as
+    buttons instead, which always select exactly one and ignore `minimum` entirely.
+    """
+
+    key: str
+    choices: tuple[Choice, ...]
+    selection: ChoiceOwnership = UNSELECTED
+    minimum: int = 1
+    maximum: int = 1
+    flexibility: Flexibility = Flexibility.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class Entities:
+    """A picker over frontend-resolved entities with an optional enumerated fallback."""
+
+    key: str
+    entity_type: EntityType
+    choices: tuple[EntityChoice, ...] = ()
+    selection: EntityOwnership = NO_ENTITIES
+    minimum: int = 1
+    maximum: int = 1
+    channel_types: tuple[ChannelType, ...] = ()
+    placeholder: TextLike | None = None
+    flexibility: Flexibility = Flexibility.NORMAL
+
+    def __post_init__(self) -> None:
+        if self.channel_types and self.entity_type is not EntityType.CHANNEL:
+            message = "channel_types is only valid for channel entity pickers"
+            raise ValueError(message)
+        if any(not supports_entity(self.entity_type, choice.ref.kind) for choice in self.choices):
+            message = f"fallback choice is incompatible with {self.entity_type.value} entity picker"
+            raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class RoutedChoices:
+    """An explicitly stateless picker whose values are submitted to one route."""
+
+    key: str
+    choices: tuple[Choice, ...]
+    route_id: str
+    placeholder: TextLike | None = None
+    minimum: int = 1
+    maximum: int = 1
+    available: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class ItemLabel:
+    content: TextLike
+
+
+@dataclass(frozen=True, slots=True)
+class Item:
+    key: str
+    label: ItemLabel
+    children: tuple[LayoutNode, ...]
+    summary: TextLike | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Items:
+    key: str
+    items: tuple[Item, ...]
+    opened: ItemOwnership = UNOPENED
+    display: ItemDisplay = ItemDisplay.AUTO
+    flexibility: Flexibility = Flexibility.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class NavOption:
+    key: str
+    label: TextLike
+    available: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class NavigateEvent(ActionEvent):
+    destination: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class Navigation:
+    key: str
+    options: tuple[NavOption, ...]
+    current: NavOwnership = FIRST_OPTION
+    """`None` means the first available destination."""
+    display: NavigationDisplay = NavigationDisplay.AUTO
+    flexibility: Flexibility = Flexibility.STABLE
+
+
+@dataclass(frozen=True, slots=True)
+class Truncated:
+    node: LayoutNode
+    keep: str = "head"
+
+
+@dataclass(frozen=True, slots=True)
+class Spilled:
+    node: LayoutNode
+
+
+@dataclass(frozen=True, slots=True)
+class OptionalContent:
+    node: LayoutNode
+    importance: Importance = Importance.LOW
+
+
+@dataclass(frozen=True, slots=True)
+class FallbackContent[ModeT = Any](Renderable[ModeT]):
+    """Complete author-supplied representations of one region, best first."""
+
+    primary: LayoutNode[ModeT]
+    alternates: tuple[LayoutNode[ModeT], ...]
+
+    def __post_init__(self) -> None:
+        if not self.alternates:
+            message = "FallbackContent needs at least one alternate"
+            raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class BestEffort:
+    node: LayoutNode
+
+
+@dataclass(frozen=True, slots=True)
+class Budgeted:
+    """Reserve and cap the character grant for one logical region."""
+
+    node: LayoutNode
+    minimum: int
+    preferred: int
+    stretch: int = 0
+
+    def __post_init__(self) -> None:
+        if self.minimum < 0 or self.preferred < 0 or self.stretch < 0:
+            message = "layout budgets must not be negative"
+            raise ValueError(message)
+        if self.minimum > self.preferred:
+            message = "layout budget min must not exceed prefer"
+            raise ValueError(message)
+
+
+@dataclass(frozen=True, slots=True)
+class Unbreakable:
+    """Keep every primitive produced by ``node`` together on a region page."""
+
+    node: LayoutNode
+
+
+@dataclass(frozen=True, slots=True)
+class KeepWithNext:
+    """Forbid a region page break immediately after ``node``."""
+
+    node: LayoutNode
+
+
+@dataclass(frozen=True, slots=True)
+class Paged:
+    """Paginate the direct children of a keyed heterogeneous region."""
+
+    node: LayoutNode
+    key: str
+    chars: int
+    min_fill: int = 0
+    widows: int = 1
+    initial: Literal["start", "end"] = "start"
+    footer: Callable[[int, int], TextLike] | None = None
+
+    def __post_init__(self) -> None:
+        if not self.key:
+            message = "paged region key must not be empty"
+            raise ValueError(message)
+        if self.chars < 1:
+            message = "paged region chars must be positive"
+            raise ValueError(message)
+        if self.min_fill < 0:
+            message = "paged region min_fill must not be negative"
+            raise ValueError(message)
+        if self.widows < 1:
+            message = "paged region widows must be at least 1"
+            raise ValueError(message)
+
+
+type SemanticNode = (
+    Group
+    | Stack
+    | Cluster
+    | Themed
+    | Block
+    | Section
+    | Article
+    | Aside
+    | Heading
+    | Paragraph
+    | Note
+    | List
+    | Fields
+    | Table
+    | Quote
+    | Code
+    | Figure
+    | Media
+    | Details
+    | Toggle
+    | Download
+    | Status
+    | ProgressBar
+    | Roster
+    | Grid
+    | Metric
+    | Timestamp
+    | ZonedTimestamp
+    | FormTrigger
+    | ActionControls
+    | Choices
+    | Entities
+    | RoutedChoices
+    | Items
+    | Navigation
+)
+
+type Adaptation = Truncated | Spilled | OptionalContent | BestEffort | Budgeted | Unbreakable | KeepWithNext | Paged
+type ConcreteLayoutNode = SemanticNode | Adaptation | FallbackContent | PrimitiveNode
+type LayoutNode[ModeT = Any] = SemanticNode | Adaptation | FallbackContent[ModeT] | Renderable[ModeT]
+
+
+def truncate(node: LayoutNode, *, keep: str = "head") -> Truncated:
+    """Allow prose in ``node`` to truncate when no lossless plan fits."""
+    return Truncated(node, keep)
+
+
+def spill(node: LayoutNode) -> Spilled:
+    """Allow a static collection in ``node`` to omit its lowest-priority entries."""
+    return Spilled(node)
+
+
+def optional(node: LayoutNode, *, importance: Importance = Importance.LOW) -> OptionalContent:
+    """Allow the whole node to disappear as an explicit last resort."""
+    return OptionalContent(node, importance)
+
+
+@overload
+def fallback[FirstT, SecondT](  # pyrefly: ignore[inconsistent-overload]
+    primary: LayoutNode[FirstT], alternate: LayoutNode[SecondT]
+) -> FallbackContent[FirstT | SecondT]: ...
+
+
+@overload
+def fallback[FirstT, SecondT, ThirdT](  # pyrefly: ignore[inconsistent-overload]
+    primary: LayoutNode[FirstT], first: LayoutNode[SecondT], second: LayoutNode[ThirdT]
+) -> FallbackContent[FirstT | SecondT | ThirdT]: ...
+
+
+@overload
+def fallback[FirstT, SecondT, ThirdT, FourthT](  # pyrefly: ignore[inconsistent-overload]
+    primary: LayoutNode[FirstT],
+    first: LayoutNode[SecondT],
+    second: LayoutNode[ThirdT],
+    third: LayoutNode[FourthT],
+) -> FallbackContent[FirstT | SecondT | ThirdT | FourthT]: ...
+
+
+@overload
+def fallback[FirstT, SecondT, ThirdT, FourthT, FifthT](  # pyrefly: ignore[inconsistent-overload]
+    primary: LayoutNode[FirstT],
+    first: LayoutNode[SecondT],
+    second: LayoutNode[ThirdT],
+    third: LayoutNode[FourthT],
+    fourth: LayoutNode[FifthT],
+) -> FallbackContent[FirstT | SecondT | ThirdT | FourthT | FifthT]: ...
+
+
+@overload
+def fallback(primary: LayoutNode[Any], *alternates: LayoutNode[Any]) -> FallbackContent[Any]: ...
+
+
+def fallback(primary: LayoutNode[Any], *alternates: LayoutNode[Any]) -> FallbackContent[Any]:
+    """Declare complete author-supplied alternate representations, in descending preference.
+
+    Each alternate is a whole replacement for ``primary``, not a shortening of it; the planner
+    steps down the ladder one rung at a time under component pressure.
+    """
+    if not alternates:
+        message = "sl.fallback() needs at least one alternate"
+        raise ValueError(message)
+    return FallbackContent(primary, alternates)
+
+
+def best_effort(node: LayoutNode) -> BestEffort:
+    """Allow safe prose truncation and static collection spill, never consequential loss."""
+    return BestEffort(node)
+
+
+def budget(node: LayoutNode, *, min: int, prefer: int, stretch: int = 0) -> Budgeted:
+    """Give ``node`` a hard floor, preferred size, and lossless stretch band."""
+    return Budgeted(node, min, prefer, stretch)
+
+
+def unbreakable(node: LayoutNode) -> Unbreakable:
+    """Keep ``node`` atomic when its containing region paginates."""
+    return Unbreakable(node)
+
+
+def keep_with_next(node: LayoutNode) -> KeepWithNext:
+    """Keep ``node`` off the bottom of a region page without its successor."""
+    return KeepWithNext(node)
+
+
+def paged(
+    node: LayoutNode,
+    *,
+    key: str,
+    chars: int,
+    min: int = 0,
+    stretch: int = 0,
+    min_fill: int = 0,
+    widows: int = 1,
+    initial: Literal["start", "end"] = "start",
+    footer: Callable[[int, int], TextLike] | None = None,
+) -> Budgeted:
+    """Apply a preferred character budget and heterogeneous paging to ``node``."""
+    region = Paged(node, key, chars, min_fill, widows, initial, footer)
+    return Budgeted(region, min, chars, stretch)
+
+
+__all__ = [
+    "CLOSED",
+    "FIRST_OPTION",
+    "NO_ENTITIES",
+    "OFF",
+    "UNOPENED",
+    "UNRATED",
+    "UNSELECTED",
+    "ActionControl",
+    "ActionControls",
+    "Adaptation",
+    "Article",
+    "Aside",
+    "BestEffort",
+    "Block",
+    "Budgeted",
+    "Choice",
+    "ChoiceEvent",
+    "ChoiceOwnership",
+    "Choices",
+    "Cluster",
+    "Code",
+    "Column",
+    "Columns",
+    "ControlDisplay",
+    "ControlGroup",
+    "Controlled",
+    "DetailLevel",
+    "Details",
+    "DisclosureOwnership",
+    "Download",
+    "Emphasis",
+    "Entities",
+    "EntityChoice",
+    "EntityEvent",
+    "EntityOwnership",
+    "FallbackContent",
+    "Field",
+    "Fields",
+    "Figure",
+    "Flexibility",
+    "FormTrigger",
+    "Group",
+    "Heading",
+    "Importance",
+    "Item",
+    "ItemDisplay",
+    "ItemLabel",
+    "ItemOwnership",
+    "Items",
+    "KeepWithNext",
+    "LayoutNode",
+    "Link",
+    "List",
+    "ListItem",
+    "Media",
+    "MediaDisplay",
+    "MediaItem",
+    "Metric",
+    "NavOption",
+    "NavOwnership",
+    "NavigateEvent",
+    "Navigation",
+    "NavigationDisplay",
+    "Note",
+    "OpenEvent",
+    "OptionalContent",
+    "Ownership",
+    "Paged",
+    "Paragraph",
+    "ProgressBar",
+    "Quote",
+    "Roster",
+    "RoutedActionControl",
+    "RoutedChoices",
+    "ScaleEvent",
+    "ScaleOwnership",
+    "Section",
+    "SemanticNode",
+    "Spilled",
+    "Stack",
+    "Status",
+    "Summary",
+    "Table",
+    "TableDisplay",
+    "TableRow",
+    "Themed",
+    "TimeStyle",
+    "Timestamp",
+    "Toggle",
+    "ToggleEvent",
+    "ToggleOwnership",
+    "Tone",
+    "Truncated",
+    "Unbreakable",
+    "Uncontrolled",
+    "ZonedTimestamp",
+    "best_effort",
+    "budget",
+    "fallback",
+    "keep_with_next",
+    "optional",
+    "paged",
+    "spill",
+    "truncate",
+    "unbreakable",
+]

@@ -1,0 +1,17 @@
+[project]
+name = "squid-storage"
+version = "0.1.0"
+description = "Portable backing stores for Squid applications"
+requires-python = ">=3.14"
+license = "MIT"
+dependencies = ["squid-reactivity", "anyio>=4.14,<5"]
+
+[project.optional-dependencies]
+postgres = ["asyncpg>=0.31,<1"]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.13"]
+build-backend = "uv_build"
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*" }]

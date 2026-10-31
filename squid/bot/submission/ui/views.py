@@ -8,11 +8,12 @@ import anyio
 import discord
 from whenever import Instant
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import BuildField, get_text_input
-from squid.bot.ui import DISCORD_BLUE, DISCORD_YELLOW, create_mount, error_layout, respond_presentation
+from squid.bot.ui import DISCORD_YELLOW, create_message_root, error_layout, respond_payload
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -20,7 +21,7 @@ from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, Bu
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.topics import resource_topic
-from squid_layouts.discord import SessionKey
+from squid_ui_discord import SessionKey
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,7 +206,7 @@ class SubmissionFormComponent(sl.Component):
         self._timeout = timeout
         self.on_submit = on_submit
         self._done = anyio.Event()
-        self._mount: sl.discord.Mount | None = None
+        self._root: sd.MessageRoot | None = None
 
     @property
     def is_ready(self) -> bool:
@@ -214,7 +215,7 @@ class SubmissionFormComponent(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
-            return (sl.section(sl.heading(t(self.locale, _("Submission closed"))), accent=DISCORD_BLUE),)
+            return (sl.section(sl.heading(t(self.locale, _("Submission closed")))),)
         missing = []
         if self.build.door_orientation is None:
             missing.append(t(self.locale, _("door type")))
@@ -239,30 +240,28 @@ class SubmissionFormComponent(sl.Component):
                 sl.truncate(sl.paragraph(guidance)),
                 sl.fields(*fields),
                 sl.note(t(self.locale, _("Only the door type and opening size are required."))),
-                accent=DISCORD_BLUE if self.is_ready else DISCORD_YELLOW,
+                accent=sl.palette.INHERIT if self.is_ready else DISCORD_YELLOW,
             ),
-            sl.semantic.Choices(
+            sl.choices(
+                *(sl.choice(t(self.locale, _(value)), key=value) for value in DOOR_ORIENTATION_NAMES),
                 key="door_type",
-                choices=tuple(sl.semantic.Choice(value, t(self.locale, _(value))) for value in DOOR_ORIENTATION_NAMES),
                 selection=sl.controlled(
                     (self.build.door_orientation,) if self.build.door_orientation is not None else (),
                     self._door_changed,
                 ),
             ),
-            sl.semantic.Choices(
-                key="location",
-                choices=(
-                    sl.semantic.Choice(
-                        "Directional",
-                        t(self.locale, _("Directional")),
-                        t(self.locale, _("May depend on the direction it faces")),
-                    ),
-                    sl.semantic.Choice(
-                        "Locational",
-                        t(self.locale, _("Locational")),
-                        t(self.locale, _("May depend on its position in the world")),
-                    ),
+            sl.choices(
+                sl.choice(
+                    t(self.locale, _("Directional")),
+                    key="Directional",
+                    description=t(self.locale, _("May depend on the direction it faces")),
                 ),
+                sl.choice(
+                    t(self.locale, _("Locational")),
+                    key="Locational",
+                    description=t(self.locale, _("May depend on its position in the world")),
+                ),
+                key="location",
                 selection=sl.controlled(
                     tuple(
                         value
@@ -274,28 +273,27 @@ class SubmissionFormComponent(sl.Component):
                 minimum=0,
                 maximum=2,
             ),
-            sl.primitives.Row(
-                (
-                    sl.primitives.Button(
-                        t(self.locale, _("Edit basics")),
-                        self._edit_basics,
-                        "edit_basics",
-                        style=sl.primitives.ActionStyle.PRIMARY,
-                    ),
-                    sl.primitives.Button(
-                        t(self.locale, _("Add links & details")),
-                        self._edit_details,
-                        "edit_details",
-                    ),
-                    sl.primitives.Button(
-                        t(self.locale, _("Submit for review")),
-                        self._submit,
-                        "submit",
-                        style=sl.primitives.ActionStyle.SUCCESS,
-                        disabled=self.submitting,
-                    ),
-                    sl.primitives.Button(t(self.locale, _("Cancel")), self._cancel, "cancel"),
-                )
+            sl.action_controls(
+                sl.action_control(
+                    t(self.locale, _("Edit basics")),
+                    self._edit_basics,
+                    key="edit_basics",
+                    emphasis=sl.semantic.Emphasis.STRONG,
+                ),
+                sl.action_control(
+                    t(self.locale, _("Add links & details")),
+                    self._edit_details,
+                    key="edit_details",
+                ),
+                sl.action_control(
+                    t(self.locale, _("Submit for review")),
+                    self._submit,
+                    key="submit",
+                    tone=sl.Tone.SUCCESS,
+                    available=not self.submitting,
+                ),
+                sl.action_control(t(self.locale, _("Cancel")), self._cancel, key="cancel"),
+                key="submission-actions",
             ),
         )
 
@@ -405,23 +403,23 @@ class SubmissionFormComponent(sl.Component):
         """Flush a changed draft when called by an external integration."""
         self.validation_error = None
         self.mutated(self.build)
-        if self._mount is not None:
-            await self._mount.flush(interaction)
+        if self._root is not None:
+            await self._root.refresh(interaction)
 
     async def wait(self) -> bool | None:
         with anyio.move_on_after(self._timeout) as scope:
             await self._done.wait()
         return None if scope.cancel_called else self.value
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
-        self._mount = create_mount(
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
+        self._root = create_message_root(
             self,
             source=source,
-            access=(sl.discord.Owner(self.author_id) if self.author_id is not None else sl.discord.Everyone()),
+            access=(sd.Owner(self.author_id) if self.author_id is not None else sd.Everyone()),
             locale=self.locale,
             timeout=self._timeout,
         )
-        return self._mount
+        return self._root
 
 
 def _edit_form(items: Sequence[BuildField[Any]], page: int, locale: str | None) -> sl.forms.FormSpec:
@@ -474,9 +472,9 @@ class BuildEditComponent(sl.Component):
                 if field.applies_to(build)
             ]
         self.items = tuple(items)
-        self._mount: sl.discord.Mount | None = None
+        self._root: sd.MessageRoot | None = None
 
-    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode | None]:
         """Load the edited build and keep its preview current with the build topic."""
         if self._build_id is not None:
@@ -547,7 +545,6 @@ class BuildEditComponent(sl.Component):
                 sl.section(
                     sl.heading(t(self.locale, _("Changes saved"))),
                     sl.paragraph(t(self.locale, _("The build card has been refreshed."))),
-                    accent=DISCORD_BLUE,
                 ),
             )
         state = self.projection.status
@@ -563,44 +560,46 @@ class BuildEditComponent(sl.Component):
             if not self.validation_error
             else t(self.locale, _("Fix these values before review:\n{errors}"), errors=self.validation_error)
         )
-        controls: list[sl.primitives.Button] = [
-            sl.primitives.Button(t(self.locale, _("Edit this section")), self._open, "open"),
-            sl.primitives.Button(t(self.locale, _("Previous")), self._previous, "previous", disabled=self.page == 1),
-            sl.primitives.Button(t(self.locale, _("Next")), self._next, "next", disabled=self.page == self.max_pages),
+        controls: list[sl.semantic.ActionControl] = [
+            sl.action_control(t(self.locale, _("Edit this section")), self._open, key="open"),
+            sl.action_control(t(self.locale, _("Previous")), self._previous, key="previous", available=self.page != 1),
+            sl.action_control(t(self.locale, _("Next")), self._next, key="next", available=self.page != self.max_pages),
         ]
         if self.confirming:
             controls.extend(
                 (
-                    sl.primitives.Button(
+                    sl.action_control(
                         t(self.locale, _("Apply changes")),
                         self._apply,
-                        "apply",
-                        style=sl.primitives.ActionStyle.SUCCESS,
+                        key="apply",
+                        tone=sl.Tone.SUCCESS,
                     ),
-                    sl.primitives.Button(t(self.locale, _("Back")), self._unconfirm, "unconfirm"),
+                    sl.action_control(t(self.locale, _("Back")), self._unconfirm, key="unconfirm"),
                 )
             )
         else:
             controls.append(
-                sl.primitives.Button(
+                sl.action_control(
                     t(self.locale, _("Review changes")),
                     self._review,
-                    "review",
-                    style=sl.primitives.ActionStyle.SUCCESS,
+                    key="review",
+                    tone=sl.Tone.SUCCESS,
                 )
             )
-        controls.append(sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"))
+        controls.append(sl.action_control(t(self.locale, _("Close")), self._close, key="close"))
         nodes: list[sl.LayoutNode] = [
             sl.section(
                 sl.heading(t(self.locale, _("Edit build"))),
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(sl.field(t(self.locale, _("Fields in this section")), self.summary_text())),
-                accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE,
+                accent=DISCORD_YELLOW if self.validation_error else sl.palette.INHERIT,
             )
         ]
         if (node := self._current()[1]) is not None:
             nodes.append(node)
-        nodes.append(sl.primitives.ActionGroup(tuple(controls)))
+        nodes.append(
+            sl.action_controls(*controls, key="build-edit-actions", display=sl.semantic.ControlDisplay.INDIVIDUAL)
+        )
         return tuple(nodes)
 
     def summary_text(self) -> str:
@@ -646,7 +645,7 @@ class BuildEditComponent(sl.Component):
     async def _apply(self, event: sl.PressEvent) -> None:
         if not await self._may_event(event):
             return
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         changed = [item for item in self.items if item.modified]
         await event.acknowledge()
         patch = BuildEditPatch.from_attributes({item.attribute: item.actual_value for item in changed})
@@ -671,7 +670,7 @@ class BuildEditComponent(sl.Component):
         await event.finish()
 
     async def _may_event(self, event: sl.ActionEvent) -> bool:
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         if Instant.now() > self.expiry_time:
             await event.notice(t(self.locale, _("This edit session expired. Reopen the build to start again.")))
             return False
@@ -687,15 +686,15 @@ class BuildEditComponent(sl.Component):
         build = self.build
         self._replace(build, await interaction.client.for_build(build).render_node())
         self.invalidate()
-        if self._mount is not None:
-            await self._mount.flush(interaction)
+        if self._root is not None:
+            await self._root.refresh(interaction)
 
     async def send(
         self,
         interaction: discord.Interaction[Any],
         ephemeral: bool = True,
         *,
-        parent: sl.discord.Mount | None = None,
+        parent: sd.MessageRoot | None = None,
     ) -> None:
         """Open an editor for this build, replacing this user's previous one."""
         self.locale = await resolve_locale(interaction, interaction.client.services.settings)
@@ -704,7 +703,7 @@ class BuildEditComponent(sl.Component):
                 self.locale,
                 _("Only the pending build's submitter or a trusted staff member can edit it."),
             )
-            await respond_presentation(interaction, error_layout(t(self.locale, _("Cannot edit this build")), message))
+            await respond_payload(interaction, error_layout(t(self.locale, _("Cannot edit this build")), message))
             return
         client = interaction.client
         build, node = self._current()
@@ -724,28 +723,28 @@ class BuildEditComponent(sl.Component):
             return latest, await client.for_build(latest).render_node()
 
         self._refresh = refresh
-        mount = self.mount(interaction.user.id, source=interaction, reactor=client.layout_reactor)
-        destination = sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True)
-        parent_session = None if parent is None else interaction.client.mounts.session_for(parent)
+        message_root = self.mount(interaction.user.id, source=interaction, scheduler=client.layout_scheduler)
+        message_destination = sd.respond_to(interaction, ephemeral=ephemeral, wait=True)
+        parent_session = None if parent is None else interaction.client.sessions.session_for(parent)
         if parent_session is None:
-            await interaction.client.mounts.open(
-                mount,
-                destination,
+            await interaction.client.sessions.open(
+                message_root,
+                message_destination,
                 key=SessionKey.custom("build-edit", (interaction.user.id, self.build.id)),
                 actor_id=interaction.user.id,
             )
         else:
-            await parent_session.attach(mount, destination, actor_id=interaction.user.id, parent=parent)
+            await parent_session.attach(message_root, message_destination, actor_id=interaction.user.id, parent=parent)
 
     def mount(
-        self, user_id: int, *, source: sl.discord.host.HostSource, reactor: sl.discord.Reactor | None = None
-    ) -> sl.discord.Mount:
-        self._mount = create_mount(
+        self, user_id: int, *, source: sd.runtime.RuntimeSource, scheduler: sd.MessageRootScheduler | None = None
+    ) -> sd.MessageRoot:
+        self._root = create_message_root(
             self,
             source=source,
-            access=sl.discord.Owner(user_id),
+            access=sd.Owner(user_id),
             locale=self.locale,
             timeout=self._timeout,
-            reactor=reactor,
+            scheduler=scheduler,
         )
-        return self._mount
+        return self._root

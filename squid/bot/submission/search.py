@@ -13,7 +13,8 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, when_mentioned
 from discord.utils import escape_markdown
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
 from squid.bot.submission.build_info import BuildInfoComponent
@@ -25,12 +26,12 @@ from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.ui import (
     PagedList,
-    create_mount,
-    destination,
+    create_message_root,
     error_layout,
     error_node,
     info_node,
-    reply_presentation,
+    message_destination,
+    reply_payload,
     text_layout,
 )
 from squid.bot.utils.autocomplete import autocompletes
@@ -46,7 +47,7 @@ from squid.permissions.domain.catalogue import (
     RESTRICTION_ALIAS_CREATE,
 )
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
-from squid_layouts.runtime.component import RenderResult
+from squid_ui.runtime.component import RenderResult
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -218,8 +219,8 @@ class SearchCog[
             load_build=load_build,
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )
-        mount = view.mount(source=ctx)
-        await mount.send(destination(ctx, locale=locale))
+        message_root = view.mount(source=ctx)
+        await message_root.send(message_destination(ctx, locale=locale))
 
     @commands.hybrid_group(name="restrictions")
     @requires(RESTRICTION_ALIAS_CREATE)
@@ -276,7 +277,7 @@ class SearchCog[
             await interaction.response.defer()
             build = await self.queries.get(build_id)
             if build is None:
-                await reply_presentation(
+                await reply_payload(
                     ctx,
                     error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                     visibility="personal",
@@ -292,16 +293,16 @@ class SearchCog[
                 return latest, await self.bot.for_build(latest).render_node()
 
             component = BuildInfoComponent(build, node, refresh=refresh, locale=locale)
-            navigator = sl.discord.navigation.Navigator(component)
-            mount = create_mount(
+            navigator = sd.navigation.StackNavigator(component)
+            message_root = create_message_root(
                 navigator,
                 source=interaction,
-                access=sl.discord.Everyone(),
+                access=sd.Everyone(),
                 locale=locale,
                 timeout=300,
-                reactor=self.bot.layout_reactor,
+                scheduler=self.bot.layout_scheduler,
             )
-            await mount.send(sl.discord.respond_to(interaction, ephemeral=False, wait=True))
+            await message_root.send(sd.respond_to(interaction, ephemeral=False, wait=True))
             return
 
         await self._view_build_prefix(ctx, build_id)
@@ -360,7 +361,7 @@ class SearchCog[
         locale = await resolve_locale(ctx, self.bot.services.settings)
         build = await self.queries.get(build_id)
         if build is None:
-            await reply_presentation(
+            await reply_payload(
                 ctx,
                 error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                 visibility="personal" if personal(ctx) else "public",
@@ -369,7 +370,7 @@ class SearchCog[
 
         # One message carrying the file, rather than a running message that would then have to
         # be edited into holding an attachment it was not sent with.
-        await reply_presentation(
+        await reply_payload(
             ctx,
             text_layout(t(locale, _("Internal state for build #{id} is attached."), id=build_id)),
             visibility="personal" if personal(ctx) else "public",

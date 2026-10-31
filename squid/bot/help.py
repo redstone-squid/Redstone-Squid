@@ -10,12 +10,12 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Command, Group
 
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import CardField, CardSection, error_layout, help_layout, respond_presentation
+from squid.bot.ui import CardField, CardSection, error_layout, help_layout, respond_payload
 from squid.config import BuildConfig
 from squid.core.i18n import _
 from squid.suggestions.application import candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
-from squid_layouts.discord import send_to
+from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -87,7 +87,7 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 )
                 candidates = list(cog.walk_commands()) if cog is not None else []
                 if not candidates:
-                    await respond_presentation(
+                    await respond_payload(
                         interaction,
                         error_layout(
                             t(locale, _("Command not found")),
@@ -123,7 +123,7 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                 sections=sections,
                 footer=t(locale, MORE_INFORMATION),
             )
-        await respond_presentation(interaction, layout, ephemeral=False)
+        await respond_payload(interaction, layout, ephemeral=False)
 
     def _root_commands(self) -> list[AnyCommand]:
         """Every top-level command a user could run, prefix tree and app tree alike.

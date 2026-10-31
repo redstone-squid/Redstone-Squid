@@ -1,0 +1,764 @@
+"""Stateful components: render() is a pure function of state; mutating state re-renders.
+
+A component describes *what the message should say now*. Interaction callbacks assign
+declared state, and every assignment schedules the mount to re-render. State values are
+immutable and replaced rather than mutated. Components never touch discord.py objects
+directly.
+
+Components compose through explicit keyed Boundary nodes, so two instances of the same
+child class can appear in one message without their controls or pagers cross-wiring. Only the
+root component is attached to a MessageRoot; children reach it through their parent.
+"""
+
+from collections.abc import Callable, Sequence
+from contextvars import ContextVar
+from dataclasses import dataclass, field, replace
+from typing import Any, Protocol
+
+from squid_reactivity.core import (
+    _RENDER_OBSERVATION,
+    Observation,
+    StateOwner,
+    observe_render,
+)
+from squid_ui.document import Asset, Document
+from squid_ui.errors import LayoutInvariantError
+from squid_ui.primitives.constraints import Paginate
+from squid_ui.primitives.nodes import (
+    Boundary,
+    Button,
+    Code,
+    ControlGroup,
+    Footer,
+    Heading,
+    Lines,
+    Row,
+    Section,
+    SelectMenu,
+    Text,
+)
+from squid_ui.runtime._tree import (
+    _IndexStep,
+    _LayoutRoute,
+    _map_layout_children_routed,
+    _SequenceStep,
+    map_layout_children,
+)
+from squid_ui.runtime.context import ContextKey
+from squid_ui.runtime.resources import (
+    AsyncBinding,
+    _AtomicResourcePending,
+    observe_async_bindings,
+    unique_async_bindings,
+)
+from squid_ui.runtime.topics import Address
+from squid_ui.semantic import (
+    ActionControl as SemanticActionControl,
+)
+from squid_ui.semantic import (
+    ActionControls as SemanticActionControls,
+)
+from squid_ui.semantic import (
+    Choices as SemanticChoices,
+)
+from squid_ui.semantic import ControlGroup as SemanticControlGroup
+from squid_ui.semantic import (
+    Details as SemanticDetails,
+)
+from squid_ui.semantic import Download as SemanticDownload
+from squid_ui.semantic import (
+    FormTrigger as SemanticFormTrigger,
+)
+from squid_ui.semantic import Grid as SemanticGrid
+from squid_ui.semantic import (
+    Items as SemanticItems,
+)
+from squid_ui.semantic import (
+    LayoutNode,
+)
+from squid_ui.semantic import (
+    Link as SemanticLink,
+)
+from squid_ui.semantic import (
+    List as SemanticList,
+)
+from squid_ui.semantic import (
+    Media as SemanticMedia,
+)
+from squid_ui.semantic import (
+    Navigation as SemanticNavigation,
+)
+from squid_ui.semantic import Paged as SemanticPaged
+from squid_ui.semantic import Roster as SemanticRoster
+from squid_ui.semantic import (
+    Table as SemanticTable,
+)
+from squid_ui.semantic import Toggle as SemanticToggle
+
+type RenderNode[ModeT = Any] = LayoutNode[ModeT]
+type RenderResult[ModeT = Any] = Document[ModeT] | LayoutNode[ModeT] | Sequence[LayoutNode[ModeT]]
+
+
+class RuntimeOwner(Protocol):
+    def invalidate(self, component: Component | None = None, *, check_dependencies: bool = False) -> None: ...
+
+
+_CURRENT_CONTEXT: ContextVar[dict[ContextKey[Any], object] | None] = ContextVar(
+    "squid_ui_component_context", default=None
+)
+_MISSING = object()
+
+
+@dataclass(frozen=True, slots=True)
+class ComponentTree:
+    """One expanded render and the component identities that produced it."""
+
+    nodes: tuple[LayoutNode, ...]
+    components: dict[str, Component]
+    assets: tuple[Asset, ...] = ()
+    document_key: str | None = None
+    deferred: tuple[Component, ...] = ()
+    async_bindings: tuple[AsyncBinding, ...] = ()
+    """Embedded components expansion stopped at, in the order it met them.
+
+    Only ever non-empty for a discovery render (see ``render_component_tree``'s ``defer``).
+    Such a tree is missing whole subtrees, so it describes what to load next and nothing else:
+    never plan it, draw it, or commit it.
+    """
+    observations: tuple[Address, ...] = ()
+    """The bus addresses of every shared cell this render read, deduplicated.
+
+    A frontend reconciles its subscriptions against this so a panel follows exactly what it
+    currently looks at. Over-subscribing is the safe direction: a staged render that is later
+    discarded costs at most one spurious refresh, while a missed subscription is a stale panel
+    until someone clicks it.
+    """
+    _topology: object = field(default_factory=object, compare=False, repr=False)
+    _topology_base: object | None = field(default=None, compare=False, repr=False)
+    _removed_components: tuple[tuple[str, Component], ...] = field(default=(), compare=False, repr=False)
+    _added_components: tuple[tuple[str, Component], ...] = field(default=(), compare=False, repr=False)
+
+
+@dataclass(slots=True)
+class _ComponentRender:
+    """One component's current pure render result and everything that read produced."""
+
+    revision: int
+    root: bool
+    inherited_context: dict[ContextKey[Any], object]
+    child_context: dict[ContextKey[Any], object]
+    nodes: tuple[RenderNode, ...]
+    assets: tuple[Asset, ...]
+    document_key: str | None
+    observation: Observation
+    addresses: tuple[Address, ...]
+    async_bindings: tuple[AsyncBinding, ...]
+
+
+@dataclass(slots=True)
+class _ExpandedSubtree:
+    """A complete expansion below one stable component path, before parent namespacing."""
+
+    component: Component
+    inherited_context: dict[ContextKey[Any], object]
+    nodes: tuple[LayoutNode, ...]
+    components: dict[str, Component]
+    assets: tuple[Asset, ...]
+    async_bindings: tuple[AsyncBinding, ...]
+    observations: tuple[Address, ...]
+    child_splices: dict[str, _NodeSplice]
+    topology: object = field(default_factory=object)
+
+
+@dataclass(frozen=True, slots=True)
+class _NodeSplice:
+    route: _LayoutRoute
+    count: int
+    key: str
+
+
+@dataclass(frozen=True, slots=True)
+class _SpliceResult:
+    subtree: _ExpandedSubtree
+    base_topology: object
+    removed: tuple[tuple[str, Component], ...]
+    added: tuple[tuple[str, Component], ...]
+
+
+class Component[ModeT = Any](StateOwner):
+    """Base class for mounted, stateful views."""
+
+    _runtime: RuntimeOwner | None = None
+    _parent: Component | None = None
+    _loaded: bool = False
+    """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
+    _reactive_internal_attributes = frozenset(
+        {"_runtime", "_parent", "_loaded", "_state_revision", "_dependency_invalidation"}
+    )
+    _reactive_require_state = False
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        cls._reactive_require_state = cls.render is not Component.render
+        super().__init_subclass__(**kwargs)
+
+    def _state_changed(self, names: frozenset[str]) -> None:
+        """React to committed writes to these state slots.
+
+        Nothing is refreshed here. A computed and a resource each record what they read and
+        re-check it when something asks for the value, so a commit only has to say the tree
+        needs drawing again. `names` is for a subclass that wants to know which fields moved.
+        """
+        del names
+        self.__dict__["_dependency_invalidation"] = True
+        try:
+            self.invalidate()
+        finally:
+            self.__dict__.pop("_dependency_invalidation", None)
+
+    def on_state_rollback(self) -> None:
+        self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
+
+    def render(self) -> RenderResult[ModeT]:
+        """Describe the message for the current state. Pure and synchronous."""
+        raise NotImplementedError
+
+    def boundary(self, child: Component, *, key: str) -> Boundary:
+        """Place child in this render tree under a stable key and namespace."""
+        return Boundary(child, key)
+
+    async def on_load(self) -> None:
+        """Fetch what this component cannot render without, before its first render.
+
+        Runs once per instance, before the first delivery that would show it, and before
+        :meth:`render` is ever called on it: a frontend stops expanding at an unloaded
+        component rather than rendering it empty. Writes are ordinary pre-delivery state, so
+        the delivered view is the loaded one -- there is no loading paint to design for.
+
+        A raise leaves the instance eligible to retry on the next delivery attempt, and
+        nothing is delivered in the meantime. Data the component can degrade without belongs
+        in declared state with a render branch, refreshed by a handler, not here.
+
+        Data that has to stay live belongs in a `sl.resource` instead. Because this runs once
+        and under no consumer, its reads are untracked: `sl.watch()` here would follow
+        nothing, and there would be no second run to reload it anyway.
+        """
+
+    def on_mount(self) -> None:
+        """Run after this component first enters a successfully drawn tree."""
+
+    def on_unmount(self) -> None:
+        """Run after this component leaves a successfully drawn tree."""
+
+    def invalidate(self) -> None:
+        """Mark this component's message as needing a re-render."""
+        dependency = self.__dict__.get("_dependency_invalidation", False)
+        if not dependency:
+            self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
+        if self._runtime is not None:
+            self._runtime.invalidate(self, check_dependencies=dependency)
+        elif self._parent is not None:
+            self._parent.invalidate()
+
+    def provide[ValueT](self, key: ContextKey[ValueT], value: ValueT) -> None:
+        """Provide an ephemeral value to descendants rendered below this component."""
+        context = _CURRENT_CONTEXT.get()
+        if context is None:
+            message = "provide() is only available while rendering"
+            raise RuntimeError(message)
+        context[key] = value
+
+    def inject[ValueT](self, key: ContextKey[ValueT], default: ValueT | object = _MISSING) -> ValueT:
+        """Read the nearest provided value while rendering."""
+        context = _CURRENT_CONTEXT.get()
+        if context is not None and key in context:
+            return context[key]  # pyrefly: ignore[bad-return]
+        if default is not _MISSING:
+            return default  # pyrefly: ignore[bad-return]
+        message = f"no value was provided for context key {key.name!r}"
+        raise LookupError(message)
+
+
+def render_component_tree(
+    root: Component,
+    *,
+    runtime: RuntimeOwner | None = None,
+    context: dict[ContextKey[Any], object] | None = None,
+    defer: Callable[[Component], bool] | None = None,
+    _render_cache: dict[Component, _ComponentRender] | None = None,
+    _dirty: set[Component] | None = None,
+    _forced: set[Component] | None = None,
+    _force_all: bool = False,
+    _subtree_cache: dict[str, _ExpandedSubtree] | None = None,
+    _dirty_paths: set[str] | None = None,
+    _component_paths: dict[Component, str] | None = None,
+) -> ComponentTree:
+    """Render and expand a component tree, preserving keyed component identity.
+
+    ``defer`` makes this a *discovery* render: an embedded component it selects is recorded in
+    :attr:`ComponentTree.deferred` and not expanded, so its :meth:`Component.render` is not
+    called. That is what lets a frontend run :meth:`Component.on_load` before a component
+    renders for the first time. The resulting tree is incomplete by construction; see
+    :attr:`ComponentTree.deferred`.
+    """
+    components: dict[str, Component] = {}
+    assets: list[Asset] = []
+    document_key: str | None = None
+    identities: dict[int, str] = {}
+    active: set[int] = set()
+    deferred: list[Component] = []
+    observed_addresses: list[Address] = []
+    observed_bindings: list[AsyncBinding] = []
+    render_cache = {} if _render_cache is None else _render_cache
+    dirty = set() if _dirty is None else _dirty
+    forced = set() if _forced is None else _forced
+    subtree_cache = {} if _subtree_cache is None else _subtree_cache
+    dirty_paths = set() if _dirty_paths is None else _dirty_paths
+
+    def inside(route: _LayoutRoute) -> _LayoutRoute:
+        last = route[-1]
+        if isinstance(last, _SequenceStep):
+            return (*route[:-1], _IndexStep(last.field, last.start))
+        return route
+
+    def items(rendered: RenderResult, path: str) -> tuple[tuple[RenderNode, ...], tuple[Asset, ...], str | None]:
+        if isinstance(rendered, Document):
+            if rendered.key is not None and path != "$":
+                message = f"{path}: only the root component may return a keyed Document"
+                raise LayoutInvariantError(message)
+            return rendered.children, rendered.assets, rendered.key
+        nodes = tuple(rendered) if isinstance(rendered, Sequence) else (rendered,)
+        return nodes, (), None
+
+    def same_context(left: dict[ContextKey[Any], object], right: dict[ContextKey[Any], object]) -> bool:
+        return left.keys() == right.keys() and all(key.matches(value, right[key]) for key, value in left.items())
+
+    def rendered(
+        component: Component,
+        path: str,
+        inherited_context: dict[ContextKey[Any], object],
+    ) -> _ComponentRender:
+        cached = render_cache.get(component)
+        revision = component.__dict__.get("_state_revision", 0)
+        dependency_check = component in dirty and component not in forced
+        reusable = (
+            not _force_all
+            and component not in forced
+            and cached is not None
+            and cached.revision == revision
+            and cached.root == (path == "$")
+            and same_context(cached.inherited_context, inherited_context)
+            and (component not in dirty or (dependency_check and cached.observation.current()))
+        )
+        if reusable:
+            current_addresses = cached.observation.addresses()
+            cached.addresses = current_addresses
+            observed_addresses.extend(current_addresses)
+            observed_bindings.extend(cached.async_bindings)
+            assets.extend(cached.assets)
+            return cached
+
+        local_context = dict(inherited_context)
+        token = _CURRENT_CONTEXT.set(local_context)
+        try:
+            with observe_render() as observation, observe_async_bindings() as bindings:
+                if active_observation := _RENDER_OBSERVATION.get():
+                    active_observation.entering_own_render(component)
+                value = component.render()
+                own_nodes, own_assets, own_key = items(value, path)
+        finally:
+            _CURRENT_CONTEXT.reset(token)
+        snapshot = _ComponentRender(
+            revision,
+            path == "$",
+            dict(inherited_context),
+            local_context,
+            own_nodes,
+            own_assets,
+            own_key,
+            observation,
+            observation.addresses(),
+            unique_async_bindings(bindings),
+        )
+        observed_addresses.extend(snapshot.addresses)
+        observed_bindings.extend(snapshot.async_bindings)
+        assets.extend(own_assets)
+        if not any(isinstance(value, Component) for value in observation.constructed.values()):
+            render_cache[component] = snapshot
+        else:
+            render_cache.pop(component, None)
+        return snapshot
+
+    def expand(
+        component: Component,
+        path: str,
+        inherited_context: dict[ContextKey[Any], object],
+    ) -> list[LayoutNode]:
+        nonlocal document_key
+        identity = id(component)
+        if identity in active:
+            message = f"{path}: component embedding cycle"
+            raise LayoutInvariantError(message)
+        if previous := identities.get(identity):
+            message = f"{path}: component instance is already embedded at {previous}"
+            raise LayoutInvariantError(message)
+        cached_subtree = subtree_cache.get(path)
+        if (
+            not _force_all
+            and path not in dirty_paths
+            and cached_subtree is not None
+            and cached_subtree.component is component
+            and same_context(cached_subtree.inherited_context, inherited_context)
+        ):
+            for cached_path, cached_component in cached_subtree.components.items():
+                cached_identity = id(cached_component)
+                if previous := identities.get(cached_identity):
+                    message = f"{cached_path}: component instance is already embedded at {previous}"
+                    raise LayoutInvariantError(message)
+                identities[cached_identity] = cached_path
+                components[cached_path] = cached_component
+                cached_component._runtime = runtime
+            assets.extend(cached_subtree.assets)
+            observed_bindings.extend(cached_subtree.async_bindings)
+            observed_addresses.extend(cached_subtree.observations)
+            return list(cached_subtree.nodes)
+
+        component_paths_before = set(components)
+        asset_start = len(assets)
+        binding_start = len(observed_bindings)
+        observation_start = len(observed_addresses)
+        deferred_start = len(deferred)
+        identities[identity] = path
+        components[path] = component
+        component._runtime = runtime
+        active.add(identity)
+        embed_keys: set[str] = set()
+        child_splices: dict[str, _NodeSplice] = {}
+        snapshot = rendered(component, path, inherited_context)
+        context = snapshot.child_context
+
+        def expand_item(item: RenderNode, item_path: str, route: _LayoutRoute) -> list[LayoutNode]:
+            if isinstance(item, Boundary):
+                if item.key in embed_keys:
+                    message = f"{item_path}: duplicate Boundary key {item.key!r}"
+                    raise LayoutInvariantError(message)
+                embed_keys.add(item.key)
+                if not isinstance(item.component, Component):
+                    message = f"{item_path}: Boundary does not contain a Component"
+                    raise LayoutInvariantError(message)
+                # Before the defer check: a deferred child still reaches the mount through
+                # its parent when its on_load writes state.
+                item.component._parent = component
+                if defer is not None and defer(item.component):
+                    deferred.append(item.component)
+                    return []
+                child_path = item.key if path == "$" else f"{path}.{item.key}"
+                expanded = _namespace(expand(item.component, child_path, context), item.key)
+                child_splices[child_path] = _NodeSplice(route, len(expanded), item.key)
+                return expanded
+            return [_map_layout_children_routed(item, item_path, inside(route), expand_item)]
+
+        try:
+            nodes: list[LayoutNode] = []
+            for index, item in enumerate(snapshot.nodes):
+                nodes.extend(expand_item(item, f"{path}.{index}", (_SequenceStep(None, len(nodes)),)))
+            if snapshot.document_key is not None:
+                document_key = snapshot.document_key
+            if len(deferred) == deferred_start:
+                subtree_cache[path] = _ExpandedSubtree(
+                    component,
+                    dict(inherited_context),
+                    tuple(nodes),
+                    {
+                        component_path: held
+                        for component_path, held in components.items()
+                        if component_path not in component_paths_before
+                    },
+                    tuple(assets[asset_start:]),
+                    unique_async_bindings(observed_bindings[binding_start:]),
+                    tuple(dict.fromkeys(observed_addresses[observation_start:])),
+                    child_splices,
+                )
+            else:
+                subtree_cache.pop(path, None)
+            return nodes
+        finally:
+            active.remove(identity)
+
+    spliced: _SpliceResult | None = None
+    attempted_splices: set[Component] = set()
+    try:
+        spliced = _splice_dirty_subtrees(
+            root,
+            _force_all,
+            dirty,
+            _component_paths,
+            render_cache,
+            subtree_cache,
+            expand,
+            attempted_splices,
+        )
+        if spliced is None:
+            dirty.difference_update(attempted_splices)
+            forced.difference_update(attempted_splices)
+            components.clear()
+            assets.clear()
+            identities.clear()
+            active.clear()
+            deferred.clear()
+            observed_addresses.clear()
+            observed_bindings.clear()
+            document_key = None
+            nodes = tuple(expand(root, "$", context or {}))
+        else:
+            nodes = spliced.subtree.nodes
+    except _AtomicResourcePending as pending:
+        # Atomic state is never rendered while pending. Keep the resource observation from
+        # the aborted discovery pass so the frontend can settle it before retrying.
+        observed_bindings.append(pending.resource)
+        nodes = ()
+    if spliced is not None:
+        subtree = spliced.subtree
+        for held in subtree.components.values():
+            held._runtime = runtime
+        return ComponentTree(
+            subtree.nodes,
+            subtree.components,
+            subtree.assets,
+            render_cache[root].document_key,
+            (),
+            subtree.async_bindings,
+            subtree.observations,
+            subtree.topology,
+            spliced.base_topology,
+            spliced.removed,
+            spliced.added,
+        )
+    complete = not deferred and (root_subtree := subtree_cache.get("$")) is not None
+    return ComponentTree(
+        nodes,
+        components,
+        tuple(assets),
+        document_key,
+        tuple(deferred),
+        unique_async_bindings(observed_bindings),
+        tuple(dict.fromkeys(observed_addresses)),
+        root_subtree.topology if complete else object(),
+    )
+
+
+def _splice_dirty_subtrees(
+    root: Component,
+    force_all: bool,
+    dirty: set[Component],
+    component_paths: dict[Component, str] | None,
+    render_cache: dict[Component, _ComponentRender],
+    subtree_cache: dict[str, _ExpandedSubtree],
+    expand: Callable[[Component, str, dict[ContextKey[Any], object]], list[LayoutNode]],
+    attempted: set[Component],
+) -> _SpliceResult | None:
+    """Patch independently dirty cached subtrees through their structural parent routes."""
+    if force_all or not dirty or root not in render_cache:
+        return None
+    root_subtree = subtree_cache.get("$")
+    if root_subtree is None:
+        return None
+    base_topology = root_subtree.topology
+    removed_components: list[tuple[str, Component]] = []
+    added_components: list[tuple[str, Component]] = []
+    selected_paths = (
+        {component: path for component in dirty if (path := component_paths.get(component)) is not None}
+        if component_paths is not None
+        else {snapshot.component: path for path, snapshot in subtree_cache.items() if snapshot.component in dirty}
+    )
+    if len(selected_paths) != len(dirty) or "$" in selected_paths.values():
+        return None
+    topmost = {
+        component: path
+        for component, path in selected_paths.items()
+        if not any(
+            ancestor is not component and (ancestor_path == "$" or path.startswith(f"{ancestor_path}."))
+            for ancestor, ancestor_path in selected_paths.items()
+        )
+    }
+    for component, path in sorted(topmost.items(), key=lambda item: item[1].count("."), reverse=True):
+        previous = subtree_cache[path]
+        candidate_nodes = tuple(expand(component, path, previous.inherited_context))
+        attempted.update(
+            candidate
+            for candidate in dirty
+            if candidate in render_cache
+            and (candidate_path := selected_paths.get(candidate)) is not None
+            and (candidate_path == path or candidate_path.startswith(f"{path}."))
+        )
+        candidate = subtree_cache.get(path)
+        if candidate is None:
+            return None
+        removed_components.extend(
+            (candidate_path, held)
+            for candidate_path, held in previous.components.items()
+            if candidate.components.get(candidate_path) is not held
+        )
+        added_components.extend(
+            (candidate_path, held)
+            for candidate_path, held in candidate.components.items()
+            if previous.components.get(candidate_path) is not held
+        )
+        if candidate_nodes != candidate.nodes:
+            candidate.nodes = candidate_nodes
+        if not _same_subtree_presentation_metadata(previous, candidate) or len(previous.nodes) != len(candidate.nodes):
+            return None
+        previous_child = previous
+        changed_child = candidate
+        child_path = path
+        while child_path != "$":
+            parent_path = "$" if "." not in child_path else child_path.rsplit(".", 1)[0]
+            parent = subtree_cache.get(parent_path)
+            if (
+                parent is None
+                or parent.component not in render_cache
+                or (splice := parent.child_splices.get(child_path)) is None
+            ):
+                return None
+            replacement = tuple(_namespace(list(changed_child.nodes), splice.key))
+            if len(replacement) != splice.count:
+                return None
+            same_topology = _same_component_map(previous_child.components, changed_child.components)
+            if same_topology:
+                changed_components = parent.components
+            else:
+                changed_components = dict(parent.components)
+                for removed_path, removed in previous_child.components.items():
+                    if changed_components.get(removed_path) is removed:
+                        changed_components.pop(removed_path)
+                changed_components.update(changed_child.components)
+            changed_parent = _ExpandedSubtree(
+                parent.component,
+                parent.inherited_context,
+                _splice_nodes(parent.nodes, splice, replacement),
+                changed_components,
+                parent.assets,
+                parent.async_bindings,
+                parent.observations,
+                parent.child_splices,
+                parent.topology if same_topology else object(),
+            )
+            subtree_cache[parent_path] = changed_parent
+            previous_child = parent
+            changed_child = changed_parent
+            child_path = parent_path
+    if (root_subtree := subtree_cache.get("$")) is None:
+        return None
+    return _SpliceResult(
+        root_subtree,
+        base_topology,
+        tuple(removed_components),
+        tuple(added_components),
+    )
+
+
+def _same_component_map(left: dict[str, Component], right: dict[str, Component]) -> bool:
+    return left.keys() == right.keys() and all(left[path] is right[path] for path in left)
+
+
+def _same_subtree_presentation_metadata(left: _ExpandedSubtree, right: _ExpandedSubtree) -> bool:
+    return (
+        left.assets == right.assets
+        and left.async_bindings == right.async_bindings
+        and left.observations == right.observations
+    )
+
+
+def _splice_nodes(
+    nodes: tuple[LayoutNode, ...],
+    splice: _NodeSplice,
+    replacement: tuple[LayoutNode, ...],
+) -> tuple[LayoutNode, ...]:
+    def rewrite(value: Any, steps: _LayoutRoute) -> Any:
+        step = steps[0]
+        rest = steps[1:]
+        if isinstance(step, _SequenceStep):
+            sequence = value if step.field is None else getattr(value, step.field)
+            changed = (*sequence[: step.start], *replacement, *sequence[step.start + splice.count :])
+            return changed if step.field is None else replace(value, **{step.field: changed})
+        if isinstance(step, _IndexStep):
+            sequence = value if step.field is None else getattr(value, step.field)
+            changed_item = replacement[0] if not rest else rewrite(sequence[step.index], rest)
+            changed = (*sequence[: step.index], changed_item, *sequence[step.index + 1 :])
+            return changed if step.field is None else replace(value, **{step.field: changed})
+        changed_item = replacement[0] if not rest else rewrite(getattr(value, step.field), rest)
+        return replace(value, **{step.field: changed_item})
+
+    return rewrite(nodes, splice.route)
+
+
+def _namespace(nodes: list[LayoutNode], prefix: str) -> list[LayoutNode]:
+    """Rewrite an embedded subtree's control keys under ``prefix``.
+
+    Explicit control keys are scoped under the embed path, so inserting a sibling cannot
+    change the identity of any existing action.
+    """
+
+    def key_for(node: Button | SelectMenu) -> str:
+        return f"{prefix}.{node.key}"
+
+    def rewrite_text[T: (Text, Heading, Footer, Code, Lines)](node: T) -> T:
+        overflow = node.overflow
+        if isinstance(overflow, Paginate) and overflow.key is not None:
+            return replace(node, overflow=replace(overflow, key=f"{prefix}.{overflow.key}"))
+        return node
+
+    def rewrite_item[T](item: T) -> T:
+        return replace(item, key=key_for(item)) if isinstance(item, Button) else item  # pyrefly: ignore
+
+    def rewrite_semantic_action(
+        item: SemanticActionControl | SemanticLink | SemanticControlGroup,
+    ) -> SemanticActionControl | SemanticLink | SemanticControlGroup:
+        if isinstance(item, SemanticControlGroup):
+            return replace(
+                item,
+                key=f"{prefix}.{item.key}",
+                controls=tuple(rewrite_semantic_action(control) for control in item.controls),
+            )
+        return replace(item, key=f"{prefix}.{item.key}")
+
+    def rewrite(node: LayoutNode) -> LayoutNode:
+        match node:
+            case SemanticActionControls(items=items, key=key):
+                return replace(
+                    node,
+                    key=f"{prefix}.{key}",
+                    items=tuple(rewrite_semantic_action(item) for item in items),
+                )
+            case SemanticDetails(key=key) | SemanticItems(key=key):
+                keyed = replace(node, key=f"{prefix}.{key}")
+                return map_layout_children(keyed, "$", lambda child, _path: (rewrite(child),))
+            case (
+                SemanticList(key=key)
+                | SemanticChoices(key=key)
+                | SemanticNavigation(key=key)
+                | SemanticTable(key=key)
+                | SemanticGrid(key=key)
+                | SemanticRoster(key=key)
+                | SemanticMedia(key=key)
+                | SemanticFormTrigger(key=key)
+                | SemanticToggle(key=key)
+                | SemanticDownload(key=key)
+            ):
+                return replace(node, key=f"{prefix}.{key}")
+            case SemanticPaged(key=key):
+                keyed = replace(node, key=f"{prefix}.{key}")
+                return map_layout_children(keyed, "$", lambda child, _path: (rewrite(child),))
+            case Text() | Heading() | Footer() | Code() | Lines():
+                return rewrite_text(node)
+            case Row(items=items):
+                return Row(items=tuple(rewrite_item(item) for item in items))
+            case ControlGroup(items=items):
+                return ControlGroup(items=tuple(rewrite_item(item) for item in items))
+            case Section(texts=texts, accessory=accessory):
+                return Section(texts=tuple(rewrite_text(text) for text in texts), accessory=rewrite_item(accessory))
+            case SelectMenu():
+                return replace(node, key=key_for(node))
+            case _:
+                return map_layout_children(node, "$", lambda child, _path: (rewrite(child),))
+
+    return [rewrite(node) for node in nodes]

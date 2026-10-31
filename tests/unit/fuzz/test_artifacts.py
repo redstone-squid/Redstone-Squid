@@ -166,7 +166,13 @@ def test_artifact_scan_accepts_keyed_canary_hashes(tmp_path: Path) -> None:
 def test_artifact_scan_refuses_symlinks(tmp_path: Path) -> None:
     target = tmp_path / "target"
     target.write_text("safe", encoding="utf-8")
-    (tmp_path / "link").symlink_to(target)
+    # Windows refuses this without Developer Mode or SeCreateSymbolicLinkPrivilege, and a
+    # test about *rejecting* symlinks cannot run where none can be made. Skipped rather
+    # than xfailed: the guard under test is fine, the platform simply will not set it up.
+    try:
+        (tmp_path / "link").symlink_to(target)
+    except OSError as error:
+        pytest.skip(f"creating symlinks is not permitted here: {error}")
 
     with pytest.raises(SensitiveArtifactError, match="symbolic links"):
         assert_artifacts_are_redacted(tmp_path, ["canary"])

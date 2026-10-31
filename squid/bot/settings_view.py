@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING, cast
 
 import discord
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import t
-from squid.bot.ui import CardField, L, create_mount, localization_for
+from squid.bot.ui import CardField, L, localization_for
 from squid.bot.utils.permissions import allows
 from squid.core.i18n import SUPPORTED_LOCALES, _
 from squid.permissions.domain import PermissionNode
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
     from squid.voting.application import VoteService
 
 SESSION_SECONDS = 300
+SETTINGS_SESSION_SPEC = sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD, options={"timeout": SESSION_SECONDS})
 
 FOLLOW_DISCORD = "-"
 """The locale select's "no override" value; an empty select value is not sendable."""
@@ -73,7 +75,7 @@ class SettingsPanel(sl.Component):
     """A semantic, mount-owned settings workspace."""
 
     history: sl.runtime.History = sl.runtime.history(limit=10)
-    """Undo for the server page's writes; see `docs/plans/squid-layouts-redesign/28-history.md`."""
+    """Undo for the server page's writes; see `docs/plans/squid-ui-redesign/28-history.md`."""
 
     page: str = sl.state("server")
     kind: VoteKind = sl.state(VoteKind.BUILD)
@@ -92,7 +94,6 @@ class SettingsPanel(sl.Component):
         settings: SettingsService,
         votes: VoteService,
         guild: discord.Guild,
-        author_id: int,
         capabilities: SettingsCapabilities,
         locale: str | None = None,
         owner_guild_id: int | None = None,
@@ -100,11 +101,9 @@ class SettingsPanel(sl.Component):
         self._settings = settings
         self._votes = votes
         self._guild = guild
-        self._author_id = author_id
         self._capabilities = capabilities
         self.locale = locale
         self._owner_guild_id = owner_guild_id
-        self._mount: sl.discord.Mount | None = None
 
     @property
     def shows_server(self) -> bool:
@@ -196,36 +195,35 @@ class SettingsPanel(sl.Component):
                     )
                 )
             children.append(
-                sl.semantic.Choices(
-                    key="locale",
-                    choices=tuple(
-                        sl.semantic.Choice(
-                            tag,
+                sl.choices(
+                    *(
+                        sl.choice(
                             L(t"Follow Discord") if tag == FOLLOW_DISCORD else tag,
+                            key=tag,
                         )
                         for tag in (FOLLOW_DISCORD, *sorted(SUPPORTED_LOCALES))
                     ),
+                    key="locale",
                     selection=sl.controlled((self._locale_override or FOLLOW_DISCORD,), self._locale_changed),
                 )
             )
-        actions: list[sl.primitives.Button] = []
+        actions: list[sl.semantic.ActionControl] = []
         # Only once there is something to reverse: an always-present disabled pair would be
         # two dead controls on a panel most readers never undo anything on.
         if self._capabilities.edit_server and self.history.can_undo:
-            actions.append(sl.primitives.Button(L(t"Undo"), self._undo, "undo"))
+            actions.append(sl.action_control(L(t"Undo"), self._undo, key="undo"))
         if self._capabilities.edit_server and self.history.can_redo:
-            actions.append(sl.primitives.Button(L(t"Redo"), self._redo, "redo"))
+            actions.append(sl.action_control(L(t"Redo"), self._redo, key="redo"))
         if self.shows_voting:
-            actions.append(sl.primitives.Button(L(t"Voting"), self._show_voting, "voting"))
+            actions.append(sl.action_control(L(t"Voting"), self._show_voting, key="voting"))
         actions.append(
-            sl.primitives.Button(
+            sl.action_control(
                 L(t"Close"),
                 self._close,
-                "close",
-                style=sl.primitives.ActionStyle.SECONDARY,
+                key="close",
             )
         )
-        children.append(sl.primitives.Row(tuple(actions)))
+        children.append(sl.action_controls(*actions, key="server-actions"))
         return children
 
     def _voting_nodes(self) -> Sequence[sl.LayoutNode]:
@@ -236,11 +234,9 @@ class SettingsPanel(sl.Component):
                 sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),
                 scope_note and sl.note(scope_note),
             ),
-            sl.semantic.Choices(
+            sl.choices(
+                *(sl.choice(L(label), key=kind.value) for kind, label in KIND_LABELS.items()),
                 key="vote-kind",
-                choices=tuple(
-                    sl.semantic.Choice(kind.value, L(label), available=True) for kind, label in KIND_LABELS.items()
-                ),
                 selection=sl.controlled((self.kind.value,), self._kind_changed),
             ),
         ]
@@ -255,37 +251,34 @@ class SettingsPanel(sl.Component):
                     placeholder=L(t"Choose a role"),
                 )
             )
-        actions: list[sl.primitives.Button] = []
+        actions: list[sl.semantic.ActionControl] = []
         if self._capabilities.edit_voting:
             actions.extend(
                 (
-                    sl.primitives.Button(
+                    sl.action_control(
                         L(t"Edit emojis"),
                         self._edit_emojis,
-                        "edit-emojis",
-                        style=sl.primitives.ActionStyle.PRIMARY,
+                        key="edit-emojis",
+                        emphasis=sl.semantic.Emphasis.STRONG,
                     ),
-                    sl.primitives.Button(
+                    sl.action_control(
                         L(t"Confirm reset") if self.confirming_reset else L(t"Reset"),
                         self._reset,
-                        "reset",
-                        style=sl.primitives.ActionStyle.DANGER
-                        if self.confirming_reset
-                        else sl.primitives.ActionStyle.SECONDARY,
+                        key="reset",
+                        tone=sl.Tone.DANGER if self.confirming_reset else sl.Tone.NEUTRAL,
                     ),
                 )
             )
         if self.shows_server:
-            actions.append(sl.primitives.Button(L(t"Back"), self._show_server, "server"))
+            actions.append(sl.action_control(L(t"Back"), self._show_server, key="server"))
         actions.append(
-            sl.primitives.Button(
+            sl.action_control(
                 L(t"Close"),
                 self._close,
-                "close",
-                style=sl.primitives.ActionStyle.SECONDARY,
+                key="close",
             )
         )
-        children.append(sl.primitives.Row(tuple(actions)))
+        children.append(sl.action_controls(*actions, key="voting-actions"))
         return children
 
     async def _channel_changed(self, event: sl.EntityEvent, setting: ScalarChannelSetting) -> None:
@@ -296,7 +289,10 @@ class SettingsPanel(sl.Component):
     async def _locale_changed(self, event: sl.ChoiceEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
-        await self.set_locale(None if event.selected[0] == FOLLOW_DISCORD else event.selected[0])
+        await self.set_locale(
+            None if event.selected[0] == FOLLOW_DISCORD else event.selected[0],
+            message_root=sd.responder(event).message_root,
+        )
 
     async def _kind_changed(self, event: sl.ChoiceEvent) -> None:
         await self.open_voting(VoteKind(event.selected[0]))
@@ -355,7 +351,7 @@ class SettingsPanel(sl.Component):
             await event.notice(t(self.locale, _("A vote multiplier must be a positive number, such as 1.5.")))
 
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         if interaction.guild is None:
             return
         text = cast(str, event.values["aliases"])
@@ -431,7 +427,7 @@ class SettingsPanel(sl.Component):
         await event.finish()
 
     async def _may_event(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
-        if await allows(sl.discord.native(event), node):
+        if await allows(sd.native(event), node):
             return True
         await event.notice(L(t"You are no longer allowed to change this."))
         return False
@@ -455,20 +451,20 @@ class SettingsPanel(sl.Component):
         else:
             await self._settings.set_channel(self._guild.id, setting, channel_id)
 
-    async def set_locale(self, locale: str | None) -> None:
+    async def set_locale(self, locale: str | None, *, message_root: sd.MessageRoot) -> None:
         previous_override, previous_locale = self._locale_override, self.locale
-        await self._write_locale(locale, locale or previous_locale)
+        await self._write_locale(locale, locale or previous_locale, message_root)
         self._locale_override = locale
         self.locale = locale or self.locale
         self.history.record(
             L(t"Changed the bot language"),
             compensate=sl.runtime.CompensationSpec(
-                lambda _key: self._write_locale(previous_override, previous_locale),
+                lambda _key: self._write_locale(previous_override, previous_locale, message_root),
                 lambda commit: f"settings:{self._guild.id}:locale:{commit.context.action_id}",
             ),
         )
 
-    async def _write_locale(self, override: str | None, effective: str | None) -> None:
+    async def _write_locale(self, override: str | None, effective: str | None, message_root: sd.MessageRoot) -> None:
         """The stored locale and the mount's, neither of which is component state.
 
         Both halves of the effective locale are captured at the call site rather than read
@@ -476,8 +472,7 @@ class SettingsPanel(sl.Component):
         `_locale_override` -- so reading them here would see the values being reversed.
         """
         await self._settings.set_locale(self._guild.id, override)
-        if self._mount is not None:
-            self._mount.localize(localization_for(effective))
+        message_root.localize(localization_for(effective))
 
     async def set_weight(self, role_id: int, multiplier: float | None) -> None:
         if multiplier is None:
@@ -542,14 +537,3 @@ class SettingsPanel(sl.Component):
         if self.kind is not VoteKind.BUILD or self._owner_guild_id in (None, self._guild.id):
             return None
         return L(t"Build reviews are weighted by the network's own server, so these multipliers do not apply here.")
-
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
-        """Create the production mount with author lock and shared error handling."""
-        self._mount = create_mount(
-            self,
-            source=source,
-            access=sl.discord.Owner(self._author_id),
-            locale=self.locale,
-            timeout=SESSION_SECONDS,
-        )
-        return self._mount

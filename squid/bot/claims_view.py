@@ -3,14 +3,15 @@
 from collections.abc import Sequence
 from typing import cast
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import AliasClaim
 from squid.accounts.errors import AliasAlreadyClaimedError
 from squid.bot.consent import with_consented_account
 from squid.bot.i18n import t
 from squid.bot.profile_render import present_claimant
-from squid.bot.ui import DISCORD_BLUE, L, create_mount
+from squid.bot.ui import DISCORD_BLUE, L, create_message_root
 from squid.bot.utils.permissions import enforce
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
@@ -59,7 +60,6 @@ class ClaimReviewComponent(sl.Component):
                 sl.section(
                     sl.heading(L(t"Claims closed")),
                     sl.paragraph(L(t"This review queue is closed.")),
-                    accent=DISCORD_BLUE,
                 ),
             )
         entries = tuple(_claim_entry(claim, self.locale) for claim in self._claims)
@@ -76,19 +76,19 @@ class ClaimReviewComponent(sl.Component):
         if self._claims:
             choices = cast(
                 sl.primitives.Node,
-                sl.semantic.Choices(
-                    key="claim",
-                    choices=tuple(
-                        sl.semantic.Choice(
-                            str(claim.id),
+                sl.choices(
+                    *(
+                        sl.choice(
                             L("Claim #{id} — {name}", id=claim.id, name=claim.alias_name),
-                            sl.md(
+                            key=str(claim.id),
+                            description=sl.md(
                                 "{claimant}",
                                 claimant=sl.raw_md(present_claimant(claim, self.locale, mention=False)),
                             ),
                         )
                         for claim in self._claims
                     ),
+                    key="claim",
                     selection=sl.controlled(
                         (str(self.selected_id),) if self.selected_id is not None else (), self._select_claim
                     ),
@@ -96,32 +96,29 @@ class ClaimReviewComponent(sl.Component):
                     maximum=1,
                 ),
             )
-        buttons: list[sl.primitives.Button] = []
+        buttons: list[sl.semantic.ActionControl] = []
         if self._can_approve:
             buttons.append(
-                sl.primitives.Button(
+                sl.action_control(
                     L(t"Take the name")
                     if self.selected_id is not None and self.reassign_armed == self.selected_id
                     else L(t"Approve"),
                     self._approve,
-                    "approve",
-                    style=sl.primitives.ActionStyle.DANGER
-                    if self.reassign_armed == self.selected_id
-                    else sl.primitives.ActionStyle.SUCCESS,
-                    disabled=self.selected is None,
+                    key="approve",
+                    tone=sl.Tone.DANGER if self.reassign_armed == self.selected_id else sl.Tone.SUCCESS,
+                    available=self.selected is not None,
                 )
             )
         if self._can_reject:
             buttons.append(
-                sl.primitives.Button(
+                sl.action_control(
                     L(t"Reject"),
                     self._reject,
-                    "reject",
-                    style=sl.primitives.ActionStyle.SECONDARY,
-                    disabled=self.selected is None,
+                    key="reject",
+                    available=self.selected is not None,
                 )
             )
-        buttons.append(sl.primitives.Button(L(t"Close"), self._close, "close"))
+        buttons.append(sl.action_control(L(t"Close"), self._close, key="close"))
         return (
             sl.primitives.Panel(
                 (
@@ -131,7 +128,7 @@ class ClaimReviewComponent(sl.Component):
                 ),
                 accent=DISCORD_BLUE,
             ),
-            sl.primitives.Row(tuple(buttons)),
+            sl.action_controls(*buttons, key="claim-actions"),
         )
 
     def _page_footer(self, page: int, pages: int) -> sl.text.Message:
@@ -151,7 +148,7 @@ class ClaimReviewComponent(sl.Component):
         claim = self.selected
         if claim is None:
             return
-        interaction = sl.discord.native(event)
+        interaction = sd.native(event)
         await enforce(interaction, ACCOUNT_CLAIM_APPROVE if approve else ACCOUNT_CLAIM_REJECT)
 
         async def resolve(live: sl.ActionEvent, staff_account_id: int) -> None:
@@ -207,11 +204,11 @@ class ClaimReviewComponent(sl.Component):
         self.closed = True
         await event.finish()
 
-    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
-        return create_mount(
+    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
+        return create_message_root(
             self,
             source=source,
-            access=sl.discord.Owner(self._author_id),
+            access=sd.Owner(self._author_id),
             locale=self.locale,
             timeout=self._timeout,
         )

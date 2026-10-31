@@ -49,10 +49,10 @@ from squid.runtime import (
     start_permission_epoch_watch,
 )
 from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
-from squid_layouts.discord import install
-from squid_layouts.discord.durability import PostgresTopicBridge
-from squid_layouts.profiling import MemoryProfiler
-from squid_reactive import LocalTopicBus
+from squid_reactivity import LocalTopicBus
+from squid_storage import PostgresTopicBridge
+from squid_ui.profiling import MemoryProfiler
+from squid_ui_discord import install
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -165,15 +165,15 @@ class RedstoneSquid(Bot):
         # that is the local bus, and the reconciler's poll is what the other processes get.
         self.topic_publisher: TopicPublisher = self.topic_bus
         # One assembly for the whole process, reachable from any interaction as
-        # `LayoutHost.of(...)`: the session registry, the reactor, and the challenge runner
+        # `ClientRuntime.of(...)`: the session registry, the scheduler, and the challenge runner
         # a guard's dialog resumes an approved press through.
-        self.layout_host = install(self, defaults=HOST_DEFAULTS, bus=self.topic_bus, profiler=self.layout_profiler)
-        assert self.layout_host.reactor is not None, "a topic bus was given, so there is a reactor"
-        self.layout_reactor = self.layout_host.reactor
-        self.layout_challenges = self.layout_host.challenges
+        self.client_runtime = install(self, defaults=HOST_DEFAULTS, bus=self.topic_bus, profiler=self.layout_profiler)
+        assert self.client_runtime.scheduler is not None, "a topic bus was given, so there is a scheduler"
+        self.layout_scheduler = self.client_runtime.scheduler
+        self.layout_challenges = self.client_runtime.challenges
         # How many of each panel a user may have open, and which mounts die with their
         # parent. Reached from a handler as `interaction.client.mounts`.
-        self.mounts = self.layout_host.mounts
+        self.sessions = self.client_runtime.sessions
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -199,7 +199,7 @@ class RedstoneSquid(Bot):
         # because each one is a gateway round trip: a slow Discord must not stall shutdown,
         # and an undisabled panel times out on its own anyway.
         with anyio.move_on_after(3.0):
-            await self.layout_host.close()
+            await self.client_runtime.close()
         await self.background_tasks.close()
         # After the supervisor, so the bridge's listener is already cancelled and cannot
         # log a torn connection on the way out. Bounded, then hung up: shutdown must not
@@ -221,7 +221,7 @@ class RedstoneSquid(Bot):
         # watcher keeps honest, so it runs before any extension loads rather than
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
-        self.background_tasks.start(self.layout_reactor.run(), name="layout-reactor")
+        self.background_tasks.start(self.layout_scheduler.run(), name="layout-scheduler")
         self.background_tasks.start(self.layout_challenges.run(), name="layout-challenges")
         if self.database_config is not None:
             self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)

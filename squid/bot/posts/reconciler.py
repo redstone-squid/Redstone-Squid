@@ -15,12 +15,12 @@ from typing import TYPE_CHECKING
 
 import discord
 
-import squid_layouts as sl
+import squid_ui_discord as sd
 from squid.bot.message_adapter import to_message_fact
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 from squid.posts.domain import DiscordPost, ResourceKind, Surface
-from squid_layouts.discord import send_to
+from squid_ui_discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -108,8 +108,8 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         if channel is None:
             logger.debug("Skipping a post to an unreachable channel %s", want.channel_id)
             return
-        receipt = await send_to(channel, allowed_mentions=want.allowed_mentions)(want.presentation)
-        message = receipt.message
+        result = await send_to(channel, allowed_mentions=want.allowed_mentions)(want.payload)
+        message = result.message
         if message is None:
             detail = "channel post delivery returned no message"
             raise RuntimeError(detail)
@@ -138,7 +138,7 @@ class PostReconciler[BotT: "squid.bot.app.RedstoneSquid"]:
         message = await self._fetch(post)
         if message is None:
             return False
-        await sl.discord.edit_to(message)(want.presentation)
+        await sd.edit_to(message)(want.payload)
         await self.bot.services.posts.mark_rendered(post.message_id, generation)
         return True
 

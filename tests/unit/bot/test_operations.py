@@ -9,8 +9,8 @@ from discord.abc import Messageable
 from squid.bot.errors import is_error_presented
 from squid.bot.operations import managed_result, run_command_operation
 from squid.bot.ui import info_node
-from squid_layouts.discord.testing import fake_message
-from squid_layouts.runtime.component import RenderResult
+from squid_ui.runtime.component import RenderResult
+from squid_ui_discord.testing import fake_message
 from tests.helpers.discord import make_layout_bot
 
 
@@ -26,7 +26,7 @@ async def test_command_operation_receives_the_initial_delivery_before_work_start
 
     async def work(progress, receipt):
         seen.append(receipt.message)
-        progress.set(info_node("Working", "Halfway"))
+        progress.report(info_node("Working", "Halfway"))
         return info_node("Done", "Complete")
 
     await run_command_operation(target, work, source=make_layout_bot())

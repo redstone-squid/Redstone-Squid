@@ -11,7 +11,7 @@ from discord.ext import commands
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.notifications_view import NotificationPanel
-from squid.bot.ui import error_layout, info_layout, respond_presentation
+from squid.bot.ui import error_layout, info_layout, respond_payload
 from squid.bot.utils.autocomplete import autocompletes
 from squid.core.i18n import _
 from squid.notifications import (
@@ -21,7 +21,7 @@ from squid.notifications import (
     TagPredicate,
 )
 from squid.runtime import JobHandle
-from squid_layouts.discord import respond_to
+from squid_ui_discord import respond_to
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -62,8 +62,8 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             author_id=interaction.user.id,
             locale=locale,
         )
-        mount = component.mount(source=interaction)
-        await mount.send(respond_to(interaction, ephemeral=True, wait=True))
+        message_root = component.mount(source=interaction)
+        await message_root.send(respond_to(interaction, ephemeral=True, wait=True))
 
     @autocompletes(
         creator="creator_profiles",
@@ -108,7 +108,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         filters = (build_kind, record_class, version_scope, tag)
         chosen = [bool(creator), bool(competition), any(value is not None for value in filters)]
         if sum(chosen) != 1:
-            await respond_presentation(
+            await respond_payload(
                 interaction,
                 error_layout(
                     t(locale, _("Nothing to follow")),
@@ -141,7 +141,7 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             )
             followed = t(locale, _("Following records matching that filter."))
         del subscription  # Nothing user-facing needs its id: `/notifications` lists and removes it.
-        await respond_presentation(
+        await respond_payload(
             interaction,
             info_layout(followed, t(locale, _("Open `/notifications` to see or undo everything you follow."))),
         )

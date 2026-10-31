@@ -29,11 +29,11 @@ from typing import Any
 import discord
 from discord.ext.commands import Context
 
-import squid_layouts as sl
+import squid_ui_discord as sd
 from squid.bot.i18n import t
-from squid.bot.ui import error_layout, info_layout, reply_presentation
+from squid.bot.ui import error_layout, info_layout, reply_payload
 from squid.core.i18n import _
-from squid_layouts.discord import send_to
+from squid_ui_discord import send_to
 
 
 def personal(ctx: Context[Any]) -> bool:
@@ -48,7 +48,7 @@ def personal(ctx: Context[Any]) -> bool:
 
 async def deliver_privately(
     ctx: Context[Any],
-    presentation: sl.discord.DiscordPresentation,
+    payload: sd.MessagePayload,
     *,
     reason: str,
     locale: str | None = None,
@@ -66,18 +66,18 @@ async def deliver_privately(
     channel, because the channel is exactly what the payload must not reach.
     """
     if ctx.interaction is not None or ctx.guild is None:
-        receipt = await sl.discord.reply_to(
+        result = await sd.reply_to(
             ctx,
             ephemeral=True,
             files=files,
             allowed_mentions=allowed_mentions,
-        )(presentation)
-        return receipt.message
+        )(payload)
+        return result.message
 
     try:
-        receipt = await send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(presentation)
+        result = await send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(payload)
     except discord.Forbidden:
-        await reply_presentation(
+        await reply_payload(
             ctx,
             error_layout(
                 t(locale, _("Nowhere private to send this")),
@@ -91,8 +91,8 @@ async def deliver_privately(
             ),
         )
         return None
-    await reply_presentation(
+    await reply_payload(
         ctx,
         info_layout(t(locale, _("Sent by direct message")), reason),
     )
-    return receipt.message
+    return result.message

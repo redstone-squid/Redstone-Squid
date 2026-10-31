@@ -19,10 +19,10 @@ from typing import TYPE_CHECKING, Any
 
 import discord
 
-import squid_layouts as sl
+import squid_ui as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.polls import poll_close, poll_refresh, polls
-from squid.bot.ui import respond_presentation, text_layout
+from squid.bot.ui import respond_payload, text_layout
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.i18n import _
 from squid.voting.domain import VoteActor, VoteRejection, VoteSessionSnapshot
@@ -31,11 +31,11 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-def poll_controls() -> sl.semantic.Actions:
+def poll_controls() -> sl.semantic.ActionControls:
     """The control row an open poll's card ends with."""
-    return sl.actions(
-        sl.routed_action("Close poll", poll_close.id(), key="close", tone=sl.Tone.DANGER),
-        sl.routed_action("Refresh weights", poll_refresh.id(), key="refresh"),
+    return sl.action_controls(
+        sl.routed_action_control("Close poll", poll_close.id(), key="close", tone=sl.Tone.DANGER),
+        sl.routed_action_control("Refresh weights", poll_refresh.id(), key="refresh"),
         key="poll.controls",
     )
 
@@ -54,7 +54,7 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
         await _refuse(interaction, locale, result.rejection or VoteRejection.NOT_FOUND)
         return
     await bot.refresh_posts("vote_session", str(result.session.id))
-    await respond_presentation(interaction, text_layout(t(locale, _("Poll closed."))))
+    await respond_payload(interaction, text_layout(t(locale, _("Poll closed."))))
 
 
 @polls.route(poll_refresh)
@@ -77,7 +77,7 @@ async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSq
             _("{count} voter(s) could not be resolved, so their cached weight was kept."),
             count=len(result.unresolved_account_ids),
         )
-    await respond_presentation(interaction, text_layout(text))
+    await respond_payload(interaction, text_layout(text))
 
 
 async def _authorize(
@@ -110,4 +110,4 @@ async def _authorize(
 
 
 async def _refuse(interaction: discord.Interaction[Any], locale: str | None, rejection: VoteRejection) -> None:
-    await respond_presentation(interaction, text_layout(describe_rejection(locale, rejection)))
+    await respond_payload(interaction, text_layout(describe_rejection(locale, rejection)))

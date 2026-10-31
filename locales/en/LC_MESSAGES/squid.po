@@ -4913,7 +4913,7 @@ msgid "someone unlinked"
 msgstr ""
 
 #: squid/bot/layout_showcase.py:173
-msgid "squid-layouts engine showcase"
+msgid "squid-ui engine showcase"
 msgstr ""
 
 #: squid/submissions/domain/finalization.py:130

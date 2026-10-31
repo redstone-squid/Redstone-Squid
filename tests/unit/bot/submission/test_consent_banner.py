@@ -16,7 +16,7 @@ from squid.bot.submission.consent_banner import (
     open_consent_prompt,
 )
 from squid.bot.submission.submit import BuildSubmitCommands
-from squid_layouts.discord.testing import fake_message
+from squid_ui_discord.testing import fake_message
 from tests.helpers.discord import make_layout_bot
 
 BUILD_LOG_CHANNEL = 500

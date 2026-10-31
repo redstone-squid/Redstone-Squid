@@ -7,15 +7,15 @@ from typing import TYPE_CHECKING, Literal, cast, override
 import discord
 from discord.utils import escape_markdown
 
-import squid_layouts as sl
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.ui import (
     DISCORD_GREEN,
     DISCORD_RED,
     DISCORD_YELLOW,
     render_item,
-    render_presentation,
-    render_static,
+    render_payload,
     truncate_display_text,
 )
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
@@ -97,16 +97,12 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                 return await self.bot.get_or_fetch_message(source.channel_id, source.message_id)
         return None
 
-    async def render_layout(self) -> sl.discord.presentation.DiscordPresentation:
-        """Render a standalone Components V2 presentation for the build."""
-        return render_static([await self.render_node()])
-
-    async def render_presentation(self) -> sl.discord.presentation.DiscordPresentation:
-        """Render the complete presentation used by post delivery."""
-        return render_presentation([await self.render_node()])
+    async def render_payload(self) -> sd.message_payload.MessagePayload:
+        """Render the complete message payload used by post delivery."""
+        return render_payload([await self.render_node()])
 
     async def render_container(
-        self, *, reservation: sl.discord.ResourceCost = sl.discord.EMPTY_RESERVATION
+        self, *, reservation: sd.ResourceCost = sd.EMPTY_RESERVATION
     ) -> discord.ui.Container[discord.ui.LayoutView]:
         """Render the build card as a detached item, for composition into a larger V2 layout.
 
@@ -169,7 +165,12 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
         rows = ()
         if build.original_link is not None:
-            rows = (sl.primitives.Row((sl.primitives.LinkButton("Original submission", build.original_link),)),)
+            rows = (
+                sl.action_controls(
+                    sl.link("Original submission", build.original_link, key="original-submission"),
+                    key="submission-links",
+                ),
+            )
         description = await self.get_description()
         media = await self._get_media_urls()
         extra_media = media[1:]

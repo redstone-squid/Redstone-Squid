@@ -18,7 +18,7 @@ This is a Discord bot for managing Minecraft redstone build submissions, built w
   `finish`, `cancel`, `discard`, `run`) or hands out expiring authority states what ends it,
   in one clause, in its first paragraph. Everything else states nothing — a frozen value has
   no lifetime to describe. The trigger is a method the class defines, not how it is spelled.
-  See `docs/squid-layouts-architecture.md` for the verb table and the naming rules
+  See `docs/squid-ui-architecture.md` for the verb table and the naming rules
   `tests/architecture/test_naming.py` enforces.
 
 ### Concurrency

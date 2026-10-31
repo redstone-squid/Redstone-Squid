@@ -18,7 +18,7 @@ from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Stat
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
-from squid_layouts.discord.testing import commit_render, delivered_to, fake_message
+from squid_ui_discord.testing import commit_render, delivered_to, fake_message
 from tests.helpers.discord import make_layout_bot
 
 if TYPE_CHECKING:
@@ -54,7 +54,7 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
     bot = SimpleNamespace(services=SimpleNamespace(versions=versions))
     handler = BuildHandler(cast("squid.bot.app.RedstoneSquid", bot), display_build)
 
-    presentation = await handler.render_presentation()
+    presentation = await handler.render_payload()
     payload = presentation.layout.to_components()
 
     assert presentation.layout.has_components_v2()
@@ -65,9 +65,15 @@ async def test_build_handler_renders_composable_v2_card(display_build: Build) ->
     assert "Submission ID: 7" in str(payload)
 
 
-def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
+async def test_build_editor_uses_semantic_state_and_forms(display_build: Build) -> None:
     field = get_text_input(display_build, "version_spec")
     component = BuildEditComponent(display_build, cast(BuildService, object()), [field])
+
+    # `projection` is an atomic resource, so reading its status aborts a discovery render
+    # until it has settled. A mount settles it before rendering; calling `render()` straight
+    # from a test has to do the same. The loader returns the seed the constructor supplied,
+    # so this touches no service.
+    await component.projection.reload()
 
     assert component.max_pages == 1
     assert "Edit this section" in str(component.render())
@@ -119,8 +125,8 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     )
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
 
-    mount = view.mount(source=make_layout_bot())
-    rendered = commit_render(mount)
+    message_root = view.mount(source=make_layout_bot())
+    rendered = commit_render(message_root)
     result_buttons = [
         child
         for child in rendered.walk_children()
@@ -152,11 +158,11 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
 async def test_search_timeout_disables_bound_controls() -> None:
     page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
-    mount = view.mount(source=make_layout_bot())
+    message_root = view.mount(source=make_layout_bot())
     message = fake_message()
-    await mount.send(delivered_to(message))
+    await message_root.send(delivered_to(message))
 
-    await mount.finish()
+    await message_root.finish()
 
     message.edit.assert_awaited_once()
     disabled = message.edit.await_args.kwargs["view"]
