@@ -1,17 +1,19 @@
 """Declarative response policy for live components."""
 
-from typing import Any, ClassVar, cast
+from typing import Any, ClassVar, cast, override
 
 import discord
 
 from squid_ui.chrome import Chrome
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
+from squid_ui_discord.access import Everyone
 from squid_ui_discord.audience import Audience, Private
 from squid_ui_discord.message_root_contracts import ExpiryPolicy
 from squid_ui_discord.request import Request
 from squid_ui_discord.response import AccessSetting, ResponseSpec, invoker_only
-from squid_ui_discord.session_specs import SessionSpec
+from squid_ui_discord.session_specs import ScopeKind, SessionSpec
+from squid_ui_discord.sessions import DEFAULT_ADMISSION, AdmissionSpec, Reject
 
 
 class Screen[OwnerT = Any](Component[ComponentsV2Target]):
@@ -72,4 +74,49 @@ class Screen[OwnerT = Any](Component[ComponentsV2Target]):
 Screen.__response_spec__ = Screen._compile_response_spec()
 
 
-__all__ = ["Screen"]
+class _SessionScreen[OwnerT = Any](Screen[OwnerT]):
+    _preset_scope: ClassVar[ScopeKind] = ScopeKind.USER
+    _preset_admission: ClassVar[AdmissionSpec] = DEFAULT_ADMISSION
+
+    @override
+    def __init_subclass__(
+        cls,
+        *,
+        session_name: str | None = None,
+        _preset_base: bool = False,
+        **kwargs: object,
+    ) -> None:
+        if session_name is not None:
+            if "session" in cls.__dict__:
+                message = "Declare either session_name or session, not both"
+                raise TypeError(message)
+            cls.session = SessionSpec(session_name, scope=cls._preset_scope, admission=cls._preset_admission)
+        if not _preset_base and (cls.session is None or not cls.session.name):
+            message = f"{cls.__name__} requires a non-empty session_name or a named SessionSpec"
+            raise TypeError(message)
+        super().__init_subclass__(**kwargs)
+
+
+class UserSessionScreen[OwnerT = Any](_SessionScreen[OwnerT], _preset_base=True):
+    """An owner-only personal screen with one replaceable session per user.
+
+    Declare `session_name` as a class keyword, or `session` for a custom recipe.
+    """
+
+
+class UserGuildSessionScreen[OwnerT = Any](_SessionScreen[OwnerT], _preset_base=True):
+    """An owner-only personal screen with one replaceable session per user and guild."""
+
+    _preset_scope = ScopeKind.USER_GUILD
+
+
+class SharedGuildSessionScreen[OwnerT = Any](_SessionScreen[OwnerT], _preset_base=True):
+    """A public screen with one shared session per guild; duplicate opens are rejected."""
+
+    _preset_scope = ScopeKind.GUILD
+    _preset_admission = AdmissionSpec(collision=Reject())
+    access = Everyone()
+    audience = "public"
+
+
+__all__ = ["Screen", "SharedGuildSessionScreen", "UserGuildSessionScreen", "UserSessionScreen"]

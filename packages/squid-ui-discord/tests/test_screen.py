@@ -250,3 +250,82 @@ async def test_parent_and_key_are_mutually_exclusive() -> None:
 
     with pytest.raises(TypeError, match="cannot be combined"):
         await ui.respond(context, BasicScreen(), parent=parent.root, session_key="ambiguous")
+
+
+class PersonalPreset(sd.UserSessionScreen[Owner], session_name="preset"):
+    @override
+    def render(self):
+        return sl.heading("Personal")
+
+
+class GuildPersonalPreset(sd.UserGuildSessionScreen[Owner], session_name="preset"):
+    @override
+    def render(self):
+        return sl.heading("Guild personal")
+
+
+class SharedPreset(sd.SharedGuildSessionScreen[Owner], session_name="preset"):
+    @override
+    def render(self):
+        return sl.heading("Shared")
+
+
+@pytest.mark.parametrize(
+    ("preset", "scope", "public"),
+    [
+        (PersonalPreset, sd.ScopeKind.USER, False),
+        (GuildPersonalPreset, sd.ScopeKind.USER_GUILD, False),
+        (SharedPreset, sd.ScopeKind.GUILD, True),
+    ],
+)
+async def test_session_presets_apply_policy_through_the_facade(
+    preset: type[sd.Screen[Owner]], scope: sd.ScopeKind, public: bool
+) -> None:
+    ui, client = _ui()
+    interaction = interaction_harness(user_id=7)
+    interaction.client = client
+    interaction.guild = message_harness(guild_id=42).guild
+    first = await ui.respond(interaction, preset())
+
+    assert isinstance(first, sd.Presented)
+    assert preset.session is not None
+    assert preset.session.scope is scope
+    assert first.session is not None
+    assert first.session.key == preset.session.key(sd.OpenContext.of(cast(discord.Interaction, interaction)))
+    assert first.root.access == (sd.Everyone() if public else sd.Owner(7))
+    assert interaction.response.send_message.await_args.kwargs["ephemeral"] is (not public)
+
+    second = await ui.respond(interaction, preset())
+    assert isinstance(second, sd.Rejected if public else sd.Presented)
+
+
+def test_session_presets_require_a_stable_name() -> None:
+    with pytest.raises(TypeError, match="requires a non-empty"):
+
+        class Missing(sd.UserSessionScreen):
+            pass
+
+    with pytest.raises(TypeError, match="requires a non-empty"):
+
+        class Empty(sd.UserGuildSessionScreen, session_name=""):
+            pass
+
+
+def test_session_presets_allow_explicit_recipes_and_inheritance() -> None:
+    recipe = sd.SessionSpec("custom", scope=sd.ScopeKind.GLOBAL, admission=AdmissionSpec(limit=2, collision=Reject()))
+
+    class Customized(sd.SharedGuildSessionScreen[Owner]):
+        session = recipe
+        audience = "personal"
+
+    class Inherited(Customized):
+        pass
+
+    assert Customized.__response_spec__.session is recipe
+    assert Inherited.__response_spec__.session is recipe
+    assert Inherited.__response_spec__.audience == "personal"
+
+    with pytest.raises(TypeError, match="either session_name or session"):
+
+        class Ambiguous(sd.UserSessionScreen, session_name="other"):
+            session = recipe
