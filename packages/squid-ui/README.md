@@ -160,9 +160,7 @@ contract and exceeding Discord's row or message budget should be an error. Use
 mount and is never a substitute for a durable host ledger:
 
 ```python
-participants = tuple(
-    sp.AgreementParticipant(str(member.id), member.name) for member in reviewers
-)
+participants = tuple(sp.AgreementParticipant(str(member.id), member.name) for member in reviewers)
 agreement = sp.Agreement(
     "Approve this release?",
     participants,
@@ -295,7 +293,7 @@ payload is an encoded *address*, never state.
 
 ```python
 bridge = sd.durability.PostgresTopicBridge(pool, bus)
-tasks.start_soon(bridge.run)   # LISTEN, plus the outbound sender
+tasks.start_soon(bridge.run)  # LISTEN, plus the outbound sender
 bridge.publish(sl.runtime.Topic("build", "123"))  # local subscribers now, other processes shortly after
 ```
 
@@ -716,6 +714,7 @@ class BuildSource:
     async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Build]:
         resolved, rows, has_previous, has_more = await builds.window(position, extent)
         return sl.sources.Window(resolved, tuple(rows), has_previous, has_more)
+
 
 ranking = sp.SourceRankedList(
     BuildSource(),
