@@ -187,9 +187,11 @@ Change `Mount.send` and session opening so abandoned delivery is data rather tha
 type SendResult = Delivered | Abandoned
 type OpenResult = Opened | Rejected | Abandoned
 
+
 @dataclass(frozen=True, slots=True)
 class Opened:
     session: Session
+
 
 @dataclass(frozen=True, slots=True)
 class Rejected:

@@ -132,8 +132,7 @@ class EditBuild(sl.Form):
     name = sl.TextField()
     category = sl.ChoiceField(options=(...))
 
-    async def on_submit(self, event: sl.SubmitEvent) -> None:
-        ...
+    async def on_submit(self, event: sl.SubmitEvent) -> None: ...
 ```
 
 Discord-only `EntityField` and `FileField` live under `sl.discord`. Their capabilities are
