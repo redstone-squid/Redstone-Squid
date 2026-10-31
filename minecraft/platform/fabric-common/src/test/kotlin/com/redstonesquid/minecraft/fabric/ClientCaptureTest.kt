@@ -1,11 +1,10 @@
 package com.redstonesquid.minecraft.fabric
 
 import com.redstonesquid.minecraft.snapshot.BlockPosition
+import com.redstonesquid.minecraft.snapshot.BlockStateSnapshot
 import com.redstonesquid.minecraft.snapshot.CaptureCompleteness
-import com.redstonesquid.minecraft.snapshot.CaptureDisclosure
 import com.redstonesquid.minecraft.snapshot.CuboidSelection
-import com.redstonesquid.minecraft.snapshot.SafeBlockState
-import com.redstonesquid.minecraft.snapshot.SafeSnapshot
+import com.redstonesquid.minecraft.snapshot.SchematicSnapshot
 import com.redstonesquid.minecraft.snapshot.SnapshotMetadata
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -17,7 +16,6 @@ class ClientCaptureTest {
         val adapter = FakeAdapter(loaded = false)
         val result = ClientCaptureController(adapter).prepare(
             CuboidSelection.fromCorners(BlockPosition(0, 0, 0), BlockPosition(0, 0, 0)),
-            CaptureDisclosure(),
         )
 
         assertEquals(0, adapter.captureCalls)
@@ -46,18 +44,14 @@ class ClientCaptureTest {
 
         override fun isFullyLoaded(selection: CuboidSelection): Boolean = loaded
 
-        override fun captureVisibleSelection(
-            selection: CuboidSelection,
-            disclosure: CaptureDisclosure,
-        ): SafeSnapshot {
+        override fun captureVisibleSelection(selection: CuboidSelection): SchematicSnapshot {
             captureCalls += 1
-            return SafeSnapshot(
+            return SchematicSnapshot(
                 dataVersion = 1,
                 dimensions = selection.dimensions,
-                blocks = List(selection.dimensions.volume.toInt()) { SafeBlockState.AIR },
+                blocks = List(selection.dimensions.volume.toInt()) { BlockStateSnapshot.AIR },
                 metadata = SnapshotMetadata(
                     completeness = CaptureCompleteness.CLIENT_VISIBLE,
-                    disclosure = disclosure,
                 ),
             )
         }

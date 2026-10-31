@@ -2,16 +2,15 @@
 
 This workspace contains the shared submission client and its Paper and Fabric
 adapters. It deliberately does not use Stick or bundle Nucleation: commands are
-native Brigadier trees, capture produces a small typed snapshot, and only the
-backend's released Nucleation sanitizer may turn imported files into durable
-submission artifacts.
+native Brigadier trees, capture produces a small typed snapshot, and the backend
+validates and stores uploaded schematics without filtering their contents.
 
 ## Modules
 
 - `protocol`: bounded JSON parsing and versioned form, draft, and device-auth
   DTOs.
-- `safe-snapshot`: vanilla-only capture values, selection/budget validation,
-  safe-NBT checks, and a deterministic write-only Sponge Schematic v3 encoder.
+- `schematic-snapshot`: capture values, selection/budget validation, and a
+  deterministic write-only Sponge Schematic v3 encoder.
 - `core`: platform-neutral submission services and the shared Brigadier tree.
 - `platform:paper`: a Paper 26.1.2 plugin entrypoint using lifecycle command
   registration.
@@ -93,13 +92,11 @@ Loader, Fabric API, and Fabric Language Kotlin at runtime.
 
 - A selection must be positive, no more than 512 blocks on an axis, and no more
   than 20 million cells.
-- Built-in snapshots accept only `minecraft` resource IDs and reject players,
-  absolute position/world fields, commands, UUIDs, and ownership fields.
-- Inventory and free-text disclosure are explicit snapshot policy values and
-  default to included; the UI must show the warning before capture.
+- Snapshots validate resource ID syntax, block counts, and local entity positions.
+  They preserve supplied block/entity NBT, including inventories, text, commands,
+  and identity fields.
 - The writer emits only Sponge v3, uses sorted palettes/compounds, and fixes the
   gzip header so identical snapshots produce identical bytes.
-- This encoder is defense in depth, not a substitute for backend sanitization.
 - Paper draft calls send both the installation credential and the short-lived
   player bearer; Fabric sends only its PKCE-issued player bearer. Draft origin is
   derived from that authenticated session, and client APIs never accept account

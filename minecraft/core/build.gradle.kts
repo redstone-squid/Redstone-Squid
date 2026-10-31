@@ -5,7 +5,7 @@ plugins {
 
 dependencies {
     api(project(":protocol"))
-    api(project(":safe-snapshot"))
+    api(project(":schematic-snapshot"))
     api(libs.brigadier)
 
     testImplementation(libs.junit.jupiter)

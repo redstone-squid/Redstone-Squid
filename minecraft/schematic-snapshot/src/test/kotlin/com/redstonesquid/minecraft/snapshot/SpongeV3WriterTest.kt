@@ -45,18 +45,18 @@ class SpongeV3WriterTest {
         assertTrue(latin1.contains("minecraft:repeater[delay=2,facing=north,powered=false]"))
     }
 
-    private fun goldenSnapshot(): SafeSnapshot = SafeSnapshot(
+    private fun goldenSnapshot(): SchematicSnapshot = SchematicSnapshot(
         dataVersion = 5000,
         dimensions = Dimensions(2, 1, 2),
         offset = BlockPosition(-1, 0, 3),
         blocks = listOf(
-            SafeBlockState.AIR,
-            SafeBlockState(
+            BlockStateSnapshot.AIR,
+            BlockStateSnapshot(
                 ResourceId.parse("minecraft:repeater"),
                 mapOf("powered" to "false", "facing" to "north", "delay" to "2"),
             ),
-            SafeBlockState(ResourceId.parse("minecraft:redstone_wire"), mapOf("power" to "15")),
-            SafeBlockState.AIR,
+            BlockStateSnapshot(ResourceId.parse("minecraft:redstone_wire"), mapOf("power" to "15")),
+            BlockStateSnapshot.AIR,
         ),
         blockEntities = listOf(
             BlockEntitySnapshot(

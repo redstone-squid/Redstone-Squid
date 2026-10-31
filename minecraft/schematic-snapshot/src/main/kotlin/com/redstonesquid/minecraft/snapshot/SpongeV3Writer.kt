@@ -8,13 +8,13 @@ import java.util.zip.Deflater
 
 /** Deterministic, write-only encoder for the Sponge Schematic v3 format. */
 public object SpongeV3Writer {
-    public fun write(snapshot: SafeSnapshot): ByteArray {
+    public fun write(snapshot: SchematicSnapshot): ByteArray {
         val output = ByteArrayOutputStream()
         write(snapshot, output)
         return output.toByteArray()
     }
 
-    public fun write(snapshot: SafeSnapshot, output: OutputStream) {
+    public fun write(snapshot: SchematicSnapshot, output: OutputStream) {
         val gzip = DeterministicGzipOutputStream(output)
         val data = DataOutputStream(gzip)
         NbtWriter(data).writeRoot(buildRoot(snapshot))
@@ -22,8 +22,8 @@ public object SpongeV3Writer {
         gzip.finish()
     }
 
-    private fun buildRoot(snapshot: SafeSnapshot): NbtCompound {
-        val paletteNames = snapshot.blocks.map(SafeBlockState::canonicalName).distinct().sorted()
+    private fun buildRoot(snapshot: SchematicSnapshot): NbtCompound {
+        val paletteNames = snapshot.blocks.map(BlockStateSnapshot::canonicalName).distinct().sorted()
         val palette = paletteNames.withIndex().associate { (index, name) -> name to NbtInt(index) }
         val paletteIndices = paletteNames.withIndex().associate { (index, name) -> name to index }
         val blockData = encodeVarInts(snapshot.blocks.map { paletteIndices.getValue(it.canonicalName) })
@@ -52,8 +52,6 @@ public object SpongeV3Writer {
     private fun encodeMetadata(metadata: SnapshotMetadata): NbtCompound {
         val redstoneSquid = NbtCompound.of(
             "CaptureCompleteness" to NbtString(metadata.completeness.protocolValue),
-            "IncludedFreeText" to NbtByte(if (metadata.disclosure.includeFreeText) 1 else 0),
-            "IncludedInventories" to NbtByte(if (metadata.disclosure.includeInventories) 1 else 0),
         )
         val fields = buildMap<String, NbtValue> {
             metadata.name?.let { put("Name", NbtString(it)) }

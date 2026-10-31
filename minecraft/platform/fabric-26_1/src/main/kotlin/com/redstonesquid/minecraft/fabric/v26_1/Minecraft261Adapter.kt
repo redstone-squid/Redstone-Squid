@@ -1,9 +1,8 @@
 package com.redstonesquid.minecraft.fabric.v26_1
 
 import com.redstonesquid.minecraft.fabric.FabricGameAdapter
-import com.redstonesquid.minecraft.snapshot.CaptureDisclosure
 import com.redstonesquid.minecraft.snapshot.CuboidSelection
-import com.redstonesquid.minecraft.snapshot.SafeSnapshot
+import com.redstonesquid.minecraft.snapshot.SchematicSnapshot
 
 /**
  * First explicit Minecraft-version boundary.
@@ -17,10 +16,7 @@ public object Minecraft261Adapter : FabricGameAdapter {
 
     override fun isFullyLoaded(selection: CuboidSelection): Boolean = false
 
-    override fun captureVisibleSelection(
-        selection: CuboidSelection,
-        disclosure: CaptureDisclosure,
-    ): SafeSnapshot = throw UnsupportedOperationException(
+    override fun captureVisibleSelection(selection: CuboidSelection): SchematicSnapshot = throw UnsupportedOperationException(
         "Minecraft 26.1.2 world extraction is not connected; no partial schematic was produced",
     )
 }

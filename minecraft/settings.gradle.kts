@@ -27,7 +27,7 @@ rootProject.name = "redstone-squid-minecraft"
 
 include(
     "protocol",
-    "safe-snapshot",
+    "schematic-snapshot",
     "core",
     "platform:paper",
     "platform:fabric-common",

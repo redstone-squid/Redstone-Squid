@@ -11,7 +11,7 @@ dependencies {
 
     implementation(project(":platform:fabric-common"))
     include(project(":protocol"))
-    include(project(":safe-snapshot"))
+    include(project(":schematic-snapshot"))
     include(project(":core"))
     include(project(":platform:fabric-common"))
 }

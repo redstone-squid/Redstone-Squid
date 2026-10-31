@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-class SafeSnapshotTest {
+class SchematicSnapshotTest {
     @Test
     fun `selection is normalized and checked without integer overflow`() {
         val selection = CuboidSelection.fromCorners(
@@ -33,7 +33,7 @@ class SafeSnapshotTest {
 
     @Test
     fun `block states have canonical property order`() {
-        val state = SafeBlockState(
+        val state = BlockStateSnapshot(
             ResourceId.parse("repeater"),
             mapOf("powered" to "false", "delay" to "2", "facing" to "north"),
         )
@@ -42,53 +42,58 @@ class SafeSnapshotTest {
     }
 
     @Test
-    fun `snapshot rejects identity and command data recursively`() {
-        val dangerousData = NbtCompound.of(
-            "nested" to NbtCompound.of("OwnerUUID" to NbtString("private")),
+    fun `snapshot preserves nested inventories text commands and identity data`() {
+        val item = NbtCompound.of(
+            "id" to NbtString("minecraft:written_book"),
+            "tag" to NbtCompound.of(
+                "author" to NbtString("Builder"),
+                "pages" to NbtList.of(listOf(NbtString("Build instructions"))),
+            ),
         )
+        val original = NbtCompound.of(
+            "Items" to NbtList.of(listOf(item)),
+            "CustomName" to NbtString("Door controller"),
+            "Command" to NbtString("say hello"),
+            "nested" to NbtCompound.of("OwnerUUID" to NbtString("owner-id")),
+        )
+        val entity = EntitySnapshot(
+            EntityPosition(0.5, 0.0, 0.5),
+            ResourceId.parse("example:custom_entity"),
+            NbtCompound.of("UUID" to NbtString("entity-id")),
+        )
+        val snapshot = minimalSnapshot(blockEntityData = original, entities = listOf(entity))
 
-        val error = assertFailsWith<IllegalArgumentException> {
-            minimalSnapshot(blockEntityData = dangerousData)
-        }
-        assertTrue(error.message.orEmpty().contains("OwnerUUID"))
-
-        assertFailsWith<IllegalArgumentException> {
-            minimalSnapshot(
-                entities = listOf(EntitySnapshot(EntityPosition(0.5, 0.0, 0.5), ResourceId.parse("player"))),
-            )
+        assertEquals(original, snapshot.blockEntities.single().data)
+        assertEquals(entity, snapshot.entities.single())
+        val encoded = java.util.zip.GZIPInputStream(SpongeV3Writer.write(snapshot).inputStream())
+            .use { it.readAllBytes().toString(Charsets.ISO_8859_1) }
+        for (value in listOf("Builder", "Build instructions", "Door controller", "say hello", "owner-id", "entity-id")) {
+            assertTrue(encoded.contains(value))
         }
     }
 
     @Test
-    fun `disclosure off rejects inventories and free text`() {
+    fun `snapshot still rejects out of bounds entity positions`() {
         assertFailsWith<IllegalArgumentException> {
             minimalSnapshot(
-                disclosure = CaptureDisclosure(includeInventories = false, includeFreeText = true),
-                blockEntityData = NbtCompound.of("Items" to NbtList.of(emptyList())),
-            )
-        }
-        assertFailsWith<IllegalArgumentException> {
-            minimalSnapshot(
-                disclosure = CaptureDisclosure(includeInventories = true, includeFreeText = false),
-                blockEntityData = NbtCompound.of("CustomName" to NbtString("secret")),
+                entities = listOf(EntitySnapshot(EntityPosition(1.5, 0.0, 0.5), ResourceId.parse("armor_stand"))),
             )
         }
     }
 
     private fun minimalSnapshot(
-        disclosure: CaptureDisclosure = CaptureDisclosure(),
         blockEntityData: NbtCompound = NbtCompound.of(),
         entities: List<EntitySnapshot> = emptyList(),
-    ): SafeSnapshot = SafeSnapshot(
+    ): SchematicSnapshot = SchematicSnapshot(
         dataVersion = 1,
         dimensions = Dimensions(1, 1, 1),
-        blocks = listOf(SafeBlockState.AIR),
+        blocks = listOf(BlockStateSnapshot.AIR),
         blockEntities = if (blockEntityData.isEmpty) {
             emptyList()
         } else {
             listOf(BlockEntitySnapshot(BlockPosition(0, 0, 0), ResourceId.parse("chest"), blockEntityData))
         },
         entities = entities,
-        metadata = SnapshotMetadata(completeness = CaptureCompleteness.SERVER_AUTHORITATIVE, disclosure = disclosure),
+        metadata = SnapshotMetadata(completeness = CaptureCompleteness.SERVER_AUTHORITATIVE),
     )
 }

@@ -116,7 +116,7 @@ private class FabricCommandActions(
             SquidCommandAction.POSITION_TWO,
             SquidCommandAction.SELECTION,
             -> notify(
-                "World capture and schematic upload are not available yet; no unsanitized schematic was created.",
+                "World capture and schematic upload are not available yet; no schematic was created.",
             )
             SquidCommandAction.SERVER_CLAIM,
             SquidCommandAction.SERVER_STATUS,
