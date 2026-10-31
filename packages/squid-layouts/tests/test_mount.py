@@ -67,9 +67,9 @@ from squid_layouts.runtime import (
     ComponentRuntime,
     Failed,
     Pending,
+    PendingPolicy,
     ReactiveWriteError,
     Ready,
-    ResourceDelivery,
     batch,
     transaction,
 )
@@ -117,6 +117,39 @@ async def test_mount_snapshot_reports_lifecycle_and_handle_expiry() -> None:
 
     assert snapshot.lifecycle is MountLifecycle.ACTIVE
     assert snapshot.handle_expires_in == pytest.approx(45)
+
+
+class TestCandidateSettlement:
+    """A drawn candidate owes the mount exactly one ending: committed, or rolled back."""
+
+    async def test_a_candidate_cannot_be_rolled_back_twice(self) -> None:
+        mount = Mount(Counter(), access=Everyone())
+        await mount.send(delivered_to(fake_message()))
+        candidate = mount._stage()
+
+        mount._rollback(candidate)
+
+        with pytest.raises(LayoutInvariantError, match="already settled"):
+            mount._rollback(candidate)
+
+    async def test_a_committed_candidate_cannot_be_rolled_back(self) -> None:
+        mount = Mount(Counter(), access=Everyone())
+        await mount.send(delivered_to(fake_message()))
+        candidate = mount._stage()
+
+        mount._commit(candidate)
+
+        with pytest.raises(LayoutInvariantError, match="already settled"):
+            mount._rollback(candidate)
+
+    async def test_only_one_candidate_may_be_outstanding_at_a_time(self) -> None:
+        """The reconciler owns this half: a second draw cannot stage over the first."""
+        mount = Mount(Counter(), access=Everyone())
+        await mount.send(delivered_to(fake_message()))
+        mount._stage()
+
+        with pytest.raises(RuntimeError, match="already staged"):
+            mount._stage()
 
 
 async def _armed_mount(
@@ -2002,6 +2035,7 @@ class TestSend:
         sent = await mount.send(destination)
 
         assert isinstance(sent, delivery.Delivered)
+        assert sent.settled
         assert sent.receipt.message is message
         assert "inc" in mount._handlers
         assert mount._generation == 1
@@ -2069,6 +2103,26 @@ class TestSend:
 
         assert component.count == 1
         assert mount.handle is not None
+
+    async def test_handleless_operation_settles_without_repainting(self) -> None:
+        panel = OperationPanel()
+        mount = Mount(panel, access=Everyone(), timeout=None)
+
+        sent = await mount.send(_Destination(None))
+
+        assert isinstance(sent, delivery.Delivered)
+        assert sent.settled
+        assert panel.publication.status == sl.operations.Succeeded(42)
+
+    async def test_dismiss_deletes_the_message_and_finishes_the_mount(self) -> None:
+        message = fake_message()
+        mount = Mount(Counter(), access=Everyone(), timeout=None)
+        await mount.send(delivered_to(message))
+
+        await mount.dismiss()
+
+        message.delete.assert_awaited_once_with()
+        assert mount.finished
 
     async def test_an_abandoned_delivery_leaves_the_mount_resendable(self):
         mount = Mount(Counter(), access=Everyone(), timeout=None)
@@ -2758,7 +2812,7 @@ class VisibleResourcePanel(Component):
         self.key = "second"
 
     def render(self):
-        match self.value.state:
+        match self.value.status:
             case Pending(previous=previous):
                 label = "pending" if previous is None else f"pending:{previous.value}"
             case Failed(error=error):
@@ -2772,19 +2826,84 @@ class AtomicResourcePanel(Component):
     def __init__(self, load: Callable[[], Awaitable[str]]) -> None:
         self._load = load
 
-    @resource(delivery=ResourceDelivery.ATOMIC)
+    @resource(pending=PendingPolicy.ATOMIC)
     async def value(self) -> str:
         return await self._load()
 
     def render(self):
-        match self.value.state:
+        match self.value.status:
             case Failed(error=error):
                 return Text(f"failed:{error}")
             case Ready(value=value):
                 return Text(f"ready:{value}")
 
 
+class OperationPanel(Component):
+    @sl.operation(initial="starting")
+    async def publication(self, progress: sl.operations.Progress[str]) -> int:
+        progress.set("publishing")
+        return 42
+
+    def render(self):
+        match self.publication.status:
+            case sl.operations.Pending(progress=progress):
+                return Text(f"pending:{progress}")
+            case sl.operations.Succeeded(value=value):
+                return Text(f"succeeded:{value}")
+            case sl.operations.Failed(error=error):
+                return Text(f"failed:{error}")
+            case sl.operations.Cancelled(progress=progress):
+                return Text(f"cancelled:{progress}")
+
+
+class ProgressiveOperationPanel(OperationPanel):
+    def __init__(self, progressed: asyncio.Event, resume: asyncio.Event) -> None:
+        self.progressed = progressed
+        self.resume = resume
+
+    @sl.operation(initial="starting")
+    async def publication(self, progress: sl.operations.Progress[str]) -> int:
+        progress.set("publishing")
+        self.progressed.set()
+        await self.resume.wait()
+        return 42
+
+
 class TestResourceLoading:
+    async def test_operation_delivers_pending_then_succeeded(self) -> None:
+        message: Any = fake_message()
+        destination = _Destination(message)
+        mount = Mount(OperationPanel(), access=Everyone(), timeout=None)
+
+        await mount.send(destination)
+
+        assert "pending:starting" in str(destination.calls[0][0].to_components())
+        message.edit.assert_awaited_once()
+        assert "succeeded:42" in str(message.edit.await_args.kwargs["view"].to_components())
+
+    async def test_operation_progress_reconciles_while_it_is_running(self) -> None:
+        progressed = asyncio.Event()
+        resume = asyncio.Event()
+        painted = asyncio.Event()
+        message: Any = fake_message()
+
+        def record_edit(**_kwargs: object) -> object:
+            painted.set()
+            return message
+
+        message.edit.side_effect = record_edit
+        mount = Mount(ProgressiveOperationPanel(progressed, resume), access=Everyone(), timeout=None)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(mount.send, _Destination(message))
+            await progressed.wait()
+            await painted.wait()
+            assert "pending:publishing" in str(message.edit.await_args_list[0].kwargs["view"].to_components())
+            resume.set()
+
+        assert message.edit.await_count == 2
+        assert "succeeded:42" in str(message.edit.await_args_list[1].kwargs["view"].to_components())
+
     async def test_visible_resource_delivers_pending_then_ready(self) -> None:
         async def load(_key: str) -> str:
             return "loaded"
@@ -2812,7 +2931,7 @@ class TestResourceLoading:
                 return "loaded"
 
             def render(self):
-                _ = self.value.state
+                _ = self.value.status
                 return Text("constant")
 
         message: Any = fake_message()
@@ -2846,15 +2965,15 @@ class TestResourceLoading:
             return "loaded"
 
         panel = AtomicResourcePanel(load)
-        with pytest.raises(sl.runtime.ResourceNotReadyError, match=r"atomic resource .* pending"):
-            _ = panel.value.state
+        with pytest.raises(sl.resources.ResourceNotReadyError, match=r"atomic resource .* pending"):
+            _ = panel.value.status
 
         await panel.value.reload()
-        assert panel.value.state == Ready("loaded")
+        assert panel.value.status == Ready("loaded")
 
         panel.value.invalidate()
         assert panel.value.pending
-        assert panel.value.state == Ready("loaded")
+        assert panel.value.status == Ready("loaded")
 
     async def test_visible_failure_is_rendered_as_state(self) -> None:
         async def load(_key: str) -> str:
@@ -2885,7 +3004,7 @@ class TestResourceLoading:
                 return "second"
 
             def render(self):
-                return Text(f"{type(self.first.state).__name__}:{type(self.second.state).__name__}")
+                return Text(f"{type(self.first.status).__name__}:{type(self.second.status).__name__}")
 
         message: Any = fake_message()
         mount = Mount(Pair(), access=Everyone(), timeout=None)
@@ -2906,7 +3025,7 @@ class TestResourceLoading:
                 return "child loaded"
 
             def render(self):
-                return Text(f"child:{type(self.value.state).__name__}")
+                return Text(f"child:{type(self.value.status).__name__}")
 
         class Parent(Component):
             def __init__(self) -> None:
@@ -2918,7 +3037,7 @@ class TestResourceLoading:
                 return "parent loaded"
 
             def render(self):
-                match self.value.state:
+                match self.value.status:
                     case Pending():
                         return Text("parent:Pending")
                     case Failed(error=error):
@@ -2948,7 +3067,7 @@ class TestResourceLoading:
                 return "loaded"
 
             def render(self):
-                return Text(type(self.value.state).__name__) if self.shown else Text("hidden")
+                return Text(type(self.value.status).__name__) if self.shown else Text("hidden")
 
         panel = Conditional()
         message: Any = fake_message()
@@ -2976,7 +3095,7 @@ class TestResourceLoading:
         await mount.send(_Destination(None))
 
         assert loads == []
-        assert isinstance(panel.value.state, Pending)
+        assert isinstance(panel.value.status, Pending)
         assert mount.pending
 
     async def test_dependency_reload_uses_the_interaction_for_both_paints(self) -> None:
@@ -3006,7 +3125,7 @@ class TestResourceLoading:
 
         await mount.send(_Destination(message))
 
-        assert isinstance(panel.value.state, Ready)
+        assert isinstance(panel.value.status, Ready)
         assert mount.pending
         assert mount._view is not None
         assert "pending" in str(mount._view.to_components())

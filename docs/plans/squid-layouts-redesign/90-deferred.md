@@ -24,6 +24,22 @@ are not re-derived or accidentally adopted later.
   reducers, middleware or global singleton; addresses still travel the bus and subscribers
   still re-read; and `Controlled`/`Managed` still owns domain truth, with 40 §3 making a
   namespace an unsuitable home for anything durable.
+  **Revisited 2026-08-23**: the CascadeUI comparison's "steal the scoping/keying ergonomics, but
+  not the singleton store" finding lands as [59](59-shared-pool.md)'s scope vocabulary and
+  [63](../completed/squid-layouts-redesign/63-stores-package.md), and neither reopens this. 59 keys a *lifetime owner* the host
+  constructs and holds — there is still no global, no lookup by type, and no way to reach a
+  namespace you were not given; adopting `sessions.py`'s existing scope taxonomy as `ScopeT` makes
+  the keying typed, not ambient. 63 is a store, but a store of application values in a package
+  *below* the UI library with no edge pointing up, which is this entry's own prescription ("add a
+  host-side event bus, not a store in the package") applied to durable data instead of events. The
+  test that keeps both honest: neither *store* is reachable from a `squid_layouts` import.
+  **Amended 2026-08-24** alongside 59's rewrite, which sharpened that last sentence. `SharedPool`
+  is re-exported as `sl.runtime.SharedPool`, so a keyed lifetime owner *is* reachable from a
+  `squid_layouts` import and always was going to be — what stays unreachable is a store, a global,
+  and any way to obtain a namespace nobody handed you. 59 also dropped the `sl.discord.scopes`
+  module this note's "scope vocabulary" referred to; the taxonomy it adopts is now reached through
+  `screens.py`'s existing `Opener`/`Scope`, which strengthens rather than weakens the point, since
+  no new surface was added at all.
 - **Persistence batteries** (SQLite/Postgres `SnapshotStore` implementations,
   reattachment, pruning). The durability layer has **zero production consumers** in
   `squid/` (verified by grep). Building storage backends for an unused subsystem is
@@ -42,7 +58,7 @@ are not re-derived or accidentally adopted later.
   is [35](35-discord-v2-fragments.md), and is the supported incremental boundary.
   `sl.discord.contribute(document, to=view)` is the shipped spelling; `into=` remains
   rejected because it names the wrong relationship.
-  **Revisited again 2026-08-23**: [53](53-view-adoption.md) splits the surviving half on one
+  **Revisited again 2026-08-23**: [53](../completed/squid-layouts-redesign/53-view-adoption.md) splits the surviving half on one
   fact — whether the view has been *sent*. A live view owns a message and will edit it, and
   that case stays rejected exactly as written above. An unsent view owns nothing: it is items
   and callbacks that have not met Discord, so Squid can translate them into its own exact
@@ -77,6 +93,17 @@ are not re-derived or accidentally adopted later.
   host-side helpers *into* `sl.discord` rather than out of it, and a fourth layer would
   re-split what that round deliberately joined. What was worth keeping — that per-open session
   policy is spread across call sites — is 51, landing in `sl.discord` as a value.
+  **Revisited 2026-08-23**: [63](../completed/squid-layouts-redesign/63-stores-package.md) adds a package and this entry does not
+  forbid it. What was rejected was a *fourth UI layer above* `sl.discord`, re-splitting what the
+  productization round deliberately joined and re-deriving `MountDefaults`, `sl.watch` and the
+  class-body policy surface under new names. 63 is the opposite direction: durable application
+  data, below the UI library and never importing it, answering a question the series has
+  consistently said is *not* the UI library's (`docs/squid-layouts-architecture.md:268`). The
+  distinction this entry turns on is which way the dependency points, so a package that points
+  down is outside its reasoning rather than an exception to it. 63 is also mostly *extraction*
+  rather than addition: 1,414 lines of it already exist inside `discord/durability/` and already
+  import nothing from `squid_layouts`, so the package boundary is being drawn where the dependency
+  graph already put one.
 - **Context-manager render DSL** (dominate-style) — fights `render()`-returns-a-value
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** — irrelevant to this repo (3.14 target).
@@ -119,6 +146,11 @@ are not re-derived or accidentally adopted later.
   `Agreement` component state. The participant *lifecycle* model is now
   [34](34-safe-session-runtime.md) §B's scope, whose worked lobby/game example is this
   entry's remaining removal condition.
+  **Closed 2026-08-24**: [60](60-session-membership.md) shipped `join`/`leave`, per-session
+  capacity and durable membership, with `/layout lobby` as the worked example this entry
+  required. One piece of 34 §B.4 stays deferred and moves to 60's Not included: the
+  cross-session member index, which is the only part needing two locks and still has no
+  consumer.
 - **`squid_layouts.patterns` library** (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
@@ -184,3 +216,42 @@ are not re-derived or accidentally adopted later.
   five routes carry no parameters at all. Registration-time `inspect.signature` checking
   is the substitute, and it is stricter than Flask's, which waits for the first request.
   Revisit only if pyrefly gains generic `Unpack` support.
+
+- **A closed suffix taxonomy that encodes lifetime in nouns** (plan 67, 2026-08-24) — designed
+  as a 17-row table (`Key`/`Address` never end, `Handle`/`Token` expire, `Registry`/`Pool`/
+  `Runtime`/`Store` end explicitly, `Snapshot`/`Report`/`Result` end immediately, `Record`/
+  `State` outlive the process) and rejected on measurement. The public surface across `sl`,
+  `sl.discord`, its twenty sub-namespaces, `squid_reactive` and `squid_stores` has **93
+  distinct class-name suffixes, 60 of them used exactly once**; only 15 recur three times or
+  more. A closed table would have to reject `Component`, `Mount`, `Screen`, `Destination`,
+  `Composition`, `Target` and `Work`, or grow until it was not a table. Record the numbers,
+  not just the conclusion, or this gets re-proposed.
+- **Collapsing suffixes to one word per lifetime class** — the follow-on idea, worse.
+  `TopicBus` → `TopicOwner` and `PersistedPool` → `PersistedOwner` destroy the information
+  that a bus delivers and a pool canonicalises, to encode a fact a single method signature
+  already carries. Lifetime belongs on verbs; nouns owe one-meaning-per-word instead.
+- **`-er` agent-noun consistency** — `ChallengeRunner` and `ChallengeSupervisor` own tasks
+  while `ErrorRenderer` and `ChallengePresenter` own nothing, so the suffix says nothing
+  about ownership. Real, but it violates no rule and renaming would be taste.
+- **A generation object replacing `Resource._request_token`** — proposed by an external review
+  so a loader would hold permission to complete *its* generation rather than comparing a
+  counter. The comparison is three lines at `resources.py:401-421`, correct and commented.
+  Churn.
+- **`_Candidate` typestate classes** (`StagedCandidate.presented() -> PresentedCandidate`) —
+  same review. The half worth having is one `settled` flag, shipped; the other half is already
+  enforced a layer down, because `_draw` stages subscriptions and the reconciler refuses a
+  second staged set. Three classes to restate what one guard states is emulating Rust syntax
+  rather than its principle.
+- **A `CompensableEffect` saga interface** for external side effects — plan 28's History
+  already separates a transactional `StateDelta` from an author-supplied external inverse, and
+  gives the tiers. Nothing to add until a consumer needs compensation ordering.
+- **An `adopt()` capture/into-component wrapper** — the review proposed making adoption an
+  explicit move. Plan 53 already enforces unsent-only with a second-writer-refusing proxy, and
+  the review itself concedes `adopt()` is pleasantly simple.
+- **A universal `Lifetime`/`Owner`/`Borrow`/`Lease` framework** — Python will not enforce it
+  strongly enough to justify making every call unpleasant. Make invalid ownership transitions
+  difficult and resource death explicit; do not emulate the syntax.
+- **`ActionKey`/`WireId`/`RouteId` newtypes** — a logical action key, a per-generation control
+  id and a durable route id are three lifetimes flowing through `str`. Real distinction, no
+  in-tree defect motivating it, and the routing module docstring already states it in prose.
+  Revisit if a mix-up ever ships.

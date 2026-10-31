@@ -14,10 +14,12 @@ from squid.bot.layout_showcase import (
     AppearancePanel,
     LayoutShowcase,
     LayoutShowcaseCog,
+    Lobby,
     PreviewPanel,
     Session,
 )
-from squid_layouts.discord import Everyone, Mount, Owner, Reactor
+from squid_layouts.discord import Everyone, Mount, Owner, Reactor, SessionKey, SessionRegistry
+from squid_layouts.discord.sessions import UserScope
 from squid_layouts.discord.testing import (
     assert_within_limits,
     commit_render,
@@ -64,10 +66,12 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
 @pytest.mark.parametrize(
     ("section", "source_marker"),
     [
-        ("tour", "class Counter(sl.Component)"),
         ("pagination", "sl.primitives.Paginate("),
         ("adaptation", 'return sl.actions(*actions, key="showcase-actions")'),
         ("degradation", "overflow=sl.primitives.Spill()"),
+        ("data", 'sl.table(columns, *rows, key="capability-table")'),
+        ("ownership", "on=sl.controlled(self.subscribed, self._set_subscribed)"),
+        ("forms", "class FeedbackForm(sl.forms.Form)"),
         ("composition", 'self.boundary(self.left, key="left")'),
         ("localization", 'mount.localize(localization_for("zh-CN"))'),
     ],
@@ -91,10 +95,74 @@ def test_degradation_exhibit_makes_each_compromise_visible() -> None:
     mount = Mount(LayoutShowcase(section="degradation", entries=20, locale="en"), access=Everyone(), timeout=None)
     view = commit_render(mount)
 
-    assert "…and 14 more" in _texts(view)
+    assert "…and 15 more" in _texts(view)
     assert "The report records every compromise" in _texts(view)
     assert mount.plan is not None
     assert len(mount.plan.report.events) >= 2
+    assert_within_limits(view)
+
+
+def test_data_exhibit_formats_typed_nodes_rather_than_strings() -> None:
+    mount = Mount(LayoutShowcase(section="data", entries=40, locale="en"), access=Everyone(), timeout=None)
+    view = commit_render(mount)
+    content = _texts(view)
+
+    assert "**Loaded samples:** 40 rows" in content
+    assert "░░░░░░░░░░ 0%" in content, "a proportion, drawn from the value and its maximum"
+    assert "<t:" in content, "the instant reaches each reader in their own timezone"
+    assert ":R>" in content, "and does so relative to when they read it"
+    assert "Adapts by" in content, "the table kept its tabular shape"
+    assert "Pickers of 25 and 11" in content, "with every declared row"
+    assert_within_limits(view)
+
+
+async def test_ownership_exhibit_separates_session_owned_and_component_owned_values() -> None:
+    component = LayoutShowcase(section="ownership", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    commit_render(mount)
+
+    await mount.dispatch("ownership.controlled", fake_interaction())
+    await mount.dispatch("ownership.rating.4", fake_interaction())
+
+    assert component.subscribed is True, "a controlled value only moves through its handler"
+    assert component.rating == 4
+    assert "\N{BLACK STAR}" * 4 in _texts(commit_render(mount))
+
+    await mount.dispatch("ownership.managed", fake_interaction())
+    labels = [button.label for button in _buttons(commit_render(mount))]
+
+    assert "Session-owned toggle: Session says on" in labels
+    assert mount.presentation.toggles["ownership.managed"].on is True, "the session holds it, not the component"
+    assert not hasattr(component, "managed"), "no component state backs the managed toggle"
+
+
+async def test_forms_exhibit_validates_then_binds_typed_values_and_prefills() -> None:
+    component = LayoutShowcase(section="forms", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    commit_render(mount)
+    assert mount.plan is not None
+    binding = mount.plan.form_bindings["feedback"]
+
+    rejected = await binding.spec.evaluate({"exhibit": "data", "headline": "Readable", "score": "1"})
+    caught = [issue.key for issue in rejected.errors if isinstance(issue, sl.forms.FieldError)]
+    assert caught == ["detail"], "cross-field validation sees typed values"
+
+    await mount.dispatch_submit(
+        "feedback",
+        fake_interaction(),
+        binding.spec,
+        {"exhibit": "data", "headline": "Typed all the way down", "score": "5"},
+        binding.on_submit,
+    )
+
+    assert (component.feedback_exhibit, component.feedback_headline, component.feedback_score) == (
+        "data",
+        "Typed all the way down",
+        5,
+    )
+    view = commit_render(mount)
+    assert "Typed all the way down" in _texts(view)
+    assert mount.plan.form_bindings["feedback"].spec.prefill["headline"] == "Typed all the way down"
     assert_within_limits(view)
 
 
@@ -133,7 +201,9 @@ async def test_composed_children_keep_independent_state_and_keys() -> None:
 
 async def test_demo_command_and_controls_are_public() -> None:
     settings = SimpleNamespace(get_locale=AsyncMock(return_value=None))
-    cog = LayoutShowcaseCog(cast(Any, SimpleNamespace(services=SimpleNamespace(settings=settings))))
+    cog = LayoutShowcaseCog(
+        cast(Any, SimpleNamespace(services=SimpleNamespace(settings=settings), topic_bus=sl.runtime.LocalTopicBus()))
+    )
     ctx = cast(
         commands.Context[Any],
         cast(
@@ -147,7 +217,7 @@ async def test_demo_command_and_controls_are_public() -> None:
         ),
     )
 
-    await LayoutShowcaseCog.demo.callback(cog, ctx, "tour", 20)  # type: ignore[arg-type]
+    await LayoutShowcaseCog.demo.callback(cog, ctx, "pagination", 20)  # type: ignore[arg-type]
 
     sent = cast(Any, ctx).send.await_args.kwargs
     assert sent["ephemeral"] is False
@@ -159,10 +229,11 @@ async def test_demo_command_and_controls_are_public() -> None:
 class TestSharedAppearance:
     """The worked example: two live panels agreeing on view state neither of them owns."""
 
-    def panels(self) -> tuple[sl.runtime.TopicBus, Reactor, Appearance, Session, Mount, Mount]:
-        bus = sl.runtime.TopicBus()
+    def panels(self) -> tuple[sl.runtime.LocalTopicBus, Reactor, Appearance, Session, Mount, Mount]:
+        bus = sl.runtime.LocalTopicBus()
         reactor = Reactor(bus)
-        appearance, session = Appearance(bus, 7), Session(bus, 7)
+        scope = UserScope(7)
+        appearance, session = Appearance(bus, scope), Session(bus, scope)
         writer = Mount(AppearancePanel(appearance, session), access=Owner(7), scheduler=reactor, timeout=None)
         reader = Mount(PreviewPanel(appearance, session), access=Owner(7), scheduler=reactor, timeout=None)
         return bus, reactor, appearance, session, writer, reader
@@ -184,7 +255,6 @@ class TestSharedAppearance:
         await reader.send(delivered_to(fake_message(message_id=2)))
 
         await writer.dispatch("controls.density", fake_interaction(user_id=7))
-        await bus.drain()
 
         assert reader in reactor._queued
 
@@ -226,3 +296,65 @@ class TestSharedAppearance:
 
         assert gone() is None, "co-existence state: nothing was looking at it"
         assert kept() is appearance, "retention state: the caller still holds it"
+
+
+class TestLobby:
+    """The roster is session membership, so the panel holds none of it."""
+
+    async def opened(self, *, capacity: int = 4) -> tuple[SessionRegistry, Lobby]:
+        registry = SessionRegistry()
+        panel = Lobby(registry, host_id=7)
+        result = await registry.open(
+            panel.mount(),
+            delivered_to(fake_message(message_id=1)),
+            key=SessionKey.guild("showcase-lobby", 5),
+            actor_id=7,
+            capacity=capacity,
+        )
+        assert isinstance(result, sl.discord.sessions.Opened)
+        return registry, panel
+
+    async def test_the_host_opens_as_the_only_member(self) -> None:
+        registry, panel = await self.opened()
+
+        assert next(iter(registry.active())).members == frozenset({7})
+        assert "Lobby (1/4)" in _texts(commit_render(panel._mount))
+
+    async def test_a_press_from_anyone_joins_and_the_roster_redraws(self) -> None:
+        registry, panel = await self.opened()
+
+        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+
+        assert next(iter(registry.active())).members == frozenset({7, 8})
+        assert "Lobby (2/4)" in _texts(commit_render(panel._mount))
+
+    async def test_the_lobby_fills_and_then_refuses(self) -> None:
+        registry, panel = await self.opened(capacity=2)
+
+        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+        await panel._mount.dispatch("join", fake_interaction(user_id=9))
+
+        assert next(iter(registry.active())).members == frozenset({7, 8})
+
+    async def test_a_roster_dependent_rule_closes_the_lobby_when_the_host_leaves(self) -> None:
+        registry, panel = await self.opened()
+        session = next(iter(registry.active()))
+
+        await panel._mount.dispatch("leave", fake_interaction(user_id=7))
+        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+
+        assert session.members == frozenset()
+        assert not session.root.finished
+
+    async def test_only_a_member_may_start(self) -> None:
+        """Everyone may press Join, so the control that is not for everyone checks itself."""
+        _, panel = await self.opened()
+
+        await panel._mount.dispatch("start", fake_interaction(user_id=8))
+        assert panel.started_with is None
+
+        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+        await panel._mount.dispatch("start", fake_interaction(user_id=8))
+
+        assert panel.started_with == 2
+        assert "Started with 2 players." in _texts(commit_render(panel._mount))

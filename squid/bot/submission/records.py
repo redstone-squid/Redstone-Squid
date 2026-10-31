@@ -7,9 +7,8 @@ from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import PagedList
+from squid.bot.ui import DISCORD_BLUE, PagedList, info_layout, reply_presentation
 from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.components import DISCORD_BLUE, info_layout, no_mentions
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import _
@@ -99,8 +98,9 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         locale = await resolve_locale(ctx, self.bot.services.settings)
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
         summary = await self.computation.rebuild(current_version_id=current_version_id, kinds=kinds)
-        await ctx.send(
-            view=info_layout(
+        await reply_presentation(
+            ctx,
+            info_layout(
                 t(locale, _("Records rebuilt")),
                 t(
                     locale,
@@ -110,8 +110,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     unresolved=summary.unresolved,
                 ),
             ),
-            ephemeral=personal(ctx),
-            allowed_mentions=no_mentions(),
+            visibility="personal" if personal(ctx) else "public",
         )
 
     @autocompletes(
@@ -163,8 +162,9 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     version_id=version_id,
                 )
             )
-        await ctx.send(
-            view=info_layout(
+        await reply_presentation(
+            ctx,
+            info_layout(
                 t(locale, _("Record category materialized")),
                 t(
                     locale,
@@ -175,8 +175,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             ),
             # Staff maintenance, like `records rebuild` beside it: the two answered differently
             # for no reason anybody recorded, which is the pair audit C2 pointed at.
-            ephemeral=personal(ctx),
-            allowed_mentions=no_mentions(),
+            visibility="personal" if personal(ctx) else "public",
         )
 
 

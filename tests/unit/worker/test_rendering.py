@@ -15,6 +15,7 @@ from squid.schematics.application.queries import (
     SkippedRender,
 )
 from squid.worker.rendering import SchematicRenderProjector
+from squid_reactive import Topic
 
 PNG = b"\x89PNG\r\n\x1a\npreview"
 RECIPE_HASH = "a" * 64
@@ -221,7 +222,7 @@ async def test_a_finished_render_publishes_the_builds_resource_topic() -> None:
 
     await projector.process_batch()
 
-    assert topics.published == [("build", "7")]
+    assert topics.published == [Topic("build", "7")]
 
 
 async def test_a_skipped_render_changes_nothing_to_publish() -> None:

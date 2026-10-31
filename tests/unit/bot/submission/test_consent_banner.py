@@ -162,8 +162,9 @@ async def test_routed_consent_button_grants_consent_when_user_agrees(
     accounts.get_or_create_identity.return_value = _discord_account(consented=True)
     interaction = _make_interaction(accounts)
 
-    async def mock_wait(self: ConsentPrompt) -> None:
-        self._consent = AccountConsent.grant_current()
+    async def mock_wait(self: ConsentPrompt) -> AccountConsent:
+        self._answer.consent = AccountConsent.grant_current()
+        return self._answer.consent
 
     monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
 

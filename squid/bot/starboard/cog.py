@@ -13,8 +13,8 @@ from whenever import Instant
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
+from squid.bot.ui import reply_presentation, text_layout
 from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
-from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import _
@@ -336,8 +336,10 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     async def _reply(self, ctx: Context[BotT], message: str, **params: object) -> None:
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await ctx.send(
-            view=text_layout(t(locale, message, **params)), ephemeral=personal(ctx), allowed_mentions=no_mentions()
+        await reply_presentation(
+            ctx,
+            text_layout(t(locale, message, **params)),
+            visibility="personal" if personal(ctx) else "public",
         )
 
     @staticmethod

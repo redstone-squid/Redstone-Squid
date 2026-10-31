@@ -24,7 +24,7 @@ Delivery *policy* (ephemeral rules, DM fallback) stays host-side.
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 
 import discord
 
@@ -71,6 +71,8 @@ class Delivered:
     """A mount render committed through a destination."""
 
     receipt: DeliveryReceipt
+    settled: bool
+    """Whether every async binding observed by the delivered generation reached a terminal status."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,8 +83,16 @@ class Abandoned:
 type SendResult = Delivered | Abandoned
 
 
+class DeleteHandle(Protocol):
+    """Authority to delete one delivered message."""
+
+    async def delete(self) -> None:
+        """Delete the message, translating expired authority to `StaleHandleError`."""
+        ...
+
+
 class EditHandle(Protocol):
-    """A way to write to one already-sent message, and how long it is good for."""
+    """A way to update or delete one already-sent message."""
 
     permanent: bool
     """The bot's own credentials, which Discord does not expire."""
@@ -177,6 +187,15 @@ class _ChannelMessageHandle:
             raise
         self.mode = presentation.mode
 
+    async def delete(self) -> None:
+        try:
+            await self._message.delete()
+        except discord.HTTPException as error:
+            if _is_stale(error):
+                message = "the bot no longer has authority to delete this channel message"
+                raise StaleHandleError(message) from error
+            raise
+
 
 class _WebhookMessageHandle:
     """Writes to one interaction webhook message by id."""
@@ -216,6 +235,15 @@ class _WebhookMessageHandle:
             raise
         self.mode = presentation.mode
 
+    async def delete(self) -> None:
+        try:
+            await self._interaction.followup.delete_message(self._message_id)
+        except discord.HTTPException as error:
+            if _is_stale(error):
+                message = "the credentials behind this interaction have expired"
+                raise StaleHandleError(message) from error
+            raise
+
 
 class _OriginalResponseHandle:
     """Writes to an interaction's original response through the `@original` endpoint."""
@@ -247,6 +275,15 @@ class _OriginalResponseHandle:
             raise
         self.mode = presentation.mode
 
+    async def delete(self) -> None:
+        try:
+            await self._interaction.delete_original_response()
+        except discord.HTTPException as error:
+            if _is_stale(error):
+                message = "the credentials behind this interaction have expired"
+                raise StaleHandleError(message) from error
+            raise
+
 
 def handle_for(message: discord.Message, *, mode: DiscordMode | None = None) -> EditHandle:
     """A permanent bot-token handle for a message sent through a channel endpoint.
@@ -269,6 +306,15 @@ def handle_from(interaction: discord.Interaction[Any]) -> EditHandle | None:
     return _WebhookMessageHandle(interaction, message.id, message, mode=mode_of(message))
 
 
+def handle_for_original(interaction: discord.Interaction[Any], *, mode: DiscordMode) -> EditHandle:
+    """Return the edit authority for an interaction's original response.
+
+    A deferred channel response has no source message for :func:`handle_from`, but its
+    ``@original`` webhook message is still writable through this handle.
+    """
+    return _OriginalResponseHandle(interaction, mode=mode)
+
+
 @dataclass(frozen=True, slots=True)
 class DeliveryReceipt:
     """What a delivery exposed and the authority it created to edit it."""
@@ -277,9 +323,12 @@ class DeliveryReceipt:
     handle: EditHandle | None
     message_id: int | None = None
     ephemeral: bool | None = None
+    delete_handle: DeleteHandle | None = None
 
     def __post_init__(self) -> None:
         """Fill metadata available on ordinary message-returning delivery paths."""
+        if self.delete_handle is None and self.handle is not None and hasattr(self.handle, "delete"):
+            object.__setattr__(self, "delete_handle", cast(DeleteHandle, self.handle))
         if self.message is None:
             return
         if self.message_id is None:
@@ -372,6 +421,7 @@ class Messageable(Protocol):
         *,
         files: Sequence[discord.File],
         allowed_mentions: discord.AllowedMentions,
+        delete_after: float | None = ...,
         content: str | None = ...,
         embeds: Sequence[discord.Embed] = ...,
         view: Any = ...,
@@ -418,15 +468,18 @@ def reply_to(
 def send_to(
     channel: Messageable,
     *,
+    files: Sequence[discord.File] = (),
     allowed_mentions: discord.AllowedMentions | None = None,
+    delete_after: float | None = None,
 ) -> Destination:
     """Send a complete presentation to a channel and retain bot-token edit authority."""
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(presentation: DiscordPresentation) -> DeliveryReceipt:
         message = await channel.send(
-            files=presentation.files(),
+            files=_merged_files(files, presentation),
             allowed_mentions=mentions,
+            **({"delete_after": delete_after} if delete_after is not None else {}),
             **presentation._send_fields(),
         )
         return DeliveryReceipt(message, handle_for(message, mode=presentation.mode))

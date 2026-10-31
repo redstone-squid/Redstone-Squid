@@ -15,7 +15,7 @@ from squid_layouts.discord.durability import (
     DurableSessionRuntime,
     RestoreContext,
     SnapshotError,
-    SQLiteSnapshotStore,
+    SQLiteSessionStore,
 )
 
 
@@ -38,7 +38,7 @@ sessions = sl.discord.SessionRegistry(defaults)
 runtime = DurableSessionRuntime(
     sessions=sessions,
     components=components,
-    store=SQLiteSnapshotStore("mounts.sqlite3", table_name="review_sessions"),
+    store=SQLiteSessionStore("mounts.sqlite3", table_name="review_sessions"),
     frontend=DiscordFrontend(bot),
 )
 ```
@@ -91,9 +91,9 @@ process shutdown releases its claim without deleting it.
 records. Missing roots and expired sessions are deleted. Missing child branches are pruned. Temporarily
 unreachable and incompatible records remain stored for a later recovery or operator action.
 
-Use `SQLiteSnapshotStore` only for one host or a shared-filesystem deployment whose hosts agree on wall-clock
+Use `SQLiteSessionStore` only for one host or a shared-filesystem deployment whose hosts agree on wall-clock
 time. For multi-host deployments, install the Postgres extra and pass an `asyncpg.Pool` to
-`PostgresSnapshotStore`; its fenced claims and admissions use PostgreSQL time. Both stores implement the same
+`PostgresSessionStore`; its fenced claims and admissions use PostgreSQL time. Both stores implement the same
 `DurableSessionStore` contract.
 
 Choose the smallest lifecycle that fits:

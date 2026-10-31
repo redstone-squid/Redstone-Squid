@@ -58,7 +58,7 @@ async def test_lookup_searches_picks_resolved_items_and_removes_them() -> None:
 
     await _search(mount, lookup, "a")
 
-    assert isinstance(lookup.results.state, sl.runtime.Ready)
+    assert isinstance(lookup.results.status, sl.resources.Ready)
     commit_render(mount)
     await mount.dispatch("lookup.results.a", fake_interaction())
     assert lookup.picked == (Entry("a", "Alpha"),)
@@ -100,7 +100,7 @@ async def test_lookup_pages_with_the_query_source_and_renders_no_results() -> No
     await _search(mount, lookup, "a")
     commit_render(mount)
     await mount.dispatch("lookup.next", fake_interaction())
-    assert isinstance(lookup.results.state, sl.runtime.Ready)
+    assert isinstance(lookup.results.status, sl.resources.Ready)
     assert lookup.results.value.loaded.window.items == (Entry("c", "Gamma"),)
 
     await _search(mount, lookup, "missing")
@@ -159,6 +159,6 @@ async def test_lookup_drops_a_stale_query_completion() -> None:
         await new_settled.wait()
         release["old"].set()
 
-    assert isinstance(lookup.results.state, sl.runtime.Ready)
+    assert isinstance(lookup.results.status, sl.resources.Ready)
     assert lookup.results.value.query == "new"
     assert lookup.results.value.loaded.window.items == (Entry("new", "new"),)

@@ -12,9 +12,9 @@ LEGACY_KEYWORDS = {"content", "embed", "embeds"}
 # The framework has to *name* the classic message vocabulary to model it: a
 # `DiscordPresentation` says which mode a payload is in, and the delivery protocol says what a
 # host `send` must accept. Naming the types is allowed there; building one is not.
-# `compose.py` names `View` only in a generic bound: a `Composition` is typed by which
+# `composition.py` names `View` only in a generic bound: a `Composition` is typed by which
 # kind of view its mode produces, and it never builds one.
-LEGACY_TYPE_HOMES = {"presentation.py", "delivery.py", "compose.py"}
+LEGACY_TYPE_HOMES = {"presentation.py", "delivery.py", "composition.py", "adoption.py"}
 
 # The classic target *is* the classic message vocabulary, so these modules build it on
 # purpose: they draw embeds and plain views, measure a host's, and mount one. This is the
@@ -54,12 +54,12 @@ class DiscordUiVisitor(ast.NodeVisitor):
                 keyword.arg for keyword in node.keywords if keyword.arg is not None and keyword.arg in LEGACY_KEYWORDS
             }
             is_archive_relay = self.path.name == "admin.py" and self.function_names[-1:] == ["archive_message"]
-            # The legacy->V2 conversion boundaries: the framework's deliver module and, until
-            # its consumers migrate, the old components helpers.
-            is_conversion_boundary = (
-                self.path.name == "components.py"
-                and self.function_names[-1:] in [["edit_layout"], ["edit_interaction_layout"]]
-            ) or (self.path.name == "delivery.py" and self.function_names[-1:] in [["apply"], ["apply_interaction"]])
+            # The framework delivery module is the only place that translates a presentation
+            # into discord.py's message kwargs.
+            is_conversion_boundary = self.path.name == "delivery.py" and self.function_names[-1:] in [
+                ["apply"],
+                ["apply_interaction"],
+            ]
             if legacy and not is_archive_relay and not is_conversion_boundary:
                 self.violations.append(f"{self.path}:{node.lineno}: legacy message fields {sorted(legacy)}")
         self.generic_visit(node)

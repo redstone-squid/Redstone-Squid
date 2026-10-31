@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Protocol
 import discord
 
 from squid.bot._types import GuildMessageable
-from squid.bot.utils.components import no_mentions, text_layout
+from squid.bot.ui import send_to, text_layout
 from squid.bot.utils.permissions import build_subject
 from squid.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
@@ -103,7 +103,11 @@ class DiscordPollPublisher:
 
     async def attach(self, vote_session_id: int, channel: GuildMessageable) -> discord.Message:
         """Post one card for an existing poll and let the reconcile loop own it."""
-        message = await channel.send(view=text_layout("Publishing poll…"), allowed_mentions=no_mentions())
+        receipt = await send_to(channel)(text_layout("Publishing poll…"))
+        message = receipt.message
+        if message is None:
+            detail = "poll placeholder delivery returned no message"
+            raise RuntimeError(detail)
         await self._bot.post_reconciler.adopt(message, "vote_session", str(vote_session_id), "vote_card")
         await self._bot.refresh_posts("vote_session", str(vote_session_id))
         return message

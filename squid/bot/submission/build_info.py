@@ -44,7 +44,7 @@ class BuildInfoComponent(sl.Component):
         self._timeout = timeout
         self._access = access if access is not None else sl.discord.Everyone()
 
-    @sl.resource(delivery=sl.runtime.ResourceDelivery.ATOMIC)
+    @sl.resource(pending=sl.resources.PendingPolicy.ATOMIC)
     async def projection(self) -> Projection:
         """The build and its rendered card, reloaded whenever the build's topic is published.
 
@@ -59,7 +59,7 @@ class BuildInfoComponent(sl.Component):
             return seed
         if self._refresh is None or self._build_id is None:
             message = "build info has no way to reload itself"
-            raise sl.runtime.ResourceNotReadyError(message)
+            raise sl.resources.ResourceNotReadyError(message)
         latest = await self._refresh(self._build_id)
         if latest is None:
             message = f"build {self._build_id} no longer exists"
@@ -74,18 +74,18 @@ class BuildInfoComponent(sl.Component):
     def _current(self) -> Projection:
         if self._seed is not None:
             return self._seed
-        state = self.projection.state
-        if isinstance(state, sl.runtime.Ready):
+        state = self.projection.status
+        if isinstance(state, sl.resources.Ready):
             return state.value
         if state.previous is not None:
             # A failed or in-flight reload keeps showing what is on screen. The topic will be
             # published again the next time the build changes.
             return state.previous.value
         message = "build info has not loaded yet"
-        raise sl.runtime.ResourceNotReadyError(message)
+        raise sl.resources.ResourceNotReadyError(message)
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
-        if not isinstance(self.projection.state, sl.runtime.Ready) and self.projection.state.previous is None:
+        if not isinstance(self.projection.status, sl.resources.Ready) and self.projection.status.previous is None:
             return (sl.status(t(self.locale, _("Loading build."))),)
         build, node = self._current()
         if build.id is None:

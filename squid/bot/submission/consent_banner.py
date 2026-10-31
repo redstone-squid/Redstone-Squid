@@ -3,19 +3,23 @@
 import logging
 from typing import TYPE_CHECKING, override
 
-import discord
 from discord import Interaction, TextChannel
 
 import squid_layouts as sl
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.bot.consent import CONSENT_SCREEN, ConsentPrompt, ConsentPromptView
+from squid.bot.consent import CONSENT_SCREEN, ConsentPrompt
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.routes.build_log_consents import build_log_consent, build_log_consents
-from squid.bot.ui import CardField, localization_for, render_static
-from squid.bot.utils.components import no_mentions, reply_layout, text_layout
+from squid.bot.ui import (
+    CardField,
+    localization_for,
+    render_presentation,
+    respond_presentation,
+    text_layout,
+)
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
-from squid_layouts.discord.sessions import Opened, Opener, Rejected
+from squid_layouts.discord.sessions import Opened, Rejected
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
@@ -34,7 +38,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
 
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(interaction.user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
-        await reply_layout(
+        await respond_presentation(
             interaction,
             text_layout(
                 t(
@@ -79,18 +83,17 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         timeout=120,
     )
     registry = interaction.client.mounts
-    opened = await CONSENT_SCREEN.open(
+    opened = await CONSENT_SCREEN.respond(
         registry,
         component,
-        sl.discord.respond_to(interaction, ephemeral=True, wait=True),
-        opener=Opener.of(interaction),
+        interaction,
+        wait=True,
         localization=localization_for(locale),
     )
     if isinstance(opened, Rejected):
-        await interaction.followup.send(
-            view=text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
+        await respond_presentation(
+            interaction,
+            text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))),
         )
         return
     if not isinstance(opened, Opened):
@@ -101,8 +104,9 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await accounts.get_or_create_identity(
             IdentityProvider.DISCORD, str(interaction.user.id), consent=component.consent
         )
-        await interaction.followup.send(
-            view=text_layout(
+        await respond_presentation(
+            interaction,
+            text_layout(
                 t(
                     locale,
                     _(
@@ -115,41 +119,15 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
                     version=CURRENT_CONSENT_VERSION,
                 )
             ),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
         )
-
-
-class BuildLogConsentPromptView(ConsentPromptView):
-    """Customized consent card highlighting build log ingestion permissions."""
-
-    @override
-    def _title(self, locale: str | None) -> str:
-        return t(locale, _("Enable Automatic Build Ingestion"))
-
-    @override
-    def _summary(self, locale: str | None) -> str:
-        return t(
-            locale,
-            _(
-                "Redstone Squid automatically indexes redstone doors and builds posted in this channel. "
-                "Agreeing stores your Discord user ID and records this consent, allowing the bot to attribute "
-                "your builds, mirror media, and analyze attached schematics. Cancelling stores nothing and leaves "
-                "your posts ignored by automated ingestion."
-            ),
-        )
-
-    @override
-    def _accept_label(self, locale: str | None) -> str:
-        return t(locale, _("Agree & Enable Ingestion"))
 
 
 class BuildLogConsentStickyMessage(StickyMessage):
     """Sticky banner posted in build-log channels when unconsented users post."""
 
     @override
-    async def render(self, channel: TextChannel) -> discord.ui.LayoutView:
-        return render_static(
+    async def render(self, channel: TextChannel) -> sl.discord.presentation.DiscordPresentation:
+        return render_presentation(
             [
                 sl.primitives.Text(
                     "## \U0001f4cb Build Log Ingestion Consent\n"

@@ -17,9 +17,8 @@ from discord.ext.commands import Context
 import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
-from squid.bot.ui import render_static, send_component
+from squid.bot.ui import render_presentation, reply_presentation, send_component, text_layout
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import requires
 from squid.bot.utils.visibility import personal
 from squid.builds.application import BuildService
@@ -85,8 +84,9 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         stored = await self._primary_or_explain(ctx, build_id, locale=locale)
         if stored is None:
             return
-        await ctx.send(
-            view=render_static(
+        await reply_presentation(
+            ctx,
+            render_presentation(
                 [
                     sl.primitives.Text(
                         _describe(stored, locale=locale, render_skip=self.schematics.explain_render_skip(stored))
@@ -94,7 +94,6 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
                 ],
                 locale=locale,
             ),
-            allowed_mentions=no_mentions(),
         )
 
     @autocompletes(build_id="builds")
@@ -169,9 +168,10 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             # sentence rather than an error card telling them to report it.
             await _say(ctx, error.localized_public_detail(locale))
             return
-        await ctx.send(
-            file=discord.File(io.BytesIO(rendered.png), filename=f"build-{build_id}-render.png"),
-            allowed_mentions=no_mentions(),
+        await reply_presentation(
+            ctx,
+            text_layout(t(locale, _("Rendered schematic for build {id}."), id=build_id)),
+            files=[discord.File(io.BytesIO(rendered.png), filename=f"build-{build_id}-render.png")],
         )
 
     @autocompletes(build_id="builds", version="approved_source_versions")
@@ -300,7 +300,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
 
 
 async def _say(ctx: Context[squid.bot.app.RedstoneSquid], message: str, *, ephemeral: bool = False) -> None:
-    await ctx.send(view=text_layout(message), ephemeral=ephemeral, allowed_mentions=no_mentions())
+    await reply_presentation(ctx, text_layout(message), visibility="personal" if ephemeral else "public")
 
 
 def _describe(stored: StoredSchematic, *, locale: str | None, render_skip: RenderSkipReason | None = None) -> str:

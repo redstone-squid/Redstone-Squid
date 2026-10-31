@@ -6,11 +6,12 @@ import discord
 from discord import app_commands
 from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
+import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.operations import managed_result
 from squid.bot.settings_view import FOLLOW_DISCORD, SettingsCapabilities, SettingsPanel
-from squid.bot.ui import destination
-from squid.bot.utils.components import edit_layout, error_layout, info_layout, no_mentions
+from squid.bot.ui import destination, error_layout, error_node, info_layout, info_node, reply_presentation
 from squid.bot.utils.permissions import hide_unless, requires, subject_for
 from squid.bot.utils.visibility import personal
 from squid.core.i18n import SUPPORTED_LOCALES, _
@@ -23,6 +24,7 @@ from squid.settings.domain import ScalarChannelSetting
 from squid.voting.domain import RoleWeight, VoteKind
 from squid.voting.errors import InvalidVoteConfigurationError
 from squid_layouts.discord import SessionKey
+from squid_layouts.runtime.component import RenderResult
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -89,46 +91,32 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
     )
     @app_commands.rename(setting="type")
     @requires(SETTINGS_SERVER_EDIT)
+    @managed_result
     async def change_setting(
         self,
         ctx: Context[BotT],
         setting: ScalarChannelSetting,
         channel: GuildMessageable | None = None,
-    ) -> None:
+    ) -> RenderResult:
         """Point one setting at a channel, or clear it. The panel edits several at once."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
 
-        async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-            if channel is None:
-                await self.settings_service.clear(ctx.guild.id, setting)
-                await edit_layout(
-                    sent_message,
-                    info_layout(
-                        t(locale, _("Setting updated")),
-                        t(locale, _("{setting} has been cleared."), setting=setting),
-                    ),
-                    allowed_mentions=no_mentions(),
-                )
-                return
-
-            if ctx.guild.get_channel_or_thread(channel.id) is None:
-                await edit_layout(
-                    sent_message,
-                    error_layout(t(locale, _("Error")), t(locale, _("Could not find that channel."))),
-                    allowed_mentions=no_mentions(),
-                )
-                return
-
-            await self.settings_service.set_channel(ctx.guild.id, setting, channel.id)
-            await edit_layout(
-                sent_message,
-                info_layout(
-                    t(locale, _("Settings updated")),
-                    t(locale, _("{setting} channel has successfully been set."), setting=setting),
-                ),
-                allowed_mentions=no_mentions(),
+        if channel is None:
+            await self.settings_service.clear(ctx.guild.id, setting)
+            return info_node(
+                t(locale, _("Setting updated")),
+                t(locale, _("{setting} has been cleared."), setting=setting),
             )
+
+        if ctx.guild.get_channel_or_thread(channel.id) is None:
+            return error_node(t(locale, _("Error")), t(locale, _("Could not find that channel.")))
+
+        await self.settings_service.set_channel(ctx.guild.id, setting, channel.id)
+        return info_node(
+            t(locale, _("Settings updated")),
+            t(locale, _("{setting} channel has successfully been set."), setting=setting),
+        )
 
     @settings_hybrid_group.command(name="locale")
     @app_commands.describe(language=app_commands.locale_str(_("The language the bot should respond in")))
@@ -139,41 +127,27 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
         ],
     )
     @requires(SETTINGS_SERVER_EDIT)
-    async def set_locale(self, ctx: Context[BotT], language: str) -> None:
+    @managed_result
+    async def set_locale(self, ctx: Context[BotT], language: str) -> RenderResult:
         """Set the language the bot responds with in this server."""
         assert ctx.guild is not None
         locale = await resolve_locale(ctx, self.settings_service)
 
         if language != FOLLOW_DISCORD and language not in SUPPORTED_LOCALES:
-            await ctx.send(
-                view=error_layout(t(locale, _("Error")), t(locale, _("That language is not supported."))),
-                allowed_mentions=no_mentions(),
-            )
-            return
+            return error_node(t(locale, _("Error")), t(locale, _("That language is not supported.")))
 
         if language == FOLLOW_DISCORD:
             await self.settings_service.set_locale(ctx.guild.id, None)
-            async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
-                await edit_layout(
-                    sent_message,
-                    info_layout(
-                        t(locale, _("Settings updated")),
-                        t(locale, _("This server now follows its Discord language.")),
-                    ),
-                    allowed_mentions=no_mentions(),
-                )
-            return
+            return info_node(
+                t(locale, _("Settings updated")),
+                t(locale, _("This server now follows its Discord language.")),
+            )
 
         await self.settings_service.set_locale(ctx.guild.id, language)
-        async with self.bot.get_running_message(ctx, locale=language) as sent_message:
-            await edit_layout(
-                sent_message,
-                info_layout(
-                    t(language, _("Settings updated")),
-                    t(language, _("This server's language has been set to {language}."), language=language),
-                ),
-                allowed_mentions=no_mentions(),
-            )
+        return info_node(
+            t(language, _("Settings updated")),
+            t(language, _("This server's language has been set to {language}."), language=language),
+        )
 
     @settings_hybrid_group.group(name="voting")
     @requires(SETTINGS_VOTING_EDIT)
@@ -251,9 +225,13 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Settings"):
             ),
         )
 
-    async def _reply(self, ctx: Context[BotT], layout: discord.ui.LayoutView) -> None:
-        """Answer the caller privately, in the layout system the rest of the bot uses."""
-        await ctx.send(view=layout, allowed_mentions=no_mentions(), ephemeral=personal(ctx))
+    async def _reply(self, ctx: Context[BotT], presentation: sl.discord.presentation.DiscordPresentation) -> None:
+        """Answer the caller privately through the presentation delivery boundary."""
+        await reply_presentation(
+            ctx,
+            presentation,
+            visibility="personal" if personal(ctx) else "public",
+        )
 
     def _weight_scope_note(self, guild_id: int, kind: VoteKind, locale: str | None) -> str:
         """Warn when this server's multipliers bind nothing it can see."""

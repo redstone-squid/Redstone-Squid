@@ -29,8 +29,9 @@ from typing import Any
 import discord
 from discord.ext.commands import Context
 
+import squid_layouts as sl
 from squid.bot.i18n import t
-from squid.bot.utils.components import error_layout, info_layout, no_mentions
+from squid.bot.ui import error_layout, info_layout, reply_presentation, send_to
 from squid.core.i18n import _
 
 
@@ -46,10 +47,11 @@ def personal(ctx: Context[Any]) -> bool:
 
 async def deliver_privately(
     ctx: Context[Any],
-    layout: discord.ui.LayoutView,
+    presentation: sl.discord.DiscordPresentation,
     *,
     reason: str,
     locale: str | None = None,
+    allowed_mentions: discord.AllowedMentions | None = None,
     files: Sequence[discord.File] = (),
 ) -> discord.Message | None:
     """Answer where only the caller can read it, whatever the transport invoked us.
@@ -62,18 +64,21 @@ async def deliver_privately(
     A closed DM delivers nothing and says so. It deliberately does not fall back to the
     channel, because the channel is exactly what the payload must not reach.
     """
-    payload: dict[str, Any] = {"view": layout, "allowed_mentions": no_mentions()}
-    if files:
-        payload["files"] = list(files)
-
     if ctx.interaction is not None or ctx.guild is None:
-        return await ctx.send(ephemeral=True, **payload)
+        receipt = await sl.discord.reply_to(
+            ctx,
+            ephemeral=True,
+            files=files,
+            allowed_mentions=allowed_mentions,
+        )(presentation)
+        return receipt.message
 
     try:
-        message = await ctx.author.send(**payload)
+        receipt = await send_to(ctx.author, files=files, allowed_mentions=allowed_mentions)(presentation)
     except discord.Forbidden:
-        await ctx.send(
-            view=error_layout(
+        await reply_presentation(
+            ctx,
+            error_layout(
                 t(locale, _("Nowhere private to send this")),
                 t(
                     locale,
@@ -83,11 +88,10 @@ async def deliver_privately(
                     ),
                 ),
             ),
-            allowed_mentions=no_mentions(),
         )
         return None
-    await ctx.send(
-        view=info_layout(t(locale, _("Sent by direct message")), reason),
-        allowed_mentions=no_mentions(),
+    await reply_presentation(
+        ctx,
+        info_layout(t(locale, _("Sent by direct message")), reason),
     )
-    return message
+    return receipt.message

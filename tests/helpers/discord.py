@@ -1,6 +1,7 @@
 """Small typed harnesses for Discord boundary tests."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal, cast
 from unittest.mock import AsyncMock
@@ -34,19 +35,22 @@ def make_interaction(
     and the error handler reads the error report store off it. Pass `error_reports` to assert
     that a failure was captured.
     """
-    send_initial = AsyncMock()
-    send_followup = AsyncMock()
+    send_initial = AsyncMock(return_value=SimpleNamespace(resource=None, message_id=None, is_ephemeral=lambda: True))
+    send_followup = AsyncMock(return_value=SimpleNamespace(id=99))
     services = SimpleNamespace(error_reports=error_reports) if error_reports is not None else None
     interaction = cast(
         discord.Interaction[discord.Client],
         SimpleNamespace(
             response=SimpleNamespace(is_done=lambda: response_done, send_message=send_initial),
-            followup=SimpleNamespace(send=send_followup),
+            followup=SimpleNamespace(send=send_followup, delete_message=AsyncMock()),
             client=SimpleNamespace(services=services),
             command=None,
             user=SimpleNamespace(id=user_id),
             guild_id=guild_id,
             channel_id=channel_id,
+            expires_at=datetime.now(UTC) + timedelta(minutes=15),
+            is_expired=lambda: False,
+            delete_original_response=AsyncMock(),
         ),
     )
     return InteractionHarness(interaction, send_initial, send_followup)

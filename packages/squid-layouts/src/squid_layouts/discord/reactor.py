@@ -71,7 +71,7 @@ class Reactor:
         concurrency: Maximum number of different mounts refreshed concurrently.
         sweep_interval: Seconds between interaction-token expiry checks.
         clock: UTC wall clock used to compare interaction-token deadlines.
-        profiler: Runtime profiler. Defaults to the bus profiler when a bus is supplied.
+        profiler: Runtime profiler for queued refresh delivery.
         max_causal_links: Maximum distinct trigger links retained per coalesced refresh.
         monotonic: Monotonic clock used to measure queue latency.
     """
@@ -97,7 +97,7 @@ class Reactor:
             message = "reactor causal link limit cannot be negative"
             raise ValueError(message)
         self.bus = bus
-        self.profiler = profiler if profiler is not None else bus.profiler if bus is not None else _NOOP_PROFILER
+        self.profiler = profiler if profiler is not None else _NOOP_PROFILER
         self.concurrency = concurrency
         self.sweep_interval = sweep_interval
         self.clock = clock
@@ -235,16 +235,13 @@ class Reactor:
 
         mount_ref = weakref.ref(mount, lambda _: unfollow())
 
-        async def refresh(topic: Address) -> None:
+        def refresh(topic: Address) -> None:
             if (current := mount_ref()) is None:
                 unfollow()
                 return
-            await current.refresh()
+            self.schedule(current)
 
-        unsubscribers.extend(
-            self.bus.subscribe(topic, refresh, label=f"mount:{mount.id}", profile_label="reactor.refresh")
-            for topic in topics
-        )
+        unsubscribers.extend(self.bus.subscribe(topic, refresh) for topic in topics)
         self._followed[mount] = self._followed.get(mount, 0) + 1
 
         async def finish(finished: Mount) -> None:

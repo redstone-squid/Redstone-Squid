@@ -3,14 +3,15 @@
 import logging
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Self, cast, override
+from typing import Any, cast, override
 
 import discord
 from discord import app_commands
 from discord.ext import commands
 
+import squid_layouts as sl
 from squid.accounts.errors import ConsentRequiredError
-from squid.bot.utils.components import edit_layout, error_layout, no_mentions
+from squid.bot.ui import error_layout, reply_presentation, respond_presentation
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, SquidError
 from squid.core.i18n import _, translate
@@ -25,27 +26,11 @@ from squid.observability import (
     trace_span,
 )
 from squid.permissions.domain import CATALOGUE
-from squid_layouts.discord.conformance import conform_modal
 
 logger = logging.getLogger(__name__)
 
 _PRESENTED_ATTRIBUTE = "_squid_error_presented"
-type ErrorResponder = Callable[[discord.ui.LayoutView], Awaitable[None]]
-
-_reporter: ErrorReportService | None = None
-
-
-def set_error_reporter(service: ErrorReportService | None) -> None:
-    """Register the process's error report store for surfaces that carry no client reference.
-
-    A command and an interaction both reach the bot through their own arguments, so those
-    handlers resolve the service themselves. A progress message does not: `RunningMessage` is
-    built from a `Messageable` or a `Webhook`, neither of which exposes the client. There is one
-    bot per process, so registering it here is more honest than threading a service through every
-    UI helper that might one day fail.
-    """
-    global _reporter
-    _reporter = service
+type ErrorResponder = Callable[[sl.discord.presentation.DiscordPresentation], Awaitable[None]]
 
 
 def _reports_from(client: object) -> ErrorReportService | None:
@@ -67,8 +52,8 @@ class ErrorPresentation:
     ID, while a moderator looking one up will be quoting whatever the card showed.
     """
 
-    def to_layout(self) -> discord.ui.LayoutView:
-        """Build the Components V2 layout for this presentation."""
+    def to_presentation(self) -> sl.discord.presentation.DiscordPresentation:
+        """Build the complete Components V2 presentation for this error."""
         return error_layout(self.title, self.detail)
 
 
@@ -300,7 +285,7 @@ async def _handle_discord_error(
             presentation,
             surface=surface,
             context={**safe_context, "application_context": application_context},
-            reports=reports if reports is not None else _reporter,
+            reports=reports,
         )
         # Both widths are logged: a backend that cannot do prefix queries still resolves whichever
         # one the reporter quoted by exact match.
@@ -316,7 +301,7 @@ async def _handle_discord_error(
         )
 
     try:
-        await responder(presentation.to_layout())
+        await responder(presentation.to_presentation())
     except discord.HTTPException:
         logger.exception(
             "Failed to send Discord error response [error_id=%s surface=%s]",
@@ -333,11 +318,11 @@ async def handle_context_error[BotT: commands.Bot](
 ) -> None:
     """Handle an exception raised by a prefix or hybrid command."""
 
-    async def respond(layout: discord.ui.LayoutView) -> None:
-        await context.send(
-            view=layout,
-            ephemeral=context.interaction is not None,
-            allowed_mentions=no_mentions(),
+    async def respond(presentation: sl.discord.presentation.DiscordPresentation) -> None:
+        await reply_presentation(
+            context,
+            presentation,
+            visibility="personal" if context.interaction is not None else "public",
         )
 
     command_name = context.command.qualified_name if context.command is not None else None
@@ -363,11 +348,8 @@ async def handle_interaction_error(
 ) -> None:
     """Handle an exception raised by an application command or UI interaction."""
 
-    async def respond(layout: discord.ui.LayoutView) -> None:
-        if interaction.response.is_done():
-            await interaction.followup.send(view=layout, ephemeral=True, allowed_mentions=no_mentions())
-        else:
-            await interaction.response.send_message(view=layout, ephemeral=True, allowed_mentions=no_mentions())
+    async def respond(presentation: sl.discord.presentation.DiscordPresentation) -> None:
+        await respond_presentation(interaction, presentation)
 
     command = interaction.command
     await _handle_discord_error(
@@ -384,31 +366,43 @@ async def handle_interaction_error(
     )
 
 
-async def handle_message_error(
-    message: discord.Message,
+async def record_operation_error(
     error: BaseException,
     *,
-    locale: str | None = None,
+    locale: str | None,
+    receipt: sl.discord.delivery.DeliveryReceipt | None,
+    presented: bool,
     reports: ErrorReportService | None = None,
 ) -> None:
-    """Render an exception into an existing progress message.
-
-    `locale` should be the locale the message was originally sent in (e.g.
-    `RunningMessage.locale`), since a bare message carries no locale info of
-    its own.
-    """
-
-    async def respond(layout: discord.ui.LayoutView) -> None:
-        await edit_layout(message, layout, allowed_mentions=no_mentions())
-
-    await _handle_discord_error(
-        error,
-        respond,
-        surface="running_message",
-        context={"channel_id": message.channel.id, "message_id": message.id},
-        locale=locale,
-        reports=reports,
-    )
+    """Capture an operation failure and mark it only when its card reached Discord."""
+    if is_error_presented(error):
+        return
+    original = unwrap_error(error)
+    presentation = build_error_presentation(original, locale)
+    context = {
+        "channel_id": receipt.message.channel.id if receipt is not None and receipt.message is not None else None,
+        "message_id": receipt.message_id if receipt is not None else None,
+    }
+    if presentation.error_id is not None:
+        application_context = _safe_log_context(original.context) if isinstance(original, SquidError) else None
+        await _capture(
+            original,
+            presentation,
+            surface="command_operation",
+            context={**context, "application_context": application_context},
+            reports=reports,
+        )
+        logger.error(
+            "Discord failure [error_id=%s error_ref=%s surface=command_operation context=%r application_context=%r]",
+            presentation.error_id,
+            presentation.reference,
+            context,
+            application_context,
+            exc_info=original,
+            extra=captured(),
+        )
+    if presented:
+        mark_error_presented(original)
 
 
 class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT]):
@@ -464,68 +458,3 @@ def _interaction_command_name(data: Mapping[str, Any] | None) -> str:
             None,
         )
     return " ".join(names) or "unknown"
-
-
-class ErrorHandledLayoutView(discord.ui.LayoutView):
-    """Components V2 view that delegates callback failures to the shared handler."""
-
-    @override
-    async def on_error[ClientT: discord.Client](
-        self,
-        interaction: discord.Interaction[ClientT],
-        error: Exception,
-        item: discord.ui.Item[Self],
-        /,
-    ) -> None:
-        await handle_interaction_error(interaction, error, surface=f"view:{type(item).__name__}")
-
-
-class ExpiringLayoutView(ErrorHandledLayoutView):
-    """A finite session view that visibly disables controls when it expires."""
-
-    def __init__(self, *, timeout: float) -> None:
-        super().__init__(timeout=timeout)
-        self._bound_message: discord.Message | None = None
-
-    def bind_message(self, message: discord.Message) -> None:
-        """Bind the response message so timeout state can be rendered visibly."""
-        self._bound_message = message
-
-    @override
-    async def on_timeout(self) -> None:
-        for child in self.walk_children():
-            component: discord.ui.Item[Any] = child
-            if isinstance(child, discord.ui.DynamicItem):
-                component = child.item
-            if isinstance(component, discord.ui.Button | discord.ui.Select):
-                component.disabled = True
-        self.stop()
-        if self._bound_message is None:
-            return
-        try:
-            await edit_layout(self._bound_message, self, allowed_mentions=no_mentions())
-        except discord.HTTPException:
-            logger.debug("Could not disable expired %s", type(self).__name__, exc_info=True)
-
-
-class ErrorHandledModal(discord.ui.Modal):
-    """Discord modal that delegates submission failures to the shared handler."""
-
-    @override
-    def to_dict(self) -> dict[str, Any]:
-        # Every send_modal serializes through here. discord.py validates no string lengths,
-        # so an oversized title or a default joined from unbounded user data (e.g. a build's
-        # image URLs) would fail at send time with HTTP 50035; clamp instead of crashing.
-        interventions = conform_modal(self)
-        if interventions:
-            logger.warning("modal clamped before send: %s", "; ".join(interventions))
-        return super().to_dict()
-
-    @override
-    async def on_error[ClientT: discord.Client](
-        self,
-        interaction: discord.Interaction[ClientT],
-        error: Exception,
-        /,
-    ) -> None:
-        await handle_interaction_error(interaction, error, surface="modal")

@@ -9,7 +9,7 @@ import pytest
 from discord.ext.commands import Context
 from whenever import Instant
 
-from squid.bot.utils.components import text_layout
+from squid.bot.ui import text_layout
 from squid.bot.utils.visibility import deliver_privately, personal
 from squid.bot.verify import VerifyCog
 
@@ -19,7 +19,17 @@ MERGE_CODE = "SPRUCE-PISTON-42"
 def make_context(*, slash: bool = False, in_guild: bool = True, dm_raises: Exception | None = None) -> Any:
     author_send = AsyncMock(side_effect=dm_raises, return_value=AsyncMock(spec=discord.Message))
     return SimpleNamespace(
-        interaction=SimpleNamespace(guild_locale=None, locale="en-US") if slash else None,
+        interaction=(
+            SimpleNamespace(
+                guild_locale=None,
+                locale="en-US",
+                response=SimpleNamespace(is_done=lambda: False),
+                is_expired=lambda: False,
+                expires_at=None,
+            )
+            if slash
+            else None
+        ),
         guild=SimpleNamespace(id=5, preferred_locale="en-US") if in_guild else None,
         author=SimpleNamespace(id=1, send=author_send),
         send=AsyncMock(return_value=AsyncMock(spec=discord.Message)),

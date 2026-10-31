@@ -26,6 +26,7 @@ from squid_layouts.discord.emoji import discord_emoji
 from squid_layouts.discord.inspection import audit_classic_payload
 from squid_layouts.discord.presentation import DiscordPresentation
 from squid_layouts.discord.renderer import RoutedItem, RoutedSelectItem
+from squid_layouts.discord.target import CLASSIC_TARGET
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.interactions import ActionBinding
 from squid_layouts.planning.adapter import ADAPTER_RENDER_CLASSIC, AdapterProfile
@@ -115,7 +116,7 @@ class ClassicRenderer:
         if scene.protocol != SceneCodec.protocol:
             message = f"ClassicRenderer cannot draw scene protocol {scene.protocol}"
             raise DrawInvariantError(message)
-        if scene.target != "discord.components-v1":
+        if scene.target != CLASSIC_TARGET.id:
             message = f"ClassicRenderer cannot draw target {scene.target!r}"
             raise DrawInvariantError(message)
         if scene.target_version != 1:

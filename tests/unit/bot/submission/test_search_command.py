@@ -14,6 +14,7 @@ from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.builds.domain import OtherBuild
 from squid.core.errors import ValidationError
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
+from squid.topics import resource_topic
 from squid_layouts.discord import Everyone
 from squid_layouts.discord.testing import fake_interaction, fake_message
 
@@ -139,8 +140,8 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     public_message = fake_message(message_id=42, ephemeral=False)
     interaction.followup.send.return_value = public_message
     build = OtherBuild(id=42)
-    renderer = SimpleNamespace(render_node=AsyncMock(return_value=sl.paragraph("Build 42")))
-    topic_bus = sl.runtime.TopicBus()
+    renderer = SimpleNamespace(render_node=AsyncMock(side_effect=[sl.paragraph("Build 42"), sl.paragraph("Build 43")]))
+    topic_bus = sl.runtime.LocalTopicBus()
     layout_reactor = sl.discord.Reactor(topic_bus)
     bot = SimpleNamespace(
         services=SimpleNamespace(settings=SimpleNamespace()),
@@ -175,7 +176,7 @@ async def test_public_build_panel_recovers_background_refresh_after_its_followup
     assert mount.handle is not None
     assert not mount.handle.permanent
     interaction.followup.edit_message.side_effect = _unknown_webhook()
-    mount.invalidate()
+    cog.bot.topic_bus.publish(resource_topic("build", "42"))
 
     await mount.refresh_now()
 

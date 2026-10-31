@@ -151,10 +151,10 @@ class SceneCodec:
 def _body_to_dict(body: SceneBody) -> dict[str, Any]:
     match body:
         case SceneComponentsV2(children=children):
-            return {"kind": "components_v2", "children": [_node_to_dict(child) for child in children]}
+            return {"kind": SceneComponentsV2.KIND, "children": [_node_to_dict(child) for child in children]}
         case SceneClassicMessage(content=content, embeds=embeds, rows=rows):
             return {
-                "kind": "classic_message",
+                "kind": SceneClassicMessage.KIND,
                 "content": content,
                 "embeds": [_embed_to_dict(embed) for embed in embeds],
                 "rows": [{"controls": [_node_to_dict(control) for control in row.controls]} for row in rows],
@@ -164,13 +164,13 @@ def _body_to_dict(body: SceneBody) -> dict[str, Any]:
 def _body_from_dict(raw: Mapping[str, Any]) -> SceneBody:
     kind = _string(raw, "kind")
     match kind:
-        case "components_v2":
+        case SceneComponentsV2.KIND:
             children = raw.get("children")
             if not isinstance(children, list):
                 msg = "components_v2 children must be an array"
                 raise SceneCodecError(msg)
             return SceneComponentsV2(tuple(_node_from_dict(_object(child)) for child in children))
-        case "classic_message":
+        case SceneClassicMessage.KIND:
             embeds = raw.get("embeds")
             rows = raw.get("rows")
             if not isinstance(embeds, list) or not isinstance(rows, list):
@@ -288,22 +288,34 @@ def _media_from_dict(raw: Any) -> SceneEmbedMedia | None:
 def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton) -> dict[str, Any]:
     match node:
         case SceneText(content=content, dialect=dialect):
-            return {"kind": "text", "content": content, "dialect": dialect.value}
+            return {"kind": SceneText.KIND, "content": content, "dialect": dialect.value}
         case SceneTime(instant=instant, style=style, prefix=prefix):
-            return {"kind": "time", "instant": instant, "style": style, "prefix": prefix}
+            return {"kind": SceneTime.KIND, "instant": instant, "style": style, "prefix": prefix}
         case SceneZonedTime(instant=instant, timezone=timezone, prefix=prefix):
-            return {"kind": "zoned_time", "instant": instant, "timezone": timezone, "prefix": prefix}
+            return {"kind": SceneZonedTime.KIND, "instant": instant, "timezone": timezone, "prefix": prefix}
         case SceneFile(asset_key=asset_key, name=name, media_type=media_type, spoiler=spoiler):
-            return {"kind": "file", "asset_key": asset_key, "name": name, "media_type": media_type, "spoiler": spoiler}
+            return {
+                "kind": SceneFile.KIND,
+                "asset_key": asset_key,
+                "name": name,
+                "media_type": media_type,
+                "spoiler": spoiler,
+            }
         case SceneSeparator(large=large, visible=visible):
-            return {"kind": "separator", "large": large, "visible": visible}
+            return {"kind": SceneSeparator.KIND, "large": large, "visible": visible}
         case SceneLink(label=label, url=url, emoji=emoji, disabled=disabled):
-            return {"kind": "link", "label": label, "url": url, "emoji": _emoji_to_dict(emoji), "disabled": disabled}
+            return {
+                "kind": SceneLink.KIND,
+                "label": label,
+                "url": url,
+                "emoji": _emoji_to_dict(emoji),
+                "disabled": disabled,
+            }
         case ScenePremiumButton(sku_id=sku_id):
-            return {"kind": "premium_button", "sku_id": sku_id}
+            return {"kind": ScenePremiumButton.KIND, "sku_id": sku_id}
         case SceneButton(label=label, action=action, style=style, emoji=emoji, disabled=disabled, policy=policy):
             return {
-                "kind": "button",
+                "kind": SceneButton.KIND,
                 "label": label,
                 "action": action,
                 "style": style.value,
@@ -313,7 +325,7 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
             }
         case SceneRoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
             return {
-                "kind": "routed_button",
+                "kind": SceneRoutedButton.KIND,
                 "label": label,
                 "route_id": route_id,
                 "style": style.value,
@@ -330,7 +342,7 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
             policy=policy,
         ):
             return {
-                "kind": "select",
+                "kind": SceneSelect.KIND,
                 "options": [
                     {
                         "label": option.label,
@@ -357,7 +369,7 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
             disabled=disabled,
         ):
             return {
-                "kind": "routed_select",
+                "kind": SceneRoutedSelect.KIND,
                 "options": [
                     {
                         "label": option.label,
@@ -386,7 +398,7 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
             policy=policy,
         ):
             return {
-                "kind": "entity_select",
+                "kind": SceneEntitySelect.KIND,
                 "entity_type": entity_type.value,
                 "action": action,
                 "placeholder": placeholder,
@@ -398,25 +410,25 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
                 "policy": policy.value,
             }
         case SceneRow(items=items):
-            return {"kind": "row", "items": [_node_to_dict(item) for item in items]}
+            return {"kind": SceneRow.KIND, "items": [_node_to_dict(item) for item in items]}
         case SceneThumbnail(url=url, description=description, spoiler=spoiler):
-            return {"kind": "thumbnail", "url": url, "description": description, "spoiler": spoiler}
+            return {"kind": SceneThumbnail.KIND, "url": url, "description": description, "spoiler": spoiler}
         case SceneGallery(items=items):
             return {
-                "kind": "gallery",
+                "kind": SceneGallery.KIND,
                 "items": [
                     {"url": item.url, "description": item.description, "spoiler": item.spoiler} for item in items
                 ],
             }
         case SceneSection(texts=texts, accessory=accessory):
             return {
-                "kind": "section",
+                "kind": SceneSection.KIND,
                 "texts": [_node_to_dict(text) for text in texts],
                 "accessory": _node_to_dict(accessory),
             }
         case ScenePanel(children=children, accent=accent, spoiler=spoiler):
             return {
-                "kind": "panel",
+                "kind": ScenePanel.KIND,
                 "children": [_node_to_dict(child) for child in children],
                 "accent": accent,
                 "spoiler": spoiler,
@@ -428,7 +440,7 @@ def _node_to_dict(node: SceneNode | SceneLink | ScenePremiumButton | SceneButton
             except (TypeError, ValueError) as error:
                 msg = f"extension {kind!r} payload is not JSON serializable"
                 raise SceneCodecError(msg) from error
-            return {"kind": "extension", "extension": kind, "version": version, "payload": normalized}
+            return {"kind": SceneExtension.KIND, "extension": kind, "version": version, "payload": normalized}
 
 
 def _node_from_dict(
@@ -436,39 +448,39 @@ def _node_from_dict(
 ) -> SceneNode | SceneLink | ScenePremiumButton | SceneButton | SceneRoutedButton:
     kind = _string(raw, "kind")
     match kind:
-        case "text":
+        case SceneText.KIND:
             return SceneText(_string(raw, "content"), TextDialect(_string(raw, "dialect")))
-        case "time":
+        case SceneTime.KIND:
             return SceneTime(
                 _string(raw, "instant"),
                 _string(raw, "style"),
                 _optional_string(raw, "prefix"),
             )
-        case "zoned_time":
+        case SceneZonedTime.KIND:
             return SceneZonedTime(
                 _string(raw, "instant"),
                 _string(raw, "timezone"),
                 _optional_string(raw, "prefix"),
             )
-        case "file":
+        case SceneFile.KIND:
             return SceneFile(
                 _string(raw, "asset_key"),
                 _string(raw, "name"),
                 _string(raw, "media_type"),
                 _boolean(raw, "spoiler", default=False),
             )
-        case "separator":
+        case SceneSeparator.KIND:
             return SceneSeparator(large=_boolean(raw, "large"), visible=_boolean(raw, "visible"))
-        case "link":
+        case SceneLink.KIND:
             return SceneLink(
                 label=_optional_string(raw, "label"),
                 url=_string(raw, "url"),
                 emoji=_emoji_from_value(raw.get("emoji")),
                 disabled=_boolean(raw, "disabled", default=False),
             )
-        case "premium_button":
+        case ScenePremiumButton.KIND:
             return ScenePremiumButton(_integer(raw, "sku_id"))
-        case "button":
+        case SceneButton.KIND:
             return SceneButton(
                 label=_optional_string(raw, "label"),
                 action=_string(raw, "action"),
@@ -477,7 +489,7 @@ def _node_from_dict(
                 disabled=_boolean(raw, "disabled"),
                 policy=ActionPolicy(_string(raw, "policy")),
             )
-        case "routed_button":
+        case SceneRoutedButton.KIND:
             return SceneRoutedButton(
                 label=_optional_string(raw, "label"),
                 route_id=_string(raw, "route_id"),
@@ -485,7 +497,7 @@ def _node_from_dict(
                 emoji=_emoji_from_value(raw.get("emoji")),
                 disabled=_boolean(raw, "disabled"),
             )
-        case "select":
+        case SceneSelect.KIND:
             options = raw.get("options")
             if not isinstance(options, list):
                 msg = "select options must be an array"
@@ -508,7 +520,7 @@ def _node_from_dict(
                 disabled=_boolean(raw, "disabled"),
                 policy=ActionPolicy(_string(raw, "policy")),
             )
-        case "routed_select":
+        case SceneRoutedSelect.KIND:
             options = raw.get("options")
             if not isinstance(options, list):
                 msg = "routed select options must be an array"
@@ -530,7 +542,7 @@ def _node_from_dict(
                 max_values=_integer(raw, "max_values"),
                 disabled=_boolean(raw, "disabled"),
             )
-        case "entity_select":
+        case SceneEntitySelect.KIND:
             defaults = raw.get("default_values")
             if not isinstance(defaults, list):
                 msg = "entity select default_values must be an array"
@@ -549,7 +561,7 @@ def _node_from_dict(
                 disabled=_boolean(raw, "disabled"),
                 policy=ActionPolicy(_string(raw, "policy")),
             )
-        case "row":
+        case SceneRow.KIND:
             items = raw.get("items")
             if not isinstance(items, list):
                 msg = "row items must be an array"
@@ -562,13 +574,13 @@ def _node_from_dict(
                 msg = "row contains an unsupported child"
                 raise SceneCodecError(msg)
             return SceneRow(decoded)
-        case "thumbnail":
+        case SceneThumbnail.KIND:
             return SceneThumbnail(
                 url=_string(raw, "url"),
                 description=_optional_string(raw, "description"),
                 spoiler=_boolean(raw, "spoiler", default=False),
             )
-        case "gallery":
+        case SceneGallery.KIND:
             items = raw.get("items")
             if not isinstance(items, list):
                 msg = "gallery items must be an array"
@@ -583,7 +595,7 @@ def _node_from_dict(
                     for item in items
                 )
             )
-        case "section":
+        case SceneSection.KIND:
             texts = raw.get("texts")
             if not isinstance(texts, list):
                 msg = "section texts must be an array"
@@ -600,7 +612,7 @@ def _node_from_dict(
                 msg = "section has an unsupported accessory"
                 raise SceneCodecError(msg)
             return SceneSection(decoded_texts, accessory)
-        case "panel":
+        case ScenePanel.KIND:
             children = raw.get("children")
             accent = raw.get("accent")
             if not isinstance(children, list) or not (accent is None or isinstance(accent, int)):
@@ -611,7 +623,7 @@ def _node_from_dict(
                 accent=accent,
                 spoiler=_boolean(raw, "spoiler", default=False),
             )
-        case "extension":
+        case SceneExtension.KIND:
             payload = raw.get("payload")
             if not isinstance(payload, dict):
                 msg = "extension payload must be an object"

@@ -5,6 +5,7 @@ import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
+import anyio
 import discord
 from discord import Message, app_commands
 from discord.ext.commands import Cog
@@ -20,15 +21,8 @@ from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import SubmissionFormComponent
-from squid.bot.ui import render_static
+from squid.bot.ui import error_layout, render_presentation, respond_presentation, text_layout
 from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.components import (
-    edit_layout,
-    error_layout,
-    no_mentions,
-    reply_layout,
-    text_layout,
-)
 from squid.bot.utils.permissions import enforce
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.builds.application import (
@@ -122,10 +116,9 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             if build_size is not None:
                 draft.dimensions = parse_dimensions(build_size)
         except ValueError as error:
-            await interaction.followup.send(
-                view=error_layout(t(locale, _("Check the dimensions")), str(error)),
-                ephemeral=True,
-                allowed_mentions=no_mentions(),
+            await respond_presentation(
+                interaction,
+                error_layout(t(locale, _("Check the dimensions")), str(error)),
             )
             return
         if door_type is not None:
@@ -215,18 +208,12 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         assert workspace_message is not None, "a waited response always hands back its message"
         await component.wait()
         if component.value is None:
-            await edit_layout(
-                workspace_message,
-                text_layout(t(locale, _("Submission expired. Nothing was saved."))),
-                allowed_mentions=no_mentions(),
-            )
+            expired = text_layout(t(locale, _("Submission expired. Nothing was saved.")))
+            await sl.discord.delivery.handle_for(workspace_message, mode=expired.mode).write(expired)
             return
         if component.value is False:
-            await edit_layout(
-                workspace_message,
-                text_layout(t(locale, _("Submission cancelled. Nothing was saved."))),
-                allowed_mentions=no_mentions(),
-            )
+            cancelled = text_layout(t(locale, _("Submission cancelled. Nothing was saved.")))
+            await sl.discord.delivery.handle_for(workspace_message, mode=cancelled.mode).write(cancelled)
             return
 
         assert submitted is not None, "The form only reports success once the build is persisted."
@@ -237,7 +224,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
             id=build.id,
         )
-        preview = render_static(
+        preview = render_presentation(
             [
                 sl.primitives.Text(heading),
                 await self.bot.for_build(build).render_node(),
@@ -253,10 +240,12 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             ],
             locale=locale,
         )
-        await asyncio.gather(
-            edit_layout(workspace_message, preview, allowed_mentions=no_mentions()),
-            self.bot.for_build(build).post_for_voting(),
-        )
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(
+                sl.discord.delivery.handle_for(workspace_message, mode=preview.mode).write,
+                preview,
+            )
+            tasks.start_soon(self.bot.for_build(build).post_for_voting)
 
     async def _analyse_attachments(
         self, pending: Sequence[tuple[str, bytes]], *, uploader_account_id: int
@@ -414,7 +403,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
         await enforce(interaction, BUILD_SUBMISSION_RECALC)
         if not self._is_build_log_message(message):
-            await reply_layout(
+            await respond_presentation(
                 interaction,
                 error_layout(
                     t(locale, _("Nothing to recalculate")),
@@ -427,7 +416,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             IdentityProvider.DISCORD, str(message.author.id)
         )
         if account is None or account.id is None or account.needs_consent_refresh:
-            await reply_layout(
+            await respond_presentation(
                 interaction,
                 error_layout(
                     t(locale, _("Author has not consented")),
@@ -446,4 +435,4 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             return
 
         await self.infer_build_from_message(message)
-        await reply_layout(interaction, text_layout(t(locale, _("Build recalculated."))))
+        await respond_presentation(interaction, text_layout(t(locale, _("Build recalculated."))))
