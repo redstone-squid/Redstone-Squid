@@ -193,8 +193,7 @@ class AccountWorkspace(sd.Screen):
 
     async def _link(self, event: sl.SubmitEvent) -> None:
         account = self._account
-        form = _LinkForm(**event.values)
-        assert form.code is not None
+        form = _LinkForm.from_submission(event)
         code = form.code
         attempted_by = (IdentityProvider.DISCORD, str(self._actor_id))
         reservation = await self._accounts.reserve_minecraft_link(
@@ -281,8 +280,7 @@ class AccountWorkspace(sd.Screen):
         if not await self._authorize_claim(ACCOUNT_IDENTITY_REFRESH_ANY):
             await event.notice(tr(t"You are no longer allowed to refresh another member's identity."))
             return
-        form = _RefreshMemberForm(**event.values)
-        assert form.user is not None
+        form = _RefreshMemberForm.from_submission(event)
         member = form.user
         assert isinstance(member, discord.abc.Snowflake)
         account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(member.id))
@@ -293,8 +291,7 @@ class AccountWorkspace(sd.Screen):
         await event.notice(refresh_message(refresh))
 
     async def _claim(self, event: sl.SubmitEvent) -> None:
-        form = _ClaimForm(**event.values)
-        assert form.name is not None
+        form = _ClaimForm.from_submission(event)
         claim = await self._accounts.request_alias_claim(self._account_id(), form.name)
         claim_id = claim.id
         alias_name = claim.alias_name
@@ -308,8 +305,7 @@ class AccountWorkspace(sd.Screen):
         )
 
     async def _request_merge(self, event: sl.SubmitEvent) -> None:
-        form = _MergeForm(**event.values)
-        assert form.code is not None
+        form = _MergeForm.from_submission(event)
         code = form.code
         preview = await self._accounts.preview_merge(self._account_id(), code)
         aliases = len(preview.alias_names)

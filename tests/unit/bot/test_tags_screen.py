@@ -99,6 +99,7 @@ class FakeRestrictionService(RestrictionService):
 class NoticeEvent:
     def __init__(self, **values: object) -> None:
         self.values = values
+        self.errors: tuple[sl.forms.FormIssue, ...] = ()
         self.notices: list[object] = []
 
     async def notice(self, text: object, **_kwargs: object) -> None:

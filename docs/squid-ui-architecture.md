@@ -397,6 +397,51 @@ caller's own `Renderable` is a layout node, and a container factory accepts it. 
 asks `is_builtin_layout_node`, because it cannot draw a node it has never heard of and has
 to say so by name.
 
+## Forms: prefills, parsed values, and submission hooks
+
+A `Form` subclass declares ordinary `FormField` descriptors. On an instance, required built-in
+fields expose `T`; fields declared with `required=False` expose `T | None`. A class attribute
+such as `Thresholds.post_at` remains the field declaration, suitable for a `FieldError`.
+
+Constructor arguments are raw prefills, available through `form.prefill`. They are not parsed
+values. Reading an instance field before it parses raises `FieldNotReadyError`, including
+optional fields. After parsing, an optional scalar blank is `None`; multi-choice fields retain
+their empty-tuple convention. Defaults seed the displayed form and still pass through parsing.
+
+```python
+class Thresholds(sl.forms.Form):
+    post_at = sl.forms.FloatField(default=3.0)
+    remove_at = sl.forms.FloatField(default=0.0)
+    note = sl.forms.TextField(required=False)
+
+    def validate(self) -> tuple[sl.forms.FormIssue, ...]:
+        if self.post_at <= self.remove_at:
+            return (sl.forms.FieldError(
+                Thresholds.post_at, Thresholds.remove_at,
+                message="Post threshold must exceed removal threshold.",
+            ),)
+        return ()
+
+    async def on_submit(self, event: sl.SubmitEvent) -> None:
+        await save_thresholds(self.post_at, self.remove_at, self.note)
+```
+
+`validate` runs after every field parses. `on_submit` runs only after both parsing and validation
+succeed. `on_invalid(event: sl.InvalidSubmitEvent)` handles rejected attempts; its default calls
+`await event.retry()`. The event exposes `attempted` raw input, `values` containing only fields
+that parsed, and `errors`. Successfully parsed fields are also readable on the form during this
+hook; failed fields raise instead of retaining an earlier attempt's value. Retry preserves raw
+input and follows the same submission pipeline. Its authority ends when the hook returns.
+
+`FieldError(*fields, message=...)` requires at least one field from the current form. Repeated
+references are deduplicated, and a shared error is displayed once with all its labels. Use
+`FormError(message)` for an error applying to the whole form.
+
+Dynamic schemas still use `FormSpec` with a mapping-based handler. A separate screen handler
+can use `MyForm.from_submission(event)` to bind an already validated event without misrepresenting
+it as prefill. `FormSpec` retains `ACCEPT_AND_MARK` for mapping-based consumers; descriptor forms
+always route invalid attempts to `on_invalid`.
+
 ## Patterns: one state machine, two shells
 
 Reusable interaction patterns are authored as pure `state -> tree` state machines. Control and

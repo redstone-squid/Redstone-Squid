@@ -8,7 +8,7 @@ crash — a `default` joined from user data fails at `send_modal` time with HTTP
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, ClassVar, cast, override
+from typing import Any, ClassVar, Literal, cast, override
 
 import discord
 
@@ -52,7 +52,7 @@ type FormSubmitHandler = Callable[[discord.Interaction, dict[str, object]], Awai
 
 
 @dataclass(frozen=True, slots=True)
-class EntityField(ExtensionField[object]):
+class EntityField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](ExtensionField[object, RequiredT]):
     """A Discord user, role, channel, or mentionable picker."""
 
     entity_type: EntityType = EntityType.USER
@@ -73,7 +73,7 @@ class EntityField(ExtensionField[object]):
 
 
 @dataclass(frozen=True, slots=True)
-class FileField(ExtensionField[object]):
+class FileField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](ExtensionField[object, RequiredT]):
     """One or more Discord attachments uploaded through a modal."""
 
     minimum: int = 1
@@ -103,7 +103,9 @@ class FileField(ExtensionField[object]):
 
 
 @dataclass(frozen=True, slots=True)
-class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
+class CheckboxGroupField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](
+    ExtensionField[tuple[ValueT, ...], RequiredT]
+):
     """A Discord-native group of typed checkbox choices."""
 
     options: tuple[ChoiceOption[ValueT], ...] = ()
@@ -127,7 +129,7 @@ class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
         """Format a prefill with the portable multi-choice contract."""
         return self._portable_field().format(value)
 
-    def _portable_field(self) -> MultiChoiceField[ValueT]:
+    def _portable_field(self) -> MultiChoiceField[ValueT, RequiredT]:
         """Build the portable value contract behind this native presentation."""
         return MultiChoiceField(
             label=self.label,

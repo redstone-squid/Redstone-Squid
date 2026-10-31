@@ -243,8 +243,7 @@ class TagsScreen(sd.Screen):
         if account_id is None:
             await event.notice(tr(t"A linked, consented account is required."))
             return
-        form = _ProposalForm(**event.values)
-        assert form.name is not None and form.value_type is not None
+        form = _ProposalForm.from_submission(event)
         name = form.name
         value_type = form.value_type
         query_name = form.query_name
@@ -263,7 +262,7 @@ class TagsScreen(sd.Screen):
         if account_id is None:
             await event.notice(tr(t"A linked, consented account is required."))
             return
-        form = _ApplyForm(**event.values)
+        form = _ApplyForm.from_submission(event)
         build_id = self._build_id or form.build_id
         tag_id = form.tag_id
         assert build_id is not None and tag_id is not None
@@ -275,8 +274,7 @@ class TagsScreen(sd.Screen):
     async def _add_alias(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RESTRICTION_ALIAS_CREATE):
             return
-        form = _AliasForm(**event.values)
-        assert form.restriction is not None and form.alias is not None
+        form = _AliasForm.from_submission(event)
         restriction = form.restriction
         alias = form.alias
         try:

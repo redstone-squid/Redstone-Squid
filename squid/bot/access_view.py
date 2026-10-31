@@ -224,8 +224,7 @@ class AccessScreen(sd.Screen):
     async def _change_rule(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_mutation(event, PERM_GRANT_GUILD, PERM_GRANT_GLOBAL):
             return
-        form = _RuleForm(**event.values)
-        assert form.operation is not None and form.pattern is not None and form.scope is not None
+        form = _RuleForm.from_submission(event)
         operation = form.operation
         pattern = form.pattern
         scope = _scope(form.scope, self._guild_id)
@@ -256,8 +255,7 @@ class AccessScreen(sd.Screen):
     async def _change_assignment(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
-        form = _AssignmentForm(**event.values)
-        assert form.operation is not None and form.slug is not None and form.scope is not None
+        form = _AssignmentForm.from_submission(event)
         operation = form.operation
         slug = form.slug
         scope = _scope(form.scope, self._guild_id)
@@ -287,8 +285,7 @@ class AccessScreen(sd.Screen):
     async def _create_role(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
-        form = _CreateRoleForm(**event.values)
-        assert form.slug is not None and form.name is not None and form.rank is not None and form.scope is not None
+        form = _CreateRoleForm.from_submission(event)
         slug = form.slug
         await self._admin.create_role(
             await self._actor(),
@@ -303,8 +300,7 @@ class AccessScreen(sd.Screen):
     async def _edit_role(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
-        form = _EditRoleForm(**event.values)
-        assert form.operation is not None and form.slug is not None
+        form = _EditRoleForm.from_submission(event)
         operation = form.operation
         slug = form.slug
         value = form.value or ""

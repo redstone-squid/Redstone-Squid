@@ -1,7 +1,7 @@
 """Discord workspace for querying and maintaining computed records."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING, Protocol, override
+from typing import TYPE_CHECKING, Literal, Protocol, override
 
 import discord
 from discord import app_commands
@@ -150,7 +150,9 @@ class RecordsScreen(sd.Screen):
         return tuple(nodes) or (sl.note(tr(t"No maintenance actions are available.")),)
 
     @staticmethod
-    def _kind_field(*, required: bool = True) -> sl.forms.ChoiceField[BuildKind]:
+    def _kind_field[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
+        *, required: RequiredT = True
+    ) -> sl.forms.ChoiceField[BuildKind, RequiredT]:
         return sl.forms.ChoiceField(
             key="kind",
             label=tr(t"Build kind"),
@@ -169,8 +171,7 @@ class RecordsScreen(sd.Screen):
     async def _lookup(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RECORD_ENTRY_INSPECT):
             return
-        form = _LookupForm(**event.values)
-        assert form.kind is not None and form.base_key is not None
+        form = _LookupForm.from_submission(event)
         kind = form.kind
         selected = form.base_key.strip()
         version_id = form.version_id
@@ -198,7 +199,7 @@ class RecordsScreen(sd.Screen):
     async def _rebuild(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RECORD_ENTRY_REBUILD):
             return
-        form = _RebuildForm(**event.values)
+        form = _RebuildForm.from_submission(event)
         kind = form.kind
         version_id = form.version_id
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)

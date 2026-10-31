@@ -118,6 +118,7 @@ from squid_ui.factories import (
 from squid_ui.interactions import (
     ActionEvent,
     EntitySelectionEvent,
+    InvalidSubmitEvent,
     PressEvent,
     SelectionEvent,
     SubmitEvent,
@@ -185,6 +186,7 @@ __all__ = [
     "EntitySelectionEvent",
     "ExistingLayoutError",
     "HtmlTarget",
+    "InvalidSubmitEvent",
     "LayoutDegradedError",
     "LayoutError",
     "LayoutInvariantError",
