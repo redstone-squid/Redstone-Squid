@@ -6,6 +6,7 @@
     #   squid-storage
     #   squid-ui
     #   squid-ui-discord
+    #   squid-ui-widgets
 -e ./packages/squid-replication
     # via redstone-squid
 -e ./packages/squid-storage
@@ -150,6 +151,7 @@ anyio==4.15.1 \
     #   pycrdt
     #   redstone-squid
     #   squid-storage
+    #   squid-ui
     #   squid-ui-discord
     #   starlette
 asgiref==3.13.0 \
