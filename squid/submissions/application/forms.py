@@ -23,9 +23,9 @@ from squid_ui.text import Message, localization_scope
 
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
-# Revision 2 is readable and explicitly upgradeable, but new-draft writers stay on
-# revision 1 until every deployed reader has been upgraded and old workers are drained.
-CURRENT_SUBMISSION_SCHEMA_REVISION = 1
+# Revision 3 is readable and explicitly upgradeable, but new-draft writers stay on
+# revision 2 until every deployed reader has been upgraded and old workers are drained.
+CURRENT_SUBMISSION_SCHEMA_REVISION = 2
 
 
 class FormManifestRegistry(Protocol):
@@ -110,7 +110,7 @@ class CheckedInFormManifestRegistry:
         locale: str | None,
     ) -> FormManifest | None:
         """Return a pinned schema when its exact immutable revision is still available."""
-        if schema_id != CURRENT_SUBMISSION_SCHEMA or revision not in {1, 2}:
+        if schema_id != CURRENT_SUBMISSION_SCHEMA or revision not in {2, 3}:
             return None
         return build_submission_manifest(locale, revision=revision)
 
@@ -121,7 +121,7 @@ def build_submission_manifest(
     revision: int = CURRENT_SUBMISSION_SCHEMA_REVISION,
 ) -> FormManifest:
     """Build the checked-in schema revision localized for one client."""
-    if revision not in {1, 2}:
+    if revision not in {2, 3}:
         msg = tr(t"unsupported checked-in submission form revision")
         raise InvalidStateError(msg)
     with localization_scope(localization_for(locale)):
@@ -130,11 +130,11 @@ def build_submission_manifest(
 
 def _build_submission_manifest(revision: int) -> FormManifest:
     localize = tr
-    context_section_id = "provenance" if revision == 1 else "submission_context"
-    context_title = tr(t"Provenance") if revision == 1 else tr(t"About this submission")
+    context_section_id = "provenance" if revision == 2 else "submission_context"
+    context_title = tr(t"Provenance") if revision == 2 else tr(t"About this submission")
     sponsor_label = (
         tr(t"Show the sponsoring server on this build")
-        if revision == 1
+        if revision == 2
         else tr(t"Credit the Minecraft server this submission came from")
     )
     common = (
@@ -309,9 +309,9 @@ def _build_submission_manifest(revision: int) -> FormManifest:
 
 
 def _door_form(localize: Callable[[Message], str], revision: int = CURRENT_SUBMISSION_SCHEMA_REVISION) -> CategoryForm:
-    opening_width = tr(t"Opening width") if revision == 1 else tr(t"Clear opening width")
-    opening_height = tr(t"Opening height") if revision == 1 else tr(t"Clear opening height")
-    opening_depth = tr(t"Opening depth") if revision == 1 else tr(t"Clear opening depth")
+    opening_width = tr(t"Opening width") if revision == 2 else tr(t"Clear opening width")
+    opening_height = tr(t"Opening height") if revision == 2 else tr(t"Clear opening height")
+    opening_depth = tr(t"Opening depth") if revision == 2 else tr(t"Clear opening depth")
     return CategoryForm(
         code="door",
         label=localize(tr(t"Door")),

@@ -268,7 +268,7 @@ async def test_create_pins_schema_and_enforces_renderer_capabilities() -> None:
     )
 
     assert draft.snapshot.schema_id == "build_submission.v1"
-    assert draft.snapshot.schema_revision == 1
+    assert draft.snapshot.schema_revision == 2
     assert draft.expires_at == NOW.add(days=7, days_assumed_24h_ok=True)
 
 
@@ -340,7 +340,7 @@ async def test_active_draft_discovery_is_bounded_owned_and_unexpired() -> None:
             id=DRAFT_ID,
             owner_account_id=7,
             schema_id="build_submission.v1",
-            schema_revision=1,
+            schema_revision=2,
             category="other",
             answers={"display_name": "CLI build"},
         ),
@@ -438,7 +438,7 @@ async def test_expired_draft_is_inaccessible_even_to_replayed_mutations() -> Non
             id=DRAFT_ID,
             owner_account_id=7,
             schema_id="build_submission.v1",
-            schema_revision=1,
+            schema_revision=2,
             category="other",
         ),
         origin=SubmissionOrigin.WEB,
@@ -473,7 +473,7 @@ async def test_expiry_batch_uses_the_service_clock_and_a_bounded_limit() -> None
                 id=draft_id,
                 owner_account_id=7,
                 schema_id="build_submission.v1",
-                schema_revision=1,
+                schema_revision=2,
                 category="other",
             ),
             origin=SubmissionOrigin.WEB,
@@ -563,7 +563,7 @@ async def test_manifest_upgrade_preserves_answers_and_is_idempotent_by_target_re
         created,
         snapshot=replace(
             created.snapshot,
-            schema_revision=1,
+            schema_revision=2,
             answers={
                 "completion": "Built at spawn",
                 "ai_generated": False,
@@ -576,18 +576,18 @@ async def test_manifest_upgrade_preserves_answers_and_is_idempotent_by_target_re
         DRAFT_ID,
         7,
         expected_revision=0,
-        target_revision=2,
+        target_revision=3,
         locale="en",
     )
     replayed = await service.upgrade_manifest(
         DRAFT_ID,
         7,
         expected_revision=0,
-        target_revision=2,
+        target_revision=3,
         locale="en",
     )
 
-    assert upgraded.draft.snapshot.schema_revision == 2
+    assert upgraded.draft.snapshot.schema_revision == 3
     assert upgraded.draft.snapshot.revision == 1
     assert upgraded.draft.snapshot.answers == {
         "completion": "Built at spawn",
@@ -614,7 +614,7 @@ async def test_manifest_upgrade_failure_does_not_touch_the_draft() -> None:
     )
     before = replace(
         created,
-        snapshot=replace(created.snapshot, schema_revision=1, answers={"unknown_answer": True}),
+        snapshot=replace(created.snapshot, schema_revision=2, answers={"unknown_answer": True}),
     )
     repository.drafts[DRAFT_ID] = before
 
@@ -623,7 +623,7 @@ async def test_manifest_upgrade_failure_does_not_touch_the_draft() -> None:
             DRAFT_ID,
             7,
             expected_revision=0,
-            target_revision=2,
+            target_revision=3,
             locale="en",
         )
 
@@ -643,7 +643,7 @@ async def test_manifest_upgrade_rejects_stale_edit_without_touching_the_draft() 
         now=NOW,
         draft_id=DRAFT_ID,
     )
-    before = replace(created, snapshot=replace(created.snapshot, schema_revision=1, revision=2))
+    before = replace(created, snapshot=replace(created.snapshot, schema_revision=2, revision=2))
     repository.drafts[DRAFT_ID] = before
 
     with pytest.raises(DraftRevisionConflictError):
@@ -651,7 +651,7 @@ async def test_manifest_upgrade_rejects_stale_edit_without_touching_the_draft() 
             DRAFT_ID,
             7,
             expected_revision=1,
-            target_revision=2,
+            target_revision=3,
             locale="en",
         )
 
@@ -679,7 +679,7 @@ async def test_manifest_upgrade_rejects_an_unretained_source_without_touching_th
             DRAFT_ID,
             7,
             expected_revision=0,
-            target_revision=2,
+            target_revision=3,
             locale="en",
         )
 
