@@ -82,7 +82,8 @@ def test_media_publication_lease_exceeds_the_configured_s3_retry_envelope() -> N
 def test_schematic_upload_limit_cannot_exceed_the_database_schema_ceiling() -> None:
     assert SchematicConfig().max_upload_bytes == SCHEMATIC_FILE_SCHEMA_MAX_BYTES
     with pytest.raises(ValueError, match=f"less than or equal to {SCHEMATIC_FILE_SCHEMA_MAX_BYTES}"):
-        SchematicConfig(max_upload_bytes=SCHEMATIC_FILE_SCHEMA_MAX_BYTES + 1)
+        # Deliberately violate the bound to exercise runtime validation.
+        SchematicConfig(max_upload_bytes=SCHEMATIC_FILE_SCHEMA_MAX_BYTES + 1)  # pyrefly: ignore[bad-argument-type]
 
 
 def test_upstream_http_overrides_are_explicitly_loopback_only() -> None:

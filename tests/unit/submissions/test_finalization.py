@@ -627,15 +627,15 @@ async def test_legacy_sponsor_request_is_refused_instead_of_silently_dropped() -
 
 
 @pytest.mark.asyncio
-async def test_schema_one_fixture_retains_shape_digest_and_round_trip() -> None:
+async def test_schema_two_fixture_retains_shape_digest_and_round_trip() -> None:
     payload = await _payload()
     encoded = encode_submission(payload)
 
-    assert encoded["payload_schema"] == 1
+    assert encoded["payload_schema"] == 2
     assert encoded["sponsor_attribution"] is False
     assert encoded["source_installation_id"] is None
     assert encoded["sponsor"] is None
-    assert submission_payload_digest(encoded) == "d48727ce2b8d2b8a57a2e754387fe7ecf8134e683ae7cc3aa64e3647317acd67"
+    assert submission_payload_digest(encoded) == "e65d560c6c45663946ce5b7fa8deb4c126d7feeea7090cb95513c34e212425e7"
     assert decode_submission(encoded) == payload
 
 
@@ -651,20 +651,20 @@ async def test_payload_codec_rejects_unknown_fields_and_type_coercion() -> None:
 
 
 @pytest.mark.asyncio
-async def test_schema_two_requires_attribution_and_verified_sponsor() -> None:
+async def test_schema_three_requires_attribution_and_verified_sponsor() -> None:
     sponsor = PublicSponsor(INSTALLATION_ID, display_name="Example server")
     _, jobs = await _submit(
         SubmissionOrigin.PAPER,
         SubmissionArtifactReadiness(
-            schematic_state=SchematicArtifactState.SANITIZED,
-            sanitized_schematic_id=SCHEMATIC_ID,
+            schematic_state=SchematicArtifactState.READY,
+            schematic_id=SCHEMATIC_ID,
         ),
         answers=_answers() | {"sponsor_attribution": True},
         sponsor=sponsor,
     )
     assert jobs.enqueued is not None
     encoded = encode_submission(jobs.enqueued)
-    assert submission_payload_digest(encoded) == "88dcebc6349fe4adbf6bdb7b8e04969329a487e78768bf8c937e33dd26bf8d7b"
+    assert submission_payload_digest(encoded) == "1c52d26fd97d23ad90e37bb4385bd63d25aac5368ff190c8d794210aaa83d8fb"
     assert decode_submission(encoded) == jobs.enqueued
 
     with pytest.raises(DataIntegrityError, match="persisted normalized submission payload is invalid"):

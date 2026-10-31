@@ -1,9 +1,9 @@
 """SQLAlchemy persistence adapter for stored schematics."""
 
 import hashlib
-from collections.abc import Sequence
+from typing import cast
 
-from sqlalchemy import ColumnElement, Select, and_, func, or_, select, update
+from sqlalchemy import ColumnElement, Select, Table, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -20,6 +20,8 @@ from squid.schematics.domain.models import (
 from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
 from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile
 from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
+
+_BUILD_TABLE = cast(Table, SQLBuild.__table__)
 
 _FINGERPRINT_COLUMNS = {
     FingerprintPreset.STRUCTURAL: BuildSchematic.fingerprint_structural,
@@ -139,7 +141,7 @@ class PostgresSchematicStore:
         )
         async with self._session_factory() as session:
             if primary:
-                await session.scalar(select(SQLBuild.id).where(SQLBuild.id == build_id).with_for_update())
+                await session.scalar(select(_BUILD_TABLE.c.id).where(_BUILD_TABLE.c.id == build_id).with_for_update())
                 # The partial unique index allows only one primary per build, so the previous
                 # holder must be demoted in the same transaction as the new one is promoted.
                 await session.execute(
@@ -248,13 +250,13 @@ class PostgresSchematicStore:
             await session.commit()
 
     @staticmethod
-    def _joined() -> Select[BuildSchematic, str, int]:
+    def _joined() -> Select[tuple[BuildSchematic, str, int]]:
         """Select an attachment together with the two facts that live on its file row."""
         return select(BuildSchematic, SchematicFile.source_format, SchematicFile.byte_size).join(
             SchematicFile, BuildSchematic.file_sha256 == SchematicFile.sha256
         )
 
-    async def _fetch(self, statement: Select[BuildSchematic, str, int]) -> list[StoredSchematic]:
+    async def _fetch(self, statement: Select[tuple[BuildSchematic, str, int]]) -> list[StoredSchematic]:
         async with self._session_factory() as session:
             rows = (await session.execute(statement)).all()
         return [
