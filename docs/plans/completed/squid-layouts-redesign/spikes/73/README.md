@@ -10,7 +10,7 @@ measured rather than argued.
 
 Two designs were on the table:
 
-- **A** — one generic signature, `def stack[ModeT](*children: ChildLike[ModeT]) -> Stack[ModeT]`,
+- **A** — one generic signature, `def stack[ModeT](../../../../squid-ui-redesign/spikes/73/*children: ChildLike[ModeT]) -> Stack[ModeT]`,
   and let the solver do it.
 - **B** — an ordered three-overload ladder per factory (`DiscordTarget` first, then the two
   leaves), which is deterministic but costs ~54 extra overloads across the 19 container and

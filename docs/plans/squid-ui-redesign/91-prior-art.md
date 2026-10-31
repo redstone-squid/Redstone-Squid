@@ -138,7 +138,7 @@ conflict. The two grounds below are the load-bearing ones.)
 
 `ReplicatedCounter`/`ReplicatedSet` already answer the commutative cases with real CRDT
 semantics, an encodable inverse for history, and a backend chosen on measured evidence
-([the backend ADR](../68-replicated-backend-adr.md)). A hand-written `commutative_add` would be a
+([the backend ADR](../completed/68-replicated-backend-adr.md)). A hand-written `commutative_add` would be a
 second, weaker spelling of a shipped one.
 
 And the motivating concurrency is thin here. Compose merges snapshots because composition and

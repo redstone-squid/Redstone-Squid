@@ -1,14 +1,14 @@
-# Spike: `ScopeT` inference for [59](../../../completed/squid-layouts-redesign/59-shared-pool.md)'s `SharedPool`
+# Spike: `ScopeT` inference for [59](../../59-shared-pool.md)'s `SharedPool`
 
 Evidence, not a staging area — nothing here is meant to be promoted into the package.
 
 ```
-uv run --locked pyrefly check docs/plans/squid-ui-redesign/spikes/59/inference.py
+uv run --locked pyrefly check docs/plans/completed/squid-layouts-redesign/spikes/59/inference.py
 ```
 
 `docs/` is outside `[tool.pyrefly] project-includes` (`pyproject.toml:365`) and ruff excludes
 `docs/plans/**/spikes/` (`:230`), so this file is only ever checked by hand. Measured against
-**Pyrefly 1.2.0**, the same version [90](../../90-deferred.md) pins for its `Unpack` rejection.
+**Pyrefly 1.2.0**, the same version [90](../../../../squid-ui-redesign/90-deferred.md) pins for its `Unpack` rejection.
 
 ## The question
 

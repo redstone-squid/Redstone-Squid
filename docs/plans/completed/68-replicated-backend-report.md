@@ -85,7 +85,7 @@ The focused tests also reproduced the limiting behavior rather than inferring it
   from unavailable retained authority.
 
 The executable evidence is in
-[`test_real_backends.py`](../../packages/squid-replication/tests/test_real_backends.py). The focused command is:
+[`test_real_backends.py`](../../../packages/squid-replication/tests/test_real_backends.py). The focused command is:
 
 ```console
 uv run --locked --package squid-replication --extra loro --extra pycrdt \
@@ -205,7 +205,7 @@ condition: two branches from the same base generate colliding operation IDs, so 
 remain inside the no-await commit gate. A focused test proves the second branch is rejected before either
 backend can silently accept only one of two colliding payloads.
 
-[`plan68_backend_actions.py`](../../benchmarks/plan68_backend_actions.py) measured sequential one-character
+[`plan68_backend_actions.py`](../../../benchmarks/plan68_backend_actions.py) measured sequential one-character
 actions on CPython 3.14.6/Linux x86-64 after the identity correction:
 
 | Backend | Actions | Time/action | State vector/frontier | Full update | Peer count |

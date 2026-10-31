@@ -84,7 +84,7 @@ confined to the two packages and their tests, and there are no live durable snap
 
 ```python
 # squid_ui/planning/dialect.py — axis 1: the protocol
-class TargetDialect[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT](Protocol):
+class TargetDialect[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT](../../squid-ui-redesign/Protocol):
     id: str
     version: int
     capabilities: frozenset[Capability]  # protocol only; no adapter or extension strings

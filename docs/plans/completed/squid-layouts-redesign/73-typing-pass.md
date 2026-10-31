@@ -23,7 +23,7 @@ Three breaks, one seam:
 | Every container held `children: tuple[LayoutNode, ...]`, i.e. `LayoutNode[Any]` | `semantic.py:140-205,676-760` |
 | `Component`, `RenderResult` and `Document` all defaulted the parameter to `Any` | `component.py:99,188`, `document.py:14,22` |
 
-`MessageRoot[ModeT](component: Component[ModeT], *, target: Target[..., ModeT, ...])` was
+`MessageRoot[ModeT](../../squid-ui-redesign/component: Component[ModeT], *, target: Target[..., ModeT, ...])` was
 already wired for this and was only ever handed `Any` on both sides.
 
 The rest of the pass is the debt that shared the same cause: signatures that described

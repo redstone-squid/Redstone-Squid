@@ -377,4 +377,4 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   both fire after the handler returns. Strict read-set validation raised how often that happens.
   Plan 68 shipped `on_action_rollback` for the notification and, having found the consumer this
   entry was waiting for, the ordering half too: `CompensationOutbox` with idempotency keys,
-  restart recovery and reconciliation. See [the Plan 68 completion audit](../68-completion-audit.md).
+  restart recovery and reconciliation. See [the Plan 68 completion audit](../completed/68-completion-audit.md).
