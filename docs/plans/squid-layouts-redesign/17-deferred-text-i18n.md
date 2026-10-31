@@ -76,12 +76,13 @@ class Localization:
     gettext: Callable[[str], str] = _identity
     ngettext: Callable[[str, str, int], str] | None = None
 
+
 @dataclass(frozen=True, slots=True)
 class Message:
     template: str
     params: Mapping[str, object] = _EMPTY
     dialect: TextDialect = TextDialect.DISCORD_MARKDOWN
-    plural: str | None = None   # plural msgid; params["count"] selects
+    plural: str | None = None  # plural msgid; params["count"] selects
 ```
 
 `resolve_text(value, localization)` takes the localization as a **required** second
