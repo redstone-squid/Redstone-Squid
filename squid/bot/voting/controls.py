@@ -21,7 +21,7 @@ import discord
 
 import squid_ui as sl
 import squid_ui_discord as sd
-from squid.bot.routes._root import _feature_group, _feature_route
+from squid.bot.routes._root import _feature_group
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.i18n import tr
@@ -32,8 +32,8 @@ if TYPE_CHECKING:
 
 
 polls, _polls_created = _feature_group("polls")
-poll_close = _feature_route(polls, "close", aliases=("poll:close",))
-poll_refresh = _feature_route(polls, "refresh", aliases=("poll:refresh",))
+poll_close = polls.define("close", aliases=("poll:close",))
+poll_refresh = polls.define("refresh", aliases=("poll:refresh",))
 
 
 def poll_controls() -> sl.semantic.ActionControls:
@@ -48,7 +48,7 @@ def poll_controls() -> sl.semantic.ActionControls:
 @polls.route(poll_close)
 async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """End a poll early, tallying it where it stands."""
-    request = await interaction.client.app_ui.request(interaction)
+    request = await sd.request(interaction)
     authorized = await _authorize(request)
     if authorized is None:
         return
@@ -66,7 +66,7 @@ async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSqui
 @polls.route(poll_refresh)
 async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """Recompute cached role weights, for a poll whose voters gained or lost roles."""
-    request = await interaction.client.app_ui.request(interaction)
+    request = await sd.request(interaction)
     authorized = await _authorize(request)
     if authorized is None:
         return

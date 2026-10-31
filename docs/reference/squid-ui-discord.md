@@ -103,8 +103,6 @@ through `Request.respond` or a session spec rather than directly.
 
 ::: squid_ui_discord.SessionOptionsResolver
 
-::: squid_ui_discord.MessageRootFactory
-
 ::: squid_ui_discord.owner_message_root
 
 ::: squid_ui_discord.message_roots
@@ -188,23 +186,15 @@ Static rendering without a mount, and the payload/destination vocabulary for del
 
 ::: squid_ui_discord.native
 
-## Managed results
+## Error policy
 
-Deliver an operation's outcome with consistent success and error presentation.
+Configure command failure rendering and observation through the installation's `ErrorPolicy`.
 
-::: squid_ui_discord.run_managed_result
-
-::: squid_ui_discord.ManagedError
-
-::: squid_ui_discord.ManagedDelivery
-
-::: squid_ui_discord.SuccessRenderer
+::: squid_ui_discord.ErrorPolicy
 
 ::: squid_ui_discord.ErrorRenderer
 
 ::: squid_ui_discord.ErrorObserver
-
-::: squid_ui_discord.Work
 
 ::: squid_ui_discord.ResourceCost
 

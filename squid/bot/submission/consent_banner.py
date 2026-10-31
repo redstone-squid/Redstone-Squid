@@ -9,7 +9,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import ConsentPrompt
-from squid.bot.routes._root import _feature_group, _feature_route
+from squid.bot.routes._root import _feature_group
 from squid.bot.ui import CardField, render_payload, text_node, tr
 from squid.bot.utils.sticky_message import StickyMessage
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 build_log_consents, _consents_created = _feature_group("build-log-consents")
-build_log_consent = _feature_route(build_log_consents, "new", aliases=("build_log:consent",))
+build_log_consent = build_log_consents.define("new", aliases=("build_log:consent",))
 
 CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 
@@ -28,7 +28,7 @@ CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 @build_log_consents.route(build_log_consent)
 async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     """Open the ephemeral consent prompt behind the public banner button."""
-    request = await interaction.client.app_ui.request(interaction)
+    request = await sd.request(interaction)
     accounts = interaction.client.services.accounts
 
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(interaction.user.id))
