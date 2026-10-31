@@ -43,7 +43,8 @@ class Counter(sd.Screen):
 
 @bot.tree.command()
 async def counter(interaction) -> None:
-    await app_ui.respond(interaction, Counter())
+    request = await app_ui.request(interaction)
+    await request.respond(Counter())
 ```
 
 `sd.install()` starts no tasks. Run the installed runtime before opening panels, even when

@@ -2,13 +2,12 @@
 
 from collections.abc import Hashable, Sequence
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Unpack, cast, overload
+from typing import TYPE_CHECKING, Any, Unpack, cast
 
 import discord
 
 from squid_ui import paragraph
 from squid_ui.runtime.component import Component
-from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import Localization
 from squid_ui_discord.access import AccessPolicy, Owner
 from squid_ui_discord.audience import Audience
@@ -24,7 +23,6 @@ from squid_ui_discord.response import (
     Abandoned,
     Presented,
     Rejected,
-    Response,
     ResponseOverrides,
     ResponseResult,
     ResponseSpec,
@@ -117,47 +115,6 @@ class Scope[OwnerT = Any]:
             palette=defaults.palette,
             strict=defaults.strict,
         )
-
-    @overload
-    async def respond[ComponentT: Component[ComponentsV2Target]](
-        self,
-        source: ResponseSource,
-        content: ComponentT | Response[ComponentT],
-        *,
-        files: Sequence[discord.File] = (),
-        parent: MessageRoot | None = None,
-        session_key: Hashable | None = None,
-        **overrides: Unpack[ResponseOverrides],
-    ) -> ResponseResult[ComponentT]: ...
-
-    @overload
-    async def respond(
-        self,
-        source: ResponseSource,
-        content: FacadeContent | Response,
-        *,
-        files: Sequence[discord.File] = (),
-        parent: MessageRoot | None = None,
-        session_key: Hashable | None = None,
-        **overrides: Unpack[ResponseOverrides],
-    ) -> ResponseResult: ...
-
-    # BasedPyright infers `Presented`'s parameter from a frozen dataclass field as if the field
-    # were writable, so `ResponseResult[ComponentT]` is not a `ResponseResult`. The first overload
-    # is the reason this ladder exists: it is what gives a component response its own type back.
-    async def respond(  # pyright: ignore[reportInconsistentOverload]
-        self,
-        source: ResponseSource,
-        content: FacadeContent | Response[Any],
-        *,
-        files: Sequence[discord.File] = (),
-        parent: MessageRoot | None = None,
-        session_key: Hashable | None = None,
-        **overrides: Unpack[ResponseOverrides],
-    ) -> ResponseResult:
-        """Respond through the request bound to this scope and source."""
-        request = await self.request(source)
-        return await request.respond(content, files=files, parent=parent, session_key=session_key, **overrides)
 
     async def send(
         self,

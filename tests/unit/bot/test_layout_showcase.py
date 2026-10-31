@@ -456,7 +456,8 @@ class TestLobby:
         )
         context.guild = Guild(id=guild_id)
         panel = Lobby(host_id)
-        outcome = await host.app_ui.respond(cast(Any, context), panel)
+        request = await host.app_ui.request(cast(Any, context))
+        outcome = await request.respond(panel)
         assert isinstance(outcome, sd.Presented)
         return host, panel
 
@@ -466,7 +467,8 @@ class TestLobby:
         context = ContextHarness(message=MessageHarness(message_id=5), bot=bot, user_id=8)
         context.guild = Guild(id=5)
 
-        result = await bot.app_ui.respond(cast(Any, context), Lobby(8))
+        request = await bot.app_ui.request(cast(Any, context))
+        result = await request.respond(Lobby(8))
 
         assert isinstance(result, sd.Rejected)
         assert tuple(bot.sessions.active()) == (session,)
