@@ -15,7 +15,6 @@ from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
 from squid.persistence.advisory_locks import (
-    SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE,
     AdvisoryLockNamespace,
     lock_key,
     lock_uuid,
@@ -278,7 +277,7 @@ class PostgresDraftRepository(DraftRepository):
     async def delete_owned(self, draft_id: UUID, account_id: int) -> bool:
         """Delete an editable owned draft behind the shared lifecycle fence."""
         async with self._session_factory.begin() as session:
-            await lock_uuid(session, draft_id, namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE)
+            await lock_uuid(session, draft_id, namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_LIFECYCLE)
             model = await session.scalar(
                 select(SubmissionDraft).where(SubmissionDraft.id == draft_id).with_for_update()
             )
@@ -333,7 +332,7 @@ class PostgresDraftRepository(DraftRepository):
             )
             expired = 0
             for draft_id in due:
-                await lock_uuid(session, draft_id, namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE)
+                await lock_uuid(session, draft_id, namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_LIFECYCLE)
                 model = await session.scalar(
                     select(SubmissionDraft).where(SubmissionDraft.id == draft_id).with_for_update()
                 )

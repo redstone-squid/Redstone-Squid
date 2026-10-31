@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response, status
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
 from squid.api.dependencies import DraftAttachments
 from squid.api.errors import responses
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.schemas.submission_media import (
     DraftMediaLimitsResponse,
@@ -185,7 +185,7 @@ async def get_draft_media(
     "/{upload_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="submission_media_discard",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE, MINECRAFT],
@@ -317,7 +317,7 @@ def _prevent_storage(response: Response, limits: MediaLimits) -> None:
 @router.post(
     "/{upload_id}/attach",
     response_model=DraftMediaResponse,
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="submission_media_attach",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE, MINECRAFT],

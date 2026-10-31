@@ -20,7 +20,7 @@ from squid.records.application.models import (
 )
 from squid.records.domain import (
     BuildKind,
-    CategoryText,
+    FormattedTitle,
     RecordCandidate,
     RecordClass,
     RecordResolution,
@@ -54,7 +54,7 @@ def _batch(ruleset_id: int, build_ids: list[int]) -> ComputationBatch:
     competition = CategoryCompetition(
         identity=CategoryIdentity(BuildKind.DOOR, "door|2x3|t[20]|Door", ()),
         facets=(),
-        category_text=CategoryText("2x3 Door"),
+        category_text=FormattedTitle("2x3 Door"),
         candidates=candidates,
         candidate_version_ids=tuple((candidate.build_id, frozenset()) for candidate in candidates),
     )
@@ -63,7 +63,7 @@ def _batch(ruleset_id: int, build_ids: list[int]) -> ComputationBatch:
         scope=VersionScope.ALL_TIME,
         version_id=None,
         competition=competition,
-        title=CategoryText("Smallest 2x3 Door"),
+        title=FormattedTitle("Smallest 2x3 Door"),
         resolution=RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(build_ids[-1],)),
         history=tuple(
             HolderHistoryEntry(
@@ -162,7 +162,7 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
             replace(
                 template,
                 record_class=record_class,
-                title=CategoryText(
+                title=FormattedTitle(
                     record_class.value, subtitle="First completion" if record_class is RecordClass.FIRST else None
                 ),
                 competition=replace(
@@ -179,7 +179,7 @@ async def test_bulk_definitions_keep_public_requests_and_stable_competition_ids(
     with record_queries(sessions) as first_queries:
         await records.activate(batch)
     identity = batch.records[0].competition.identity
-    titles = {record_class: CategoryText(f"Requested {record_class.value}") for record_class in RecordClass}
+    titles = {record_class: FormattedTitle(f"Requested {record_class.value}") for record_class in RecordClass}
     await records.save_requested_category(batch.ruleset_id, identity, titles)
     assert identity in await records.list_requested_categories(BuildKind.DOOR)
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId
 from squid.core.errors import ValidationError
@@ -102,7 +102,7 @@ async def upload_schematic(
     "/{upload_id}/primary",
     operation_id="submission_schematic_primary",
     openapi_extra=_WRITE,
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
 )
 async def select_primary(
     draft_id: UUID, upload_id: UUID, account_id: AccountId, schematics: Schematics
@@ -116,7 +116,7 @@ async def select_primary(
     "/{upload_id}",
     operation_id="submission_schematic_discard",
     openapi_extra=_WRITE,
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
 )
 async def discard_schematic(
     draft_id: UUID, upload_id: UUID, account_id: AccountId, schematics: Schematics
@@ -130,7 +130,7 @@ async def discard_schematic(
     "/{upload_id}/attach",
     operation_id="submission_schematic_attach",
     openapi_extra=_WRITE,
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
 )
 async def attach_schematic(
     draft_id: UUID,

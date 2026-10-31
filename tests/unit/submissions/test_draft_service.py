@@ -27,7 +27,6 @@ from squid.submissions.domain import (
 from squid.submissions.errors import (
     DraftAccessDeniedError,
     DraftCapacityExceededError,
-    DraftIncompleteError,
     DraftSchemaUnsupportedError,
     DraftStateConflictError,
     DraftValidationError,
@@ -502,7 +501,7 @@ async def test_processing_reports_field_errors_for_incomplete_web_draft() -> Non
         draft_id=DRAFT_ID,
     )
 
-    with pytest.raises(DraftIncompleteError) as error:
+    with pytest.raises(DraftValidationError) as error:
         await service.validate_for_finalization(
             DRAFT_ID,
             7,

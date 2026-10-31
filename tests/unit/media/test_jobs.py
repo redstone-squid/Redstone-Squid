@@ -688,7 +688,7 @@ async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -
                 source_content_type="image/png",
             )
         )
-    assert exc_info.value.violation.measure.value == "image_count"
+    assert exc_info.value.violations[0].measure.value == "image_count"
     assert all(data != b"second" for data in artifacts.objects.values())
 
     assert await jobs.discard(DRAFT_ID, first_id)

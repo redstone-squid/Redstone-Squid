@@ -32,9 +32,9 @@ from squid.records.application.models import (
 from squid.records.application.ports import RecomputeLease
 from squid.records.domain import (
     BuildKind,
-    CategoryText,
     DoorCategory,
     ExtenderCategory,
+    FormattedTitle,
     RecordCandidate,
     RecordClass,
     ResolutionStatus,
@@ -86,7 +86,7 @@ class _DefinitionWrite:
 
     record_class: RecordClass
     category_key: str
-    title: CategoryText
+    title: FormattedTitle
     source: RecordMaterializationSource
     facets: tuple[tuple[RecordFacetKind, int], ...]
 
@@ -494,7 +494,7 @@ class PostgresRecordRepository:
         self,
         ruleset_id: int,
         category: CategoryIdentity,
-        titles: Mapping[RecordClass, CategoryText],
+        titles: Mapping[RecordClass, FormattedTitle],
     ) -> None:
         """Persist an accepted exact category so future rebuilds retain it."""
         async with self._session_factory.begin() as session:

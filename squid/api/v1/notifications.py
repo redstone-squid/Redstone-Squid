@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Response, status
 from squid.api.contract import WEB, WEB_WRITE, browser_only, contract
 from squid.api.dependencies import Notifications, Permissions
 from squid.api.errors import responses
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
@@ -59,7 +59,7 @@ async def get_preferences(notifications: Notifications, caller: UserCaller) -> N
     "/preferences",
     response_model=NotificationPreferencesDetail,
     responses=responses(400, 401, 403, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="notification_preferences_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -98,7 +98,7 @@ async def list_subscriptions(
     response_model=NotificationSubscriptionDetail,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="notification_subscription_create",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -121,7 +121,7 @@ async def create_subscription(
     "/subscriptions/{subscription_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="notification_subscription_delete",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -167,7 +167,7 @@ async def list_inbox(
     "/inbox/{notification_id}/read",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="notification_inbox_mark_read",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -186,7 +186,7 @@ async def mark_read(
     "/inbox/{notification_id}/unread",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="notification_inbox_mark_unread",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )

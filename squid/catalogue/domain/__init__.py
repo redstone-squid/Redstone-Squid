@@ -1,7 +1,6 @@
 """Dependency-free catalogue title grammar."""
 
 from squid.catalogue.domain.titles import (
-    CategoryText,
     DoorCategory,
     ExtenderCategory,
     FormattedTitle,
@@ -14,7 +13,6 @@ from squid.catalogue.domain.titles import (
 )
 
 __all__ = [
-    "CategoryText",
     "DoorCategory",
     "ExtenderCategory",
     "FormattedTitle",

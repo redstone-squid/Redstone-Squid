@@ -10,7 +10,7 @@ from fastapi.responses import RedirectResponse, Response
 from squid.api.contract import ANONYMOUS, WEB, WEB_WRITE, browser_only, contract
 from squid.api.dependencies import CurrentCaller, WebAuth
 from squid.api.errors import responses
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.v1.schemas.auth import CsrfTokenResponse
 from squid.core.errors import AuthenticationError, ValidationError
 
@@ -47,7 +47,7 @@ async def csrf_token(request: Request, response: Response, caller: CurrentCaller
     "/logout",
     status_code=204,
     responses=responses(401, 403, 409, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="browser_session_revoke",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )

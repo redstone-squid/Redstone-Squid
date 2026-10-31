@@ -10,7 +10,7 @@ from pydantic import AnyHttpUrl
 from squid.api.contract import ANONYMOUS, PAPER, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import MinecraftInstallations, MinecraftPlayerAuthorization
 from squid.api.errors import responses
-from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
+from squid.api.idempotency import IdempotencyKey, reserve_idempotent_request, reserve_idempotent_request_for
 from squid.api.security import BrowserAccountId, prevent_credential_storage
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
@@ -88,7 +88,7 @@ async def enforce_paper_request_idempotency(
 ) -> None:
     """Partition one-time Paper responses by an authenticated credential generation."""
     caller = f"minecraft-installation:{installation.id}:{installation.credential_version}"
-    await enforce_request_idempotency_for(request, caller, idempotency_key)
+    await reserve_idempotent_request_for(request, caller, idempotency_key)
 
 
 async def enforce_fabric_request_idempotency(
@@ -98,7 +98,7 @@ async def enforce_fabric_request_idempotency(
     """Partition anonymous Fabric retries by the transport's observed network peer."""
     peer = request.client.host if request.client is not None else "unknown"
     peer_digest = hashlib.sha256(peer.encode()).hexdigest()
-    await enforce_request_idempotency_for(request, f"minecraft-fabric:{peer_digest}", idempotency_key)
+    await reserve_idempotent_request_for(request, f"minecraft-fabric:{peer_digest}", idempotency_key)
 
 
 router = APIRouter(
@@ -113,7 +113,7 @@ router = APIRouter(
     response_model=IssuedInstallationResponse,
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 401, 403, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="paper_installation_create",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -153,7 +153,7 @@ async def list_installations(
     "/paper/installations/{installation_id}/rotate",
     response_model=IssuedInstallationResponse,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="paper_installation_rotate",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -171,7 +171,7 @@ async def rotate_installation(
     "/paper/installations/{installation_id}/profile",
     response_model=InstallationResponse,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="paper_installation_profile_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -195,7 +195,7 @@ async def update_installation_profile(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="paper_installation_revoke",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -289,7 +289,7 @@ async def exchange_fabric_challenge(
     "/challenges/approval",
     response_model=ChallengeApprovalResponse,
     responses=responses(400, 401, 403, 409, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="minecraft_challenge_approve",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -308,7 +308,7 @@ async def approve_challenge(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="minecraft_grant_revoke",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )

@@ -14,7 +14,7 @@ from squid.records.application.models import (
     RecordSourceCandidate,
     TitleDiagnosticGap,
 )
-from squid.records.domain import BuildKind, CategoryText, RecordClass
+from squid.records.domain import BuildKind, FormattedTitle, RecordClass
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +81,7 @@ class RecordRunRepository(Protocol):
         self,
         ruleset_id: int,
         category: CategoryIdentity,
-        titles: Mapping[RecordClass, CategoryText],
+        titles: Mapping[RecordClass, FormattedTitle],
     ) -> None: ...
 
     async def enqueue(self, kind: BuildKind, *, build_id: int | None, reason: str) -> None: ...

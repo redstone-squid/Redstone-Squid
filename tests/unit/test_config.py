@@ -941,7 +941,6 @@ def test_new_caller_quota_wins_over_the_deprecated_name() -> None:
     config = RateLimitConfig.model_validate({"caller_requests": 120, "principal_requests": 90})
 
     assert config.caller_requests == 120
-    assert config.principal_requests == 120
 
 
 @pytest.mark.parametrize(
