@@ -48,7 +48,7 @@ from squid_ui.target_types import ClassicTarget, DiscordPyAdapter, Renderable
 from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import NEUTRAL, Localization, TextLike
 from squid_ui_discord._draw import plan_and_draw
-from squid_ui_discord._exact_factories import (
+from squid_ui_discord._factories import (
     button,
     check_content,
     code,

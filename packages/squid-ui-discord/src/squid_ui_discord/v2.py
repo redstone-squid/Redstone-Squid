@@ -25,7 +25,7 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.styles import Color
 from squid_ui.target_types import ComponentsV2Target, Renderable
 from squid_ui.text import TextLike
-from squid_ui_discord._exact_factories import (
+from squid_ui_discord._factories import (
     button,
     check_content,
     code,
