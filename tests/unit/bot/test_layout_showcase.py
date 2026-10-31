@@ -460,6 +460,19 @@ class TestLobby:
         assert isinstance(outcome, sd.Presented)
         return host, panel
 
+    async def test_duplicate_guild_lobby_keeps_the_existing_session(self) -> None:
+        bot, panel = await self.opened()
+        session = _lobby_session(panel)
+        context = ContextHarness(message=MessageHarness(message_id=5), bot=bot, user_id=8)
+        context.guild = Guild(id=5)
+
+        result = await bot.app_ui.respond(cast(Any, context), Lobby(8))
+
+        assert isinstance(result, sd.Rejected)
+        assert tuple(bot.sessions.active()) == (session,)
+        assert session.members == frozenset({7})
+        assert not session.root.finished
+
     async def test_the_host_opens_as_the_only_member(self) -> None:
         bot, panel = await self.opened()
 

@@ -90,12 +90,10 @@ def _error_detail(error: ValidationError) -> sl.TextLike:
     return tr(t"{message} {action}")
 
 
-class AccountScreen(sd.Screen):
+class AccountScreen(sd.UserSessionScreen, session_name="account"):
     """An account workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("account")
     timeout = SESSION_SECONDS
-    audience = "personal"
 
     selected_id: int | None = sl.state(None)
     closed: bool = sl.state(default=False)

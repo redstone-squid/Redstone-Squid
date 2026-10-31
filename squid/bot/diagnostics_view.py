@@ -137,10 +137,9 @@ class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target]):
         )
 
 
-class ErrorReportScreen(sd.Screen):
+class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
     """An error browser that ends when closed, cleared, replaced, or timed out."""
 
-    session = sd.SessionSpec("errors")
     timeout = SESSION_SECONDS
     audience = sd.Private(tr(t"An error report names internal paths, so it is never posted in a channel."))
     chrome = ERROR_CHROME
@@ -260,18 +259,16 @@ class ErrorReportScreen(sd.Screen):
         reference = report.reference
         traceback_text: sl.TextLike = report.traceback.strip() or tr(t"No traceback was recorded.")
         children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
-            sl.primitives.Heading(tr(t"Error {reference}")),
+            sd.v2.heading(tr(t"Error {reference}")),
             # Opens at the end because the failing frame is the last one.
-            sl.primitives.Code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", initial="end")),
+            sd.v2.code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", initial="end")),
         ]
         if report.log_tail:
             # The run-up to the failure: its last lines matter most, so it trims from the
             # front; the attachment carries all of it.
-            children.append(sl.primitives.Heading(tr(t"Log tail"), level=3, priority=2))
+            children.append(sd.v2.heading(tr(t"Log tail"), level=3, priority=2))
             children.append(
-                sl.primitives.Code(
-                    "\n".join(report.log_tail), overflow=sl.primitives.Truncate(keep="tail"), priority=-8
-                )
+                sd.v2.code("\n".join(report.log_tail), overflow=sl.primitives.Truncate(keep="tail"), priority=-8)
             )
         children.append(sl.fields(*_summary_fields(report, matches)))
         children.append(

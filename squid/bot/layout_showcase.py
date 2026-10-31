@@ -100,8 +100,8 @@ _AUDIT_LOG = (
 )
 
 _SOURCE_EXAMPLES = {
-    "pagination": """lines = sl.primitives.Lines(
-    builds,
+    "pagination": """lines = sd.v2.lines(
+    *builds,
     overflow=sl.primitives.Paginate(
         key="samples",          # this list's own cursor, independent of any other
         per=6,                  # a page a reader can take in; fewer if six will not fit
@@ -302,19 +302,15 @@ class DemoCounter(sl.Component[sl.ComponentsV2Target]):
     @override
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         count = self.count
-        return sl.primitives.Panel(
-            (
-                sl.primitives.Heading(self.label, level=3),
-                sl.primitives.Text(tr(t"Pressed {count} times")),
-                sl.primitives.Row(
-                    (
-                        sl.primitives.Button(
-                            tr(t"Add one"),
-                            self._increment,
-                            "increment",
-                            style=sl.primitives.ActionStyle.SUCCESS,
-                        ),
-                    )
+        return sd.v2.panel(
+            sd.v2.heading(self.label, level=3),
+            sd.v2.text(tr(t"Pressed {count} times")),
+            sd.v2.row(
+                sd.v2.button(
+                    tr(t"Add one"),
+                    self._increment,
+                    key="increment",
+                    style=sl.primitives.ActionStyle.SUCCESS,
                 ),
             ),
             accent=DISCORD_GREEN,
@@ -421,39 +417,35 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
     @override
     def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         controls = (
-            sl.primitives.SelectMenu(
-                tuple(
-                    sl.primitives.Option(label, value, description, default=self.section == value)
+            sd.v2.select(
+                *(
+                    sd.v2.option(label, value, description=description, default=self.section == value)
                     for value, label, description in self._sections()
                 ),
-                self._select_section,
-                "section",
+                on_select=self._select_section,
+                key="section",
                 placeholder=tr(t"Pick something to look at"),
             ),
-            sl.primitives.ControlGroup(
-                (
-                    sl.primitives.Button(
-                        tr(t"Change colour"),
-                        self._cycle_accent,
-                        "accent",
-                        style=sl.primitives.ActionStyle.PRIMARY,
-                    ),
-                    sl.primitives.Button(tr(t"Redraw"), self._click, "click"),
-                )
+            sd.v2.controls(
+                sd.v2.button(
+                    tr(t"Change colour"),
+                    self._cycle_accent,
+                    key="accent",
+                    style=sl.primitives.ActionStyle.PRIMARY,
+                ),
+                sd.v2.button(tr(t"Redraw"), self._click, key="click"),
             ),
         )
-        header = sl.primitives.Panel(
-            (
-                sl.primitives.Heading(tr(t"How this bot draws its messages")),
-                # Never: the exhibit below is what may be squeezed, and the "Running out of
-                # room" one squeezes hard enough to eat this framing if it is allowed to.
-                sl.primitives.Text(
-                    tr(t"Each entry below is one problem a Discord message runs into. They are all live."),
-                    overflow=sl.primitives.Never(),
-                ),
-                sl.primitives.Text(self.status, overflow=sl.primitives.Never()),
-                *controls,
+        header = sd.v2.panel(
+            sd.v2.heading(tr(t"How this bot draws its messages")),
+            # Never: the exhibit below is what may be squeezed, and the "Running out of
+            # room" one squeezes hard enough to eat this framing if it is allowed to.
+            sd.v2.text(
+                tr(t"Each entry below is one problem a Discord message runs into. They are all live."),
+                overflow=sl.primitives.Never(),
             ),
+            sd.v2.text(self.status, overflow=sl.primitives.Never()),
+            *controls,
             accent=_ACCENTS[self.accent_index],
         )
         return (header, *self._render_section())
@@ -526,8 +518,8 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
                     t"measured as part of each page, so if {per} entries were ever too long to fit you "
                     t"would be given fewer -- never a page Discord refuses to send.",
                 ),
-                sl.primitives.Lines(
-                    self.entries,
+                sd.v2.lines(
+                    *self.entries,
                     overflow=sl.primitives.Paginate(key="samples", per=_PAGE_SIZE, footer=self._page_footer),
                 ),
                 steps=(tr(t"Press Next."),),
@@ -1161,26 +1153,24 @@ class AppearanceControls(sl.Component[sl.ComponentsV2Target]):
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         appearance = self.inject(APPEARANCE)
         density = appearance.density
-        return sl.primitives.ControlGroup(
-            (
-                sl.primitives.Button(
-                    tr(t"Change colour"),
-                    partial(self._cycle, appearance=appearance),
-                    "accent",
-                    record=self.history,
-                ),
-                sl.primitives.Button(
-                    tr(t"Density: {density}"),
-                    partial(self._toggle_density, appearance=appearance),
-                    "density",
-                ),
-                sl.primitives.Button(
-                    tr(t"Undo that"),
-                    self._undo,
-                    "undo",
-                    style=sl.primitives.ActionStyle.SECONDARY,
-                ),
-            )
+        return sd.v2.controls(
+            sd.v2.button(
+                tr(t"Change colour"),
+                partial(self._cycle, appearance=appearance),
+                key="accent",
+                record=self.history,
+            ),
+            sd.v2.button(
+                tr(t"Density: {density}"),
+                partial(self._toggle_density, appearance=appearance),
+                key="density",
+            ),
+            sd.v2.button(
+                tr(t"Undo that"),
+                self._undo,
+                key="undo",
+                style=sl.primitives.ActionStyle.SECONDARY,
+            ),
         )
 
     async def _cycle(self, event: sl.PressEvent, *, appearance: Appearance) -> None:
@@ -1212,14 +1202,12 @@ class AppearancePanel(sl.Component[sl.ComponentsV2Target]):
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         self.provide(APPEARANCE, self.appearance)
         focus = self.session.focus
-        return sl.primitives.Panel(
-            (
-                sl.primitives.Heading(tr(t"Appearance")),
-                sl.primitives.Text(tr(t"Looking at: {focus}")),
-                self.boundary(self.controls, key="controls"),
-                sl.primitives.Row(
-                    (sl.primitives.Button(tr(t"Look at details"), self._focus_details, "focus"),),
-                ),
+        return sd.v2.panel(
+            sd.v2.heading(tr(t"Appearance")),
+            sd.v2.text(tr(t"Looking at: {focus}")),
+            self.boundary(self.controls, key="controls"),
+            sd.v2.row(
+                sd.v2.button(tr(t"Look at details"), self._focus_details, key="focus"),
             ),
             accent=self.appearance.accent,
         )
@@ -1239,20 +1227,18 @@ class PreviewPanel(sl.Component[sl.ComponentsV2Target]):
     def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         density = self.appearance.density
         focus = self.session.focus
-        return sl.primitives.Panel(
-            (
-                sl.primitives.Heading(tr(t"Preview")),
-                sl.primitives.Text(
-                    tr(
-                        t"This panel redrew itself because it read the values the other one wrote. Nothing joins them but that. Density: {density}, looking at: {focus}."
-                    )
-                ),
+        return sd.v2.panel(
+            sd.v2.heading(tr(t"Preview")),
+            sd.v2.text(
+                tr(
+                    t"This panel redrew itself because it read the values the other one wrote. Nothing joins them but that. Density: {density}, looking at: {focus}."
+                )
             ),
             accent=self.appearance.accent,
         )
 
 
-class Lobby(sd.Screen):
+class Lobby(sd.SharedGuildSessionScreen):
     """A guild lobby whose roster is session membership, not view state.
 
     Membership belongs to the logical session: it survives a redraw, it is what replacement
@@ -1262,9 +1248,13 @@ class Lobby(sd.Screen):
 
     capacity = 4
     quota = 1
-    session = sd.SessionSpec("showcase-lobby", scope=sd.ScopeKind.GUILD, capacity=capacity, quota=quota)
-    access = sd.Everyone()
-    audience = "public"
+    session = sd.SessionSpec(
+        "showcase-lobby",
+        scope=sd.ScopeKind.GUILD,
+        admission=sd.sessions.AdmissionSpec(collision=sd.sessions.Reject()),
+        capacity=capacity,
+        quota=quota,
+    )
     timeout = None
 
     started_with: int | None = sl.state(None)

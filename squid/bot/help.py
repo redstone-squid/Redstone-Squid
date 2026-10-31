@@ -59,10 +59,9 @@ class HelpClient(Protocol):
     def user(self) -> discord.ClientUser | None: ...
 
 
-class HelpScreen(sd.Screen):
+class HelpScreen(sd.UserSessionScreen, session_name="help"):
     """A command browser that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("help")
     timeout = 300
     audience = "public"
 

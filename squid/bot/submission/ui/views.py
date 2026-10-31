@@ -233,12 +233,10 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
     return sl.forms.FormSpec(tr(t"Edit build, section {page}"), tuple(fields), validator=validate)
 
 
-class BuildEditScreen(sd.Screen):
+class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
     """A build editor that ends when saved, closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("build-edit")
     timeout = 900
-    audience = "personal"
     follow_topics = True
     root_options = {"retain_routed_on_timeout": True}
 
