@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import replace
-from typing import cast
+from typing import cast, override
 from uuid import UUID
 
 import pytest
@@ -205,8 +205,8 @@ async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_pro
     ).create_or_get(submission)
 
     build = builds.calls[0][0]
-    assert build.door_dimensions == (3, 4, 2)
     assert isinstance(build, DoorBuild)
+    assert build.door_dimensions == (3, 4, 2)
     assert build.orientation == "Trapdoor"
     assert build.patterns == ["Regular"]
     assert build.wiring_placement_restrictions == ["Seamless"]
@@ -297,6 +297,7 @@ async def test_retry_race_rejects_a_persisted_build_with_different_sponsor_prove
     )
 
     class RacingBuilds(FakeBuilds):
+        @override
         async def submit_for_account(self, build: Build, **kwargs: object) -> Build:
             return OtherBuild(
                 id=41,

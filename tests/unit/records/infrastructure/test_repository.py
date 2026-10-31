@@ -142,7 +142,7 @@ async def test_active_records_convert_computed_timestamp_to_datetime() -> None:
     ]
     repository = PostgresRecordRepository(cast(async_sessionmaker[AsyncSession], FakeSessionFactory(session)))
 
-    records = await repository.list_active_records(after_id=None, limit=10)
+    records = await repository.list_active_records(offset=0, after_id=None, before_id=None, descending=True, limit=10)
 
     assert len(records) == 1
     assert records[0].computed_at == datetime(2026, 10, 31, 12, tzinfo=UTC)

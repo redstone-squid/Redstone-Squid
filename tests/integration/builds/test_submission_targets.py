@@ -104,8 +104,6 @@ def _normalized_submission(account_id: int, draft_id: uuid.UUID, source_version:
             visibility=SubmissionSchematicVisibility.REVIEWER_ONLY,
             license=None,
             rights_attested=False,
-            include_inventories=False,
-            include_free_text=False,
         ),
         completion=None,
         ai_generated=False,
@@ -154,6 +152,7 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     for build in builds:
         await repository.save(build)
         assert build.id is not None
+        assert build.revision == 1
 
     loaded = [await repository.get_by_id(build.id) for build in builds if build.id is not None]
     assert [build.category if build is not None else None for build in loaded] == list(BuildCategory)
@@ -458,11 +457,13 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     sponsor = PublicSponsor(installation_id, display_name="Merge-safe server")
     queued_at = Instant.now()
 
+    absorbed_id = absorbed.id
+
     def draft(draft_id: uuid.UUID) -> StoredDraft:
         return StoredDraft(
             snapshot=DraftSnapshot(
                 id=draft_id,
-                owner_account_id=absorbed.id,
+                owner_account_id=absorbed_id,
                 schema_id="build_submission.v1",
                 schema_revision=1,
                 category="other",
@@ -560,12 +561,12 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     completed_job = jobs[claimed_draft_id]
     assert pending_job.status == FinalizationJobStatus.PENDING.value
     assert pending_job.payload is not None
-    assert pending_job.payload["payload_schema"] == 1
+    assert pending_job.payload["payload_schema"] == 2
     assert pending_job.payload["owner_account_id"] == survivor.id
     assert pending_job.payload_sha256 == submission_payload_digest(pending_job.payload)
     assert completed_job.status == FinalizationJobStatus.COMPLETED.value
     assert completed_job.payload is not None
-    assert completed_job.payload["payload_schema"] == 2
+    assert completed_job.payload["payload_schema"] == 3
     assert completed_job.payload["owner_account_id"] == survivor.id
     assert completed_job.payload_sha256 == submission_payload_digest(completed_job.payload)
     assert stale_claim.claim_token != replacement_claim.claim_token

@@ -16,10 +16,10 @@ class FakeSettingsRepository:
     def __init__(self, locale: str | None = None) -> None:
         self._locale = locale
 
-    async def get(self, server_ids: Iterable[int], setting: Setting) -> dict[int, int | list[int] | None]:
+    async def get(self, server_ids: Iterable[int], setting: Setting) -> dict[int, int | None]:
         return {}
 
-    async def get_single(self, server_id: int, setting: Setting) -> int | list[int] | None:
+    async def get_single(self, server_id: int, setting: Setting) -> int | None:
         return None
 
     async def get_all(self, server_id: int) -> SettingOptions:

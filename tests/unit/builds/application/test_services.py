@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from typing import Literal, cast
+from typing import Literal, cast, override
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -225,7 +225,7 @@ async def test_edit_applies_only_after_lock_and_releases_on_cancel(existing_buil
     locks.release.assert_awaited_once_with(42)
 
 
-async def test_edit_commit_uses_repository_and_releases_after_save(existing_build: Build) -> None:
+async def test_edit_commit_uses_repository_and_releases_after_save(existing_build: DoorBuild) -> None:
     repository = FakeBuildRepository(existing_build)
     locks = FakeBuildLocks()
     service = build_service(repository, locks)
@@ -263,6 +263,7 @@ async def test_edit_releases_lease_when_cancelled_while_loading(existing_build: 
     loading = asyncio.Event()
 
     class BlockingRepository(FakeBuildRepository):
+        @override
         async def get_by_id(self, build_id: int) -> Build | None:
             loading.set()
             await asyncio.sleep(3600)
@@ -361,6 +362,7 @@ async def test_submit_door_maps_input_and_saves() -> None:
 
     build = await service.submit_door(submission)
 
+    assert isinstance(build, DoorBuild)
     assert build.category is BuildCategory.DOOR
     assert build.submission_status is Status.PENDING
     assert build.submitter_id == 123

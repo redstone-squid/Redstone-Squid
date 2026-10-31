@@ -34,7 +34,6 @@ class RoleVoteWeightPolicy(VoteWeightPolicy):
             user_id=actor.discord_id,
             guild_id=actor.guild_id,
             role_ids=actor.role_ids,
-            is_staff=actor.is_staff,
-            is_trusted=actor.is_trusted,
+            capabilities=actor.capabilities,
         )
         return await self._policy.calculate(reaction_actor, WeightScope(actor.guild_id, session.kind))

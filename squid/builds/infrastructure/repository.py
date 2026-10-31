@@ -259,9 +259,7 @@ class BuildRepository:
                 build.id = sql_build.id
                 if build.original_message is not None:
                     await self._create_or_update_message(build, session)
-                sql_build.original_message_id = (
-                    build.original_message.message_id if build.original_message is not None else None
-                )
+                    sql_build.original_message_id = build.original_message.message_id
                 await session.commit()
                 build.revision = sql_build.revision
         else:

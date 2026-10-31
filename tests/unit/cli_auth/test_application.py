@@ -30,7 +30,7 @@ class FakeConsentReader:
     def __init__(self, *, current: bool = True) -> None:
         self.current = current
 
-    async def has_current_consent(self, _account_id: int) -> bool:
+    async def has_current_consent(self, account_id: int) -> bool:
         return self.current
 
 

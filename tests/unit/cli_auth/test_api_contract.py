@@ -244,7 +244,9 @@ async def test_enrollment_returns_fragment_approval_link_and_no_store() -> None:
     assert response.headers["cache-control"] == "no-store"
     assert response.json()["verification_uri_complete"] == f"{VERIFICATION_URI}#code=ABCD-EFGH"
     assert cli.started == (PUBLIC_KEY, CLIENT_INSTANCE_ID, "Test workstation")
-    assert idempotency.reservations[0]["principal"].startswith("cli-anonymous:")
+    principal = idempotency.reservations[0]["principal"]
+    assert isinstance(principal, str)
+    assert principal.startswith("cli-anonymous:")
 
 
 async def test_browser_previews_fingerprint_before_approval() -> None:
