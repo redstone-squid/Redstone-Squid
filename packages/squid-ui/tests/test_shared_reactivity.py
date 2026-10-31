@@ -161,7 +161,7 @@ def test_a_component_built_inside_a_parent_render_may_assign_its_own_state() -> 
 
     class Parent(Component[DiscordTarget]):
         @override
-        def render(self) -> Boundary:
+        def render(self) -> Boundary[DiscordTarget]:
             return self.boundary(Child("hi"), key="child")
 
     tree = render_component_tree(Parent())
@@ -183,7 +183,7 @@ def test_a_component_born_this_render_still_raises_once_its_own_render_runs() ->
 
     class Parent(Component[DiscordTarget]):
         @override
-        def render(self) -> Boundary:
+        def render(self) -> Boundary[DiscordTarget]:
             return self.boundary(TornChild(), key="child")
 
     with pytest.raises(ReactiveWriteError, match="factory="):

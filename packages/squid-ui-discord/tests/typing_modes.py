@@ -13,7 +13,7 @@ from typing import assert_type
 
 import squid_ui as sl
 from squid_ui.planning import ClassicTarget, ComponentsV2Target, plan
-from squid_ui.primitives import Card, Panel, Text
+from squid_ui.primitives import Boundary, Card, Panel, Text
 from squid_ui.semantic import Stack
 from squid_ui_discord.target import classic, v2
 
@@ -48,3 +48,22 @@ plan(classic_only, target=v2())  # pyright: ignore[reportArgumentType]  # pyrefl
 buried = sl.stack(sl.section(sl.heading("h"), sl.aside(sl.stack(Panel(())))))
 plan(buried, target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[no-matching-overload, bad-argument-type]
 plan(buried, target=v2())
+
+
+def boundaries(
+    portable_child: sl.Component,
+    v2_child: sl.Component[ComponentsV2Target],
+    classic_parent: sl.Component[ClassicTarget],
+) -> None:
+    direct = Boundary(v2_child, key="direct")
+    assert_type(direct, Boundary[ComponentsV2Target])
+    assert_type(direct.component, sl.Component[ComponentsV2Target])
+    wrapped = v2_child.boundary(v2_child, key="child")
+    assert_type(wrapped, Boundary[ComponentsV2Target])
+    assert_type(v2_child.boundary(portable_child, key="portable"), Boundary[ComponentsV2Target])
+    nested = sl.stack(sl.section(sl.heading("child"), wrapped))
+    assert_type(nested, Stack[ComponentsV2Target])
+    plan(nested, target=v2())
+    plan(nested, target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+    classic_parent.boundary(v2_child, key="wrong")  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+    portable_child.boundary(v2_child, key="wrong")  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
