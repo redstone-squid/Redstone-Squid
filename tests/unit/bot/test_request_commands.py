@@ -1,7 +1,7 @@
 """Command wrappers preserve owner scopes, access checks, and consent responses."""
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import pytest
@@ -30,10 +30,10 @@ async def test_error_command_checks_access_before_presenting_in_its_cog_scope(
     monkeypatch.setattr(diagnostics, "allows", AsyncMock(return_value=False))
 
     if allowed:
-        await cog.errors.callback(cog, interaction, None)
+        await cast(Any, cog.errors).callback(cog, interaction, None)
     else:
         with pytest.raises(PermissionNodeRequired):
-            await cog.errors.callback(cog, interaction, None)
+            await cast(Any, cog.errors).callback(cog, interaction, None)
 
     request = await cog.ui.request(interaction)
     check.assert_awaited_once_with(request, DIAGNOSTICS_ERROR_READ)
@@ -68,7 +68,7 @@ async def test_notification_consent_uses_the_command_request_without_a_second_re
         await request.respond("Consent required", audience="personal")
 
     monkeypatch.setattr(notifications, "ensure_consented_account", refuse)
-    await cog.notifications.callback(cog, interaction)
+    await cast(Any, cog.notifications).callback(cog, interaction)
 
     request = await cog.ui.request(interaction)
     assert seen == [request]

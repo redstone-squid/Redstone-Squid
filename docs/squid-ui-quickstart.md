@@ -46,10 +46,12 @@ class Counter(sd.Screen):
 
 @bot.tree.command()
 async def counter(interaction: discord.Interaction) -> None:
-    await app_ui.respond(interaction, Counter())
+    request = await app_ui.request(interaction)
+    await request.respond(Counter())
 ```
 
-The owner scope resolves localization, user, destination, acknowledgement state, and response policy.
+The request carries localization, user, destination, acknowledgement state, and response policy.
+Its scope owns the screens it opens.
 For a common logical session policy, choose a named screen preset:
 
 ```python
@@ -64,12 +66,10 @@ For custom admission, capacity, quota, or scope, declare a complete `session = s
 instead of the `session_name` class keyword.
 
 Use `on_load()` for request-dependent loading before the first render; `opening` is available inside
-that hook. For one-off output, use the same scope directly or resolve a typed request:
+that hook. For one-off output, resolve a request once and use it for deferral and replies:
 
 ```python
-await app_ui.respond(interaction, sl.section(sl.heading("Saved"), sl.paragraph("Your changes are live.")))
-
-request = await app_ui.resolve(interaction)
+request = await app_ui.request(interaction)
 await request.defer("private")
 await request.respond("Saved.")
 ```

@@ -18,10 +18,11 @@ class RequiredArguments(Screen):
 
 
 async def construction_and_presentation(ui: Scope[object], source: Any) -> None:
-    await ui.respond(source, RequiredArguments("ready", count=2))
-    await ui.respond(source, RequiredArguments(2, count="wrong"))  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
-    await ui.respond(source, RequiredArguments("missing"))  # pyright: ignore[reportCallIssue]  # pyrefly: ignore[missing-argument]
-    await ui.respond(source, RequiredArguments("ready", count=2), None)  # pyright: ignore[reportCallIssue]  # pyrefly: ignore[no-matching-overload]
+    request = await ui.request(source)
+    await request.respond(RequiredArguments("ready", count=2))
+    await request.respond(RequiredArguments(2, count="wrong"))  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
+    await request.respond(RequiredArguments("missing"))  # pyright: ignore[reportCallIssue]  # pyrefly: ignore[missing-argument]
+    await request.respond(RequiredArguments("ready", count=2), None)  # pyright: ignore[reportCallIssue]  # pyrefly: ignore[no-matching-overload]
 
 
 class PresetOwner:

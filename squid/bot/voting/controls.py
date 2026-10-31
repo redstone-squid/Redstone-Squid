@@ -92,9 +92,9 @@ async def _authorize(
     Refreshing recomputes the weights a close would act on, so both controls are gated by
     the session's own `can_close` rather than by a second copy of the rule.
     """
-    bot = request.owner
     interaction = request.interaction
     assert interaction is not None
+    bot = interaction.client
     message = interaction.message
     if message is None or not isinstance(interaction.user, discord.Member):
         await _refuse(request, VoteRejection.WRONG_GUILD)
