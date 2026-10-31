@@ -144,7 +144,7 @@ class Paginator(discord.ui.View):
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         self.page += 1
         self.next.disabled = self.page == LAST
-        await interaction.response.edit_message(view=self)   # no HTTP; the message root flushes
+        await interaction.response.edit_message(view=self)  # no HTTP; the message root flushes
 
 
 message_root = defaults.mount(sd.adopt(Paginator()), access=sd.Owner(user.id))

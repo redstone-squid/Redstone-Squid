@@ -112,6 +112,7 @@ class Door(sl.Component):
             sl.action_controls(sl.action_control("Approve", approve, key="approve"), key="controls"),
         ]
 
+
 message_root = sd.MessageRoot(Door(), target=CLASSIC_TARGET, access=sd.Owner(user_id))
 await message_root.send(sd.reply_to(ctx))
 ```

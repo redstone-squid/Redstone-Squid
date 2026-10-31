@@ -87,15 +87,17 @@ confined to the two packages and their tests, and there are no live durable snap
 class TargetDialect[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT](Protocol):
     id: str
     version: int
-    capabilities: frozenset[Capability]   # protocol only; no adapter or extension strings
+    capabilities: frozenset[Capability]  # protocol only; no adapter or extension strings
     mode: type[ModeT]
     body_type: type[BodyT]
     default_limits: LimitsT
-    realizes_extensions: bool             # V2 True, classic False
+    realizes_extensions: bool  # V2 True, classic False
 
     def normalize(self, nodes: Sequence[Node], target: Target[LimitsT, BodyT, ModeT, Any]) -> tuple[Node, ...]: ...
     def validate(self, nodes: Sequence[Node], limits: LimitsT) -> None: ...
-    def paginate(self, nodes, *, key, capacities, limits: LimitsT, chrome, nav, broker) -> tuple[MeasuredLayout, int]: ...
+    def paginate(
+        self, nodes, *, key, capacities, limits: LimitsT, chrome, nav, broker
+    ) -> tuple[MeasuredLayout, int]: ...
     def body(self, children: Sequence[Realized], bindings: SceneBindings) -> BodyT: ...
 
 
@@ -104,7 +106,7 @@ class TargetDialect[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT](Protocol):
 class Target[LimitsT: DiscordLimits, BodyT: SceneBody, ModeT, AdapterT]:
     dialect: TargetDialect[LimitsT, BodyT, ModeT]
     adapter: AdapterProfile[AdapterT]
-    limits: LimitsT                                       # effective, after any reservation
+    limits: LimitsT  # effective, after any reservation
     selected_adapter_capabilities: frozenset[str] | None = None
 ```
 
@@ -143,24 +145,41 @@ so every function reading them borrowed `V2Limits`. Give it a name.
 @dataclass(frozen=True, slots=True)
 class ComponentLimits:
     """Caps every Discord component obeys, whichever message mode holds it."""
-    row_buttons=5; button_label=80; link_url=512
-    select_options=25; select_placeholder=150
-    option_label=100; option_value=100; option_description=100
-    modal_title=45; modal_components=5; modal_text=4000
-    label_text=45; label_description=100
-    text_input_placeholder=100; text_input_value=4000
-    custom_id=100
+
+    row_buttons = 5
+    button_label = 80
+    link_url = 512
+    select_options = 25
+    select_placeholder = 150
+    option_label = 100
+    option_value = 100
+    option_description = 100
+    modal_title = 45
+    modal_components = 5
+    modal_text = 4000
+    label_text = 45
+    label_description = 100
+    text_input_placeholder = 100
+    text_input_value = 4000
+    custom_id = 100
+
 
 @dataclass(frozen=True, slots=True)
 class EmbedLimits:
-    title=256; description=4096; fields=25
-    field_name=256; field_value=1024; footer=2048; author=256
+    title = 256
+    description = 4096
+    fields = 25
+    field_name = 256
+    field_value = 1024
+    footer = 2048
+    author = 256
+
 
 @dataclass(frozen=True, slots=True)
-class DiscordLimits:                       # abstract; message-wide budgets live on subclasses
+class DiscordLimits:  # abstract; message-wide budgets live on subclasses
     components: ComponentLimits = COMPONENT_LIMITS
     attachments: int = 10
-    embeds: EmbedLimits | None = None      # None on V2, populated on classic
+    embeds: EmbedLimits | None = None  # None on V2, populated on classic
 ```
 
 - **`embeds: EmbedLimits | None` deletes all seven invented defaults.** An optional capability gets
