@@ -10,7 +10,9 @@ import squid_ui_discord as sd
 ## Installing a runtime
 
 One runtime per Discord client. `install()` starts no background work; supervise
-`runtime.run()` yourself if you use scheduled refreshes or challenge flows.
+`runtime.run()` before opening panels and close the runtime during shutdown.
+
+::: squid_ui_discord.Config
 
 ::: squid_ui_discord.install
 
@@ -36,7 +38,9 @@ opening policy and is always presented through an owner scope.
 
 ::: squid_ui_discord.Request
 
-::: squid_ui_discord.DiscordAction
+::: squid_ui_discord.request
+
+::: squid_ui_discord.Response
 
 ::: squid_ui_discord.ResponseSpec
 
@@ -52,23 +56,32 @@ opening policy and is always presented through an owner scope.
 
 ::: squid_ui_discord.DevToolsSection
 
-## Optional discord.py integration
+## Commands and testing
 
-`squid_ui_discord.ext` composes owner request injection and cog lifecycle with ordinary discord.py
-decorators. Its testing stage exercises facade presentation, access, sessions, dispatch, generated
-forms, and serialized payload limits without connecting a gateway.
+`sd.command` and `sd.hybrid_command` return native discord.py commands whose handlers receive
+a `Request`. `sd.Group` and `sd.hybrid_group` add inherited command policy; `sd.Cog` owns their
+scope and context menus. `sd.testing.stage` exercises presentation, access, sessions, dispatch,
+generated forms, and serialized payload limits without connecting a gateway.
 
-::: squid_ui_discord.ext.Cog
+::: squid_ui_discord.Cog
 
-::: squid_ui_discord.ext.command
+::: squid_ui_discord.command
 
-::: squid_ui_discord.ext.context_menu
+::: squid_ui_discord.hybrid_command
 
-::: squid_ui_discord.ext.autocomplete
+::: squid_ui_discord.prefix_command
 
-::: squid_ui_discord.ext.testing.stage
+::: squid_ui_discord.Group
 
-::: squid_ui_discord.ext.testing.invoke
+::: squid_ui_discord.hybrid_group
+
+::: squid_ui_discord.context_menu
+
+::: squid_ui_discord.autocomplete
+
+::: squid_ui_discord.testing.stage
+
+::: squid_ui_discord.testing.invoke
 
 ## Access policies
 
@@ -182,13 +195,9 @@ Static rendering without a mount, and the payload/destination vocabulary for del
 
 ::: squid_ui_discord.deliver_to
 
-::: squid_ui_discord.responder
-
-::: squid_ui_discord.native
-
 ## Error policy
 
-Configure command failure rendering and observation through the installation's `ErrorPolicy`.
+Configure command and component failure rendering and observation through `Config.errors`.
 
 ::: squid_ui_discord.ErrorPolicy
 

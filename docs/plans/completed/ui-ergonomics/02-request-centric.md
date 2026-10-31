@@ -6,11 +6,50 @@ routing below the facade are untouched.
 
 ## Status
 
-Prototyped on `cleanup/surface-audit` (commits `bd5ba7a8`..`cf697211`, 2026-09-02): the
-package half and all three call-site clusters are ported, plus `give_redstoner.py` and the
-`ext.Cog` imports. Numbers and findings are in [Verification](#verification). Still open:
-the deletions list below (the `DiscordUI` shim, `ext`, `run_managed_result`'s public name,
-`app_ui`) and the docs.
+**Completed 2026-10-31.** The request-centric API and bot migration are complete. The original
+prototype shipped on `cleanup/surface-audit` (`bd5ba7a8`..`cf697211`, 2026-09-02); the cleanup
+removed its remaining compatibility surfaces and updated the maintained guides.
+
+Final API decisions:
+
+- `sd.Config` is the installation configuration. Installation keywords and scope response defaults
+  are gone; `Scope` owns lifetime and out-of-band `send`/`edit`, while `sd.request` resolves sources.
+- `sd.request` is **always asynchronous**, including component events. This keeps one call shape
+  and makes asynchronous native-source localization explicit. A native-first memoized request gains
+  its root, root locale, and owner scope when later resolved from its component event.
+- `sd.native` and `sd.responder` are removed. Application callers use request fields and `form`;
+  portable event methods retain their own frontend-neutral response behavior. Private transport
+  helpers remain for adoption and guards on standalone roots.
+- `ext.testing` lives in `sd.testing`. `run_managed_result` and its auxiliary public types are gone;
+  command `pending=` uses a private component. `ErrorRenderer` and `ErrorObserver` now name the
+  request-based `ErrorPolicy` callbacks.
+- `Config.errors` handles pending-command and component failures. Application installation rejects
+  the old defaults error hook; the low-level `MessageRoot.on_error` seam remains for standalone
+  roots without an installed runtime. This preserves the transport layer below the application API.
+- Chrome lives in `Config.defaults` with an explicit `Screen.chrome` override. The build editor's
+  previously unread `root_options` became typed `retain_routed_on_timeout` screen policy; its
+  recovery route is tested through `Request.respond` and actual timeout handling.
+- `app_ui`, `_component_error_hook`, scope request/default APIs, and the transitional permissions
+  caller union are removed. Cogs find the installation directly without requiring `bot.ui`.
+- `AdmissionSpec` and `Reject` are public exports. Identical `RouteGroup.define` calls are idempotent,
+  even after registration; changing aliases still fails. The bot's route cache is removed.
+
+The implementation and verification notes below describe the original proposal and prototype;
+where they differ, these final decisions and the maintained architecture guide take precedence.
+
+## Cleanup verification
+
+All **2,278 tests pass** across `packages/squid-ui-discord/tests`, `tests/unit/bot`, and
+`tests/architecture`, covering retired public exports, command injection, component rollback and
+error visibility, failed error delivery, route reloads, and editor timeout recovery. Pyrefly reports
+zero errors. `alembic heads` reports one head, `git diff --check` passes, and every symbol named by
+the maintained Discord API reference resolves.
+
+The installed `just` predates a function used by the justfile, so type checking used its exact
+recipe, `uv run --locked pyrefly check --config pyproject.toml`. SQLite worker tests ran outside the
+filesystem sandbox after confirming they stall inside it. Stale revision-1 submission fixtures were
+updated to the checked-in schema revision, and the local generated catalogue template was refreshed
+for the existing schematic-assessment message.
 
 ## What is wrong
 
@@ -56,7 +95,7 @@ component events), so every layer that receives the source gets the same request
 
 ```python
 req = await sd.request(interaction)  # anywhere: resolves or returns the memoized one
-req = sd.request(event)  # component handlers: sync, the event carries it
+req = await sd.request(event)  # component handlers use the same asynchronous resolver
 ```
 
 `Request` owns everything the old three surfaces shared:
