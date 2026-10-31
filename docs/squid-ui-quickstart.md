@@ -19,7 +19,6 @@ import squid_ui_discord as sd
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 runtime = sd.install(bot)
-app_ui = runtime.scope(bot)
 ```
 
 Then define a `Screen`. Its class variables are opening policy; its fields and `render()` are the
@@ -44,10 +43,12 @@ class Counter(sd.Screen):
         self.count += 1
 
 
-@bot.tree.command()
-async def counter(interaction: discord.Interaction) -> None:
-    request = await app_ui.request(interaction)
-    await request.respond(Counter())
+@sd.command()
+async def counter(request: sd.Request) -> Counter:
+    return Counter()
+
+
+bot.tree.add_command(counter)
 ```
 
 The request carries localization, user, destination, acknowledgement state, and response policy.
@@ -69,7 +70,7 @@ Use `on_load()` for request-dependent loading before the first render; `opening`
 that hook. For one-off output, resolve a request once and use it for deferral and replies:
 
 ```python
-request = await app_ui.request(interaction)
+request = await sd.request(interaction)
 await request.defer("private")
 await request.respond("Saved.")
 ```

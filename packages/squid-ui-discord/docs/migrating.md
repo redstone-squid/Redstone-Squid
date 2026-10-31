@@ -262,7 +262,7 @@ its callback body into the submit handler.
 | `View.interaction_check` | `AccessPolicy`; action guards | `Owner`, `Users`, `Everyone`, or async `Check` gates the message root. Guards apply finer action policy. |
 | `View.on_error` | `MessageRoot(on_error=...)` / `MessageRootDefaults(on_error=...)` | One host hook receives the interaction, exception, and action source. Routers configure their own hook. |
 | `DynamicItem` | `Route`, `RouteGroup`, `Router` | Keep stable IDs and aliases; register the router at startup. |
-| Decorated button callback | `sl.action_control(..., on_click=...)` | Reuse the service call, not the live item. Use `sd.native(event)` only when the interaction itself is required. |
+| Decorated button callback | `sl.action_control(..., on_click=...)` | Reuse the service call, not the live item. Resolve `await sd.request(event)` for Discord facts. |
 | `Modal.on_submit` | `FormSpec` or `sl.forms.Form` plus `SubmitEvent` | Parsing and retry policy move out of the Discord modal class. |
 | Ephemeral edit token | `RenewEphemeral` with an expiry-supervising `MessageRootScheduler` | Interactive edits can renew credentials; unattended authority still expires. |
 
@@ -334,10 +334,44 @@ For native Discord callbacks, resolve the request once under the existing owner
 scope. Pass it to helpers that need to defer, prompt, or reply:
 
 ```python
-request = await self.ui.request(interaction)
+request = await sd.request(interaction, owner=self)
 await request.defer("private")
 await request.respond(BuildScreen(user_id=request.user.id))
 ```
 
 Use `Scope.send` and `Scope.edit` for work without an incoming request. Closing
 the scope still finishes the screens opened by its requests.
+
+
+## Finish the request-centric migration
+
+Use one request API for commands, native callbacks, and component events:
+
+| Previous API | Replacement |
+|---|---|
+| `DiscordUIConfig` or installation keyword arguments | `sd.install(client, sd.Config(...))` |
+| `scope.request(source)` or `bot.app_ui.request(source)` | `await sd.request(source, owner=owner)` when the callback knows its registered owner; otherwise `await sd.request(source)` |
+| Scope response defaults | `Config.responses`, screen class policy, or call keywords |
+| `sd.responder(event).message_root` | `(await sd.request(event)).root` |
+| `sd.native(event)` | `(await sd.request(event)).interaction` |
+| `responder(event).send_modal(modal)` | `await (await sd.request(event)).form(modal)` |
+| `squid_ui_discord.ext` | `squid_ui_discord` |
+| `ext.testing.stage` / `invoke` | `sd.testing.stage` / `invoke` |
+| `run_managed_result` | A command's `pending=` card and returned document |
+| Application `MessageRootDefaults.on_error` | `Config.errors=sd.ErrorPolicy(render=..., observe=...)` |
+| `Screen.root_options` | Typed screen fields such as `chrome` and `retain_routed_on_timeout` |
+
+`sd.request` is asynchronous for every source. The root and session fields are optional because
+commands and native callbacks need not originate on a live panel. A component event supplies its
+root and inherits that root's owner scope. `Scope` now owns lifetime and out-of-band sends/edits;
+it does not resolve requests or carry response defaults.
+
+`ErrorPolicy.render(request, error)` returns a document. `observe(request, error, delivery)` records
+the failure; delivery is absent when no notice was sent. Pending commands replace their card and
+re-raise the failure for discord.py's command error handler. Component failures roll back first,
+then use the same policy to send a notice and report the failure. Standalone low-level roots can
+still use their transport error hook; installing a runtime requires application errors in `Config`.
+
+`RouteGroup.define` returns the existing route for an identical format and aliases, including after
+registration. Reloading a handler module needs no application route cache; changed aliases and
+new overlapping definitions still fail.

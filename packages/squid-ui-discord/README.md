@@ -21,7 +21,6 @@ import squid_ui_discord as sd
 
 
 runtime = sd.install(bot)
-app_ui = runtime.scope(bot)
 
 
 class Counter(sd.Screen):
@@ -41,10 +40,12 @@ class Counter(sd.Screen):
         self.count += 1
 
 
-@bot.tree.command()
-async def counter(interaction) -> None:
-    request = await app_ui.request(interaction)
-    await request.respond(Counter())
+@sd.command()
+async def counter(request: sd.Request) -> Counter:
+    return Counter()
+
+
+bot.tree.add_command(counter)
 ```
 
 `sd.install()` starts no tasks. Run the installed runtime before opening panels, even when

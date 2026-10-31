@@ -122,7 +122,7 @@ hook, forms, navigation, and history are the same code the V2 target uses. Only 
 the renderer, the view factory, and the message mode differ.
 
 A legacy callback body is reusable; a decorated item or a whole live view is not. When a
-handler genuinely needs the interaction, reach for it explicitly with `sd.native(event)`
+handler needs the interaction, resolve `request = await sd.request(event)` and read `request.interaction`
 rather than transferring the item that carried it.
 
 ### 4. Open a V2 message root instead

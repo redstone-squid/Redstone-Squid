@@ -170,11 +170,11 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Need | API | Result |
 |---|---|---|
 | Runtime for one discord.py client | `runtime = sd.install(client, config)` | `DiscordUIRuntime`: scopes, sessions, scheduler, challenges, and localization |
-| Authority for one application owner | `ui = runtime.scope(owner, defaults=...)` | an identity-bound `Scope[OwnerT]` closed with its owner |
-| Current command or routed action | `request = await ui.request(source)` | typed owner/source, localization, user, guild, and acknowledgement state |
+| Authority for one application owner | `ui = runtime.scope(owner)` | an identity-bound `Scope[OwnerT]` closed with its owner |
+| Current command or routed action | `request = await sd.request(source)` | typed owner/source, localization, user, guild, and acknowledgement state |
 | Terminal response | `await request.respond(content, audience=...)` | `Sent`, `Presented`, `Rejected`, or `Abandoned` |
 | Plain live panel | `await request.respond(component, access=...)` | a `Presented` outcome with its `MessageRoot` and delivery |
-| Reusable application screen | `await request.respond(MyScreen(...))` | screen class policy composed with scope and call policy |
+| Reusable application screen | `await request.respond(MyScreen(...))` | screen class policy composed with installation and call policy |
 | Dynamic session composition | `await request.respond(component, session=spec)` | a typed presentation or admission rejection |
 | Low-level root composition | `MessageRoot(...)`, then `root.send(destination)` | explicit message-root and delivery ownership when a higher entry point cannot express it |
 | Low-level Discord destination | `sd.reply_to`, `sd.respond_to`, `sd.send_to` | a `MessageDestination` for framework internals and transport adapters |
@@ -199,27 +199,47 @@ document is preferable because the planner can see every cost. A reservation is 
 planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
 
-`DiscordUIRuntime.scope` is the product ownership boundary. It keys scopes by exact object identity;
-re-registering the same owner and defaults returns the live scope, while conflicting defaults fail.
-`Scope.request` creates a `Request` once for a Discord source. The request reconciles its
-acknowledgement ledger with discord.py before each response, so Squid never assumes it was the only
-responder. `tr(...)` resolves strings leaving the layout system, such as autocomplete or a native
-modal API; layout nodes retain deferred `TextLike` values and resolve them when their root renders.
+`DiscordUIRuntime.scope` is the ownership boundary. It keys scopes by exact object identity;
+re-registering the same owner returns its live scope. Scopes own roots and offer `send` and `edit`
+for work without an incoming request. Closing a scope finishes its roots.
+
+`sd.command`, `sd.hybrid_command`, and `sd.prefix_command` inject the memoized `Request` into
+the handler's source slot. `sd.Group` and `sd.hybrid_group` supply inherited `pending=` and `defer=`
+policy. They return native discord.py commands, so native checks and parameter decorators compose
+normally. `sd.Cog` registers its scope and context menus and closes them on unload.
+
+Native callbacks and portable component handlers resolve `await sd.request(source)` themselves;
+`owner=` selects an already registered scope when the callback knows its owner. Request resolution
+is always asynchronous, including component events. A component request carries `root`, `session`,
+and the native `interaction`. Re-resolving its interaction returns the same request and ledger.
+`defer("private")` fixes subsequent response visibility; `request.audience` exposes the chosen
+visibility. Use `request.form(...)` for a native modal and the event's `present_form(...)` for a
+portable form participating in component dispatch.
+
+Install application policy with `sd.Config`: `responses` supplies response defaults, `defaults`
+supplies rendering defaults such as chrome and palette, and `errors` is the `ErrorPolicy` used by
+pending commands and component failures. Component errors are rendered after the action rolls back,
+and observed even if delivery fails. The low-level `MessageRoot.on_error` hook remains available
+for standalone roots without an installed runtime; installed applications use `Config.errors`.
 
 `Screen` is declarative response policy over an ordinary component. A subclass places stable
-`audience`, `access`, `timeout`, `expiry`, `follow_topics`, `session`, `allowed_mentions`, and
-`root_options` values in class variables. Those values compile once into a `ResponseSpec`, then the
-owner facade overlays installation defaults, owner defaults, call policy, and explicit overrides.
+`audience`, `access`, `timeout`, `expiry`, `follow_topics`, `retain_routed_on_timeout`, `session`,
+`allowed_mentions`, and `chrome` values in class variables. Those values compile once into a
+`ResponseSpec`, layered over installation defaults and under the call's keyword policy.
+`Response(content, audience=..., timeout=...)` packages content with call policy for a return value.
 The facade claims one screen instance for one presentation and records its `opening` request before
 delivery. Request-dependent loading uses the ordinary component `on_load()` hook and therefore runs
 only when the screen reaches its first render.
+
+`tr(...)` resolves strings leaving the layout system, such as autocomplete or a native modal API;
+layout nodes retain deferred `TextLike` values and resolve them when their root renders.
 
 `SessionSpec` remains the composition recipe for dynamic policy: `scope` picks the collision key,
 `admission` decides what happens on collision, `capacity` and `quota` bound membership, and `access`
 builds the root policy from the open context. `SessionSpec.open`/`respond`, `SessionManager`, raw
 `MessageRoot`, and `reply_to`/`respond_to` remain public lower layers for framework extensions and
-transport adapters. Application handlers normally enter through an owner-scoped `Scope`, which
-derives destination, sessions, open context, and localization from one source.
+transport adapters. Application handlers normally enter through a `Request`, which derives destination, sessions,
+open context, and localization from one source.
 
 ## Semantic authoring, adaptation, and exact primitives
 
