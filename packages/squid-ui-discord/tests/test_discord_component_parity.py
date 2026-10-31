@@ -6,7 +6,7 @@ import pytest
 from squid_ui import scene
 from squid_ui.emoji import Emoji
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.html import Renderer as HtmlRenderer
+from squid_ui.html import DiscordPreviewRenderer
 from squid_ui.planning import plan
 from squid_ui.primitives import (
     Gallery,
@@ -90,7 +90,7 @@ def test_html_marks_premium_metadata_and_spoilers_accessibly() -> None:
         ),
     )
 
-    rendered = HtmlRenderer().draw(document)
+    rendered = DiscordPreviewRenderer().draw(document)
 
     assert 'data-sku-id="42"' in rendered
     assert 'alt="preview"' in rendered

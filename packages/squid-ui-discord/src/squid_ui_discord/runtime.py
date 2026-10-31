@@ -16,15 +16,17 @@ declined by a host that wants per-job health granularity; either way the host su
 """
 
 import weakref
-from collections.abc import Iterator
+from collections.abc import Awaitable, Callable, Iterator
 from typing import Any, Unpack
 
 import anyio
 import discord
 
+from squid_ui.errors import SquidUiError
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
 from squid_ui.runtime.topics import TopicBus
+from squid_ui.text import Localization
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui_discord.delivery import Replyable
@@ -33,14 +35,20 @@ from squid_ui_discord.message_root_options import MessageRootDefaults, MessageRo
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.sessions import SessionManager
 
-type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable
+type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable | discord.Message
 """Anything an installation can be found from: the client, or something carrying one."""
+
+type InvocationSource = discord.Interaction[Any] | Replyable | discord.Message
+"""A Discord event surface from which a user-facing invocation originates."""
+
+type LocalizationResolver = Callable[[InvocationSource], Awaitable[Localization]]
+"""Resolve the render-time localization for one invocation source."""
 
 _INSTALLED: weakref.WeakKeyDictionary[Any, ClientRuntime[Any]] = weakref.WeakKeyDictionary()
 """Hosts installed per client, so a second `install` on one client can be refused."""
 
 
-class ClientRuntimeMissing(LookupError):
+class ClientRuntimeMissing(SquidUiError, LookupError):
     """Nothing was installed on the client this source names.
 
     A wiring bug rather than a runtime condition: every reachable path from a click runs
@@ -61,6 +69,10 @@ def _candidates(source: RuntimeSource) -> Iterator[Any]:
         carried = getattr(source, attribute, None)
         if carried is not None:
             yield carried
+    state = getattr(source, "_state", None)
+    get_client = getattr(state, "_get_client", None)
+    if callable(get_client):
+        yield get_client()
 
 
 class ClientRuntime[ClientT: discord.Client]:
@@ -79,11 +91,13 @@ class ClientRuntime[ClientT: discord.Client]:
         sessions: SessionManager,
         challenges: ChallengeRunner,
         scheduler: MessageRootScheduler | None,
+        localization: LocalizationResolver | None,
     ) -> None:
         self.client = client
         self.sessions = sessions
         self.challenges = challenges
         self.scheduler = scheduler
+        self.localization = localization
 
     @property
     def defaults(self) -> MessageRootDefaults:
@@ -98,9 +112,9 @@ class ClientRuntime[ClientT: discord.Client]:
     def defaults(self, defaults: MessageRootDefaults) -> None:
         self.sessions.defaults = defaults
 
-    def mount(
-        self, component: Component, *, access: AccessPolicy, **overrides: Unpack[MessageRootOptions]
-    ) -> MessageRoot:
+    def mount[RenderTargetT](
+        self, component: Component[RenderTargetT], *, access: AccessPolicy, **overrides: Unpack[MessageRootOptions]
+    ) -> MessageRoot[RenderTargetT]:
         """Construct a mount from this host's defaults, applying per-call overrides.
 
         The reason a panel needs no object but the host: chrome, localization, the error
@@ -161,12 +175,15 @@ def install[ClientT: discord.Client](
     defaults: MessageRootDefaults = MessageRootDefaults(),  # noqa: B008  # frozen value
     bus: TopicBus | None = None,
     profiler: Profiler | None = None,
+    localization: LocalizationResolver | None = None,
 ) -> ClientRuntime[ClientT]:
     """Assemble the Discord runtime for `client` and record it against the client.
 
     `bus` is what makes a scheduler: with one, message roots refresh from topics and shared state, and
     the scheduler becomes the default scheduler; without one, a mount is refreshed only by its
-    own clicks. `profiler` instruments that scheduler.
+    own clicks. `profiler` instruments that scheduler. `localization` is the host's one async
+    hook for resolving an invocation's render-time locale; it runs lazily when an invocation
+    first asks for it.
 
     Raises:
         ValueError: A host is already installed on this client. One client has one host, the
@@ -184,9 +201,22 @@ def install[ClientT: discord.Client](
     # The knot install exists to tie: the presenter needs the registry and the runner, and
     # the registry needs the presenter to hand every mount it opens.
     sessions.defaults = sessions.defaults.replace(challenge=DialogPresenter(sessions, challenges))
-    runtime = ClientRuntime(client, sessions=sessions, challenges=challenges, scheduler=scheduler)
+    runtime = ClientRuntime(
+        client,
+        sessions=sessions,
+        challenges=challenges,
+        scheduler=scheduler,
+        localization=localization,
+    )
     _INSTALLED[client] = runtime
     return runtime
 
 
-__all__ = ["ClientRuntime", "ClientRuntimeMissing", "RuntimeSource", "install"]
+__all__ = [
+    "ClientRuntime",
+    "ClientRuntimeMissing",
+    "InvocationSource",
+    "LocalizationResolver",
+    "RuntimeSource",
+    "install",
+]

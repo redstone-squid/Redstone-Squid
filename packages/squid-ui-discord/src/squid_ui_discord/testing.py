@@ -23,18 +23,19 @@ from unittest.mock import AsyncMock
 import discord
 
 from squid_ui import scene
-from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, DiscordLimits, V2Limits
+from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, MessageLimits, V2Limits
 from squid_ui.planning.target import Target
 from squid_ui_discord.delivery import DeliveryResult, EditHandle, MessageDestination, handle_for
 from squid_ui_discord.message_payload import MessagePayload
-from squid_ui_discord.message_root import AnyMountedView, ClassicMountedView, MessageRoot, MountedView
+from squid_ui_discord.message_root import MessageRoot
+from squid_ui_discord.message_root_wiring import AnyMountedView, ClassicMountedView, MountedView
 
 type ComponentPayload = dict[str, Any]
 
 
-def without_capabilities[LimitsT: DiscordLimits, BodyT: scene.Body, ModeT, AdapterT](
-    target: Target[LimitsT, BodyT, ModeT, AdapterT], *capabilities: str
-) -> Target[LimitsT, BodyT, ModeT, AdapterT]:
+def without_capabilities[LimitsT: MessageLimits, BodyT: scene.Body, RenderTargetT, AdapterT](
+    target: Target[LimitsT, BodyT, RenderTargetT, AdapterT], *capabilities: str
+) -> Target[LimitsT, BodyT, RenderTargetT, AdapterT]:
     """A copy of `target` whose dialect declares fewer protocol capabilities.
 
     Every degradation path is reached by a target that lacks something, and a protocol

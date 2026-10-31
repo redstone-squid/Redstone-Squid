@@ -7,21 +7,17 @@ import squid_ui_discord as sd
 from squid.bot.ui import (
     CardField,
     L,
-    card_layout,
-    link_layout,
-    text_layout,
+    card_node,
+    link_node,
+    render_payload,
+    text_node,
     truncate_display_text,
 )
 from tests.helpers.discord import make_message
 
 
-def test_card_layout_serializes_as_components_v2() -> None:
-    layout = card_layout(
-        "Status",
-        "Ready",
-        fields=(CardField("Count", "3"),),
-        footer="Updated now",
-    )
+def test_card_node_serializes_as_components_v2() -> None:
+    layout = render_payload([card_node("Status", "Ready", fields=(CardField("Count", "3"),), footer="Updated now")])
 
     payload = layout.layout.to_components()
     children = payload[0]["components"]
@@ -36,11 +32,19 @@ def test_card_layout_serializes_as_components_v2() -> None:
     assert children[3]["content"] == "-# Updated now"
 
 
-def test_link_layout_uses_a_link_button() -> None:
-    payload = link_layout("Documentation", "https://example.com", label="Read").layout.to_components()
+def test_link_node_uses_a_link_button() -> None:
+    payload = render_payload([link_node("Documentation", "https://example.com", label="Read")]).layout.to_components()
 
     assert "https://example.com" in str(payload)
     assert "'style': 5" in str(payload)
+
+
+def test_node_factories_compose_under_one_render() -> None:
+    payload = render_payload([text_node("Status"), link_node("Documentation", "https://example.com")])
+
+    components = payload.layout.to_components()
+    assert "Status" in str(components)
+    assert "https://example.com" in str(components)
 
 
 def test_deferred_template_marker_preserves_msgid_and_values() -> None:
@@ -60,8 +64,8 @@ def test_deferred_template_marker_rejects_expression_placeholders() -> None:
         L(t"Page {page + 1}")
 
 
-def test_text_layout_truncates_to_the_v2_display_limit() -> None:
-    layout = text_layout("x" * 5000)
+def test_text_node_truncates_to_the_v2_display_limit() -> None:
+    layout = render_payload([text_node("x" * 5000)])
 
     assert layout.layout.content_length() == 4000
     assert truncate_display_text("abcd", 3) == "ab…"
@@ -70,7 +74,7 @@ def test_text_layout_truncates_to_the_v2_display_limit() -> None:
 @pytest.mark.asyncio
 async def test_delivery_clears_legacy_fields_when_converting() -> None:
     harness = make_message()
-    layout = text_layout("Converted")
+    layout = render_payload([text_node("Converted")])
 
     await sd.delivery.handle_for(
         harness.message,
@@ -87,7 +91,7 @@ async def test_delivery_clears_legacy_fields_when_converting() -> None:
 @pytest.mark.asyncio
 async def test_delivery_does_not_resend_legacy_fields_for_v2_message() -> None:
     harness = make_message(components_v2=True)
-    layout = text_layout("Updated")
+    layout = render_payload([text_node("Updated")])
 
     await sd.delivery.handle_for(harness.message, mode=layout.mode).write(layout)
 

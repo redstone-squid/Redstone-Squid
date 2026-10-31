@@ -9,7 +9,7 @@ target exists to avoid.
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Unpack
 
 import discord
 
@@ -22,18 +22,16 @@ from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.adapter import AdapterCapability
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
-from squid_ui.planning.navigation import PlannedNav
 from squid_ui.planning.planner import EMPTY_RESERVATION
-from squid_ui.planning.planner import plan as plan_document
-from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
+from squid_ui.planning.request import PlanOptions, PlanRequest, StaticPlanOptions
 from squid_ui.planning.target import ResourceCost
 from squid_ui.profiling import OperationRecorder
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.presentation_state import PresentationState
 from squid_ui.scene.model import PlanReport, PlanResult
 from squid_ui.sources import Position
 from squid_ui.target_types import ClassicTarget, DiscordPyAdapter
 from squid_ui.text import NEUTRAL, Localization
+from squid_ui_discord._draw import plan_and_draw
 from squid_ui_discord.adapter import require_discord_py_target
 from squid_ui_discord.attachments import files_for
 from squid_ui_discord.classic_renderer import ClassicRenderer, Wire
@@ -47,91 +45,49 @@ from squid_ui_discord.inspection import (
     measure_classic,
 )
 from squid_ui_discord.message_payload import MessageMode, MessageModeError, MessagePayload
+from squid_ui_discord.rendering import RenderedMessage
 from squid_ui_discord.target import DISCORD_V1_DPY27, Target
 
 logger = logging.getLogger(__name__)
 
 
 def render_message(
-    rendered: DocumentLike,
+    rendered: DocumentLike[ClassicTarget],
     *,
     wire: Wire | None = None,
     renderer: ClassicRenderer | None = None,
     target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
-    chrome: Chrome = DEFAULT_CHROME,
-    localization: Localization = NEUTRAL,
-    palette: Palette = DEFAULT_PALETTE,
-    strict: bool = False,
-    reservation: ResourceCost = EMPTY_RESERVATION,
-    positions: Mapping[str, Position] | None = None,
-    nav: PlannedNav | None = None,
-    session: PresentationState | None = None,
     cache: PlanCache | None = None,
     memo: PlanMemo | None = None,
-    search_budget: int = DEFAULT_SEARCH_BUDGET,
     profile: OperationRecorder | None = None,
-):
+    **options: Unpack[PlanOptions],
+) -> RenderedMessage[discord.ui.View | None, scene.ClassicMessage]:
     """Plan a logical document, then draw the complete classic message it resolves to."""
-    from squid_ui_discord.rendering import RenderedMessage, _span
-
     adapter = require_discord_py_target(target, AdapterCapability.RENDER_CLASSIC, "render a classic message")
-    with _span(profile, "planner") as planner_span:
-        result = plan_document(
-            rendered,
-            target=target,
-            chrome=chrome,
-            localization=localization,
-            palette=palette,
-            strict=strict,
-            reservation=reservation,
-            positions=positions,
-            nav=nav,
-            session=session,
-            cache=cache,
-            memo=memo,
-            search_budget=search_budget,
-        )
-        if planner_span is not None:
-            planner_span.set_attribute("cache_hit", result.metrics.cache_hit)
-            planner_span.set_attribute("states_explored", result.metrics.states_explored)
-            planner_span.set_attribute("search_fallback", result.metrics.search_fallback)
-        if profile is not None:
-            profile.increment("planner.calls")
-            profile.increment("planner.cache_hits", int(result.metrics.cache_hit))
-            profile.increment("planner.search_fallbacks", int(result.metrics.search_fallback))
-            profile.increment("planner.states_explored", result.metrics.states_explored)
-    drawer = renderer if renderer is not None else ClassicRenderer(limits=target.limits, adapter=adapter)
-    with _span(profile, "renderer"):
-        payload = drawer.draw(result.scene, plan=result, wire=wire)
-    if result.report.events:
-        logger.warning("layout degraded: %s", "; ".join(event.message for event in result.report.events))
+    payload, result = plan_and_draw(
+        rendered,
+        PlanRequest(target=target, **options),
+        drawer=renderer if renderer is not None else ClassicRenderer(limits=target.limits, adapter=adapter),
+        wire=wire,
+        cache=cache,
+        memo=memo,
+        profile=profile,
+    )
     return RenderedMessage(payload, result)
 
 
 def render_static(
-    nodes: DocumentLike | Component,
+    nodes: DocumentLike[ClassicTarget] | Component[ClassicTarget],
     *,
     target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
-    chrome: Chrome = DEFAULT_CHROME,
-    localization: Localization = NEUTRAL,
-    palette: Palette = DEFAULT_PALETTE,
-    strict: bool = False,
-    reservation: ResourceCost = EMPTY_RESERVATION,
+    **options: Unpack[StaticPlanOptions],
 ) -> MessagePayload:
     """Plan and draw a sessionless classic document as one complete message.
 
     A presentation, never a bare view: the embeds *are* the message here, and handing back
     only the controls would leave the caller to reassemble the half that carries the content.
     """
-    return render_message(
-        nodes.render() if isinstance(nodes, Component) else nodes,
-        target=target,
-        chrome=chrome,
-        localization=localization,
-        palette=palette,
-        strict=strict,
-        reservation=reservation,
-    ).payload
+    return render_message(nodes.render() if isinstance(nodes, Component) else nodes, target=target, **options).payload
 
 
 @dataclass(slots=True)
@@ -188,7 +144,7 @@ def measure_host(
 
 
 def contribute(
-    document: DocumentLike,
+    document: DocumentLike[ClassicTarget],
     *,
     to: MessagePayload,
     followed_by: Sequence[discord.Embed] = (),

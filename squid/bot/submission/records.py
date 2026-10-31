@@ -6,11 +6,11 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Cog, Context, hybrid_group
 
+import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import DISCORD_BLUE, PagedList, info_layout, reply_payload
+from squid.bot.ui import DISCORD_BLUE, PagedList, info_node
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.permissions import hide_unless, requires
-from squid.bot.utils.visibility import personal
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RecordLookupRequest
@@ -43,6 +43,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit gaps to one build kind.")))
     async def gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
         """List categories whose winner needs more factual evidence."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         gaps = await self.records.gaps(kind=kind)
         paginator = _diagnostic_list(
@@ -56,13 +57,14 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             empty=t(locale, _("No unresolved active record categories.")),
             locale=locale,
         )
-        await paginator.send(ctx, visibility="personal")
+        await invocation.mount(paginator, access=sd.Owner(invocation.user.id), visibility="personal")
 
     @records_group.command(name="title-issues")
     @requires(RECORD_ENTRY_INSPECT)
     @app_commands.describe(kind=app_commands.locale_str(_("Optionally limit title diagnostics to one build kind.")))
     async def title_gaps(self, ctx: Context[BotT], kind: BuildKind | None = None) -> None:
         """List canonical titles containing unknown or contradictory taxonomy."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         gaps = await self.records.title_gaps(kind=kind)
         paginator = _diagnostic_list(
@@ -76,7 +78,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             empty=t(locale, _("No active record titles require taxonomy review.")),
             locale=locale,
         )
-        await paginator.send(ctx, visibility="personal")
+        await invocation.mount(paginator, access=sd.Owner(invocation.user.id), visibility="personal")
 
     @autocompletes(current_version_id="version_ids")
     @records_group.command(name="rebuild")
@@ -94,13 +96,13 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         kind: BuildKind | None = None,
     ) -> None:
         """Recompute records from confirmed build facts."""
-        await ctx.defer(ephemeral=personal(ctx))
+        await ctx.defer(ephemeral=ctx.interaction is not None)
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
         summary = await self.computation.rebuild(current_version_id=current_version_id, kinds=kinds)
-        await reply_payload(
-            ctx,
-            info_layout(
+        await invocation.reply(
+            info_node(
                 t(locale, _("Records rebuilt")),
                 t(
                     locale,
@@ -110,7 +112,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     unresolved=summary.unresolved,
                 ),
             ),
-            visibility="personal" if personal(ctx) else "public",
+            visibility="personal",
         )
 
     @autocompletes(
@@ -139,6 +141,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     ) -> None:
         """Materialize and compute an arbitrary exact restriction category."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
+        invocation = await sd.Invocation.of(ctx)
         try:
             restriction_ids = frozenset(int(value.strip()) for value in restrictions.split(",") if value.strip())
         except ValueError as error:
@@ -162,9 +165,8 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                     version_id=version_id,
                 )
             )
-        await reply_payload(
-            ctx,
-            info_layout(
+        await invocation.reply(
+            info_node(
                 t(locale, _("Record category materialized")),
                 t(
                     locale,
@@ -175,7 +177,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             ),
             # Staff maintenance, like `records rebuild` beside it: the two answered differently
             # for no reason anybody recorded, which is the pair audit C2 pointed at.
-            visibility="personal" if personal(ctx) else "public",
+            visibility="personal",
         )
 
 
@@ -198,7 +200,6 @@ def _diagnostic_list(
         title,
         entries,
         empty=empty,
-        locale=locale,
         page_size=DIAGNOSTICS_PER_PAGE,
         separator="\n",
         accent_colour=DISCORD_BLUE,

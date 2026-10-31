@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 
 from squid_ui.errors import LayoutInvariantError
-from squid_ui.planning.limits import DiscordLimits
+from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.search import StrategyAxis, StrategyCandidate
 from squid_ui.planning.semantic_adaptation.model import FallbackAxis, SemanticDecisions
 from squid_ui.primitives.nodes import Panel
@@ -63,7 +63,7 @@ GRID_ADAPTER_VERSION = 1
 def nominate_decisions(
     nodes: Sequence[LayoutNode],
     *,
-    limits: DiscordLimits,
+    limits: MessageLimits,
     session: PresentationState,
     fallbacks: Mapping[str, int] | None = None,
 ) -> SemanticDecisions:
@@ -190,7 +190,7 @@ def strategy_axis(
     return StrategyAxis(path, key, adapter_id, adapter_version, flexibility, preferred, candidates, baseline)
 
 
-def individual_fits(controls: int, limits: DiscordLimits) -> bool:
+def individual_fits(controls: int, limits: MessageLimits) -> bool:
     rows = (controls + limits.components.row_buttons - 1) // limits.components.row_buttons
     return limits.fits_controls(controls, rows)
 
@@ -207,7 +207,7 @@ def item_state(node: Items, session: PresentationState) -> tuple[str | None, boo
             return opened, node.key in session.selections or initial is not None
 
 
-def items_axis(node: Items, path: str, limits: DiscordLimits, session: PresentationState) -> StrategyAxis:
+def items_axis(node: Items, path: str, limits: MessageLimits, session: PresentationState) -> StrategyAxis:
     opened, fixed = item_state(node, session)
     if fixed:
         available = ("opened",) if opened is not None else ("overview",)
@@ -237,7 +237,7 @@ def items_axis(node: Items, path: str, limits: DiscordLimits, session: Presentat
     return axis
 
 
-def navigation_axis(node: Navigation, path: str, limits: DiscordLimits, session: PresentationState) -> StrategyAxis:
+def navigation_axis(node: Navigation, path: str, limits: MessageLimits, session: PresentationState) -> StrategyAxis:
     available = tuple(destination for destination in node.options if destination.available)
     strategies = ["individual"]
     if not individual_fits(len(available), limits):
@@ -285,7 +285,7 @@ def table_axis(node: Table, path: str, session: PresentationState) -> StrategyAx
     )
 
 
-def grid_axis(node: Grid, path: str, limits: DiscordLimits, session: PresentationState) -> StrategyAxis:
+def grid_axis(node: Grid, path: str, limits: MessageLimits, session: PresentationState) -> StrategyAxis:
     rows = (len(node.cells) + node.columns - 1) // node.columns
     strategies: list[str] = []
     if node.columns <= limits.components.row_buttons and limits.fits_controls(len(node.cells), rows):
@@ -322,7 +322,7 @@ def media_axis(node: Media, path: str, session: PresentationState) -> StrategyAx
     )
 
 
-def action_axis(node: ActionControls, path: str, limits: DiscordLimits, session: PresentationState) -> StrategyAxis:
+def action_axis(node: ActionControls, path: str, limits: MessageLimits, session: PresentationState) -> StrategyAxis:
     actions = [action for item in node.items for action in contained_actions(item)]
     forced_pager = any(
         len(tuple(contained_actions(item))) > 75 for item in node.items if isinstance(item, ControlGroup)

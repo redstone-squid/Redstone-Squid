@@ -18,10 +18,9 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.groups import BuildCommandGroup
-from squid.bot.ui import render_payload, reply_payload, send_component, text_layout
+from squid.bot.ui import text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import requires
-from squid.bot.utils.visibility import personal
 from squid.builds.application import BuildService
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SCHEMATIC_DETECT_LATTICE, BUILD_SCHEMATIC_MEASURE_TIMING
@@ -50,13 +49,13 @@ WRITABLE_EXTENSIONS = {
 they are accepted as uploads but never offered as a download target."""
 
 
-class _DownloadDocument(sl.Component):
+class _DownloadDocument(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, label: sl.TextLike, asset: sl.document.Asset, *, description: sl.TextLike | None = None) -> None:
         self.label = label
         self.asset = asset
         self.description = description
 
-    def render(self) -> sl.LayoutNode:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         return sl.download(self.label, self.asset, key="download", description=self.description)
 
 
@@ -81,19 +80,14 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     async def schematic_info(self, ctx: Context[BotT], build_id: int) -> None:
         """Show what the engine read out of the build's schematic."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         stored = await self._primary_or_explain(ctx, build_id, locale=locale)
         if stored is None:
             return
-        await reply_payload(
-            ctx,
-            render_payload(
-                [
-                    sl.primitives.Text(
-                        _describe(stored, locale=locale, render_skip=self.schematics.explain_render_skip(stored))
-                    )
-                ],
-                locale=locale,
+        await invocation.reply(
+            sl.primitives.Text(
+                _describe(stored, locale=locale, render_skip=self.schematics.explain_render_skip(stored))
             ),
         )
 
@@ -108,6 +102,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     ) -> None:
         """Download the build's schematic, converted to another format if asked."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         if file_format not in WRITABLE_EXTENSIONS:
             await _say(
@@ -126,14 +121,12 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
 
         data, _losses = await self.schematics.convert(build_id, ConvertRequest(target_format=file_format))
         name = f"build-{build_id}.{WRITABLE_EXTENSIONS[file_format]}"
-        await send_component(
-            ctx,
+        await invocation.mount(
             _DownloadDocument(
                 t(locale, _("Download schematic")),
                 sl.document.Asset("schematic", name, "application/octet-stream", sl.document.InlineAsset(data)),
             ),
             access=sd.Everyone(),
-            locale=locale,
         )
 
     @autocompletes(build_id="builds")
@@ -154,6 +147,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     ) -> None:
         """Render the build's schematic and post the image."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         stored = await self._primary_or_explain(ctx, build_id, locale=locale)
         if stored is None:
@@ -169,9 +163,8 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             # sentence rather than an error card telling them to report it.
             await _say(ctx, error.localized_public_detail(locale))
             return
-        await reply_payload(
-            ctx,
-            text_layout(t(locale, _("Rendered schematic for build {id}."), id=build_id)),
+        await invocation.reply(
+            text_node(t(locale, _("Rendered schematic for build {id}."), id=build_id)),
             files=[discord.File(io.BytesIO(rendered.png), filename=f"build-{build_id}-render.png")],
         )
 
@@ -191,6 +184,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     ) -> None:
         """Retarget the schematic at another Minecraft version and report what the change cost."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         if data_version is None and version is None:
             await _say(ctx, t(locale, _("Give either a data version or a Minecraft version to convert to.")))
@@ -205,8 +199,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             ConvertRequest(target_format=SchematicFormat.LITEMATIC, target_data_version=data_version),
             version_label=version,
         )
-        await send_component(
-            ctx,
+        await invocation.mount(
             _DownloadDocument(
                 t(locale, _("Download converted schematic")),
                 sl.document.Asset(
@@ -218,7 +211,6 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
                 description=f"{t(locale, _('Conversion report:'))} {summarise_losses(losses)}",
             ),
             access=sd.Everyone(),
-            locale=locale,
         )
 
     @autocompletes(build_id="builds")
@@ -235,9 +227,10 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         input_position: str | None = None,
     ) -> None:
         """Measure moderator-facing piston timing without changing the submitted value."""
-        await ctx.defer(ephemeral=personal(ctx))
+        ephemeral = ctx.interaction is not None
+        await ctx.defer(ephemeral=ephemeral)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        stored = await self._primary_or_explain(ctx, build_id, locale=locale, ephemeral=personal(ctx))
+        stored = await self._primary_or_explain(ctx, build_id, locale=locale, ephemeral=ephemeral)
         if stored is None:
             return
         position = _parse_position(input_position)
@@ -245,7 +238,7 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
             await _say(
                 ctx,
                 t(locale, _("Input position must contain three integers, for example `12 5 -3`.")),
-                ephemeral=personal(ctx),
+                ephemeral=ephemeral,
             )
             return
         try:
@@ -253,9 +246,9 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
         except AmbiguousSimulationInputError as error:
             # The generic error handler would show the refusal without ever naming what to
             # choose between, leaving the moderator to guess coordinates out of a binary file.
-            await _say(ctx, _describe_input_refusal(error, locale=locale), ephemeral=personal(ctx))
+            await _say(ctx, _describe_input_refusal(error, locale=locale), ephemeral=ephemeral)
             return
-        await _say(ctx, _describe_timing(result, locale=locale), ephemeral=personal(ctx))
+        await _say(ctx, _describe_timing(result, locale=locale), ephemeral=ephemeral)
 
     @autocompletes(build_id="builds")
     @schematic_group.command(name="detect-lattice")  # type: ignore
@@ -263,18 +256,17 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
     @app_commands.describe(build_id=app_commands.locale_str(_("The submission ID to inspect for repetition.")))
     async def detect_lattice(self, ctx: Context[BotT], build_id: int) -> None:
         """Show the repeating unit detected during schematic analysis."""
-        await ctx.defer(ephemeral=personal(ctx))
+        ephemeral = ctx.interaction is not None
+        await ctx.defer(ephemeral=ephemeral)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        stored = await self._primary_or_explain(ctx, build_id, locale=locale, ephemeral=personal(ctx))
+        stored = await self._primary_or_explain(ctx, build_id, locale=locale, ephemeral=ephemeral)
         if stored is None:
             return
         lattice = await self.schematics.detect_lattice(build_id)
         if lattice is None:
-            await _say(
-                ctx, t(locale, _("No repeating lattice was detected in this schematic.")), ephemeral=personal(ctx)
-            )
+            await _say(ctx, t(locale, _("No repeating lattice was detected in this schematic.")), ephemeral=ephemeral)
             return
-        await _say(ctx, _describe_lattice(lattice, locale=locale), ephemeral=personal(ctx))
+        await _say(ctx, _describe_lattice(lattice, locale=locale), ephemeral=ephemeral)
 
     async def _primary_or_explain(
         self,
@@ -301,7 +293,8 @@ class BuildSchematicCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGr
 
 
 async def _say(ctx: Context[squid.bot.app.RedstoneSquid], message: str, *, ephemeral: bool = False) -> None:
-    await reply_payload(ctx, text_layout(message), visibility="personal" if ephemeral else "public")
+    invocation = await sd.Invocation.of(ctx)
+    await invocation.reply(text_node(message), visibility="personal" if ephemeral else "public")
 
 
 def _describe(stored: StoredSchematic, *, locale: str | None, render_skip: RenderSkipReason | None = None) -> str:

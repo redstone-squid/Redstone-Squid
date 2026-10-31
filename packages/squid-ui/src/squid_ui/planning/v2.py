@@ -9,8 +9,9 @@ from squid_ui import scene
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.planning.control_validation import fail, register_pager, validate_component
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
-from squid_ui.planning.dialect import SceneBindings
+from squid_ui.planning.discord_dialect import SceneBindings
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.layout_measurement.model import (
     MeasuredPanel,
@@ -26,10 +27,12 @@ from squid_ui.planning.layout_measurement.solver import (
 )
 from squid_ui.planning.limits import LIMITS, Axis, V2Limits
 from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
+from squid_ui.planning.resolved import emoji as resolved_emoji
+from squid_ui.planning.resolved import optional_text as resolved_optional_text
+from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.planning.target import Target
 from squid_ui.primitives.constraints import Never, Paginate
 from squid_ui.primitives.nodes import (
-    Boundary,
     Break,
     Budget,
     Button,
@@ -39,6 +42,7 @@ from squid_ui.primitives.nodes import (
     File,
     Footer,
     Gallery,
+    GalleryItem,
     LinkButton,
     MediaCollection,
     Node,
@@ -59,14 +63,39 @@ from squid_ui.sources import Position
 from squid_ui.target_types import ComponentsV2Target
 
 
+def _gallery_item(value: str | GalleryItem) -> GalleryItem:
+    """Return the item normalized by Gallery construction."""
+    if isinstance(value, str):
+        message = "Gallery left a shorthand URL unnormalized"
+        raise LayoutInvariantError(message)
+    return value
+
+
 @dataclass(slots=True)
 class _V2Converter:
     bindings: SceneBindings
 
     def accessory(
         self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str
-    ) -> scene.Node:
-        return self.bindings.control(node, path)
+    ) -> scene.Thumbnail | scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension:
+        converted = self.bindings.control(node, path)
+        if not isinstance(
+            converted,
+            scene.Thumbnail | scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension,
+        ):
+            message = f"accessory {path} converted to unsupported {type(converted).__name__}"
+            raise LayoutInvariantError(message)
+        return converted
+
+    def row_item(
+        self, node: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem, path: str
+    ) -> scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension:
+        """Convert a control while excluding thumbnails from action rows."""
+        converted = self.accessory(node, path)
+        if isinstance(converted, scene.Thumbnail):
+            message = f"row {path} contains a thumbnail"
+            raise LayoutInvariantError(message)
+        return converted
 
     def node(self, node: Realized, path: str) -> scene.Node:
         match node:
@@ -90,24 +119,22 @@ class _V2Converter:
             case Sep(large=large, visible=visible):
                 return scene.Separator(large, visible)
             case Row(items=items):
-                converted = tuple(self.accessory(item, f"{path}.{index}") for index, item in enumerate(items))
-                if not all(
-                    isinstance(
-                        item, scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension
-                    )
-                    for item in converted
-                ):
-                    message = f"row {path} contains an unsupported item"
-                    raise LayoutInvariantError(message)
+                converted = tuple(self.row_item(item, f"{path}.{index}") for index, item in enumerate(items))
                 return scene.Row(converted)
             case SelectMenu(options=options):
                 return scene.Select(
                     options=tuple(
-                        scene.Option(option.label, option.value, option.description, option.default, option.emoji)
+                        scene.Option(
+                            resolved_text(option.label),
+                            option.value,
+                            resolved_optional_text(option.description),
+                            option.default,
+                            resolved_emoji(option.emoji),
+                        )
                         for option in options
                     ),
                     action=self.bindings.action(node),
-                    placeholder=node.placeholder,
+                    placeholder=resolved_optional_text(node.placeholder),
                     min_values=node.min_values,
                     max_values=node.max_values,
                     disabled=node.disabled,
@@ -117,7 +144,7 @@ class _V2Converter:
                 return scene.EntitySelect(
                     entity_type=node.entity_type,
                     action=self.bindings.action(node),
-                    placeholder=node.placeholder,
+                    placeholder=resolved_optional_text(node.placeholder),
                     default_values=node.default_values,
                     channel_types=node.channel_types,
                     min_values=node.min_values,
@@ -128,25 +155,40 @@ class _V2Converter:
             case RoutedSelect(options=options):
                 return scene.RoutedSelect(
                     options=tuple(
-                        scene.Option(option.label, option.value, option.description, option.default, option.emoji)
+                        scene.Option(
+                            resolved_text(option.label),
+                            option.value,
+                            resolved_optional_text(option.description),
+                            option.default,
+                            resolved_emoji(option.emoji),
+                        )
                         for option in options
                     ),
                     route_id=node.route_id,
-                    placeholder=node.placeholder,
+                    placeholder=resolved_optional_text(node.placeholder),
                     min_values=node.min_values,
                     max_values=node.max_values,
                     disabled=node.disabled,
                 )
             case Thumbnail(url=url, description=description, spoiler=spoiler):
-                return scene.Thumbnail(url, description, spoiler)
+                return scene.Thumbnail(url, resolved_optional_text(description), spoiler)
             case Gallery(items=items):
                 return scene.Gallery(
-                    tuple(scene.GalleryItem(item.url, item.description, item.spoiler) for item in items)
+                    tuple(
+                        scene.GalleryItem(
+                            _gallery_item(item).url,
+                            resolved_optional_text(_gallery_item(item).description),
+                            _gallery_item(item).spoiler,
+                        )
+                        for item in items
+                    )
                 )
             case RawItem():
                 return self.accessory(node, path)
-            case LinkButton() | PremiumButton() | RoutedButton():
+            case LinkButton() | PremiumButton() | RoutedButton() | Button():
                 return self.accessory(node, path)
+        message = f"{path}: {type(node).__name__} cannot appear in a Components V2 scene"
+        raise LayoutInvariantError(message)
 
     def children(self, children: Sequence[Realized]) -> tuple[scene.Node, ...]:
         return tuple(self.node(child, str(index)) for index, child in enumerate(children))
@@ -192,8 +234,8 @@ def _lower(
                     lowered.extend(_lower((fallback,), target, limits))
                     continue
                 prepared = adapter.prepare(payload)
-                component_cost = prepared.cost.get("components")
-                text_cost = prepared.cost.get("display_text")
+                component_cost = prepared.cost.get(Axis.COMPONENTS)
+                text_cost = prepared.cost.get(Axis.DISPLAY_TEXT)
                 if component_cost < 1 or text_cost < 0:
                     message = f"extension adapter {kind!r} returned an invalid resource cost"
                     raise LayoutInvariantError(message)
@@ -231,87 +273,21 @@ def _lower(
 
 
 def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
+    """Reject what a Components V2 message cannot express, naming the node that cannot be drawn."""
     pager_keys: set[str] = set()
 
-    def fail(path: str, detail: str) -> None:
-        message = f"{path}: {detail}"
-        raise LayoutInvariantError(message)
-
     def walk(node: Node, path: str) -> None:
-        if isinstance(node, Boundary):
-            fail(path, "Boundary must be expanded by a component mount before planning")
-        overflow = getattr(node, "overflow", None)
-        if isinstance(overflow, Paginate):
-            if overflow.key is None:
-                fail(path, "Paginate requires an explicit key")
-            if overflow.key in pager_keys:
-                fail(path, f"duplicate pager key {overflow.key!r}")
-            pager_keys.add(overflow.key)
+        register_pager(node, path, pager_keys)
         match node:
-            case Button(label=label) | RoutedButton(label=label):
-                if label is None and node.emoji is None:
-                    fail(path, "interactive button needs a label or emoji")
-                if label is not None and len(label) > limits.components.button_label:
-                    fail(path, f"button label exceeds {limits.components.button_label}")
-            case LinkButton(label=label, url=url):
-                if label is None and node.emoji is None:
-                    fail(path, "link button needs a label or emoji")
-                if label is not None and len(label) > limits.components.button_label:
-                    fail(path, f"button label exceeds {limits.components.button_label}")
-                if len(url) > limits.components.link_url:
-                    fail(path, f"link URL exceeds {limits.components.link_url}")
             case PremiumButton(sku_id=sku_id):
                 if sku_id <= 0:
                     fail(path, "premium button SKU must be positive")
-            case Row(items=items):
-                if len(items) > limits.components.row_buttons:
-                    fail(path, f"row has {len(items)} controls; maximum is {limits.components.row_buttons}")
-                for index, item in enumerate(items):
-                    if isinstance(item, Button | RoutedButton | LinkButton | PremiumButton):
-                        walk(item, f"{path}.{index}")
-            case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum) | (
-                RoutedSelect(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum)
-            ):
-                if not options:
-                    fail(path, "select needs at least one option")
-                if len(options) > limits.components.select_options:
-                    remedy = (
-                        "split the routed picker into separate routes"
-                        if isinstance(node, RoutedSelect)
-                        else "use an option-paging semantic node"
-                    )
-                    fail(path, f"select has {len(options)} options; {remedy}")
-                if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
-                    fail(path, f"select placeholder exceeds {limits.components.select_placeholder}")
-                if minimum < 0 or maximum < minimum or maximum > max(1, len(options)):
-                    fail(path, "select value bounds are invalid")
-                for index, option in enumerate(options):
-                    if len(option.label) > limits.components.option_label:
-                        fail(f"{path}.option.{index}", f"label exceeds {limits.components.option_label}")
-                    if len(option.value) > limits.components.option_value:
-                        fail(f"{path}.option.{index}", f"value exceeds {limits.components.option_value}")
-                    if (
-                        option.description is not None
-                        and len(option.description) > limits.components.option_description
-                    ):
-                        fail(f"{path}.option.{index}", f"description exceeds {limits.components.option_description}")
-            case EntitySelect(
-                placeholder=placeholder,
-                default_values=defaults,
-                min_values=minimum,
-                max_values=maximum,
-            ):
-                if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
-                    fail(path, f"select placeholder exceeds {limits.components.select_placeholder}")
-                if minimum < 0 or maximum < minimum or maximum > limits.components.select_options:
-                    fail(path, "entity select value bounds are invalid")
-                if len(defaults) > maximum:
-                    fail(path, "entity select has more defaults than max_values")
             case Gallery(items=items):
                 if len(items) > limits.gallery_items:
                     fail(path, f"gallery has {len(items)} items; use MediaCollection")
                 for index, item in enumerate(items):
-                    if item.description is not None and len(item.description) > limits.gallery_item_description:
+                    description = resolved_optional_text(_gallery_item(item).description)
+                    if description is not None and len(description) > limits.gallery_item_description:
                         fail(
                             f"{path}.{index}",
                             f"media description exceeds {limits.gallery_item_description}",
@@ -326,19 +302,11 @@ def _validate_v2(nodes: Sequence[Node], limits: V2Limits) -> None:
                             "Paginate cannot be nested in a Section; place it beside the Section",
                         )
                     walk(text, f"{path}.text.{index}")
-            case Panel(children=children) | Budget(children=children) | Break(children=children):
+            case Panel(children=children):
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
-            case Variants(variants=variants):
-                # Every rung is checked, not just the one the search will open on, so a
-                # document is rejected for a bad rung it might never reach. That also means
-                # two rungs cannot share a Paginate key — as under the previous Fold, whose
-                # primary and fallback were both walked.
-                for index, variant in enumerate(variants):
-                    for child_index, child in enumerate(variant.nodes):
-                        walk(child, f"{path}.variant.{index}.{child_index}")
             case _:
-                return
+                validate_component(node, path, limits=limits, walk=walk)
 
     for index, node in enumerate(nodes):
         walk(node, f"$.{index}")
@@ -348,7 +316,7 @@ def _paginate_v2(
     nodes: Sequence[Node],
     *,
     key: str,
-    capacities: Mapping[str, int],
+    capacities: Mapping[Axis, int],
     limits: V2Limits,
     chrome: Chrome,
     nav: PlannedNav,
@@ -421,10 +389,16 @@ class V2Dialect:
             Capability.LAYOUT_SECTION,
         }
     )
-    mode = ComponentsV2Target
+    render_target = ComponentsV2Target
     body_type = scene.ComponentsV2
     default_limits = LIMITS
     realizes_extensions = True
+
+    @property
+    def planner(self) -> Any:
+        from squid_ui.planning.discord_planner import DISCORD_PLANNER
+
+        return DISCORD_PLANNER
 
     def normalize(
         self, nodes: Sequence[Node], target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, Any]

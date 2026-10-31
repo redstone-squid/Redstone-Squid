@@ -2,13 +2,14 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from typing import Literal, cast
 
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.palette import DEFAULT_PALETTE, AccentDefault, Palette
 from squid_ui.planning.cursors import CursorCoordinator
-from squid_ui.planning.limits import DiscordLimits
+from squid_ui.planning.limits import MessageLimits
 from squid_ui.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_ui.planning.semantic_adaptation.common import (
     _resolve,
@@ -67,17 +68,24 @@ from squid_ui.primitives.nodes import (
     Budget,
     Button,
     Card,
+    CardAuthor,
     CardField,
     CardFooter,
     CardMedia,
+    CardText,
+    Content,
     EntitySelect,
+    Extension,
     Footer,
     Gallery,
     GalleryItem,
     Lines,
     LinkButton,
+    MediaCollection,
     Node,
     Panel,
+    PremiumButton,
+    RawItem,
     RoutedButton,
     RoutedSelect,
     Row,
@@ -85,7 +93,9 @@ from squid_ui.primitives.nodes import (
     Text,
     Thumbnail,
     Time,
+    Variants,
     ZonedTime,
+    card_text,
 )
 from squid_ui.primitives.nodes import (
     Code as PrimitiveCode,
@@ -108,6 +118,7 @@ from squid_ui.runtime.presentation_state import (
 from squid_ui.scene.model import PlanEvent, PlanSeverity
 from squid_ui.semantic import (
     ActionControls,
+    AnyLayoutNode,
     Article,
     Aside,
     BestEffort,
@@ -160,9 +171,9 @@ from squid_ui.text import Localization
 
 
 def lower_semantics(
-    nodes: Sequence[LayoutNode],
+    nodes: Sequence[AnyLayoutNode],
     *,
-    limits: DiscordLimits,
+    limits: MessageLimits,
     chrome: Chrome,
     localization: Localization,
     session: PresentationState,
@@ -215,10 +226,13 @@ def _panel_children(children: Sequence[LayoutNode], path: str, context: _Context
         context.panel_depth -= 1
 
 
-def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
+def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
     match node:
         case Truncated(node=child, keep=keep):
-            return [_with_overflow(item, Truncate(keep)) for item in _node(child, path, context)]
+            return [
+                _with_overflow(item, Truncate(cast(Literal["head", "tail"], keep)))
+                for item in _node(child, path, context)
+            ]
         case Spilled(node=child):
             return [_with_overflow(item, Spill()) for item in _node(child, path, context)]
         case OptionalContent(node=child):
@@ -350,7 +364,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 value += f"\n— {_resolve(attribution, context)}"
             return [Text(value, overflow=Never())]
         case Code(content=content, language=language):
-            return [PrimitiveCode(content, language, overflow=Never())]
+            return [PrimitiveCode(_resolve(content, context), language, overflow=Never())]
         case Figure(media=media, caption=caption):
             if media.spoiler and _cards(context):
                 message = (
@@ -362,7 +376,10 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
                 # author's alternative text, and a scene that dropped it could not restore it.
                 return [
                     Card(
-                        image=CardMedia(media.url, media.description),
+                        image=CardMedia(
+                            media.url,
+                            _resolve(media.description, context) if media.description is not None else None,
+                        ),
                         footer=None if caption is None else CardFooter(_resolve(caption, context)),
                     )
                 ]
@@ -451,7 +468,7 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             # would be reinterpreting a shape they chose for its own sake.
             return [Panel(tuple(_children(children, path, context)), accent)]
         case _:
-            return [_primitive(node, context)]
+            return [_primitive(cast(Node, node), context)]
 
 
 def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
@@ -497,7 +514,13 @@ def _primitive(node: Node, context: _Context) -> Node:
         case Button(label=label) | LinkButton(label=label) | RoutedButton(label=label):
             return replace(node, label=None if label is None else _resolve(label, context))
         case Row(items=items) | PrimitiveActionGroup(items=items):
-            return replace(node, items=tuple(_primitive(item, context) for item in items))
+            return replace(
+                node,
+                items=tuple(
+                    cast(Button | LinkButton | PremiumButton | RoutedButton | RawItem, _primitive(item, context))
+                    for item in items
+                ),
+            )
         case (
             SelectMenu(options=options, placeholder=placeholder)
             | RoutedSelect(options=options, placeholder=placeholder)
@@ -518,18 +541,106 @@ def _primitive(node: Node, context: _Context) -> Node:
             return replace(node, placeholder=_resolve(placeholder, context) if placeholder is not None else None)
         case Thumbnail(description=description):
             return replace(node, description=_resolve(description, context) if description is not None else None)
+        case Gallery(items=items) | MediaCollection(items=items):
+            return replace(
+                node,
+                items=tuple(_resolved_gallery_item(item, context) for item in items),
+            )
+        case Content(content=content):
+            return replace(node, content=_resolve(content, context))
+        case Card():
+            return replace(
+                node,
+                children=tuple(_primitive(child, context) for child in node.children),
+                title=_card_text(node.title, context),
+                fields=tuple(
+                    replace(
+                        field,
+                        name=_required_card_text(field.name, context),
+                        value=_required_card_text(field.value, context),
+                    )
+                    for field in node.fields
+                ),
+                footer=(
+                    None
+                    if node.footer is None
+                    else CardFooter(_required_card_text(node.footer.text, context), node.footer.icon_url)
+                ),
+                author=(
+                    None
+                    if node.author is None
+                    else CardAuthor(
+                        _required_card_text(node.author.name, context), node.author.url, node.author.icon_url
+                    )
+                ),
+                image=_card_media(node.image, context),
+                thumbnail=_card_media(node.thumbnail, context),
+            )
         case PrimitiveSection(texts=texts, accessory=accessory):
             return replace(
                 node,
-                texts=tuple(_primitive(text, context) for text in texts),
-                accessory=_primitive(accessory, context),
+                texts=tuple(cast(Text | PrimitiveHeading | Footer, _primitive(text, context)) for text in texts),
+                accessory=cast(
+                    Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem,
+                    _primitive(accessory, context),
+                ),
             )
         case Budget(children=children):
             return replace(node, children=tuple(_primitive(child, context) for child in children))
         case Break(children=children):
             return replace(node, children=tuple(_primitive(child, context) for child in children))
+        case Panel(children=children):
+            return replace(node, children=tuple(_primitive(child, context) for child in children))
+        case Extension(fallback=fallback):
+            return replace(node, fallback=_primitive(fallback, context))
+        case Variants(variants=variants):
+            return replace(
+                node,
+                variants=tuple(
+                    replace(variant, nodes=tuple(_primitive(child, context) for child in variant.nodes))
+                    for variant in variants
+                ),
+            )
         case _:
             return node
+
+
+def _card_text(value: CardText | None, context: _Context) -> Text | None:
+    """Resolve one authored card slot while retaining its overflow policy."""
+    if value is None:
+        return None
+    node = card_text(value)
+    return replace(node, content=_resolve(node.content, context))
+
+
+def _required_card_text(value: CardText, context: _Context) -> Text:
+    """Resolve a card slot that its containing value requires."""
+    resolved = _card_text(value, context)
+    assert resolved is not None
+    return resolved
+
+
+def _gallery_item(value: str | GalleryItem) -> GalleryItem:
+    """Return the normalized item guaranteed by Gallery construction."""
+    if isinstance(value, str):
+        message = "Gallery left a shorthand URL unnormalized"
+        raise LayoutInvariantError(message)
+    return value
+
+
+def _resolved_gallery_item(value: str | GalleryItem, context: _Context) -> GalleryItem:
+    """Resolve the optional description on one normalized gallery item."""
+    item = _gallery_item(value)
+    description = item.description
+    return replace(item, description=None if description is None else _resolve(description, context))
+
+
+def _card_media(value: CardMedia | None, context: _Context) -> CardMedia | None:
+    """Resolve one optional embed media description."""
+    if value is None:
+        return None
+    description = None if value.description is None else _resolve(value.description, context)
+    return replace(value, description=description)
 
 
 def _field_entry(field: Field, context: _Context) -> str | Alt:
@@ -551,7 +662,7 @@ def _field_entry(field: Field, context: _Context) -> str | Alt:
     return Alt(primary, tuple(kept), priority=int(field.importance))
 
 
-def _children(children: Sequence[LayoutNode], path: str, context: _Context) -> list[Node]:
+def _children(children: Sequence[AnyLayoutNode], path: str, context: _Context) -> list[Node]:
     lowered: list[Node] = []
     for index, child in enumerate(children):
         lowered.extend(_node(child, f"{path}.{index}", context))

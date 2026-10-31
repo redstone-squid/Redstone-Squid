@@ -54,7 +54,13 @@ class PycrdtTextBranch:
             raise ValueError(message)
 
     def snapshot(self) -> str:
-        return self.text.to_py()
+        value = self.text.to_py()
+        if value is None:
+            # `to_py` answers `None` only for a `Text` never integrated into a document, and
+            # both of ours are constructed into one; reaching here means the document is gone.
+            message = "pycrdt text is not integrated into a document"
+            raise RuntimeError(message)
+        return value
 
     def prepare(self, base: object) -> PycrdtPrepared:
         if base != self._base or self._engine.version() != self._base:
@@ -84,7 +90,13 @@ class PycrdtTextEngine:
         self.doc = pycrdt.Doc({"text": self.text}, skip_gc=True)
 
     def snapshot(self) -> str:
-        return self.text.to_py()
+        value = self.text.to_py()
+        if value is None:
+            # `to_py` answers `None` only for a `Text` never integrated into a document, and
+            # both of ours are constructed into one; reaching here means the document is gone.
+            message = "pycrdt text is not integrated into a document"
+            raise RuntimeError(message)
+        return value
 
     def version(self) -> bytes:
         return self.doc.get_state()
@@ -106,7 +118,9 @@ class PycrdtTextEngine:
         branch = self.branch()
         module = self.module
         item = module.StackItem(
-            branch.doc,
+            # pycrdt's stub names the Rust `Doc`, but the runtime takes the Python wrapper --
+            # see tests/test_real_backends.py::test_pycrdt_stack_item_groups_multiple_container_types.
+            branch.doc,  # pyrefly: ignore[bad-argument-type]
             module.IdSet.decode(token.deletions),
             module.IdSet.decode(token.insertions),
         )

@@ -22,11 +22,11 @@ from squid_reactivity.actions import (
 from squid_reactivity.core import (
     ReactiveConflictError,
     TransactionView,
-    _Cell,
     action_participant,
     enlist,
     transaction,
 )
+from squid_reactivity.internals import Cell as _Cell
 from squid_replication.engine import ReplicationBackend, ReplicationEngine
 from squid_replication.model import (
     ReplicatedItem,
@@ -40,11 +40,20 @@ _DEDUP_LIMIT = 10_000
 _PENDING_UPDATE_LIMIT = 1_000
 
 
-class ReplicaClosedError(RuntimeError):
+class ReplicationError(Exception):
+    """Base class for every failure squid-replication raises deliberately.
+
+    Each error keeps a standard exception base alongside this one (`RuntimeError`,
+    `ValueError`, or `TypeError`), so catching by standard type keeps working while
+    `except ReplicationError` covers the package.
+    """
+
+
+class ReplicaClosedError(ReplicationError, RuntimeError):
     """A replicated scope or document has been closed and no longer grants mutation authority."""
 
 
-class ReplicationResyncRequiredError(RuntimeError):
+class ReplicationResyncRequiredError(ReplicationError, RuntimeError):
     """The bounded outbound buffer overflowed, so what it still holds is an incomplete history.
 
     Recover by exporting from the peer's version and acknowledging the resync. Nothing is lost
@@ -53,15 +62,15 @@ class ReplicationResyncRequiredError(RuntimeError):
     """
 
 
-class ReplicationCorruptUpdateError(ValueError):
+class ReplicationCorruptUpdateError(ReplicationError, ValueError):
     """A backend update or durable token failed structural or native decoding."""
 
 
-class ReplicationBackendIntegrityError(RuntimeError):
+class ReplicationBackendIntegrityError(ReplicationError, RuntimeError):
     """A validated backend operation failed at the canonical apply boundary."""
 
 
-class UnsupportedReplicationContainerError(TypeError):
+class UnsupportedReplicationContainerError(ReplicationError, TypeError):
     """The explicitly selected backend does not implement a requested container class."""
 
 

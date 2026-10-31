@@ -1,11 +1,26 @@
 [project]
 name = "squid-ui-widgets"
-version = "0.1.0"
+version = "0.1.0a1"
 description = "Frontend-neutral, reusable application patterns for squid-ui"
 requires-python = ">=3.14"
 readme = "README.md"
 license = "MIT"
-dependencies = ["squid-ui"]
+license-files = ["LICENSE"]
+authors = [{ name = "Redstone Squid contributors" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+]
+dependencies = ["squid-ui==0.1.0a1"]
+
+[project.urls]
+Changelog = "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md"
+Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"
+Issues = "https://github.com/redstone-squid/Redstone-Squid/issues"
+Repository = "https://github.com/redstone-squid/Redstone-Squid"
 
 [build-system]
 requires = ["uv_build>=0.11,<0.13"]

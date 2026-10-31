@@ -1,12 +1,13 @@
 """Structural degradation: entry drop priorities and Variants, the component-budget policy."""
 
 from collections.abc import Sequence
+from typing import Any
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from squid_ui import scene
+from squid_ui import ComponentsV2Target, Renderable, scene
 from squid_ui.errors import LayoutDegradedError
 from squid_ui.planning import (
     SolveNoteCode,
@@ -22,7 +23,6 @@ from squid_ui.primitives import (
     Lines,
     LinkButton,
     Never,
-    Node,
     Option,
     Paginate,
     Panel,
@@ -54,7 +54,7 @@ def _rendered(solved) -> str:
     return "\n".join(parts)
 
 
-def _planned(nodes: Sequence[Node], **options) -> PlanResult:
+def _planned(nodes: Sequence[Renderable[ComponentsV2Target]], **options) -> PlanResult:
     """Ladders are planner decisions, so structural behaviour is observed through plan()."""
     return plan(nodes, target=DISCORD_V2_DPY27, **options)
 
@@ -136,7 +136,7 @@ class TestEntryPriorities:
         assert rendered.splitlines()[-3:] == ["tail", "head", "middle"]
 
 
-def _ladder_document(count: int, *, priorities: list[int] | None = None) -> list[Node]:
+def _ladder_document(count: int, *, priorities: list[int] | None = None) -> list[Variants[Any]]:
     """`count` panels, each stepping to a single line of text.
 
     A panel here is 4 components (container, text, row, button) and its last rung is 1, so

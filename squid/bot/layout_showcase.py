@@ -3,8 +3,8 @@
 import asyncio
 from collections.abc import Awaitable, Callable, Iterable, Sequence
 from datetime import UTC, datetime
-from functools import partial
-from typing import TYPE_CHECKING, Literal, Never
+from functools import cache, partial
+from typing import TYPE_CHECKING, ClassVar, Literal, Never
 
 from discord import app_commands
 from discord.ext import commands
@@ -13,17 +13,8 @@ from discord.ext.commands import Cog, Context, guild_only
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.i18n import resolve_locale
-from squid.bot.ui import (
-    DISCORD_BLUE,
-    DISCORD_GREEN,
-    DISCORD_YELLOW,
-    L,
-    create_message_root,
-    localization_for,
-    message_destination,
-    send_component,
-)
+from squid.bot.i18n import localization_for, resolve_locale
+from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, L
 from squid.core.i18n import _
 from squid_replication import ReferenceBackend, Replica, ReplicatedDocument
 from squid_ui_discord import SessionKey
@@ -137,7 +128,7 @@ sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate))"
 # A schema, not a Discord modal. RETRY re-presents it with the errors
 # and everything already typed; **prefill seeds it from state.
 return sl.form("Open the feedback form", FeedbackForm(**prefill), key="feedback")""",
-    "composition": """class Dashboard(sl.Component):
+    "composition": """class Dashboard(sl.Component[sl.ComponentsV2Target]):
     def __init__(self):
         self.left = Counter("Left")
         self.right = Counter("Right")
@@ -242,7 +233,7 @@ def _fail_demo_action() -> Never:
     raise DemoRollback(message)
 
 
-class DemoCounter(sl.Component):
+class DemoCounter(sl.Component[sl.ComponentsV2Target]):
     """A tiny child component used twice to demonstrate keyed composition."""
 
     count: int = sl.state(0)
@@ -250,7 +241,7 @@ class DemoCounter(sl.Component):
     def __init__(self, label: sl.TextLike) -> None:
         self.label = label
 
-    def render(self) -> sl.primitives.Node:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         return sl.primitives.Panel(
             (
                 sl.primitives.Heading(self.label, level=3),
@@ -314,7 +305,7 @@ class FeedbackForm(sl.forms.Form):
         await self._on_recorded(self, event)
 
 
-class LayoutShowcase(sl.Component):
+class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
     """One mounted tour of planning, pagination, ownership, forms, and composition."""
 
     section: str = sl.state("pagination")
@@ -364,7 +355,7 @@ class LayoutShowcase(sl.Component):
     def status(self) -> sl.text.Message:
         return L("Section: {section} · reactive clicks: {clicks}", section=self.section, clicks=self.clicks)
 
-    def render(self) -> Sequence[sl.LayoutNode]:
+    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         controls = (
             sl.primitives.SelectMenu(
                 tuple(
@@ -397,7 +388,7 @@ class LayoutShowcase(sl.Component):
         )
         return (header, *self._render_section())
 
-    def _render_section(self) -> Sequence[sl.LayoutNode]:
+    def _render_section(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         match self.section:
             case "adaptation":
                 exhibit = self._adaptation()
@@ -425,7 +416,7 @@ class LayoutShowcase(sl.Component):
                 exhibit = self._pagination()
         return (*exhibit, self._source_example())
 
-    def _pagination(self) -> Sequence[sl.primitives.Node]:
+    def _pagination(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.primitives.Panel(
                 (
@@ -447,7 +438,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _adaptation(self) -> Sequence[sl.LayoutNode]:
+    def _adaptation(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         actions = tuple(
             sl.semantic.ActionControl(f"action.{index}", L("Action {number}", number=index), self._action_notice)
             for index in range(1, 37)
@@ -467,7 +458,7 @@ class LayoutShowcase(sl.Component):
             sl.semantic.ActionControls(actions, key="showcase-actions"),
         )
 
-    def _degradation(self) -> Sequence[sl.LayoutNode]:
+    def _degradation(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         long_explanation = " ".join(
             [
                 "This deliberately oversized explanation remains important, so Truncate shortens it instead of "
@@ -499,7 +490,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _data(self) -> Sequence[sl.LayoutNode]:
+    def _data(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.section(
                 sl.heading(L(t"Typed data, not pre-formatted strings")),
@@ -530,7 +521,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _ownership(self) -> Sequence[sl.LayoutNode]:
+    def _ownership(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.section(
                 sl.heading(L(t"Who owns a control's value")),
@@ -568,7 +559,7 @@ class LayoutShowcase(sl.Component):
             sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate)),
         )
 
-    def _grid(self) -> Sequence[sl.LayoutNode]:
+    def _grid(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         blocked = {5, 10}
         cells = tuple(
             sp.GridCell(
@@ -595,7 +586,7 @@ class LayoutShowcase(sl.Component):
             sl.grid(*cells, key="showcase-grid", columns=4, on_pick=self._pick_grid),
         )
 
-    def _forms(self) -> Sequence[sl.LayoutNode]:
+    def _forms(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         prefill: dict[str, object] = {}
         if self.feedback_exhibit:
             prefill["exhibit"] = self.feedback_exhibit
@@ -629,7 +620,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _composition(self) -> Sequence[sl.LayoutNode]:
+    def _composition(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.section(
                 sl.heading(L(t"Keyed component composition")),
@@ -644,7 +635,7 @@ class LayoutShowcase(sl.Component):
             self.boundary(self.right, key="right"),
         )
 
-    def _localization(self) -> Sequence[sl.LayoutNode]:
+    def _localization(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         unsafe = "*operator input* @everyone [not a link](https://example.com)"
         return (
             sl.section(
@@ -665,7 +656,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _history(self) -> Sequence[sl.LayoutNode]:
+    def _history(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.section(
                 sl.heading(L(t"Action outcomes and conflict-safe history")),
@@ -711,7 +702,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _replication(self) -> Sequence[sl.LayoutNode]:
+    def _replication(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         local_counter = self.local_document.counter("votes").value
         local_reviewers = self.local_document.set("reviewers").value
         peer_counter = self.peer_document.counter("votes").value
@@ -753,7 +744,7 @@ class LayoutShowcase(sl.Component):
             ),
         )
 
-    def _effects(self) -> Sequence[sl.LayoutNode]:
+    def _effects(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             sl.section(
                 sl.heading(L(t"Operations and compensation sagas")),
@@ -1095,7 +1086,7 @@ APPEARANCE = sl.ContextKey[Appearance]("showcase.appearance")
 _DENSITIES = ("comfortable", "compact")
 
 
-class AppearanceControls(sl.Component):
+class AppearanceControls(sl.Component[sl.ComponentsV2Target]):
     """A leaf that never receives the namespace as an argument -- it injects it.
 
     `inject` is render-time, so the handlers close over the handle the render found rather
@@ -1105,7 +1096,7 @@ class AppearanceControls(sl.Component):
 
     history: sl.runtime.History = sl.runtime.history(limit=5)
 
-    def render(self) -> sl.LayoutNode:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         appearance = self.inject(APPEARANCE)
         return sl.primitives.ControlGroup(
             (
@@ -1146,7 +1137,7 @@ class AppearanceControls(sl.Component):
         await self.history.undo()
 
 
-class AppearancePanel(sl.Component):
+class AppearancePanel(sl.Component[sl.ComponentsV2Target]):
     """The panel that writes. It provides the namespace rather than passing it down."""
 
     def __init__(self, appearance: Appearance, session: Session) -> None:
@@ -1154,7 +1145,7 @@ class AppearancePanel(sl.Component):
         self.session = session
         self.controls = AppearanceControls()
 
-    def render(self) -> sl.LayoutNode:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         self.provide(APPEARANCE, self.appearance)
         return sl.primitives.Panel(
             (
@@ -1172,14 +1163,14 @@ class AppearancePanel(sl.Component):
         self.session.focus = "details" if self.session.focus == "overview" else "overview"
 
 
-class PreviewPanel(sl.Component):
+class PreviewPanel(sl.Component[sl.ComponentsV2Target]):
     """The panel that only reads. It declares no dependency and follows both cells anyway."""
 
     def __init__(self, appearance: Appearance, session: Session) -> None:
         self.appearance = appearance
         self.session = session
 
-    def render(self) -> sl.LayoutNode:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         return sl.primitives.Panel(
             (
                 sl.primitives.Heading(L(t"Preview")),
@@ -1196,7 +1187,7 @@ class PreviewPanel(sl.Component):
         )
 
 
-class Lobby(sl.Component):
+class Lobby(sd.Screen):
     """A guild lobby whose roster is session membership, not view state.
 
     Membership belongs to the logical session: it survives a redraw, it is what replacement
@@ -1204,32 +1195,49 @@ class Lobby(sl.Component):
     roster of its own -- it reads `session.members` and asks for a redraw after each change.
     """
 
+    session: ClassVar[str] = "showcase-lobby"
+    scope = sd.ScopeKind.GUILD
+    capacity = 4
+    quota = 1
+    visibility = "public"
+    timeout = None
+
+    @classmethod
+    @cache
+    def spec(cls) -> sd.SessionSpec:
+        """Open the shared roster to everyone while retaining Screen's session policy."""
+        return sd.SessionSpec(
+            cls.session,
+            scope=cls.scope,
+            admission=cls.admission,
+            capacity=cls.capacity,
+            quota=cls.quota,
+            domain=cls.domain,
+            access=lambda _context: sd.Everyone(),
+            options={"timeout": cls.timeout},
+        )
+
     started_with: int | None = sl.state(None)
     """How many players the game began with. The only fact here that *is* view state."""
 
-    def __init__(self, sessions: sd.SessionManager, host_id: int) -> None:
-        self.sessions = sessions
+    def __init__(self, host_id: int) -> None:
         self.host_id = host_id
-        self._root: sd.MessageRoot | None = None
 
-    def mount(self, *, source: sd.runtime.RuntimeSource, locale: str | None = None) -> sd.MessageRoot:
-        # Kept so the panel can find its own session; the mount cannot be handed to the
-        # component that renders it any other way.
-        self._root = create_message_root(self, source=source, access=sd.Everyone(), locale=locale, timeout=None)
-        return self._root
-
-    def render(self) -> sl.LayoutNode:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         session = self._session()
-        if session is None:
-            return sl.section(sl.heading(L(t"Lobby")), sl.paragraph(L(t"This lobby has closed.")))
+        members = frozenset({self.host_id}) if session is None else session.members
+        capacity = self.capacity if session is None else session.capacity
         placement = sp.place_roster(
-            tuple(sp.RosterEntry(str(user_id), f"<@{user_id}>", "players") for user_id in sorted(session.members)),
-            (sp.RosterSlot("players", L(t"Players"), session.capacity),),
+            tuple(sp.RosterEntry(str(user_id), f"<@{user_id}>", "players") for user_id in sorted(members)),
+            (sp.RosterSlot("players", L(t"Players"), capacity),),
         )
         status = (
             L("Started with {count} players.", count=self.started_with)
             if self.started_with is not None
-            else L("{remaining} seats left.", remaining=session.remaining_capacity)
+            else L(
+                "{remaining} seats left.",
+                remaining=max(0, capacity - len(members)) if capacity is not None else "∞",
+            )
         )
         return sl.section(
             sl.heading(L(t"Lobby")),
@@ -1271,7 +1279,11 @@ class Lobby(sl.Component):
         self.started_with = len(session.members)
 
     def _session(self) -> sd.sessions.Session | None:
-        return None if self._root is None else self.sessions.session_for(self._root)
+        guild = self.opening.guild
+        if guild is None:
+            return None
+        sessions = self.opening.runtime.sessions.get(SessionKey.guild(self.session, guild.id))
+        return sessions[0] if sessions else None
 
 
 _JOIN_NOTICES = {
@@ -1319,18 +1331,17 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         entries: app_commands.Range[int, 20, 200] = 100,
     ) -> None:
         """Open an interactive showcase of squid-ui."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await send_component(
-            ctx,
+        await invocation.mount(
             LayoutShowcase(section=section, entries=entries, locale=locale),
             access=sd.Everyone(),
-            locale=locale,
         )
 
     @layout_group.command(name="shared")
     async def shared(self, ctx: Context[BotT]) -> None:
         """Open two live panels that share one namespace of view state."""
-        locale = await resolve_locale(ctx, self.bot.services.settings)
+        invocation = await sd.Invocation.of(ctx)
         scope = OpenContext(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
         appearance = self._appearance.get(scope)
         # Co-existence state: only the two panels hold it, so it is collected when the second
@@ -1341,12 +1352,10 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             AppearancePanel(appearance, session),
             PreviewPanel(appearance, session),
         ):
-            await send_component(
-                ctx,
+            await invocation.mount(
                 component,
                 access=sd.Owner(ctx.author.id),
-                locale=locale,
-                scheduler=self.bot.layout_scheduler,
+                scheduler=self.bot.client_runtime.scheduler,
             )
 
     @layout_group.command(name="lobby")
@@ -1354,18 +1363,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def lobby(self, ctx: Context[BotT]) -> None:
         """Open a four-seat lobby whose roster lives in the session, not the panel."""
         assert ctx.guild is not None
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        panel = Lobby(self.bot.sessions, ctx.author.id)
-        await self.bot.sessions.open(
-            panel.mount(source=ctx, locale=locale),
-            message_destination(ctx, locale=locale),
-            key=SessionKey.guild("showcase-lobby", ctx.guild.id),
-            actor_id=ctx.author.id,
-            capacity=4,
-            # The dual of `capacity`: four players per lobby, and one lobby per player, so a
-            # reader cannot hold a seat in two servers at once.
-            quota=1,
-        )
+        await Lobby.show(ctx, ctx.author.id)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

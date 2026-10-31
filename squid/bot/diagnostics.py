@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING
 from discord.ext import commands
 from discord.ext.commands import Context
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import Private, create_message_root, info_layout, message_destination
+from squid.bot.ui import info_node
 from squid.bot.utils.permissions import hide_unless, requires
-from squid.bot.utils.visibility import deliver_privately
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 
@@ -57,7 +57,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await self._deliver(
             ctx,
-            info_layout(
+            info_node(
                 t(locale, _("Errors cleared")),
                 t(locale, _("Deleted {count} stored error reports."), count=deleted),
             ),
@@ -76,38 +76,30 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         other surface withholds, which is the payload class `deliver_privately` exists for:
         ephemeral on the slash side, direct messages on the prefix side, never the channel.
         """
-        message_root = create_message_root(
+        invocation = await sd.Invocation.of(ctx)
+        await invocation.mount(
             browser,
-            source=ctx,
             access=sd.Owner(ctx.author.id),
-            locale=locale,
+            visibility=sd.Private(
+                t(locale, _("An error report names internal paths, so it is never posted in a channel."))
+            ),
             chrome=browser.chrome(),
             timeout=SESSION_SECONDS,
-        )
-        # A closed DM raises DeliveryAbandoned, which discards the render: there is nothing to
-        # bind and, deliberately, no channel fallback.
-        await message_root.send(
-            message_destination(
-                ctx,
-                visibility=Private(
-                    t(locale, _("An error report names internal paths, so it is never posted in a channel."))
-                ),
-                locale=locale,
-            )
         )
 
     async def _deliver(
         self,
         ctx: Context[BotT],
-        payload: sd.message_payload.MessagePayload,
+        node: sl.LayoutNode[sl.ComponentsV2Target],
         locale: str | None,
     ) -> None:
         """Answer a plain layout where only the caller can read it (see `_deliver_browser`)."""
-        await deliver_privately(
-            ctx,
-            payload,
-            reason=t(locale, _("An error report names internal paths, so it is never posted in a channel.")),
-            locale=locale,
+        invocation = await sd.Invocation.of(ctx)
+        await invocation.reply(
+            node,
+            visibility=sd.Private(
+                t(locale, _("An error report names internal paths, so it is never posted in a channel."))
+            ),
         )
 
 

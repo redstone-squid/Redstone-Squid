@@ -7,6 +7,7 @@ import squid_ui_discord
 from squid_ui import scene
 from squid_ui.interactions import Actor, EntitySelectionEvent, Visibility
 from squid_ui.planning import measure
+from squid_ui.planning.limits import Axis
 from squid_ui.primitives import EntitySelect
 from squid_ui.runtime import PresentationState
 from squid_ui_discord.testing import without_capabilities
@@ -51,9 +52,9 @@ def test_picker_rejects_incompatible_defaults_and_channel_filters() -> None:
 def test_entity_select_costs_an_action_row_and_control() -> None:
     solved = measure([EntitySelect(sl.entity.EntityType.USER, _select, "users")])
 
-    assert solved.cost.get("components") == 2
-    assert solved.cost.get("rows") == 1
-    assert solved.cost.get("controls") == 1
+    assert solved.cost.get(Axis.COMPONENTS) == 2
+    assert solved.cost.get(Axis.ROWS) == 1
+    assert solved.cost.get(Axis.CONTROLS) == 1
 
 
 def test_native_semantic_picker_lowers_to_entity_scene() -> None:

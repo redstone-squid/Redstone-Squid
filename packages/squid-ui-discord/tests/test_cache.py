@@ -126,7 +126,7 @@ def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
 
 
 def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
-    import squid_ui.planning.planner as planner_module
+    import squid_ui.planning.discord_planner as planner_module
 
     attempts = 0
     original = planner_module.measure
@@ -159,7 +159,7 @@ def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
 
 
 def test_structural_program_rebinds_generated_form_adapter_without_lowering(monkeypatch) -> None:
-    import squid_ui.planning.planner as planner_module
+    import squid_ui.planning.discord_planner as planner_module
 
     cache = PlanCache()
     spec = FormSpec("Edit", (TextField(key="name", label="Name"),))
@@ -181,7 +181,7 @@ def test_structural_program_rebinds_generated_form_adapter_without_lowering(monk
 
 
 def test_structural_program_rebinds_managed_controls_to_the_current_session(monkeypatch) -> None:
-    import squid_ui.planning.planner as planner_module
+    import squid_ui.planning.discord_planner as planner_module
 
     cache = PlanCache()
     document = Choices("pick", (Choice("a", "A"), Choice("b", "B")), Uncontrolled(()))
@@ -220,7 +220,7 @@ def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> N
 
 def test_cache_hit_restores_a_fallback_branch_and_rebinds_it(monkeypatch) -> None:
     """All three decision classes travel in the entry, so a hit never re-searches."""
-    import squid_ui.planning.planner as planner_module
+    import squid_ui.planning.discord_planner as planner_module
 
     cache = PlanCache()
 
@@ -262,7 +262,7 @@ def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
 
 
 def test_cache_hit_rebinds_solver_generated_pager_controls(monkeypatch) -> None:
-    import squid_ui.planning.planner as planner_module
+    import squid_ui.planning.discord_planner as planner_module
 
     cache = PlanCache()
 
@@ -301,7 +301,7 @@ def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
 
 
 def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch) -> None:
-    import squid_ui.planning.planner as planner_module
+    import squid_ui.planning.discord_planner as planner_module
 
     document = ActionControls((ActionControl("run", "Run", _first),), key="tools")
     session = PresentationState()
@@ -318,7 +318,7 @@ def test_exact_memo_skips_cache_key_lowering_and_binding_collection(monkeypatch)
 
 
 def test_lossless_text_growth_replans_locally_without_global_search(monkeypatch) -> None:
-    import squid_ui.planning.planner as planner_module
+    import squid_ui.planning.discord_planner as planner_module
 
     cases = []
     for make_document in (Text, Paragraph):
@@ -341,7 +341,7 @@ def test_lossless_text_growth_replans_locally_without_global_search(monkeypatch)
 
 
 def test_classic_lossless_text_growth_replans_locally_without_global_search(monkeypatch) -> None:
-    import squid_ui.planning.planner as planner_module
+    import squid_ui.planning.discord_planner as planner_module
 
     expected = plan(Text("x" * 2500), target=DISCORD_V1_DPY27)
     cache = PlanCache()
@@ -360,7 +360,7 @@ def test_classic_lossless_text_growth_replans_locally_without_global_search(monk
 
 
 def test_incremental_text_growth_falls_back_when_it_crosses_headroom(monkeypatch) -> None:
-    import squid_ui.planning.planner as planner_module
+    import squid_ui.planning.discord_planner as planner_module
 
     cache = PlanCache()
     plan(Text("x" * 2000), target=DISCORD_V2_DPY27, cache=cache)

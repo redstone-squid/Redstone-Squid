@@ -9,10 +9,7 @@ looking at it and removing it belong to the same message (audit C5's retyping ha
 from typing import TYPE_CHECKING
 
 import squid_ui as sl
-import squid_ui_discord as sd
-from squid.bot.i18n import t
-from squid.bot.ui import create_message_root
-from squid.core.i18n import _
+from squid.bot.ui import L
 from squid.notifications import (
     NotificationPreferences,
     NotificationSubscription,
@@ -28,14 +25,18 @@ SESSION_SECONDS = 300
 MAX_LISTED = 25
 """A select holds 25 options, which is also as many as a card should list."""
 
-KIND_LABELS = {
-    SubscriptionKind.CREATOR: _("Creator"),
-    SubscriptionKind.RECORD: _("Record"),
-    SubscriptionKind.RECORD_FILTER: _("Record filter"),
-}
+
+def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
+    match kind:
+        case SubscriptionKind.CREATOR:
+            return L("Creator")
+        case SubscriptionKind.RECORD:
+            return L("Record")
+        case SubscriptionKind.RECORD_FILTER:
+            return L("Record filter")
 
 
-class NotificationPanel(sl.Component):
+class NotificationPanel(sl.Component[sl.ComponentsV2Target]):
     """A mounted notification workspace with semantic choices and actions."""
 
     selected_ids: tuple[str, ...] = sl.state(())
@@ -50,12 +51,10 @@ class NotificationPanel(sl.Component):
         notifications: NotificationService,
         account_id: int,
         author_id: int,
-        locale: str | None = None,
     ) -> None:
         self._notifications = notifications
         self._account_id = account_id
         self._author_id = author_id
-        self.locale = locale
 
     async def on_load(self) -> None:
         await self._refresh()
@@ -80,20 +79,20 @@ class NotificationPanel(sl.Component):
     def subscriptions(self) -> tuple[NotificationSubscription, ...]:
         return self._subscriptions[:MAX_LISTED]
 
-    def render(self) -> tuple[sl.LayoutNode, ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
-            return (sl.section(sl.heading(t(self.locale, _("Notifications closed")))),)
-        on, off = t(self.locale, _("On")), t(self.locale, _("Off"))
+            return (sl.section(sl.heading(L("Notifications closed"))),)
+        on, off = L("On"), L("Off")
         fields = (
-            sl.field(t(self.locale, _("Web inbox")), on if self.web_enabled else off),
-            sl.field(t(self.locale, _("Discord DMs")), on if self.dm_enabled else off),
-            sl.field(t(self.locale, _("Following")), self._subscription_list()),
+            sl.field(L("Web inbox"), on if self.web_enabled else off),
+            sl.field(L("Discord DMs"), on if self.dm_enabled else off),
+            sl.field(L("Following"), self._subscription_list()),
         )
-        description = t(self.locale, _("Toggle where notifications arrive, and unfollow what you no longer want."))
+        description = L("Toggle where notifications arrive, and unfollow what you no longer want.")
         suspension_note = self._suspension_note()
-        nodes: list[sl.LayoutNode] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.section(
-                sl.heading(t(self.locale, _("Notifications"))),
+                sl.heading(L("Notifications")),
                 sl.truncate(sl.paragraph(description)),
                 sl.fields(*fields),
                 suspension_note and sl.note(suspension_note),
@@ -119,13 +118,13 @@ class NotificationPanel(sl.Component):
         nodes.extend(
             (
                 sl.toggle(
-                    t(self.locale, _("Web inbox")),
+                    L("Web inbox"),
                     key="web",
                     on=sl.controlled(self.web_enabled, self._toggle_web),
                     tone=sl.Tone.SUCCESS if self.web_enabled else sl.Tone.NEUTRAL,
                 ),
                 sl.toggle(
-                    t(self.locale, _("Discord DMs")),
+                    L("Discord DMs"),
                     key="dm",
                     on=sl.controlled(self.dm_enabled, self._toggle_dm),
                     tone=sl.Tone.SUCCESS if self.dm_enabled else sl.Tone.NEUTRAL,
@@ -135,14 +134,14 @@ class NotificationPanel(sl.Component):
         nodes.append(
             sl.action_controls(
                 sl.action_control(
-                    t(self.locale, _("Unfollow selected")),
+                    L("Unfollow selected"),
                     self._unfollow,
                     key="unfollow_selected",
                     tone=sl.Tone.DANGER,
                     available=bool(self.selected_ids),
                 ),
                 sl.action_control(
-                    t(self.locale, _("Close")),
+                    L("Close"),
                     self._close,
                     key="close",
                 ),
@@ -181,38 +180,33 @@ class NotificationPanel(sl.Component):
         self.closed = True
         await event.finish()
 
-    def _subscription_list(self) -> str:
+    def _subscription_list(self) -> sl.TextLike:
         if not self._subscriptions:
-            return t(self.locale, _("_Nothing yet._"))
-        lines = [
-            f"**{self.describe(subscription)}**\n{self.detail(subscription)}" for subscription in self.subscriptions
-        ]
+            return L("_Nothing yet._")
+        params: dict[str, object] = {}
+        lines: list[str] = []
+        for index, subscription in enumerate(self.subscriptions):
+            label = f"label_{index}"
+            params[label] = self.describe(subscription)
+            lines.append(f"**{{{label}}}**\n{self.detail(subscription)}")
         hidden = len(self._subscriptions) - len(self.subscriptions)
         if hidden > 0:
-            lines.append(t(self.locale, _("…and {count} more."), count=hidden))
-        return "\n".join(lines)
+            params["remainder"] = L("…and {count} more.", count=hidden)
+            lines.append("{remainder}")
+        return L("\n".join(lines), **params)
 
-    def describe(self, subscription: NotificationSubscription) -> str:
-        return t(self.locale, KIND_LABELS[subscription.kind])
+    def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
+        return _kind_label(subscription.kind)
 
     def detail(self, subscription: NotificationSubscription) -> str:
         if subscription.record_filter is not None:
             return _filter_text(subscription.record_filter)
         return f"\x60{subscription.subject_id}\x60"
 
-    def _suspension_note(self) -> str | None:
+    def _suspension_note(self) -> sl.TextLike | None:
         if self._preferences is None or self._preferences.dm_suspended_at is None:
             return None
-        return t(self.locale, _("Discord rejected a DM, so DMs are suspended until you re-enable them."))
-
-    def mount(self, *, source: sd.runtime.RuntimeSource) -> sd.MessageRoot:
-        return create_message_root(
-            self,
-            source=source,
-            access=sd.Owner(self._author_id),
-            locale=self.locale,
-            timeout=SESSION_SECONDS,
-        )
+        return L("Discord rejected a DM, so DMs are suspended until you re-enable them.")
 
 
 def _filter_text(record_filter: RecordSubscriptionFilter) -> str:

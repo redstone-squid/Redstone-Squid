@@ -24,7 +24,9 @@ from squid_ui.planning.layout_measurement.model import (
     Realized,
 )
 from squid_ui.planning.layout_measurement.text import BudgetRegion, TextBearing, TextUnit, make_unit, trim_keep
-from squid_ui.planning.limits import LIMITS, Axis, DiscordLimits
+from squid_ui.planning.limits import LIMITS, Axis, MessageLimits
+from squid_ui.planning.resolved import optional_text as resolved_optional_text
+from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.primitives.nodes import (
     Boundary,
     Break,
@@ -35,6 +37,7 @@ from squid_ui.primitives.nodes import (
     Code,
     Content,
     EntitySelect,
+    File,
     Footer,
     Gallery,
     Heading,
@@ -43,13 +46,16 @@ from squid_ui.primitives.nodes import (
     Node,
     Option,
     Panel,
+    PremiumButton,
     RawItem,
     RoutedButton,
     RoutedSelect,
     Row,
     Section,
     SelectMenu,
+    Sep,
     Text,
+    Thumbnail,
     Time,
     Variants,
     ZonedTime,
@@ -59,13 +65,13 @@ from squid_ui.primitives.nodes import (
 
 @dataclass(slots=True)
 class Builder:
-    limits: DiscordLimits = LIMITS
+    limits: MessageLimits = LIMITS
     notes: list[SolveNote] = field(default_factory=list)
     units: list[TextUnit] = field(default_factory=list)
-    raw_text_cost: dict[str, int] = field(default_factory=dict)
+    raw_text_cost: dict[Axis, int] = field(default_factory=dict)
     """Text no overflow policy can shrink, per axis: timestamps and prepared native items."""
     budgets: list[BudgetRegion] = field(default_factory=list)
-    axis: str = Axis.DISPLAY_TEXT
+    axis: Axis = Axis.DISPLAY_TEXT
     """The pool text realized right now draws from; target shape moves it, nothing else."""
 
     def charge(self, characters: int) -> None:
@@ -77,7 +83,7 @@ class Builder:
             self.units.append(made)
 
     @contextmanager
-    def pool(self, axis: str) -> Iterator[None]:
+    def pool(self, axis: Axis) -> Iterator[None]:
         """Realize everything inside this block against another text pool."""
         previous = self.axis
         self.axis = axis
@@ -91,7 +97,7 @@ class Builder:
         if value is None:
             return None
         node = card_text(value)
-        content = node.content.strip()
+        content = resolved_text(node.content).strip()
         if not content:
             return None
         if len(content) > cap:
@@ -146,16 +152,17 @@ class Builder:
         )
 
     def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
-        if button.label is None or len(button.label) <= self.limits.components.button_label:
+        label = resolved_optional_text(button.label)
+        if label is None or len(label) <= self.limits.components.button_label:
             return button
         self.notes.append(
             note(
                 SolveNoteCode.CLAMP_BUTTON_LABEL,
-                f"button label clamped from {len(button.label)}",
+                f"button label clamped from {len(label)}",
                 SolveNoteSeverity.CLAMP,
             )
         )
-        return replace(button, label=trim_keep(button.label, self.limits.components.button_label, "head"))
+        return replace(button, label=trim_keep(label, self.limits.components.button_label, "head"))
 
     def _clamp_select[SelectT: SelectMenu | RoutedSelect](self, select: SelectT) -> SelectT:
         limits = self.limits
@@ -171,18 +178,24 @@ class Builder:
             options = options[: limits.components.select_options]
         clamped_options = []
         for option in options:
-            label = trim_keep(option.label, limits.components.option_label, "head")
+            label = trim_keep(resolved_text(option.label), limits.components.option_label, "head")
             value = option.value[: limits.components.option_value]
-            description = option.description
+            description = resolved_optional_text(option.description)
             if description is not None and len(description) > limits.components.option_description:
                 description = trim_keep(description, limits.components.option_description, "head")
             if (label, value, description) != (option.label, option.value, option.description):
                 self.notes.append(
                     note(SolveNoteCode.CLAMP_SELECT_OPTION_TEXT, "select option text clamped", SolveNoteSeverity.CLAMP)
                 )
-                option = Option(label=label, value=value, description=description, default=option.default)
+                option = Option(
+                    label=label,
+                    value=value,
+                    description=description,
+                    default=option.default,
+                    emoji=option.emoji,
+                )
             clamped_options.append(option)
-        placeholder = select.placeholder
+        placeholder = resolved_optional_text(select.placeholder)
         if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
             self.notes.append(
                 note(
@@ -200,7 +213,7 @@ class Builder:
         )
 
     def _clamp_entity_select(self, select: EntitySelect) -> EntitySelect:
-        placeholder = select.placeholder
+        placeholder = resolved_optional_text(select.placeholder)
         if placeholder is not None and len(placeholder) > self.limits.components.select_placeholder:
             self.notes.append(
                 note(
@@ -294,6 +307,8 @@ class Builder:
             case RawItem(text_cost=text_cost):
                 self.charge(text_cost)
                 return node
+            case File() | Sep() | Thumbnail() | PremiumButton() | Button() | LinkButton():
+                return node
             case Boundary():
                 message = "Boundary must be expanded before solving"
                 raise ValueError(message)
@@ -301,4 +316,5 @@ class Builder:
                 message = "Variants must be resolved before measuring; plan() owns that choice"
                 raise LayoutInvariantError(message)
             case _:
-                return node
+                message = f"{type(node).__name__} must be normalized before measuring"
+                raise LayoutInvariantError(message)

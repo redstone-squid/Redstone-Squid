@@ -108,27 +108,36 @@ class TransactionParticipant[PreparedT](Protocol):
         """
 
 
-class ReactiveWriteError(RuntimeError):
+class ReactivityError(Exception):
+    """Base class for every failure squid-reactivity raises deliberately.
+
+    Each error keeps a standard exception base alongside this one (`RuntimeError`,
+    `ValueError`, or `LookupError`), so catching by standard type keeps working while
+    `except ReactivityError` covers the package.
+    """
+
+
+class ReactiveWriteError(ReactivityError, RuntimeError):
     """A state mutation was attempted inside a read-only action."""
 
 
-class ActionValidationError(ValueError):
+class ActionValidationError(ReactivityError, ValueError):
     """An admitted action failed application validation before publication."""
 
 
-class FrameworkIntegrityError(RuntimeError):
+class FrameworkIntegrityError(ReactivityError, RuntimeError):
     """An infallible publication adapter failed after the local commit point."""
 
 
-class FreshActionError(RuntimeError):
+class FreshActionError(ReactivityError, RuntimeError):
     """A distinct action was requested after its admitting transaction staged work."""
 
 
-class UndeclaredStateError(RuntimeError):
+class UndeclaredStateError(ReactivityError, RuntimeError):
     """An attribute that is not declared state was written inside a transaction."""
 
 
-class ReactiveCycleError(RuntimeError):
+class ReactiveCycleError(ReactivityError, RuntimeError):
     """A derived value depends, through some chain, on itself.
 
     Raised for a computed that reads itself and for a resource whose loader awaits one
@@ -144,7 +153,7 @@ class ReactiveCycleError(RuntimeError):
         super().__init__(message)
 
 
-class StaleReactiveContextError(RuntimeError):
+class StaleReactiveContextError(ReactivityError, RuntimeError):
     """A transaction was written through from outside the scope or the task that owns it.
 
     Two mistakes with one shape, because a transaction travels in a `ContextVar` and a task
@@ -158,7 +167,7 @@ class StaleReactiveContextError(RuntimeError):
     """
 
 
-class ReactiveConflictError(RuntimeError):
+class ReactiveConflictError(ReactivityError, RuntimeError):
     """An action's strong input or explicit inverse precondition moved before commit.
 
     Nothing was published: the action rolls back whole and travels the ordinary failed-handler
@@ -197,7 +206,7 @@ _STRONG_READS: ContextVar[int] = ContextVar("squid_reactivity_strong_reads", def
 _INTERLEAVER: ContextVar[Callable[[str], None] | None] = ContextVar(
     "squid_reactivity_deterministic_interleaver", default=None
 )
-_INTERLEAVER_USERS = 0
+_INTERLEAVER_USERS: int = 0
 
 
 def _checkpoint(name: str) -> None:
@@ -1657,14 +1666,14 @@ def inspect_computed(owner: ReactiveOwner) -> dict[str, ComputedReport]:
     return reports
 
 
-def declared_cells(owner: ReactiveOwner) -> dict[Any, int]:
+def declared_cells(owner: ReactiveOwner) -> dict[_Cell, int]:
     """Every declared state cell on `owner`, at the version it holds now.
 
     The presumed dependency set for something that has not yet said what it reads -- a
     resource holding a value that was installed rather than loaded. Over-subscribing is the
     safe direction, and the first real run replaces the presumption with the truth.
     """
-    presumed: dict[Any, int] = {}
+    presumed: dict[_Cell, int] = {}
     for klass in type(owner).__mro__:
         for descriptor in vars(klass).values():
             if isinstance(descriptor, _State):

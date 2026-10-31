@@ -1,6 +1,5 @@
 """Session identity, structured outcomes, cardinality, and attachment lifetime."""
 
-import inspect
 from dataclasses import fields
 from typing import Any, cast
 from unittest.mock import AsyncMock
@@ -11,6 +10,7 @@ import pytest
 import squid_ui as sl
 import squid_ui_discord
 from squid_ui.primitives import Button, Heading, Row
+from squid_ui.text import Message
 from squid_ui_discord import Everyone, MessageRootDefaults, SessionKey, SessionManager
 from squid_ui_discord.delivery import Abandoned
 from squid_ui_discord.sessions import (
@@ -30,7 +30,7 @@ from squid_ui_discord.sessions import (
 from squid_ui_discord.testing import fake_message
 
 
-class Panel(sl.Component):
+class Panel(sl.Component[sl.ComponentsV2Target]):
     def render(self):
         return [Heading("Panel"), Row((Button(label="Go", on_click=self._noop, key="go"),))]
 
@@ -98,14 +98,10 @@ def test_session_keys_use_typed_frozen_scopes() -> None:
     assert len({SessionKey.global_("status"), SessionKey.global_("status")}) == 1
 
 
-def test_message_root_defaults_fields_track_message_root_keyword_options() -> None:
-    message_root_keywords = {
-        name
-        for name, parameter in inspect.signature(squid_ui_discord.MessageRoot.__init__).parameters.items()
-        if parameter.kind is inspect.Parameter.KEYWORD_ONLY
-    }
-
-    assert {field.name for field in fields(MessageRootDefaults)} == message_root_keywords - {"access"}
+def test_message_root_defaults_expose_every_configurable_value() -> None:
+    assert {field.name for field in fields(MessageRootDefaults)} == set(
+        squid_ui_discord.message_root_contracts.MessageRootConfig.__dataclass_fields__
+    )
 
 
 def test_message_root_defaults_apply_overrides_without_mutating_the_defaults() -> None:
@@ -160,6 +156,30 @@ class TestResults:
         assert isinstance(first, Opened)
         assert result == Rejected((first.session.snapshot,), RejectionReason.COLLISION)
         destination.assert_not_awaited()
+
+    async def test_reject_threads_a_deferred_notice_into_the_result(self) -> None:
+        manager = SessionManager()
+        first = await manager.open(a_root(), to_message(), key=KEY)
+        notice = Message("You already have this panel open.")
+
+        result = await manager.open(
+            a_root(),
+            to_message(),
+            key=KEY,
+            admission=AdmissionSpec(collision=Reject(notice=notice)),
+        )
+
+        assert isinstance(first, Opened)
+        assert result == Rejected((first.session.snapshot,), RejectionReason.COLLISION, notice)
+
+    async def test_open_results_have_branch_friendly_truthiness(self) -> None:
+        opened = await SessionManager().open(a_root(), to_message(), key=KEY)
+        rejected = Rejected((), RejectionReason.COLLISION)
+        abandoned = Abandoned()
+
+        assert opened
+        assert not rejected
+        assert not abandoned
 
     async def test_abandoned_is_distinct_from_rejection_and_delivery(self) -> None:
         result = await SessionManager().open(a_root(), abandoning(), key=KEY)
@@ -399,7 +419,7 @@ class TestMembership:
         manager = SessionManager()
         seen: list[frozenset[int] | None] = []
 
-        class Roster(sl.Component):
+        class Roster(sl.Component[sl.ComponentsV2Target]):
             def render(self):
                 session = manager.session_for(message_root)
                 seen.append(None if session is None else session.members)

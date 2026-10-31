@@ -29,7 +29,11 @@ _SCHEMA_VERSION = 1
 _MISSING = object()
 
 
-class SlotVersionError(ValueError):
+class StorageError(Exception):
+    """Base class for every failure squid-storage raises deliberately."""
+
+
+class SlotVersionError(StorageError, ValueError):
     """A stored slot value was written by a newer declaration than the reader supports."""
 
 

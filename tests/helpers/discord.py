@@ -1,5 +1,7 @@
 """Small typed harnesses for Discord boundary tests."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -31,19 +33,19 @@ def make_interaction(
 ) -> InteractionHarness:
     """Create the minimal interaction contract used by shared error handling.
 
-    The client is present but carries no services by default: a real interaction always has one,
-    and the error handler reads the error report store off it. Pass `error_reports` to assert
-    that a failure was captured.
+    The client carries the installed layout host a real interaction always names. It has no
+    services by default; pass `error_reports` to assert that a failure was captured.
     """
     send_initial = AsyncMock(return_value=SimpleNamespace(resource=None, message_id=None, is_ephemeral=lambda: True))
     send_followup = AsyncMock(return_value=SimpleNamespace(id=99))
     services = SimpleNamespace(error_reports=error_reports) if error_reports is not None else None
+    client = make_layout_bot(services=services)
     interaction = cast(
         discord.Interaction[discord.Client],
         SimpleNamespace(
             response=SimpleNamespace(is_done=lambda: response_done, send_message=send_initial),
             followup=SimpleNamespace(send=send_followup, delete_message=AsyncMock()),
-            client=SimpleNamespace(services=services),
+            client=client,
             command=None,
             user=SimpleNamespace(id=user_id),
             guild_id=guild_id,
@@ -211,18 +213,32 @@ def make_layout_bot(**attributes: Any) -> Any:
     bare `SessionManager`. The installation is weakly keyed, so it leaves with the double.
     """
     import squid_ui_discord as sd
+    from squid.bot.i18n import localization_resolver
     from squid.bot.ui import HOST_DEFAULTS
     from squid_reactivity import LocalTopicBus
+    from squid_ui.text import NEUTRAL, Localization
 
     bus = attributes.get("topic_bus") or LocalTopicBus()
     client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})
-    runtime = sd.install(cast(discord.Client, client), defaults=HOST_DEFAULTS, bus=bus)
+
+    async def resolve(source: sd.InvocationSource) -> Localization:
+        settings = getattr(getattr(client, "services", None), "settings", None)
+        return NEUTRAL if settings is None else await localization_resolver(source)
+
+    runtime = sd.install(cast(discord.Client, client), defaults=HOST_DEFAULTS, bus=bus, localization=resolve)
     # Written through `__dict__` because these are the bot attributes the code under test
     # reads, and the double is a bag of them rather than a class declaring any.
     client.__dict__.update(
         client_runtime=runtime,
         sessions=runtime.sessions,
-        layout_scheduler=runtime.scheduler,
-        layout_challenges=runtime.challenges,
     )
     return client
+
+
+@asynccontextmanager
+async def invocation_scope(source: Any) -> AsyncIterator[Any]:
+    """Resolve one invocation inside the ambient scope production dispatch establishes."""
+    import squid_ui_discord as sd
+
+    with sd.invocation_scope(source):
+        yield await sd.Invocation.of(source)

@@ -1,0 +1,147 @@
+name: Publish Squid UI
+
+on:
+  push:
+    tags:
+      - squid-ui-v*
+
+permissions: {}
+
+concurrency:
+  group: squid-ui-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  UV_VERSION: "0.11.32"
+
+jobs:
+  build:
+    name: Build release set
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.14"
+          enable-cache: false
+
+      - name: Verify release tag and lockfile
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version=$(python scripts/check_squid_ui_release.py "$RELEASE_TAG")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          uv lock --locked
+
+      - name: Install test dependencies
+        run: uv sync --locked --dev
+
+      - name: Test framework packages and boundaries
+        run: uv run --locked pytest --no-cov packages tests/architecture
+
+      - name: Build and inspect distributions
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          python scripts/build_squid_ui_dist.py dist
+          python scripts/check_squid_ui_dist.py dist "$RELEASE_VERSION"
+
+      - name: Upload release set
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: squid-ui-dist
+          path: dist
+          if-no-files-found: error
+          include-hidden-files: false
+          retention-days: 7
+
+  smoke:
+    name: Install smoke (${{ matrix.os }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.14"
+          enable-cache: false
+
+      - name: Download release set
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: squid-ui-dist
+          path: dist
+
+      - name: Install wheels and public extras
+        shell: bash
+        env:
+          FRAMEWORK_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          uv venv .smoke --python 3.14
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            smoke_python=.smoke/Scripts/python.exe
+          else
+            smoke_python=.smoke/bin/python
+          fi
+          uv pip install --python "$smoke_python" --find-links dist \
+            "squid-ui-discord[postgres]==$FRAMEWORK_VERSION" \
+            "squid-ui-widgets==$FRAMEWORK_VERSION" \
+            "squid-replication[loro,pycrdt]==$FRAMEWORK_VERSION"
+          "$smoke_python" scripts/smoke_squid_ui_install.py
+
+  publish:
+    name: Publish to PyPI
+    needs: [build, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      attestations: write # Record provenance for every wheel and source distribution.
+      contents: read
+      id-token: write # Authenticate both the attestation and PyPI trusted publishing.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/squid-ui/${{ needs.build.outputs.version }}/
+
+    steps:
+      - name: Download verified release set
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: squid-ui-dist
+          path: dist
+
+      - name: Attest release provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+
+      - name: Publish through PyPI trusted publishing
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist

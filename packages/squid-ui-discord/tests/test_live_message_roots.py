@@ -2,8 +2,7 @@
 
 import gc
 
-import pytest
-
+import squid_ui as sl
 from squid_ui import Component, PressEvent, state
 from squid_ui.primitives import Button, Heading, Row, Text
 from squid_ui_discord import Everyone, MessageRoot, Owner, live
@@ -11,7 +10,7 @@ from squid_ui_discord.delivery import DeliveryResult
 from squid_ui_discord.testing import commit_render, delivered_to, fake_interaction, fake_message
 
 
-class Panel(Component):
+class Panel(Component[sl.ComponentsV2Target]):
     count: int = state(0)
 
     def render(self):
@@ -23,14 +22,6 @@ class Panel(Component):
 
     async def bump(self, event: PressEvent) -> None:
         self.count += 1
-
-
-@pytest.fixture(autouse=True)
-def _isolated_registry():
-    """Every test starts from an empty process registry and leaves one behind."""
-    live._LIVE.clear()
-    yield
-    live._LIVE.clear()
 
 
 class TestLiveRegistry:
@@ -53,7 +44,7 @@ class TestLiveRegistry:
 
         assert live.message_roots() == (message_root,)
         # One hook, not one per generation: the mount is deregistered once when it finishes.
-        assert len(message_root._finish_hooks) == 1
+        assert len(message_root._hooks.finish) == 1
 
     async def test_finishing_deregisters_before_collection(self) -> None:
         message_root = MessageRoot(Panel(), access=Everyone())

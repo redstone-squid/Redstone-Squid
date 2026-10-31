@@ -113,7 +113,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         assert isinstance(container, discord.ui.Container)
         return container
 
-    async def render_node(self) -> sl.LayoutNode:
+    async def render_node(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         """The build card as layout IR, for callers composing a whole message at once."""
         build = self.build
         current_java_version = await self.bot.services.versions.newest("Java")

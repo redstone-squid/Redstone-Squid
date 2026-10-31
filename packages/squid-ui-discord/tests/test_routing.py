@@ -105,6 +105,29 @@ class TestRouteFormats:
 
 
 class TestRouter:
+    async def test_dispatch_establishes_invocation_scope_inside_the_handler_task(self) -> None:
+        class FakeClient:
+            pass
+
+        client = FakeClient()
+        runtime = squid_ui_discord.install(cast(discord.Client, client))
+        interaction = fake_interaction()
+        interaction.client = client
+        seen: list[squid_ui_discord.Invocation] = []
+        router = Router()
+
+        @router.route(POLL_CLOSE)
+        async def close(source) -> None:
+            invocation = await squid_ui_discord.Invocation.of(source)
+            assert squid_ui_discord.current_invocation() is invocation
+            seen.append(invocation)
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+        await runtime.close()
+
+        assert len(seen) == 1
+        assert squid_ui_discord.current_invocation() is None
+
     async def test_a_handler_takes_its_route_parameters_by_name(self) -> None:
         seen: list[int] = []
         router = Router()
@@ -981,7 +1004,9 @@ class TestDrawing:
     def test_the_html_preview_emits_the_route(self) -> None:
         document = sl.action_controls(sl.routed_action_control("Close", POLL_CLOSE.id(), key="close"), key="c")
 
-        html = sl.html.Renderer().draw(sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene)
+        html = sl.html.DiscordPreviewRenderer().draw(
+            sl.planning.plan(document, target=squid_ui_discord.DISCORD_V2_DPY27).scene
+        )
 
         assert 'data-route-id="poll:close"' in html
 
@@ -1012,7 +1037,7 @@ class TestDrawing:
         assert [option.value for option in select.options] == ["one", "two"]
         assert not select.is_dispatchable()
 
-        html = sl.html.Renderer().draw(planned)
+        html = sl.html.DiscordPreviewRenderer().draw(planned)
         assert 'data-route-id="pick:build:3"' in html
 
     def test_a_primitive_routed_select_draws_without_a_binding(self) -> None:

@@ -8,14 +8,15 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 
+import squid_ui as sl
+import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.operations import managed_result
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.ui import info_layout, link_layout, reply_payload, text_layout
+from squid.bot.ui import info_node, link_node, text_node
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import hide_unless, requires
-from squid.bot.utils.visibility import personal
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
@@ -64,8 +65,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         query_name: str | None = None,
     ) -> None:
         """Propose a build tag for staff review."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
+        account_id = await ensure_consented_account(ctx, self.bot.services.accounts)
         if account_id is None:
             return
         definition = await self.tags.propose_showcase(
@@ -74,13 +76,12 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             query_name=query_name,
             created_by_account_id=account_id,
         )
-        await reply_payload(
-            ctx,
-            info_layout(
+        await invocation.reply(
+            info_node(
                 t(locale, _("Tag proposed")),
                 t(locale, _("Tag #{id} is awaiting staff approval."), id=definition.id),
             ),
-            visibility="personal" if personal(ctx) else "public",
+            visibility="personal",
         )
 
     @autocompletes(build_id="builds", tag_id="showcase_tag_ids")
@@ -98,8 +99,9 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         value: str | None = None,
     ) -> None:
         """Apply an approved tag to one of your builds."""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
+        account_id = await ensure_consented_account(ctx, self.bot.services.accounts)
         if account_id is None:
             return
         tag = await self.tags.assign_showcase(
@@ -108,32 +110,31 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
             value,
             actor_account_id=account_id,
         )
-        await reply_payload(
-            ctx,
-            info_layout(
+        await invocation.reply(
+            info_node(
                 t(locale, _("Build tagged")),
                 t(locale, _("Attached **{name}** to build #{id}."), name=tag.display_name, id=build_id),
             ),
-            visibility="personal" if personal(ctx) else "public",
+            visibility="personal",
         )
 
     @tag_group.command(name="pending")
     @requires(TAG_PROPOSAL_LIST)
     async def pending_tags(self, ctx: Context[BotT]) -> None:
         """List user tags awaiting moderation."""
+        invocation = await sd.Invocation.of(ctx)
         definitions = await self.tags.pending()
         body = "\n".join(
             f"**#{tag.id}** {tag.display_name} ({tag.value_type.value}; `{tag.query_name or 'no field'}`)"
             for tag in definitions
         )
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_payload(
-            ctx,
-            info_layout(
+        await invocation.reply(
+            info_node(
                 t(locale, _("Pending tags")),
                 body or t(locale, _("No tags are awaiting review.")),
             ),
-            visibility="personal" if personal(ctx) else "public",
+            visibility="personal",
         )
 
     @autocompletes(tag_id="tags_pending")
@@ -141,11 +142,11 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @requires(TAG_PROPOSAL_APPROVE)
     async def approve_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Publish a proposed showcase tag."""
+        invocation = await sd.Invocation.of(ctx)
         tag = await self.tags.approve(tag_id)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_payload(
-            ctx,
-            info_layout(
+        await invocation.reply(
+            info_node(
                 t(locale, _("Tag approved")),
                 t(locale, _("Published **{name}**."), name=tag.display_name),
             ),
@@ -156,11 +157,11 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @requires(TAG_PROPOSAL_REJECT)
     async def reject_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Reject a proposed showcase tag."""
+        invocation = await sd.Invocation.of(ctx)
         tag = await self.tags.reject(tag_id)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_payload(
-            ctx,
-            info_layout(
+        await invocation.reply(
+            info_node(
                 t(locale, _("Tag rejected")),
                 t(locale, _("Rejected **{name}**."), name=tag.display_name),
             ),
@@ -171,11 +172,11 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @requires(TAG_PROPOSAL_ARCHIVE)
     async def archive_tag(self, ctx: Context[BotT], tag_id: int) -> None:
         """Archive a published tag."""
+        invocation = await sd.Invocation.of(ctx)
         tag = await self.tags.archive(tag_id)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_payload(
-            ctx,
-            info_layout(
+        await invocation.reply(
+            info_node(
                 t(locale, _("Tag archived")),
                 t(locale, _("Archived **{name}**."), name=tag.display_name),
             ),
@@ -259,10 +260,10 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
                 synced = await ctx.bot.tree.sync()
 
             locale = await resolve_locale(ctx, self.bot.services.settings)
+            invocation = await sd.Invocation.of(ctx)
             scope = t(locale, _("globally")) if spec is None else t(locale, _("to the current guild"))
-            await reply_payload(
-                ctx,
-                text_layout(t(locale, _("Synced {count} commands {scope}."), count=len(synced), scope=scope)),
+            await invocation.reply(
+                text_node(t(locale, _("Synced {count} commands {scope}."), count=len(synced), scope=scope)),
             )
             return
 
@@ -276,19 +277,19 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
                 ret += 1
 
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_payload(
-            ctx,
-            text_layout(t(locale, _("Synced the tree to {synced}/{total}."), synced=ret, total=len(guilds))),
+        invocation = await sd.Invocation.of(ctx)
+        await invocation.reply(
+            text_node(t(locale, _("Synced the tree to {synced}/{total}."), synced=ret, total=len(guilds))),
         )
 
     @commands.command(name="gdb", hidden=True)
     @commands.is_owner()
     async def get_sheets_link(self, ctx: Context[BotT]):
         """Sends the google sheets link"""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_payload(
-            ctx,
-            link_layout(
+        await invocation.reply(
+            link_node(
                 t(locale, _("Build spreadsheet")),
                 "https://docs.google.com/spreadsheets/d/1BiyHD6PE1Jyn1EtlT0o2DqciUzWPSdwHmeRcUJtanUs/edit#gid=2075219221",
                 label=t(locale, _("Open spreadsheet")),
@@ -299,10 +300,10 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.is_owner()
     async def get_database_link(self, ctx: Context[BotT]):
         """Sends the database link"""
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await reply_payload(
-            ctx,
-            link_layout(
+        await invocation.reply(
+            link_node(
                 t(locale, _("Database")),
                 "https://supabase.com/dashboard/project/jnushtruzgnnmmxabsxi/editor/29424?sort=submission_id%3Aasc",
                 label=t(locale, _("Open database")),
@@ -314,7 +315,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
     @commands.command(name="raise-error", aliases=["e"], hidden=True)
     @commands.is_owner()
     @managed_result(dismiss_on_success=True)
-    async def raise_error(self, ctx: Context[BotT]) -> RenderResult:
+    async def raise_error(self, ctx: Context[BotT]) -> RenderResult[sl.ComponentsV2Target]:
         """Raises an error for testing purposes."""
         msg = "This is a test error."
         raise ValueError(msg)

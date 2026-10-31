@@ -4,7 +4,7 @@ import squid_ui as sl
 from squid_ui_discord import MessageRoot, Owner
 
 
-class Panel(sl.Component):
+class Panel(sl.Component[sl.ComponentsV2Target]):
     def render(self) -> tuple[sl.LayoutNode, ...]:
         return (sl.section(sl.heading("Panel")),)
 

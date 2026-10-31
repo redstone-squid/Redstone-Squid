@@ -26,17 +26,12 @@ from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.ui import (
     PagedList,
-    create_message_root,
-    error_layout,
     error_node,
     info_node,
-    message_destination,
-    reply_payload,
-    text_layout,
+    text_node,
 )
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import hide_unless, requires
-from squid.bot.utils.visibility import personal
 from squid.builds.domain import Build
 from squid.builds.errors import AliasAlreadyAddedError
 from squid.core.i18n import _
@@ -198,7 +193,7 @@ class SearchCog[
     ) -> None:
         """Search records, builds, patterns, and restrictions using text and field filters."""
         await ctx.defer()
-        locale = await resolve_locale(ctx, self.bot.services.settings)
+        invocation = await sd.Invocation.of(ctx)
         search_scope, targeted_query = _targeted(scope, query)
         request = SearchRequest(
             targeted_query,
@@ -215,12 +210,10 @@ class SearchCog[
             request,
             page,
             author_id=ctx.author.id,
-            locale=locale,
             load_build=load_build,
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )
-        message_root = view.mount(source=ctx)
-        await message_root.send(message_destination(ctx, locale=locale))
+        await invocation.mount(view, access=sd.Owner(ctx.author.id), timeout=180)
 
     @commands.hybrid_group(name="restrictions")
     @requires(RESTRICTION_ALIAS_CREATE)
@@ -237,7 +230,9 @@ class SearchCog[
         alias=app_commands.locale_str(_("The additional name.")),
     )
     @managed_result
-    async def add_restriction_alias(self, ctx: Context[BotT], restriction: str, alias: str) -> RenderResult:
+    async def add_restriction_alias(
+        self, ctx: Context[BotT], restriction: str, alias: str
+    ) -> RenderResult[sl.ComponentsV2Target]:
         """Add another name for a restriction."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 
@@ -254,16 +249,16 @@ class SearchCog[
     async def get_pending_submissions(self, ctx: Context[BotT]):
         """Shows an overview of all submitted builds pending review."""
         await ctx.defer()
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         pending = await self.queries.pending()
         paginator = PagedList(
             t(locale, _("Pending submissions")),
             [_pending_entry(build, locale) for build in pending],
             empty=t(locale, _("Nothing is waiting for review.")),
-            locale=locale,
             page_size=None,
         )
-        await paginator.send(ctx)
+        await invocation.mount(paginator, access=sd.Owner(invocation.user.id))
 
     @autocompletes(build_id="builds")
     @BuildCommandGroup.build_hybrid_group.command(name="view")  # type: ignore
@@ -272,43 +267,41 @@ class SearchCog[
     async def view_build(self, ctx: Context[BotT], build_id: int):
         """Displays a submission."""
         if ctx.interaction:
+            invocation = await sd.Invocation.of(ctx)
             locale = await resolve_locale(ctx, self.bot.services.settings)
             interaction = ctx.interaction
             await interaction.response.defer()
             build = await self.queries.get(build_id)
             if build is None:
-                await reply_payload(
-                    ctx,
-                    error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
+                await invocation.reply(
+                    error_node(t(locale, _("Error")), t(locale, _("No build with that ID."))),
                     visibility="personal",
                 )
                 return
 
             node = await self.bot.for_build(build).render_node()
 
-            async def refresh(current_id: int) -> tuple[Build, sl.LayoutNode] | None:
+            async def refresh(current_id: int) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target]] | None:
                 latest = await self.queries.get(current_id)
                 if latest is None:
                     return None
                 return latest, await self.bot.for_build(latest).render_node()
 
-            component = BuildInfoComponent(build, node, refresh=refresh, locale=locale)
+            component = BuildInfoComponent(build, node, refresh=refresh)
             navigator = sd.navigation.StackNavigator(component)
-            message_root = create_message_root(
+            await invocation.mount(
                 navigator,
-                source=interaction,
                 access=sd.Everyone(),
-                locale=locale,
+                visibility="public",
                 timeout=300,
-                scheduler=self.bot.layout_scheduler,
+                scheduler=self.bot.client_runtime.scheduler,
             )
-            await message_root.send(sd.respond_to(interaction, ephemeral=False, wait=True))
             return
 
         await self._view_build_prefix(ctx, build_id)
 
     @managed_result
-    async def _view_build_prefix(self, ctx: Context[BotT], build_id: int) -> RenderResult:
+    async def _view_build_prefix(self, ctx: Context[BotT], build_id: int) -> RenderResult[sl.ComponentsV2Target]:
         """Render a prefix-command build view through a managed result mount."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
         build = await self.queries.get(build_id)
@@ -324,7 +317,7 @@ class SearchCog[
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to confirm.")))
     @managed_result
-    async def confirm_build(self, ctx: Context[BotT], build_id: int) -> RenderResult:
+    async def confirm_build(self, ctx: Context[BotT], build_id: int) -> RenderResult[sl.ComponentsV2Target]:
         """Mark a submission as confirmed and publish it."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 
@@ -337,7 +330,7 @@ class SearchCog[
     @app_commands.rename(build_id="id")
     @app_commands.describe(build_id=app_commands.locale_str(_("The ID of the build you want to deny.")))
     @managed_result
-    async def deny_build(self, ctx: Context[BotT], build_id: int) -> RenderResult:
+    async def deny_build(self, ctx: Context[BotT], build_id: int) -> RenderResult[sl.ComponentsV2Target]:
         """Mark a submission as denied."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
 
@@ -357,23 +350,22 @@ class SearchCog[
     )
     async def debug_build(self, ctx: Context[BotT], build_id: int):
         """Display internal details for a build."""
-        await ctx.defer(ephemeral=personal(ctx))
+        await ctx.defer(ephemeral=ctx.interaction is not None)
+        invocation = await sd.Invocation.of(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         build = await self.queries.get(build_id)
         if build is None:
-            await reply_payload(
-                ctx,
-                error_layout(t(locale, _("Error")), t(locale, _("No build with that ID."))),
-                visibility="personal" if personal(ctx) else "public",
+            await invocation.reply(
+                error_node(t(locale, _("Error")), t(locale, _("No build with that ID."))),
+                visibility="personal",
             )
             return
 
         # One message carrying the file, rather than a running message that would then have to
         # be edited into holding an attachment it was not sent with.
-        await reply_payload(
-            ctx,
-            text_layout(t(locale, _("Internal state for build #{id} is attached."), id=build_id)),
-            visibility="personal" if personal(ctx) else "public",
+        await invocation.reply(
+            text_node(t(locale, _("Internal state for build #{id} is attached."), id=build_id)),
+            visibility="personal",
             files=[discord.File(io.BytesIO(_debug_dump(build).encode()), filename=f"build-{build_id}-debug.json")],
         )
 

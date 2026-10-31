@@ -7,15 +7,17 @@ would be making layout decisions with none of the planner's budget information.
 """
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 from typing import Any
 
 from squid_ui import scene
 from squid_ui.capabilities import Capability
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError, UnsolvableLayoutError
+from squid_ui.planning.control_validation import fail, register_pager, validate_component
 from squid_ui.planning.cursors import CursorCoordinator, MaterializedCursorRequest
-from squid_ui.planning.dialect import SceneBindings
+from squid_ui.planning.discord_dialect import SceneBindings
 from squid_ui.planning.identity import stable_fingerprint
 from squid_ui.planning.layout_measurement.model import (
     MeasuredCard,
@@ -30,15 +32,18 @@ from squid_ui.planning.layout_measurement.solver import (
 )
 from squid_ui.planning.limits import CLASSIC_LIMITS, Axis, ClassicLimits
 from squid_ui.planning.navigation import PlannedNav, materialized_navigation_state
+from squid_ui.planning.resolved import emoji as resolved_emoji
+from squid_ui.planning.resolved import optional_text as resolved_optional_text
+from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.planning.target import Target
-from squid_ui.primitives.constraints import Never, Paginate
+from squid_ui.primitives.constraints import Never
 from squid_ui.primitives.nodes import (
-    Boundary,
     Break,
     Budget,
     Button,
     Card,
     CardMedia,
+    CardText,
     Content,
     ControlGroup,
     EntitySelect,
@@ -49,8 +54,8 @@ from squid_ui.primitives.nodes import (
     LinkButton,
     MediaCollection,
     Node,
+    Option,
     Panel,
-    PremiumButton,
     RawItem,
     RoutedButton,
     RoutedSelect,
@@ -110,31 +115,19 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
     pager_keys: set[str] = set()
     contents = 0
 
-    def fail(path: str, detail: str) -> None:
-        message = f"{path}: {detail}"
-        raise LayoutInvariantError(message)
-
-    def slot(path: str, value: object, cap: int, what: str) -> None:
+    def slot(path: str, value: CardText | None, cap: int, what: str) -> None:
         """A direct value over its local cap is a planning error, not a silent trim."""
         if value is None:
             return
-        node = card_text(value)  # type: ignore[arg-type]
-        length = len(node.content.strip())
+        node = card_text(value)
+        length = len(resolved_text(node.content).strip())
         if length > cap and isinstance(node.overflow, Never):
             fail(path, f"{what} is {length} characters; the cap is {cap}. Give it an explicit overflow policy")
 
     def walk(node: Node, path: str) -> None:
         nonlocal contents
-        overflow = getattr(node, "overflow", None)
-        if isinstance(overflow, Paginate):
-            if overflow.key is None:
-                fail(path, "Paginate requires an explicit key")
-            if overflow.key in pager_keys:
-                fail(path, f"duplicate pager key {overflow.key!r}")
-            pager_keys.add(overflow.key)
+        register_pager(node, path, pager_keys)
         match node:
-            case Boundary():
-                fail(path, "Boundary must be expanded by a component mount before planning")
             case File() | Panel() | Section() | Gallery() | MediaCollection():
                 fail(
                     path,
@@ -158,66 +151,8 @@ def _validate(nodes: Sequence[Node], limits: ClassicLimits) -> None:
                     slot(f"{path}.author", author.name, limits.embeds.author, "embed author")
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
-            case Button(label=label) | RoutedButton(label=label):
-                if label is None and node.emoji is None:
-                    fail(path, "interactive button needs a label or emoji")
-                if label is not None and len(label) > limits.components.button_label:
-                    fail(path, f"button label exceeds {limits.components.button_label}")
-            case LinkButton(label=label, url=url):
-                if label is None and node.emoji is None:
-                    fail(path, "link button needs a label or emoji")
-                if label is not None and len(label) > limits.components.button_label:
-                    fail(path, f"button label exceeds {limits.components.button_label}")
-                if len(url) > limits.components.link_url:
-                    fail(path, f"link URL exceeds {limits.components.link_url}")
-            case Row(items=items):
-                if len(items) > limits.components.row_buttons:
-                    fail(path, f"row has {len(items)} controls; maximum is {limits.components.row_buttons}")
-                for index, item in enumerate(items):
-                    if isinstance(item, Button | RoutedButton | LinkButton | PremiumButton):
-                        walk(item, f"{path}.{index}")
-            case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum) | (
-                RoutedSelect(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum)
-            ):
-                if not options:
-                    fail(path, "select needs at least one option")
-                if len(options) > limits.components.select_options:
-                    fail(path, f"select has {len(options)} options; use an option-paging semantic node")
-                if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
-                    fail(path, f"select placeholder exceeds {limits.components.select_placeholder}")
-                if minimum < 0 or maximum < minimum or maximum > max(1, len(options)):
-                    fail(path, "select value bounds are invalid")
-                for index, option in enumerate(options):
-                    if len(option.label) > limits.components.option_label:
-                        fail(f"{path}.option.{index}", f"label exceeds {limits.components.option_label}")
-                    if len(option.value) > limits.components.option_value:
-                        fail(f"{path}.option.{index}", f"value exceeds {limits.components.option_value}")
-                    if (
-                        option.description is not None
-                        and len(option.description) > limits.components.option_description
-                    ):
-                        fail(f"{path}.option.{index}", f"description exceeds {limits.components.option_description}")
-            case EntitySelect(
-                placeholder=placeholder,
-                default_values=defaults,
-                min_values=minimum,
-                max_values=maximum,
-            ):
-                if placeholder is not None and len(placeholder) > limits.components.select_placeholder:
-                    fail(path, f"select placeholder exceeds {limits.components.select_placeholder}")
-                if minimum < 0 or maximum < minimum or maximum > limits.components.select_options:
-                    fail(path, "entity select value bounds are invalid")
-                if len(defaults) > maximum:
-                    fail(path, "entity select has more defaults than max_values")
-            case Budget(children=children) | Break(children=children):
-                for index, child in enumerate(children):
-                    walk(child, f"{path}.{index}")
-            case Variants(variants=variants):
-                for index, variant in enumerate(variants):
-                    for child_index, child in enumerate(variant.nodes):
-                        walk(child, f"{path}.variant.{index}.{child_index}")
             case _:
-                return
+                validate_component(node, path, limits=limits, walk=walk)
 
     for index, node in enumerate(nodes):
         walk(node, f"$.{index}")
@@ -227,7 +162,7 @@ def _paginate(
     nodes: Sequence[Node],
     *,
     key: str,
-    capacities: Mapping[str, int],
+    capacities: Mapping[Axis, int],
     limits: ClassicLimits,
     chrome: Chrome,
     nav: PlannedNav,
@@ -285,12 +220,8 @@ class _ClassicConverter:
 
     bindings: SceneBindings
     content: str | None = None
-    embeds: list[scene.Embed] = None  # type: ignore[assignment]
-    rows: list[scene.ClassicRow] = None  # type: ignore[assignment]
-
-    def __post_init__(self) -> None:
-        self.embeds = []
-        self.rows = []
+    embeds: list[scene.Embed] = field(default_factory=list)
+    rows: list[scene.ClassicRow] = field(default_factory=list)
 
     def convert(self, children: Sequence[Realized], path: str = "") -> None:
         for index, child in enumerate(children):
@@ -318,7 +249,7 @@ class _ClassicConverter:
                                 scene.Select(
                                     options=tuple(_options(options)),
                                     action=self.bindings.action(child),
-                                    placeholder=child.placeholder,
+                                    placeholder=resolved_optional_text(child.placeholder),
                                     min_values=child.min_values,
                                     max_values=child.max_values,
                                     disabled=child.disabled,
@@ -334,7 +265,7 @@ class _ClassicConverter:
                                 scene.EntitySelect(
                                     entity_type=child.entity_type,
                                     action=self.bindings.action(child),
-                                    placeholder=child.placeholder,
+                                    placeholder=resolved_optional_text(child.placeholder),
                                     default_values=child.default_values,
                                     channel_types=child.channel_types,
                                     min_values=child.min_values,
@@ -352,7 +283,7 @@ class _ClassicConverter:
                                 scene.RoutedSelect(
                                     options=tuple(_options(options)),
                                     route_id=child.route_id,
-                                    placeholder=child.placeholder,
+                                    placeholder=resolved_optional_text(child.placeholder),
                                     min_values=child.min_values,
                                     max_values=child.max_values,
                                     disabled=child.disabled,
@@ -409,25 +340,31 @@ def _text(slot: MeasuredText | None) -> str | None:
 
 
 def _media(media: CardMedia | None) -> scene.EmbedMedia | None:
-    return None if media is None else scene.EmbedMedia(media.url, media.description)
+    return None if media is None else scene.EmbedMedia(media.url, resolved_optional_text(media.description))
 
 
-def _timestamp(value: object) -> str | None:
+def _timestamp(value: ZonedDateTime | datetime | None) -> str | None:
     if value is None:
         return None
     if isinstance(value, ZonedDateTime):
         return value.instant.isoformat()
-    return value.isoformat()  # type: ignore[union-attr]
+    return value.isoformat()
 
 
-def _options(options: Sequence[object]) -> list[scene.Option]:
+def _options(options: Sequence[Option]) -> list[scene.Option]:
     return [
-        scene.Option(option.label, option.value, option.description, option.default, option.emoji)  # type: ignore[attr-defined]
+        scene.Option(
+            resolved_text(option.label),
+            option.value,
+            resolved_optional_text(option.description),
+            option.default,
+            resolved_emoji(option.emoji),
+        )
         for option in options
     ]
 
 
-def _as_control(node: object, path: str) -> scene.Control:
+def _as_control(node: scene.Node, path: str) -> scene.Control:
     if not isinstance(node, scene.Link | scene.PremiumButton | scene.Button | scene.RoutedButton | scene.Extension):
         message = f"{path}: an action row cannot hold {type(node).__name__}"
         raise LayoutInvariantError(message)
@@ -452,11 +389,17 @@ class ClassicDialect:
             Capability.MESSAGE_CONTENT,
         }
     )
-    mode = ClassicTarget
+    render_target = ClassicTarget
     body_type = scene.ClassicMessage
     default_limits = CLASSIC_LIMITS
     # A classic message has no component that can hold a native discord.py item.
     realizes_extensions = False
+
+    @property
+    def planner(self) -> Any:
+        from squid_ui.planning.discord_planner import DISCORD_PLANNER
+
+        return DISCORD_PLANNER
 
     def normalize(
         self, nodes: Sequence[Node], target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, Any]

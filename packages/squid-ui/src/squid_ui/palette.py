@@ -8,6 +8,8 @@ from squid_ui.primitives.styles import Color
 
 
 class Tone(StrEnum):
+    """Semantic colour roles that the active :class:`Palette` maps to exact colours."""
+
     NEUTRAL = "neutral"
     INFO = "info"
     SUCCESS = "success"

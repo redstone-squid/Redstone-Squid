@@ -1,0 +1,74 @@
+"""Validate the contents and metadata of a built Squid UI release set."""
+
+import argparse
+import email
+import re
+import tarfile
+import zipfile
+from pathlib import Path
+
+DISTRIBUTIONS = {
+    "squid-reactivity": "squid_reactivity",
+    "squid-replication": "squid_replication",
+    "squid-storage": "squid_storage",
+    "squid-ui": "squid_ui",
+    "squid-ui-discord": "squid_ui_discord",
+    "squid-ui-widgets": "squid_ui_widgets",
+}
+
+
+def _requirement_name_and_specifier(raw: str) -> tuple[str, str]:
+    requirement = raw.partition(";")[0].strip()
+    match = re.fullmatch(r"([A-Za-z0-9._-]+)(?:\[[^]]+\])?(.*)", requirement)
+    assert match is not None, f"could not parse requirement {raw!r}"
+    name = re.sub(r"[-_.]+", "-", match.group(1)).lower()
+    return name, match.group(2).strip()
+
+
+def _validate_wheel(path: Path, distribution: str, package: str, version: str) -> None:
+    with zipfile.ZipFile(path) as wheel:
+        members = wheel.namelist()
+        metadata_names = [name for name in members if name.endswith(".dist-info/METADATA")]
+        assert len(metadata_names) == 1, f"{path.name}: expected one METADATA file"
+        metadata = email.message_from_bytes(wheel.read(metadata_names[0]))
+        assert metadata["Name"] == distribution
+        assert metadata["Version"] == version
+        assert metadata["License-Expression"] == "MIT"
+        assert metadata["Requires-Python"] == ">=3.14"
+        assert metadata.get_all("License-File") == ["LICENSE"]
+        assert f"{package}/py.typed" in members
+        assert any(name.endswith(".dist-info/licenses/LICENSE") for name in members)
+        for raw_requirement in metadata.get_all("Requires-Dist", []):
+            name, specifier = _requirement_name_and_specifier(raw_requirement)
+            if name in DISTRIBUTIONS:
+                assert specifier == f"=={version}"
+
+
+def _validate_sdist(path: Path, distribution: str, package: str, version: str) -> None:
+    prefix = f"{package}-{version}"
+    with tarfile.open(path, "r:gz") as sdist:
+        members = {member.name for member in sdist.getmembers()}
+    for required in ("LICENSE", "README.md", "pyproject.toml", f"src/{package}/py.typed"):
+        assert f"{prefix}/{required}" in members, f"{path.name}: missing {required}"
+
+
+def main() -> None:
+    """Check that one complete, internally compatible release set was built."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("directory", type=Path)
+    parser.add_argument("version", help="the release version every distribution must carry")
+    args = parser.parse_args()
+    expected_files: set[str] = set()
+    for distribution, package in DISTRIBUTIONS.items():
+        wheel_name = f"{package}-{args.version}-py3-none-any.whl"
+        sdist_name = f"{package}-{args.version}.tar.gz"
+        expected_files.update({wheel_name, sdist_name})
+        _validate_wheel(args.directory / wheel_name, distribution, package, args.version)
+        _validate_sdist(args.directory / sdist_name, distribution, package, args.version)
+
+    actual_files = {path.name for path in args.directory.iterdir() if path.name != ".gitignore"}
+    assert actual_files == expected_files
+
+
+if __name__ == "__main__":
+    main()

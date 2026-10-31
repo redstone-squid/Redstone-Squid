@@ -46,11 +46,12 @@ from squid_ui.planning.layout_measurement.model import (
 )
 from squid_ui.planning.layout_measurement.realization import Builder
 from squid_ui.planning.layout_measurement.text import TextUnit
-from squid_ui.planning.limits import LIMITS, Axis, DiscordLimits
+from squid_ui.planning.limits import LIMITS, Axis, MessageLimits
 from squid_ui.planning.navigation import (
     PlannedNav,
     materialized_navigation_state,
 )
+from squid_ui.planning.resolved import text as resolved_text
 from squid_ui.primitives.constraints import Paginate
 from squid_ui.primitives.nodes import (
     Lines,
@@ -84,10 +85,10 @@ class MeasuredLayout:
     """
     nav: PlannedNav | None = None
     chrome: Chrome = DEFAULT_CHROME
-    limits: DiscordLimits = LIMITS
+    limits: MessageLimits = LIMITS
     degradation: DegradationProfile = field(default_factory=DegradationProfile)
 
-    def fits(self, capacities: Mapping[str, int]) -> bool:
+    def fits(self, capacities: Mapping[Axis, int]) -> bool:
         """Whether every budgeted axis is within its cap."""
         return self.cost.within(capacities)
 
@@ -172,7 +173,7 @@ type PositionState = Mapping[str, Position] | Position | None
 def measure(
     nodes: Sequence[Node],
     *,
-    limits: DiscordLimits = LIMITS,
+    limits: MessageLimits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
     localization: Localization = NEUTRAL,
     strict: bool = False,
@@ -219,7 +220,8 @@ def _configure_paginators(
             raise ValueError(message)
         used.add(key)
         keys[unit.index] = key
-        footers[unit.index] = policy.footer if policy.footer is not None else chrome.page_footer
+        footer = policy.footer if policy.footer is not None else chrome.page_footer
+        footers[unit.index] = lambda page, pages, footer=footer: resolved_text(footer(page, pages))
         if policy.per is not None:
             if isinstance(unit.node, Lines):
                 unit.count_pages = _count_pages(unit, policy.per)
@@ -269,13 +271,13 @@ class _Pass:
     footers: dict[int, Callable[[int, int], str]]
     clamps: int
     degradation: DegradationProfile
-    text_used: dict[str, int]
+    text_used: dict[Axis, int]
 
 
 def _measure_once(
     nodes: Sequence[Node],
     *,
-    limits: DiscordLimits,
+    limits: MessageLimits,
     chrome: Chrome,
     reserved: ResourceCost,
     position: PositionState,

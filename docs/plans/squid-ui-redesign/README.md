@@ -50,6 +50,8 @@ The active index now intentionally remains only for:
 - `../completed/squid-layouts-redesign/70-discord-py-interop.md`
 - `71-target-product.md`
 - `72-render-caching.md`
+- `73-typing-pass.md`
+- `74-typing-pass-2.md`
 - `90-deferred.md`
 - `91-prior-art.md`
 

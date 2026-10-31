@@ -1,55 +1,88 @@
 """Operation-backed command messages."""
 
 import asyncio
-import inspect
 from collections.abc import Awaitable, Callable, Coroutine
 from functools import wraps
-from typing import Any, overload
-
-from discord.abc import Messageable
-from discord.ext.commands import Context
+from typing import Any, cast, overload
 
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.errors import build_error_notice, record_operation_error
-from squid.bot.i18n import resolve_locale
-from squid.bot.ui import create_message_root, error_node, info_node, message_destination
-from squid.core.i18n import _, translate
+from squid.bot.ui import L, error_node, info_node
 from squid_ui.runtime.component import RenderResult
 
 type OperationWork = Callable[
-    [sl.operations.ProgressReporter[RenderResult | None], sd.delivery.DeliveryResult],
-    Awaitable[RenderResult],
+    [sl.operations.ProgressReporter[RenderResult[sl.ComponentsV2Target] | None], sd.delivery.DeliveryResult],
+    Awaitable[RenderResult[sl.ComponentsV2Target]],
 ]
-_INITIAL_PROGRESS: RenderResult | None = None
+_INITIAL_PROGRESS: RenderResult[sl.ComponentsV2Target] | None = None
 
-type ManagedResultHandler[**P] = Callable[P, Awaitable[RenderResult]]
+type ManagedResultHandler[**P] = Callable[P, Awaitable[RenderResult[sl.ComponentsV2Target]]]
 type ManagedResultCallback[**P] = Callable[P, Coroutine[Any, Any, None]]
 
 
-class CommandOperation(sl.Component):
+async def _command_invocation(args: tuple[object, ...]) -> sd.Invocation:
+    if len(args) < 2:
+        message = "managed_result requires a bound command callback"
+        raise RuntimeError(message)
+    invocation = await sd.Invocation.of(cast(sd.InvocationSource, args[1]))
+    if sd.current_invocation() is not invocation:
+        message = "managed_result requires a resolved ambient invocation"
+        raise RuntimeError(message)
+    return invocation
+
+
+def _make_root(
+    invocation: sd.Invocation,
+) -> Callable[[sl.Component[sl.ComponentsV2Target]], sd.MessageRoot[sl.ComponentsV2Target]]:
+    def make_root(component: sl.Component[sl.ComponentsV2Target]) -> sd.MessageRoot[sl.ComponentsV2Target]:
+        return invocation.runtime.mount(
+            component,
+            access=sd.Everyone(),
+            localization=invocation.localization,
+            timeout=900,
+        )
+
+    return make_root
+
+
+def _render_error(invocation: sd.Invocation, error: Exception) -> RenderResult[sl.ComponentsV2Target]:
+    notice = build_error_notice(error, invocation.localization.locale)
+    return error_node(notice.title, notice.detail)
+
+
+async def _record_error(invocation: sd.Invocation, managed: sd.ManagedError) -> None:
+    delivered = managed.delivery
+    result = delivered.result if isinstance(delivered, sd.delivery.Delivered) else None
+    services = getattr(invocation.client, "services", None)
+    await record_operation_error(
+        managed.error,
+        locale=invocation.localization.locale,
+        result=result,
+        presented=isinstance(delivered, sd.delivery.Delivered) and delivered.settled,
+        reports=getattr(services, "error_reports", None),
+    )
+
+
+class CommandOperation(sl.Component[sl.ComponentsV2Target]):
     """A command effect whose progress and terminal outcome are its rendered state."""
 
-    execution: sl.operations.OperationExecution[RenderResult, RenderResult | None]
+    execution: sl.operations.OperationExecution[
+        RenderResult[sl.ComponentsV2Target], RenderResult[sl.ComponentsV2Target] | None
+    ]
 
-    def __init__(
-        self,
-        work: OperationWork,
-        *,
-        initial: RenderResult,
-        locale: str | None,
-    ) -> None:
+    def __init__(self, invocation: sd.Invocation, work: OperationWork) -> None:
+        self._invocation = invocation
         self._work = work
-        self._initial = initial
-        self._locale = locale
+        self._initial = info_node(L("Working"), L("Getting information..."))
         self._result: sd.delivery.DeliveryResult | None = None
         self.execution = self._execute.start()
 
     @sl.operation(initial=_INITIAL_PROGRESS)
     async def _execute(
         self,
-        progress: sl.operations.ProgressReporter[RenderResult | None],
-    ) -> RenderResult:
+        progress: sl.operations.ProgressReporter[RenderResult[sl.ComponentsV2Target] | None],
+    ) -> RenderResult[sl.ComponentsV2Target]:
         result = self._result
         if result is None:
             message = "a command operation cannot start before its initial delivery"
@@ -57,65 +90,22 @@ class CommandOperation(sl.Component):
 
         return await self._work(progress, result)
 
-    def render(self) -> RenderResult:
+    def render(self) -> RenderResult[sl.ComponentsV2Target]:
         match self.execution.status:
             case sl.operations.Pending(progress=progress):
                 return self._initial if progress is None else progress
             case sl.operations.Succeeded(value=value):
                 return value
             case sl.operations.Failed(error=error):
-                payload = build_error_notice(error, self._locale)
-                return error_node(payload.title, payload.detail)
+                return _render_error(self._invocation, error)
             case sl.operations.Cancelled(progress=progress):
                 return self._initial if progress is None else progress
-
-
-class _ManagedResultComponent(sl.Component):
-    """Run one command callback after its initial layout has been delivered."""
-
-    execution: sl.operations.OperationExecution[RenderResult, None]
-
-    def __init__(
-        self,
-        callback: Callable[..., Awaitable[RenderResult]],
-        args: tuple[Any, ...],
-        kwargs: dict[str, Any],
-        *,
-        initial: RenderResult,
-        locale: str | None,
-    ) -> None:
-        self._callback = callback
-        self._args = args
-        self._kwargs = kwargs
-        self._initial = initial
-        self._locale = locale
-        self.execution = self._execute.start()
-
-    @sl.operation(initial=None)
-    async def _execute(self, _progress: sl.operations.ProgressReporter[None]) -> RenderResult:
-        """Evaluate the command callback once the mount has committed its initial delivery."""
-        return await self._callback(*self._args, **self._kwargs)
-
-    def render(self) -> RenderResult:
-        """Render the initial card until the callback supplies its terminal layout."""
-        match self.execution.status:
-            case sl.operations.Pending():
-                return self._initial
-            case sl.operations.Succeeded(value=value):
-                return value
-            case sl.operations.Failed(error=error):
-                payload = build_error_notice(error, self._locale)
-                return error_node(payload.title, payload.detail)
-            case sl.operations.Cancelled():
-                return self._initial
 
 
 @overload
 def managed_result[**P](
     callback: ManagedResultHandler[P],
     *,
-    title: str = _("Working"),
-    description: str = _("Getting information..."),
     dismiss_on_success: bool = False,
 ) -> ManagedResultCallback[P]: ...
 
@@ -123,8 +113,6 @@ def managed_result[**P](
 @overload
 def managed_result[**P](
     *,
-    title: str = _("Working"),
-    description: str = _("Getting information..."),
     dismiss_on_success: bool = False,
 ) -> Callable[[ManagedResultHandler[P]], ManagedResultCallback[P]]: ...
 
@@ -132,51 +120,35 @@ def managed_result[**P](
 def managed_result[**P](
     callback: ManagedResultHandler[P] | None = None,
     *,
-    title: str = _("Working"),
-    description: str = _("Getting information..."),
     dismiss_on_success: bool = False,
 ) -> ManagedResultCallback[P] | Callable[[ManagedResultHandler[P]], ManagedResultCallback[P]]:
     """Manage a command callback whose return value is a rendered terminal layout.
 
-    The decorated callback keeps its Discord-facing parameters. It runs after the initial
-    progress card is delivered, and its returned layout becomes the terminal scene. Failures
-    are rendered, recorded, and re-raised through the command's normal error handling path.
+    The decorated callback keeps its Discord-facing parameters and requires the command
+    dispatcher to have resolved the ambient invocation. It runs after the deferred progress
+    card is delivered, and its returned layout becomes the terminal scene.
     """
 
     def decorate(handler: ManagedResultHandler[P]) -> ManagedResultCallback[P]:
         @wraps(handler)
         async def invoke(*args: P.args, **kwargs: P.kwargs) -> None:
-            bound = inspect.signature(handler).bind(*args, **kwargs)
-            ctx = _command_context(bound.arguments)
-            locale = await _command_locale(ctx, bound.arguments)
-            component = _ManagedResultComponent(
-                handler,
-                args,
-                dict(kwargs),
-                initial=info_node(translate(locale, title), translate(locale, description)),
-                locale=locale,
+            invocation = await _command_invocation(args)
+
+            async def work() -> RenderResult:
+                return cast(RenderResult, await handler(*args, **kwargs))
+
+            async def on_error(error: sd.ManagedError) -> None:
+                await _record_error(invocation, error)
+
+            await sd.run_managed_result(
+                work,
+                message_destination=invocation.destination(),
+                make_root=cast(sd.MessageRootFactory, _make_root(invocation)),
+                initial=cast(RenderResult, info_node(L("Working"), L("Getting information..."))),
+                render_error=cast(sd.ErrorRenderer, lambda error: _render_error(invocation, error)),
+                on_error=on_error,
+                dismiss_on_success=dismiss_on_success,
             )
-            message_root = create_message_root(component, source=ctx, access=sd.Everyone(), locale=locale, timeout=900)
-            delivered = await message_root.send(message_destination(ctx, locale=locale))
-            match component.execution.status:
-                case sl.operations.Succeeded():
-                    if dismiss_on_success:
-                        await message_root.dismiss()
-                case sl.operations.Failed(error=error):
-                    result = delivered.result if isinstance(delivered, sd.delivery.Delivered) else None
-                    await record_operation_error(
-                        error,
-                        locale=locale,
-                        result=result,
-                        presented=isinstance(delivered, sd.delivery.Delivered) and delivered.settled,
-                        reports=_error_reports(bound.arguments),
-                    )
-                    raise error
-                case sl.operations.Cancelled():
-                    raise asyncio.CancelledError
-                case sl.operations.Pending():
-                    message = "managed command result remained pending after mount settlement"
-                    raise RuntimeError(message)
 
         return invoke
 
@@ -185,64 +157,20 @@ def managed_result[**P](
     return decorate
 
 
-def _command_context(arguments: dict[str, object]) -> Context[Any]:
-    """Find the command context in a bound discord.py callback."""
-    for name in ("ctx", "context"):
-        value = arguments.get(name)
-        if value is not None:
-            return value  # type: ignore[return-value]
-    message = "managed_result requires a command callback with a ctx or context parameter"
-    raise TypeError(message)
-
-
-async def _command_locale(ctx: Context[Any], arguments: dict[str, object]) -> str | None:
-    """Resolve the command locale when the owning bot exposes its settings service."""
-    settings = next((getattr(candidate, "settings_service", None) for candidate in arguments.values()), None)
-    if settings is None:
-        for candidate in arguments.values():
-            services = getattr(candidate, "services", None)
-            settings = getattr(services, "settings", None)
-            if settings is not None:
-                break
-    if settings is None:
-        return None
-    return await resolve_locale(ctx, settings)
-
-
-def _error_reports(arguments: dict[str, object]) -> Any:
-    """Find the bot's error report service without coupling the decorator to a cog type."""
-    for candidate in arguments.values():
-        services = getattr(candidate, "services", None)
-        reports = getattr(services, "error_reports", None)
-        if reports is not None:
-            return reports
-    return None
-
-
 async def run_command_operation(
-    target: Messageable,
+    invocation: sd.Invocation,
     work: OperationWork,
     *,
-    source: sd.runtime.RuntimeSource,
-    title: str = _("Working"),
-    description: str = _("Getting information..."),
-    locale: str | None = None,
+    destination: sd.MessageDestination | None = None,
     dismiss_on_success: bool = False,
-    reports: Any = None,
 ) -> None:
     """Deliver and settle one command operation, rethrowing a rendered failure."""
-    component = CommandOperation(
-        work,
-        initial=info_node(translate(locale, title), translate(locale, description)),
-        locale=locale,
-    )
-    message_root = create_message_root(component, source=source, access=sd.Everyone(), locale=locale, timeout=900)
-    message_destination = sd.send_to(target)
+    component = CommandOperation(invocation, work)
+    message_root = _make_root(invocation)(component)
+    target = invocation.destination() if destination is None else destination
 
-    async def capture(
-        payload: sd.message_payload.MessagePayload,
-    ) -> sd.delivery.DeliveryResult:
-        result = await message_destination(payload)
+    async def capture(payload: sd.message_payload.MessagePayload) -> sd.delivery.DeliveryResult:
+        result = await target(payload)
         component._result = result
         return result
 
@@ -252,14 +180,7 @@ async def run_command_operation(
             if dismiss_on_success:
                 await message_root.dismiss()
         case sl.operations.Failed(error=error):
-            result = delivered.result if isinstance(delivered, sd.delivery.Delivered) else None
-            await record_operation_error(
-                error,
-                locale=locale,
-                result=result,
-                presented=isinstance(delivered, sd.delivery.Delivered) and delivered.settled,
-                reports=reports,
-            )
+            await _record_error(invocation, sd.ManagedError(error, delivered))
             raise error
         case sl.operations.Cancelled():
             raise asyncio.CancelledError

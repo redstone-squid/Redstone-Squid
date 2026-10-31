@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.grids import GridCell
 from squid_ui.interactions import ActionBinding
+from squid_ui.planning.limits import V2Limits
 from squid_ui.planning.semantic_adaptation.common import (
     _button_style,
     _page_items,
@@ -253,17 +254,25 @@ def _media(node: Media, path: str, context: _Context) -> list[Node]:
         if first.spoiler and _cards(context):
             message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
             raise LayoutInvariantError(message)
-        result: list[Node] = [Gallery((GalleryItem(first.url, first.description, first.spoiler),))]
+        description = _resolve(first.description, context) if first.description is not None else None
+        result: list[Node] = [Gallery((GalleryItem(first.url, description, first.spoiler),))]
         if first.description is not None:
             result.append(Footer(_resolve(first.description, context), overflow=Never()))
         return result
     if _cards(context) and any(item.spoiler for item in node.items):
         message = f"{path}: classic targets cannot preserve media spoilers; provide an explicit Variants fallback"
         raise LayoutInvariantError(message)
+    if not isinstance(context.limits, V2Limits):
+        message = f"{path}: media galleries require Components V2 or a classic media strategy"
+        raise LayoutInvariantError(message)
     return [
         Gallery(
             tuple(
-                GalleryItem(item.url, item.description, item.spoiler)
+                GalleryItem(
+                    item.url,
+                    _resolve(item.description, context) if item.description is not None else None,
+                    item.spoiler,
+                )
                 for item in node.items[start : start + context.limits.gallery_items]
             )
         )

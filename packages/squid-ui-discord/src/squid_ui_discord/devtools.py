@@ -37,7 +37,8 @@ from squid_ui_discord.devtools_runtime import (
 )
 from squid_ui_discord.devtools_view import OperationalInspector, metrics_text, plan_text, scene_attachment
 from squid_ui_discord.live import find
-from squid_ui_discord.message_root import MessageRootSnapshot, current_message_root
+from squid_ui_discord.message_root import current_message_root
+from squid_ui_discord.message_root_contracts import MessageRootSnapshot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
 from squid_ui_discord.routing import routers
 from squid_ui_discord.sessions import SessionManager
@@ -87,7 +88,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         if self._owns_action_ledger:
             add_action_result_sink(self._action_ledger)
 
-    def cog_unload(self) -> None:
+    async def cog_unload(self) -> None:
         """Close the DevTools-owned action ledger when Discord unloads this cog."""
         if self._owns_action_ledger:
             self._action_ledger.close()

@@ -6,6 +6,7 @@ from dataclasses import dataclass, fields, is_dataclass, replace
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.nodes import Break, Budget, Card, Extension, Panel, Variants
 from squid_ui.semantic import (
+    AnyLayoutNode,
     Article,
     Aside,
     BestEffort,
@@ -17,7 +18,6 @@ from squid_ui.semantic import (
     Group,
     Items,
     KeepWithNext,
-    LayoutNode,
     OptionalContent,
     Paged,
     Section,
@@ -28,9 +28,9 @@ from squid_ui.semantic import (
     Unbreakable,
 )
 
-type LayoutTransform = Callable[[LayoutNode, str], Sequence[LayoutNode]]
+type LayoutTransform = Callable[[AnyLayoutNode, str], Sequence[AnyLayoutNode]]
 type _LayoutRoute = tuple[_FieldStep | _IndexStep | _SequenceStep, ...]
-type _RoutedLayoutTransform = Callable[[LayoutNode, str, _LayoutRoute], Sequence[LayoutNode]]
+type _RoutedLayoutTransform = Callable[[AnyLayoutNode, str, _LayoutRoute], Sequence[AnyLayoutNode]]
 
 _CHILD_FIELD_NAMES = frozenset({"children", "node", "primary", "alternates", "fallback", "variants"})
 
@@ -52,7 +52,7 @@ class _SequenceStep:
     start: int
 
 
-def map_layout_children(node: LayoutNode, path: str, transform: LayoutTransform) -> LayoutNode:
+def map_layout_children(node: AnyLayoutNode, path: str, transform: LayoutTransform) -> AnyLayoutNode:
     """Rebuild ``node`` after transforming each of its direct layout children.
 
     Sequence positions accept a transform that splices zero or more nodes. Singular positions
@@ -64,22 +64,22 @@ def map_layout_children(node: LayoutNode, path: str, transform: LayoutTransform)
 
 
 def _map_layout_children_routed(
-    node: LayoutNode,
+    node: AnyLayoutNode,
     path: str,
     route: _LayoutRoute,
     transform: _RoutedLayoutTransform,
-) -> LayoutNode:
+) -> AnyLayoutNode:
     """Rebuild a node while identifying where each transformed child lands."""
 
-    def many(children: Sequence[LayoutNode], parent_path: str, field: str) -> tuple[LayoutNode, ...]:
-        transformed: list[LayoutNode] = []
+    def many(children: Sequence[AnyLayoutNode], parent_path: str, field: str) -> tuple[AnyLayoutNode, ...]:
+        transformed: list[AnyLayoutNode] = []
         for index, child in enumerate(children):
             transformed.extend(
                 transform(child, f"{parent_path}.{index}", (*route, _SequenceStep(field, len(transformed))))
             )
         return tuple(transformed)
 
-    def one(child: LayoutNode, child_path: str, child_route: _LayoutRoute) -> LayoutNode:
+    def one(child: AnyLayoutNode, child_path: str, child_route: _LayoutRoute) -> AnyLayoutNode:
         transformed = tuple(transform(child, child_path, child_route))
         if len(transformed) != 1:
             message = f"{child_path}: this structural position requires exactly one node"
@@ -184,13 +184,13 @@ def _map_layout_children_routed(
 
 
 def _map_many_at(
-    children: Sequence[LayoutNode],
+    children: Sequence[AnyLayoutNode],
     path: str,
     route: _LayoutRoute,
     field: str,
     transform: _RoutedLayoutTransform,
-) -> tuple[LayoutNode, ...]:
-    transformed: list[LayoutNode] = []
+) -> tuple[AnyLayoutNode, ...]:
+    transformed: list[AnyLayoutNode] = []
     for index, child in enumerate(children):
         transformed.extend(transform(child, f"{path}.{index}", (*route, _SequenceStep(field, len(transformed)))))
     return tuple(transformed)

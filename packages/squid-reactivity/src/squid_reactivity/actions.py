@@ -13,7 +13,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 from types import MappingProxyType
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    # `core` imports this module at runtime, so the edge back has to stay type-only.
+    from squid_reactivity.core import CellPatchSet
 
 _log = logging.getLogger(__name__)
 
@@ -155,12 +159,25 @@ class ConflictDetail:
     actual_version: int
 
 
+class ChangeToken[InverseT = Any](Protocol):
+    """A participant's handle to work it can plan and then stage an inverse for.
+
+    Opaque in what the inverse *is* -- that belongs to whichever backend produced it -- but
+    not in what can be asked of the handle. `sl.history()` calls exactly these two methods,
+    and typing the field `Any` meant neither the calls nor the implementations were checked.
+    """
+
+    def plan_inverse(self) -> InverseT | ConflictDetail: ...
+
+    def stage_inverse(self, inverse: InverseT) -> None: ...
+
+
 @dataclass(frozen=True, slots=True)
 class TransactionContribution:
     """An opaque reversible participant contribution and its safe report."""
 
     participant_id: str
-    token: Any
+    token: ChangeToken[Any]
     report: ChangeReport = ChangeReport(participants=1)
 
 
@@ -173,7 +190,7 @@ class ActionCommit:
     committed_at: datetime
     duration: timedelta
     reads: tuple[ObservedRead, ...]
-    patches: Any
+    patches: CellPatchSet
     participant_changes: tuple[TransactionContribution, ...] = ()
     tags: frozenset[str] = frozenset()
 
@@ -547,16 +564,38 @@ def causal_scope(cause: CausalRef, root_action_id: ActionId | None):
 
 
 def add_action_result_sink(sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION) -> None:
+    """Register a process-wide observer of committed and rolled-back actions.
+
+    The sink is held weakly and observes redacted snapshots under `policy`. Registering an
+    already-registered sink is a no-op and keeps its original policy. For an observer with a
+    narrower life than the process, prefer :func:`action_result_sink`, which cannot leak a
+    registration.
+    """
     if not any(registration.reference() is sink for registration in _sinks):
         _sinks.append(_SinkRegistration(weakref.ref(sink), policy))
 
 
 def remove_action_result_sink(sink: ActionResultSink) -> None:
+    """Unregister a sink; unknown sinks are ignored."""
     _sinks[:] = [
         registration
         for registration in _sinks
         if (registered := registration.reference()) is not None and registered is not sink
     ]
+
+
+@contextmanager
+def action_result_sink(sink: ActionResultSink, *, policy: RedactionPolicy = DEFAULT_REDACTION):
+    """Register a sink until the lexical scope exits.
+
+    The scoped form of :func:`add_action_result_sink`, for observers -- a test collector, a
+    bounded diagnostic capture -- whose life is a block rather than the process.
+    """
+    add_action_result_sink(sink, policy=policy)
+    try:
+        yield sink
+    finally:
+        remove_action_result_sink(sink)
 
 
 def emit_result(result: ActionResult) -> None:

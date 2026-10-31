@@ -12,7 +12,7 @@ from textwrap import dedent
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_payload
+from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
@@ -24,7 +24,7 @@ def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: i
 
 
 def render_build_review(
-    card: sl.LayoutNode,
+    card: sl.LayoutNode[sl.ComponentsV2Target],
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
 ) -> sd.message_payload.MessagePayload:
@@ -62,7 +62,7 @@ def render_build_review(
     # Panel, so splice into its own children instead of nesting a second container — one
     # accent-coloured box, and the vote text is solved in the same pass as the card's fields.
     if isinstance(card, sl.semantic.Section):
-        post: sl.LayoutNode = dataclasses.replace(card, children=(*card.children, *state))
+        post: sl.LayoutNode[sl.ComponentsV2Target] = dataclasses.replace(card, children=(*card.children, *state))
     elif isinstance(card, sl.primitives.Panel):
         post = sl.primitives.Panel(children=(*card.children, *state), accent=card.accent)
     else:
@@ -104,15 +104,19 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.
         **Log content**
         {target_content}
         """).strip()
-    return card_layout(
-        title,
-        description,
-        accent_colour=accent_colour,
-        fields=(
-            CardField("Upvotes", str(snapshot.upvotes)),
-            CardField("Downvotes", str(snapshot.downvotes)),
-            CardField("Net votes", str(snapshot.net_votes)),
-        ),
+    return render_payload(
+        [
+            card_node(
+                title,
+                description,
+                accent_colour=accent_colour,
+                fields=(
+                    CardField("Upvotes", str(snapshot.upvotes)),
+                    CardField("Downvotes", str(snapshot.downvotes)),
+                    CardField("Net votes", str(snapshot.net_votes)),
+                ),
+            )
+        ]
     )
 
 
@@ -134,14 +138,14 @@ def render_generic_poll(
 def _generic_poll_nodes(
     snapshot: VoteSessionSnapshot,
     voter_discord_ids: Mapping[int, int],
-) -> list[sl.LayoutNode]:
+) -> list[sl.LayoutNode[sl.ComponentsV2Target]]:
     """Build the semantic content for a generic poll without its controls."""
     poll = snapshot.poll
     assert poll is not None
     closed = snapshot.status is VoteStatus.CLOSED
     show_totals = poll.visibility != "anonymous_hidden" or closed
     options = snapshot.options_for_guild(poll.guild_id or 0)
-    nodes: list[sl.LayoutNode] = [sl.heading(sl.plain(poll.question))]
+    nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [sl.heading(sl.plain(poll.question))]
 
     if show_totals:
         raw = snapshot.raw_tallies()

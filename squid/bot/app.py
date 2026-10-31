@@ -17,7 +17,7 @@ from squid.bootstrap import create_bot_runtime
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
 from squid.bot.errors import SquidCommandTree
-from squid.bot.i18n import SquidAppCommandTranslator
+from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
@@ -52,7 +52,7 @@ from squid.topics import TopicPublisher, open_topic_bridge, resource_topic
 from squid_reactivity import LocalTopicBus
 from squid_storage import PostgresTopicBridge
 from squid_ui.profiling import MemoryProfiler
-from squid_ui_discord import install
+from squid_ui_discord import SessionManager, install, invocation_scope
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -62,6 +62,9 @@ DEFAULT_BUILD_CONFIG = BuildConfig()
 DEFAULT_COMMUNITY_CONFIG = CommunityConfig()
 DEFAULT_NOTIFICATION_CONFIG = NotificationConfig()
 CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation", "notification-deliveries"})
+# The layout runtime is supervised but deliberately not health-critical: `is_healthy`
+# reads job heartbeats, and forever-jobs such as the scheduler and challenge runner never
+# write one merely by staying alive.
 
 EXTENSIONS = (
     "squid.bot.reactions",
@@ -167,13 +170,18 @@ class RedstoneSquid(Bot):
         # One assembly for the whole process, reachable from any interaction as
         # `ClientRuntime.of(...)`: the session registry, the scheduler, and the challenge runner
         # a guard's dialog resumes an approved press through.
-        self.client_runtime = install(self, defaults=HOST_DEFAULTS, bus=self.topic_bus, profiler=self.layout_profiler)
-        assert self.client_runtime.scheduler is not None, "a topic bus was given, so there is a scheduler"
-        self.layout_scheduler = self.client_runtime.scheduler
-        self.layout_challenges = self.client_runtime.challenges
-        # How many of each panel a user may have open, and which mounts die with their
-        # parent. Reached from a handler as `interaction.client.mounts`.
-        self.sessions = self.client_runtime.sessions
+        self.client_runtime = install(
+            self,
+            defaults=HOST_DEFAULTS,
+            bus=self.topic_bus,
+            profiler=self.layout_profiler,
+            localization=localization_resolver,
+        )
+
+    @property
+    def sessions(self) -> SessionManager:
+        """The installed registry for live Discord sessions."""
+        return self.client_runtime.sessions
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -188,7 +196,7 @@ class RedstoneSquid(Bot):
         and mint a second ID unrelated to the log lines the command produced. A hybrid command
         reaching here from the application command tree keeps the ID that tree already bound.
         """
-        with correlation_scope():
+        with correlation_scope(), invocation_scope(ctx):
             await super().invoke(ctx)
 
     @override
@@ -221,8 +229,7 @@ class RedstoneSquid(Bot):
         # watcher keeps honest, so it runs before any extension loads rather than
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
-        self.background_tasks.start(self.layout_scheduler.run(), name="layout-scheduler")
-        self.background_tasks.start(self.layout_challenges.run(), name="layout-challenges")
+        self.background_tasks.start(self.client_runtime.run(), name="layout-runtime")
         if self.database_config is not None:
             self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)
         if self.topic_bridge is not None:

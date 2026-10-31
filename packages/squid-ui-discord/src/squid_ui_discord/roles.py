@@ -5,7 +5,7 @@ import re
 from collections.abc import Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Protocol
 
 import discord
 
@@ -13,7 +13,6 @@ from squid_ui.emoji import EmojiLike, normalize_emoji
 from squid_ui.primitives.nodes import (
     ControlGroup,
     Heading,
-    Node,
     Option,
     RoutedButton,
     RoutedSelect,
@@ -23,6 +22,8 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.routing import Route
 from squid_ui.runtime.component import Component
+from squid_ui.semantic import LayoutNode
+from squid_ui.target_types import DiscordTarget
 from squid_ui.text import TextLike
 from squid_ui_discord.routing import RouteComponent, RouteGroup
 
@@ -284,17 +285,34 @@ async def _member_lock(key: tuple[int, int]):
             _MEMBER_LOCKS.pop(key, None)
 
 
-def _role_is_default(role: Any, guild: Any) -> bool:
+class RoleLike(Protocol):
+    """The parts of a Discord role this module reads.
+
+    A protocol rather than `discord.Role` because the hierarchy rules below are pure functions of
+    these four attributes, and stating them keeps the role tests able to supply a stand-in without
+    constructing a whole gateway object.
+    """
+
+    @property
+    def id(self) -> int: ...
+
+    @property
+    def position(self) -> int: ...
+
+    @property
+    def managed(self) -> bool: ...
+
+    def is_default(self) -> bool: ...
+
+
+def _role_is_default(role: RoleLike) -> bool:
     """Whether a role is the guild's @everyone role."""
-    checker = getattr(role, "is_default", None)
-    if callable(checker):
-        return bool(checker())
-    return getattr(role, "id", None) == getattr(guild, "id", None)
+    return role.is_default()
 
 
-def _role_is_editable(role: Any, guild: Any) -> bool:
+def _role_is_editable(role: RoleLike, guild: Any) -> bool:
     """Apply Discord's role-management and hierarchy rules without mutating anything."""
-    if _role_is_default(role, guild) or bool(getattr(role, "managed", False)):
+    if _role_is_default(role) or role.managed:
         return False
     bot = getattr(guild, "me", None)
     permissions = getattr(bot, "guild_permissions", None)
@@ -336,7 +354,7 @@ async def _send_default_notice(interaction: discord.Interaction[Any], result: Ro
         await interaction.response.send_message(content, ephemeral=True, allowed_mentions=allowed_mentions)
 
 
-class RolePanel(Component):
+class RolePanel(Component[DiscordTarget]):
     """A stateless, persistent panel for managing member self-roles."""
 
     def __init__(
@@ -419,9 +437,9 @@ class RolePanel(Component):
             raise
         return toggle_route, set_route
 
-    def render(self) -> tuple[Node, ...]:
+    def render(self) -> Sequence[LayoutNode[DiscordTarget]]:
         """Render stateless buttons with a planner-owned select fallback."""
-        nodes: list[Node] = [Heading(self.title)]
+        nodes: list[LayoutNode[DiscordTarget]] = [Heading(self.title)]
         for category in self.categories:
             nodes.append(Heading(category.label, level=3))
             if category.description is not None:
@@ -550,7 +568,7 @@ class RolePanel(Component):
         role_by_id = {role_id: guild.get_role(role_id) for role_id in configured_ids}
         missing = frozenset(role_id for role_id, role in role_by_id.items() if role is None)
         member_roles = tuple(member.roles)
-        held_ids = frozenset(int(role.id) for role in member_roles if not _role_is_default(role, guild))
+        held_ids = frozenset(int(role.id) for role in member_roles if not _role_is_default(role))
         current = held_ids & {role.role_id for role in category.roles}
         if missing:
             return RoleConfigurationUnavailable(
@@ -559,16 +577,18 @@ class RolePanel(Component):
                 missing,
                 "One or more configured roles are missing in this server.",
             )
+        # Past the guard above every configured id resolved, but the lookup dict still carries the
+        # `None` its `get_role` calls could have returned.
+        resolved = {role_id: role for role_id, role in role_by_id.items() if role is not None}
 
         candidate, reason = self._candidate(category, current, toggle_role_id, selected_values)
         if reason is not None:
             return RoleSelectionInvalid(category.key, current, candidate, reason)
-        assert candidate is not None
         changed = current ^ candidate
         if not changed:
             return RolesUnchanged(category.key, current)
 
-        forbidden = frozenset(role_id for role_id in changed if not _role_is_editable(role_by_id[role_id], guild))
+        forbidden = frozenset(role_id for role_id in changed if not _role_is_editable(resolved[role_id], guild))
         if forbidden:
             return RoleMutationForbidden(
                 category.key,
@@ -583,7 +603,7 @@ class RolePanel(Component):
         seen: set[int] = set()
         for role in member_roles:
             role_id = int(role.id)
-            if _role_is_default(role, guild) or role_id in category_ids or role_id in seen:
+            if _role_is_default(role) or role_id in category_ids or role_id in seen:
                 continue
             complete_roles.append(role)
             seen.add(role_id)
@@ -617,7 +637,7 @@ class RolePanel(Component):
         current: frozenset[int],
         toggle_role_id: int | None,
         selected_values: tuple[str, ...] | None,
-    ) -> tuple[frozenset[int] | None, str | None]:
+    ) -> tuple[frozenset[int], str | None]:
         """Compute a candidate category set and explain invalid requests."""
         role_ids = {role.role_id for role in category.roles}
         maximum = len(category.roles) if category.cardinality.maximum is None else category.cardinality.maximum

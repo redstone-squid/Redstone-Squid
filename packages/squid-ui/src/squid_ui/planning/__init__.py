@@ -38,7 +38,10 @@ from squid_ui.planning.types import (
     DiscordPy27Adapter,
     DiscordPyAdapter,
     DiscordTarget,
+    HtmlAdapter,
+    HtmlTarget,
     Renderable,
+    RenderTarget,
 )
 from squid_ui.sources import POSITION_RESOLVER, Position, PositionResolver
 
@@ -54,6 +57,8 @@ __all__ = [
     "DiscordPy27Adapter",
     "DiscordPyAdapter",
     "DiscordTarget",
+    "HtmlAdapter",
+    "HtmlTarget",
     "LayoutOverflowError",
     "MeasuredLayout",
     "PlanCache",
@@ -61,6 +66,7 @@ __all__ = [
     "Position",
     "PositionResolver",
     "PreparedExtension",
+    "RenderTarget",
     "Renderable",
     "ResourceCost",
     "SolveNote",

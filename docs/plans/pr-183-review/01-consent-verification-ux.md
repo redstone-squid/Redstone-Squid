@@ -145,7 +145,7 @@ way. There are no classic embeds anywhere in `squid/bot`; Components V2 is the o
 ### Out of scope, found while auditing `verification_codes`
 
 Recorded here because §1 adds columns to this table and a reader will be looking at it. Neither is a UX matter and
-neither is fixed by this plan; both are filed in [`BUGS.md`](../../../BUGS.md).
+neither is fixed by this plan; both are filed in [`BUGS.md`](https://github.com/redstone-squid/Redstone-Squid/blob/master/BUGS.md).
 
 - **`verification_codes.id` is a `SmallInteger` autoincrement primary key** (`infrastructure/models.py:227`) and
   rows are never deleted — `replace_verification_code` only flips `valid = False` and inserts a replacement
@@ -429,7 +429,7 @@ Things found while building that the plan did not predict:
   from docstrings, which the extractor never sees, so every command in the tree is English-only. Both
   are their own commits.
 - Two latent bugs found in `verification_codes` while adding to it are filed in
-  [`BUGS.md`](../../../BUGS.md): the `SmallInteger` primary key exhausts after 32,767 codes, and the
+  [`BUGS.md`](https://github.com/redstone-squid/Redstone-Squid/blob/master/BUGS.md): the `SmallInteger` primary key exhausts after 32,767 codes, and the
   code digest has no index. Both are still open — unrelated later commits (`db: index the foreign
   keys that referential actions scan`, `db: close four small schema defects`) touched other tables,
   not this one.

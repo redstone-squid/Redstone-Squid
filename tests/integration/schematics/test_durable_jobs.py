@@ -3,7 +3,7 @@
 import asyncio
 from collections.abc import AsyncGenerator, Coroutine
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 import pytest
 from sqlalchemy import func, select, text, update
@@ -23,7 +23,6 @@ from tests.unit.schematics.fakes import FakeSchematicAnalyzer
 
 pytestmark = pytest.mark.asyncio
 
-ResultT = TypeVar("ResultT")
 _TABLE = Base.metadata.tables["schematic_jobs"]
 
 
@@ -57,7 +56,7 @@ def durable_components(
     )
 
 
-async def _with_runner(runner: SchematicJobRunner, request: Coroutine[Any, Any, ResultT]) -> ResultT:
+async def _with_runner[ResultT](runner: SchematicJobRunner, request: Coroutine[Any, Any, ResultT]) -> ResultT:
     task = asyncio.create_task(request)
     while not task.done():
         await runner.process_batch()

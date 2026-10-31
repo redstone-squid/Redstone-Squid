@@ -10,6 +10,7 @@ import pytest
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.permissions.domain import Decision, Reason
+from tests.helpers.discord import make_layout_bot
 
 BUILD_LOG_CHANNEL = 500
 
@@ -38,7 +39,7 @@ def _cog(*, allowed: bool = True, account_consented: bool = True) -> BuildSubmit
 
     cog.bot = cast(
         Any,
-        SimpleNamespace(
+        make_layout_bot(
             services=SimpleNamespace(
                 settings=SimpleNamespace(),
                 accounts=accounts,

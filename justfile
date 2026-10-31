@@ -99,10 +99,10 @@ db-stamp-baseline:
     uv run alembic stamp 20260728_baseline
 
 test:
-    uv run pytest tests/unit tests/architecture packages/squid-reactive/tests packages/squid-stores/tests packages/squid-replicated/tests packages/squid-layouts/tests packages/squid-discord/tests packages/squid-patterns/tests
+    uv run --locked pytest
 
 test-integration:
-    uv run pytest tests/integration
+    uv run --locked pytest tests/integration
 
 # Prove the disposable API stack lifecycle without running an API fuzzer.
 [unix]
@@ -115,7 +115,11 @@ fuzz-api-smoke seed="0":
     uv run --locked python -m scripts.run_api_fuzz --seed {{seed}}
 
 test-all:
-    uv run pytest tests/unit tests/architecture packages/squid-reactive/tests packages/squid-stores/tests packages/squid-replicated/tests packages/squid-layouts/tests packages/squid-discord/tests packages/squid-patterns/tests tests/integration
+    uv run --locked pytest tests packages
+
+framework-dist output="dist":
+    uv run --locked python scripts/build_squid_ui_dist.py "{{output}}"
+    uv run --locked python scripts/check_squid_ui_dist.py "{{output}}"
 
 [unix]
 fuzz-target *settings:
