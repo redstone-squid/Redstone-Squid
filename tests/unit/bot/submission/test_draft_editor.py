@@ -10,6 +10,7 @@ from whenever import Instant
 from squid.bot.submission.ui.drafts import DraftEditorScreen, draft_editor
 from squid.runtime import BotServices
 from squid.submissions.application import StoredDraft, build_submission_manifest
+from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
 from squid.submissions.domain import DraftChange, DraftRevisionConflictError, DraftSnapshot, SubmissionOrigin
 from squid_ui.testing import labels
 
@@ -49,7 +50,7 @@ class Finalization:
 def setup() -> tuple[BotServices, Drafts]:
     now = Instant.now()
     draft = StoredDraft(
-        snapshot=DraftSnapshot(uuid4(), 7, "build_submission.v1", 1, "other"),
+        snapshot=DraftSnapshot(uuid4(), 7, CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION, "other"),
         origin=SubmissionOrigin.DISCORD,
         created_at=now,
         updated_at=now,
