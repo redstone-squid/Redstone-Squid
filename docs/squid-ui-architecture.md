@@ -416,10 +416,13 @@ class Thresholds(sl.forms.Form):
 
     def validate(self) -> tuple[sl.forms.FormIssue, ...]:
         if self.post_at <= self.remove_at:
-            return (sl.forms.FieldError(
-                Thresholds.post_at, Thresholds.remove_at,
-                message="Post threshold must exceed removal threshold.",
-            ),)
+            return (
+                sl.forms.FieldError(
+                    Thresholds.post_at,
+                    Thresholds.remove_at,
+                    message="Post threshold must exceed removal threshold.",
+                ),
+            )
         return ()
 
     async def on_submit(self, event: sl.SubmitEvent) -> None:
