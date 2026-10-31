@@ -513,7 +513,7 @@ async def test_reconciliation_discovers_artifacts_committed_by_an_old_worker(
             update(MediaNormalizationJobRecord)
             .where(MediaNormalizationJobRecord.upload_id == UPLOAD_ID)
             .values(
-                status=MediaJobStatus.COMPLETED.value,
+                status=MediaJobStatus.COMPLETED,
                 claimed_at=None,
                 claim_token=None,
                 completed_at=func.now(),
@@ -624,7 +624,7 @@ async def test_real_submission_draft_lifecycle_fences_new_media_and_discard(
     first = upload()
     await repository.enqueue(first, LIMITS)
     async with async_session_factory.begin() as session:
-        await session.execute(update(SubmissionDraft).where(SubmissionDraft.id == DRAFT_ID).values(status=status.value))
+        await session.execute(update(SubmissionDraft).where(SubmissionDraft.id == DRAFT_ID).values(status=status))
 
     replay = await repository.enqueue(first, LIMITS)
     assert replay.created is False

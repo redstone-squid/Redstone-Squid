@@ -272,7 +272,7 @@ def test_sponsor_migration_refuses_to_discard_retained_provenance(
                     "id, draft_id, draft_revision, payload, status, attention_at, attention_issues"
                     ") VALUES ("
                     "'99999999-9999-4999-8999-999999999999', :draft_id, 0, "
-                    "'{\"payload_schema\": 2}'::jsonb, 'needs_attention', now(), "
+                    "'{\"payload_schema\": 3}'::jsonb, 'needs_attention', now(), "
                     '\'[{"field_id": "submission", "reason": "target_rejected"}]\'::jsonb'
                     ")"
                 ),
@@ -296,7 +296,7 @@ def test_sponsor_migration_refuses_unresolved_legacy_attribution(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Schema-one requests cannot cross the migration without a verified sponsor snapshot."""
+    """Schema-two requests cannot cross the migration without a verified sponsor snapshot."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
     config = Config("alembic.ini", toml_file="pyproject.toml")
     command.upgrade(config, "f4a5b6c7d8e9")
@@ -319,7 +319,7 @@ def test_sponsor_migration_refuses_unresolved_legacy_attribution(
                     "id, draft_id, draft_revision, payload, status, attention_at, attention_issues"
                     ") VALUES ("
                     "'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', :draft_id, 0, "
-                    '\'{"payload_schema": 1, "sponsor_attribution": true}\'::jsonb, '
+                    '\'{"payload_schema": 2, "sponsor_attribution": true}\'::jsonb, '
                     "'needs_attention', now(), "
                     '\'[{"field_id": "sponsor_attribution", "reason": "target_rejected"}]\'::jsonb'
                     ")"
@@ -346,7 +346,7 @@ def test_sponsor_migration_refuses_unresolved_legacy_attribution(
                     "id, draft_id, draft_revision, payload, status, attention_at, attention_issues"
                     ") VALUES ("
                     "'cccccccc-cccc-4ccc-8ccc-cccccccccccc', :draft_id, 0, "
-                    '\'{"payload_schema": "1", "sponsor_attribution": "true"}\'::jsonb, '
+                    '\'{"payload_schema": "2", "sponsor_attribution": "true"}\'::jsonb, '
                     "'needs_attention', now(), "
                     '\'[{"field_id": "sponsor_attribution", "reason": "target_rejected"}]\'::jsonb'
                     ")"
@@ -510,7 +510,7 @@ def test_submission_content_policy_migration_preserves_uploads_and_retry_identit
                 ),
                 {"id": job_id, "draft": draft_id, "payload": json.dumps(payload), "digest": "a" * 64},
             )
-        command.upgrade(config, "head")
+        command.upgrade(config, "b4d6f8a0c2e4")
         with engine.connect() as connection:
             draft = connection.execute(
                 text("SELECT schema_revision, revision, answers FROM submission_drafts WHERE id = :id"),

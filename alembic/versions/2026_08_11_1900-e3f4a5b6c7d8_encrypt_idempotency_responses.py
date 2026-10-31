@@ -1,7 +1,7 @@
 """Encrypt retained idempotency response bodies.
 
 Revision ID: e3f4a5b6c7d8
-Revises: d2f3a4b5c6d7
+Revises: b4d6f8a0c2e4
 Create Date: 2026-08-11 19:00:00.000000
 """
 
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e3f4a5b6c7d8"
-down_revision: str | Sequence[str] | None = "d2f3a4b5c6d7"
+down_revision: str | Sequence[str] | None = "b4d6f8a0c2e4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

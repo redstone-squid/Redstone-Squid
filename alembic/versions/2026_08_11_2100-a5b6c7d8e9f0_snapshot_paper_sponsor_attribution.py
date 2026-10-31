@@ -27,7 +27,7 @@ def upgrade() -> None:
         BEGIN
             IF EXISTS (
                 SELECT 1 FROM submission_finalization_jobs
-                WHERE payload ->> 'payload_schema' = '1'
+                WHERE payload ->> 'payload_schema' = '2'
                   AND payload ->> 'sponsor_attribution' = 'true'
             ) THEN
                 RAISE EXCEPTION 'cannot migrate unresolved legacy sponsor attribution requests';
@@ -39,7 +39,7 @@ def upgrade() -> None:
     op.create_check_constraint(
         "submission_finalization_jobs_legacy_sponsor_forbidden",
         "submission_finalization_jobs",
-        "payload IS NULL OR NOT (payload ->> 'payload_schema' = '1' AND payload ->> 'sponsor_attribution' = 'true')",
+        "payload IS NULL OR NOT (payload ->> 'payload_schema' = '2' AND payload ->> 'sponsor_attribution' = 'true')",
     )
     op.add_column(
         "submission_drafts",
@@ -111,7 +111,7 @@ def downgrade() -> None:
                 SELECT 1 FROM submission_drafts WHERE source_installation_id IS NOT NULL
             ) OR EXISTS (
                 SELECT 1 FROM submission_finalization_jobs
-                WHERE payload ->> 'payload_schema' = '2'
+                WHERE payload ->> 'payload_schema' = '3'
             ) THEN
                 RAISE EXCEPTION 'cannot downgrade while sponsor attribution schema data is retained';
             END IF;

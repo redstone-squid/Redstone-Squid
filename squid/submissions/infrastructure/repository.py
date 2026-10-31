@@ -214,7 +214,7 @@ class PostgresDraftRepository(DraftRepository):
                     MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
                 )
                 .values(
-                    status=MediaJobStatus.DISCARDED.value,
+                    status=MediaJobStatus.DISCARDED,
                     claimed_at=None,
                     claim_token=None,
                     completed_at=None,
@@ -273,7 +273,7 @@ class PostgresDraftRepository(DraftRepository):
                         MediaNormalizationJobRecord.status != MediaJobStatus.DISCARDED.value,
                     )
                     .values(
-                        status=MediaJobStatus.DISCARDED.value,
+                        status=MediaJobStatus.DISCARDED,
                         claimed_at=None,
                         claim_token=None,
                         completed_at=None,
