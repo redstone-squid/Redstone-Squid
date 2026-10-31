@@ -12,14 +12,42 @@ import squid_layouts as sl
 
 def test_root_is_semantic_first() -> None:
     assert {"Section", "Paragraph", "Note", "Actions", "Component", "plan", "PlanReport", "TopicBus"} <= set(sl.__all__)
+    assert {"ActionKind", "ActionMiddleware", "ActionProceed", "ActionRequest"} <= set(sl.__all__)
     assert {"section", "paragraph", "note", "actions", "action", "ChildLike"} <= set(sl.__all__)
     assert {"budget", "paged", "unbreakable", "keep_with_next"} <= set(sl.__all__)
     assert {"Toggle", "ToggleEvent", "ToggleOwnership", "OFF", "toggle"} <= set(sl.__all__)
     assert {"MultiChoiceField", "UploadedFile"} <= set(sl.__all__)
-    assert {"Timestamp", "TimeStyle", "timestamp", "TimeField", "DateTimeField"} <= set(sl.__all__)
+    assert {
+        "AmbiguousTimePolicy",
+        "DateTimeField",
+        "NonexistentTimePolicy",
+        "TimeField",
+        "Timestamp",
+        "TimeStyle",
+        "ZonedDateTime",
+        "ZonedDateTimeField",
+        "ZonedTimestamp",
+        "timestamp",
+        "zoned_timestamp",
+    } <= set(sl.__all__)
     assert {"Decision", "DecisionOption", "DecisionState", "DecisionHandler", "confirm"} <= set(sl.__all__)
     assert {"CollectionEditor", "CollectionEntry", "CollectionState", "CollectionChangeHandler"} <= set(sl.__all__)
+    assert "CommitPolicy" in sl.__all__
+    assert {
+        "Editor",
+        "EditorCommitHandler",
+        "EditorSection",
+        "EditorSectionState",
+        "EditorState",
+        "EditorValues",
+    } <= set(sl.__all__)
+    assert {"Browser", "BrowserDetail", "BrowserOpenHandler", "BrowserOverview", "list_source"} <= set(sl.__all__)
+    assert {"Lookup", "LookupPickHandler", "LookupSearch"} <= set(sl.__all__)
     assert {"Download", "download"} <= set(sl.__all__)
+    assert {"Guard", "GuardVerdict", "GuardLedger", "GuardScope", "ADMIT", "guards"} <= set(sl.__all__)
+    assert "Feedback" in sl.__all__
+    assert "WizardReview" in sl.__all__
+    assert {"Scale", "ScaleField", "ScaleEvent", "ScaleOwnership", "UNRATED", "rating"} <= set(sl.__all__)
     assert {"Resource", "ResourceDelivery", "ResourceState", "Pending", "Ready", "Failed", "resource"} <= set(
         sl.__all__
     )
@@ -40,7 +68,6 @@ def test_root_is_semantic_first() -> None:
         "HtmlRenderer",
         "PresentationSession",
         "SceneCodec",
-        "solve",
         "conform",
         "render_static",
     ):
@@ -51,18 +78,33 @@ def test_root_is_semantic_first() -> None:
 def test_explicit_namespaces_expose_specialized_apis() -> None:
     assert sl.primitives.Button
     assert sl.primitives.File
-    assert sl.planning.solve
+    assert sl.planning.measure
+    assert sl.profiling.MemoryProfiler
+    assert sl.profiling.snapshot_json
     assert sl.runtime.ComponentRuntime
     assert sl.scene.Codec
     assert sl.scene.SceneFile
     assert sl.html.Renderer
     assert sl.discord.Mount
-    assert sl.discord.MountRegistry
+    assert sl.discord.SessionRegistry
     assert sl.discord.routers
-    assert sl.discord.Renderer
+    assert sl.discord.V2Renderer
+    assert sl.discord.ClassicRenderer
+    assert sl.discord.classic.compose
     assert sl.discord.SessionKey
-    assert sl.discord.WhenOpen
-    assert sl.discord.durability.MountManager
+    assert sl.discord.SessionPolicy
+    assert sl.discord.DiscordPresentation
+    assert sl.discord.DiscordMode.COMPONENTS_V2
+    assert sl.discord.DiscordModeError
+    assert sl.discord.mode_of
+    assert sl.discord.presentation.DiscordPresentation
+    assert not hasattr(sl.discord, "MountRegistry")
+    assert not hasattr(sl.discord, "WhenOpen")
+    assert sl.discord.guards.requires_role
+    assert sl.discord.durability.DurableSessionRuntime
+    assert sl.discord.durability.DurableBot
+    assert sl.discord.durability.DiscordFrontend
+    assert not hasattr(sl.discord.durability, "MountManager")
     assert sl.TopicBus
     assert sl.discord.Reactor.follow
 
@@ -82,6 +124,7 @@ sys.meta_path.insert(0, BlockAdapterDependencies())
 import squid_layouts
 import squid_layouts.html
 import squid_layouts.planning
+import squid_layouts.profiling
 import squid_layouts.runtime
 import squid_layouts.topics
 assert "discord" not in sys.modules

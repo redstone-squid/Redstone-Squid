@@ -8,11 +8,14 @@ resulting scene — authors never do budget arithmetic.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 
-from squid_layouts.actions import ActionBinding, ActionPolicy, PressHandler, SelectionHandler
+from squid_layouts.actions import ActionBinding, ActionPolicy, Feedback, PressHandler, SelectionHandler
 from squid_layouts.forms import FormBinding
-from squid_layouts.primitives.constraints import Alt, Overflow, Spill, Truncate
+from squid_layouts.guards import Guard
+from squid_layouts.primitives.constraints import Alt, Never, Overflow, Spill, Truncate
 from squid_layouts.primitives.styles import ActionStyle, Color
+from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
 
 
@@ -77,6 +80,14 @@ class Time:
 
 
 @dataclass(frozen=True, slots=True)
+class ZonedTime:
+    """An exact instant visibly retained with its named timezone."""
+
+    value: ZonedDateTime
+    prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class File:
     """A visible file component backed by a separately carried asset resource."""
 
@@ -108,6 +119,8 @@ class Button:
     emoji: str | None = None
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    guard: Guard | None = None
+    feedback: Feedback | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,19 +199,119 @@ class RawItem:
 
 
 @dataclass(frozen=True, slots=True)
-class Embed:
-    """A keyed component boundary expanded before portable planning."""
+class Boundary:
+    """A keyed component boundary expanded before portable planning.
+
+    Named for what it is rather than what it draws to. It has never had anything to do with
+    a Discord embed, and a node called ``Embed`` in the same union as real embed rendering
+    is a trap for every future reader.
+    """
 
     component: object
     key: str
 
     def __post_init__(self) -> None:
         if not self.key:
-            message = "Embed key must not be empty"
+            message = "Boundary key must not be empty"
             raise ValueError(message)
         if "." in self.key:
-            message = "Embed key must not contain '.'"
+            message = "Boundary key must not contain '.'"
             raise ValueError(message)
+
+
+# --- Classic message structure --------------------------------------------------------------
+#
+# These are as exact as `Row` and `Section` are, and gated the same way: a target that lacks
+# `message.content` or `layout.embed` rejects them during validation. They live in the shared
+# node union rather than a parallel IR so that one `Variants` ladder can offer a V2 rung and a
+# classic rung for the same region, and so `resolve_variants` and measurement stay single
+# implementations.
+
+
+@dataclass(frozen=True, slots=True)
+class Content:
+    """The classic message's `content` field: the text a reply preview or push shows.
+
+    A Components V2 message has no `content` at all, which is the whole reason the classic
+    target is a permanent capability rather than a migration ramp. At most one may appear in
+    a document, because a message has exactly one such field.
+
+    Defaults to `Never` because content is usually the part that must survive: it is what a
+    notification quotes, and silently shortening it defeats the reason it was written.
+    """
+
+    content: TextLike
+    overflow: Overflow = field(default_factory=Never)
+    priority: int = 0
+
+
+type CardText = TextLike | Text
+"""A card slot's text: a bare string, or a `Text` carrying an overflow policy.
+
+A bare string means `Never` — a title or a field name is written to be read whole, and
+quietly clipping one is worse than telling the author it does not fit. An author who would
+rather it shrank says so by writing `Text(value, overflow=Truncate())`.
+"""
+
+
+def card_text(value: CardText) -> Text:
+    """Normalize a card slot to a `Text` node, defaulting a bare string to `Never`."""
+    return value if isinstance(value, Text) else Text(value, overflow=Never())
+
+
+@dataclass(frozen=True, slots=True)
+class CardField:
+    """One embed field. A nested value, never a legal root node."""
+
+    name: CardText
+    value: CardText
+    inline: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CardAuthor:
+    name: CardText
+    url: str | None = None
+    icon_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CardFooter:
+    text: CardText
+    icon_url: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CardMedia:
+    """An embed image or thumbnail. The description is kept even where Discord drops it."""
+
+    url: str
+    description: TextLike | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Card:
+    """One embed: a titled, coloured, field-structured block beside the message text.
+
+    ``children`` are description blocks, joined with blank lines in document order — one
+    deterministic joining rule, so the same card always produces the same description and the
+    same fingerprint.
+
+    Every text-bearing slot takes the ordinary overflow policies through :data:`CardText`.
+    Server-generated embed properties — provider, video, and anything Discord fills in from a
+    URL it unfurls — are not offered, because Squid cannot own what it did not write.
+    """
+
+    children: tuple[Node, ...] = ()
+    title: CardText | None = None
+    url: str | None = None
+    fields: tuple[CardField, ...] = ()
+    footer: CardFooter | None = None
+    author: CardAuthor | None = None
+    accent: Color | None = None
+    image: CardMedia | None = None
+    thumbnail: CardMedia | None = None
+    timestamp: ZonedDateTime | datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -281,6 +394,26 @@ class Break:
     keep_with_next: bool = False
 
 
+class Fidelity(StrEnum):
+    """How faithfully one variant reproduces the region it represents.
+
+    Rung order is a *preference*, not a loss ladder. A later rung may be a perfectly
+    faithful alternative — paginating a long region loses nothing — so the solver must be
+    told which rungs actually cost the reader something rather than inferring it from
+    position. Without this, an exact but late rung would be priced as loss and a lossy
+    early rung would be priced as free, and `strict=True` could reject neither honestly.
+    """
+
+    EXACT = "exact"
+    """Every authored element survives, in a shape the target renders faithfully."""
+
+    REFORMATTED = "reformatted"
+    """Every element survives in a different shape: a table as lines, fields as prose."""
+
+    LOSSY = "lossy"
+    """Something the author wrote is not shown at all."""
+
+
 @dataclass(frozen=True, slots=True)
 class Variant:
     """One structural representation of a region and the capabilities it requires.
@@ -288,10 +421,15 @@ class Variant:
     ``nodes`` is a tuple because a variant may lower to several nodes — an ActionGroup becomes
     one Row per five buttons — and splicing them into the parent is exact where wrapping them
     in a Panel would invent the very container component the ladder exists to save.
+
+    ``fidelity`` defaults to :attr:`Fidelity.EXACT` because most alternatives are: an author
+    writing a ladder by hand is usually offering a smaller faithful shape. A library adapter
+    offering a rung that reformats or discards content must say so explicitly.
     """
 
     nodes: tuple[Node, ...]
     requires: frozenset[str] = frozenset()
+    fidelity: Fidelity = Fidelity.EXACT
 
     def __post_init__(self) -> None:
         if not self.nodes:
@@ -306,6 +444,10 @@ class Variants:
     Overflow policies shrink *text*; nothing they do returns a component, so a document with
     too many components would otherwise only be reportable. A ladder gives the solver
     something to give up: a button panel stepping to one select, a gallery to a link row.
+
+    A rung's *position* prices preference; its :class:`Fidelity` prices loss. A later exact
+    rung therefore beats an earlier reformatted one, and `strict=True` rejects the reformatted
+    or lossy rung it would otherwise have to accept silently.
 
     Rungs unsupported by the target are dropped at planning time; the survivors form a budget
     ladder. The solver opens every ladder at rung 0 and searches reachable rung assignments
@@ -329,7 +471,7 @@ class Variants:
 
     @classmethod
     def of(cls, *rungs: Node | Variant, priority: int = 0) -> Variants:
-        """Build a ladder from bare nodes, wrapping each in a capability-free Variant."""
+        """Build a ladder from bare nodes, wrapping each in an exact, capability-free Variant."""
         return cls(tuple(rung if isinstance(rung, Variant) else Variant((rung,)) for rung in rungs), priority)
 
 
@@ -340,6 +482,7 @@ type Node = (
     | Code
     | Lines
     | Time
+    | ZonedTime
     | File
     | Sep
     | Row
@@ -355,7 +498,9 @@ type Node = (
     | Budget
     | Break
     | RawItem
-    | Embed
+    | Boundary
+    | Card
+    | Content
     | Extension
     | Variants
 )

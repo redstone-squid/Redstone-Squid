@@ -6,14 +6,14 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from squid_layouts.discord import (
-    DEFAULT_LIMITS as LIMITS,
-)
-from squid_layouts.discord import (
     ELLIPSIS,
     LimitViolationError,
     conform,
     conform_modal,
     trim,
+)
+from squid_layouts.discord import (
+    V2_LIMITS as LIMITS,
 )
 from squid_layouts.discord.testing import assert_within_limits, payload_problems
 

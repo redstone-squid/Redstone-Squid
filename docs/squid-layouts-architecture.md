@@ -16,7 +16,7 @@ HTML, serialized to JSON, and handed to another process.
     target adapters -- finite lossless strategies plus sticky presentation state
         |
         v
-    exact primitives -- measured solve, declared degradation, pagination
+    exact primitives -- one measured candidate per searched state
         |
         +-- PlanReport (notes and fingerprints)
         +-- PlanMetrics (search/cache/latency instrumentation)
@@ -35,18 +35,25 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 
 | Need | API | Result |
 |---|---|---|
-| Stateful Discord interaction | sl.discord.Mount(component) | lifecycle, events, paging, edits |
-| Static Discord message | sl.discord.render_static(document) | discord.ui.LayoutView |
-| Discord view plus diagnostics | sl.discord.compose(document) | Composition |
+| Stateful Discord interaction | sl.discord.Mount(component, access=...) | lifecycle, access, events, paging, edits |
+| Scoped live UI lifetime | sl.discord.SessionRegistry | root/child cascade, cardinality, replacement |
+| Static Components V2 message | sl.discord.render_static(document) | DiscordPresentation |
+| Static classic message | sl.discord.classic.render_static(document) | DiscordPresentation |
+| Region in a host-owned classic message | sl.discord.classic.contribute(document, to=...) | AttachedClassicContribution |
+| Discord message plus diagnostics | sl.discord.compose(document) | Composition |
 | Portable planning | plan(document, target=...) | PlanResult |
 | Browser or preview drawing | sl.html.Renderer().draw(scene) | HTML string |
 | Cross-process transport | sl.scene.Codec.dumps and loads | canonical protocol JSON |
-| Resume an opted-in session | sl.discord.durability registry and `MountManager` | restored Mount |
+| Resume an opted-in session | sl.discord.durability.DurableSessionRuntime | recovered Session graph |
 
-sl.discord.compose is the Discord convenience path: plan for sl.discord.Target, draw with
-sl.discord.Renderer, then strictly audit the result. Detached composition can pass
-reserved_text; composing the complete document is preferable because the planner can see
-every cost. It never adopts an arbitrary existing `discord.py` view: renderers own their
+sl.discord.compose is the Components V2 convenience path: plan for `V2_TARGET`, draw with
+`V2Renderer`, then strictly audit the result. `sl.discord.classic.compose` is its counterpart
+for `CLASSIC_TARGET` and `ClassicRenderer`; both return a `DiscordPresentation`, which is the
+whole outgoing message rather than half of it. There is no default — the author picks the
+target, because the two modes differ in what a message can carry. Detached composition passes a
+reservation, measured from the host view rather than counted by hand; composing the complete
+document is preferable because the planner can see every cost. A reservation is applied by
+planning against a reduced target, so adaptation and measurement agree on the room available. It never adopts an arbitrary existing `discord.py` view: renderers own their
 output object, so unknown pre-existing controls cannot undermine measurement.
 
 ## Semantic authoring, adaptation, and exact primitives
@@ -88,12 +95,33 @@ honestly express that domain operation without an explicit grouping or commit mo
 Strategy ranking is lexicographic rather than scalar: representation stability by
 `Flexibility`, author display preference, pager count, transition distance, then stable path
 and strategy identifiers. Per-adapter versions invalidate only that adapter's sticky state.
-The solver first gives every semantic assignment its preferred structural rungs, then searches
-reachable `Variants` assignments best-first. If no wholly lossless candidate exists, author
-priority is compared before loss kind: semantic substitutions beat truncation, truncation beats
-spilling entries, and spilling beats dropping a whole node. Semantic strategy cost breaks the
-remaining tie. The default search budget is 512 measured whole-layout candidates. Exhaustion
-selects the best valid incumbent and records `planner.search_fallback`.
+Choosing between alternatives is one search, not several. Semantic strategies, semantic
+fallback branches, and primitive `Variants` rungs are all decisions in a single conditional
+state graph the planner explores best-first; `measure()` evaluates exactly one concrete
+primitive layout and never chooses anything. The graph is conditional because a decision only
+exists once the branch containing it is selected, so nine axes behind an unopened fallback
+cost nothing.
+
+States are canonical: a decision the selected branches no longer expose is dropped, a newly
+reachable axis opens at its cheapest candidate, and changing a semantic representation
+discards the ladder positions that were measured against the old tree. Frontier entries are
+ranked by the structural loss they already commit to, then by semantic strategy cost;
+completed candidates are ranked by their measured loss merged with that structural loss. So a
+lossless representation change is always tried before a fallback the author priced as loss.
+If no wholly lossless candidate exists, author priority is compared before loss kind: semantic
+substitutions beat truncation, truncation beats spilling entries, and spilling beats dropping
+a whole node.
+
+Search stops as soon as the frontier's lower bound cannot beat the best feasible incumbent.
+The default budget is 512 `measure()` evaluations; root-pagination probes are packing rather
+than optimization and are not counted. A ladder product too large for the remaining budget is
+walked one deterministic component-saving step at a time instead. Exhaustion, and any use of
+that guidance, returns the best incumbent and records `planner.search_fallback`.
+
+Every candidate gets its own `CursorCoordinator` and lowering, so a rejected state leaves no
+pagers, assets, events, bindings, or staged session writes behind. `PlanCache` stores the
+winning fallback branches, strategy assignment, and ladder positions; a hit re-lowers only
+those and recollects current callbacks without measuring again.
 
 Target-shaped nodes live under `squid_layouts.primitives`. Their policies are explicit:
 
@@ -102,8 +130,8 @@ Target-shaped nodes live under `squid_layouts.primitives`. Their policies are ex
 - `Paginate` has an explicit key, measured footer/navigation chrome, and optional `min_fill`
   and `widows` break preferences.
 - `Variants` supplies an ordered ladder of complete structural alternates for component
-  pressure; rungs may be capability-gated, and the planner filters them before a bounded
-  global search considers the survivors.
+  pressure; rungs may be capability-gated, and the planner filters them after target lowering
+  so the survivors number from zero for the rest of the search.
 - `Drop` and `Never` make omission or non-degradation explicit.
 
 Semantic helpers `truncate`, `spill`, `optional`, `fallback`, and `best_effort` grant the
@@ -167,39 +195,50 @@ policy behind pattern state.
 
 ## Components and Vue-inspired reactivity
 
-Components render synchronously from state. state observes assignment and nested list, dict,
-and set mutation. A default is deep-copied per instance, so `sl.state([])` is safe; reach for
-`state(factory=...)` when the initial value must be *computed* per instance rather than copied
-from a template, since the declaration itself runs once, at class-body time:
+Components render synchronously from state. A state field holds an **immutable** value and
+is replaced rather than mutated; every assignment is checked with `hash()`, which is deep, so
+`(1, [2])` and a frozen dataclass with a `list` field are both refused. Reach for
+`state(factory=...)` when the initial value must be *computed* per instance, since the
+declaration itself runs once, at class-body time; a plain default needs no copy and is shared:
 
     class Search(sl.Component):
         query: str = sl.state("")
-        results: list[str] = sl.state([])
+        results: tuple[str, ...] = sl.state(())
         opened_at: Instant = sl.state(factory=Instant.now)
 
         @sl.computed
         def title(self) -> str:
             return f"{len(self.results)} results for {self.query}"
 
-computed caches until the component tree invalidates. batch coalesces related writes.
-transaction restores every touched field if an exception escapes, and `sl.discord.Mount`
-dispatch wraps mutating actions in one.
+A mapping in state needs a container the check accepts: `sl.FrozenMapping` is a `Mapping`
+that copies its entries once and hashes, where `MappingProxyType` is read-only but neither.
+
+`computed` records what its body read and recomputes when one of those values moves --
+nothing is declared, so a conditional dependency is exact. It is lazy: one nobody renders is
+never evaluated, and one that raises fails where its value is used. `untracked()` reads
+without subscribing. batch coalesces related writes. transaction rolls back every write if an
+exception escapes, and `sl.discord.Mount` dispatch wraps mutating actions in one.
 
 That guarantee reaches declared state, and only declared state:
 
 | Attribute | Re-renders on write | Rolled back on failure |
 |---|---|---|
-| `sl.state(...)` | yes, including nested list, dict, and set mutation | yes |
-| `sl.state(copy="ref")` | on assignment | to the previous reference |
-| a plain attribute | no | no |
+| `sl.state(...)` | yes | yes |
+| `sl.state(opaque=True)` | on assignment, or on `mutated()` | to the previous reference |
+| a plain attribute | no | it cannot be written inside an action at all |
 | anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
+
+A write inside an action **stages**: it lands in the transaction's overlay and becomes visible
+when the action commits. The action reads its own writes, and so do the computeds downstream
+of them; another task reading the same component across an `await` sees the committed value
+until then. Rolling back is dropping the overlay.
 
 `sl.resource` is a descriptor-owned, runtime-only state machine rather than snapshot state:
 
     class Search(sl.Component):
         query: str = sl.state("")
 
-        @sl.resource(depends=(query,))
+        @sl.resource
         async def results(self) -> tuple[Result, ...]:
             return await index.search(self.query)
 
@@ -209,26 +248,29 @@ That guarantee reaches declared state, and only declared state:
                 case sl.Failed(error=error, previous=previous): ...
                 case sl.Ready(value=results): ...
 
-Dependencies are exact `sl.state` fields and invalidate the resource only when their transaction
-commits. Render observation keeps hidden resources lazy. The default visible delivery commits the
+The loader's reads are tracked the way a computed's are, so the state it consults is its
+dependency set and a committed write to any of it re-pends the resource at the next read. A
+resource whose loader has not run -- one holding a `.replace(value)` result -- presumes it
+reads every field its component declares, and narrows to the truth after its first real load.
+Render observation keeps hidden resources lazy. The default visible delivery commits the
 `Pending` branch before settling it; `ResourceDelivery.ATOMIC` settles the same state machine before
 delivery. Siblings settle concurrently under the frontend's task group, and newly revealed resources
 are discovered on the next bounded render pass. `.reload()` is awaited sugar over the same transition;
 `.replace(value)` publishes an authoritative local result.
 
-A plain attribute assigned during a transaction is therefore uncovered, so the framework says
-so: a read-only action raises `ReactiveWriteError`, and a mutating one logs a warning naming
-the attribute. `sl.strict_state()` turns that warning into `UndeclaredStateError`; the test
-suite runs with it on. Declare the field to make it stop.
+A plain attribute assigned during a transaction is therefore uncovered, and the framework
+refuses it: `UndeclaredStateError`, or `ReactiveWriteError` in a read-only action. It raises
+*before* the write lands, which is the point -- a landed write is exactly the one thing a
+rollback would leave standing. Declare the field to make it stop.
 
 A component *created* during an action is exempt, because a transaction restores the view the
 action started from and such a component had no state then. Handlers are free to build one.
 The rule is birth, not mounting: a component built earlier and not currently in the tree is
 still covered, since it may be about to go back in.
 
-Neither rollback nor invalidation reaches a change made *through* a field — setting an
-attribute on the object a `copy="ref"` field holds, for instance. Nothing can observe that, so
-say it explicitly:
+A state value is immutable, so the only field whose contents can change behind the
+framework's back is an `opaque=True` one -- setting an attribute on the collaborator it holds.
+Neither rollback nor invalidation reaches that, so say it explicitly:
 
     async def _door_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.door_orientation = event.selected[0]
@@ -239,13 +281,13 @@ field is the point — the call fails if that field stops being declared state, 
 signal cannot drift away from the declaration it depends on.
 
 state(persist=False) marks runtime-only data that durable snapshots omit. Persistent state
-must be JSON-safe. `sl.state(copy="ref")` covers the opposite case, a collaborator that is
-real state but must never be copied — a service, a guild, a session. It is never persisted,
-and it snapshots the reference rather than a deep copy:
+must be JSON-safe. `sl.state(opaque=True)` covers the opposite case, a collaborator the
+component holds and never mutates -- a service, a guild, a session. The immutability check is
+skipped for it, it settles on identity rather than equality, and it is never persisted:
 
     class Panel(sl.Component):
         page: str = sl.state("server")
-        guild: discord.Guild = sl.state(copy="ref")
+        guild: discord.Guild = sl.state(opaque=True)
 
         def __init__(self, guild: discord.Guild) -> None:
             self.guild = guild
@@ -292,7 +334,7 @@ metadata.
 Each runtime keeps a small callback-free plan LRU. Cache keys include semantic structure,
 assets, target/version/limits, chrome, reservation, presentation/position state, nav factory
 version, strictness, and search budget. Cache hits always recollect current callbacks,
-including solver-generated pager controls.
+including planner-generated pager controls.
 
 ## Actions and frontend adapters
 
@@ -301,8 +343,19 @@ portable actor facts and response intents: notice, present_form, download, redir
 finish. Each frontend implements ActionResponder; Discord details live in
 sl.discord.ActionResponder.
 
+What a delivery moves is a `DiscordPresentation`: mode, content, embeds, view and assets as
+one value, so the payload Squid owns can be staged, logged and asserted on rather than
+assembled kwarg by kwarg. `DiscordMode` is `CLASSIC` or `COMPONENTS_V2`; construction rejects
+the combinations Discord answers with an unhelpful 400, including a classic view that reports
+`has_components_v2()` and would therefore set the flag implicitly. `Destination` and
+`EditHandle.write` both take one. Only `COMPONENTS_V2` is constructed today; `CLASSIC` exists
+so the transition matrix is written once, and a `LayoutView` message can never go back to it —
+that raises `DiscordModeError` before the request.
+
 A mount writes back through an `EditHandle` rather than a stored message: a way to reach one
-already-sent message, and how long it is good for. The bot's own credentials never expire;
+already-sent message, and how long it is good for. A handle also records which mode the
+message is in, so the legacy fields a pre-Components-V2 message must clear are stated rather
+than guessed, and durable records carry the mode beside the locator. The bot's own credentials never expire;
 an interaction's do, and every click carries a fresh one, so `Mount` keeps the longest-lived
 handle it has seen. A handle that no longer addresses its message raises `StaleHandleError`,
 which is the one place webhook tokens and response shapes are understood. When no handle is
@@ -338,6 +391,25 @@ Use EXCLUSIVE for ordinary mutations, REBASE when the same logical action should
 newest state after waiting, PARALLEL_READ for side-effect-free reads, and IMMEDIATE only when
 concurrency is deliberately handled elsewhere.
 
+`Mount(..., middleware=(...))` installs application middleware directly; callers do not build a
+pipeline object. The mount freezes that sequence and treats the same instance repeated in it as
+one installation, while separately configured instances of the same class remain distinct. The
+first entry is outermost, completion unwinds in reverse, omitting `proceed()` short-circuits the
+handler, and the continuation is valid once and only during its middleware call.
+
+Middleware begins only after access, binding resolution, the concurrency gate, and stale-generation
+handling admit the action. Plan 31's per-action guards belong immediately before middleware. Its
+immutable `ActionRequest` carries the portable event, stable key, interaction kind, effective
+policy, submitted and active generations, and a `rebased` flag. Rebase is metadata: a rebased action
+may subsequently complete or fail, so it is not a terminal dispatch result.
+
+The handler's reactive transaction is the onion endpoint rather than a wrapper around the whole
+onion. An outer middleware may therefore catch a handler exception only after the handler's state
+writes have rolled back. Middleware is application policy, not component code; it receives no
+component or binding and should not mutate component state through captured references. A
+short-circuit still returns to the mount's acknowledgement/flush path, and the watchdog, Discord
+write, generation commit, and error presentation remain outside user middleware.
+
 Form submissions run the same funnel, so REBASE resolves the newest binding there too: a
 `FormTrigger` declares one per render, planning carries it in `PlanResult.form_bindings`, and
 a late submission is rebased onto the newest one for its key. It is rebased only when that
@@ -350,7 +422,7 @@ to the same key in two different tables: `bindings` opens the form, `form_bindin
 ## Pagination
 
 Every paginator has an explicit unique string key. `sl.discord.Mount` stores a cursor per key; embedded
-components prefix it automatically. The solver measures active footers and navigation IR to
+components prefix it automatically. `measure()` costs active footers and navigation IR to
 a fixed point, so controls spend real text and component budgets.
 
 A paginator scene record contains a content fingerprint. When content under one key changes,
@@ -397,28 +469,28 @@ sl.html.Renderer emits escaped semantic markup, action identifiers, policies, an
 Standalone mode includes Discord-like CSS. It preserves planned structure; pixel-level
 fidelity also needs the website's chosen Discord-markdown and emoji renderer.
 
-## Durable mounts
+## Durable sessions
 
 Durability is opt-in:
 
-1. Register a stable root key, positive version, and host factory in ComponentRegistry.
-2. Build and attach the mount to MountManager.
-3. Checkpoint at a host-chosen durability boundary.
-4. Restore through the registry and a SnapshotStore implementation.
+1. Register a stable recipe key, positive version, and complete mount constructor in `ComponentRegistry`.
+2. Construct `DurableSessionRuntime` with the live `SessionRegistry`, a fenced store, and a frontend adapter.
+3. Start the runtime after Discord login and await recovery before gateway connection.
+4. Open and attach durable mounts through the runtime so the first complete record and later checkpoints remain
+   coordinated with visible Discord commits.
 
 Snapshots contain JSON-safe declared state by keyed component path plus the closed
-presentation vocabulary. They never contain callbacks, native items, service objects, or
-dynamic import instructions. The factory injects dependencies. Component and adapter versions
-are independent: an adapter update resets only its sticky strategy. Version or tree-shape
-mismatches fail with `SnapshotError` and require an explicit host migration.
+presentation vocabulary. One durable record owns the root and every attached child, including portable
+frontend locators, parent links, and actor attribution. Records never contain callbacks, native items, service
+objects, or dynamic import instructions. Restore recipes inject dependencies and explicit access policy.
+Component and adapter versions are independent; missing sequential component migrations retain the record as
+incompatible for operator action.
 
-MountManager starts no tasks. Database or Redis storage, checkpoint cadence, expiry, and
-reconnection remain host policy. A `DurableMountRecord` may pair the snapshot with a portable
-`MountLocator`, for example Discord channel/message IDs, plus an expiry. Stores that implement
-`LeaseSnapshotStore` add atomic claim, renew, and release operations. `MountManager.recover()`
-claims live records and returns each restored mount beside its locator; the host reconnects the
-frontend and periodically calls `renew_claims()` under its own task supervisor. This prevents
-two workers from dispatching the same visible controls after a restart.
+`DurableSessionRuntime.run()` owns recovery, claim renewal, visible-commit checkpointing, bounded retries, expiry,
+and shutdown release under a host-owned anyio task group. `DiscordFrontend` promotes public interaction delivery
+to permanent bot-token authority and reconnects a complete graph before registering it for dispatch. Fenced
+admission publishes the newcomer and retires selected durable victims atomically, while stale claim tokens cannot
+renew, save, or delete after takeover. SQLite assumes coordinated host clocks; Postgres uses database time.
 
 ## Durable route graph and dispatch onion
 
@@ -454,7 +526,7 @@ is the single framework boundary outside the whole user onion.
 ## Library binding: discord.py, not Discord alone
 
 The portable seam is the scene. Everything above it — semantic vocabulary, planner,
-solver, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
+`measure()`, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
 row widths) but imports no discord.py; `sl.html` consumes scenes. Everything below it —
 `renderer`, `mount`, `delivery`, `routing` — is a **discord.py adapter**, not a
 Discord-protocol adapter, and its dependencies sort into three strata:

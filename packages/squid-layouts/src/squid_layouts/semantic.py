@@ -6,11 +6,13 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import Literal
 
-from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
 from squid_layouts.forms import FormSpec, SubmitHandler
+from squid_layouts.guards import Guard
+from squid_layouts.palette import INHERIT, Accent, Palette, Tone
 from squid_layouts.primitives.nodes import Node as PrimitiveNode
-from squid_layouts.primitives.styles import Color
+from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import TextLike
 
 
@@ -68,14 +70,6 @@ class Emphasis(StrEnum):
     STRONG = "strong"
 
 
-class Tone(StrEnum):
-    NEUTRAL = "neutral"
-    INFO = "info"
-    SUCCESS = "success"
-    WARNING = "warning"
-    DANGER = "danger"
-
-
 class TimeStyle(StrEnum):
     SHORT_TIME = "t"
     LONG_TIME = "T"
@@ -120,6 +114,7 @@ type ChoiceOwnership = Ownership[tuple[str, ...], ChoiceEvent]
 type ItemOwnership = Ownership[str | None, OpenEvent[str | None]]
 type DisclosureOwnership = Ownership[bool, OpenEvent[bool]]
 type ToggleOwnership = Ownership[bool, ToggleEvent]
+type ScaleOwnership = Ownership[int | None, ScaleEvent]
 type NavOwnership = Ownership[str | None, NavigateEvent]
 
 # The engine-managed default of each stateful node, named for the state it seeds.
@@ -127,6 +122,7 @@ UNSELECTED: ChoiceOwnership = Managed(())
 UNOPENED: ItemOwnership = Managed(None)
 CLOSED: DisclosureOwnership = Managed(initial=False)
 OFF: ToggleOwnership = Managed(initial=False)
+UNRATED: ScaleOwnership = Managed(None)
 FIRST_DESTINATION: NavOwnership = Managed(None)
 
 
@@ -146,14 +142,22 @@ class Cluster:
 
 
 @dataclass(frozen=True, slots=True)
+class Themed:
+    """A subtree planned with a presentation palette override."""
+
+    children: tuple[LayoutNode, ...]
+    palette: Palette
+
+
+@dataclass(frozen=True, slots=True)
 class Section:
     """A titled block of related content.
 
-    ``accent`` is an explicit house-colour override, not a semantic fact: it says "paint
-    this the brand's green", which is chrome the framework has no opinion about. Colour
-    that *means* something — advisory, warning, failed — belongs on `Aside` or `Status`
-    via `Tone`, which every target maps for itself. Reach for ``accent`` when the exact
-    value is data (a guild's configured colour) or house style, and for `Aside` otherwise.
+    ``accent`` is an exact colour override, not a semantic fact. Omit it to inherit the
+    active `Palette.brand`, pass ``None`` to opt out of an inherited accent, and pass a
+    colour when the exact value is data (such as a guild's configured colour). Colour that
+    *means* something — advisory, warning, failed — belongs on `Aside` or `Status` via
+    `Tone`, which the active palette maps without discarding the semantic meaning.
 
     ``thumbnail`` is a lead image shown beside the heading. With no heading there is
     nothing to sit beside, so it lowers to a leading single-image gallery instead.
@@ -161,7 +165,7 @@ class Section:
 
     children: tuple[LayoutNode, ...]
     heading: TextLike | None = None
-    accent: Color | None = None
+    accent: Accent = INHERIT
     thumbnail: str | None = None
 
 
@@ -171,7 +175,7 @@ class Article:
 
     children: tuple[LayoutNode, ...]
     heading: TextLike | None = None
-    accent: Color | None = None
+    accent: Accent = INHERIT
     thumbnail: str | None = None
 
 
@@ -363,6 +367,14 @@ class Timestamp:
 
 
 @dataclass(frozen=True, slots=True)
+class ZonedTimestamp:
+    """An exact instant rendered visibly in its named timezone."""
+
+    value: ZonedDateTime
+    label: TextLike | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class FormTrigger:
     """A content entry point that presents a portable form."""
 
@@ -373,6 +385,8 @@ class FormTrigger:
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
     tone: Tone = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
+    guard: Guard | None = None
+    """Admission for the press that opens the form; the submission is not re-admitted."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -385,6 +399,10 @@ class Action:
     available: bool = True
     allow_grouping: bool | None = None
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+    guard: Guard | None = None
+    """Whether this press may execute now. `available` is the render-time question."""
+    feedback: Feedback | None = None
+    """Busy feedback for a handler slow enough that the reader needs to see it running."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -451,6 +469,13 @@ class OpenEvent[ValueT](ActionEvent):
     """The reader asked to open something: one of N entries, or one disclosure."""
 
     opened: ValueT
+
+
+@dataclass(frozen=True, slots=True)
+class ScaleEvent(ActionEvent):
+    """The reader picked one point on an ordinal scale."""
+
+    value: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -620,6 +645,7 @@ type SemanticNode = (
     Group
     | Stack
     | Cluster
+    | Themed
     | Section
     | Article
     | Aside
@@ -640,6 +666,7 @@ type SemanticNode = (
     | Progress
     | Measure
     | Timestamp
+    | ZonedTimestamp
     | FormTrigger
     | Actions
     | Choices

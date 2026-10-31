@@ -15,8 +15,8 @@ from squid_layouts import (
 from squid_layouts.discord import Everyone, Mount
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.primitives import (
+    Boundary,
     Button,
-    Embed,
     Heading,
     Lines,
     Node,
@@ -59,7 +59,7 @@ class Pair(Component):
         self.right = Counter("right")
 
     def render(self):
-        return [Heading("Pair"), self.embed(self.left, key="left"), self.embed(self.right, key="right")]
+        return [Heading("Pair"), self.boundary(self.left, key="left"), self.boundary(self.right, key="right")]
 
 
 def _custom_ids(view: discord.ui.LayoutView) -> list[str]:
@@ -70,7 +70,7 @@ def _texts(view: discord.ui.LayoutView) -> list[str]:
     return [item.content for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay)]
 
 
-class TestEmbedding:
+class TestBoundaries:
     async def test_each_instance_answers_only_its_own_control(self):
         pair = Pair()
         mount = Mount(pair, access=Everyone(), timeout=None)
@@ -123,9 +123,9 @@ class Nest(Component):
         self.child = Nest(depth - 1) if depth else None
 
     def render(self):
-        nodes: list[Node | Embed] = [Row((Button(label="x", on_click=self._click, key="click"),))]
+        nodes: list[Node | Boundary] = [Row((Button(label="x", on_click=self._click, key="click"),))]
         if self.child is not None:
-            nodes.append(self.embed(self.child, key=f"level{self.depth}" + "_padding" * 4))
+            nodes.append(self.boundary(self.child, key=f"level{self.depth}" + "_padding" * 4))
         return [Panel(children=tuple(nodes))]
 
     async def _click(self, event: PressEvent) -> None: ...
@@ -154,7 +154,7 @@ class PagedPair(Component):
         self.right = PagedChild()
 
     def render(self):
-        return [self.embed(self.left, key="left"), self.embed(self.right, key="right")]
+        return [self.boundary(self.left, key="left"), self.boundary(self.right, key="right")]
 
 
 def test_embed_namespaces_pager_state_and_controls() -> None:
@@ -172,9 +172,9 @@ def test_embed_namespaces_pager_state_and_controls() -> None:
 def test_duplicate_sibling_embed_keys_are_rejected() -> None:
     class Duplicate(Component):
         def render(self):
-            return [self.embed(Counter("one"), key="same"), self.embed(Counter("two"), key="same")]
+            return [self.boundary(Counter("one"), key="same"), self.boundary(Counter("two"), key="same")]
 
-    with pytest.raises(LayoutInvariantError, match="duplicate Embed key"):
+    with pytest.raises(LayoutInvariantError, match="duplicate Boundary key"):
         commit_render(Mount(Duplicate(), access=Everyone(), timeout=None))
 
 
@@ -183,7 +183,7 @@ def test_one_component_instance_cannot_occupy_two_paths() -> None:
 
     class Duplicate(Component):
         def render(self):
-            return [self.embed(child, key="one"), self.embed(child, key="two")]
+            return [self.boundary(child, key="one"), self.boundary(child, key="two")]
 
     with pytest.raises(LayoutInvariantError, match="already embedded"):
         commit_render(Mount(Duplicate(), access=Everyone(), timeout=None))
@@ -192,7 +192,7 @@ def test_one_component_instance_cannot_occupy_two_paths() -> None:
 def test_component_embedding_cycles_are_rejected() -> None:
     class Cycle(Component):
         def render(self):
-            return self.embed(self, key="self")
+            return self.boundary(self, key="self")
 
     with pytest.raises(LayoutInvariantError, match="embedding cycle"):
         commit_render(Mount(Cycle(), access=Everyone(), timeout=None))
@@ -222,7 +222,7 @@ async def test_keyed_component_lifecycle_tracks_replacement_and_finish() -> None
             self.child = Tracked("first", events)
 
         def render(self):
-            return self.embed(self.child, key="child")
+            return self.boundary(self.child, key="child")
 
     parent = Parent()
     mount = Mount(parent, access=Everyone(), timeout=None)
@@ -251,7 +251,7 @@ def test_typed_context_flows_to_descendants_without_entering_component_state() -
 
         def render(self):
             self.provide(greeting, "hello from context")
-            return self.embed(self.child, key="child")
+            return self.boundary(self.child, key="child")
 
     view = commit_render(Mount(Parent(), access=Everyone(), timeout=None))
 
@@ -271,7 +271,7 @@ def test_semantic_actions_are_namespaced_across_embedded_instances() -> None:
             self.right = Child()
 
         def render(self):
-            return (self.embed(self.left, key="left"), self.embed(self.right, key="right"))
+            return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
 
     mount = Mount(Parent(), access=Everyone(), timeout=None)
     commit_render(mount)
@@ -305,7 +305,7 @@ def test_all_keyed_semantics_are_namespaced_through_semantic_containers() -> Non
             self.right = Child()
 
         def render(self):
-            return (self.embed(self.left, key="left"), self.embed(self.right, key="right"))
+            return (self.boundary(self.left, key="left"), self.boundary(self.right, key="right"))
 
     mount = Mount(Parent(), access=Everyone(), timeout=None)
     commit_render(mount)

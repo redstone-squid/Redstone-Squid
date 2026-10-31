@@ -45,9 +45,11 @@ import anyio
 import discord
 
 from squid_layouts.discord.mount import ErrorHook
+from squid_layouts.profiling import NoOpProfiler, OperationKind, OperationRecorder, Profiler, TraceOutcome, TraceResult
 from squid_layouts.routing import Route
 
 logger = logging.getLogger(__name__)
+_NOOP_PROFILER = NoOpProfiler()
 
 type RouteHandler = Callable[..., Awaitable[None]]
 """Storage type. The checked surface is `Router.route`, which pins the first argument."""
@@ -327,6 +329,7 @@ class Router[BotT: discord.Client]:
         on_gone: GoneHook[BotT] | None = None,
         on_error: ErrorHook | None = None,
         acknowledgement_timeout: float = 2.5,
+        profiler: Profiler = _NOOP_PROFILER,
     ) -> None:
         namespace_group = namespace if isinstance(namespace, RouteGroup) else None
         namespace_value = namespace if isinstance(namespace, str) else None
@@ -352,6 +355,7 @@ class Router[BotT: discord.Client]:
         self.on_gone = on_gone
         self.on_error = on_error
         self.acknowledgement_timeout = acknowledgement_timeout
+        self.profiler = profiler
         if namespace_group is not None:
             self.include(namespace_group)
 
@@ -684,34 +688,73 @@ class Router[BotT: discord.Client]:
             matched_alias=(registration is not None and registration.route.pattern.fullmatch(custom_id) is None),
         )
 
-        async def dispatch_operation() -> None:
-            try:
-                await self._run_middleware(self._middleware_for(request.group_prefix), request, operation)
-            except Exception as error:
-                await self._handle_error(interaction, error, source)
+        middleware = self._middleware_for(request.group_prefix)
+        trace_name = registration.route.format if registration is not None else source
+        with self.profiler.operation(
+            OperationKind.ROUTE_DISPATCH,
+            name=trace_name,
+            attributes={
+                "component": component.value,
+                "matched_alias": request.matched_alias,
+                "middleware": len(middleware),
+            },
+        ) as profile:
+            acknowledgement = profile.start_span("acknowledgement")
 
-        async def watchdog() -> None:
-            await anyio.sleep(self.acknowledgement_timeout)
-            await self._acknowledge_safely(interaction, source)
+            def finish_acknowledgement(source: str) -> None:
+                if interaction.response.is_done():
+                    acknowledgement.set_attribute("source", source)
+                    acknowledgement.finish()
 
-        async with anyio.create_task_group() as tasks:
-            tasks.start_soon(watchdog)
-            try:
-                await dispatch_operation()
-            finally:
-                tasks.cancel_scope.cancel()
-        await self._acknowledge_safely(interaction, source)
+            async def endpoint() -> None:
+                with profile.span("handler"):
+                    await operation()
+                finish_acknowledgement("handler")
+
+            async def dispatch_operation() -> None:
+                try:
+                    handled = await self._run_middleware(middleware, request, endpoint, profile=profile)
+                except Exception as error:
+                    profile.set_result(
+                        TraceResult(TraceOutcome.FAILED, f"{type(error).__module__}.{type(error).__qualname__}")
+                    )
+                    with profile.span("error_hook"):
+                        await self._handle_error(interaction, error, source)
+                    finish_acknowledgement("error_hook")
+                else:
+                    profile.set_result(TraceResult(TraceOutcome.COMPLETED, None if handled else "short_circuited"))
+
+            async def watchdog() -> None:
+                await anyio.sleep(self.acknowledgement_timeout)
+                deferred = await self._acknowledge_safely(interaction, source)
+                finish_acknowledgement("watchdog" if deferred else "handler")
+                if deferred:
+                    profile.mark_deadline_missed()
+
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(watchdog)
+                try:
+                    await dispatch_operation()
+                finally:
+                    tasks.cancel_scope.cancel()
+            deferred = await self._acknowledge_safely(interaction, source)
+            finish_acknowledgement("final_defer" if deferred else "handler")
 
     async def _run_middleware(
         self,
         middleware: tuple[Middleware[BotT], ...],
         request: RouteRequest[BotT],
         endpoint: RouteProceed,
-    ) -> None:
+        *,
+        profile: OperationRecorder,
+    ) -> bool:
         """Compose a one-shot middleware chain in first-added, outermost order."""
+        handled = False
 
         async def invoke(index: int) -> None:
+            nonlocal handled
             if index == len(middleware):
+                handled = True
                 await endpoint()
                 return
 
@@ -730,11 +773,14 @@ class Router[BotT: discord.Client]:
                 await invoke(index + 1)
 
             try:
-                await middleware[index].dispatch(request, proceed)
+                kind = type(middleware[index])
+                with profile.span(f"middleware:{kind.__module__}.{kind.__qualname__}"):
+                    await middleware[index].dispatch(request, proceed)
             finally:
                 active = False
 
         await invoke(0)
+        return handled
 
     async def _handle_error(
         self,
@@ -751,16 +797,18 @@ class Router[BotT: discord.Client]:
         except Exception:
             logger.exception("routed error hook failed in %s", source)
 
-    async def _acknowledge_safely(self, interaction: discord.Interaction[Any], source: str) -> None:
+    async def _acknowledge_safely(self, interaction: discord.Interaction[Any], source: str) -> bool:
         """Acknowledge an unused response slot, tolerating a concurrent handler response."""
         if interaction.response.is_done():
-            return
+            return False
         try:
             await interaction.response.defer()
         except discord.InteractionResponded:
-            return
+            return False
         except Exception:
             logger.exception("could not acknowledge %s", source)
+            return False
+        return True
 
     def _in_namespace(self, custom_id: str) -> bool:
         """Whether ``custom_id`` belongs to this router's reserved namespace."""

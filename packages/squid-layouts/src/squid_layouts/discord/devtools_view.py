@@ -39,7 +39,7 @@ class MountInspector(sl.Component):
     """This panel's own mount id, set by the cog once the mount exists — it is in the list
     like everything else, and unlabelled it reads as a mystery session."""
 
-    def __init__(self, *, focus: str | None = None, registry: sl.discord.MountRegistry | None = None) -> None:
+    def __init__(self, *, focus: str | None = None, registry: sl.discord.SessionRegistry | None = None) -> None:
         self.focus = focus
         self._registry = registry
 
@@ -99,7 +99,14 @@ class MountInspector(sl.Component):
     def _session_key(self, mount_id: str) -> Hashable | None:
         if self._registry is None:
             return None
-        return next((key for key, mount in self._registry.active() if mount.id == mount_id), None)
+        return next(
+            (
+                session.key
+                for session in self._registry.active()
+                if any(mount.id == mount_id for mount in session.mounts)
+            ),
+            None,
+        )
 
     # --- Detail -------------------------------------------------------------------------
 
@@ -119,6 +126,13 @@ class MountInspector(sl.Component):
                 sl.note("persisted fields only"),
                 sl.code(_dump(_exported_state(mount))),
                 heading="Component state",
+            )
+        )
+        children.append(
+            sl.section(
+                sl.note("cell versions and what each computed last read"),
+                sl.code(_dump_lines(_reactivity(mount))),
+                heading="Reactivity",
             )
         )
         children.append(
@@ -287,8 +301,8 @@ def _duration(seconds: float) -> str:
 def _exported_state(mount: sl.discord.Mount) -> dict[str, object]:
     """Declared persistent state for every component in the committed tree, by path.
 
-    Each component is exported on its own: `export_state` deep-copies, and one field holding
-    something that refuses to be copied must not cost the whole dump.
+    Each component is exported on its own, so one field whose value refuses to be formatted
+    does not cost the whole dump.
     """
     exported: dict[str, object] = {}
     for path, component in mount.runtime.components.items():
@@ -297,6 +311,39 @@ def _exported_state(mount: sl.discord.Mount) -> dict[str, object]:
         except Exception as error:
             exported[path] = f"<unreadable: {type(error).__name__}: {error}>"
     return exported
+
+
+def _reactivity(mount: sl.discord.Mount) -> list[str]:
+    """Every cell's version and every computed's current source set, resolved to names.
+
+    Names are resolved across the whole tree rather than per component, because a computed
+    may read another component's state and printing an identity would say nothing.
+    """
+    components = mount.runtime.components
+    labels: dict[int, str] = {}
+    for path, component in components.items():
+        for name, cell in sl.runtime.inspect_cells(component).items():
+            labels[cell.identity] = f"{path}.{name}"
+        for name, node in sl.runtime.inspect_computed(component).items():
+            labels[node.identity] = f"{path}.{name}"
+
+    lines: list[str] = []
+    for path, component in components.items():
+        lines.append(path)
+        for name, cell in sl.runtime.inspect_cells(component).items():
+            marks = " ".join(mark for mark, on in (("opaque", cell.opaque), ("default", not cell.assigned)) if on)
+            lines.append(f"  {name} v{cell.version}{f'  [{marks}]' if marks else ''}")
+        for name, node in sl.runtime.inspect_computed(component).items():
+            if not node.evaluated:
+                lines.append(f"  {name} (never evaluated)")
+                continue
+            read = ", ".join(labels.get(source, "<external>") for source in node.sources) or "nothing"
+            lines.append(f"  {name} v{node.version} <- {read}")
+    return lines
+
+
+def _dump_lines(lines: list[str]) -> str:
+    return "\n".join(lines) or "(no components)"
 
 
 def _presentation(session: sl.runtime.PresentationSession) -> dict[str, object]:

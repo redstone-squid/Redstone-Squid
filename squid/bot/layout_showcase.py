@@ -75,8 +75,8 @@ return sl.actions(*actions, key="showcase-actions")""",
 
     def render(self):
         return sl.stack(
-            self.embed(self.left, key="left"),
-            self.embed(self.right, key="right"),
+            self.boundary(self.left, key="left"),
+            self.boundary(self.right, key="right"),
         )
 
 # Keys namespace state, lifecycle, and action ids for each child.""",
@@ -297,15 +297,15 @@ class LayoutShowcase(sl.Component):
                 sl.truncate(
                     sl.paragraph(
                         L(
-                            "These are two instances of the same child class. Embed namespaces their state, "
+                            "These are two instances of the same child class. Boundaries namespace their state, "
                             "actions, and lifecycle paths, so clicking one cannot cross-wire the other."
                         )
                     )
                 ),
                 heading=L(t"Keyed component composition"),
             ),
-            self.embed(self.left, key="left"),
-            self.embed(self.right, key="right"),
+            self.boundary(self.left, key="left"),
+            self.boundary(self.right, key="right"),
         )
 
     def _localization(self) -> Sequence[sl.LayoutNode]:

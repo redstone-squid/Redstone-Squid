@@ -1,253 +1,146 @@
-"""Reactive async resources before a frontend chooses how to deliver them."""
+"""Named message-wide resource axes: the vocabulary the planner budgets in."""
 
-from collections.abc import Awaitable, Callable
-
-import anyio
 import pytest
 
-from squid_layouts import (
-    Component,
-    Failed,
-    Pending,
-    Ready,
-    ResourceDelivery,
-    ResourceNotReadyError,
-    resource,
-    state,
-    transaction,
-)
-from squid_layouts.primitives import Text
-from squid_layouts.runtime import ComponentRuntime
+from squid_layouts import LayoutInvariantError, UnsolvableLayoutError, plan
+from squid_layouts.discord import V2_LIMITS as LIMITS
+from squid_layouts.discord import V2_TARGET
+from squid_layouts.planning import TargetProfile, measure
+from squid_layouts.planning.limits import ATTACHMENTS, COMPONENTS, DISPLAY_TEXT
+from squid_layouts.planning.measure import RText, _BudgetRegion, _make_unit, measure_nodes, text_total
+from squid_layouts.planning.target import ResourceCost
+from squid_layouts.primitives import Never, Panel, Text, Variants
 
 
-class ResourcePanel(Component):
-    kind: str = state("first")
-    filters: list[str] = state([])
-    visible: bool = state(default=True)
+class TestResourceCost:
+    def test_a_negative_cost_is_rejected_where_it_is_written(self) -> None:
+        with pytest.raises(LayoutInvariantError, match="cannot cost -1"):
+            ResourceCost({COMPONENTS: -1})
 
-    def __init__(self, load: Callable[[str, tuple[str, ...]], Awaitable[str]]) -> None:
-        self._load = load
+    def test_zero_axes_are_dropped_so_equal_spending_compares_equal(self) -> None:
+        assert ResourceCost({COMPONENTS: 2}) == ResourceCost({COMPONENTS: 2, ATTACHMENTS: 0})
 
-    @resource(depends=(kind, filters))
-    async def result(self) -> str:
-        return await self._load(self.kind, tuple(self.filters))
+    def test_axes_are_stored_in_name_order_whatever_order_they_arrived_in(self) -> None:
+        cost = ResourceCost({COMPONENTS: 1, ATTACHMENTS: 1, DISPLAY_TEXT: 1})
 
-    def render(self):
-        if not self.visible:
-            return Text("hidden")
-        match self.result.state:
-            case Pending(previous=previous):
-                suffix = "" if previous is None else f":{previous.value}"
-                return Text(f"pending{suffix}")
-            case Failed(error=error):
-                return Text(f"failed:{error}")
-            case Ready(value=value):
-                return Text(value)
+        assert cost.axes == (ATTACHMENTS, COMPONENTS, DISPLAY_TEXT)
 
+    def test_addition_sums_every_axis_either_side_names(self) -> None:
+        combined = ResourceCost({COMPONENTS: 2, DISPLAY_TEXT: 5}) + ResourceCost({COMPONENTS: 3, ATTACHMENTS: 1})
 
-async def immediate(kind: str, filters: tuple[str, ...]) -> str:
-    return f"{kind}:{','.join(filters)}"
+        assert combined.values == {ATTACHMENTS: 1, COMPONENTS: 5, DISPLAY_TEXT: 5}
 
+    def test_overspending_names_every_offending_axis_not_just_the_first(self) -> None:
+        """A document over two budgets should hear about both in one pass."""
+        cost = ResourceCost({COMPONENTS: 41, DISPLAY_TEXT: 4001, ATTACHMENTS: 1})
 
-class TestResourceState:
-    async def test_reload_moves_from_pending_to_ready(self) -> None:
-        panel = ResourcePanel(immediate)
-        assert panel.result.state == Pending()
-        assert await panel.result.reload() == Ready("first:")
-        assert panel.result.value == "first:"
+        assert list(cost.over({COMPONENTS: 40, DISPLAY_TEXT: 4000, ATTACHMENTS: 10})) == [
+            (COMPONENTS, 41, 40),
+            (DISPLAY_TEXT, 4001, 4000),
+        ]
 
-    def test_value_rejects_non_ready_state(self) -> None:
-        panel = ResourcePanel(immediate)
-        with pytest.raises(ResourceNotReadyError, match=r"ResourcePanel\.result"):
-            _ = panel.result.value
+    def test_an_unbudgeted_axis_is_unconstrained_rather_than_zero_capacity(self) -> None:
+        assert ResourceCost({"embed_text": 9000}).within({COMPONENTS: 40})
 
-    async def test_failure_retains_the_previous_ready_value(self) -> None:
-        async def load(kind: str, _filters: tuple[str, ...]) -> str:
-            if kind == "broken":
-                message = "offline"
-                raise RuntimeError(message)
-            return kind
+    def test_cheaper_anywhere_is_per_axis_and_never_trades_one_for_another(self) -> None:
+        components = ResourceCost({COMPONENTS: 1, DISPLAY_TEXT: 100})
+        text = ResourceCost({COMPONENTS: 10, DISPLAY_TEXT: 5})
 
-        panel = ResourcePanel(load)
-        await panel.result.reload()
-        panel.kind = "broken"
+        # Neither dominates: one is blocked on components, the other on text, and the steps
+        # that free each are different steps.
+        assert components.cheaper_anywhere(text)
+        assert text.cheaper_anywhere(components)
 
-        failed = await panel.result._settle()
-
-        assert isinstance(failed, Failed)
-        assert str(failed.error) == "offline"
-        assert failed.previous == Ready("first")
-
-    async def test_replace_supersedes_an_in_flight_completion(self) -> None:
-        entered = anyio.Event()
-        release = anyio.Event()
-
-        async def load(_kind: str, _filters: tuple[str, ...]) -> str:
-            entered.set()
-            await release.wait()
-            return "late"
-
-        panel = ResourcePanel(load)
-        async with anyio.create_task_group() as tasks:
-            tasks.start_soon(panel.result._settle)
-            await entered.wait()
-            panel.result.replace("authoritative")
-            release.set()
-
-        assert panel.result.state == Ready("authoritative")
-
-    async def test_concurrent_settles_share_one_load(self) -> None:
-        entered = anyio.Event()
-        release = anyio.Event()
-        attempts = 0
-
-        async def load(_kind: str, _filters: tuple[str, ...]) -> str:
-            nonlocal attempts
-            attempts += 1
-            entered.set()
-            await release.wait()
-            return "shared"
-
-        panel = ResourcePanel(load)
-        async with anyio.create_task_group() as tasks:
-            tasks.start_soon(panel.result._settle)
-            await entered.wait()
-            tasks.start_soon(panel.result._settle)
-            await anyio.sleep(0)
-            release.set()
-
-        assert attempts == 1
-        assert panel.result.state == Ready("shared")
-
-    async def test_cancellation_leaves_the_resource_pending(self) -> None:
-        entered = anyio.Event()
-
-        async def load(_kind: str, _filters: tuple[str, ...]) -> str:
-            entered.set()
-            await anyio.sleep_forever()
-            raise AssertionError("unreachable")
-
-        panel = ResourcePanel(load)
-        async with anyio.create_task_group() as tasks:
-            tasks.start_soon(panel.result._settle)
-            await entered.wait()
-            tasks.cancel_scope.cancel()
-
-        assert panel.result.state == Pending()
+    def test_a_strictly_worse_cost_is_cheaper_nowhere(self) -> None:
+        assert not ResourceCost({COMPONENTS: 10}).cheaper_anywhere(ResourceCost({COMPONENTS: 5}))
 
 
-class TestResourceDependencies:
-    async def test_a_committed_dependency_write_invalidates_with_the_previous_value(self) -> None:
-        panel = ResourcePanel(immediate)
-        await panel.result.reload()
+class TestTargetCapacities:
+    def test_a_target_reads_its_budgets_from_its_limits(self) -> None:
+        assert V2_TARGET.capacities == {
+            DISPLAY_TEXT: LIMITS.total_text,
+            COMPONENTS: LIMITS.total_components,
+            ATTACHMENTS: LIMITS.attachments,
+        }
 
-        with transaction():
-            panel.kind = "second"
+    def test_a_reservation_shows_up_as_a_smaller_capacity(self) -> None:
+        reserved = V2_TARGET.reserve(ResourceCost({COMPONENTS: 5}))
 
-        assert panel.result.state == Pending(Ready("first:"))
-        assert await panel.result._settle() == Ready("second:")
+        assert reserved.capacity(COMPONENTS) == LIMITS.total_components - 5
+        assert reserved.capacity(DISPLAY_TEXT) == LIMITS.total_text
 
-    async def test_a_rolled_back_dependency_write_does_not_invalidate(self) -> None:
-        panel = ResourcePanel(immediate)
-        await panel.result.reload()
+    def test_an_axis_the_target_does_not_budget_has_no_capacity(self) -> None:
+        assert V2_TARGET.capacity("embed_text") is None
 
-        with pytest.raises(RuntimeError, match="abort"), transaction():
-            panel.kind = "second"
-            message = "abort"
-            raise RuntimeError(message)
-
-        assert panel.result.state == Ready("first:")
-
-    async def test_an_observed_in_place_write_invalidates(self) -> None:
-        panel = ResourcePanel(immediate)
-        await panel.result.reload()
-
-        panel.filters.append("new")
-
-        assert panel.result.state == Pending(Ready("first:"))
-        assert await panel.result._settle() == Ready("first:new")
-
-    async def test_mutated_invalidates_reference_copied_dependencies(self) -> None:
-        class RefPanel(Component):
-            values: list[str] = state(copy="ref")
-
-            def __init__(self) -> None:
-                self.values = []
-
-            @resource(depends=(values,))
-            async def joined(self) -> str:
-                return ",".join(self.values)
-
-            def render(self):
-                return Text(type(self.joined.state).__name__)
-
-        panel = RefPanel()
-        await panel.joined.reload()
-        panel.values.append("new")
-        panel.mutated("values")
-
-        assert panel.joined.state == Pending(Ready(""))
-
-    def test_dependencies_must_be_state_descriptors_on_the_same_component(self) -> None:
-        with pytest.raises(TypeError, match=r"Invalid\.result dependency must be an sl\.state"):
-
-            class Invalid(Component):
-                @resource(depends=("kind",))
-                async def result(self) -> str:
-                    return ""
-
-                def render(self):
-                    return Text("")
+    def test_reserving_an_unknown_axis_names_the_ones_that_exist(self) -> None:
+        with pytest.raises(LayoutInvariantError, match="no reservable resource 'embed_text'"):
+            V2_TARGET.reserve(ResourceCost({"embed_text": 1}))
 
 
-class TestResourceObservation:
-    def test_render_records_each_observed_resource_once(self) -> None:
-        panel = ResourcePanel(immediate)
-        tree = ComponentRuntime(panel).render()
+class TestMeasuredCost:
+    def test_a_measured_layout_reports_every_axis_it_spends(self) -> None:
+        measured = measure([Panel(children=(Text("hello"), Text("world")))])
 
-        assert tree.resources == (panel.result,)
+        assert measured.cost.get(COMPONENTS) == 3
+        assert measured.cost.get(DISPLAY_TEXT) == len("hello") + len("world")
 
-    def test_a_hidden_resource_is_not_observed_or_loaded(self) -> None:
-        panel = ResourcePanel(immediate)
-        panel.visible = False
+    def test_preferred_node_measurement_speaks_the_same_axes(self) -> None:
+        cost = measure_nodes([Panel(children=(Text("hello"),))])
 
-        tree = ComponentRuntime(panel).render()
+        assert cost.get(COMPONENTS) == 2
+        assert text_total(cost) == 5
 
-        assert tree.resources == ()
+    def test_an_overspent_document_names_the_axis_in_its_failure(self) -> None:
+        oversized = [Text(f"line {index}") for index in range(LIMITS.total_components + 1)]
 
-    def test_delivery_policy_is_part_of_the_bound_resource(self) -> None:
-        class AtomicPanel(Component):
-            @resource(delivery=ResourceDelivery.ATOMIC)
-            async def result(self) -> str:
-                return "ready"
-
-            def render(self):
-                return Text(type(self.result.state).__name__)
-
-        assert AtomicPanel().result.delivery is ResourceDelivery.ATOMIC
+        with pytest.raises(UnsolvableLayoutError, match=rf"41 {COMPONENTS} exceed target maximum 40"):
+            plan(oversized, target=V2_TARGET)
 
 
-class TestResourceOrdering:
-    async def test_an_older_completion_cannot_replace_a_newer_dependency_generation(self) -> None:
-        entered = {"old": anyio.Event(), "new": anyio.Event()}
-        release = {"old": anyio.Event(), "new": anyio.Event()}
+class TestBudgetRegions:
+    def test_a_budget_region_spanning_two_text_pools_is_rejected(self) -> None:
+        """One `Budget` states one preferred size; applying it to two pools would double it."""
+        units = [
+            _make_unit(Text("a"), RText(), 0, DISPLAY_TEXT),
+            _make_unit(Text("b"), RText(), 1, "embed_text"),
+        ]
+        region = _BudgetRegion(tuple(unit for unit in units if unit is not None), 0, 10, 0, best_effort=False)
 
-        async def load(kind: str, _filters: tuple[str, ...]) -> str:
-            captured = kind
-            entered[captured].set()
-            await release[captured].wait()
-            return captured
+        with pytest.raises(LayoutInvariantError, match="spans the text axes display_text, embed_text"):
+            _ = region.axis
 
-        panel = ResourcePanel(load)
-        panel.kind = "old"
-        async with anyio.create_task_group() as tasks:
-            tasks.start_soon(panel.result._settle)
-            await entered["old"].wait()
-            panel.kind = "new"
-            tasks.start_soon(panel.result._settle)
-            await entered["new"].wait()
-            release["new"].set()
-            await anyio.sleep(0)
-            release["old"].set()
+    def test_a_single_pool_region_reports_that_pool(self) -> None:
+        unit = _make_unit(Text("a"), RText(), 0, DISPLAY_TEXT)
+        assert unit is not None
 
-        assert panel.result.state == Ready("new")
+        assert _BudgetRegion((unit,), 0, 10, 0, best_effort=False).axis == DISPLAY_TEXT
+
+    def test_a_region_holding_no_text_claims_no_pool(self) -> None:
+        assert _BudgetRegion((), 0, 10, 0, best_effort=False).axis is None
+
+
+class TestParetoSearch:
+    def test_a_candidate_cheaper_on_one_axis_is_not_pruned_by_one_cheaper_on_another(self) -> None:
+        """Two documents blocked on different budgets need different steps to become legal."""
+        components = ResourceCost({COMPONENTS: 39, DISPLAY_TEXT: 3999})
+        text = ResourceCost({COMPONENTS: 5, DISPLAY_TEXT: 10})
+
+        assert components.cheaper_anywhere(text) is False
+        assert text.cheaper_anywhere(components) is True
+
+    def test_the_search_still_finds_a_fit_when_ladders_trade_different_axes(self) -> None:
+        """One ladder frees components, the other frees text, and neither dominates.
+
+        A search pruning on a single scalar prices the two steps against each other and can
+        walk the wrong one twice; both budgets have to be satisfied, so both must step.
+        """
+        wide = Variants.of(Panel(children=tuple(Text(f"w{index}") for index in range(20))), Text("w"))
+        long = Variants.of(Text("x" * 3990, overflow=Never()), Text("x"))
+        filler = [Text(f"f{index}") for index in range(19)]
+
+        result = plan([wide, long, *filler], target=TargetProfile("test", 1, limits=LIMITS))
+        rendered = repr(result.scene.components_v2.children)
+
+        assert "w0" not in rendered  # the component-heavy ladder gave way
+        assert "x" * 3990 not in rendered  # and so did the text-heavy one
+        assert "f18" in rendered  # while everything that fits is still shown

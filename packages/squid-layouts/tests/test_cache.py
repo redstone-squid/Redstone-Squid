@@ -10,10 +10,14 @@ from squid_layouts import (
     ListItem,
     Localization,
     Message,
+    Palette,
     Paragraph,
+    Section,
+    Stack,
+    fallback,
     plan,
 )
-from squid_layouts.discord import DEFAULT_TARGET, compose
+from squid_layouts.discord import V2_TARGET, compose
 from squid_layouts.planning import PlanCache
 from squid_layouts.planning.cache import CachedPlan
 from squid_layouts.primitives import (
@@ -27,7 +31,7 @@ from squid_layouts.primitives import (
 )
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.scene.codec import SceneCodec
-from squid_layouts.scene.model import PlanReport, SceneDocument
+from squid_layouts.scene.model import PlanReport, SceneComponentsV2, SceneDocument, ScenePanel
 
 
 async def _first(_event) -> None: ...
@@ -42,14 +46,28 @@ async def _previous(_event) -> None: ...
 async def _next(_event) -> None: ...
 
 
+def test_palette_is_part_of_plan_cache_identity() -> None:
+    cache = PlanCache()
+    document = Section((Paragraph("brand"),))
+
+    first = plan(document, target=V2_TARGET, palette=Palette(brand=0x111111), cache=cache)
+    second = plan(document, target=V2_TARGET, palette=Palette(brand=0x222222), cache=cache)
+
+    assert not second.metrics.cache_hit
+    assert isinstance(first.scene.components_v2.children[0], ScenePanel)
+    assert isinstance(second.scene.components_v2.children[0], ScenePanel)
+    assert (first.scene.components_v2.children[0].accent, second.scene.components_v2.children[0].accent) == (
+        0x111111,
+        0x222222,
+    )
+
+
 def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
     cache = PlanCache()
     session = PresentationSession()
-    first = plan(
-        Actions((Action("run", "Run", _first),), key="tools"), target=DEFAULT_TARGET, session=session, cache=cache
-    )
+    first = plan(Actions((Action("run", "Run", _first),), key="tools"), target=V2_TARGET, session=session, cache=cache)
     second = plan(
-        Actions((Action("run", "Run", _second),), key="tools"), target=DEFAULT_TARGET, session=session, cache=cache
+        Actions((Action("run", "Run", _second),), key="tools"), target=V2_TARGET, session=session, cache=cache
     )
 
     assert not first.metrics.cache_hit
@@ -58,18 +76,18 @@ def test_cache_hit_reuses_structure_and_rebinds_current_handler() -> None:
     assert second.bindings["run"].handler is _second
 
 
-def test_cache_hit_reuses_the_global_assignment_without_solving(monkeypatch) -> None:
+def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
     import squid_layouts.planning.planner as planner_module
 
     attempts = 0
-    original = planner_module.solve
+    original = planner_module.measure
 
     def counted(*args, **kwargs):
         nonlocal attempts
         attempts += 1
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(planner_module, "solve", counted)
+    monkeypatch.setattr(planner_module, "measure", counted)
     cache = PlanCache()
     document = (
         *(Paragraph(f"component {index}") for index in range(35)),
@@ -79,8 +97,8 @@ def test_cache_hit_reuses_the_global_assignment_without_solving(monkeypatch) -> 
         ),
     )
 
-    miss = plan(document, target=DEFAULT_TARGET, cache=cache)
-    hit = plan(document, target=DEFAULT_TARGET, cache=cache)
+    miss = plan(document, target=V2_TARGET, cache=cache)
+    hit = plan(document, target=V2_TARGET, cache=cache)
 
     assert attempts == miss.metrics.states_explored == 2
     assert hit.metrics == replace(miss.metrics, cache_hit=True)
@@ -99,8 +117,8 @@ def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> N
             ),
         )
 
-    miss = plan(document(_first), target=DEFAULT_TARGET, cache=cache)
-    hit = plan(document(_second), target=DEFAULT_TARGET, cache=cache)
+    miss = plan(document(_first), target=V2_TARGET, cache=cache)
+    hit = plan(document(_second), target=V2_TARGET, cache=cache)
 
     assert not miss.metrics.cache_hit
     assert hit.metrics.cache_hit
@@ -108,9 +126,38 @@ def test_cache_hit_reuses_variant_positions_and_rebinds_the_selected_rung() -> N
     assert hit.bindings["run"].handler is _second
 
 
+def test_cache_hit_restores_a_fallback_branch_and_rebinds_it(monkeypatch) -> None:
+    """All three decision classes travel in the entry, so a hit never re-searches."""
+    import squid_layouts.planning.planner as planner_module
+
+    cache = PlanCache()
+
+    def document(handler):
+        return (
+            *(Paragraph(f"component {index}") for index in range(35)),
+            fallback(
+                Stack(tuple(Paragraph(f"primary {index}") for index in range(10))),
+                Actions((Action("run", "Run", handler),), key="fallback-actions"),
+            ),
+        )
+
+    miss = plan(document(_first), target=V2_TARGET, cache=cache)
+    monkeypatch.setattr(planner_module, "measure", _never_measured)
+    hit = plan(document(_second), target=V2_TARGET, cache=cache)
+
+    assert hit.metrics.cache_hit
+    assert hit.scene is miss.scene
+    assert hit.bindings["run"].handler is _second
+
+
+def _never_measured(*_args, **_kwargs):
+    message = "a cache hit must not measure"
+    raise AssertionError(message)
+
+
 def test_plan_cache_evicts_the_least_recently_used_entry() -> None:
     cache = PlanCache(capacity=2)
-    scene = SceneDocument(SceneCodec.protocol, "discord.components-v2", 1, ())
+    scene = SceneDocument(SceneCodec.protocol, "discord.components-v2", 1, SceneComponentsV2(()))
     cached = CachedPlan(scene, PlanReport())
 
     cache.put("first", cached)
@@ -136,8 +183,8 @@ def test_cache_hit_rebinds_solver_generated_pager_controls() -> None:
         )
 
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
-    plan(document, target=DEFAULT_TARGET, nav=nav, cache=cache)
-    cached = plan(document, target=DEFAULT_TARGET, nav=nav, cache=cache)
+    plan(document, target=V2_TARGET, nav=nav, cache=cache)
+    cached = plan(document, target=V2_TARGET, nav=nav, cache=cache)
 
     assert cached.metrics.cache_hit
     assert cached.bindings["prev.traceback"].handler is _previous
@@ -147,11 +194,11 @@ def test_cache_hit_rebinds_solver_generated_pager_controls() -> None:
 def test_a_cache_hit_stages_the_same_session_writes_as_a_miss() -> None:
     """The session is part of the key, so a hit must not silently skip its writes."""
     document = Code("x" * 9000, overflow=Paginate(key="traceback"))
-    miss = plan(document, target=DEFAULT_TARGET, session=PresentationSession())
+    miss = plan(document, target=V2_TARGET, session=PresentationSession())
 
     cache = PlanCache()
-    plan(document, target=DEFAULT_TARGET, session=PresentationSession(), cache=cache)
-    hit = plan(document, target=DEFAULT_TARGET, session=PresentationSession(), cache=cache)
+    plan(document, target=V2_TARGET, session=PresentationSession(), cache=cache)
+    hit = plan(document, target=V2_TARGET, session=PresentationSession(), cache=cache)
 
     assert hit.metrics.cache_hit
     assert hit.session_updates == miss.session_updates
@@ -164,8 +211,8 @@ def test_plan_cache_separates_locales() -> None:
     english = Localization("en", gettext=lambda message: message)
     translated = Localization("xx", gettext=lambda _message: "Bonjour")
 
-    first = plan(document, target=DEFAULT_TARGET, localization=english, cache=cache)
-    second = plan(document, target=DEFAULT_TARGET, localization=translated, cache=cache)
+    first = plan(document, target=V2_TARGET, localization=english, cache=cache)
+    second = plan(document, target=V2_TARGET, localization=translated, cache=cache)
 
     assert not second.metrics.cache_hit
     assert first.scene != second.scene

@@ -2,12 +2,13 @@
 
 import pytest
 
+import squid_layouts as sl
 from squid_layouts import (
     LayoutInvariantError,
     Position,
     plan,
 )
-from squid_layouts.discord import DEFAULT_TARGET
+from squid_layouts.discord import V2_TARGET
 from squid_layouts.runtime import PresentationSession, apply_updates
 from squid_layouts.scene.model import (
     SceneGallery,
@@ -47,8 +48,8 @@ def test_small_single_choices_use_buttons_and_larger_sets_use_a_picker() -> None
     small = Choices("size", tuple(Choice(str(index), str(index)) for index in range(3)))
     large = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)))
 
-    assert isinstance(plan(small, target=DEFAULT_TARGET).scene.children[0], SceneRow)
-    assert isinstance(plan(large, target=DEFAULT_TARGET).scene.children[0], SceneSelect)
+    assert isinstance(plan(small, target=V2_TARGET).scene.components_v2.children[0], SceneRow)
+    assert isinstance(plan(large, target=V2_TARGET).scene.components_v2.children[0], SceneSelect)
 
 
 def test_items_switch_from_overview_to_focused_content_through_session_state() -> None:
@@ -60,24 +61,30 @@ def test_items_switch_from_overview_to_focused_content_through_session_state() -
             Item("two", "Two", (Paragraph("second detail"),), "second"),
         ),
     )
-    overview = plan(document, target=DEFAULT_TARGET, session=session)
+    overview = plan(document, target=V2_TARGET, session=session)
     session.select("catalog", ("two",))
-    focused = plan(document, target=DEFAULT_TARGET, session=session)
+    focused = plan(document, target=V2_TARGET, session=session)
 
-    assert any(isinstance(node, SceneSelect) for node in overview.scene.children)
-    assert any(isinstance(node, SceneText) and "second detail" in node.content for node in focused.scene.children)
+    assert any(isinstance(node, SceneSelect) for node in overview.scene.components_v2.children)
+    assert any(
+        isinstance(node, SceneText) and "second detail" in node.content for node in focused.scene.components_v2.children
+    )
 
 
 def test_details_disclosure_is_presentation_state() -> None:
     session = PresentationSession()
     document = Details("debug", "Debug details", (Paragraph("hidden body"),))
 
-    closed = plan(document, target=DEFAULT_TARGET, session=session)
+    closed = plan(document, target=V2_TARGET, session=session)
     session.disclose("debug", open_=True)
-    opened = plan(document, target=DEFAULT_TARGET, session=session)
+    opened = plan(document, target=V2_TARGET, session=session)
 
-    assert not any(isinstance(node, SceneText) and "hidden body" in node.content for node in closed.scene.children)
-    assert any(isinstance(node, SceneText) and "hidden body" in node.content for node in opened.scene.children)
+    assert not any(
+        isinstance(node, SceneText) and "hidden body" in node.content for node in closed.scene.components_v2.children
+    )
+    assert any(
+        isinstance(node, SceneText) and "hidden body" in node.content for node in opened.scene.components_v2.children
+    )
 
 
 def test_an_unset_selection_is_distinguishable_from_an_empty_one() -> None:
@@ -91,7 +98,7 @@ def test_an_unset_selection_is_distinguishable_from_an_empty_one() -> None:
 def test_navigation_groups_six_destinations() -> None:
     document = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(6)))
 
-    assert isinstance(plan(document, target=DEFAULT_TARGET).scene.children[0], SceneSelect)
+    assert isinstance(plan(document, target=V2_TARGET).scene.components_v2.children[0], SceneSelect)
 
 
 def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
@@ -102,13 +109,15 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
     )
     navigation = Navigation("tabs", tuple(Destination(str(index), f"Tab {index}") for index in range(36)))
 
-    choice_plan = plan(choices, target=DEFAULT_TARGET, positions={"size.choices": Position(offset=1)})
-    item_plan = plan(items, target=DEFAULT_TARGET, positions={"catalog.items": Position(offset=1)})
-    navigation_plan = plan(navigation, target=DEFAULT_TARGET, positions={"tabs.destinations": Position(offset=1)})
+    choice_plan = plan(choices, target=V2_TARGET, positions={"size.choices": Position(offset=1)})
+    item_plan = plan(items, target=V2_TARGET, positions={"catalog.items": Position(offset=1)})
+    navigation_plan = plan(navigation, target=V2_TARGET, positions={"tabs.destinations": Position(offset=1)})
 
-    choice_select = next(node for node in choice_plan.scene.children if isinstance(node, SceneSelect))
-    item_select = next(node for node in item_plan.scene.children if isinstance(node, SceneSelect))
-    navigation_select = next(node for node in navigation_plan.scene.children if isinstance(node, SceneSelect))
+    choice_select = next(node for node in choice_plan.scene.components_v2.children if isinstance(node, SceneSelect))
+    item_select = next(node for node in item_plan.scene.components_v2.children if isinstance(node, SceneSelect))
+    navigation_select = next(
+        node for node in navigation_plan.scene.components_v2.children if isinstance(node, SceneSelect)
+    )
     assert [len(choice_select.options), len(item_select.options), len(navigation_select.options)] == [11, 11, 11]
     assert [(pager.key, pager.page, pager.pages) for pager in choice_plan.scene.pagers] == [("size.choices", 1, 2)]
     assert [(pager.key, pager.page, pager.pages) for pager in item_plan.scene.pagers] == [("catalog.items", 1, 2)]
@@ -120,17 +129,25 @@ def test_large_semantic_pickers_fold_into_keyed_25_and_11_pages() -> None:
 def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> None:
     session = PresentationSession()
     original = tuple(Item(str(index), f"Item {index}", (Paragraph("detail"),)) for index in range(36))
-    first = plan(Items("catalog", original), target=DEFAULT_TARGET, session=session)
+    first = plan(Items("catalog", original), target=V2_TARGET, session=session)
     apply_updates(session, first.session_updates)
     session.move_cursor("catalog.items", Position(offset=1))
-    second_page = plan(Items("catalog", original), target=DEFAULT_TARGET, session=session)
+    second_page = plan(Items("catalog", original), target=V2_TARGET, session=session)
     apply_updates(session, second_page.session_updates)
-    assert "25" in next(node for node in second_page.scene.children if isinstance(node, SceneSelect)).options[0].value
+    assert (
+        "25"
+        in next(node for node in second_page.scene.components_v2.children if isinstance(node, SceneSelect))
+        .options[0]
+        .value
+    )
 
     inserted = (Item("new", "New", (Paragraph("detail"),)), *original)
-    replanned = plan(Items("catalog", inserted), target=DEFAULT_TARGET, session=session)
+    replanned = plan(Items("catalog", inserted), target=V2_TARGET, session=session)
     values = {
-        option.value for node in replanned.scene.children if isinstance(node, SceneSelect) for option in node.options
+        option.value
+        for node in replanned.scene.components_v2.children
+        if isinstance(node, SceneSelect)
+        for option in node.options
     }
     assert "25" in values
 
@@ -139,7 +156,7 @@ def test_choices_minimum_zero_allows_deselecting_all() -> None:
     document = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)), minimum=0)
 
     select = next(
-        node for node in plan(document, target=DEFAULT_TARGET).scene.children if isinstance(node, SceneSelect)
+        node for node in plan(document, target=V2_TARGET).scene.components_v2.children if isinstance(node, SceneSelect)
     )
     assert select.min_values == 0
 
@@ -148,7 +165,7 @@ def test_cross_page_multi_choice_requires_an_explicit_grouping_model() -> None:
     document = Choices("many", tuple(Choice(str(index), str(index)) for index in range(36)), maximum=2)
 
     with pytest.raises(LayoutInvariantError, match="cross-page multi-selection is ambiguous"):
-        plan(document, target=DEFAULT_TARGET)
+        plan(document, target=V2_TARGET)
 
 
 def test_tables_and_media_choose_mechanical_target_shapes() -> None:
@@ -159,12 +176,12 @@ def test_tables_and_media_choose_mechanical_target_shapes() -> None:
     )
     media = Media(tuple(MediaItem(str(index), f"https://example.invalid/{index}.png") for index in range(12)), "shots")
 
-    table_scene = plan(table, target=DEFAULT_TARGET).scene
-    media_scene = plan(media, target=DEFAULT_TARGET).scene
+    table_scene = plan(table, target=V2_TARGET).scene
+    media_scene = plan(media, target=V2_TARGET).scene
 
-    assert isinstance(table_scene.children[0], SceneText)
-    assert table_scene.children[0].content.startswith("```")
-    galleries = [node for node in media_scene.children if isinstance(node, SceneGallery)]
+    assert isinstance(table_scene.components_v2.children[0], SceneText)
+    assert table_scene.components_v2.children[0].content.startswith("```")
+    galleries = [node for node in media_scene.components_v2.children if isinstance(node, SceneGallery)]
     assert [len(gallery.items) for gallery in galleries] == [10, 2]
 
 
@@ -176,8 +193,8 @@ def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
         thumbnail="https://example.invalid/lead.png",
     )
 
-    scene = plan(document, target=DEFAULT_TARGET).scene
-    panel = scene.children[0]
+    scene = plan(document, target=V2_TARGET).scene
+    panel = scene.components_v2.children[0]
 
     assert isinstance(panel, ScenePanel)
     assert panel.accent == 0x43B581
@@ -188,10 +205,44 @@ def test_a_section_carries_house_colour_a_lead_image_and_small_print() -> None:
     assert panel.children[-1] == SceneText("-# Submission ID: 5")
 
 
+def test_palette_resolves_inherited_exact_and_explicitly_absent_accents() -> None:
+    document = (
+        sl.section("inherited"),
+        sl.section("absent", accent=None),
+        sl.section("exact", accent=0x123456),
+        sl.aside("semantic", tone=sl.Tone.WARNING),
+    )
+
+    panels = plan(
+        document,
+        target=V2_TARGET,
+        palette=sl.Palette(brand=0xABCDEF, warning=0x654321),
+    ).scene.components_v2.children
+
+    assert [panel.accent for panel in panels if isinstance(panel, ScenePanel)] == [
+        0xABCDEF,
+        None,
+        0x123456,
+        0x654321,
+    ]
+
+
+def test_palette_scope_is_dynamic_and_does_not_leak_to_siblings() -> None:
+    document = (
+        sl.section("outer before"),
+        sl.themed(sl.Palette(brand=0x222222), sl.section("inner")),
+        sl.section("outer after"),
+    )
+
+    panels = plan(document, target=V2_TARGET, palette=sl.Palette(brand=0x111111)).scene.components_v2.children
+
+    assert [panel.accent for panel in panels if isinstance(panel, ScenePanel)] == [0x111111, 0x222222, 0x111111]
+
+
 def test_a_lead_image_with_no_heading_has_nothing_to_sit_beside() -> None:
     document = Section((Paragraph("body"),), thumbnail="https://example.invalid/lead.png")
 
-    panel = plan(document, target=DEFAULT_TARGET).scene.children[0]
+    panel = plan(document, target=V2_TARGET).scene.components_v2.children[0]
 
     assert isinstance(panel, ScenePanel)
     assert panel.children[0] == SceneGallery((SceneGalleryItem("https://example.invalid/lead.png"),))
@@ -202,7 +253,7 @@ def test_fields_step_down_their_own_ladders_and_never_lose_a_field() -> None:
         (Fields(tuple(Field(str(index), f"Field {index}", "v" * 400, fallbacks=("short",)) for index in range(20))),),
     )
 
-    panel = plan(document, target=DEFAULT_TARGET).scene.children[0]
+    panel = plan(document, target=V2_TARGET).scene.components_v2.children[0]
 
     assert isinstance(panel, ScenePanel)
     body = "\n".join(child.content for child in panel.children if isinstance(child, SceneText))

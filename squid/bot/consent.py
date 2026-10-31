@@ -22,7 +22,7 @@ from squid.bot.ui import create_mount
 from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions, text_layout
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_layouts.discord import MountRegistry, SessionKey, WhenOpen
+from squid_layouts.discord import Opened, Reject, Rejected, SessionKey, SessionPolicy, SessionRegistry
 
 
 class NotAskedType(Enum):
@@ -372,7 +372,7 @@ def _destination(target: ConsentTarget) -> sl.discord.Destination:
 
 async def _send(target: ConsentTarget, view: discord.ui.LayoutView) -> None:
     """Send one plain layout where the prompt itself would have gone."""
-    await _destination(target)(view, [])
+    await _destination(target)(sl.discord.DiscordPresentation.components_v2(view))
 
 
 def _default_ephemeral(target: ConsentTarget) -> bool:
@@ -388,7 +388,7 @@ def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
     return cast(discord.Interaction[Any], target).user
 
 
-def _registry_of(target: ConsentTarget) -> MountRegistry:
+def _registry_of(target: ConsentTarget) -> SessionRegistry:
     """The bot's session registry, through whichever surface the caller arrived on."""
     if _is_context(target):
         return cast(Any, cast(commands.Context[Any], target).bot).mounts
@@ -525,16 +525,26 @@ async def prompt_for_consent(
     # end the wait too, or the caller blocks for the rest of the timeout on a dead prompt.
     mount.on_finish(component.abandon)
     registry = _registry_of(target)
-    key = SessionKey("consent", user_id)
-    opened = await registry.open(mount, _destination(target), key=key, policy=WhenOpen.REJECT, parent=parent)
-    if opened is None:
-        if registry.get(key) is not None:
-            await _send(
-                target,
-                text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))),
-            )
-        # The other way `open` declines is a destination that delivered nothing, which by
-        # contract has already told the user why. Either way there is nothing to wait on.
+    key = SessionKey.user("consent", user_id)
+    parent_session = None if parent is None else registry.session_for(parent)
+    if parent_session is None:
+        opened = await registry.open(
+            mount,
+            _destination(target),
+            key=key,
+            policy=SessionPolicy(collision=Reject()),
+            actor_id=user_id,
+        )
+    else:
+        opened = await parent_session.attach(mount, _destination(target), actor_id=user_id, parent=parent)
+    if isinstance(opened, Rejected):
+        await _send(
+            target,
+            text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))),
+        )
+        return NOT_ASKED
+    if not isinstance(opened, Opened):
+        # An abandoned destination has already explained why it delivered nothing.
         return NOT_ASKED
     return await component.wait()
 

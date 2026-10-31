@@ -27,7 +27,7 @@ flush, `Reactor.run` → `refresh_now`).
    folded into staging rather than run beside it**, because discovery *is* a render: a
    naive "stage, then load what it found" renders a component before its own `on_load`
    and brings the unloaded-state branches straight back. `render_component_tree` gained a
-   `defer` predicate — an `Embed` whose component still owes a load is recorded in
+   `defer` predicate — a `Boundary` whose component still owes a load is recorded in
    `ComponentTree.deferred` and not expanded — and `Mount._stage_loaded` loads a tier,
    renders to reveal the next, and draws only once nothing is deferred. A tier that still
    owes loads is rendered but never planned; a tree declaring no `on_load` renders and

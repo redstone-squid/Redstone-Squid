@@ -29,7 +29,7 @@ FOLLOW_DISCORD = "-"
 """The locale select's "no override" value; an empty select value is not sendable."""
 
 CHANNEL_SETTINGS: tuple[ScalarChannelSetting, ...] = ("Smallest", "Fastest", "First", "Builds", "Vote")
-"""Every channel setting, in the order the panel stacks their pickers."""
+"""Every channel setting, in the order the panel offers them."""
 
 CHANNEL_TYPES = [
     discord.ChannelType.text,
@@ -75,8 +75,10 @@ class SettingsPanel(sl.Component):
     """A semantic, mount-owned settings workspace.
 
     Discord channel and role pickers are represented as semantic choices so the layout planner
-    can page them when a guild has more than one legal select can hold. Text-entry operations
-    still use the Discord modal adapter, the one native form boundary in squid-layouts.
+    can page them when a guild has more than one legal select can hold. Only one channel
+    picker is on screen at a time, because a paged picker costs six components and five of
+    them do not fit beside the rest of the panel. Text-entry operations still use the Discord
+    modal adapter, the one native form boundary in squid-layouts.
     """
 
     history: sl.History = sl.history(limit=10)
@@ -84,11 +86,15 @@ class SettingsPanel(sl.Component):
 
     page: str = sl.state("server")
     kind: VoteKind = sl.state(VoteKind.BUILD)
+    editing: ScalarChannelSetting = sl.state(CHANNEL_SETTINGS[0])
+    """Which channel setting the single visible channel picker is currently editing."""
     confirming_reset: bool = sl.state(default=False)
     locale: str | None = sl.state(None, persist=False)
     # Refreshed from the services by open_server/open_voting, so a snapshot would only restore
     # them stale.
-    _channels: dict[ScalarChannelSetting, int | None] = sl.state(dict.fromkeys(CHANNEL_SETTINGS), persist=False)
+    _channels: sl.FrozenMapping[ScalarChannelSetting, int | None] = sl.state(
+        sl.FrozenMapping(dict.fromkeys(CHANNEL_SETTINGS)), persist=False
+    )
     _locale_override: str | None = sl.state(None, persist=False)
     _preset: EmojiPreset | None = sl.state(None, persist=False)
     _weights: tuple[RoleWeight, ...] = sl.state((), persist=False)
@@ -151,7 +157,7 @@ class SettingsPanel(sl.Component):
 
     async def open_server(self) -> None:
         stored = cast(Mapping[str, int | None], await self._settings.get_all(self._guild.id))
-        self._channels = {setting: stored.get(setting) for setting in CHANNEL_SETTINGS}
+        self._channels = sl.FrozenMapping({setting: stored.get(setting) for setting in CHANNEL_SETTINGS})
         self._locale_override = await self._settings.get_locale(self._guild.id)
         self.page = "server"
 
@@ -182,18 +188,30 @@ class SettingsPanel(sl.Component):
             )
         ]
         if self._capabilities.edit_server:
+            # One picker at a time. A guild with more than 25 channels pages every picker,
+            # and five paged pickers cost 30 of the 40 components a message has — the panel
+            # became unplannable at exactly the guild sizes that need it most. Every current
+            # value is still on screen: the fields above list all five.
+            selected = self.channel_id(self.editing)
             children.extend(
-                sl.Choices(
-                    key=f"channel-{setting}",
-                    choices=self._channel_choices(setting),
-                    selection=sl.controlled(
-                        (str(self.channel_id(setting)) if self.channel_id(setting) is not None else "clear",),
-                        lambda event, setting=setting: self._channel_changed(
-                            cast(ScalarChannelSetting, setting), event
+                (
+                    sl.Choices(
+                        key="channel-setting",
+                        choices=tuple(
+                            sl.Choice(setting, L(SETTING_LABELS[setting]), available=True)
+                            for setting in CHANNEL_SETTINGS
+                        ),
+                        selection=sl.controlled((self.editing,), self._editing_changed),
+                    ),
+                    sl.Choices(
+                        key=f"channel-{self.editing}",
+                        choices=self._channel_choices(self.editing),
+                        selection=sl.controlled(
+                            (str(selected) if selected is not None else "clear",),
+                            self._channel_changed,
                         ),
                     ),
                 )
-                for setting in CHANNEL_SETTINGS
             )
             children.append(
                 sl.Choices(
@@ -306,11 +324,14 @@ class SettingsPanel(sl.Component):
             choices.append(sl.Choice(str(role_id), label))
         return tuple(choices)
 
-    async def _channel_changed(self, setting: ScalarChannelSetting, event: sl.ChoiceEvent) -> None:
+    async def _editing_changed(self, event: sl.ChoiceEvent) -> None:
+        self.editing = cast(ScalarChannelSetting, event.selected[0])
+
+    async def _channel_changed(self, event: sl.ChoiceEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
         value = event.selected[0]
-        await self.set_channel(setting, None if value == "clear" else int(value))
+        await self.set_channel(self.editing, None if value == "clear" else int(value))
 
     async def _locale_changed(self, event: sl.ChoiceEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
@@ -376,7 +397,7 @@ class SettingsPanel(sl.Component):
     async def set_channel(self, setting: ScalarChannelSetting, channel_id: int | None) -> None:
         previous = self._channels[setting]
         await self._write_channel(setting, channel_id)
-        self._channels[setting] = channel_id
+        self._channels = sl.FrozenMapping({**self._channels, setting: channel_id})
         self.history.record(
             L("Changed {setting}", setting=L(SETTING_LABELS[setting])),
             undo=lambda: self._write_channel(setting, previous),

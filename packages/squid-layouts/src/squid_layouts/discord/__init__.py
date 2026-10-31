@@ -1,10 +1,11 @@
 """Discord Components V2 target, renderer, and runtime adapter."""
 
-from squid_layouts.discord import delivery, devtools, durability, live
+from squid_layouts.discord import classic, delivery, devtools, durability, guards, live, presentation
 from squid_layouts.discord.access import AccessDecision, AccessPolicy, Allowed, Check, Denied, Everyone, Owner, Users
 from squid_layouts.discord.actions import ActionResponder, native, responder
+from squid_layouts.discord.classic_renderer import ClassicRenderer, StaticClassicView, audit_classic_payload
 from squid_layouts.discord.compose import Composition, compose, render_static
-from squid_layouts.discord.conform import ELLIPSIS, LimitViolationError, conform, conform_modal, trim
+from squid_layouts.discord.conform import ELLIPSIS, conform, conform_modal, trim
 from squid_layouts.discord.delivery import (
     Abandoned,
     Delivered,
@@ -16,6 +17,24 @@ from squid_layouts.discord.delivery import (
     StaleHandleError,
     reply_to,
     respond_to,
+)
+from squid_layouts.discord.fragments import (
+    AttachedFragment,
+    Fragment,
+    FragmentOwnershipError,
+    StaleReservationError,
+    contribute,
+    fragment,
+)
+from squid_layouts.discord.inspection import (
+    AuditReport,
+    CustomIdSite,
+    DiscordReservation,
+    Violation,
+    ViolationCode,
+    audit,
+    cost,
+    measure,
 )
 from squid_layouts.discord.live import mounts
 from squid_layouts.discord.modal import (
@@ -38,8 +57,9 @@ from squid_layouts.discord.mount import (
     owned_mount,
 )
 from squid_layouts.discord.navigation import Navigator
-from squid_layouts.discord.reactor import Reactor
-from squid_layouts.discord.renderer import Renderer, RoutedItem, StaticView, Wire
+from squid_layouts.discord.presentation import DiscordMode, DiscordModeError, DiscordPresentation, mode_of
+from squid_layouts.discord.reactor import Reactor, ReactorSnapshot
+from squid_layouts.discord.renderer import RoutedItem, StaticView, V2Renderer, Wire
 from squid_layouts.discord.routing import (
     Middleware,
     RouteComponent,
@@ -52,10 +72,39 @@ from squid_layouts.discord.routing import (
     RouteRequest,
     routers,
 )
-from squid_layouts.discord.sessions import MountRegistry, SessionKey, WhenOpen
-from squid_layouts.discord.target import DEFAULT_TARGET, NativeItem, Target
-from squid_layouts.planning.limits import LIMITS as DEFAULT_LIMITS
-from squid_layouts.planning.limits import V2Limits as Limits
+from squid_layouts.discord.sessions import (
+    CollisionDecision,
+    CollisionPolicy,
+    CustomScope,
+    GlobalScope,
+    GuildScope,
+    Opened,
+    OpeningRequest,
+    OpenResult,
+    ProtectCrossUserAttachments,
+    Refuse,
+    Reject,
+    Rejected,
+    RejectionReason,
+    Replace,
+    ReplacementProtection,
+    ReplaceOldest,
+    Session,
+    SessionKey,
+    SessionPolicy,
+    SessionRegistry,
+    SessionScope,
+    SessionSummary,
+    Unprotected,
+    UserGuildScope,
+    UserScope,
+    open_personal,
+)
+from squid_layouts.discord.target import CLASSIC_TARGET, V2_TARGET, NativeItem, Target
+from squid_layouts.discord.targets import DEFAULT_TARGETS, TargetRegistry
+from squid_layouts.errors import ExistingLayoutError, LimitViolationError
+from squid_layouts.planning.limits import CLASSIC_LIMITS, ClassicLimits, DiscordLimits, V2Limits
+from squid_layouts.planning.limits import LIMITS as V2_LIMITS
 from squid_layouts.planning.navigation import (
     NavFactory,
     NavigationContext,
@@ -65,38 +114,60 @@ from squid_layouts.planning.navigation import (
     page_select_nav,
     seek_control,
 )
+from squid_layouts.planning.planner import EMPTY_RESERVATION
+from squid_layouts.planning.target import ResourceCost
 
 __all__ = [
-    "DEFAULT_LIMITS",
-    "DEFAULT_TARGET",
+    "CLASSIC_LIMITS",
+    "CLASSIC_TARGET",
+    "DEFAULT_TARGETS",
     "ELLIPSIS",
+    "EMPTY_RESERVATION",
+    "V2_LIMITS",
+    "V2_TARGET",
     "Abandoned",
     "AccessDecision",
     "AccessPolicy",
     "ActionResponder",
     "Allowed",
+    "AttachedFragment",
+    "AuditReport",
     "Check",
+    "ClassicLimits",
+    "ClassicRenderer",
+    "CollisionDecision",
+    "CollisionPolicy",
     "Composition",
+    "CustomIdSite",
+    "CustomScope",
     "Delivered",
     "DeliveryAbandoned",
     "DeliveryReceipt",
     "Denied",
     "Destination",
+    "DiscordLimits",
+    "DiscordMode",
+    "DiscordModeError",
+    "DiscordPresentation",
+    "DiscordReservation",
     "EditHandle",
     "EntityField",
     "EntityType",
     "ErrorHook",
     "Everyone",
+    "ExistingLayoutError",
     "FileField",
     "FinishHook",
+    "Fragment",
+    "FragmentOwnershipError",
+    "GlobalScope",
+    "GuildScope",
     "LabelSpec",
     "LimitViolationError",
-    "Limits",
     "Middleware",
     "ModalSpec",
     "Mount",
     "MountAddress",
-    "MountRegistry",
     "MountSnapshot",
     "MountedView",
     "NativeItem",
@@ -104,9 +175,21 @@ __all__ = [
     "NavigationContext",
     "NavigationState",
     "Navigator",
+    "OpenResult",
+    "Opened",
+    "OpeningRequest",
     "Owner",
+    "ProtectCrossUserAttachments",
     "Reactor",
-    "Renderer",
+    "ReactorSnapshot",
+    "Refuse",
+    "Reject",
+    "Rejected",
+    "RejectionReason",
+    "Replace",
+    "ReplaceOldest",
+    "ReplacementProtection",
+    "ResourceCost",
     "RouteComponent",
     "RouteDescription",
     "RouteGroup",
@@ -117,29 +200,54 @@ __all__ = [
     "RoutedItem",
     "Router",
     "SendResult",
+    "Session",
     "SessionKey",
+    "SessionPolicy",
+    "SessionRegistry",
+    "SessionScope",
+    "SessionSummary",
     "StaleHandleError",
+    "StaleReservationError",
+    "StaticClassicView",
     "StaticView",
     "Target",
+    "TargetRegistry",
     "TextInputSpec",
+    "Unprotected",
+    "UserGuildScope",
+    "UserScope",
     "Users",
-    "WhenOpen",
+    "V2Limits",
+    "V2Renderer",
+    "Violation",
+    "ViolationCode",
     "Wire",
+    "audit",
+    "audit_classic_payload",
     "build_form_modal",
     "build_modal",
+    "classic",
     "compose",
     "conform",
     "conform_modal",
+    "contribute",
+    "cost",
     "default_nav",
     "delivery",
     "devtools",
     "durability",
+    "fragment",
+    "guards",
     "live",
+    "measure",
+    "mode_of",
     "mounts",
     "native",
     "navigation_controls",
+    "open_personal",
     "owned_mount",
     "page_select_nav",
+    "presentation",
     "render_static",
     "reply_to",
     "respond_to",

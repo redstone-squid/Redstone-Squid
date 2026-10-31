@@ -60,7 +60,7 @@ Core design debts closed before further migration:
   reserved_text, so detached build and vote cards no longer bypass solving or audit.
 - Pagination controls and footers are measured IR, with independently keyed cursors and
   content-based reset. Count-paged lists share the same controls.
-- Explicit Embed boundaries namespace actions and pagers; Navigator is an ordinary
+- Explicit Boundary nodes namespace actions and pagers; Navigator is an ordinary
   composition consumer.
 - Structural Fold choices make component-count overflow solvable; entry priorities make
   text spill order semantic.

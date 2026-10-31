@@ -8,7 +8,8 @@ or drop, so looking at it and acting on it belong to the same message (audit C5'
 the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
-from typing import Any, override
+from collections.abc import Iterable, Mapping
+from typing import cast
 
 import discord
 
@@ -17,6 +18,9 @@ from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     MAX_BIO_LENGTH,
     MAX_DISPLAY_NAME_LENGTH,
+    MAX_LINK_LABEL_LENGTH,
+    MAX_LINK_URL_LENGTH,
+    MAX_PROFILE_LINKS,
     MAX_PRONOUNS_LENGTH,
     AccountIdentity,
     AccountProfile,
@@ -26,7 +30,6 @@ from squid.accounts.domain import (
 )
 from squid.accounts.errors import AccountNotFoundError
 from squid.bot.consent import NOT_ASKED, prompt_for_consent
-from squid.bot.errors import ErrorHandledModal
 from squid.bot.i18n import t
 from squid.bot.profile_render import identity_label, own_profile_avatar, own_profile_fields
 from squid.bot.ui import create_mount
@@ -54,6 +57,7 @@ class AccountPanel(sl.Component):
     _needs_consent: bool = sl.state(default=False, persist=False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
+    _profile_editor: sl.ComponentShell[sl.EditorState] | None = sl.state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -70,6 +74,7 @@ class AccountPanel(sl.Component):
         self.locale = locale
         self._timeout = timeout
         self._profile = AccountProfile.empty(account_id)
+        self._profile_editor = None
         self._mount: sl.discord.Mount | None = None
 
     async def on_load(self) -> None:
@@ -104,6 +109,19 @@ class AccountPanel(sl.Component):
             # DISCORD_BLUE is house chrome, not a Tone, so this needs sl.section's accent
             # rather than sl.status's fixed tone palette.
             return (sl.section(sl.paragraph(t(self.locale, _("Account controls closed"))), accent=DISCORD_BLUE),)
+        if self._profile_editor is not None:
+            return (
+                self.boundary(self._profile_editor, key="profile-editor"),
+                sl.primitives.Row(
+                    (
+                        sl.primitives.Button(
+                            t(self.locale, _("Cancel")),
+                            self._cancel_profile_edit,
+                            "cancel-profile-edit",
+                        ),
+                    )
+                ),
+            )
         fields = tuple(sl.field(field.name, field.value) for field in self._fields())
         footer = self._footer()
         media = own_profile_avatar(self._profile, self._identities)
@@ -241,15 +259,134 @@ class AccountPanel(sl.Component):
             self._needs_consent = False
             await event.notice(t(self.locale, _("Thanks. Press **Edit page** again to open the editor.")))
             return
-        await sl.discord.responder(event).send_modal(ProfileEditModal(self, self._profile, locale=self.locale))
+        self._profile_editor = self._build_profile_editor()
 
-    async def save_profile(self, interaction: discord.Interaction[Any], update: ProfileUpdate) -> None:
-        await self._accounts.update_profile(self._account_id, update)
+    def _build_profile_editor(self) -> sl.ComponentShell[sl.EditorState]:
+        profile_section = sl.EditorSection.form(
+            "profile",
+            t(self.locale, _("Profile")),
+            sl.FormSpec(
+                t(self.locale, _("Edit profile")),
+                (
+                    sl.TextField(
+                        key="display_name",
+                        label=t(self.locale, _("Display name")),
+                        required=False,
+                        maximum=MAX_DISPLAY_NAME_LENGTH,
+                    ),
+                    sl.TextField(
+                        key="pronouns",
+                        label=t(self.locale, _("Pronouns")),
+                        required=False,
+                        maximum=MAX_PRONOUNS_LENGTH,
+                    ),
+                    sl.TextAreaField(
+                        key="bio",
+                        label=t(self.locale, _("Bio")),
+                        required=False,
+                        maximum=MAX_BIO_LENGTH,
+                    ),
+                ),
+            ),
+        )
+        links = sl.CollectionEditor(
+            t(self.locale, _("Links")),
+            create=sl.FormSpec(
+                t(self.locale, _("Profile link")),
+                (
+                    sl.TextField(
+                        key="label",
+                        label=t(self.locale, _("Label")),
+                        maximum=MAX_LINK_LABEL_LENGTH,
+                    ),
+                    sl.TextField(
+                        key="url",
+                        label=t(self.locale, _("HTTPS URL")),
+                        maximum=MAX_LINK_URL_LENGTH,
+                    ),
+                ),
+                validator=self._validate_link,
+            ),
+            label=lambda value: str(value["label"]),
+            minimum=0,
+            maximum=MAX_PROFILE_LINKS,
+        )
+        links_section = sl.EditorSection.pattern(
+            "links",
+            t(self.locale, _("Links")),
+            links,
+            load=lambda value: links.initial_from(cast(Iterable[Mapping[str, object]], value)),
+            dump=links.values,
+            summary=lambda value: t(self.locale, _("{count} links"), count=len(value)),
+            issues=lambda state: (sl.FormError(message) for message in links.errors(state)),
+        )
+        editor = sl.Editor(
+            t(self.locale, _("Edit your creator page")),
+            (profile_section, links_section),
+            preview=self._profile_preview,
+            commit_label=t(self.locale, _("Save profile")),
+            validate=self._validate_profile_editor,
+        )
+        initial: sl.EditorValues = {
+            "profile": {
+                "display_name": self._profile.display_name,
+                "pronouns": self._profile.pronouns,
+                "bio": self._profile.bio,
+            },
+            "links": tuple({"label": link.label, "url": link.url} for link in self._profile.links),
+        }
+        return editor.component(initial=initial, on_commit=self._profile_committed)
+
+    def _validate_link(self, values: Mapping[str, object]) -> tuple[sl.FormIssue, ...]:
+        try:
+            ProfileLink.parse(str(values["label"]), str(values["url"]))
+        except ValidationError as error:
+            return (sl.FormError(error.localized_public_detail(self.locale)),)
+        return ()
+
+    def _raw_profile_update(self, values: sl.EditorValues) -> ProfileUpdate:
+        profile = cast(Mapping[str, object], values["profile"])
+        links = cast(Iterable[Mapping[str, object]], values["links"])
+        return ProfileUpdate(
+            display_name=cast(str | None, profile["display_name"]),
+            pronouns=cast(str | None, profile["pronouns"]),
+            bio=cast(str | None, profile["bio"]),
+            links=tuple(ProfileLink(str(link["label"]), str(link["url"])) for link in links),
+        )
+
+    def _profile_update(self, values: sl.EditorValues) -> ProfileUpdate:
+        return self._raw_profile_update(values).validated()
+
+    def _validate_profile_editor(self, values: sl.EditorValues) -> tuple[sl.FormIssue, ...]:
+        try:
+            self._profile_update(values)
+        except ValidationError as error:
+            return (sl.FormError(error.localized_public_detail(self.locale)),)
+        return ()
+
+    def _profile_preview(self, values: sl.EditorValues) -> sl.LayoutNode:
+        draft = self._raw_profile_update(values).apply(self._profile)
+        fields = tuple(sl.field(field.name, field.value) for field in own_profile_fields(draft, self.locale))
+        return sl.section(
+            draft.bio and sl.truncate(sl.paragraph(draft.bio)),
+            sl.fields(*fields) if fields else None,
+            heading=draft.display_name or t(self.locale, _("Your account")),
+            accent=DISCORD_BLUE,
+        )
+
+    async def _profile_committed(
+        self,
+        event: sl.PatternEvent[sl.EditorState],
+        values: sl.EditorValues,
+        _changed: frozenset[str],
+    ) -> None:
+        await self._accounts.update_profile(self._account_id, self._profile_update(values))
         await self._refresh()
-        self.invalidate()
-        if self._mount is None:
-            return
-        await self._mount.flush(interaction)
+        self._profile_editor = None
+        await event.source.notice(t(self.locale, _("Profile saved.")))
+
+    async def _cancel_profile_edit(self, _event: sl.PressEvent) -> None:
+        self._profile_editor = None
 
     async def _consented(self, event: sl.ActionEvent) -> bool:
         await event.acknowledge()
@@ -335,74 +472,3 @@ class AccountPanel(sl.Component):
             timeout=self._timeout,
         )
         return self._mount
-
-
-class ProfileEditModal(ErrorHandledModal):
-    """Edit the free-text parts of a creator page.
-
-    Links are one `label | url` per line rather than a repeated field because a modal allows five
-    inputs total; the same domain validator parses them, so the bot and the API agree on what a
-    valid link is.
-    """
-
-    def __init__(self, panel: AccountPanel, profile: AccountProfile, *, locale: str | None) -> None:
-        super().__init__(title=t(locale, _("Edit your creator page")))
-        self._panel = panel
-        self._locale = locale
-        self.display_name = discord.ui.TextInput(
-            label=t(locale, _("Display name")),
-            required=False,
-            max_length=MAX_DISPLAY_NAME_LENGTH,
-            default=profile.display_name,
-        )
-        self.pronouns = discord.ui.TextInput(
-            label=t(locale, _("Pronouns")),
-            required=False,
-            max_length=MAX_PRONOUNS_LENGTH,
-            default=profile.pronouns,
-        )
-        self.bio = discord.ui.TextInput(
-            label=t(locale, _("Bio")),
-            style=discord.TextStyle.paragraph,
-            required=False,
-            max_length=MAX_BIO_LENGTH,
-            default=profile.bio,
-        )
-        self.links = discord.ui.TextInput(
-            label=t(locale, _("Links (one per line: Label | https://...)")),
-            style=discord.TextStyle.paragraph,
-            required=False,
-            default="\n".join(f"{link.label} | {link.url}" for link in profile.links),
-        )
-        for item in (self.display_name, self.pronouns, self.bio, self.links):
-            self.add_item(item)
-
-    @override
-    async def on_submit(self, interaction: discord.Interaction) -> None:
-        update = ProfileUpdate(
-            display_name=self.display_name.value or None,
-            pronouns=self.pronouns.value or None,
-            bio=self.bio.value or None,
-            links=_parse_link_lines(self.links.value, self._locale),
-        )
-        await self._panel.save_profile(interaction, update)
-
-
-def _parse_link_lines(raw: str, locale: str | None) -> tuple[ProfileLink, ...]:
-    """Parse `Label | https://...` lines into links, refusing a line that is not one.
-
-    Parsing only splits; `ProfileUpdate.validated` in the service is what accepts or rejects the
-    URL itself, so the modal cannot end up with a laxer idea of a valid link than the API.
-    """
-    links: list[ProfileLink] = []
-    for line in raw.splitlines():
-        if not line.strip():
-            continue
-        label, separator, url = line.partition("|")
-        if not separator:
-            raise ValidationError(
-                t(locale, _("Each link needs a label and a URL separated by `|`, got {line!r}.")),
-                message_params={"line": line.strip()},
-            )
-        links.append(ProfileLink(label=label.strip(), url=url.strip()))
-    return tuple(links)

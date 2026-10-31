@@ -96,7 +96,7 @@ class TestSnapshot:
         mount = Mount(Panel(), access=Everyone())
         # A destination that delivers without handing a message back — the unwaited
         # interaction response, where the mount runs located only once someone clicks.
-        await mount.send(lambda view, files: _none())
+        await mount.send(lambda presentation: _none())
         assert mount.snapshot().address is None
 
         await mount.dispatch("inc", fake_interaction(message_id=42))

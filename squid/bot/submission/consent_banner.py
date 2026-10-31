@@ -15,7 +15,7 @@ from squid.bot.ui import CardField, render_static
 from squid.bot.utils.components import no_mentions, reply_layout, text_layout
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.i18n import _
-from squid_layouts.discord import SessionKey, WhenOpen
+from squid_layouts.discord import Opened, Reject, Rejected, SessionKey, SessionPolicy
 
 if TYPE_CHECKING:
     # importing this causes a circular import at runtime
@@ -84,20 +84,22 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     # one prompt between them rather than each opening their own. The button is on a public
     # sticky message with nothing guarding a double click.
     registry = interaction.client.mounts
-    key = SessionKey("consent", interaction.user.id)
+    key = SessionKey.user("consent", interaction.user.id)
     opened = await registry.open(
         mount,
         sl.discord.respond_to(interaction, ephemeral=True, wait=True),
         key=key,
-        policy=WhenOpen.REJECT,
+        policy=SessionPolicy(collision=Reject()),
+        actor_id=interaction.user.id,
     )
-    if opened is None:
-        if registry.get(key) is not None:
-            await interaction.followup.send(
-                view=text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))),
-                ephemeral=True,
-                allowed_mentions=no_mentions(),
-            )
+    if isinstance(opened, Rejected):
+        await interaction.followup.send(
+            view=text_layout(t(locale, _("You already have a consent prompt open. Please answer that one."))),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
+        return
+    if not isinstance(opened, Opened):
         return
     await component.wait()
 

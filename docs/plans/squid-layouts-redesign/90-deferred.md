@@ -14,6 +14,16 @@ are not re-derived or accidentally adopted later.
   **Revisited 2026-08-22**: the bus is [26](26-topic-bus.md), moved package-side by the
   productization decision; the store half of this rejection stands in full — the bus is
   payload-free precisely so it can never become one.
+  **Revisited again 2026-08-22**: [40](40-shared-state.md) covers one narrow case the bus
+  provably cannot — view state that outlives a mount *and* still rolls back with the action
+  that wrote it, which the bus cannot carry (payload-free) and a shared service cannot
+  either (outside `transaction()`, so `sl.history()` needs a hand-written inverse for state
+  the framework should own). It does not overturn this rejection: 40 has no store. A shared
+  namespace is an object, shared by being passed, and what it adds is that its writes join
+  the transaction and its changes reach the bus and `sl.history()` unaided. No dispatch,
+  reducers, middleware or global singleton; addresses still travel the bus and subscribers
+  still re-read; and `Controlled`/`Managed` still owns domain truth, with 40 §3 making a
+  namespace an unsuitable home for anything durable.
 - **Persistence batteries** (SQLite/Postgres `SnapshotStore` implementations,
   reattachment, pruning). The durability layer has **zero production consumers** in
   `squid/` (verified by grep). Building storage backends for an unused subsystem is
@@ -25,6 +35,13 @@ are not re-derived or accidentally adopted later.
 - **`compose(into=view)` / adopting existing discord.py views** — re-confirmed: renderer
   ownership is what keeps budget measurement sound. Incremental interop is CascadeUI's
   advantage by design choice, not an oversight here.
+  **Revisited 2026-08-22**: this bundled two operations, and only one of them is unsafe.
+  *Adoption* — Squid and a live view both claiming lifecycle or edit ownership of one
+  message — stays rejected. *Fragment composition* — the host stays the sole owner while
+  Squid measures it and contributes a sessionless, fully planned region to what is left —
+  is [35](35-discord-v2-fragments.md), and is the supported incremental boundary.
+  `sl.discord.contribute(document, to=view)` is the shipped spelling; `into=` remains
+  rejected because it names the wrong relationship.
 - **Context-manager render DSL** (dominate-style) — fights `render()`-returns-a-value
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** — irrelevant to this repo (3.14 target).
@@ -53,6 +70,10 @@ are not re-derived or accidentally adopted later.
   this entry's condition is met — and the answer is the paused-chrome banner plus
   click-to-resume, not a handoff control: every control already renews on click, so
   arming a special one adds nothing. The handoff *mechanism* stays rejected.
+  **Reopened 2026-08-22**: [39](39-ephemeral-handoff.md) identifies the missing UX contract:
+  existing controls mutate application state, while a dedicated renewal action does not.
+  The accepted design keeps Cascade's protected pre-expiry screen but renews Squid's same
+  mount and message in place instead of reconstructing a view and spawning a successor.
 - **Participant tracking / shared sessions** — plan 12 shipped instance policies and
   widened `lock_to` to accept a set of ids; participant *lifecycle* (join/leave, per-actor
   state) waits for a feature that needs it. No consumer needs even the set form today: the

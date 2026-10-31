@@ -208,7 +208,8 @@ class PollModal(ErrorHandledModal):
         await interaction.client.mounts.open(
             component.mount(),
             sl.discord.respond_to(interaction, ephemeral=True, wait=True),
-            key=SessionKey("poll-wizard", interaction.user.id, interaction.guild.id),
+            key=SessionKey.user_guild("poll-wizard", interaction.user.id, interaction.guild.id),
+            actor_id=interaction.user.id,
         )
 
 

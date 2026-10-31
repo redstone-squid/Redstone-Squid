@@ -21,15 +21,17 @@ from string.templatelib import Template
 from types import UnionType
 from typing import Literal, NoReturn, TypeAliasType, get_args
 
-from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.actions import ActionEvent, ActionPolicy, Feedback
 from squid_layouts.assets import Asset
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
-from squid_layouts.primitives.styles import Color
+from squid_layouts.guards import Guard
+from squid_layouts.palette import INHERIT, Accent, Palette
 from squid_layouts.semantic import (
     CLOSED,
     FIRST_DESTINATION,
     OFF,
     UNOPENED,
+    UNRATED,
     UNSELECTED,
     Action,
     ActionDisplay,
@@ -38,6 +40,7 @@ from squid_layouts.semantic import (
     Article,
     Aside,
     Choice,
+    ChoiceEvent,
     ChoiceOwnership,
     Choices,
     Cluster,
@@ -79,18 +82,23 @@ from squid_layouts.semantic import (
     Quote,
     RoutedAction,
     RoutedChoices,
+    ScaleEvent,
+    ScaleOwnership,
     Section,
     Stack,
     Status,
     Table,
     TableDisplay,
     TableRow,
+    Themed,
     Timestamp,
     TimeStyle,
     Toggle,
     ToggleOwnership,
     Tone,
+    ZonedTimestamp,
 )
+from squid_layouts.temporal import ZonedDateTime
 from squid_layouts.text import ResolvedText, TextLike, md
 
 type TextValue = TextLike | Template
@@ -147,7 +155,7 @@ def _reject(value: object, origin: str, index: int) -> NoReturn:
     elif isinstance(value, Iterable):
         detail = f"a {type(value).__name__} is not content; unpack it, e.g. {origin[:-1]}*entries)"
     elif _is_component(value):
-        detail = "components are placed with self.embed(child, key=...)"
+        detail = "components are placed with self.boundary(child, key=...)"
     else:
         detail = f"{type(value).__name__} is not content"
     message = f"{origin} argument {index}: {detail}"
@@ -207,10 +215,15 @@ def cluster(*children: ChildLike) -> Cluster:
     return Cluster(_children(children, "sl.cluster()"))
 
 
+def themed(palette: Palette, *children: ChildLike) -> Themed:
+    """Apply a presentation palette to one semantic subtree."""
+    return Themed(_children(children, "sl.themed()"), palette)
+
+
 def section(
     *children: ChildLike,
     heading: TextValue | None = None,
-    accent: Color | None = None,
+    accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Section:
     """A titled block of related content; ``accent`` is a house-colour override."""
@@ -220,7 +233,7 @@ def section(
 def article(
     *children: ChildLike,
     heading: TextValue | None = None,
-    accent: Color | None = None,
+    accent: Accent = INHERIT,
     thumbnail: str | None = None,
 ) -> Article:
     """A self-contained block that stands on its own."""
@@ -264,10 +277,15 @@ def form(
     policy: ActionPolicy | None = None,
     tone: Tone = Tone.NEUTRAL,
     emphasis: Emphasis = Emphasis.NORMAL,
+    guard: Guard | None = None,
 ) -> FormTrigger:
-    """A content control that presents a portable form."""
+    """A content control that presents a portable form.
+
+    ``guard`` gates the press that opens the form; the submission that follows completes an
+    already-admitted press and is not checked again.
+    """
     resolved, handler, default_policy = bind_form(spec, on_submit)
-    return FormTrigger(key, _text(label), resolved, handler, policy or default_policy, tone, emphasis)
+    return FormTrigger(key, _text(label), resolved, handler, policy or default_policy, tone, emphasis, guard)
 
 
 def item(*children: ChildLike, key: str, label: TextValue, summary: TextValue | None = None) -> Item:
@@ -340,6 +358,11 @@ def timestamp(
         message = "sl.timestamp() requires an aware datetime"
         raise ValueError(message)
     return Timestamp(instant, style, _opt_text(label))
+
+
+def zoned_timestamp(value: ZonedDateTime, *, label: TextValue | None = None) -> ZonedTimestamp:
+    """An exact instant displayed with its IANA timezone identity."""
+    return ZonedTimestamp(value, _opt_text(label))
 
 
 def figure(media: MediaItem | str, *, caption: TextValue | None = None) -> Figure:
@@ -450,9 +473,15 @@ def action(
     available: bool = True,
     allow_grouping: bool | None = None,
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
+    guard: Guard | None = None,
+    feedback: Feedback | None = None,
 ) -> Action:
-    """A control that runs ``on_trigger``; ``key`` namespaces its custom id."""
-    return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy)
+    """A control that runs ``on_trigger``; ``key`` namespaces its custom id.
+
+    ``guard`` decides whether a press may execute now; ``available`` decides whether the
+    control is offered at all. A cooldown wants both.
+    """
+    return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy, guard, feedback)
 
 
 def toggle(
@@ -544,6 +573,60 @@ def choices(
         maximum,
         flexibility,
     )
+
+
+def rating(
+    *,
+    key: str,
+    maximum: int = 5,
+    value: ScaleOwnership = UNRATED,
+    labels: Mapping[int, TextValue] | None = None,
+) -> Choices:
+    """An ordinal 1-to-``maximum`` picker; five or fewer points render as a star row.
+
+    No new semantic node: `choices` with ``maximum=1`` already lowers to the row a rating
+    wants. This owns the two things that would otherwise be hand-rolled every time — the
+    star labels and the string-to-`int` round trip — and hands the handler a typed
+    `ScaleEvent` rather than the option key it was submitted as.
+    """
+    if maximum < 2:
+        message = "sl.rating() needs a maximum of at least 2"
+        raise ValueError(message)
+    points = range(1, maximum + 1)
+    named = {} if labels is None else labels
+    entries = tuple(
+        Choice(str(point), _text(named[point]) if point in named else _text(_stars(point, maximum))) for point in points
+    )
+    if isinstance(value, Managed):
+        selection: ChoiceOwnership = Managed(() if value.initial is None else (str(value.initial),))
+    else:
+        chosen = value.value
+        on_change = value.on_change
+
+        async def rate(event: ChoiceEvent) -> None:
+            if not event.selected:
+                return
+            await on_change(
+                ScaleEvent(
+                    event.actor,
+                    event.responder,
+                    event.locale,
+                    event.context,
+                    int(event.selected[0]),
+                )
+            )
+
+        selection = Controlled((), rate) if chosen is None else Controlled((str(chosen),), rate)
+    return Choices(key, entries, selection, minimum=1, maximum=1)
+
+
+def _stars(point: int, maximum: int) -> str:
+    """The default label for one scale point.
+
+    Cumulative stars while the control is still a button row; above that a select of ten
+    star strings is unreadable, so the number speaks for itself.
+    """
+    return "\N{BLACK STAR}" * point if maximum <= 5 else str(point)
 
 
 def routed_choices(

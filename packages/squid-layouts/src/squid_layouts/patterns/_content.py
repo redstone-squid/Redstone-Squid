@@ -44,7 +44,7 @@ def _normalize_item(value: object, *, name: str) -> ContentItem:
 def render_content(owner: Component, content: Iterable[ContentItem], *, prefix: str) -> tuple[LayoutNode, ...]:
     """Expand component children under stable embed keys while retaining semantic nodes."""
     return tuple(
-        owner.embed(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
+        owner.boundary(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item
         for index, item in enumerate(content)
     )
 

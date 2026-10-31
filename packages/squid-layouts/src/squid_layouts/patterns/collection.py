@@ -3,10 +3,10 @@
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from types import MappingProxyType
 
 from squid_layouts.factories import actions, choice, heading, stack, status
 from squid_layouts.forms import Form, FormLike, FormSpec
+from squid_layouts.frozen import FrozenMapping
 from squid_layouts.patterns._paging import window
 from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
 from squid_layouts.runtime.component import RenderResult
@@ -87,13 +87,14 @@ class CollectionEditor:
 
     @staticmethod
     def _mapping(entry: CollectionEntry) -> Mapping[str, object]:
-        return MappingProxyType(dict(entry.values))
+        # Frozen rather than a proxy: `values()` is retained as an editor's committed state.
+        return FrozenMapping(entry.values)
 
     def initial_from(self, entries: Iterable[Mapping[str, object]]) -> CollectionState:
         collected: list[CollectionEntry] = []
         keys: set[str] = set()
         for index, values in enumerate(entries, start=1):
-            copied = MappingProxyType(dict(values))
+            copied = FrozenMapping(values)
             key = self.identity(copied) if self.identity is not None else str(index)
             if not key or key in keys:
                 message = f"CollectionEditor entry keys must be non-empty and unique: {key!r}"
@@ -114,6 +115,10 @@ class CollectionEditor:
             await on_change(event, tuple(self._mapping(entry) for entry in event.state.entries))
 
         return ComponentShell(self, initial=initial, on_change=changed)
+
+    def values(self, state: CollectionState) -> tuple[Mapping[str, object], ...]:
+        """Project state to its ordered public form-value mappings."""
+        return tuple(self._mapping(entry) for entry in state.entries)
 
     def errors(self, state: CollectionState) -> tuple[str, ...]:
         errors: list[str] = []
@@ -148,7 +153,7 @@ class CollectionEditor:
         if action == _Action.ADD and submitted is not None:
             if self.maximum is not None and len(state.entries) >= self.maximum:
                 return state
-            copied = MappingProxyType(dict(submitted))
+            copied = FrozenMapping(submitted)
             key = self.identity(copied) if self.identity is not None else self._mint(state.entries)
             if not key or key in {entry.key for entry in state.entries}:
                 return state

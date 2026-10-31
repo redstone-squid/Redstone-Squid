@@ -9,6 +9,7 @@ predecessors, so call sites migrate by changing an import line.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from math import ceil
 from string.templatelib import Template
 from typing import Any, Literal
 
@@ -38,9 +39,9 @@ __all__ = [
     "Private",
     "Visibility",
     "card_layout",
+    "contribute",
     "create_mount",
     "destination",
-    "display_text_length",
     "error_layout",
     "help_layout",
     "info_layout",
@@ -100,10 +101,19 @@ def localization_for(locale: str | None) -> ui.Localization:
     return ui.Localization(locale=resolved, gettext=catalog.gettext, ngettext=catalog.ngettext)
 
 
+def _try_again_in(seconds: float) -> ui.Message:
+    """Round a guard's remaining cooldown up to whole seconds before wording it."""
+    whole = max(1, ceil(seconds))
+    return L(t"Try again in {whole} seconds.")
+
+
 CHROME = ui.Chrome(
     and_n_more=lambda count: L(t"…and {count} more."),
     not_yours=L(t"These list controls belong to someone else."),
     session_ended=L(t"This session has ended."),
+    not_now=L(t"You can't do that right now."),
+    try_again_in=_try_again_in,
+    working=L(t"Working…"),
     updates_paused=L(t"Live updates paused — press any control to resume."),
     previous=L(t"Previous"),
     next=L(t"Next"),
@@ -115,12 +125,20 @@ CHROME = ui.Chrome(
     download=L(t"Download"),
     confirm=L(t"Confirm"),
     cancel=L(t"Cancel"),
+    apply=L(t"Apply"),
+    save=L(t"Save"),
+    unsaved=L(t"Unsaved changes"),
+    search=L(t"Search"),
+    no_results=L(t"No results"),
     decided=lambda label: L(t"You chose {label}.", label=label),
     add=L(t"Add"),
     edit=L(t"Edit"),
     remove=L(t"Remove"),
     move_up=L(t"Move up"),
     move_down=L(t"Move down"),
+    review=L(t"Review"),
+    finish=L(t"Finish"),
+    unanswered=L(t"Not answered yet"),
     page_footer=lambda page, pages: L(t"Page {page} of {pages}"),
 )
 _OPEN_LINK = L(t"Open link")
@@ -183,13 +201,18 @@ def destination(
         if ctx.interaction is not None:
             return ui.discord.reply_to(ctx, ephemeral=True, files=files)
 
-        async def privately(view: discord.ui.LayoutView, rendered: list[discord.File]) -> ui.discord.DeliveryReceipt:
+        async def privately(presentation: ui.discord.DiscordPresentation) -> ui.discord.DeliveryReceipt:
             message = await deliver_privately(
-                ctx, view, reason=visibility.reason, locale=locale, files=[*files, *rendered]
+                ctx,
+                presentation.layout,
+                reason=visibility.reason,
+                locale=locale,
+                files=[*files, *presentation.files()],
             )
             if message is None:
                 raise ui.discord.DeliveryAbandoned
-            return ui.discord.DeliveryReceipt(message, ui.discord.delivery.handle_for(message))
+            handle = ui.discord.delivery.handle_for(message, mode=presentation.mode)
+            return ui.discord.DeliveryReceipt(message, handle)
 
         return privately
 
@@ -197,15 +220,41 @@ def destination(
     return ui.discord.reply_to(ctx, ephemeral=ephemeral, files=files)
 
 
-def render_item(node: ui.LayoutNode, *, locale: str | None = None, reserved_text: int = 0) -> discord.ui.Item[Any]:
+def contribute(
+    nodes: ui.DocumentLike,
+    *,
+    to: discord.ui.LayoutView,
+    followed_by: Sequence[discord.ui.Item[Any]] = (),
+    locale: str | None = None,
+    strict: bool = False,
+) -> ui.discord.AttachedFragment:
+    """Contribute a Squid region to a hand-assembled view, through the bot's chrome.
+
+    `followed_by` carries the rows the host adds after the Squid region: they are costed
+    into the plan and placed here, so the view proven legal is the view that gets sent.
+    """
+    return ui.discord.contribute(
+        nodes,
+        to=to,
+        followed_by=followed_by,
+        chrome=CHROME,
+        localization=localization_for(locale),
+        strict=strict,
+    )
+
+
+def render_item(
+    node: ui.LayoutNode,
+    *,
+    locale: str | None = None,
+    reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
+) -> discord.ui.Item[Any]:
     """Render one node to a detached item, for composition into a larger layout.
 
-    The build card uses this: it renders as an engine-solved Container that callers (vote
-    cards, search detail) then embed or extend. A detached item escapes the engine's view of
-    the message, so callers pass ``reserved_text`` for whatever else the message will carry;
-    composing the whole document with `ui.discord.render_static` is better still where possible.
+    Prefer `contribute`, which measures the host and places the result atomically. This
+    stays for callers that build the surrounding view themselves and know their own budget.
     """
-    view = render_static([node], locale=locale, reserved_text=reserved_text)
+    view = render_static([node], locale=locale, reservation=reservation)
     item = view.children[0]
     view.remove_item(item)
     return item
@@ -216,25 +265,18 @@ def render_static(
     *,
     locale: str | None = None,
     strict: bool = False,
-    reserved_text: int = 0,
+    reservation: ui.discord.ResourceCost = ui.discord.EMPTY_RESERVATION,
 ) -> discord.ui.LayoutView:
     """Render a sessionless document through the bot's chrome and catalogue."""
+    # `.layout` rather than the whole presentation: the bot is entirely on Components V2,
+    # where the layout *is* the message, and every caller here wants a view to send.
     return ui.discord.render_static(
         nodes,
         chrome=CHROME,
         localization=localization_for(locale),
         strict=strict,
-        reserved_text=reserved_text,
-    )
-
-
-def display_text_length(view: discord.ui.LayoutView) -> int:
-    """Display characters already spent in `view`.
-
-    Hand-assembled V1 views compose engine-solved items with items of their own; passing this
-    as `reserved_text` tells the engine how much of the message budget is already gone.
-    """
-    return sum(len(item.content) for item in view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+        reservation=reservation,
+    ).layout
 
 
 def truncate_display_text(content: str, limit: int) -> str:

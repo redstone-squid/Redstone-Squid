@@ -12,11 +12,17 @@ from squid_layouts.discord.routing import _dispatch_item
 from squid_layouts.discord.testing import fake_interaction
 from squid_layouts.errors import DrawInvariantError, LayoutInvariantError
 from squid_layouts.primitives import Option, Panel, RoutedButton, RoutedSelect, Row
+from squid_layouts.profiling import MemoryProfiler, OperationKind, TraceOutcome
 from squid_layouts.scene.model import SceneRoutedButton, SceneRoutedSelect, SceneRow
 
 EDIT_BUILD = sl.Route("edit:build:{build_id:int}")
 POLL_CLOSE = sl.Route("poll:close")
 NAME_BUILD = sl.Route("name:build:{slug}")
+
+
+def _static_view(*args, **kwargs) -> discord.ui.LayoutView:
+    """The drawn layout of a sessionless V2 document, for tests that only read components."""
+    return render_static(*args, **kwargs).layout
 
 
 class TestRouteFormats:
@@ -828,6 +834,70 @@ class TestAcknowledgement:
         interaction.response.defer.assert_not_awaited()
 
 
+class TestProfiling:
+    async def test_route_trace_profiles_middleware_handler_and_acknowledgement(self) -> None:
+        class Continue(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                await proceed()
+
+        profiler = MemoryProfiler()
+        interaction = fake_interaction()
+        router = Router(profiler=profiler)
+        router.add_middleware(Continue())
+
+        @router.route(POLL_CLOSE)
+        async def close(current) -> None:
+            await current.response.send_message()
+
+        await router.dispatch(interaction, POLL_CLOSE.id())
+
+        trace = profiler.snapshot().recent[0]
+        assert trace.operation is OperationKind.ROUTE_DISPATCH
+        assert trace.name == POLL_CLOSE.format
+        assert trace.result.outcome is TraceOutcome.COMPLETED
+        spans = {span.name: span for span in trace.spans}
+        middleware_name = f"middleware:{__name__}.TestProfiling.test_route_trace_profiles_middleware_handler_and_acknowledgement.<locals>.Continue"
+        assert {"acknowledgement", middleware_name, "handler"} <= spans.keys()
+        assert (
+            dict((attribute.key, attribute.value) for attribute in spans["acknowledgement"].attributes)["source"]
+            == "handler"
+        )
+
+    async def test_short_circuit_and_caught_failure_remain_distinct(self) -> None:
+        class Stop(sl.discord.Middleware[discord.Client]):
+            async def dispatch(self, request, proceed) -> None:
+                pass
+
+        profiler = MemoryProfiler()
+        router = Router(profiler=profiler)
+        router.add_middleware(Stop())
+        router.add(POLL_CLOSE, _noop)
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        trace = profiler.snapshot().recent[0]
+        assert trace.result.outcome is TraceOutcome.COMPLETED
+        assert trace.result.detail == "short_circuited"
+        assert all(span.name != "handler" for span in trace.spans)
+
+    async def test_watchdog_defer_marks_the_route_deadline_miss(self) -> None:
+        profiler = MemoryProfiler()
+        router = Router(acknowledgement_timeout=0.01, profiler=profiler)
+
+        @router.route(POLL_CLOSE)
+        async def slow(_interaction) -> None:
+            await anyio.sleep(0.03)
+
+        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+
+        trace = profiler.snapshot().deadline_misses[0]
+        acknowledgement = next(span for span in trace.spans if span.name == "acknowledgement")
+        assert trace.deadline_missed
+        assert (
+            dict((attribute.key, attribute.value) for attribute in acknowledgement.attributes)["source"] == "watchdog"
+        )
+
+
 class TestDrawing:
     def test_a_sessionless_document_may_carry_a_routed_control(self) -> None:
         document = sl.section(
@@ -835,7 +905,7 @@ class TestDrawing:
             heading="Poll",
         )
 
-        view = render_static([document])
+        view = _static_view([document])
         buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
 
         assert [(button.custom_id, button.style) for button in buttons] == [("poll:close", discord.ButtonStyle.danger)]
@@ -843,7 +913,7 @@ class TestDrawing:
     def test_a_routed_button_places_exactly_where_a_primitive_asks(self) -> None:
         document = Panel((Row((RoutedButton("Edit", EDIT_BUILD.id(build_id=3)),)),))
 
-        view = render_static([document])
+        view = _static_view([document])
         buttons = [child for child in view.walk_children() if isinstance(child, discord.ui.Button)]
 
         assert [button.custom_id for button in buttons] == ["edit:build:3"]
@@ -852,7 +922,7 @@ class TestDrawing:
         # Its only dispatch path must be the router's. A stored button would take a second,
         # no-op dispatch that resets the surrounding view's timeout expiry.
         document = Panel((Row((RoutedButton("Close", "poll:close"),)),))
-        view = render_static(document)
+        view = _static_view(document)
 
         button = next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
         assert button.custom_id == "poll:close"
@@ -875,21 +945,21 @@ class TestDrawing:
     def test_a_routed_scene_round_trips_through_the_codec(self) -> None:
         document = sl.section(sl.actions(sl.routed_action("Edit", EDIT_BUILD.id(build_id=3), key="e"), key="c"))
 
-        scene = sl.plan(document, target=sl.discord.DEFAULT_TARGET).scene
+        scene = sl.plan(document, target=sl.discord.V2_TARGET).scene
         payload = sl.scene.Codec.dumps(scene)
 
         assert "routed_button" in sl.scene.Codec.schema()["$defs"]
         assert '"route_id":"edit:build:3"' in payload
         assert '"custom_id"' not in payload
         assert sl.scene.Codec.loads(payload) == scene
-        row = scene.children[0].children[0]  # type: ignore[union-attr]
+        row = scene.components_v2.children[0].children[0]  # type: ignore[union-attr]
         assert isinstance(row, SceneRow)
         assert row.items == (SceneRoutedButton("Edit", "edit:build:3"),)
 
     def test_the_old_scene_custom_id_field_is_not_accepted(self) -> None:
         document = sl.actions(sl.routed_action("Close", POLL_CLOSE.id(), key="close"), key="c")
-        payload = sl.scene.Codec.to_dict(sl.plan(document, target=sl.discord.DEFAULT_TARGET).scene)
-        routed = payload["children"][0]["items"][0]
+        payload = sl.scene.Codec.to_dict(sl.plan(document, target=sl.discord.V2_TARGET).scene)
+        routed = payload["body"]["children"][0]["items"][0]
         routed["custom_id"] = routed.pop("route_id")
 
         with pytest.raises(ValueError, match="route_id"):
@@ -898,7 +968,7 @@ class TestDrawing:
     def test_the_html_preview_emits_the_route(self) -> None:
         document = sl.actions(sl.routed_action("Close", POLL_CLOSE.id(), key="close"), key="c")
 
-        html = sl.html.Renderer().draw(sl.plan(document, target=sl.discord.DEFAULT_TARGET).scene)
+        html = sl.html.Renderer().draw(sl.plan(document, target=sl.discord.V2_TARGET).scene)
 
         assert 'data-route-id="poll:close"' in html
 
@@ -911,8 +981,8 @@ class TestDrawing:
             placeholder="Choose",
         )
 
-        scene = sl.plan(document, target=sl.discord.DEFAULT_TARGET).scene
-        assert scene.children == (
+        scene = sl.plan(document, target=sl.discord.V2_TARGET).scene
+        assert scene.components_v2.children == (
             SceneRoutedSelect(
                 (sl.scene.SceneOption("One", "one", "First"), sl.scene.SceneOption("Two", "two")),
                 "pick:build:3",
@@ -923,7 +993,7 @@ class TestDrawing:
         assert '"kind":"routed_select"' in payload
         assert sl.scene.Codec.loads(payload) == scene
 
-        view = render_static(document)
+        view = _static_view(document)
         select = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
         assert select.custom_id == "pick:build:3"
         assert [option.value for option in select.options] == ["one", "two"]
@@ -935,7 +1005,9 @@ class TestDrawing:
     def test_a_primitive_routed_select_draws_without_a_binding(self) -> None:
         document = RoutedSelect((Option("One", "one"),), "pick:one")
 
-        select = next(item for item in render_static(document).walk_children() if isinstance(item, discord.ui.Select))
+        select = next(
+            item for item in render_static(document).layout.walk_children() if isinstance(item, discord.ui.Select)
+        )
         assert select.custom_id == "pick:one"
 
     def test_routed_choices_do_not_invent_session_pagination(self) -> None:
@@ -946,7 +1018,7 @@ class TestDrawing:
         )
 
         with pytest.raises(LayoutInvariantError, match="split the routed picker"):
-            sl.plan(document, target=sl.discord.DEFAULT_TARGET)
+            sl.plan(document, target=sl.discord.V2_TARGET)
 
     def test_routed_choices_need_an_available_option(self) -> None:
         document = sl.routed_choices(
@@ -956,7 +1028,7 @@ class TestDrawing:
         )
 
         with pytest.raises(LayoutInvariantError, match="at least one available"):
-            sl.plan(document, target=sl.discord.DEFAULT_TARGET)
+            sl.plan(document, target=sl.discord.V2_TARGET)
 
 
 class _FakeClient:
