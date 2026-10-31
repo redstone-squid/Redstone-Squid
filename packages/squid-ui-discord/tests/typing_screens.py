@@ -1,19 +1,12 @@
-"""Pins constructor and option checking at the declarative screen boundary. Nothing here runs.
+"""Pyrefly fixture for Screen construction and scoped presentation."""
 
-Screen construction happens before ``show`` so each subclass keeps its real ``__init__``
-signature. Session option bundles are TypedDicts for the same reason: misspelled or wrongly
-typed policy should fail where it is declared, not when a message is opened.
-"""
-
-from typing import cast
+from typing import Any
 
 import squid_ui as sl
-import squid_ui_discord as sd
+from squid_ui_discord import DiscordUI, Screen
 
 
-class RequiredArguments(sd.Screen):
-    session_name = "required"
-
+class RequiredArguments(Screen):
     def __init__(self, label: str, *, count: int) -> None:
         self.label = label
         self.count = count
@@ -22,23 +15,8 @@ class RequiredArguments(sd.Screen):
         return sl.heading(f"{self.label}: {self.count}")
 
 
-source = cast(sd.InvocationSource, object())
-
-
-async def construction_is_checked_before_show() -> None:
-    await RequiredArguments("ready", count=2).show(source)
-    await RequiredArguments(2, count="wrong").show(source)  # pyrefly: ignore[bad-argument-type]
-    await RequiredArguments("missing").show(source)  # pyrefly: ignore[missing-argument]
-    await RequiredArguments("ready", count=2).show(source, None)  # pyrefly: ignore[bad-argument-count]
-
-
-sd.SessionSpec("typed", options={"timeout": 20, "strict": True})
-sd.SessionSpec("typo", options={"timout": 20})  # pyrefly: ignore[bad-typed-dict-key]
-sd.SessionSpec("wrong", options={"timeout": "later"})  # pyrefly: ignore[bad-assignment]
-
-
-class InvalidOptions(sd.Screen):
-    root_options = {"strcit": True}  # pyrefly: ignore[bad-typed-dict-key]
-
-    def render(self):
-        return sl.heading("invalid")
+async def construction_and_presentation(ui: DiscordUI[object], source: Any) -> None:
+    await ui.respond(source, RequiredArguments("ready", count=2))
+    await ui.respond(source, RequiredArguments(2, count="wrong"))  # pyrefly: ignore[bad-argument-type]
+    await ui.respond(source, RequiredArguments("missing"))  # pyrefly: ignore[missing-argument]
+    await ui.respond(source, RequiredArguments("ready", count=2), None)  # pyrefly: ignore[no-matching-overload]

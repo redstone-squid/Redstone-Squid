@@ -13,7 +13,6 @@ Guardrails are installed **before** the engine is imported, so a malicious file 
 the host during module initialisation either.
 """
 
-import base64
 import faulthandler
 import json
 import logging
@@ -21,7 +20,7 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import IO, Any, cast
+from typing import IO, Any
 
 try:
     import resource
@@ -32,19 +31,14 @@ from squid.config import load_worker_log_config, load_worker_observability_confi
 from squid.core.errors import DomainError, SquidError
 from squid.logging_config import configure_worker_logging
 from squid.observability import configure_observability, extracted_trace_span
-from squid.schematics.application.commands import RenderRequest, SimulationRequest
-from squid.schematics.domain.models import (
-    FingerprintPreset,
-    SchematicFormat,
-    SchematicLimits,
-)
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
     AmbiguousSimulationInputError,
     InvalidSchematicError,
     SchematicTooLargeError,
 )
 from squid.schematics.infrastructure import wire
-from squid.schematics.infrastructure.wire import ErrorKind, Frame
+from squid.schematics.infrastructure.wire import ErrorKind, Frame, Operation
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +71,7 @@ Absent on the other POSIX hosts this module still has to start on, which is why 
 it tolerates failure rather than treating the file as guaranteed.
 """
 
-_RESOURCE_PACK: bytes | None = None
+_RESOURCE_PACK: VerifiedResourcePack | None = None
 """Cached across requests. Reading and parsing a vanilla resource pack is expensive, and it is
 the only reason this is a persistent worker rather than a one-shot subprocess. A `Schematic`
 is deliberately *never* cached here: `simulate` attaches a live world to one."""
@@ -141,7 +135,9 @@ def _set_limit(which: int, soft: int) -> None:
         logger.warning("Could not apply resource limit %s.", which, exc_info=True)
 
 
-def handle(operation: str, params: Mapping[str, Any], payloads: tuple[bytes, ...]) -> tuple[Mapping[str, Any], bytes]:
+def handle(
+    operation: Operation, params: Mapping[str, Any], payloads: tuple[bytes, ...]
+) -> tuple[Mapping[str, Any], bytes]:
     """Dispatch one request, returning its JSON result and any binary payload.
 
     Imported lazily so that :func:`apply_guardrails` has already run by the time the native
@@ -153,41 +149,49 @@ def handle(operation: str, params: Mapping[str, Any], payloads: tuple[bytes, ...
         return {"capabilities": wire.encode_capabilities(engine.capabilities())}, b""
 
     if operation == "analyze":
-        source_format = params.get("source_format")
+        limits, with_lattice, source_format, lattice_max_block_count = wire.decode_analyze_params(params)
         analysis = engine.analyze(
             payloads[0],
-            limits=SchematicLimits(**cast(dict[str, int], params["limits"])),
-            with_lattice=bool(params.get("with_lattice", False)),
-            source_format=SchematicFormat(source_format) if source_format else None,
-            lattice_max_block_count=int(params.get("lattice_max_block_count", 200_000)),
+            limits=limits,
+            with_lattice=with_lattice,
+            source_format=source_format,
+            lattice_max_block_count=lattice_max_block_count,
         )
         return {"analysis": wire.encode_analysis(analysis)}, b""
 
     if operation == "convert":
-        data_version = params.get("data_version")
+        target, data_version = wire.decode_convert_params(params)
         converted, losses = engine.convert(
             payloads[0],
-            target=SchematicFormat(params["target"]),
-            data_version=int(data_version) if data_version is not None else None,
+            target=target,
+            data_version=data_version,
         )
         return {"losses": wire.encode_losses(losses)}, converted
 
     if operation == "compare":
-        comparison = engine.compare(payloads[0], payloads[1], preset=FingerprintPreset(params["preset"]))
+        comparison = engine.compare(payloads[0], payloads[1], preset=wire.decode_compare_params(params))
         return {"comparison": wire.encode_comparison(comparison)}, b""
 
     if operation == "render":
-        return {}, engine.render(payloads[0], request=_render_request(params), resource_pack=_resource_pack(params))
+        return {}, engine.render(
+            payloads[0],
+            request=wire.decode_render_request(params.get("request")),
+            resource_pack=_resource_pack(params),
+        )
 
     if operation == "simulate":
-        result = engine.simulate(payloads[0], request=_simulation_request(params))
+        result = engine.simulate(
+            payloads[0],
+            request=wire.decode_simulation_request(params.get("request")),
+        )
         return {"simulation": wire.encode_simulation(result)}, b""
 
     if operation == "autostack":
+        lattice, counts = wire.decode_autostack_params(params)
         stacked = engine.autostack(
             payloads[0],
-            lattice=wire.decode_lattice(cast(Mapping[str, Any], params["lattice"])),
-            counts=tuple(int(count) for count in params["counts"]),
+            lattice=lattice,
+            counts=counts,
         )
         return {}, stacked
 
@@ -195,39 +199,14 @@ def handle(operation: str, params: Mapping[str, Any], payloads: tuple[bytes, ...
     raise InvalidSchematicError(msg, developer_action="The supervisor sent an operation this worker cannot handle.")
 
 
-def _render_request(params: Mapping[str, Any]) -> RenderRequest:
-    request = cast(Mapping[str, Any], params["request"])
-    return RenderRequest(
-        width=int(request["width"]),
-        height=int(request["height"]),
-        projection=request["projection"],
-        sphere_fit=bool(request["sphere_fit"]),
-        yaw=request.get("yaw"),
-        pitch=request.get("pitch"),
-        zoom=request.get("zoom"),
-        background=tuple(float(channel) for channel in request["background"]),  # type: ignore[arg-type]
-    )
-
-
-def _simulation_request(params: Mapping[str, Any]) -> SimulationRequest:
-    request = cast(Mapping[str, Any], params["request"])
-    return SimulationRequest(
-        input_position=(
-            tuple(int(axis) for axis in request["input_position"])  # type: ignore[arg-type]
-            if request.get("input_position") is not None
-            else None
-        ),
-        watch_positions=tuple(tuple(int(axis) for axis in position) for position in request.get("watch_positions", ())),  # type: ignore[arg-type]
-        max_ticks=int(request.get("max_ticks", 200)),
-    )
-
-
-def _resource_pack(params: Mapping[str, Any]) -> bytes:
+def _resource_pack(params: Mapping[str, Any]) -> VerifiedResourcePack:
     """Return the cached resource pack, accepting a fresh one when the supervisor sends it."""
     global _RESOURCE_PACK
     encoded = params.get("resource_pack_b64")
     if encoded is not None:
-        _RESOURCE_PACK = base64.b64decode(cast(str, encoded))
+        _RESOURCE_PACK = wire.decode_resource_pack(
+            params.get("resource_pack"), wire.decode_base64(encoded, "resource-pack payload")
+        )
     if _RESOURCE_PACK is None:
         msg = "No resource pack has been supplied to this worker."
         raise InvalidSchematicError(msg, developer_action="Send resource_pack_b64 with the first render request.")
@@ -254,19 +233,6 @@ def _error_payload(exc: Exception) -> Mapping[str, Any]:
     return {"kind": kind, "message": str(exc), "context": context}
 
 
-def _read_exactly(stream: IO[bytes], size: int) -> bytes:
-    """Read `size` bytes from a blocking binary stream, or fewer at end of file."""
-    chunks: list[bytes] = []
-    remaining = size
-    while remaining > 0:
-        chunk = stream.read(remaining)
-        if not chunk:
-            break
-        chunks.append(chunk)
-        remaining -= len(chunk)
-    return b"".join(chunks)
-
-
 def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
     """Handle framed requests until the supervisor closes stdin.
 
@@ -274,23 +240,14 @@ def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
     running several workers, not from interleaving inside one.
     """
     while True:
-        prefix = _read_exactly(stdin, 2 * wire.LENGTH_PREFIX_BYTES)
-        if len(prefix) < 2 * wire.LENGTH_PREFIX_BYTES:
+        frame = wire.read_frame_sync(stdin)
+        if frame is None:
             return
-        header_length = int.from_bytes(prefix[: wire.LENGTH_PREFIX_BYTES], "big")
-        body_length = int.from_bytes(prefix[wire.LENGTH_PREFIX_BYTES :], "big")
-        header = cast(Mapping[str, Any], json.loads(_read_exactly(stdin, header_length).decode("utf-8")))
-        body = _read_exactly(stdin, body_length)
-
-        payloads: list[bytes] = []
-        offset = 0
-        for size in header.get("parts", []):
-            payloads.append(body[offset : offset + int(size)])
-            offset += int(size)
-
-        request_id = header.get("id")
-        operation = str(header["op"])
-        params = cast(Mapping[str, Any], header.get("params", {}))
+        request = wire.decode_worker_request(frame)
+        header = frame.header
+        request_id = request.request_id
+        operation = request.operation
+        params = request.params
         attributes: dict[str, str] = {"squid.schematic.operation": operation}
         schematic_format = params.get("source_format") or params.get("target")
         if isinstance(schematic_format, str):
@@ -299,13 +256,13 @@ def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
             "squid.schematic.request_id": request_id,
             "squid.schematic.operation": operation,
         }
-        if header.get("job_id") is not None:
-            context["squid.schematic.job_id"] = header["job_id"]
+        if request.job_id is not None:
+            context["squid.schematic.job_id"] = request.job_id
         _request_context.fields = context
         try:
-            with extracted_trace_span(f"schematic.worker {operation}", header, attributes) as span:
+            with extracted_trace_span(f"schematic.worker {operation}", _trace_headers(header), attributes) as span:
                 try:
-                    result, output = handle(operation, params, tuple(payloads))
+                    result, output = handle(operation, params, frame.payloads)
                     response = Frame({"id": request_id, "ok": True, "result": result}, (output,) if output else ())
                 except Exception as exc:
                     if isinstance(exc, SquidError):
@@ -329,6 +286,14 @@ def serve(stdin: IO[bytes], stdout: IO[bytes]) -> None:
 
         stdout.write(response.encode())
         stdout.flush()
+
+
+def _trace_headers(header: Mapping[str, Any]) -> Mapping[str, str]:
+    """Accept only a string-to-string trace carrier from the untrusted request frame."""
+    trace = header.get("trace")
+    if not isinstance(trace, Mapping):
+        return {}
+    return {name: value for name, value in trace.items() if isinstance(name, str) and isinstance(value, str)}
 
 
 def main() -> None:

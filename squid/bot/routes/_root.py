@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import discord
 
 import squid_ui_discord as sd
-from squid.observability import SpanAttribute, correlation_scope, trace_span
+from squid.observability import SpanAttribute, TraceSurface, correlation_scope, trace_span
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -47,7 +47,7 @@ class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
 
     async def dispatch(self, request: sd.routing.RouteRequest[BotT], proceed: sd.routing.RouteProceed) -> None:
         attributes: dict[str, SpanAttribute] = {
-            "squid.surface": "discord_route",
+            "squid.surface": TraceSurface.DISCORD_ROUTE,
             "squid.route.component": request.component.value,
             "squid.route.matched_alias": request.matched_alias,
         }
@@ -63,9 +63,11 @@ async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> N
     from squid.bot.ui import text_node
     from squid.core.i18n import tr
 
-    invocation = await sd.Invocation.of(interaction)
-
-    await invocation.reply(text_node(tr("This control is no longer available.")), visibility="personal")
+    await interaction.client.app_ui.respond(
+        interaction,
+        text_node(tr("This control is no longer available.")),
+        audience="personal",
+    )
 
 
 async def _route_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:

@@ -17,7 +17,7 @@ from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
 from squid.settings.application import SettingsService
-from squid_ui_discord.testing import InteractionHarness
+from squid_ui_discord.testing import InteractionHarness, invoke_context_menu
 from tests.support.discord import make_layout_bot
 
 BUILD_LOG_CHANNEL = 500
@@ -123,6 +123,7 @@ def _cog(*, allowed: bool = True, account_consented: bool = True) -> RecordingSu
             community_config=CommunityConfig(build_log_channel_ids={BUILD_LOG_CHANNEL}),
         ),
     )
+    cog.ui = cog.bot.ui.scope(cog)
     cog.consent_sticky = ConsentStickyRecorder()
     return cog
 
@@ -134,7 +135,6 @@ def _interaction() -> discord.Interaction[Any]:
     interaction.guild_locale = None
     interaction.locale = "en-US"
     interaction.client = None
-    interaction.response._done = True
     return cast(discord.Interaction[Any], interaction)
 
 
@@ -160,7 +160,7 @@ def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False) -> 
 async def _run(cog: BuildSubmitCommands[Any], message: discord.Message) -> discord.Interaction[Any]:
     interaction = _interaction()
     cast(Any, interaction).client = cog.bot
-    await cog.recalc_context_menu(interaction, message)
+    await invoke_context_menu(cog, cog.recalc_context_menu, interaction, message)
     return interaction
 
 
@@ -184,7 +184,7 @@ async def test_a_message_no_build_can_come_from_says_so() -> None:
     interaction = await _run(cog, _message(channel_id=999))
 
     assert cog.inferred == []
-    assert cast(Any, interaction).followup.send.await_count == 1
+    assert cast(Any, interaction).edit_original_response.await_count == 1
 
 
 async def test_a_build_log_message_is_recalculated() -> None:
@@ -203,6 +203,6 @@ async def test_recalc_refuses_when_author_is_unconsented() -> None:
     interaction = await _run(cog, message)
 
     assert cog.inferred == []
-    assert cast(Any, interaction).followup.send.await_count == 1
+    assert cast(Any, interaction).edit_original_response.await_count == 1
     assert isinstance(cog.consent_sticky, ConsentStickyRecorder)
     assert cog.consent_sticky.calls == [message.channel]

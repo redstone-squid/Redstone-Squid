@@ -3,7 +3,7 @@
 import anyio
 import pytest
 
-from squid.core.concurrency import run_all, run_all_awaitables, settle_all
+from squid.core.concurrency import run_all, run_all_awaitables, run_all_settled, settle_all, task_group
 
 
 async def test_run_all_returns_results_in_argument_order() -> None:
@@ -40,11 +40,37 @@ async def test_run_all_cancels_siblings_on_the_first_failure() -> None:
             sibling_cancelled = True
             raise
 
-    with anyio.fail_after(5), pytest.raises(BaseExceptionGroup) as caught:
+    # Unwrapped, not an ExceptionGroup: call sites classify by type, and an
+    # ``except RuntimeError`` upstream has to keep matching.
+    with anyio.fail_after(5), pytest.raises(RuntimeError):
         await run_all([lambda: failing(), lambda: sibling()])
 
     assert sibling_cancelled is True
-    assert [type(error) for error in caught.value.exceptions] == [RuntimeError]
+
+
+async def test_run_all_groups_simultaneous_failures() -> None:
+    async def failing(error: Exception) -> None:
+        raise error
+
+    with pytest.raises(BaseExceptionGroup) as caught:
+        await run_all([lambda: failing(RuntimeError("first")), lambda: failing(ValueError("second"))])
+
+    assert [type(error) for error in caught.value.exceptions] == [RuntimeError, ValueError]
+
+
+async def test_run_all_preserves_a_lone_failures_cause() -> None:
+    """Unwrapping must not rewrite the chain the operation raised its error with."""
+
+    async def failing() -> None:
+        cause = ValueError("root")
+        msg = "wrapped"
+        raise RuntimeError(msg) from cause
+
+    with pytest.raises(RuntimeError) as caught:
+        await run_all([failing])
+
+    assert isinstance(caught.value.__cause__, ValueError)
+    assert not isinstance(caught.value.__context__, BaseExceptionGroup)
 
 
 async def test_run_all_respects_the_concurrency_limit() -> None:
@@ -109,3 +135,94 @@ async def test_run_all_awaitables_awaits_every_coroutine() -> None:
         return number
 
     assert await run_all_awaitables([value(1), value(2), value(3)]) == [1, 2, 3]
+
+
+async def test_run_all_settled_finishes_every_operation_before_raising() -> None:
+    """A cancelled job never reaches its own except clause, so nothing may be cancelled."""
+    finished: list[int] = []
+    started = anyio.Event()
+
+    async def failing() -> None:
+        started.set()
+        msg = "boom"
+        raise RuntimeError(msg)
+
+    async def sibling(number: int) -> None:
+        await started.wait()
+        await anyio.sleep(0.01)
+        finished.append(number)
+
+    with anyio.fail_after(5), pytest.raises(RuntimeError):
+        await run_all_settled([lambda: failing(), lambda: sibling(1), lambda: sibling(2)])
+
+    assert finished == [1, 2]
+
+
+async def test_run_all_settled_returns_results_in_argument_order() -> None:
+    async def make(value: int, delay: float) -> int:
+        await anyio.sleep(delay)
+        return value
+
+    assert await run_all_settled([lambda: make(1, 0.02), lambda: make(2, 0.0)]) == [1, 2]
+
+
+async def test_run_all_settled_groups_several_failures() -> None:
+    async def failing(error: Exception) -> None:
+        raise error
+
+    with pytest.raises(BaseExceptionGroup) as caught:
+        await run_all_settled([lambda: failing(RuntimeError("first")), lambda: failing(ValueError("second"))])
+
+    assert [type(error) for error in caught.value.exceptions] == [RuntimeError, ValueError]
+
+
+async def test_task_group_raises_a_lone_child_failure_unwrapped() -> None:
+    """A supervised child's failure has to stay matchable by its own type."""
+
+    async def child() -> None:
+        msg = "boom"
+        raise RuntimeError(msg)
+
+    async def supervise() -> None:
+        async with task_group() as tasks:
+            tasks.start_soon(child)
+            await anyio.sleep(0.01)
+
+    with pytest.raises(RuntimeError):
+        await supervise()
+
+
+async def test_task_group_passes_a_body_failure_through_untouched() -> None:
+    """The body's own error must arrive as itself, chain intact."""
+    cause = ValueError("root")
+    raised = RuntimeError("wrapped")
+    raised.__cause__ = cause
+
+    async def child() -> None:
+        await anyio.sleep(30)
+
+    async def supervise() -> None:
+        async with task_group() as tasks:
+            tasks.start_soon(child)
+            raise raised
+
+    with pytest.raises(RuntimeError) as caught:
+        await supervise()
+
+    assert caught.value is raised
+    assert caught.value.__cause__ is cause
+
+
+async def test_task_group_groups_several_child_failures() -> None:
+    async def child(error: Exception) -> None:
+        raise error
+
+    async def supervise() -> None:
+        async with task_group() as tasks:
+            tasks.start_soon(child, RuntimeError("first"))
+            tasks.start_soon(child, ValueError("second"))
+
+    with pytest.raises(BaseExceptionGroup) as caught:
+        await supervise()
+
+    assert [type(error) for error in caught.value.exceptions] == [RuntimeError, ValueError]

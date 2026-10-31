@@ -11,12 +11,13 @@ import discord
 from discord.ext import commands
 from discord.ext.commands import Bot
 
+import squid_ui_discord as sd
 from squid.bootstrap import create_bot_runtime
 
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
-from squid.bot.errors import SquidCommandTree
+from squid.bot.errors import COMMAND_ERRORS, SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
@@ -40,7 +41,7 @@ from squid.config import (
 )
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
-from squid.observability import configure_observability, correlation_scope
+from squid.observability import TraceSurface, configure_observability, correlation_scope, trace_span
 from squid.posts.domain import ResourceKind
 from squid.runtime import (
     BackgroundTaskSupervisor,
@@ -53,7 +54,7 @@ from squid_reactivity import LocalTopicBus
 from squid_storage import PostgresTopicBridge
 from squid_ui.profiling import MemoryProfiler
 from squid_ui.text import localization_scope
-from squid_ui_discord import Invocation, SessionManager, install, invocation_scope
+from squid_ui_discord import DiscordUIConfig, DiscordUIRuntime, SessionManager, install
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -149,7 +150,7 @@ class RedstoneSquid(Bot):
         self.owner_server_id = config.owner_server_id
         self.source_code_url = config.source_code_url
         self.background_tasks = BackgroundTaskSupervisor()
-        self.reactions = ReactionRouter(self)
+        self.reactions = ReactionRouter(self, self.background_tasks)
         self.post_reconciler = PostReconciler(
             self,
             [BuildCardRenderer(self), VoteSessionRenderer(self), StarboardEntryRenderer(self)],
@@ -167,20 +168,28 @@ class RedstoneSquid(Bot):
         # that is the local bus, and the reconciler's poll is what the other processes get.
         self.topic_publisher: TopicPublisher = self.topic_bus
         # One assembly for the whole process, reachable from any interaction as
-        # `ClientRuntime.of(...)`: the session registry, the scheduler, and the challenge runner
+        # `DiscordUIRuntime.of(...)`: the session registry, the scheduler, and the challenge runner
         # a guard's dialog resumes an approved press through.
-        self.client_runtime = install(
+        self.ui: DiscordUIRuntime[Self] = install(
             self,
-            defaults=HOST_DEFAULTS,
-            bus=self.topic_bus,
-            profiler=self.layout_profiler,
-            localization=localization_resolver,
+            DiscordUIConfig(
+                defaults=HOST_DEFAULTS,
+                bus=self.topic_bus,
+                profiler=self.layout_profiler,
+                localization=localization_resolver,
+                errors=COMMAND_ERRORS,
+            ),
         )
+
+    @property
+    def app_ui(self) -> sd.Scope[Self]:
+        """The cached owner scope for bot-level and routed application work."""
+        return self.ui.scope(self)
 
     @property
     def sessions(self) -> SessionManager:
         """The installed registry for live Discord sessions."""
-        return self.client_runtime.sessions
+        return self.ui.sessions
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -195,10 +204,21 @@ class RedstoneSquid(Bot):
         and mint a second ID unrelated to the log lines the command produced. A hybrid command
         reaching here from the application command tree keeps the ID that tree already bound.
         """
-        with correlation_scope(), invocation_scope(ctx):
-            invocation = await Invocation.of(ctx)
-            with localization_scope(invocation.localization):
+        command_name = ctx.command.qualified_name if ctx.command is not None else "unknown"
+        attributes: dict[str, str | int] = {
+            "squid.command.name": command_name,
+            "squid.surface": TraceSurface.PREFIX_COMMAND,
+        }
+        if ctx.guild is not None:
+            attributes["squid.guild.id"] = ctx.guild.id
+        if ctx.channel is not None:
+            attributes["squid.channel.id"] = ctx.channel.id
+        with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
+            request = await sd.request(ctx)
+            with localization_scope(request.localization):
                 await super().invoke(ctx)
+                if ctx.command_failed:
+                    span.set_error()
 
     @override
     async def close(self) -> None:
@@ -208,7 +228,7 @@ class RedstoneSquid(Bot):
         # because each one is a gateway round trip: a slow Discord must not stall shutdown,
         # and an undisabled panel times out on its own anyway.
         with anyio.move_on_after(3.0):
-            await self.client_runtime.close()
+            await self.ui.close()
         await self.background_tasks.close()
         # After the supervisor, so the bridge's listener is already cancelled and cannot
         # log a torn connection on the way out. Bounded, then hung up: shutdown must not
@@ -230,7 +250,7 @@ class RedstoneSquid(Bot):
         # watcher keeps honest, so it runs before any extension loads rather than
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
-        self.background_tasks.start(self.client_runtime.run(), name="layout-runtime")
+        self.background_tasks.start(self.ui.run(), name="layout-runtime")
         if self.database_config is not None:
             self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)
         if self.topic_bridge is not None:
@@ -311,49 +331,57 @@ class RedstoneSquid(Bot):
         await self.post_reconciler.reconcile(resource_kind, resource_key, generation)
 
 
+async def _run_bot(
+    config: BotProcessConfig,
+    identity_config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
+) -> None:
+    """Run the configured Discord process until the gateway client stops."""
+    async with create_bot_runtime(config.runtime) as runtime:
+        bot = RedstoneSquid(
+            runtime.services,
+            config=identity_config,
+            catbox_config=config.catbox,
+            build_config=config.build,
+            community_config=config.community,
+            notification_config=config.notification,
+            database_config=config.runtime.database,
+            inference_model=config.openai.chat_model,
+            inference_reasoning_effort=config.openai.reasoning_effort,
+            development_mode=config.development_mode,
+        )
+
+        async def bot_ready() -> bool:
+            await runtime.ready()
+            return bot.is_operational()
+
+        # The supervisor's task group has to be entered and exited by the same
+        # task, and Bot.close() can be driven from more than one place, so the
+        # group is held here and close() only cancels what it owns.
+        async with (
+            bot.background_tasks.running(),
+            bot,
+            ProcessHealthServer(bot_ready, port=config.bot.health_port),
+        ):
+            start_log_capture(
+                bot.background_tasks,
+                runtime.services.error_reports,
+                enabled=config.diagnostics.capture_logged_errors,
+                capacity=config.diagnostics.log_capture_queue,
+            )
+            await bot.start(config.discord.token.get_secret_value())
+
+
 async def main(
     process_config: BotProcessConfig | None = None,
     identity_config: BotIdentityConfig = DEFAULT_BOT_IDENTITY,
 ) -> None:
-    """Main entry point for the bot."""
+    """Run the Discord process with process-owned logging and telemetry."""
     resolved_config = process_config or load_or_exit(load_bot_process_config)
     queue_listener = configure_bot_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="bot")
 
     try:
-        async with create_bot_runtime(resolved_config.runtime) as runtime:
-            bot = RedstoneSquid(
-                runtime.services,
-                config=identity_config,
-                catbox_config=resolved_config.catbox,
-                build_config=resolved_config.build,
-                community_config=resolved_config.community,
-                notification_config=resolved_config.notification,
-                database_config=resolved_config.runtime.database,
-                inference_model=resolved_config.openai.chat_model,
-                inference_reasoning_effort=resolved_config.openai.reasoning_effort,
-                development_mode=resolved_config.development_mode,
-            )
-
-            async def bot_ready() -> bool:
-                await runtime.ready()
-                return bot.is_operational()
-
-            # The supervisor's task group has to be entered and exited by the same
-            # task, and Bot.close() can be driven from more than one place, so the
-            # group is held here and close() only cancels what it owns.
-            async with (
-                bot.background_tasks.running(),
-                bot,
-                ProcessHealthServer(bot_ready, port=resolved_config.bot.health_port),
-            ):
-                start_log_capture(
-                    bot.background_tasks,
-                    runtime.services.error_reports,
-                    enabled=resolved_config.diagnostics.capture_logged_errors,
-                    capacity=resolved_config.diagnostics.log_capture_queue,
-                )
-                await bot.start(resolved_config.discord.token.get_secret_value())
+        await _run_bot(resolved_config, identity_config)
     finally:
         observability.shutdown()
         queue_listener.stop()

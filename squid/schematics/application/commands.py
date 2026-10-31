@@ -6,6 +6,7 @@ from typing import Literal
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.schematics.domain.models import SchematicFormat, Vector3
+from squid.schematics.domain.values import RgbaColor
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +52,7 @@ class RenderRequest:
     yaw: float | None = None
     pitch: float | None = None
     zoom: float | None = None
-    background: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
+    background: RgbaColor = RgbaColor(0.0, 0.0, 0.0, 0.0)
 
     def __post_init__(self) -> None:
         for axis, extent in (("width", self.width), ("height", self.height)):
@@ -61,9 +62,6 @@ class RenderRequest:
                 raise ValidationError(tr(t"Render {axis} must be between {minimum} and {maximum} pixels."))
         if self.zoom is not None and self.zoom <= 0:
             msg = tr(t"Render zoom must be positive.")
-            raise ValidationError(msg)
-        if not all(0.0 <= channel <= 1.0 for channel in self.background):
-            msg = tr(t"Render background channels must be between 0 and 1.")
             raise ValidationError(msg)
 
     def recipe_fields(self) -> tuple[object, ...]:
@@ -76,7 +74,7 @@ class RenderRequest:
             self.yaw,
             self.pitch,
             self.zoom,
-            self.background,
+            self.background.as_tuple(),
         )
 
 
@@ -91,4 +89,6 @@ class SimulationRequest:
 
     input_position: Vector3 | None = None
     watch_positions: tuple[Vector3, ...] = ()
+    """Blocks to observe without actuating them during the simulation."""
     max_ticks: int = 200
+    """Maximum simulated ticks before the run ends as a safety budget."""

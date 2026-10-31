@@ -1,8 +1,6 @@
 """Discord transport boundary for opening build-edit screens."""
 
-from typing import TYPE_CHECKING, Any
-
-import discord
+from typing import TYPE_CHECKING, Any, cast
 
 import squid_ui_discord as sd
 from squid.bot.submission.ui.views import BuildEditScreen
@@ -17,24 +15,27 @@ if TYPE_CHECKING:
 
 
 async def prepare_build_editor(
-    interaction: discord.Interaction[RedstoneSquid],
+    request: sd.Request[Any],
     build: Build,
     builds: BuildService | None = None,
+    *,
+    recovered: bool = False,
 ) -> BuildEditScreen:
     """Inject actor-aware Discord operations into one build editor."""
-    client = interaction.client
+    client = cast("RedstoneSquid", request.client)
+    actor_id = request.user.id
     prepared: BuildEditScreen | None = None
 
     async def authorize() -> bool:
         current = build if prepared is None else prepared.build
-        actor_account_id = await client.account_ids.resolve(client.services.accounts, interaction.user.id)
+        actor_account_id = await client.account_ids.resolve(client.services.accounts, actor_id)
         if (
             current.submission_status is Status.PENDING
             and actor_account_id is not None
             and current.submitter_account_id == actor_account_id
         ):
             return True
-        return await allows(interaction, BUILD_SUBMISSION_EDIT)
+        return await allows(request, BUILD_SUBMISSION_EDIT)
 
     async def render_build(current: Build) -> Any:
         return await client.for_build(current).render_node()
@@ -49,35 +50,38 @@ async def prepare_build_editor(
         authorize=authorize,
         render_build=render_build,
         refresh_posts=refresh_posts,
+        recovered=recovered,
     )
     return prepared
 
 
-async def show_build_editor(
-    interaction: discord.Interaction[RedstoneSquid],
-    screen: BuildEditScreen,
-) -> BuildEditScreen | None:
+async def show_build_editor(request: sd.Request[Any], screen: BuildEditScreen) -> BuildEditScreen | None:
     """Authorize and show a prepared editor under its user/build key."""
     if not await screen.may_edit():
-        invocation = await sd.Invocation.of(interaction)
-        await invocation.reply(
+        await request.respond(
             error_node(
                 tr(t"Cannot edit this build"),
                 tr(t"Only the pending build's submitter or a trusted staff member can edit it."),
             ),
-            visibility="personal",
+            audience="personal",
         )
         return None
-    key = sd.SessionKey.custom("build-edit", (interaction.user.id, screen.build.id))
-    return await screen.show(interaction, key=key, wait=True)
+    key = sd.SessionKey.custom("build-edit", (request.user.id, screen.build.id))
+    outcome = await request.respond(screen, session_key=key)
+    return screen if isinstance(outcome, sd.Presented) else None
 
 
 async def open_build_editor(
-    interaction: discord.Interaction[RedstoneSquid],
+    request: sd.Request[Any],
     build: Build,
+    *,
+    recovered: bool = False,
 ) -> BuildEditScreen | None:
     """Prepare and show a build editor in one call."""
-    return await show_build_editor(interaction, await prepare_build_editor(interaction, build))
+    return await show_build_editor(
+        request,
+        await prepare_build_editor(request, build, recovered=recovered),
+    )
 
 
 __all__ = ["open_build_editor", "prepare_build_editor", "show_build_editor"]

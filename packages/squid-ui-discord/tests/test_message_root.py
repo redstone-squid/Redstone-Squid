@@ -166,15 +166,9 @@ class Counter(Component[sl.ComponentsV2Target]):
         self.count += 1
 
 
-async def test_dispatch_and_submit_establish_invocation_scope_inside_the_handler_task() -> None:
-    class FakeClient:
-        pass
-
-    client = FakeClient()
-    runtime = squid_ui_discord.install(cast(discord.Client, client))
+async def test_dispatch_and_submit_bind_root_localization_inside_the_handler_task() -> None:
     interaction = interaction_harness()
-    interaction.client = client
-    seen: list[squid_ui_discord.Invocation] = []
+    seen: list[str | None] = []
 
     class Inspect(Component[sl.ComponentsV2Target]):
         def render(self):
@@ -182,29 +176,26 @@ async def test_dispatch_and_submit_establish_invocation_scope_inside_the_handler
 
         async def inspect(self, event: PressEvent) -> None:
             del event
-            invocation = await squid_ui_discord.Invocation.of(interaction)
-            assert squid_ui_discord.current_invocation() is invocation
-            seen.append(invocation)
+            seen.append(sl.text.current_localization().locale)
 
-    message_root = MessageRoot(Inspect(), access=Everyone(), timeout=None)
+    message_root = MessageRoot(
+        Inspect(),
+        access=Everyone(),
+        timeout=None,
+        localization=sl.text.Localization(locale="en-GB"),
+    )
     commit_render(message_root)
     await message_root.dispatch("inspect", interaction)
 
     submitted = interaction_harness()
-    submitted.client = client
     spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
 
     async def submit(event: sl.SubmitEvent) -> None:
         del event
-        invocation = await squid_ui_discord.Invocation.of(submitted)
-        assert squid_ui_discord.current_invocation() is invocation
-        seen.append(invocation)
+        seen.append(sl.text.current_localization().locale)
 
     await message_root.dispatch_submit("rename", submitted, spec, {"name": "Ada"}, submit)
-    await runtime.close()
-
-    assert len(seen) == 2
-    assert squid_ui_discord.current_invocation() is None
+    assert seen == ["en-GB", "en-GB"]
 
 
 @pytest.mark.parametrize("warning", [0, -1, math.inf, -math.inf, math.nan])
@@ -1837,6 +1828,34 @@ class TestLifecycle:
         interaction = interaction_harness()
         await message_root.dispatch("inc", interaction)  # finished mounts ignore late clicks
         interaction.response.edit_message.assert_not_awaited()
+
+    async def test_timeout_can_leave_only_stateless_recovery_routes_enabled(self) -> None:
+        class Recoverable(Component[sl.ComponentsV2Target]):
+            def render(self):
+                return sl.action_controls(
+                    sl.action_control("Mounted action", self.press, key="mounted"),
+                    sl.routed_action_control("Recover", "route:recover", key="recover"),
+                    key="actions",
+                )
+
+            async def press(self, event: PressEvent) -> None: ...
+
+        message_root = MessageRoot(
+            Recoverable(),
+            access=Everyone(),
+            timeout=None,
+            retain_routed_on_timeout=True,
+        )
+        message: Any = message_harness()
+        await message_root.send(delivered_to(message))
+
+        await message_root.handle_timeout()
+
+        disabled_view = message.edit.await_args.kwargs["view"]
+        buttons = {
+            item.label: item.disabled for item in disabled_view.walk_children() if isinstance(item, discord.ui.Button)
+        }
+        assert buttons == {"Mounted action": True, "Recover": False}
 
     async def test_refresh_edits_bound_message(self):
         component = Counter()

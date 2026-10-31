@@ -1,21 +1,27 @@
-"""Declarative Screen policy over Invocation's opening primitives."""
+"""Declarative Screen policy presented only through owner-scoped facades."""
 
 from typing import Any, cast
 
-import anyio
 import discord
 import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid_reactivity import LocalTopicBus
+from squid_ui.chrome import Chrome
 from squid_ui.text import Message
-from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject
+from squid_ui_discord.sessions import AdmissionSpec, Reject
 from squid_ui_discord.testing import ContextHarness, interaction_harness, message_harness
+
+CHROME = Chrome()
 
 
 class FakeClient:
     """A weak-referenceable installed client double."""
+
+
+class Owner:
+    pass
 
 
 def _context(client: FakeClient) -> Any:
@@ -24,60 +30,62 @@ def _context(client: FakeClient) -> Any:
     return cast(Any, context)
 
 
-class BasicScreen(sd.Screen):
-    session_name = "basic"
+def _ui(*, bus: LocalTopicBus | None = None) -> tuple[sd.Scope[Owner], FakeClient]:
+    client = FakeClient()
+    runtime = sd.install(cast(discord.Client, client), bus=bus)
+    return runtime.scope(Owner()), client
+
+
+class BasicScreen(sd.Screen[Owner]):
+    session = sd.SessionSpec("basic")
 
     def render(self):
         return sl.heading("Basic")
 
 
-def test_screen_derives_its_declared_session_policy() -> None:
+def test_screen_compiles_its_class_policy_once() -> None:
     policy = AdmissionSpec(limit=2, collision=Reject(notice=Message("Full")))
 
-    class Declared(sd.Screen):
-        session_name = "declared"
-        scope = sd.ScopeKind.USER_GUILD
-        admission = policy
-        capacity = 4
-        quota = 1
-        domain = "games"
+    class Declared(sd.Screen[Owner]):
+        audience = "public"
+        access = sd.Everyone()
+        session = sd.SessionSpec(
+            "declared",
+            scope=sd.ScopeKind.USER_GUILD,
+            admission=policy,
+            capacity=4,
+            quota=1,
+            domain="games",
+        )
         timeout = 30
         expiry = sd.PauseUpdates(10)
-        root_options = {"strict": True}
+        chrome = CHROME
 
         def render(self):
             return sl.heading("Declared")
 
-    access = sd.Everyone()
-    spec = Declared()._session_spec(access)
+    compiled = Declared.__response_spec__
+    Declared.timeout = 90
 
-    assert spec.name == "declared"
-    assert spec.scope is sd.ScopeKind.USER_GUILD
-    assert spec.admission is policy
-    assert spec.capacity == 4
-    assert spec.quota == 1
-    assert spec.domain == "games"
-    assert spec.access(sd.OpenContext(7)) is access
-
-
-def test_a_direct_screen_rejects_session_only_policy_at_class_creation() -> None:
-    with pytest.raises(TypeError, match=r"declares no session_name.*capacity"):
-
-        class Invalid(sd.Screen):
-            capacity = 4
-
-            def render(self):
-                return sl.heading("Invalid")
+    assert compiled.audience == "public"
+    assert compiled.access == sd.Everyone()
+    assert compiled.timeout == 30
+    assert compiled.session is Declared.session
+    assert compiled.chrome is CHROME
+    assert Declared.__response_spec__.timeout == 30
 
 
-async def test_show_sets_opening_and_loads_before_the_first_render() -> None:
-    client = FakeClient()
-    runtime = sd.install(cast(discord.Client, client))
+def test_screen_has_no_delivery_method() -> None:
+    assert not hasattr(BasicScreen(), "show")
+
+
+async def test_facade_sets_opening_and_loads_before_first_render() -> None:
+    ui, client = _ui()
     context = _context(client)
     order: list[str] = []
 
-    class Loaded(sd.Screen):
-        session_name = "loaded"
+    class Loaded(sd.Screen[Owner]):
+        session = sd.SessionSpec("loaded")
 
         def __init__(self, label: str) -> None:
             order.append(f"construct:{label}")
@@ -85,257 +93,151 @@ async def test_show_sets_opening_and_loads_before_the_first_render() -> None:
 
         async def on_load(self) -> None:
             assert self.opening.source is context
+            assert self.opening.owner is ui.owner
             order.append("load")
 
         def render(self):
             order.append("render")
             return sl.heading(self.label)
 
-    screen = await Loaded("ready").show(context)
+    outcome = await ui.respond(context, Loaded("ready"))
 
-    assert isinstance(screen, Loaded)
+    assert isinstance(outcome, sd.Presented)
     assert order == ["construct:ready", "load", "render"]
-    assert screen.opening.runtime is runtime
+    assert outcome.component.opening.runtime is ui.runtime
 
 
-async def test_show_returns_none_after_invocation_renders_a_rejection_notice() -> None:
-    client = FakeClient()
-    sd.install(cast(discord.Client, client))
+async def test_rejected_session_delivers_notice_without_loading_component() -> None:
+    ui, client = _ui()
     context = _context(client)
     loads = 0
 
-    class Exclusive(BasicScreen):
-        session_name = "exclusive"
-        admission = AdmissionSpec(collision=Reject(notice=Message("Already open")))
+    class Exclusive(sd.Screen[Owner]):
+        session = sd.SessionSpec(
+            "exclusive",
+            admission=AdmissionSpec(collision=Reject(notice=Message("Already open"))),
+        )
 
         async def on_load(self) -> None:
             nonlocal loads
             loads += 1
 
-    first = await Exclusive().show(context)
-    second = await Exclusive().show(context)
+        def render(self):
+            return sl.heading("Exclusive")
 
-    assert isinstance(first, Exclusive)
-    assert second is None
+    first = await ui.respond(context, Exclusive())
+    second = await ui.respond(context, Exclusive())
+
+    assert isinstance(first, sd.Presented)
+    assert isinstance(second, sd.Rejected)
     assert loads == 1
     assert context.send.await_count == 2
 
 
-async def test_show_attaches_below_a_parent_session() -> None:
-    client = FakeClient()
-    runtime = sd.install(cast(discord.Client, client))
+async def test_facade_attaches_below_parent_session() -> None:
+    ui, client = _ui()
     context = _context(client)
-    invocation = await sd.Invocation.of(context)
-    parent_result = await invocation.open(BasicScreen(), sd.SessionSpec("parent"))
-    assert isinstance(parent_result, Opened)
+    parent = await ui.respond(context, BasicScreen())
+    assert isinstance(parent, sd.Presented)
 
-    child = await BasicScreen().show(invocation, parent=parent_result.session.root)
+    child = await ui.respond(context, BasicScreen(), parent=parent.root)
 
-    assert isinstance(child, BasicScreen)
-    child_root = parent_result.session.message_roots[-1]
-    assert runtime.sessions.session_for(child_root) is parent_result.session
-    assert parent_result.session.parent_of(child_root) is parent_result.session.root
+    assert isinstance(child, sd.Presented)
+    assert child.session is parent.session
+    assert child.session is not None
+    assert child.session.parent_of(child.root) is parent.root
 
 
-async def test_show_passes_a_custom_session_key_through_invocation() -> None:
-    client = FakeClient()
-    runtime = sd.install(cast(discord.Client, client))
-    context = _context(client)
+async def test_facade_passes_a_custom_session_key() -> None:
+    ui, client = _ui()
     key = sd.SessionKey.custom("build-edit", (7, 99))
 
-    screen = await BasicScreen().show(context, key=key)
+    outcome = await ui.respond(_context(client), BasicScreen(), session_key=key)
 
-    assert isinstance(screen, BasicScreen)
-    assert len(runtime.sessions.get(key)) == 1
+    assert isinstance(outcome, sd.Presented)
+    assert len(ui.runtime.sessions.get(key)) == 1
 
 
-async def test_renew_ephemeral_degrades_without_an_installed_scheduler() -> None:
-    client = FakeClient()
-    runtime = sd.install(cast(discord.Client, client))
-    context = _context(client)
+async def test_renew_ephemeral_degrades_without_scheduler() -> None:
+    ui, client = _ui()
 
-    class Renewable(sd.Screen):
-        session_name = "renewable"
+    class Renewable(sd.Screen[Owner]):
+        session = sd.SessionSpec("renewable")
         expiry = sd.RenewEphemeral(45)
 
         def render(self):
             return sl.heading("Renewable")
 
-    screen = await Renewable().show(context)
+    outcome = await ui.respond(_context(client), Renewable())
 
-    assert isinstance(screen, Renewable)
-    session = runtime.sessions.get(sd.SessionKey.user("renewable", 7))[0]
-    assert session.root.expiry == sd.PauseUpdates(45)
+    assert isinstance(outcome, sd.Presented)
+    assert outcome.root.expiry == sd.PauseUpdates(45)
 
 
-async def test_follow_topics_selects_the_installed_scheduler() -> None:
-    client = FakeClient()
-    runtime = sd.install(cast(discord.Client, client), bus=LocalTopicBus())
-    context = _context(client)
+async def test_follow_topics_selects_installed_scheduler() -> None:
+    ui, client = _ui(bus=LocalTopicBus())
 
-    class Following(sd.Screen):
-        session_name = "following"
+    class Following(sd.Screen[Owner]):
+        session = sd.SessionSpec("following")
         follow_topics = True
 
         def render(self):
             return sl.heading("Following")
 
-    screen = await Following().show(context)
+    outcome = await ui.respond(_context(client), Following())
 
-    assert isinstance(screen, Following)
-    session = runtime.sessions.get(sd.SessionKey.user("following", 7))[0]
-    assert session.root.scheduler is runtime.scheduler
+    assert isinstance(outcome, sd.Presented)
+    assert outcome.root.scheduler is ui.runtime.scheduler
 
 
-async def test_sessionless_show_uses_a_plain_owner_mount() -> None:
-    client = FakeClient()
-    runtime = sd.install(cast(discord.Client, client))
+async def test_sessionless_screen_uses_personal_invoker_mount() -> None:
+    ui, client = _ui()
     interaction = interaction_harness(user_id=7)
     interaction.client = client
     interaction.guild = message_harness(guild_id=42).guild
 
-    class Plain(sd.Screen):
-        visibility = "personal"
+    class Plain(sd.Screen[Owner]):
         timeout = None
 
         def render(self):
             return sl.heading("Plain")
 
-    screen = await Plain().show(interaction)
+    outcome = await ui.respond(interaction, Plain())
 
-    assert isinstance(screen, Plain)
-    assert tuple(runtime.sessions.active()) == ()
+    assert isinstance(outcome, sd.Presented)
+    assert tuple(ui.runtime.sessions.active()) == ()
     assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True
-    assert sd.message_roots()[-1].access == sd.Owner(7)
+    assert outcome.root.access == sd.Owner(7)
 
 
-async def test_sessionless_show_forwards_wait_to_interaction_delivery() -> None:
-    client = FakeClient()
-    sd.install(cast(discord.Client, client))
-    interaction = interaction_harness(user_id=7)
-    interaction.client = client
+async def test_call_policy_overrides_screen_policy() -> None:
+    ui, client = _ui()
 
-    class Plain(sd.Screen):
-        def render(self):
-            return sl.heading("Plain")
+    outcome = await ui.respond(
+        _context(client),
+        sd.Response(BasicScreen(), timeout=40),
+        timeout=20,
+    )
 
-    await Plain().show(interaction, wait=True)
-
-    interaction.original_response.assert_awaited_once()
+    assert isinstance(outcome, sd.Presented)
+    assert outcome.root.timeout == 20
 
 
-@pytest.mark.parametrize("session_name", [None, "shared"])
-async def test_fixed_access_applies_to_both_opening_paths(session_name: str | None) -> None:
-    client = FakeClient()
-    runtime = sd.install(cast(discord.Client, client))
-    context = _context(client)
+async def test_one_screen_instance_cannot_be_presented_twice() -> None:
+    ui, client = _ui()
+    screen = BasicScreen()
 
-    class Shared(sd.Screen):
-        access = sd.Everyone()
+    await ui.respond(_context(client), screen)
 
-        def render(self):
-            return sl.heading("Shared")
-
-    if session_name is None:
-        screen_type = Shared
-    else:
-
-        class SessionShared(Shared):
-            session_name = "shared"
-
-        screen_type = SessionShared
-    screen = await screen_type().show(context)
-
-    assert isinstance(screen, screen_type)
-    if session_name is None:
-        assert sd.message_roots()[-1].access == sd.Everyone()
-    else:
-        session = runtime.sessions.get(sd.SessionKey.user(session_name, 7))[0]
-        assert session.root.access == sd.Everyone()
-
-
-async def test_resolve_access_can_use_instance_state_and_opening() -> None:
-    client = FakeClient()
-    runtime = sd.install(cast(discord.Client, client))
-    context = _context(client)
-
-    class SharedWith(sd.Screen):
-        session_name = "shared-with"
-
-        def __init__(self, guest_id: int) -> None:
-            self.guest_id = guest_id
-
-        def resolve_access(self, opening: sd.Invocation) -> sd.AccessPolicy:
-            return sd.Users({opening.user.id, self.guest_id})
-
-        def render(self):
-            return sl.heading("Shared")
-
-    screen = await SharedWith(9).show(context)
-
-    assert isinstance(screen, SharedWith)
-    session = runtime.sessions.get(sd.SessionKey.user("shared-with", 7))[0]
-    assert session.root.access == sd.Users({7, 9})
-
-
-async def test_direct_screen_rejects_session_arguments_without_consuming_the_instance() -> None:
-    client = FakeClient()
-    sd.install(cast(discord.Client, client))
-
-    class Plain(sd.Screen):
-        def render(self):
-            return sl.heading("Plain")
-
-    screen = Plain()
-    with pytest.raises(TypeError, match="key= cannot apply"):
-        await screen.show(_context(client), key="ignored")
-
-    assert await screen.show(_context(client)) is screen
+    with pytest.raises(RuntimeError, match="already been presented"):
+        await ui.respond(_context(client), screen)
 
 
 async def test_parent_and_key_are_mutually_exclusive() -> None:
-    client = FakeClient()
-    sd.install(cast(discord.Client, client))
-    invocation = await sd.Invocation.of(_context(client))
-    parent = await invocation.mount(BasicScreen(), access=sd.Owner(7))
+    ui, client = _ui()
+    context = _context(client)
+    parent = await ui.respond(context, BasicScreen())
+    assert isinstance(parent, sd.Presented)
 
     with pytest.raises(TypeError, match="cannot be combined"):
-        await BasicScreen().show(invocation, parent=parent, key="ambiguous")
-
-
-async def test_one_screen_instance_cannot_be_shown_twice() -> None:
-    client = FakeClient()
-    sd.install(cast(discord.Client, client))
-    screen = BasicScreen()
-
-    await screen.show(_context(client))
-
-    with pytest.raises(RuntimeError, match=r"BasicScreen\.show\(\) has already been called"):
-        await screen.show(_context(client))
-
-
-async def test_one_screen_instance_cannot_be_shown_concurrently() -> None:
-    client = FakeClient()
-    sd.install(cast(discord.Client, client))
-    entered = anyio.Event()
-    release = anyio.Event()
-
-    class Slow(sd.Screen):
-        async def on_load(self) -> None:
-            entered.set()
-            await release.wait()
-
-        def render(self):
-            return sl.heading("Slow")
-
-    screen = Slow()
-
-    async def show() -> None:
-        await screen.show(_context(client))
-
-    async with anyio.create_task_group() as tasks:
-        tasks.start_soon(show)
-        await entered.wait()
-        with pytest.raises(RuntimeError, match="already been called"):
-            await screen.show(_context(client))
-        release.set()
+        await ui.respond(context, BasicScreen(), parent=parent.root, session_key="ambiguous")

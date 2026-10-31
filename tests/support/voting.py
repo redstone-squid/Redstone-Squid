@@ -6,6 +6,7 @@ one set of builders here means a field added to the domain is added once.
 """
 
 from collections.abc import Mapping, Sequence
+from typing import cast
 
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -16,6 +17,7 @@ from squid.posts.infrastructure.models import DiscordPost
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     BuildVoteTarget,
+    DeleteLogVoteTarget,
     GenericPoll,
     PollScope,
     VoteChoice,
@@ -39,6 +41,8 @@ AUTHOR_ACCOUNT_IDS = (99, 100)
 VOTER_ACCOUNT_IDS = (7, 8)
 
 DEFAULT_BUILD_TARGET = BuildVoteTarget(42)
+DEFAULT_DELETE_LOG_TARGET = DeleteLogVoteTarget(TARGET_MESSAGE_ID, CHANNEL_ID, GUILD_ID)
+_INFER_TARGET = object()
 
 GENERIC_OPTIONS = (
     VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=10, label="One"),
@@ -58,14 +62,17 @@ def build_snapshot(
     votes: Mapping[int, float] | None = None,
     messages: tuple[VoteMessage, ...] = (VoteMessage(100, 200, 10),),
     options: tuple[VoteOption, ...] = DEFAULT_VOTE_OPTIONS,
-    target: VoteTarget = DEFAULT_BUILD_TARGET,
+    target: VoteTarget | object = _INFER_TARGET,
     selections: tuple[VoteSelection, ...] = (),
     poll: GenericPoll | None = None,
 ) -> VoteSessionSnapshot:
     """Build a threshold-closing snapshot, defaulting to an open build review.
 
-    Pass `target=None` for a session that deliberately has none.
+    The target defaults to the payload required by `kind`; pass an explicit value to
+    exercise invalid domain combinations.
     """
+    if target is _INFER_TARGET:
+        target = DEFAULT_DELETE_LOG_TARGET if kind is VoteKind.DELETE_LOG else DEFAULT_BUILD_TARGET
     return VoteSessionSnapshot(
         id=id,
         author_account_id=author_account_id,
@@ -77,7 +84,7 @@ def build_snapshot(
         votes=dict(votes or {}),
         messages=messages,
         options=options,
-        target=target,
+        target=cast(VoteTarget, target),
         selections=selections,
         poll=poll,
     )

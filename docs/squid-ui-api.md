@@ -15,14 +15,16 @@ composition and adapter contracts.
 | Compile a Slack message | `squid_ui_slack.SLACK_MESSAGE_SDK343`, `MessageRenderer` |
 | Compile a Slack modal | `squid_ui_slack.SLACK_MODAL_SDK343`, `ModalRenderer` |
 | Compile an App Home view | `squid_ui_slack.SLACK_HOME_SDK343`, `HomeRenderer` |
-| Install a Discord host | `squid_ui_discord.install`, `ClientRuntime` |
-| Handle one Discord event | `squid_ui_discord.Invocation` |
+| Install a Discord host | `squid_ui_discord.install`, `DiscordUIRuntime` |
+| Bind UI authority to an owner | `DiscordUIRuntime.scope`, `DiscordUI` |
+| Handle one Discord event | `DiscordUI.resolve`, `DiscordRequest` |
 | Declare reusable opening policy | `squid_ui_discord.Screen` |
 | Compose dynamic session policy | `SessionSpec`, `SessionManager` |
 | Own one live message | `MessageRoot` |
 | Render Components V2 | `render_static`, `render_message`, `DISCORD_V2_DPY27` |
 | Render classic messages | `classic.render_static`, `classic.render_message`, `DISCORD_V1_DPY27` |
-| Test without a gateway | `squid_ui_discord.testing` |
+| Test roots and payloads without a gateway | `squid_ui_discord.testing` |
+| Stage the complete Discord facade | `squid_ui_discord.ext.testing.stage`, `invoke` |
 | Persist scoped bytes | `squid_storage.ScopedStore`, `MemoryScopedStore`, `PostgresScopedStore` |
 | Persist reactive state | `squid_storage.PersistentStatePool` |
 | Replicate state | `squid_replication.Replica` and a selected backend |

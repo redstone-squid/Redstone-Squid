@@ -29,6 +29,7 @@ from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import COMPONENT_LIMITS, LIMITS, ComponentLimits, MessageLimits, V2Limits
 from squid_ui.planning.target import Target
 from squid_ui.planning.types import DiscordAdapter
+from squid_ui_discord.commands import bind_context_menu, context_menu_declaration
 from squid_ui_discord.delivery import DeliveryResult, EditHandle, MessageDestination, handle_for
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
@@ -252,7 +253,9 @@ class _InteractionResponseHarness:
 
         async def record(*_args: Any, **kwargs: Any) -> _InteractionResult:
             self._done = True
-            self.type = kind
+            # A "thinking" defer is a deferred channel message, the shape discord.py reports for it.
+            thinking = kind is discord.InteractionResponseType.deferred_message_update and kwargs.get("thinking")
+            self.type = discord.InteractionResponseType.deferred_channel_message if thinking else kind
             response_message_id = message_id if kind is discord.InteractionResponseType.channel_message else None
             return _InteractionResult(response_message_id, bool(kwargs.get("ephemeral", False)))
 
@@ -318,12 +321,26 @@ class InteractionHarness:
     """
 
     def __init__(
-        self, user_id: int = 1, *, message_id: int = 99, expired: bool = False, components_v2: bool = True
+        self,
+        user_id: int = 1,
+        *,
+        message_id: int = 99,
+        expired: bool = False,
+        components_v2: bool = True,
+        client: Any = None,
     ) -> None:
         self.user = _Identity(user_id)
         self.message_harness = MessageHarness(message_id=message_id, components_v2=components_v2)
         self.message = self.message_harness.source
+        self.client = client
+        self.channel = self.message.channel
+        self.channel_id = self.channel.id
+        self.guild = self.message.guild
         self.guild_id = self.message.guild.id if self.message.guild is not None else None
+        self.locale = "en-US"
+        self.guild_locale = "en-US"
+        self.extras: dict[Any, Any] = {}
+        self.command: Any = None
         self.response = _InteractionResponseHarness(message_id)
         self.followup = _FollowupHarness()
         self.original_response = AsyncCallRecorder(result=self.message)
@@ -375,6 +392,7 @@ class ContextHarness:
         self.reply = AsyncCallRecorder(result=self.message)
         self.bot = bot
         self.interaction: Any = None
+        self.command: Any = None
         self.author = _Identity(user_id)
         self.guild: Any = None
 
@@ -583,6 +601,24 @@ async def drain(scheduler: MessageRootScheduler, *, timeout: float = 1) -> None:
         tasks.cancel_scope.cancel()
 
 
+# --- Commands -------------------------------------------------------------------------------
+
+
+async def invoke_context_menu(owner: object, method: Any, interaction: Any, target: Any) -> None:
+    """Run one `@sd.context_menu` method through the dispatch its registered menu would use.
+
+    `method` is the declared function, unbound or bound; the defer and return handling of its
+    declaration apply, so a test sees the same interaction traffic as production.
+    """
+    callback: Any = getattr(method, "__func__", method)
+    declaration = context_menu_declaration(callback)
+    if declaration is None:
+        message = "the method carries no @sd.context_menu declaration"
+        raise TypeError(message)
+    menu = bind_context_menu(owner, callback, declaration)
+    await menu.callback(interaction, target)
+
+
 __all__ = [
     "CallRecord",
     "ContextHarness",
@@ -596,6 +632,7 @@ __all__ = [
     "drain",
     "http_error",
     "interaction_harness",
+    "invoke_context_menu",
     "iter_component_payloads",
     "layout_view",
     "message_harness",

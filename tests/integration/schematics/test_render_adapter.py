@@ -8,6 +8,7 @@ import nucleation
 import pytest
 
 from squid.schematics.application.commands import RenderRequest
+from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.infrastructure import nucleation_adapter
 
 pytestmark = pytest.mark.schematic
@@ -38,7 +39,7 @@ def test_render_reaches_the_renderer_with_native_configuration(
     actual = nucleation_adapter.render(
         piston_door,
         request=RenderRequest(width=320, height=240),
-        resource_pack=pack_bytes,
+        resource_pack=VerifiedResourcePack.from_bytes(pack_bytes),
     )
 
     assert actual == output

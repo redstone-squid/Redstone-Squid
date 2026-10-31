@@ -1,16 +1,20 @@
 """Portable field specifications for build submission and editing."""
 
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from beartype.door import is_bearable
 
+import squid_ui as sl
 from squid.bot.submission.parse import get_formatter_and_parser_for_type
-from squid.builds.domain import Build, BuildCategory, DoorBuild
+from squid.builds.domain import Build, BuildCategory, BuildDraft, DoorBuild
 from squid.core.i18n import tr
+
+if TYPE_CHECKING:
+    from squid.builds.application import BuildService
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +24,49 @@ class FieldDisplay(StrEnum):
 
     TEXT = "text"
     PARAGRAPH = "paragraph"
+
+
+@dataclass(frozen=True, slots=True)
+class CreationFieldSpec[ValueT]:
+    """One typed creation input and its complete portable presentation metadata."""
+
+    key: str
+    label: str
+    placeholder: str
+    parser: Callable[[str], ValueT]
+    formatter: Callable[[ValueT], str]
+    draft_value: Callable[[BuildDraft], ValueT]
+    target: Callable[[BuildDraft, ValueT, BuildService], Awaitable[None]]
+    required: bool = False
+    minimum: int | None = None
+    maximum: int | None = None
+    display: FieldDisplay = FieldDisplay.TEXT
+
+    def parse(self, raw: object) -> ValueT:
+        """Parse the adapter value through this field's one declared parser."""
+        return self.parser(str(raw or ""))
+
+    def form_field(self, draft: BuildDraft) -> sl.forms.FormField[str]:
+        """Build the portable control from the same metadata that parses its value."""
+        field_type = sl.forms.TextAreaField if self.display is FieldDisplay.PARAGRAPH else sl.forms.TextField
+        return field_type(
+            key=self.key,
+            label=tr(self.label),
+            placeholder=tr(self.placeholder),
+            default=self.formatter(self.draft_value(draft)),
+            required=self.required,
+            minimum=self.minimum,
+            maximum=self.maximum,
+        )
+
+    def prepare(self, raw: object) -> Callable[[BuildDraft, BuildService], Awaitable[None]]:
+        """Parse one value into a type-safe target application without mutating the draft."""
+        value = self.parse(raw)
+
+        async def apply(draft: BuildDraft, builds: BuildService) -> None:
+            await self.target(draft, value, builds)
+
+        return apply
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,13 +97,14 @@ class BuildFieldSpec:
         maximum: int | None = None,
         display: FieldDisplay = FieldDisplay.TEXT,
         categories: frozenset[BuildCategory] | None = None,
+        parser: Callable[[str], object] | None = None,
     ) -> BuildFieldSpec:
         """Build a specification from the shared formatter/parser registry."""
-        formatter, parser = get_formatter_and_parser_for_type(value_type)
+        formatter, default_parser = get_formatter_and_parser_for_type(value_type)
         return cls(
             patch_key,
             label or patch_key.replace("_", " ").title(),
-            parser,
+            default_parser if parser is None else parser,
             formatter,
             placeholder,
             required=not is_bearable(None, value_type) if required is None else required,
@@ -104,7 +152,7 @@ class BoundBuildField:
             return
         try:
             value = self.spec.parser(text)
-        except Exception as error:
+        except ValueError as error:
             self.validation_error = str(error) or tr("Invalid value")
             return
         self.actual_value = value
@@ -183,6 +231,7 @@ def field_spec(
     maximum: int | None = None,
     display: FieldDisplay = FieldDisplay.TEXT,
     categories: frozenset[BuildCategory] | None = None,
+    parser: Callable[[str], object] | None = None,
 ) -> BuildFieldSpec:
     """Describe a patch field using the domain model's declared value type."""
     value_type = _EDIT_FIELD_READERS.get(patch_key, (None, None))[1]
@@ -202,7 +251,8 @@ def field_spec(
         maximum=maximum,
         display=display,
         categories=categories,
+        parser=parser,
     )
 
 
-__all__ = ["BoundBuildField", "BuildFieldSpec", "FieldDisplay", "field_spec"]
+__all__ = ["BoundBuildField", "BuildFieldSpec", "CreationFieldSpec", "FieldDisplay", "field_spec"]

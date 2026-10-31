@@ -2,6 +2,7 @@
 
 from squid.community.domain.models import (
     PendingWelcomeMember,
+    PendingWelcomeMessage,
     RedstonerDecision,
     RedstonerDecisionKind,
     RedstonerPolicy,
@@ -11,6 +12,7 @@ from squid.community.domain.models import (
 
 __all__ = [
     "PendingWelcomeMember",
+    "PendingWelcomeMessage",
     "RedstonerDecision",
     "RedstonerDecisionKind",
     "RedstonerPolicy",

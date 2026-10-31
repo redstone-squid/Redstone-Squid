@@ -6,15 +6,33 @@ import pytest
 
 from squid.api.security import Caller
 from squid.api.v1.votes import VoteInput, cast_vote
-from squid.core.errors import AuthenticationError, ValidationError
+from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
 from squid.voting.application import VoteService
-from squid.voting.domain import CastVoteResult, VoteActor, VoteKind, VoteRejection, VoteSessionSnapshot
+from squid.voting.domain import (
+    CastVoteResult,
+    VoteActor,
+    VoteChoice,
+    VoteKind,
+    VoteMessage,
+    VoteOption,
+    VoteRejection,
+    VoteSessionSnapshot,
+)
+from squid.voting.errors import VoteSessionNotFoundError
 from tests.support.voting import build_snapshot
 from tests.unit.api.fakes import credential_nodes
 
 
 def snapshot() -> VoteSessionSnapshot:
-    return build_snapshot()
+    return build_snapshot(
+        messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 999)),
+        options=(
+            VoteOption("<:yes:1>", VoteChoice.APPROVE, identifier="approve", guild_id=10, position=0),
+            VoteOption("<:no:2>", VoteChoice.DENY, identifier="deny", guild_id=10, position=1),
+            VoteOption("✅", VoteChoice.APPROVE, identifier="approve", guild_id=999, position=0),
+            VoteOption("❌", VoteChoice.DENY, identifier="deny", guild_id=999, position=1),
+        ),
+    )
 
 
 def account(subject: str = "account:1") -> Caller:
@@ -64,22 +82,23 @@ class MemberRecorder:
         pass
 
 
+@pytest.mark.parametrize("guild_id", [10, 999])
 @pytest.mark.asyncio
-async def test_vote_resolves_current_guild_membership_and_casts_by_option_id() -> None:
+async def test_vote_keeps_the_option_id_stable_across_guild_aliases(guild_id: int) -> None:
     session = snapshot()
-    actor = VoteActor(1, 7, guild_id=10, role_ids=frozenset({99}))
+    actor = VoteActor(1, 7, guild_id=guild_id, role_ids=frozenset({99}))
     votes = VoteRecorder(session)
     members = MemberRecorder(actor)
 
     response = await cast_vote(
         12,
-        VoteInput(guild_id=10, option_id="approve"),
+        VoteInput(guild_id=guild_id, option_id="approve"),
         votes,
         members,
         account(),
     )
 
-    assert members.calls == [(1, 10, VoteKind.BUILD)]
+    assert members.calls == [(1, guild_id, VoteKind.BUILD)]
     assert votes.cast_calls == [CastCall(12, actor, "approve")]
     assert response.id == 12
 
@@ -112,17 +131,32 @@ async def test_service_credentials_cannot_cast_ballots() -> None:
         await cast_vote(12, VoteInput(guild_id=10, option_id="approve"), VoteRecorder(snapshot()), None, service)
 
 
+_REJECTION_ERRORS: dict[VoteRejection, type[Exception]] = {
+    VoteRejection.NOT_FOUND: VoteSessionNotFoundError,
+    VoteRejection.CLOSED: ConflictError,
+    VoteRejection.NOT_ELIGIBLE: AuthorizationError,
+    VoteRejection.INVALID_OPTION: ValidationError,
+    VoteRejection.WRONG_GUILD: AuthorizationError,
+    VoteRejection.NOT_AUTHORIZED: AuthorizationError,
+}
+assert set(_REJECTION_ERRORS) == set(VoteRejection)
+
+
+@pytest.mark.parametrize(("rejection", "error_type"), _REJECTION_ERRORS.items())
 @pytest.mark.asyncio
-async def test_invalid_option_is_a_typed_client_error() -> None:
+async def test_every_vote_rejection_maps_to_a_typed_api_error(
+    rejection: VoteRejection,
+    error_type: type[Exception],
+) -> None:
     session = snapshot()
-    votes = VoteRecorder(session, rejection=VoteRejection.INVALID_OPTION)
+    votes = VoteRecorder(session, rejection=rejection)
     members = MemberRecorder(VoteActor(1, 7, guild_id=10))
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(error_type):
         await cast_vote(
             12,
-            VoteInput(guild_id=10, option_id="missing"),
+            VoteInput(guild_id=10, option_id="approve"),
             votes,
             members,
-            account("account:invalid-option"),
+            account(f"account:{rejection.value}"),
         )

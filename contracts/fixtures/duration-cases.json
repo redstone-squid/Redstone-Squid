@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "description": "Shared duration-string language for game_ticks form fields. `core` cases must parse identically on every surface that accepts duration strings (web catalogue, Minecraft clients, Python backend). `client_rejects` cases must be rejected by form clients even though the Python free-text parser reads them; forms demand explicit, exact input while parse_time_string serves fuzzy Discord and inference text. `python_only` documents that looser language. The Rust CLI takes no duration strings: its duration control prompts for a bare integer already denominated in game ticks.",
+  "core": [
+    { "input": "10gt", "ticks": 10 },
+    { "input": "21gt", "ticks": 21 },
+    { "input": "21 gt", "ticks": 21 },
+    { "input": "16t", "ticks": 16 },
+    { "input": "5rt", "ticks": 10 },
+    { "input": "5 rt", "ticks": 10 },
+    { "input": "3rt", "ticks": 6 },
+    { "input": "1.5s", "ticks": 30 },
+    { "input": "0.5s", "ticks": 10 },
+    { "input": ".5s", "ticks": 10 },
+    { "input": "  8S  ", "ticks": 160 }
+  ],
+  "client_rejects": [
+    { "input": "30", "python_ticks": 600, "reason": "bare numbers are seconds in free text but ambiguous against the CLI's bare-ticks integer prompt, so forms require a unit" },
+    { "input": "0.1gt", "python_ticks": 0, "reason": "free text rounds to the nearest tick; forms reject fractional ticks so nothing is submitted silently rounded" },
+    { "input": "1.5t", "python_ticks": 2, "reason": "free text rounds to the nearest tick; forms reject fractional ticks so nothing is submitted silently rounded" },
+    { "input": "0.055s", "python_ticks": 1, "reason": "free text rounds to the nearest tick; forms reject fractional ticks so nothing is submitted silently rounded" },
+    { "input": "-1s", "python_ticks": -20, "reason": "durations in forms are non-negative; the free-text parser reads signed values" },
+    { "input": "invalid", "python_ticks": null, "reason": "not a duration anywhere" },
+    { "input": "", "python_ticks": null, "reason": "not a duration anywhere" }
+  ],
+  "python_only": [
+    { "input": "~2s", "ticks": 40 },
+    { "input": "~ 1.05 sec", "ticks": 21 },
+    { "input": "2 seconds", "ticks": 40 },
+    { "input": "16 ticks", "ticks": 16 },
+    { "input": "1 tick", "ticks": 1 },
+    { "input": "40 game ticks", "ticks": 40 },
+    { "input": "40game-ticks", "ticks": 40 },
+    { "input": "3 redstone ticks", "ticks": 6 },
+    { "input": "30", "ticks": 600 },
+    { "input": "-1", "ticks": -20 }
+  ]
+}

@@ -298,29 +298,30 @@ async def test_leaving_the_pool_lifetime_stops_every_stderr_pump(mocker: MockerF
 async def test_worker_request_injects_trace_context_into_frame(mocker: MockerFixture) -> None:
     worker = unowned_worker()
     stdout = asyncio.StreamReader()
-    stdout.feed_data(Frame({"id": 1, "ok": True}).encode())
+    stdout.feed_data(Frame({"id": 1, "ok": True, "result": {}}).encode())
     stdin = mocker.Mock()
     stdin.drain = mocker.AsyncMock()
     process = mocker.Mock(stdin=stdin, stdout=stdout)
     mocker.patch.object(worker, "_ensure_started", new=mocker.AsyncMock(return_value=process))
-    inject = mocker.patch.object(
+    headers = mocker.patch.object(
         worker_module,
-        "inject_trace_context",
-        side_effect=lambda header: header.update({"traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01"}),
+        "trace_context_headers",
+        return_value={"traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01"},
     )
 
     await worker.request("capabilities", {}, (), 1.0)
 
-    inject.assert_called_once()
+    headers.assert_called_once_with()
     encoded = stdin.write.call_args.args[0]
-    assert b'"traceparent":"00-' in encoded
+    assert b'"trace":{"traceparent":"00-' in encoded
+    assert b'"params":{},"traceparent"' not in encoded
 
 
 @pytest.mark.parametrize("job_id", [4242, None])
 async def test_worker_request_carries_the_durable_job_id(mocker: MockerFixture, job_id: int | None) -> None:
     worker = unowned_worker()
     stdout = asyncio.StreamReader()
-    stdout.feed_data(Frame({"id": 1, "ok": True}).encode())
+    stdout.feed_data(Frame({"id": 1, "ok": True, "result": {}}).encode())
     stdin = mocker.Mock()
     stdin.drain = mocker.AsyncMock()
     mocker.patch.object(
@@ -339,7 +340,7 @@ async def test_worker_request_carries_the_durable_job_id(mocker: MockerFixture, 
 def test_serve_stamps_request_context_on_child_logs(mocker: MockerFixture, caplog: pytest.LogCaptureFixture) -> None:
     """Without this the only correlation between a child log and its job is the trace context."""
     header = {"id": 7, "op": "analyze", "params": {}, "job_id": 4242}
-    stdin = io.BytesIO(Frame(header).encode())
+    stdin = io.BytesIO(Frame(header, (b"schematic",)).encode())
 
     def _fail(*_: object, **__: object) -> None:
         raise InvalidSchematicError(context={"reason": "unreadable"})
@@ -386,9 +387,9 @@ def test_worker_main_extracts_parent_context_around_operation(mocker: MockerFixt
         "id": 1,
         "op": "analyze",
         "params": {"source_format": "litematic"},
-        "traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01",
+        "trace": {"traceparent": "00-" + "a" * 32 + "-" + "b" * 16 + "-01"},
     }
-    stdin = io.BytesIO(Frame(header).encode())
+    stdin = io.BytesIO(Frame(header, (b"schematic",)).encode())
     stdout = io.BytesIO()
     mocker.patch.object(worker_main, "handle", return_value=({"analysis": {}}, b""))
     context = mocker.MagicMock()
@@ -398,7 +399,7 @@ def test_worker_main_extracts_parent_context_around_operation(mocker: MockerFixt
 
     extract.assert_called_once_with(
         "schematic.worker analyze",
-        mocker.ANY,
+        header["trace"],
         {"squid.schematic.operation": "analyze", "squid.schematic.format": "litematic"},
     )
 

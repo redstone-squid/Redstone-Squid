@@ -1,7 +1,6 @@
 """Durable media upload and normalization job orchestration."""
 
 import asyncio
-import contextlib
 import hashlib
 import hmac
 import json
@@ -21,7 +20,7 @@ from uuid import UUID, uuid4
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
-from squid.core.concurrency import run_all
+from squid.core.concurrency import run_all_settled, task_group
 from squid.core.errors import InvalidStateError, SquidError, ValidationError
 from squid.core.i18n import tr
 from squid.media.application.commands import MediaNormalizationRequest
@@ -565,9 +564,11 @@ class MediaNormalizationJobRunner:
     async def process_batch(self, *, limit: int = 8) -> None:
         """Claim and process a bounded batch without coupling work to storage cleanup."""
         claimed = await self._jobs.claim(limit=limit)
-        # A task group rather than gather: an abandoned sibling still holds its
-        # database claim, its heartbeat task and its temporary directory.
-        await run_all([partial(self._process, job) for job in claimed])
+        # Settled rather than cancelled on the first failure: the jobs are
+        # independent, and a cancelled one never reaches the handler that fails it,
+        # so it would hold its claim, its heartbeat and its temporary directory
+        # until the lease expires. Failures still raise once the batch is done.
+        await run_all_settled([partial(self._process, job) for job in claimed])
 
     async def cleanup_terminal_sources(self, *, limit: int = 100) -> None:
         """Retry idempotent deletion of raw objects committed to terminal states."""
@@ -579,16 +580,14 @@ class MediaNormalizationJobRunner:
 
     async def _process(self, job: ClaimedMediaJob) -> None:
         claim_lost = asyncio.Event()
-        heartbeat = asyncio.create_task(
-            self._maintain_claim(job, claim_lost),
-            name=f"media-heartbeat-{job.upload.id}",
-        )
-        try:
-            await self._process_claim(job, claim_lost)
-        finally:
-            heartbeat.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await heartbeat
+        async with task_group() as heartbeat:
+            heartbeat.start_soon(self._maintain_claim, job, claim_lost)
+            try:
+                await self._process_claim(job, claim_lost)
+            finally:
+                # The heartbeat runs until the work it fences is over, however
+                # that happens; the task group owns its lifetime either way.
+                heartbeat.cancel_scope.cancel()
 
     async def _process_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
         with tempfile.TemporaryDirectory(prefix="squid-media-", dir=self._working_directory) as temporary_name:

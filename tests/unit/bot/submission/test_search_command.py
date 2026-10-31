@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 import pytest
-from discord.ext import commands
 
 from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.builds.application import BuildQueryService
@@ -13,8 +12,6 @@ from squid.core.errors import ValidationError
 from squid.search.application import SearchService
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection
 from squid.settings.application import SettingsService
-from squid_ui_discord.testing import ContextHarness, MessageHarness
-from tests.support.discord import make_layout_bot
 
 
 class RecordingSearch(SearchService):
@@ -62,14 +59,8 @@ def _cog(search: RecordingSearch) -> SearchCog[Any]:
     return cog
 
 
-def _context() -> commands.Context[Any]:
-    context = ContextHarness(message=MessageHarness(message_id=1), bot=make_layout_bot(), user_id=7)
-    context.guild = None
-    return cast(commands.Context[Any], context.source)
-
-
 async def _run(cog: SearchCog[Any], **kwargs: Any) -> None:
-    await cog._show_search(_context(), **kwargs)
+    await cog._search_screen(**kwargs)
 
 
 async def test_a_descending_sort_suggestion_survives_the_trip() -> None:

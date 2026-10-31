@@ -54,3 +54,11 @@ deleting coverage.
   integration tests after migration-harness changes.
 - Run changed-file Ruff, `just typecheck` (pyrefly), and `git diff --check` before each
   reviewable commit.
+
+## Completion update (2026-08-30)
+
+**Blocked on external verification only.** Every repository change and review-thread disposition
+is complete, including self-checking Alembic entities and the current typed reaction callback
+contract. The remaining condition is a green GitHub CI/PostgreSQL run for the documented
+integration cases; local Docker access is unavailable, so there is no further repository task to
+perform here.

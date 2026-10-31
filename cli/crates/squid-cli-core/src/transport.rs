@@ -559,7 +559,7 @@ fn origin_host(origin: &ApiOrigin) -> Option<&str> {
 }
 
 fn validate_endpoint_path(path: &str) -> Result<(), TransportError> {
-    if !path.starts_with("/api/v1/")
+    if !path.starts_with("/v1/")
         || path.contains("//")
         || path.contains('\\')
         || path.contains('?')
@@ -659,7 +659,7 @@ pub enum TransportError {
     InvalidInstanceId,
     #[error("API profile is not trusted or valid: {0}")]
     InvalidProfile(#[source] ProfileError),
-    #[error("endpoint must be a normalized /api/v1/ path without a query or fragment")]
+    #[error("endpoint must be a normalized /v1/ path without a query or fragment")]
     InvalidEndpointPath,
     #[error("query parameter name, value, or count is invalid")]
     InvalidQueryParameter,
@@ -789,13 +789,13 @@ mod tests {
 
     #[test]
     fn rejects_paths_that_could_change_origin_or_routing() {
-        assert!(validate_endpoint_path("/api/v1/drafts").is_ok());
+        assert!(validate_endpoint_path("/v1/drafts").is_ok());
         for invalid in [
-            "https://evil.example/api/v1/drafts",
-            "/api/v1/../admin",
-            "/api/v1/drafts?token=x",
-            "/api/v1//drafts",
-            "/v1/drafts",
+            "https://evil.example/v1/drafts",
+            "/v1/../admin",
+            "/v1/drafts?token=x",
+            "/v1//drafts",
+            "/api/v1/drafts",
         ] {
             assert!(
                 validate_endpoint_path(invalid).is_err(),
@@ -817,7 +817,7 @@ mod tests {
             ),
             Err(TransportError::InvalidProfile(_)),
         ));
-        let request = ApiRequest::new(ApiMethod::Post, "/api/v1/drafts")
+        let request = ApiRequest::new(ApiMethod::Post, "/v1/drafts")
             .with_json(&serde_json::json!({"private": "do-not-print"}))?;
         let debug = format!("{request:?}");
         assert!(!debug.contains("do-not-print"));
@@ -848,7 +848,7 @@ mod tests {
             &RendererCapabilities::prompt(false),
         )?;
         let response = client.send_json::<ResponseBody>(
-            ApiRequest::new(ApiMethod::Post, "/api/v1/submissions/media").with_file(
+            ApiRequest::new(ApiMethod::Post, "/v1/submissions/media").with_file(
                 source.path(),
                 "image/png",
                 32,
@@ -915,7 +915,7 @@ mod tests {
             &RendererCapabilities::prompt(false),
         )?;
         let response = client.send_json::<ResponseBody>(
-            ApiRequest::new(ApiMethod::Get, "/api/v1/capabilities")
+            ApiRequest::new(ApiMethod::Get, "/v1/capabilities")
                 .with_query_param("category", "door & gate")?,
             None,
         )?;
@@ -925,7 +925,7 @@ mod tests {
             .join()
             .map_err(|_error| io::Error::other("test server panicked"))??;
         let lowercase = request.to_ascii_lowercase();
-        assert!(lowercase.starts_with("get /api/v1/capabilities?category=door+%26+gate http/1.1"));
+        assert!(lowercase.starts_with("get /v1/capabilities?category=door+%26+gate http/1.1"));
         assert!(lowercase.contains("squid-protocol:"));
         assert!(lowercase.contains("squid-renderer-capabilities:"));
         assert!(lowercase.contains("cli.control.text.v1"));
@@ -961,7 +961,7 @@ mod tests {
             &RendererCapabilities::prompt(false),
         )?;
         let result = client.send_json::<Value>(
-            ApiRequest::new(ApiMethod::Post, "/api/v1/cli/auth/enrollments/exchange"),
+            ApiRequest::new(ApiMethod::Post, "/v1/cli/auth/enrollments/exchange"),
             None,
         );
         match result {
@@ -1010,7 +1010,7 @@ mod tests {
             &RendererCapabilities::prompt(false),
         )?;
         let result = client.send_json::<Value>(
-            ApiRequest::new(ApiMethod::Get, "/api/v1/capabilities"),
+            ApiRequest::new(ApiMethod::Get, "/v1/capabilities"),
             None,
         );
         assert!(matches!(

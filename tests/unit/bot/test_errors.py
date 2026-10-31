@@ -9,6 +9,7 @@ from discord.ext import commands
 from pytest_mock import MockerFixture
 
 import squid_ui_discord as sd
+from squid.accounts.errors import MinecraftServiceUnavailableError
 from squid.bot.errors import (
     SquidCommandTree,
     build_error_notice,
@@ -21,7 +22,8 @@ from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.builds.errors import BuildNotFoundError
 from squid.core.errors import InternalError
 from squid.observability import correlation_id
-from tests.support.discord import make_interaction, make_message
+from squid_ui.text import Localization, current_localization
+from tests.support.discord import make_interaction, make_layout_bot, make_message
 
 
 def test_unwrap_error_finds_original_command_exception() -> None:
@@ -37,6 +39,14 @@ def test_domain_error_presentation_exposes_only_public_detail() -> None:
 
     assert notice.title == "Resource not found"
     assert notice.detail == "Build not found. Check the build ID and try again."
+    assert notice.error_id is None
+
+
+def test_minecraft_service_outage_is_rendered_as_a_stable_retryable_bot_error() -> None:
+    notice = build_error_notice(MinecraftServiceUnavailableError(), locale="en-GB")
+
+    assert notice.title == "Service unavailable"
+    assert notice.detail == "The Minecraft account service is temporarily unavailable. Try again in a few minutes."
     assert notice.error_id is None
 
 
@@ -73,6 +83,7 @@ async def test_application_command_span_excludes_user_id(mocker: MockerFixture) 
         "name": "admin",
         "options": [{"name": "records", "type": 1, "options": []}],
     }
+    interaction.command = mocker.Mock(qualified_name="admin records")
     interaction.guild_id = 10
     interaction.channel_id = 20
     interaction.command_failed = False
@@ -164,6 +175,7 @@ async def test_application_command_binds_one_correlation_id_for_the_whole_invoca
     interaction = mocker.Mock()
     interaction.type = discord.InteractionType.application_command
     interaction.data = {"name": "settings"}
+    interaction.command = mocker.Mock(qualified_name="settings")
     interaction.guild_id = None
     interaction.channel_id = None
     interaction.command_failed = False
@@ -182,9 +194,13 @@ async def test_application_command_binds_one_correlation_id_for_the_whole_invoca
     assert seen[0] != outside, "the binding must not leak past the invocation"
 
 
-async def test_application_command_establishes_invocation_scope(mocker: MockerFixture) -> None:
+async def test_application_command_establishes_localization_scope(mocker: MockerFixture) -> None:
     client = discord.Client(intents=discord.Intents.none())
-    runtime = sd.install(client)
+
+    async def localize(_source: object) -> Localization:
+        return Localization(locale="en-GB")
+
+    runtime = sd.install(client, localization=localize)
     tree = SquidCommandTree(client)
     interaction = mocker.Mock(
         type=discord.InteractionType.application_command,
@@ -192,24 +208,24 @@ async def test_application_command_establishes_invocation_scope(mocker: MockerFi
         guild_id=None,
         channel_id=None,
         command_failed=False,
+        command=mocker.Mock(qualified_name="settings"),
         client=client,
         user=mocker.Mock(id=7),
         guild=None,
     )
-    seen: list[sd.Invocation] = []
+    seen: list[str | None] = []
 
     async def record_bound(_tree: object, source: discord.Interaction) -> None:
-        invocation = await sd.Invocation.of(source)
-        assert sd.current_invocation() is invocation
-        seen.append(invocation)
+        del source
+        seen.append(current_localization().locale)
 
     mocker.patch.object(app_commands.CommandTree, "_call", new=record_bound)
 
     await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
     await runtime.close()
 
-    assert len(seen) == 1
-    assert sd.current_invocation() is None
+    assert seen == ["en-GB"]
+    assert current_localization().locale is None
 
 
 async def test_application_command_failure_marks_span(mocker: MockerFixture) -> None:
@@ -221,6 +237,7 @@ async def test_application_command_failure_marks_span(mocker: MockerFixture) -> 
         guild_id=None,
         channel_id=20,
         command_failed=True,
+        command=mocker.Mock(qualified_name="submit"),
     )
     mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
     span = mocker.Mock()
@@ -231,6 +248,39 @@ async def test_application_command_failure_marks_span(mocker: MockerFixture) -> 
     await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
 
     span.set_error.assert_called_once_with()
+
+
+async def test_unknown_application_command_uses_bounded_fallback_name(mocker: MockerFixture) -> None:
+    client = discord.Client(intents=discord.Intents.none())
+    tree = SquidCommandTree(client)
+    interaction = mocker.Mock(
+        type=discord.InteractionType.application_command,
+        command=None,
+        guild_id=None,
+        channel_id=None,
+        command_failed=False,
+    )
+    mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
+    span_context = mocker.MagicMock()
+    trace = mocker.patch("squid.bot.errors.trace_span", return_value=span_context)
+
+    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+
+    assert trace.call_args.args[0] == "discord.command unknown"
+    assert trace.call_args.args[1]["squid.command.name"] == "unknown"
+
+
+async def test_autocomplete_does_not_emit_a_command_span(mocker: MockerFixture) -> None:
+    client = discord.Client(intents=discord.Intents.none())
+    tree = SquidCommandTree(client)
+    interaction = mocker.Mock(type=discord.InteractionType.autocomplete)
+    base_call = mocker.patch.object(app_commands.CommandTree, "_call", new=mocker.AsyncMock())
+    trace = mocker.patch("squid.bot.errors.trace_span")
+
+    await tree._call(interaction)  # pyright: ignore[reportPrivateUsage]
+
+    base_call.assert_awaited_once_with(interaction)
+    trace.assert_not_called()
 
 
 async def test_application_command_error_records_exception_on_current_span(mocker: MockerFixture) -> None:
@@ -275,6 +325,19 @@ async def test_interaction_error_uses_followup_after_response() -> None:
     followup_call = harness.send_followup.await_args
     assert followup_call is not None
     assert followup_call.kwargs["ephemeral"] is True
+
+
+@pytest.mark.asyncio
+async def test_interaction_error_completes_a_public_defer_in_place() -> None:
+    """A public "thinking" placeholder is edited, not answered with an ephemeral follow-up."""
+    harness = sd.testing.InteractionHarness(client=make_layout_bot())
+    request = await sd.request(harness.source)
+    await request.defer("public")
+
+    await handle_interaction_error(harness.source, BuildNotFoundError(42), surface="command")
+
+    harness.edit_original_response.assert_awaited_once()
+    harness.followup.send.assert_not_awaited()
 
 
 @pytest.mark.asyncio
