@@ -29,9 +29,9 @@ def test_the_info_card_says_nothing_about_previews_when_one_is_possible() -> Non
 
 def test_the_info_card_names_why_a_build_will_never_get_a_preview() -> None:
     """ "No preview here" and "no preview yet" call for different moderator responses."""
-    body = _describe(stored(), locale=None, render_skip=RenderSkipReason.NOT_SANITIZED)
+    body = _describe(stored(), locale=None, render_skip=RenderSkipReason.OVER_BLOCK_BUDGET)
 
-    assert "**No preview**: This schematic has not been sanitized, so it is never rendered." in body
+    assert f"**No preview**: {tr(RenderSkipReason.OVER_BLOCK_BUDGET.description)}" in body
 
 
 def test_no_skip_reason_leaks_the_engine_or_its_configured_caps() -> None:
