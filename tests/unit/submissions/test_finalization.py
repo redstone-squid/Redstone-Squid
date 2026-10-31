@@ -12,7 +12,9 @@ from squid.sponsors import PublicSponsor
 from squid.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
+    CheckedInFormManifestRegistry,
     ClaimedFinalizationJob,
+    DraftPreparationSnapshot,
     FinalizationFailureOutcome,
     FinalizationJobSnapshot,
     StoredDraft,
@@ -20,7 +22,7 @@ from squid.submissions.application import (
     SubmissionFinalizationService,
     SubmissionFinalizationWorker,
     SubmissionPreparation,
-    build_submission_manifest,
+    SubmissionRequestResult,
 )
 from squid.submissions.domain import (
     BuildSubmissionRejected,
@@ -33,7 +35,6 @@ from squid.submissions.domain import (
     ExtenderSubmissionDetails,
     FinalizationJobStatus,
     FinalizedBuild,
-    FormManifest,
     GeneralSubmissionDetails,
     NormalizedSubmission,
     SchematicArtifactState,
@@ -61,33 +62,12 @@ failed together. `_drafts` hands the service this instant so the suite tests the
 the calendar."""
 
 
-class FakeManifestRegistry:
-    def __init__(self) -> None:
-        self.manifest = build_submission_manifest("en")
-
-    async def current(self, *, locale: str | None) -> FormManifest:
-        del locale
-        return self.manifest
-
-    async def get(
-        self,
-        schema_id: str,
-        revision: int,
-        *,
-        locale: str | None,
-    ) -> FormManifest | None:
-        if schema_id == self.manifest.schema_id and revision in {1, 2}:
-            return build_submission_manifest(locale, revision=revision)
-        return None
-
-
 class FakeDraftRepository:
     def __init__(self, draft: StoredDraft) -> None:
         self.draft = draft
 
-    async def count_active_for_account(self, account_id: int) -> int:
-        del account_id
-        return 1
+    async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
+        return ()
 
     async def list_active_for_account(
         self,
@@ -99,7 +79,7 @@ class FakeDraftRepository:
         del now, limit
         return (self.draft,) if self.draft.snapshot.owner_account_id == account_id else ()
 
-    async def create(self, draft: StoredDraft) -> StoredDraft:
+    async def create(self, draft: StoredDraft, *, capacity: int = 10) -> StoredDraft:
         self.draft = draft
         return draft
 
@@ -123,28 +103,10 @@ class FakeDraftRepository:
         *,
         updated_at: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> AppliedDraftChange:
         del draft_id, account_id, change, updated_at, expires_at
         raise NotImplementedError
-
-    async def transition(
-        self,
-        draft_id: UUID,
-        account_id: int,
-        *,
-        expected_revision: int,
-        status: DraftStatus,
-        updated_at: Instant,
-        expires_at: Instant,
-    ) -> StoredDraft:
-        del draft_id, account_id, expected_revision
-        self.draft = replace(
-            self.draft,
-            snapshot=self.draft.snapshot.transition(status),
-            updated_at=updated_at,
-            expires_at=expires_at,
-        )
-        return self.draft
 
     async def upgrade_manifest(
         self,
@@ -193,15 +155,28 @@ class FakeFinalizationJobs:
     def __init__(self) -> None:
         self.snapshot: FinalizationJobSnapshot | None = None
         self.enqueued: NormalizedSubmission | None = None
+        self.enqueued_expiry: Instant | None = None
+        self.waiting_drafts: tuple[StoredDraft, ...] = ()
         self.attention: tuple[SubmissionAttentionIssue, ...] = ()
         self.claimed: tuple[ClaimedFinalizationJob, ...] = ()
-        self.completed: FinalizedBuild | None = None
         self.worker_attention: tuple[SubmissionAttentionIssue, ...] = ()
         self.failures: list[str] = []
 
     async def get(self, draft_id: UUID) -> FinalizationJobSnapshot | None:
         assert draft_id == DRAFT_ID
         return self.snapshot
+
+    async def get_attempt(self, draft_id: UUID, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+        snapshot = await self.get(draft_id)
+        return snapshot if snapshot is not None and snapshot.job_id == attempt_id else None
+
+    async def list_attempts(
+        self, draft_id: UUID, *, before: int | None, limit: int
+    ) -> tuple[FinalizationJobSnapshot, ...]:
+        snapshot = await self.get(draft_id)
+        if snapshot is None or (before is not None and snapshot.attempt_number >= before):
+            return ()
+        return (snapshot,)[:limit]
 
     async def enqueue(
         self,
@@ -210,10 +185,12 @@ class FakeFinalizationJobs:
         *,
         now: Instant,
         expires_at: Instant,
+        actor_account_id: int | None = None,
     ) -> FinalizationJobSnapshot:
         assert draft.snapshot.id == DRAFT_ID
         assert expires_at > now
         self.enqueued = payload
+        self.enqueued_expiry = expires_at
         self.snapshot = _snapshot(FinalizationJobStatus.PENDING)
         return self.snapshot
 
@@ -224,33 +201,22 @@ class FakeFinalizationJobs:
         *,
         now: Instant,
         expires_at: Instant,
-    ) -> FinalizationJobSnapshot:
+        actor_account_id: int | None = None,
+        waiting_for_artifacts: bool = False,
+    ) -> DraftPreparationSnapshot:
         assert draft.snapshot.id == DRAFT_ID
         assert expires_at > now
         self.attention = tuple(issues)
-        self.snapshot = replace(
-            _snapshot(FinalizationJobStatus.NEEDS_ATTENTION),
-            attention_at=now,
-            issues=self.attention,
-        )
-        return self.snapshot
+        return DraftPreparationSnapshot(DRAFT_ID, draft.snapshot.revision, self.attention, waiting_for_artifacts)
+
+    async def reserve_preparations(self, *, now: Instant, limit: int) -> tuple[StoredDraft, ...]:
+        result, self.waiting_drafts = self.waiting_drafts[:limit], self.waiting_drafts[limit:]
+        return result
 
     async def claim(self, *, now: Instant, limit: int) -> tuple[ClaimedFinalizationJob, ...]:
         assert limit >= 1
         del now
         return self.claimed
-
-    async def complete(
-        self,
-        job: ClaimedFinalizationJob,
-        result: FinalizedBuild,
-        *,
-        now: Instant,
-    ) -> bool:
-        assert job in self.claimed
-        del now
-        self.completed = result
-        return True
 
     async def needs_attention(
         self,
@@ -287,8 +253,8 @@ class FakeWriter:
         self.result = result
         self.payloads: list[NormalizedSubmission] = []
 
-    async def create_or_get(self, submission: NormalizedSubmission) -> BuildSubmissionResult:
-        self.payloads.append(submission)
+    async def execute(self, job: ClaimedFinalizationJob, *, now: Instant) -> BuildSubmissionResult:
+        self.payloads.append(job.payload)
         if isinstance(self.result, Exception):
             raise self.result
         return self.result
@@ -336,7 +302,7 @@ def _stored(
 
 def _drafts(repository: FakeDraftRepository) -> SubmissionDraftService:
     """A draft service frozen at `NOW`, so a fixture's expiry never depends on the wall clock."""
-    return SubmissionDraftService(repository, FakeManifestRegistry(), now=lambda: NOW)
+    return SubmissionDraftService(repository, CheckedInFormManifestRegistry(), now=lambda: NOW)
 
 
 def _snapshot(status: FinalizationJobStatus) -> FinalizationJobSnapshot:
@@ -357,7 +323,7 @@ async def _submit(
     category: str = "other",
     answers: dict[str, JSONValue] | None = None,
     sponsor: PublicSponsor | None = None,
-) -> tuple[FinalizationJobSnapshot, FakeFinalizationJobs]:
+) -> tuple[SubmissionRequestResult, FakeFinalizationJobs]:
     repository = FakeDraftRepository(_stored(origin, category=category, answers=answers))
     drafts = _drafts(repository)
     jobs = FakeFinalizationJobs()
@@ -374,7 +340,7 @@ async def _submit(
 async def test_minecraft_origins_require_backend_verified_schematic(origin: SubmissionOrigin) -> None:
     result, jobs = await _submit(origin, SubmissionArtifactReadiness())
 
-    assert result.status is FinalizationJobStatus.NEEDS_ATTENTION
+    assert result.status == DraftStatus.NEEDS_ATTENTION
     assert jobs.enqueued is None
     assert jobs.attention == (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_REQUIRED),)
 
@@ -400,7 +366,7 @@ async def test_any_supplied_schematic_must_finish_server_validation() -> None:
         SubmissionArtifactReadiness(schematic_state=SchematicArtifactState.PROCESSING),
     )
 
-    assert result.status is FinalizationJobStatus.NEEDS_ATTENTION
+    assert result.status == DraftStatus.NEEDS_ATTENTION
     assert jobs.attention == (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),)
 
 
@@ -479,7 +445,7 @@ async def test_unavailable_paper_sponsor_returns_stable_attention() -> None:
         answers=answers,
     )
 
-    assert result.status is FinalizationJobStatus.NEEDS_ATTENTION
+    assert result.status == DraftStatus.NEEDS_ATTENTION
     assert jobs.enqueued is None
     assert jobs.attention == (
         SubmissionAttentionIssue("sponsor_attribution", SubmissionAttentionReason.SPONSOR_UNAVAILABLE),
@@ -579,7 +545,7 @@ async def test_manifest_failures_are_retained_as_stable_attention_codes() -> Non
     del answers["source_version"]
     result, jobs = await _submit(SubmissionOrigin.WEB, SubmissionArtifactReadiness(), answers=answers)
 
-    assert result.status is FinalizationJobStatus.NEEDS_ATTENTION
+    assert result.status == DraftStatus.NEEDS_ATTENTION
     assert SubmissionAttentionIssue("source_version", SubmissionAttentionReason.REQUIRED) in jobs.attention
 
 
@@ -599,6 +565,12 @@ async def test_status_rechecks_draft_ownership_before_returning_job() -> None:
 
     with pytest.raises(DraftAccessDeniedError):
         await service.status(DRAFT_ID, 8)
+    with pytest.raises(DraftAccessDeniedError):
+        await service.attempt(DRAFT_ID, 8, JOB_ID)
+    with pytest.raises(DraftAccessDeniedError):
+        await service.attempts(DRAFT_ID, 8)
+    assert await service.attempt(DRAFT_ID, 7, JOB_ID) == jobs.snapshot
+    assert await service.attempts(DRAFT_ID, 7) == (jobs.snapshot,)
 
 
 async def _payload() -> NormalizedSubmission:
@@ -687,16 +659,19 @@ def _claim(payload: NormalizedSubmission, attempts: int = 1) -> ClaimedFinalizat
 
 
 @pytest.mark.asyncio
-async def test_worker_completes_after_retry_safe_build_creation() -> None:
+async def test_worker_delegates_successful_completion_to_the_executor() -> None:
     payload = await _payload()
     jobs = FakeFinalizationJobs()
     jobs.claimed = (_claim(payload),)
     target_result = FinalizedBuild(41)
-    worker = SubmissionFinalizationWorker(jobs, FakeWriter(target_result))
+    executor = FakeWriter(target_result)
+    worker = SubmissionFinalizationWorker(jobs, executor)
 
     await worker.process_batch(now=NOW)
 
-    assert jobs.completed == target_result
+    assert executor.payloads == [payload]
+    assert jobs.failures == []
+    assert jobs.worker_attention == ()
 
 
 @pytest.mark.asyncio
@@ -725,3 +700,39 @@ async def test_unexpected_failure_retries_then_dead_letters() -> None:
     await worker.process_batch(now=NOW)
 
     assert jobs.failures == ["RuntimeError"]
+
+
+async def test_attachment_wait_resumes_without_extending_retention() -> None:
+    draft = _stored(SubmissionOrigin.WEB)
+    repository = FakeDraftRepository(draft)
+    jobs = FakeFinalizationJobs()
+    artifacts = FakeArtifacts(
+        SubmissionArtifactReadiness(
+            issues=(SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_PROCESSING),),
+        )
+    )
+    service = SubmissionFinalizationService(_drafts(repository), SubmissionPreparation(artifacts), jobs)
+    waiting = await service.submit(DRAFT_ID, 7, locale="en", now=NOW)
+    assert isinstance(waiting, DraftPreparationSnapshot)
+    assert waiting.waiting_for_artifacts is True
+    assert jobs.enqueued is None
+
+    jobs.waiting_drafts = (draft,)
+    artifacts.readiness = SubmissionArtifactReadiness()
+    await service.resume_waiting(now=NOW.add(seconds=31))
+    assert jobs.enqueued is not None
+    assert jobs.enqueued_expiry == draft.expires_at
+
+
+async def test_edit_after_wait_reservation_prevents_automatic_submission() -> None:
+    draft = _stored(SubmissionOrigin.WEB)
+    repository = FakeDraftRepository(replace(draft, snapshot=replace(draft.snapshot, revision=1)))
+    jobs = FakeFinalizationJobs()
+    jobs.waiting_drafts = (draft,)
+    service = SubmissionFinalizationService(
+        _drafts(repository),
+        SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
+        jobs,
+    )
+    await service.resume_waiting(now=NOW)
+    assert jobs.enqueued is None

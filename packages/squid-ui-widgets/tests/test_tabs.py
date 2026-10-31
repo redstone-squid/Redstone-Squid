@@ -1,5 +1,7 @@
 """Tabs: one strip, one selected body, and the shape the strip takes as it grows."""
 
+from typing import override
+
 import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui import testing as engine
@@ -11,6 +13,7 @@ class Screen(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, name: str) -> None:
         self.name = name
 
+    @override
     def render(self):
         return sl.paragraph(f"screen: {self.name}")
 

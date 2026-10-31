@@ -6,7 +6,8 @@ name shipped as a `CommandRegistrationError` at process start, with the bot refu
 """
 
 import sys
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
+from contextlib import asynccontextmanager
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -62,9 +63,9 @@ class StubBot(commands.Bot):
         return MagicMock()
 
 
-@pytest_asyncio.fixture(scope="module", loop_scope="module")
-async def loaded_bot() -> AsyncIterator[commands.Bot]:
-    """Load the real extension list, then put `sys.modules` back exactly as it was.
+@asynccontextmanager
+async def _loaded_bot(extensions: Sequence[str]) -> AsyncIterator[commands.Bot]:
+    """Load the requested extensions, restoring imported modules when the context exits.
 
     `load_extension` builds a *fresh* module object and assigns it into `sys.modules`, rather than
     reusing the already-imported one. Without the restore, every other test in the session that had
@@ -75,13 +76,27 @@ async def loaded_bot() -> AsyncIterator[commands.Bot]:
     before = dict(sys.modules)
     bot = StubBot()
     try:
-        for extension in LOADABLE:
+        for extension in extensions:
             await bot.load_extension(extension)
         yield bot
     finally:
         for name, module in before.items():
             if sys.modules.get(name) is not module:
                 sys.modules[name] = module
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def loaded_bot() -> AsyncIterator[commands.Bot]:
+    """Load production and development extensions together to check for collisions."""
+    async with _loaded_bot(LOADABLE) as bot:
+        yield bot
+
+
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def production_bot() -> AsyncIterator[commands.Bot]:
+    """Load only the extensions registered by a production bot."""
+    async with _loaded_bot(EXTENSIONS) as bot:
+        yield bot
 
 
 async def test_every_extension_loads_onto_one_bot(loaded_bot: commands.Bot) -> None:
@@ -143,8 +158,8 @@ async def test_the_help_directory_names_commands_that_exist(loaded_bot: commands
     assert "poll" not in prefix_names, "the directory would find `poll` anyway if it were not app-only"
 
 
-async def test_message_context_menu_taxonomy(loaded_bot: commands.Bot) -> None:
-    names = {command.name for command in loaded_bot.tree.get_commands(type=discord.AppCommandType.message)}
+async def test_message_context_menu_taxonomy(production_bot: commands.Bot) -> None:
+    names = {command.name for command in production_bot.tree.get_commands(type=discord.AppCommandType.message)}
 
     assert names == {
         "Archive Message",
@@ -155,13 +170,9 @@ async def test_message_context_menu_taxonomy(loaded_bot: commands.Bot) -> None:
     }
 
 
-async def test_production_chat_input_taxonomy(loaded_bot: commands.Bot) -> None:
+async def test_production_chat_input_taxonomy(production_bot: commands.Bot) -> None:
     """The breaking cutover leaves one app-only root per public workflow."""
-    names = {
-        command.name
-        for command in loaded_bot.tree.get_commands(type=discord.AppCommandType.chat_input)
-        if command.module != "squid.bot.layout_showcase"
-    }
+    names = {command.name for command in production_bot.tree.get_commands(type=discord.AppCommandType.chat_input)}
 
     assert names == {
         "access",

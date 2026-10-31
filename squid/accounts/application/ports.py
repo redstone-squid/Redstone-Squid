@@ -84,9 +84,12 @@ class AccountRepository(Protocol):
 
     async def update_consent(self, account_id: int, consent: AccountConsent) -> Account: ...
 
-    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None: ...
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None:
+        """Atomically remove an owned identity, raising LastIdentityError if it is the last.
 
-    async def count_identities(self, account_id: int) -> int: ...
+        Return None for a missing identity or one owned by another account.
+        """
+        ...
 
     async def set_identity_visibility(
         self, account_id: int, identity_id: int, *, is_public: bool

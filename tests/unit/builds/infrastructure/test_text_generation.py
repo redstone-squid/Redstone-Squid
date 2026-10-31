@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any, cast
 
-import httpx
+import httpx2
 import openai
 import pytest
 from openai import AsyncOpenAI
@@ -49,9 +49,9 @@ class FakeCompletions:
     async def parse(self, **kwargs: Any) -> _Response:
         self.parse_kwargs = kwargs
         if self.fail:
-            raise openai.APIConnectionError(request=httpx.Request("POST", "https://example.invalid/chat"))
+            raise openai.APIConnectionError(request=httpx2.Request("POST", "https://example.invalid/chat"))
         if self.reject_strict:
-            response = httpx.Response(400, request=httpx.Request("POST", "https://example.invalid/chat"))
+            response = httpx2.Response(400, request=httpx2.Request("POST", "https://example.invalid/chat"))
             raise openai.BadRequestError("unsupported", response=response, body=None)
         return _Response((_Choice(_Message(parsed=InferenceResult(builds=[]))),))
 

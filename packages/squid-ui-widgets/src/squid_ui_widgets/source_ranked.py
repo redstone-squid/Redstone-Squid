@@ -1,7 +1,10 @@
 """An explicitly asynchronous ranking component backed by a window source."""
 
 from collections.abc import Callable
+from typing import override
 
+from squid_reactivity.core import state
+from squid_reactivity.resources import Failed, Pending, Ready, resource
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, action_controls, heading, note, stack
@@ -13,8 +16,6 @@ from squid_ui.planning.navigation import (
 )
 from squid_ui.primitives import Lines
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.reactivity import state
-from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import LayoutNode
 from squid_ui.sources import (
     ORIGIN,
@@ -117,6 +118,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         value = hook(total) if callable(hook) else hook
         return render_content(self, normalize_content(value, name=name), prefix=name)
 
+    @override
     def render(self) -> DocumentLike[RenderTargetT]:
         """Render ready, pending, or failed ranking state."""
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.

@@ -144,7 +144,7 @@ def render_item(
     node: ui.LayoutNode[ui.ComponentsV2Target],
     *,
     localization: ui.text.Localization = ui.text.NEUTRAL,
-    reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
+    reservation: sd.ResourceCost = sd.EMPTY_COST,
 ) -> discord.ui.Item[Any]:
     """Render one node to a detached item through the bot's chrome and catalogue."""
     return sd.render_item(
@@ -161,7 +161,7 @@ def render_payload(
     *,
     localization: ui.text.Localization = ui.text.NEUTRAL,
     strict: bool = False,
-    reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
+    reservation: sd.ResourceCost = sd.EMPTY_COST,
 ) -> sd.message_payload.MessagePayload:
     """Render a complete Discord payload through the bot's chrome and catalogue."""
     return sd.render_static(

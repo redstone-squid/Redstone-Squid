@@ -32,6 +32,7 @@ async def _seed(session: AsyncSession) -> int:
         ),
         {"key": str(build_id)},
     )
+    assert isinstance(build_id, int)
     return build_id
 
 

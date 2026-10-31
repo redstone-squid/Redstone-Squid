@@ -29,39 +29,6 @@ class BuildStatusFilter(StrEnum):
         return Status[self.name]
 
 
-class DoorSubmission(BaseModel):
-    """A user-authored door build submission."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    category: str = "door"
-    door_size: InputDimensions
-    pattern: list[str] = Field(default_factory=lambda: ["Regular"], max_length=50)
-    door_type: Literal["Door", "Skydoor", "Trapdoor"] = "Door"
-    build_size: InputDimensions = (None, None, None)
-    works_in: str | None = Field(default=None, max_length=500)
-    restrictions: list[str] = Field(default_factory=list, max_length=100)
-    information_about_build: str | None = Field(default=None, max_length=10_000)
-    normal_closing_time: int | None = Field(default=None, ge=0)
-    normal_opening_time: int | None = Field(default=None, ge=0)
-    date_of_creation: str | None = Field(default=None, max_length=100)
-    creators: list[str] = Field(default_factory=list, max_length=100)
-    locationality: Literal["Locational", "Locational with fixes", "Not locational"] | None = None
-    directionality: Literal["Directional", "Directional with fixes", "Not directional"] | None = None
-    image_urls: list[str] = Field(default_factory=list, max_length=100)
-    video_urls: list[str] = Field(default_factory=list, max_length=100)
-    world_download_urls: list[str] = Field(default_factory=list, max_length=100)
-    schematic_urls: list[str] = Field(default_factory=list, max_length=100)
-
-    @model_validator(mode="after")
-    def _positive_dimensions(self) -> Self:
-        for dimensions in (self.door_size, self.build_size):
-            if any(value is not None and value <= 0 for value in dimensions):
-                msg = "dimensions must be positive when supplied"
-                raise ValueError(msg)
-        return self
-
-
 class DoorPatch(BaseModel):
     """A partial edit of the facts only a door has.
 
@@ -227,6 +194,7 @@ class BuildSummary(FromDomain[Build]):
     updated_at: datetime | None
 
     @classmethod
+    @override
     def from_domain(cls, build: Build, /) -> Self:
         """Render allowlisted public build fields."""
         if build.id is None:
@@ -238,7 +206,7 @@ class BuildSummary(FromDomain[Build]):
             title=build.title,
             display_name=build.display_name,
             status=_status_name(build.submission_status),
-            category=build.category.value if build.category is not None else "unknown",
+            category=build.category.value,
             dimensions=Dimensions(width=build.width, height=build.height, depth=build.depth),
             creators=list(build.creators_ign),
             tags=[
@@ -410,7 +378,10 @@ class BuildDetail(BuildSummary):
                     display_name=build.sponsor.display_name,
                     address=build.sponsor.address,
                     description=build.sponsor.description,
-                    website_url=build.sponsor.website_url,
+                    # PublicSponsor validates and normalizes this into an AnyHttpUrl string on
+                    # construction, and pydantic validates it again here; only the synthesized
+                    # __init__ signature insists on the parsed field type.
+                    website_url=build.sponsor.website_url,  # pyright: ignore[reportArgumentType]
                 )
             ),
         )

@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from squid_ui.entity import EntityRef, encode_entity_ref
 from squid_ui.forms import FormSpec, SubmitHandler
@@ -46,6 +46,7 @@ class PresentForm(GeneratedHandler[PressEvent]):
     label: TextLike
     record: History | None
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await event.present_form(
             self.spec,
@@ -89,6 +90,7 @@ class ChooseChoice(GeneratedHandler[PressEvent]):
     commit: ChoiceCommit
     key: str
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.commit.commit(event, (self.key,))
 
@@ -97,6 +99,7 @@ class ChooseChoice(GeneratedHandler[PressEvent]):
 class SelectChoices(GeneratedHandler[SelectionEvent]):
     commit: ChoiceCommit
 
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         await self.commit.commit(event, event.values)
 
@@ -132,6 +135,7 @@ class EntityCommit:
 class SelectEntities(GeneratedHandler[EntitySelectionEvent]):
     commit: EntityCommit
 
+    @override
     async def __call__(self, event: EntitySelectionEvent) -> None:
         await self.commit.commit(event, event.values)
 
@@ -141,6 +145,7 @@ class SelectEntityFallback(GeneratedHandler[ChoiceEvent]):
     commit: EntityCommit
     by_key: Mapping[str, EntityRef]
 
+    @override
     async def __call__(self, event: ChoiceEvent) -> None:
         await self.commit.commit(event, tuple(self.by_key[key] for key in event.selected if key in self.by_key))
 
@@ -165,6 +170,7 @@ class ItemCommit:
 class CloseItem(GeneratedHandler[PressEvent]):
     commit: ItemCommit
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.commit.commit(event, None)
 
@@ -173,6 +179,7 @@ class CloseItem(GeneratedHandler[PressEvent]):
 class FocusItem(GeneratedHandler[SelectionEvent]):
     commit: ItemCommit
 
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         await self.commit.commit(event, event.values[0] if event.values else None)
 
@@ -197,6 +204,7 @@ class NavigationCommit:
 class SelectDestination(GeneratedHandler[SelectionEvent]):
     commit: NavigationCommit
 
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         if event.values:
             await self.commit.commit(event, event.values[0])
@@ -207,6 +215,7 @@ class GoToDestination(GeneratedHandler[PressEvent]):
     commit: NavigationCommit
     key: str
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.commit.commit(event, self.key)
 
@@ -217,6 +226,7 @@ class ToggleDetails(GeneratedHandler[PressEvent]):
     open: bool
     session: PresentationState
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         match self.node.open:
             case Controlled(on_change=on_change):
@@ -236,6 +246,7 @@ class FlipToggle(GeneratedHandler[PressEvent]):
     on: bool
     session: PresentationState
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         match self.node.on:
             case Controlled(on_change=on_change):
@@ -252,6 +263,7 @@ class ForwardSelection(GeneratedHandler[PressEvent]):
     handler: Callable[[SelectionEvent], Awaitable[None]]
     key: str
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.handler(SelectionEvent(event.actor, event.responder, event.locale, event.context, (self.key,)))
 
@@ -260,6 +272,7 @@ class ForwardSelection(GeneratedHandler[PressEvent]):
 class RouteSelection(GeneratedHandler[SelectionEvent]):
     routes: Mapping[str, ActionBinding]
 
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         binding = self.routes.get(event.values[0]) if len(event.values) == 1 else None
         if binding is not None:

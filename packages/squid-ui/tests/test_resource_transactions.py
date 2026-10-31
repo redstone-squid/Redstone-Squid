@@ -5,6 +5,8 @@ and every other write in the package stages in the transaction's overlay: readab
 action that made it, invisible to everyone else until commit, and gone if the action fails.
 """
 
+from typing import override
+
 import pytest
 
 import squid_ui as sl
@@ -15,6 +17,7 @@ class Panel(sl.Component):
     async def value(self) -> str:
         return "loaded"
 
+    @override
     def render(self):
         return sl.paragraph("x")
 
@@ -64,10 +67,10 @@ def _outside(panel: Panel) -> str:
     """Read the resource as a task with no transaction of its own would."""
     import contextvars
 
-    from squid_ui.runtime.reactivity import _CURRENT
+    from squid_reactivity.internals import CURRENT_TRANSACTION
 
     context = contextvars.copy_context()
-    context.run(_CURRENT.set, None)
+    context.run(CURRENT_TRANSACTION.set, None)
     return context.run(lambda: panel.value.value)
 
 
@@ -100,6 +103,7 @@ async def test_a_replacement_rebaselines_its_sources_only_when_it_commits() -> N
             sl.runtime.watch(topic)
             return "loaded"
 
+        @override
         def render(self):
             return sl.paragraph("x")
 
@@ -130,6 +134,7 @@ async def test_a_replacement_settles_sources_before_the_commit_becomes_irreversi
         async def value(self) -> str:
             return str(self.derived)
 
+        @override
         def render(self):
             return sl.paragraph("x")
 
@@ -160,6 +165,7 @@ async def test_a_replacement_survives_the_action_that_wrote_its_sources() -> Non
         async def value(self) -> str:
             return f"loaded-{self.x}"
 
+        @override
         def render(self):
             return sl.paragraph("x")
 

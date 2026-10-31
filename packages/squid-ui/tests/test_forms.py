@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, timezone
-from typing import ClassVar
+from typing import Any, ClassVar, override
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -13,7 +13,7 @@ from squid_ui.interactions import ActionMode
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.discord import components_v2_target
 from squid_ui.planning.limits import LIMITS, V2Limits
-from squid_ui.planning.types import DiscordAdapter
+from squid_ui.target_types import DiscordAdapter
 
 
 def _target(name: str, *, capabilities: frozenset[AdapterCapability] = frozenset(), limits: V2Limits = LIMITS):
@@ -35,6 +35,7 @@ class ProfileForm(sl.forms.Form):
         super().__init__(**prefill)
         self.validations = 0
 
+    @override
     def validate(self):
         self.validations += 1
         return (sl.forms.FormError("Name and age cannot match."),) if self.name == str(self.age) else ()
@@ -71,8 +72,8 @@ def test_parallel_read_form_cannot_declare_history_recording() -> None:
 
 def _multi_choice(
     *, required: bool = True, minimum: int = 0, maximum: int | None = None
-) -> sl.forms.MultiChoiceField[int]:
-    return sl.forms.MultiChoiceField(
+) -> sl.forms.MultiChoiceField[int, Any]:
+    return sl.forms.MultiChoiceField[int, Any](
         key="values",
         label="Values",
         options=(
@@ -92,9 +93,11 @@ async def test_parse_errors_are_field_errors_and_gate_cross_field_validation() -
 
     failed = await spec.evaluate({"name": "A", "age": "young", "public": False})
 
+    assert isinstance(spec.items[0], sl.forms.FormField)
+    assert isinstance(spec.items[1], sl.forms.FormField)
     assert failed.errors == (
-        sl.forms.FieldError("name", "Enter at least 2 characters."),
-        sl.forms.FieldError("age", "Enter a whole number."),
+        sl.forms.FieldError(spec.items[0], message="Enter at least 2 characters."),
+        sl.forms.FieldError(spec.items[1], message="Enter a whole number."),
     )
     assert form.validations == 0
 
@@ -422,6 +425,7 @@ def test_form_trigger_plans_as_content_with_a_submission_binding() -> None:
 class NativeOnlyField(sl.forms.ExtensionField[str]):
     capability: ClassVar[str] = "forms.native-only"
 
+    @override
     def parse(self, raw: object) -> str | None:
         return None if raw is None else str(raw)
 
@@ -456,6 +460,7 @@ def test_extension_field_uses_its_portable_fallback() -> None:
 class BrokenField(sl.forms.FormField[str]):
     """A field with a bug in its parser, as opposed to input a reader can correct."""
 
+    @override
     def parse(self, raw: object) -> str | None:
         return raw.no_such_attribute  # type: ignore[attr-defined]
 
@@ -469,6 +474,7 @@ async def test_a_bug_in_a_field_propagates_instead_of_becoming_a_field_error() -
 
 @dataclass(frozen=True, slots=True)
 class CorrectableField(sl.forms.FormField[str]):
+    @override
     def parse(self, raw: object) -> str | None:
         if raw != "good":
             message = "Type 'good'."
@@ -481,7 +487,8 @@ async def test_form_value_error_is_still_reported_to_the_reader() -> None:
 
     evaluated = await spec.evaluate({"pick": "bad"})
 
-    assert evaluated.errors == (sl.forms.FieldError("pick", "Type 'good'."),)
+    assert isinstance(spec.items[0], sl.forms.FormField)
+    assert evaluated.errors == (sl.forms.FieldError(spec.items[0], message="Type 'good'."),)
 
 
 async def test_a_custom_duration_parser_reports_bad_input_as_a_field_error() -> None:
@@ -493,7 +500,8 @@ async def test_a_custom_duration_parser_reports_bad_input_as_a_field_error() -> 
 
     evaluated = await spec.evaluate({"for": "banana"})
 
-    assert evaluated.errors == (sl.forms.FieldError("for", "Durations look like 30m."),)
+    assert isinstance(spec.items[0], sl.forms.FormField)
+    assert evaluated.errors == (sl.forms.FieldError(spec.items[0], message="Durations look like 30m."),)
 
 
 def test_scale_field_parses_a_picked_point_and_a_typed_one() -> None:
@@ -533,3 +541,78 @@ def test_scale_field_prefill_is_the_option_key() -> None:
 def test_scale_field_needs_a_span_to_pick_from() -> None:
     with pytest.raises(ValueError, match="maximum greater than minimum"):
         sl.forms.ScaleField(key="score", minimum=3, maximum=3)
+
+
+async def test_shared_field_error_resolves_inherited_declarations_and_deduplicates() -> None:
+    class Thresholds(sl.forms.Form):
+        post = sl.forms.FloatField()
+        remove = sl.forms.FloatField()
+
+        @override
+        def validate(self) -> tuple[sl.forms.FormIssue, ...]:
+            return (sl.forms.FieldError(Thresholds.post, Thresholds.remove, Thresholds.post, message="Bad order"),)
+
+    class Inherited(Thresholds):
+        pass
+
+    spec = Inherited().spec().with_prefill({"post": 1})
+    result = await spec.evaluate({"post": "1", "remove": "2"})
+    (error,) = result.errors
+    assert isinstance(error, sl.forms.FieldError)
+    assert error.fields == spec.items
+    assert error.message == "Bad order"
+
+
+async def test_field_error_rejects_a_foreign_field_even_with_the_same_key() -> None:
+    own = sl.forms.TextField(key="name", label="Name")
+    foreign = sl.forms.TextField(key="name", label="Name")
+    spec = sl.forms.FormSpec(
+        "Names", (own,), validator=lambda values: (sl.forms.FieldError(foreign, message="Wrong field"),)
+    )
+    with pytest.raises(ValueError, match="outside this form"):
+        await spec.evaluate({"name": "Ada"})
+
+
+def test_field_error_requires_field_objects() -> None:
+    with pytest.raises(TypeError, match="one or more"):
+        sl.forms.FieldError(message="No field")
+    with pytest.raises(TypeError, match="one or more"):
+        sl.forms.FieldError("name", message="Not a field")  # type: ignore
+
+
+def test_prefill_does_not_claim_to_be_a_parsed_value() -> None:
+    form = ProfileForm(name="Ada", age="not an age")
+    assert form.prefill["age"] == "not an age"
+    with pytest.raises(sl.forms.FieldNotReadyError, match="age"):
+        _ = form.age
+
+
+async def test_optional_blank_and_zero_are_distinct_parsed_values() -> None:
+    class Values(sl.forms.Form):
+        number = sl.forms.IntField(required=False)
+        flag = sl.forms.BoolField()
+
+    form = Values()
+    with pytest.raises(sl.forms.FieldNotReadyError):
+        _ = form.number
+    await form.spec().evaluate({"number": "", "flag": False})
+    assert form.number is None
+    assert form.flag is False
+    await form.spec().evaluate({"number": "0", "flag": False})
+    assert form.number == 0
+
+
+async def test_from_submission_binds_values_without_treating_them_as_prefill() -> None:
+    from squid_ui.testing import submit_event
+
+    form = ProfileForm.from_submission(submit_event({"name": "Ada", "age": 36, "public": False}))
+    assert form.name == "Ada"
+    assert form.age == 36
+    assert form.public is False
+    assert form.prefill == {"public": False}
+
+    event = submit_event({"name": "Ada"})
+    from dataclasses import replace
+
+    with pytest.raises(ValueError, match="invalid submission"):
+        ProfileForm.from_submission(replace(event, errors=(sl.forms.FormError("Rejected"),)))

@@ -31,6 +31,7 @@ from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
+    from squid_ui.runtime.component import Component
     from squid_ui.runtime.histories import History
 
 
@@ -268,16 +269,10 @@ class RawItem(Renderable[DiscordTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Boundary(Renderable[RenderTarget]):
-    """A keyed component boundary expanded before portable planning.
+class Boundary[RenderTargetT = RenderTarget](Renderable[RenderTargetT]):
+    """A keyed child whose target restriction survives until runtime expansion."""
 
-    Named for what it is rather than what it draws to. The runtime removes it before planning,
-    so it is portable even when the child it protects is target-specific. The child component's
-    target parameter carries that restriction; assigning one to this transient marker as well
-    would erase it when the marker stores the component as an opaque object.
-    """
-
-    component: object
+    component: Component[RenderTargetT]
     key: str
 
     def __post_init__(self) -> None:
@@ -651,7 +646,7 @@ type Node = (
     | Budget
     | Break
     | RawItem
-    | Boundary
+    | Boundary[Any]
     | Card
     | Content
     | Extension

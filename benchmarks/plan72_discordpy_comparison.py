@@ -13,6 +13,7 @@ import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from functools import partial
+from typing import override
 
 import discord
 
@@ -148,7 +149,7 @@ def _normalized(view: discord.ui.LayoutView) -> list[dict[str, object]]:
     return view.to_components()
 
 
-class _ButtonRow(sl.Component):
+class _ButtonRow(sl.Component[sl.ComponentsV2Target]):
     alternate: bool = sl.state(default=False)
 
     def __init__(self, offset: int, size: int) -> None:
@@ -156,6 +157,7 @@ class _ButtonRow(sl.Component):
         self.size = size
         self.renders = 0
 
+    @override
     def render(self) -> Row:
         self.renders += 1
         return Row(
@@ -169,7 +171,7 @@ class _ButtonRow(sl.Component):
         )
 
 
-class _ButtonRoot(sl.Component):
+class _ButtonRoot(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, controls: int) -> None:
         offset = 0
         rows: list[_ButtonRow] = []
@@ -179,6 +181,7 @@ class _ButtonRoot(sl.Component):
         self.rows = tuple(rows)
         self.renders = 0
 
+    @override
     def render(self):
         self.renders += 1
         return tuple(self.boundary(row, key=str(index)) for index, row in enumerate(self.rows))
@@ -190,7 +193,7 @@ def _measure_pipeline(controls: int, samples: int) -> tuple[int, int]:
     commit_render(message_root)
     root.rows[0].alternate = True
     candidate = message_root._preflight(message_root.runtime.render(reuse_committed=True))
-    message_root._commit(candidate)  # pyrefly: ignore[bad-argument-type]
+    message_root._commit(candidate)  # pyrefly: ignore[bad-argument-type]  # pyright: ignore[reportArgumentType]  # private preflight/commit pair
     elapsed: list[int] = []
     gc.collect()
     gc_enabled = gc.isenabled()
@@ -201,7 +204,7 @@ def _measure_pipeline(controls: int, samples: int) -> tuple[int, int]:
             started = time.perf_counter_ns()
             candidate = message_root._preflight(message_root.runtime.render(reuse_committed=True))
             elapsed.append(time.perf_counter_ns() - started)
-            message_root._commit(candidate)  # pyrefly: ignore[bad-argument-type]
+            message_root._commit(candidate)  # pyrefly: ignore[bad-argument-type]  # pyright: ignore[reportArgumentType]  # private preflight/commit pair
     finally:
         if gc_enabled:
             gc.enable()

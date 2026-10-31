@@ -7,7 +7,7 @@ read still reaches the render that used the value.
 """
 
 import asyncio
-from typing import Any
+from typing import Any, override
 
 import discord
 
@@ -38,6 +38,7 @@ class Watcher(Component[sl.ComponentsV2Target]):
         sl.runtime.watch(*(self._topics if self._topics is not None else (self.topic,)))
         return await self._load()
 
+    @override
     def render(self):
         match self.value.status:
             case sl.resources.Ready(value=value):
@@ -98,6 +99,7 @@ async def test_a_topic_watched_in_render_is_followed_too() -> None:
     """`watch` is a tracked read, so the render's own consumer collects it directly."""
 
     class Direct(Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             sl.runtime.watch(BUILD)
             return Text("x")
@@ -123,7 +125,7 @@ async def test_one_publish_refreshes_a_watching_message_root_exactly_once() -> N
         nonlocal refreshes
         refreshes += 1
 
-    message_root.refresh = refresh  # pyrefly: ignore
+    message_root.refresh = refresh  # pyright: ignore[reportAttributeAccessIssue]  # a stub for the one `refresh(links=...)` call the scheduler makes  # pyrefly: ignore
 
     bus.publish(BUILD)
     await sd.drain(scheduler)
@@ -276,12 +278,12 @@ def test_a_topic_nobody_watches_holds_no_cell() -> None:
 
 def test_watching_a_topic_installs_no_commit_precondition() -> None:
     """A watch is not an observation: nothing writes a topic, so nothing can lose an update."""
-    from squid_ui.runtime.reactivity import _CURRENT, _Transaction
+    from squid_reactivity.internals import CURRENT_TRANSACTION, Transaction
 
     with sl.runtime.transaction():
         sl.runtime.watch(BUILD)
-        current = _CURRENT.get()
-        assert isinstance(current, _Transaction)
+        current = CURRENT_TRANSACTION.get()
+        assert isinstance(current, Transaction)
         assert not current.observed
 
 

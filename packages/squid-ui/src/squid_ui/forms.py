@@ -12,11 +12,11 @@ from datetime import datetime as DateTimeValue
 from datetime import time as TimeValue
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, Self, cast, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast, overload, override
 
 from squid_ui.emoji import EmojiLike, normalize_emoji
 from squid_ui.errors import LayoutInvariantError, SquidUiError
-from squid_ui.interactions import ActionMode, SubmitEvent
+from squid_ui.interactions import ActionMode, InvalidSubmitEvent, SubmitEvent
 from squid_ui.temporal import (
     AmbiguousLocalTimeError,
     AmbiguousTimeMode,
@@ -34,12 +34,20 @@ if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class FieldError:
-    """A validation error attached to one field key."""
+    """One validation message associated with one or more field declarations."""
 
-    key: str
+    fields: tuple[FormField[Any], ...]
     message: TextLike
+
+    def __init__(self, *fields: FormField[Any], message: TextLike) -> None:
+        if not fields or any(not isinstance(field, FormField) for field in fields):
+            error = "FieldError requires one or more form fields"
+            raise TypeError(error)
+        unique = tuple({id(field): field for field in fields}.values())
+        object.__setattr__(self, "fields", unique)
+        object.__setattr__(self, "message", message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,6 +65,10 @@ class FormValidationMode(StrEnum):
 
     RETRY = "retry"
     ACCEPT_AND_MARK = "accept_and_mark"
+
+
+class FieldNotReadyError(SquidUiError, RuntimeError):
+    """A form field was read before its submitted value parsed successfully."""
 
 
 class FormValueError(SquidUiError, ValueError):
@@ -105,7 +117,7 @@ def _prefill(value: object) -> PrefillValue:
 
 
 @dataclass(frozen=True, slots=True)
-class FormField[ValueT](ABC):
+class FormField[ValueT, RequiredT: bool = bool](ABC):
     """One typed value in a portable form schema.
 
     The same object can be used dynamically in :class:`FormSpec` or as a descriptor on
@@ -116,9 +128,10 @@ class FormField[ValueT](ABC):
     label: TextLike | None = None
     key: str = ""
     description: TextLike | None = None
-    required: bool = True
+    required: RequiredT = cast(RequiredT, True)  # noqa: FBT003 -- the cast preserves the generic constructor default.
     default: ValueT | None = None
     _name: str = dataclass_field(default="", init=False, repr=False, compare=False)
+    _declaration: FormField[Any] | None = dataclass_field(default=None, repr=False, compare=False)
 
     def __set_name__(self, owner: type[Form], name: str) -> None:
         del owner
@@ -128,21 +141,31 @@ class FormField[ValueT](ABC):
     def __get__(self, instance: None, owner: type[Form]) -> Self: ...
 
     @overload
+    def __get__(self: FormField[ValueT, Literal[True]], instance: Form, owner: type[Form]) -> ValueT: ...
+
+    @overload
     def __get__(self, instance: Form, owner: type[Form]) -> ValueT | None: ...
 
     def __get__(self, instance: Form | None, owner: type[Form]) -> Self | ValueT | None:
         del owner
         if instance is None:
             return self
-        return instance.__dict__.get(self._name, self.default)
+        if self._name not in instance._values:
+            message = f"Form field {self._name!r} has no parsed value"
+            raise FieldNotReadyError(message)
+        return instance._values[self._name]
 
     def __set__(self, instance: Form, value: ValueT | None) -> None:
-        instance.__dict__[self._name] = value
+        if value is None and self.required:
+            message = f"Required form field {self._name!r} cannot contain None"
+            raise ValueError(message)
+        instance._values[self._name] = value
 
     def bind(self, name: str) -> Self:
         """Fill descriptor-derived schema metadata without mutating the declaration."""
         label = self.label if self.label is not None else name.replace("_", " ").capitalize()
-        return replace(self, key=self.key or name, label=label)
+        # Pyrefly treats this stored field reference as an invoked descriptor.
+        return replace(self, key=self.key or name, label=label, _declaration=self._declaration or self)  # pyrefly: ignore[no-matching-overload]
 
     @abstractmethod
     def parse(self, raw: object) -> ValueT | None:
@@ -173,7 +196,7 @@ class FormField[ValueT](ABC):
 
 
 @dataclass(frozen=True, slots=True)
-class TextField(FormField[str]):
+class TextField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[str, RequiredT]):
     """A single-line text value."""
 
     placeholder: TextLike | None = None
@@ -181,6 +204,7 @@ class TextField(FormField[str]):
     maximum: int | None = None
     strip: bool = True
 
+    @override
     def parse(self, raw: object) -> str | None:
         if self._optional(raw):
             return None
@@ -197,18 +221,19 @@ class TextField(FormField[str]):
 
 
 @dataclass(frozen=True, slots=True)
-class TextAreaField(TextField):
+class TextAreaField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](TextField[RequiredT]):
     """A multi-line text value."""
 
 
 @dataclass(frozen=True, slots=True)
-class IntField(FormField[int]):
+class IntField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """An integer constrained by optional inclusive bounds."""
 
     minimum: int | None = None
     maximum: int | None = None
     placeholder: TextLike | None = None
 
+    @override
     def parse(self, raw: object) -> int | None:
         if self._optional(raw):
             return None
@@ -224,13 +249,14 @@ class IntField(FormField[int]):
 
 
 @dataclass(frozen=True, slots=True)
-class FloatField(FormField[float]):
+class FloatField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[float, RequiredT]):
     """A finite floating-point number constrained by optional inclusive bounds."""
 
     minimum: float | None = None
     maximum: float | None = None
     placeholder: TextLike | None = None
 
+    @override
     def parse(self, raw: object) -> float | None:
         if self._optional(raw):
             return None
@@ -252,7 +278,7 @@ _DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 
 
 @dataclass(frozen=True, slots=True)
-class DurationField(FormField[int]):
+class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """A compact duration such as ``30m``, parsed to seconds."""
 
     minimum: int | None = None
@@ -261,6 +287,7 @@ class DurationField(FormField[int]):
     parser: Callable[[str], int] | None = dataclass_field(default=None, repr=False, compare=False)
     """Replaces the compact-duration grammar; signals bad input with `ValueError`."""
 
+    @override
     def parse(self, raw: object) -> int | None:
         if self._optional(raw):
             return None
@@ -283,6 +310,7 @@ class DurationField(FormField[int]):
             _invalid(f"Enter a duration no longer than {self.maximum} seconds.")
         return value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         if not isinstance(value, int):
             return _prefill(value)
@@ -293,13 +321,14 @@ class DurationField(FormField[int]):
 
 
 @dataclass(frozen=True, slots=True)
-class DateField(FormField[date]):
+class DateField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[date, RequiredT]):
     """An ISO-8601 calendar date."""
 
     minimum: date | None = None
     maximum: date | None = None
     placeholder: TextLike | None = "YYYY-MM-DD"
 
+    @override
     def parse(self, raw: object) -> date | None:
         if self._optional(raw):
             return None
@@ -313,18 +342,20 @@ class DateField(FormField[date]):
             _invalid(f"Enter a date on or before {self.maximum.isoformat()}.")
         return value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         return value.isoformat() if isinstance(value, date) else _prefill(value)
 
 
 @dataclass(frozen=True, slots=True)
-class TimeField(FormField[TimeValue]):
+class TimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[TimeValue, RequiredT]):
     """An ISO-8601 wall-clock time with optional inclusive bounds."""
 
     minimum: TimeValue | None = None
     maximum: TimeValue | None = None
     placeholder: TextLike | None = "HH:MM"
 
+    @override
     def parse(self, raw: object) -> TimeValue | None:
         if self._optional(raw):
             return None
@@ -338,12 +369,13 @@ class TimeField(FormField[TimeValue]):
             _invalid(f"Enter a time at or before {self.maximum.isoformat()}.")
         return value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         return value.isoformat() if isinstance(value, TimeValue) else _prefill(value)
 
 
 @dataclass(frozen=True, slots=True)
-class DateTimeField(FormField[DateTimeValue]):
+class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[DateTimeValue, RequiredT]):
     """An ISO-8601 instant; naive input is resolved in ``timezone``.
 
     Ambiguous and nonexistent local times reject by default. Explicitly offset
@@ -369,6 +401,7 @@ class DateTimeField(FormField[DateTimeValue]):
                 message = f"DateTimeField {name} must be aware"
                 raise ValueError(message)
 
+    @override
     def parse(self, raw: object) -> DateTimeValue | None:
         if self._optional(raw):
             return None
@@ -393,12 +426,15 @@ class DateTimeField(FormField[DateTimeValue]):
             _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
         return value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         return value.isoformat() if isinstance(value, DateTimeValue) else _prefill(value)
 
 
 @dataclass(frozen=True, slots=True)
-class ZonedDateTimeField(FormField[ZonedDateTime]):
+class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
+    FormField[ZonedDateTime, RequiredT]
+):
     """A local ISO-8601 datetime resolved in one named IANA timezone."""
 
     timezone: str = "UTC"
@@ -421,6 +457,7 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
                 message = f"ZonedDateTimeField {name} must be aware"
                 raise ValueError(message)
 
+    @override
     def parse(self, raw: object) -> ZonedDateTime | None:
         if self._optional(raw):
             return None
@@ -451,6 +488,7 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
             _invalid(f"Enter a date and time on or before {self.maximum.isoformat()}.")
         return value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         if not isinstance(value, ZonedDateTime):
             return _prefill(value)
@@ -458,7 +496,7 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
 
 
 @dataclass(frozen=True, slots=True)
-class ScaleField(FormField[int]):
+class ScaleField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """One point on an inclusive ordinal scale, such as a 1-5 rating.
 
     Portable by construction: a target with a radio-group shape draws the whole span, and one
@@ -485,6 +523,7 @@ class ScaleField(FormField[int]):
         named = None if self.labels is None else self.labels.get(value)
         return str(value) if named is None else named
 
+    @override
     def parse(self, raw: object) -> int | None:
         if self._optional(raw):
             return None
@@ -496,6 +535,7 @@ class ScaleField(FormField[int]):
             _invalid(f"Choose a value from {self.minimum} to {self.maximum}.")
         return value
 
+    @override
     def format(self, value: object) -> str | None:
         # A string either way: it is the radio option's value and the text input's default.
         return None if value is None else str(value)
@@ -516,7 +556,7 @@ class ChoiceOption[ValueT]:
 
 
 @dataclass(frozen=True, slots=True)
-class ChoiceField[ValueT](FormField[ValueT]):
+class ChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[ValueT, RequiredT]):
     """A single choice mapped from a stable submitted key to a typed value."""
 
     options: tuple[ChoiceOption[ValueT], ...] = ()
@@ -527,6 +567,7 @@ class ChoiceField[ValueT](FormField[ValueT]):
             message = f"ChoiceField option keys must be unique: {keys!r}"
             raise ValueError(message)
 
+    @override
     def parse(self, raw: object) -> ValueT | None:
         if self._optional(raw):
             return None
@@ -536,13 +577,16 @@ class ChoiceField[ValueT](FormField[ValueT]):
             _invalid("Choose one of the available options.")
         return option.value
 
+    @override
     def format(self, value: object) -> PrefillValue:
         option = next((option for option in self.options if option.value == value or option.key == value), None)
         return option.key if option is not None else _prefill(value)
 
 
 @dataclass(frozen=True, slots=True)
-class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
+class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](
+    FormField[tuple[ValueT, ...], RequiredT]
+):
     """Several declared choices returned in declaration order."""
 
     options: tuple[ChoiceOption[ValueT], ...] = ()
@@ -559,6 +603,7 @@ class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
             message = "MultiChoiceField bounds must satisfy 0 <= minimum <= maximum <= len(options)"
             raise ValueError(message)
 
+    @override
     def parse(self, raw: object) -> tuple[ValueT, ...]:
         if self._missing(raw):
             if self.required:
@@ -577,6 +622,7 @@ class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
             _invalid(f"Choose no more than {maximum} options.")
         return values
 
+    @override
     def format(self, value: object) -> tuple[str, ...]:
         submitted = tuple(value) if isinstance(value, list | tuple | set | frozenset) else (value,)
         return tuple(
@@ -598,9 +644,10 @@ class UploadedFile:
 
 
 @dataclass(frozen=True, slots=True)
-class BoolField(FormField[bool]):
+class BoolField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[bool, RequiredT]):
     """A boolean checkbox."""
 
+    @override
     def parse(self, raw: object) -> bool:
         if isinstance(raw, bool):
             return raw
@@ -615,7 +662,7 @@ class BoolField(FormField[bool]):
 
 
 @dataclass(frozen=True, slots=True)
-class ExtensionField[ValueT](FormField[ValueT]):
+class ExtensionField[ValueT, RequiredT: bool = bool](FormField[ValueT, RequiredT]):
     """A frontend-specific field with an optional portable fallback."""
 
     fallback: FormField[ValueT] | None = None
@@ -647,6 +694,9 @@ class FormSpec:
     prefill: Mapping[str, object] = dataclass_field(default_factory=dict)
     validator: FormValidator | None = dataclass_field(default=None, repr=False, compare=False)
     validation: FormValidationMode = FormValidationMode.RETRY
+    on_invalid: Callable[[InvalidSubmitEvent], Awaitable[None]] | None = dataclass_field(
+        default=None, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         normalized = tuple(self.items)
@@ -687,11 +737,29 @@ class FormSpec:
             try:
                 values[field.key] = field.parse(raw.get(field.key))
             except FormValueError as error:
-                errors.append(FieldError(field.key, str(error)))
+                errors.append(FieldError(field, message=str(error)))
         if not errors and self.validator is not None:
             validated = self.validator(MappingProxyType(values))
             issues = await validated if inspect.isawaitable(validated) else validated
-            errors.extend(issues)
+            for issue in issues:
+                if isinstance(issue, FieldError):
+                    resolved: list[FormField[Any]] = []
+                    for reference in issue.fields:
+                        matched = next(
+                            (
+                                item
+                                for item in self.items
+                                # Pyrefly treats this stored field reference as an invoked descriptor.
+                                if isinstance(item, FormField) and (reference is item or reference is item._declaration)  # pyrefly: ignore[no-matching-overload]
+                            ),
+                            None,
+                        )
+                        if matched is None:
+                            message = "FieldError references a field outside this form"
+                            raise ValueError(message)
+                        resolved.append(matched)
+                    issue = FieldError(*resolved, message=issue.message)
+                errors.append(issue)
         return FormResult(MappingProxyType(values), raw, tuple(errors))
 
     def prefill_for(self, field: FormField[Any]) -> PrefillValue:
@@ -717,23 +785,34 @@ class FormSpec:
             if not isinstance(field, ExtensionField) or field.capability in capabilities:
                 adapted.append(field)
                 continue
-            if field.fallback is None:
+            # `FormField` is also the `Form` descriptor, so BasedPyright runs `__get__` over this
+            # field's declared type; the slot on a frozen slotted dataclass holds a plain value.
+            # Pyrefly treats this stored field reference as an invoked descriptor.
+            declared: FormField[Any] | None = field.fallback  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[no-matching-overload]
+            if declared is None:
                 message = f"form field {field.key!r} requires unsupported capability {field.capability!r}"
                 raise LayoutInvariantError(message)
-            fallback = field.fallback.bind(field.key)
+            fallback = declared.bind(field.key)
             adapted.append(
                 replace(
                     fallback,
                     key=field.key,
                     label=fallback.label if fallback.label is not None else field.label,
                     description=fallback.description if fallback.description is not None else field.description,
+                    # Pyrefly treats this stored field reference as an invoked descriptor.
+                    _declaration=field._declaration or field,  # pyrefly: ignore[no-matching-overload]
                 )
             )
         return replace(self, items=tuple(adapted))
 
 
 class Form:
-    """Descriptor sugar that compiles typed class attributes into a :class:`FormSpec`."""
+    """A form whose field attributes expose parsed submission values.
+
+    Constructor values are raw prefills, available through `prefill`. Reading a field before
+    it parses raises `FieldNotReadyError`; a parsed optional blank is `None`. Validation
+    runs after parsing, then either `on_submit` or `on_invalid` handles the attempt.
+    """
 
     title: ClassVar[TextLike] = "Form"
     validation: ClassVar[FormValidationMode] = FormValidationMode.RETRY
@@ -758,19 +837,36 @@ class Form:
         if unknown:
             message = f"unknown form fields: {sorted(unknown)!r}"
             raise TypeError(message)
+        self._values: dict[str, Any] = {}
+        self._prefill: dict[str, object] = {}
         for name, field in self._form_fields:
             if name in prefill:
-                setattr(self, name, prefill[name])
+                self._prefill[name] = prefill[name]
             elif field.default is not None:
-                setattr(self, name, field.default)
+                self._prefill[name] = field.default
+
+    @property
+    def prefill(self) -> Mapping[str, object]:
+        """Raw initial values, keyed by attribute name; these have not been parsed."""
+        return MappingProxyType(self._prefill)
+
+    @classmethod
+    def from_submission(cls, event: SubmitEvent) -> Self:
+        """Bind an already validated event for a separate screen handler."""
+        if event.errors:
+            message = "Cannot bind an invalid submission as a validated form"
+            raise ValueError(message)
+        form = cls()
+        form._bind(event.values)
+        return form
 
     def spec(self) -> FormSpec:
-        """Compile this instance's declarations and current values."""
+        """Compile this instance's declarations and raw prefills."""
         fields = tuple(field.bind(name) for name, field in self._form_fields)
         prefill = {
-            field.key: self.__dict__[name]
+            field.key: self._prefill[name]
             for (name, _declaration), field in zip(self._form_fields, fields, strict=True)
-            if name in self.__dict__
+            if name in self._prefill
         }
         return FormSpec(
             self.title,
@@ -778,9 +874,11 @@ class Form:
             prefill,
             validator=self._validate_values,
             validation=self.validation,
+            on_invalid=self._invalid,
         )
 
     def _bind(self, values: Mapping[str, object]) -> None:
+        self._values.clear()
         for name, declaration in self._form_fields:
             key = declaration.key or name
             if key in values:
@@ -792,15 +890,26 @@ class Form:
         return await result if inspect.isawaitable(result) else result
 
     async def _submit(self, event: SubmitEvent) -> None:
+        if event.errors:
+            message = "Invalid submissions must use on_invalid"
+            raise ValueError(message)
         self._bind(event.values)
         await self.on_submit(event)
+
+    async def _invalid(self, event: InvalidSubmitEvent) -> None:
+        self._bind(event.values)
+        await self.on_invalid(event)
+
+    async def on_invalid(self, event: InvalidSubmitEvent) -> None:
+        """Handle an invalid attempt; the default offers a retry with the attempted input."""
+        await event.retry()
 
     def validate(self) -> Iterable[FormIssue] | Awaitable[Iterable[FormIssue]]:
         """Return cross-field errors after every field has parsed successfully."""
         return ()
 
     async def on_submit(self, event: SubmitEvent) -> None:
-        """Handle a successfully parsed submission, or an accepted invalid one."""
+        """Handle a submission after parsing and cross-field validation succeed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -846,6 +955,7 @@ __all__ = [
     "DurationField",
     "ExtensionField",
     "FieldError",
+    "FieldNotReadyError",
     "FloatField",
     "Form",
     "FormBinding",

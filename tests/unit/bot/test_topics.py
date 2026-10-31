@@ -2,7 +2,7 @@
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 
 import anyio
 
@@ -32,6 +32,7 @@ class Projection(sl.Component):
         sl.runtime.watch(resource_topic("build", "42"))
         return self._read()
 
+    @override
     def render(self):
         # An atomic resource is still rendered once while pending: that discovery render is
         # how the mount learns the resource exists, and what it reads is what it follows.
@@ -53,6 +54,7 @@ class PostRecorder(PostService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def pending_generation(self, resource_kind: ResourceKind, resource_key: str) -> int | None:
         assert (resource_kind, resource_key) == ("build", "42")
         return 7
@@ -62,6 +64,7 @@ class ReconcileRecorder(PostReconciler[RedstoneSquid]):
     def __init__(self) -> None:
         self.calls: list[tuple[ResourceKind, str, int]] = []
 
+    @override
     async def reconcile(self, resource_kind: ResourceKind, resource_key: str, generation: int) -> None:
         self.calls.append((resource_kind, resource_key, generation))
 

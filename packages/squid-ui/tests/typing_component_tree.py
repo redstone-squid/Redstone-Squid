@@ -1,6 +1,6 @@
 """Pins render targets through tree expansion and runtime ownership; nothing here runs."""
 
-from typing import assert_type
+from typing import assert_type, override
 
 from squid_ui.planning import ComponentsV2Target
 from squid_ui.primitives import Panel
@@ -9,6 +9,7 @@ from squid_ui.runtime.owner import ComponentRuntime
 
 
 class V2Component(Component[ComponentsV2Target]):
+    @override
     def render(self) -> Panel:
         return Panel(())
 

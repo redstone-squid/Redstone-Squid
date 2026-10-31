@@ -239,3 +239,18 @@ class MediaNormalizationJobRecord(Base, kw_only=True):
     dead_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     discarded_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     last_error: Mapped[str | None] = mapped_column(Text, default=None)
+
+
+class MediaDraftReference(Base, kw_only=True):
+    """One independently discardable draft reference to a shared normalization job."""
+
+    __tablename__ = "media_draft_references"
+    __table_args__ = (Index("media_draft_references_upload_idx", "upload_id"),)
+
+    draft_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("submission_drafts.id", ondelete="CASCADE"), primary_key=True
+    )
+    upload_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("media_uploads.id", ondelete="RESTRICT"), primary_key=True
+    )
+    discarded: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))

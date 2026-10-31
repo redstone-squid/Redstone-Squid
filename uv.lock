@@ -2809,7 +2809,6 @@ dependencies = [
     { name = "gspread" },
     { name = "httpx" },
     { name = "jishaku" },
-    { name = "markdown" },
     { name = "openai" },
     { name = "pgvector" },
     { name = "pydantic-settings" },
@@ -2861,7 +2860,6 @@ dev = [
     { name = "schemathesis" },
     { name = "testcontainers" },
     { name = "types-docker" },
-    { name = "types-markdown" },
     { name = "types-psycopg2" },
 ]
 docs = [
@@ -2889,7 +2887,6 @@ requires-dist = [
     { name = "gspread", specifier = ">=6.1.4" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "jishaku", specifier = ">=2.6.0" },
-    { name = "markdown", specifier = ">=3.7" },
     { name = "nucleation", marker = "extra == 'schematics'", specifier = "==0.12.0" },
     { name = "openai", specifier = ">=1.58.1" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'observability'", specifier = ">=1.44,<2" },
@@ -2936,7 +2933,6 @@ dev = [
     { name = "schemathesis", specifier = "==4.24.2" },
     { name = "testcontainers", specifier = ">=4.10.0" },
     { name = "types-docker", specifier = ">=7.1" },
-    { name = "types-markdown", specifier = ">=3.7" },
     { name = "types-psycopg2", specifier = ">=2.9" },
 ]
 docs = [
@@ -3316,11 +3312,18 @@ dependencies = [
     { name = "squid-reactivity" },
 ]
 
+[package.optional-dependencies]
+services = [
+    { name = "anyio" },
+]
+
 [package.metadata]
 requires-dist = [
+    { name = "anyio", marker = "extra == 'services'", specifier = ">=4.14,<5" },
     { name = "markdown-it-py", specifier = ">=4.0,<5" },
     { name = "squid-reactivity", editable = "packages/squid-reactivity" },
 ]
+provides-extras = ["services"]
 
 [[package]]
 name = "squid-ui-discord"
@@ -3331,7 +3334,7 @@ dependencies = [
     { name = "discord-py" },
     { name = "packaging" },
     { name = "squid-reactivity" },
-    { name = "squid-ui" },
+    { name = "squid-ui", extra = ["services"] },
     { name = "typing-extensions" },
 ]
 
@@ -3356,7 +3359,7 @@ requires-dist = [
     { name = "squid-reactivity", editable = "packages/squid-reactivity" },
     { name = "squid-storage", marker = "extra == 'durable'", editable = "packages/squid-storage" },
     { name = "squid-storage", extras = ["postgres"], marker = "extra == 'postgres'", editable = "packages/squid-storage" },
-    { name = "squid-ui", editable = "packages/squid-ui" },
+    { name = "squid-ui", extras = ["services"], editable = "packages/squid-ui" },
     { name = "typing-extensions", specifier = ">=4.13" },
 ]
 provides-extras = ["durable", "postgres"]
@@ -3386,11 +3389,15 @@ name = "squid-ui-widgets"
 version = "0.1.0a1"
 source = { editable = "packages/squid-ui-widgets" }
 dependencies = [
+    { name = "squid-reactivity" },
     { name = "squid-ui" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "squid-ui", editable = "packages/squid-ui" }]
+requires-dist = [
+    { name = "squid-reactivity", editable = "packages/squid-reactivity" },
+    { name = "squid-ui", editable = "packages/squid-ui" },
+]
 
 [[package]]
 name = "starlette"
@@ -3516,15 +3523,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ce/4f/7e8c7ab8fa5c04e92c00289e126ea5c467f211f98161e6d88cc87f1d8a50/types_docker-7.2.0.20260806.tar.gz", hash = "sha256:5f1dd8f10c64d37675a9694cad96c4163a7c8f4e7b1f40faf69855e6da8051c2", size = 36624, upload-time = "2026-08-06T04:52:42.083Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/14/48/48febbf2f34f158732495d7de1adf8904ea8915557d55a4c4d5f3ad4574d/types_docker-7.2.0.20260806-py3-none-any.whl", hash = "sha256:a426388646f115bf85554734ff0b7eb308903fbe5081a5588d1a271b7845d473", size = 51174, upload-time = "2026-08-06T04:52:41.174Z" },
-]
-
-[[package]]
-name = "types-markdown"
-version = "3.10.2.20260712"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/19/eb/9520ed01687401b47265594955c0a9202a4f547795176de61bff77c8dfda/types_markdown-3.10.2.20260712.tar.gz", hash = "sha256:25aea17282490f35ab6b17a87771abd2f479185aaff8e8f4a0035043f02f2c52", size = 20185, upload-time = "2026-07-12T05:13:53.537Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9f/ea/a8dc2c8977870d27b8b44c4ba2952d765f9d39626e42d0083c871c1c1ebf/types_markdown-3.10.2.20260712-py3-none-any.whl", hash = "sha256:a551ddedde46e0eaca7059aa3d0e42db71afe2b53d8b58f72f2de63f3284f625", size = 25842, upload-time = "2026-07-12T05:13:52.702Z" },
 ]
 
 [[package]]

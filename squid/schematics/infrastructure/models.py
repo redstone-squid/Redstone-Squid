@@ -165,9 +165,9 @@ class BuildSchematic(Base, kw_only=True):
     analysis_schema_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     """Which revision of *our* analysis produced this row, bumped when we change what we read."""
 
-    lattice: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    lattice: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
     """The highest-coverage repeating unit cell found, if the build has one."""
-    simulation_evidence: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
+    simulation_evidence: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
     """Staff-triggered tick-engine evidence. It never changes the build's declared timing."""
 
     visibility: Mapped[str] = mapped_column(
@@ -326,6 +326,13 @@ class SchematicJob(Base, kw_only=True):
     input_keys: Mapped[list[str]] = mapped_column(ARRAY(Text), nullable=False, default_factory=list)
     result: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
     result_object_key: Mapped[str | None] = mapped_column(Text, default=None)
+    result_object_keys: Mapped[list[str]] = mapped_column(
+        ARRAY(Text),
+        nullable=False,
+        default_factory=list,
+        server_default=text("'{}'::text[]"),
+        comment="Result objects registered by worker claims, retained until job expiry.",
+    )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     available_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now

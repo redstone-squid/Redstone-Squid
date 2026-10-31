@@ -20,7 +20,10 @@ from squid.search.infrastructure import models as search_models
 from squid.settings.infrastructure import models as setting_models
 from squid.starboard.infrastructure import models as starboard_models
 from squid.submissions.infrastructure import finalization_models as submission_finalization_models
+from squid.submissions.infrastructure import intake as submission_intake_models
 from squid.submissions.infrastructure import models as submission_models
+from squid.submissions.infrastructure import revision_models as submission_revision_models
+from squid.submissions.infrastructure import schematic_models as submission_schematic_models
 from squid.sync.infrastructure import models as sync_models
 from squid.tags.infrastructure import models as tag_models
 from squid.versions.infrastructure import models as version_models
@@ -47,9 +50,15 @@ __all__ = [
     "setting_models",
     "starboard_models",
     "submission_finalization_models",
+    "submission_inference_models",
+    "submission_intake_models",
     "submission_models",
+    "submission_revision_models",
+    "submission_schematic_models",
     "sync_models",
     "tag_models",
     "version_models",
     "voting_models",
 ]
+
+from squid.submissions.infrastructure import inference_runs as submission_inference_models

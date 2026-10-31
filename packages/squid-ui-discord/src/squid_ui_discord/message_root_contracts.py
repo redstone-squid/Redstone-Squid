@@ -13,14 +13,16 @@ from typing import TYPE_CHECKING, Any, Protocol, Self, TypedDict, Unpack, cast, 
 
 import discord
 
+from squid_reactivity.topics import Address, TopicBus
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.guards import Challenge
 from squid_ui.interactions import ActionMiddleware
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.navigation import NavFactory
+from squid_ui.planning.target import Target
 from squid_ui.profiling import Profiler
-from squid_ui.runtime.topics import Address, TopicBus
+from squid_ui.runtime.services import UIExecutionHost
 from squid_ui.scene.model import PlanMetrics, PlanReport
 from squid_ui.target_types import (
     ComponentsV2Target,
@@ -31,7 +33,7 @@ from squid_ui.target_types import (
 from squid_ui.text import NEUTRAL, Localization, TextLike
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.render_cache import RenderProgramCache, RenderProgramCacheSnapshot
-from squid_ui_discord.target import DISCORD_V2_DPY27, Target
+from squid_ui_discord.target import DISCORD_V2_DPY27
 
 if TYPE_CHECKING:
     from squid_ui_discord.message_root import AnyMessageRoot
@@ -219,6 +221,7 @@ class MessageRootBehaviorOptions(TypedDict, total=False):
     profiler: Profiler | None
     render_cache: RenderProgramCache | None
     scheduler: Scheduler | None
+    execution_host: UIExecutionHost | None
     expiry: ExpiryPolicy | None
     nav: NavFactory | None
     challenge: ChallengePresenter | None
@@ -268,6 +271,8 @@ class MessageRootConfig[
     profiler: Profiler | None = None
     render_cache: RenderProgramCache | None = None
     scheduler: Scheduler | None = None
+    execution_host: UIExecutionHost | None = None
+    """Running owner of service activity and asynchronous panel shutdown."""
     expiry: ExpiryPolicy | None = DEFAULT_EXPIRY
     nav: NavFactory | None = None
     challenge: ChallengePresenter | None = None

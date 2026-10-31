@@ -1,5 +1,7 @@
 """Menu: drilling into entries, and the chrome the machine owns on the way back out."""
 
+from typing import override
+
 import pytest
 
 import squid_ui as sl
@@ -11,6 +13,7 @@ class Screen(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, name: str) -> None:
         self.name = name
 
+    @override
     def render(self):
         return sl.paragraph(f"screen: {self.name}")
 

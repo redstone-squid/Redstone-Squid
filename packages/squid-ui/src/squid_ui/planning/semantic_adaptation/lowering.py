@@ -29,9 +29,7 @@ from squid_ui.planning.semantic_adaptation.controls import (
     _with_overflow,
 )
 from squid_ui.planning.semantic_adaptation.model import (
-    LoweringContext as _Context,
-)
-from squid_ui.planning.semantic_adaptation.model import (
+    LoweringContext,
     SemanticLowering,
 )
 from squid_ui.planning.semantic_adaptation.regions import (
@@ -200,7 +198,7 @@ def lower_semantics(
 ) -> SemanticLowering:
     """Lower one semantic decision set into the primitives `measure()` will price."""
     broker = pages if pages is not None else CursorCoordinator(session, chrome)
-    context = _Context(
+    context = LoweringContext(
         limits,
         chrome,
         localization,
@@ -231,7 +229,7 @@ def lower_semantics(
     )
 
 
-def _panel_children(children: Sequence[LayoutNode], path: str, context: _Context) -> list[Node]:
+def _panel_children(children: Sequence[LayoutNode], path: str, context: LoweringContext) -> list[Node]:
     """Lower children while recording that Discord already has their enclosing container."""
     context.panel_depth += 1
     try:
@@ -240,14 +238,14 @@ def _panel_children(children: Sequence[LayoutNode], path: str, context: _Context
         context.panel_depth -= 1
 
 
-def _node(node: AnyLayoutNode, path: str, context: _Context) -> list[Node]:
+def _node(node: AnyLayoutNode, path: str, context: LoweringContext) -> list[Node]:
     if not is_builtin_layout_node(node):
         message = f"{path}: {type(node).__name__} is neither a semantic node nor a Discord primitive"
         raise LayoutInvariantError(message)
     return _concrete(node, path, context)
 
 
-def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Node]:
+def _concrete(node: BuiltinLayoutNode, path: str, context: LoweringContext) -> list[Node]:
     match node:
         case Truncated(node=child, keep=keep):
             return [
@@ -400,10 +398,12 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Nod
                         footer=None if caption is None else CardFooter(_resolve(caption, context)),
                     )
                 ]
-            children: list[Node] = [Gallery((GalleryItem(media.url, media.description, media.spoiler),))]
+            # Not `children`: that name is a match capture throughout this function, and
+            # declaring it here would impose `list[Node]` on every other branch's binding.
+            gallery: list[Node] = [Gallery((GalleryItem(media.url, media.description, media.spoiler),))]
             if caption is not None:
-                children.append(Footer(_resolve(caption, context)))
-            return children
+                gallery.append(Footer(_resolve(caption, context)))
+            return gallery
         case Media():
             return _media(node, path, context)
         case Details():
@@ -520,11 +520,11 @@ def _concrete(node: BuiltinLayoutNode, path: str, context: _Context) -> list[Nod
             # `Panel` is claimed above because its children may carry semantic nodes to lower,
             # so this arm must stay after it.
             return [_primitive(node, context)]
-        case _ as unreachable:
+        case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
             assert_never(unreachable)
 
 
-def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
+def _card_fields(fields: Sequence[Field], context: LoweringContext) -> list[CardField]:
     """Real embed fields, keeping the name/value split the semantic node already made.
 
     This is the whole reason lowering has to know the target. `_field_entry` flattens a field
@@ -547,7 +547,7 @@ def _card_fields(fields: Sequence[Field], context: _Context) -> list[CardField]:
     return entries
 
 
-def _primitive(node: Node, context: _Context) -> Node:
+def _primitive(node: Node, context: LoweringContext) -> Node:
     """Resolve deferred author text on exact primitive nodes."""
     match node:
         case (
@@ -658,11 +658,11 @@ def _primitive(node: Node, context: _Context) -> Node:
             # Nothing on these carries author text; stated by name so a new primitive that
             # does carry some cannot slip through unresolved.
             return node
-        case _ as unreachable:
+        case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
             assert_never(unreachable)
 
 
-def _card_text(value: CardText | None, context: _Context) -> Text | None:
+def _card_text(value: CardText | None, context: LoweringContext) -> Text | None:
     """Resolve one authored card slot while retaining its overflow policy."""
     if value is None:
         return None
@@ -670,21 +670,21 @@ def _card_text(value: CardText | None, context: _Context) -> Text | None:
     return replace(node, content=_resolve(node.content, context))
 
 
-def _required_card_text(value: CardText, context: _Context) -> Text:
+def _required_card_text(value: CardText, context: LoweringContext) -> Text:
     """Resolve a card slot that its containing value requires."""
     resolved = _card_text(value, context)
     assert resolved is not None
     return resolved
 
 
-def _resolved_gallery_item(value: str | GalleryItem, context: _Context) -> GalleryItem:
+def _resolved_gallery_item(value: str | GalleryItem, context: LoweringContext) -> GalleryItem:
     """Resolve the optional description on one normalized gallery item."""
     item = require_gallery_item(value)
     description = item.description
     return replace(item, description=None if description is None else _resolve(description, context))
 
 
-def _card_media(value: CardMedia | None, context: _Context) -> CardMedia | None:
+def _card_media(value: CardMedia | None, context: LoweringContext) -> CardMedia | None:
     """Resolve one optional embed media description."""
     if value is None:
         return None
@@ -692,7 +692,7 @@ def _card_media(value: CardMedia | None, context: _Context) -> CardMedia | None:
     return replace(value, description=description)
 
 
-def _field_entry(field: Field, context: _Context) -> str | Alt:
+def _field_entry(field: Field, context: LoweringContext) -> str | Alt:
     """One `Fields` line, carrying the field's own degradation ladder when it has one.
 
     Rungs come from caller data assembled by formatting and escaping, so one that came out
@@ -711,7 +711,7 @@ def _field_entry(field: Field, context: _Context) -> str | Alt:
     return Alt(primary, tuple(kept), priority=int(field.importance))
 
 
-def _children(children: Sequence[AnyLayoutNode], path: str, context: _Context) -> list[Node]:
+def _children(children: Sequence[AnyLayoutNode], path: str, context: LoweringContext) -> list[Node]:
     lowered: list[Node] = []
     for child, child_path in _indexed_children(children, path):
         lowered.extend(_node(child, child_path, context))

@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import cast
+from typing import cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -126,6 +126,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
             raise LookupError(message)
         return build, await self._render_build(build)
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         state = self.projection.status
         if not isinstance(state, sl.resources.Ready) and state.previous is None:
@@ -184,29 +185,11 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
 
     @staticmethod
     def _convert_form() -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"Convert schematic"),
-            (
-                sl.forms.ChoiceField(
-                    key="format",
-                    label=tr(t"Output format"),
-                    default=SchematicFormat.LITEMATIC,
-                    options=tuple(
-                        sl.forms.ChoiceOption(file_format.value, file_format.value, file_format)
-                        for file_format in WRITABLE_EXTENSIONS
-                    ),
-                ),
-                sl.forms.IntField(key="data_version", label=tr(t"Minecraft data version"), required=False),
-                sl.forms.TextField(key="version", label=tr(t"Minecraft version name"), required=False, maximum=100),
-            ),
-        )
+        return _ConvertForm().spec()
 
     @staticmethod
     def _timing_form() -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"Measure schematic timing"),
-            (sl.forms.TextField(key="input", label=tr(t"Input position (x y z)"), required=False, maximum=100),),
-        )
+        return _TimingForm().spec()
 
     def _review_prompt(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
         action = self._pending_review or "review"
@@ -308,9 +291,10 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
     async def _convert(self, event: sl.SubmitEvent) -> None:
         if await self._primary(event) is None:
             return
-        file_format = cast(SchematicFormat, event.values["format"])
-        data_version = cast(int | None, event.values.get("data_version"))
-        version = cast(str | None, event.values.get("version")) or None
+        form = _ConvertForm.from_submission(event)
+        file_format = form.format
+        data_version = form.data_version
+        version = form.version or None
         data, losses = await self._schematics.convert(
             self._build_id,
             ConvertRequest(target_format=file_format, target_data_version=data_version),
@@ -323,7 +307,8 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
     async def _timing(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, BUILD_SCHEMATIC_MEASURE_TIMING) or await self._primary(event) is None:
             return
-        raw = cast(str | None, event.values.get("input")) or None
+        form = _TimingForm.from_submission(event)
+        raw = form.input or None
         position = _parse_position(raw)
         if raw is not None and position is None:
             await event.notice(tr(t"Input position must contain three integers, for example `12 5 -3`."))
@@ -360,12 +345,10 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
         return False
 
 
-class BuildBrowseScreen(sd.Screen):
+class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
     """A live build workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("build-browse")
     timeout = 300
-    audience = "personal"
     follow_topics = True
 
     def __init__(
@@ -398,7 +381,9 @@ class BuildBrowseScreen(sd.Screen):
             key="builds",
             identity=lambda build: str(build.id),
             label=lambda build: f"#{build.id} {build.title}",
-            summary=lambda build: f"{build.category} · {build.submission_status.name.lower()}",
+            # `_BuildSource` filters on `submission_status`, so every listed build carries one; the
+            # domain type stays optional only for a build that has not been submitted yet.
+            summary=lambda build: f"{build.category} · {cast(Status, build.submission_status).name.lower()}",
             detail=self._detail,
             page_size=15,
             title=tr(t"Build catalogue"),
@@ -407,6 +392,7 @@ class BuildBrowseScreen(sd.Screen):
         self._selected: _BuildDetail | None = None
         self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         if self._initial_id is not None:
             await self._select(self._initial_id)
@@ -419,6 +405,7 @@ class BuildBrowseScreen(sd.Screen):
             title=tr(t"Builds"),
         ).build_component()
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._selected is not None:
             return (
@@ -440,19 +427,13 @@ class BuildBrowseScreen(sd.Screen):
         return (
             sl.form(
                 tr(t"Open by ID"),
-                sl.forms.FormSpec(
-                    tr(t"Open build"),
-                    (sl.forms.IntField(key="id", label=tr(t"Build ID"), minimum=1),),
-                ),
+                _OpenBuildForm().spec(),
                 key="open-id",
                 on_submit=self._open_id,
             ),
             sl.form(
                 tr(t"Search by meaning"),
-                sl.forms.FormSpec(
-                    tr(t"Find build"),
-                    (sl.forms.TextField(key="query", label=tr(t"Description or title"), maximum=500),),
-                ),
+                _SearchForm().spec(),
                 key="semantic-search",
                 on_submit=self._search,
             ),
@@ -479,12 +460,14 @@ class BuildBrowseScreen(sd.Screen):
         return True
 
     async def _open_id(self, event: sl.SubmitEvent) -> None:
-        build_id = cast(int, event.values["id"])
+        form = _OpenBuildForm.from_submission(event)
+        build_id = form.id
         if not await self._select(build_id):
             await event.notice(tr(t"No visible build has that ID."))
 
     async def _search(self, event: sl.SubmitEvent) -> None:
-        build = await self._queries.semantic(cast(str, event.values["query"]))
+        form = _SearchForm.from_submission(event)
+        build = await self._queries.semantic(form.query)
         if build is None or build.id is None or not await self._select(build.id):
             await event.notice(tr(t"No visible build matches that search."))
 
@@ -492,4 +475,37 @@ class BuildBrowseScreen(sd.Screen):
         self._selected = None
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
+
+
+class _ConvertForm(sl.forms.Form):
+    title = tr(t"Convert schematic")
+
+    format = sl.forms.ChoiceField(
+        label=tr(t"Output format"),
+        default=SchematicFormat.LITEMATIC,
+        options=tuple(
+            sl.forms.ChoiceOption(file_format.value, file_format.value, file_format)
+            for file_format in WRITABLE_EXTENSIONS
+        ),
+    )
+    data_version = sl.forms.IntField(label=tr(t"Minecraft data version"), required=False)
+    version = sl.forms.TextField(label=tr(t"Minecraft version name"), required=False, maximum=100)
+
+
+class _TimingForm(sl.forms.Form):
+    title = tr(t"Measure schematic timing")
+
+    input = sl.forms.TextField(label=tr(t"Input position (x y z)"), required=False, maximum=100)
+
+
+class _OpenBuildForm(sl.forms.Form):
+    title = tr(t"Open build")
+
+    id = sl.forms.IntField(label=tr(t"Build ID"), minimum=1)
+
+
+class _SearchForm(sl.forms.Form):
+    title = tr(t"Find build")
+
+    query = sl.forms.TextField(label=tr(t"Description or title"), maximum=500)

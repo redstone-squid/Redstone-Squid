@@ -1,9 +1,6 @@
 """SQLAlchemy build and taxonomy models."""
 
-from __future__ import annotations
-
 import uuid
-from typing import TYPE_CHECKING
 
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy import (
@@ -35,9 +32,7 @@ from squid.builds.domain import (
 from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, IntEnumSmallInt, now
-
-if TYPE_CHECKING:
-    from squid.tags.infrastructure.models import BuildTagAssignment
+from squid.tags.infrastructure.models import BuildTagAssignment
 
 
 class Build(Base, kw_only=True):

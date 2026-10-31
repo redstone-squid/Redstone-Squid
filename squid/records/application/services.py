@@ -29,9 +29,9 @@ from squid.records.application.models import (
 from squid.records.application.ports import PublicBuildSummaryReader, RecordCandidateRepository, RecordRunRepository
 from squid.records.domain import (
     BuildKind,
-    CategoryText,
     DoorCategory,
     ExtenderCategory,
+    FormattedTitle,
     RecordCandidate,
     RecordClass,
     RecordResolution,
@@ -244,7 +244,7 @@ class RecordComputationService:
             source="public_lookup" if source == "public_lookup" else "eager",
         )
 
-    def format_record_titles(self, competition: CategoryCompetition) -> dict[RecordClass, CategoryText]:
+    def format_record_titles(self, competition: CategoryCompetition) -> dict[RecordClass, FormattedTitle]:
         """Render the per-class titles a definition stores for this competition."""
         return {
             record_class: self._formatter.format_record(record_class, competition.category_text)

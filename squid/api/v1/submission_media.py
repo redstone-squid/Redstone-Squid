@@ -11,13 +11,13 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
-import anyio
+import anyio.to_thread
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
 from squid.api.dependencies import DraftAttachments
 from squid.api.errors import responses
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.schemas.submission_media import (
     DraftMediaLimitsResponse,
@@ -185,7 +185,7 @@ async def get_draft_media(
     "/{upload_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="submission_media_discard",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE, MINECRAFT],
@@ -312,3 +312,24 @@ def _require_non_nil(identifier: UUID, *, reason: str) -> None:
 def _prevent_storage(response: Response, limits: MediaLimits) -> None:
     response.headers["Cache-Control"] = _NO_STORE
     response.headers[_MAX_UPLOAD_HEADER] = str(limits.max_source_bytes)
+
+
+@router.post(
+    "/{upload_id}/attach",
+    response_model=DraftMediaResponse,
+    dependencies=[Depends(reserve_idempotent_request)],
+    operation_id="submission_media_attach",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE, MINECRAFT],
+        cli=cli_command("media.attach", features=("submission-media",), interaction="direct"),
+    ),
+)
+async def attach_draft_media(
+    draft_id: UUID,
+    upload_id: UUID,
+    source_draft_id: UUID,
+    attachments: DraftAttachments,
+    account_id: AccountId,
+) -> DraftMediaResponse:
+    """Reference a file supplied to another owned draft without duplicating its processing."""
+    return DraftMediaResponse.from_snapshot(await attachments.attach(source_draft_id, draft_id, account_id, upload_id))

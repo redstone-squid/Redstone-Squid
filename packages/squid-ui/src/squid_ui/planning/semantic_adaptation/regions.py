@@ -16,7 +16,7 @@ from squid_ui.planning.semantic_adaptation.common import (
     _resolve,
 )
 from squid_ui.planning.semantic_adaptation.model import (
-    LoweringContext as _Context,
+    LoweringContext,
 )
 from squid_ui.primitives.constraints import (
     Alt,
@@ -66,7 +66,7 @@ class _Fragment(Card):
     """
 
 
-def _fold(nodes: Sequence[Node], context: _Context) -> list[Node]:
+def _fold(nodes: Sequence[Node], context: LoweringContext) -> list[Node]:
     """Fold consecutive fragments into as few legal cards as possible.
 
     Loose prose has to live somewhere, and a classic message's only home for prose beside an
@@ -149,12 +149,12 @@ def _merge(first: _Fragment, second: _Fragment, limits: MessageLimits) -> _Fragm
     )
 
 
-def _settle(nodes: Sequence[Node], context: _Context) -> list[Node]:
+def _settle(nodes: Sequence[Node], context: LoweringContext) -> list[Node]:
     """Close every still-open fragment. Folding leaves them open so a parent can absorb them."""
     return [_close(node, context) if isinstance(node, _Fragment) else node for node in nodes]
 
 
-def _close(card: _Fragment, context: _Context) -> Node:
+def _close(card: _Fragment, context: LoweringContext) -> Node:
     """Settle a folded card, offering the reformatted alternative where one exists."""
     plain = Card(
         children=card.children,
@@ -191,7 +191,7 @@ def _slot_text(value: CardText) -> str:
     return resolved_text(card_text(value).content)
 
 
-def _region(card: Card, body: Sequence[Node], context: _Context) -> Node:
+def _region(card: Card, body: Sequence[Node], context: LoweringContext) -> Node:
     """One authored region as one card, absorbing whatever its body folded into.
 
     A region's body is already folded, so the common case is a single fragment that merges
@@ -216,7 +216,7 @@ def _region(card: Card, body: Sequence[Node], context: _Context) -> Node:
     return Break(tuple(folded), keep_with_next=True)
 
 
-def _cards(context: _Context) -> bool:
+def _cards(context: LoweringContext) -> bool:
     """Whether this target draws regions as embeds rather than as container components."""
     return Capability.LAYOUT_EMBED in context.capabilities
 
@@ -316,8 +316,8 @@ def _break_region(
 def _paged_region(
     node: Paged,
     path: str,
-    context: _Context,
-    lower_node: Callable[[LayoutNode, str, _Context], list[Node]],
+    context: LoweringContext,
+    lower_node: Callable[[LayoutNode, str, LoweringContext], list[Node]],
     *,
     minimum: int,
     preferred: int,

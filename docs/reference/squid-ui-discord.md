@@ -21,14 +21,20 @@ One runtime per Discord client. `install()` starts no background work; supervise
 ## Entry points
 
 `DiscordUIRuntime` owns process resources. Its exact-identity owner scopes provide delivery, while
-`DiscordRequest` normalizes one event and its acknowledgement state. `Screen` declares reusable
+`Request` normalizes one event and its acknowledgement state. `Screen` declares reusable
 opening policy and is always presented through an owner scope.
 
 ::: squid_ui_discord.Screen
 
-::: squid_ui_discord.DiscordUI
+::: squid_ui_discord.UserSessionScreen
 
-::: squid_ui_discord.DiscordRequest
+::: squid_ui_discord.UserGuildSessionScreen
+
+::: squid_ui_discord.SharedGuildSessionScreen
+
+::: squid_ui_discord.Scope
+
+::: squid_ui_discord.Request
 
 ::: squid_ui_discord.DiscordAction
 
@@ -41,6 +47,10 @@ opening policy and is always presented through an owner scope.
 ::: squid_ui_discord.ResponseSource
 
 ::: squid_ui_discord.StackNavigator
+
+::: squid_ui_discord.open_devtools
+
+::: squid_ui_discord.DevToolsSection
 
 ## Optional discord.py integration
 
@@ -77,7 +87,7 @@ Every message root names who may use it.
 ## Message roots
 
 A `MessageRoot` owns one live Discord message for its whole life. Most hosts construct them
-through `DiscordUI.respond` or a session spec rather than directly.
+through `Request.respond` or a session spec rather than directly.
 
 ::: squid_ui_discord.MessageRoot
 
@@ -246,7 +256,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 
 ::: squid_ui_discord.conform
 
-::: squid_ui_discord.EMPTY_RESERVATION
+::: squid_ui_discord.EMPTY_COST
 
 ::: squid_ui_discord.button_grid
 
@@ -263,6 +273,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui_discord.adapter` | The verified discord.py adapter profile and boundary checks. |
 | `squid_ui_discord.challenges` | Showing a guard's challenge, and running the approved press. |
 | `squid_ui_discord.classic` | Composing classic Discord messages. |
+| `squid_ui_discord.v2` | Exact Components V2 layout factories. |
 | `squid_ui_discord.classic_renderer` | Mechanical drawing of resolved classic messages. |
 | `squid_ui_discord.conformance` | Boundary gate that keeps built views inside Discord's limits. |
 | `squid_ui_discord.delivery` | Send/edit mechanics for rendered Discord messages. |

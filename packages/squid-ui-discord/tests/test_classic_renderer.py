@@ -10,7 +10,8 @@ from squid_ui.errors import DrawInvariantError
 from squid_ui.planning.limits import CLASSIC_LIMITS
 from squid_ui.semantic import ActionControls, Link, Note, Paragraph
 from squid_ui_discord import DISCORD_V1_DPY27, classic
-from squid_ui_discord.classic_renderer import ClassicRenderer, audit_classic_payload
+from squid_ui_discord.classic_renderer import ClassicRenderer
+from squid_ui_discord.inspection import audit_classic_payload
 
 
 def _document(body: scene.ClassicMessage) -> scene.Scene[scene.ClassicMessage]:
@@ -79,7 +80,7 @@ class TestMalformedScenes:
         wrong = scene.Scene(scene.Codec.protocol, "discord.components-v1", 1, scene.ComponentsV2((scene.Text("x"),)))
 
         with pytest.raises(DrawInvariantError, match="cannot draw a ComponentsV2 body"):
-            ClassicRenderer().draw(wrong)  # pyrefly: ignore[bad-argument-type]
+            ClassicRenderer().draw(wrong)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
     def test_the_v2_target_id_is_refused(self) -> None:
         wrong = scene.Scene(scene.Codec.protocol, "discord.components-v2", 1, scene.ClassicMessage())

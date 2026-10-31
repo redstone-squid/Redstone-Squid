@@ -2,6 +2,7 @@
 
 import hashlib
 from collections.abc import Sequence
+from typing import Any, override
 from urllib.parse import urlsplit
 
 from slack_sdk.errors import SlackObjectFormationError
@@ -54,6 +55,12 @@ from squid_ui_slack.message_payload import MessagePayload
 
 type SdkText = PlainTextObject | MarkdownTextObject
 
+# The verified default, widened to the family every renderer below accepts. `AdapterProfile` is
+# frozen, so a profile for a narrower family really is a profile for a wider one; BasedPyright
+# infers a dataclass type parameter as invariant even when the dataclass is frozen, while Pyrefly
+# reads the same declaration as covariant. Naming the default once keeps that to one crossing.
+_DEFAULT_ADAPTER: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER  # pyright: ignore[reportAssignmentType]
+
 _CONVERSATION_TYPES = {
     ConversationType.WORKSPACE_PUBLIC: "public",
     ConversationType.WORKSPACE_PRIVATE: "private",
@@ -97,7 +104,9 @@ class _Drawer:
         self,
         *,
         assets: Sequence[scene.Asset],
-        plan: PlanResult[scene.SlackBody] | None,
+        # The drawer reads only `plan.resources`, which every body type shares, so naming one
+        # body here would constrain callers without describing anything this class does.
+        plan: PlanResult[Any] | None,
         asset_resolver: AssetResolver | None,
     ) -> None:
         self.assets = {asset.key: asset for asset in assets}
@@ -546,12 +555,13 @@ class MessageRenderer(Renderer[scene.SlackMessage, MessagePayload]):
     def __init__(
         self,
         *,
-        adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER,
+        adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER,
         asset_resolver: AssetResolver | None = None,
     ) -> None:
         self.adapter = adapter
         self.asset_resolver = asset_resolver
 
+    @override
     def draw(
         self,
         document: scene.Scene[scene.SlackMessage],
@@ -583,9 +593,10 @@ class MessageRenderer(Renderer[scene.SlackMessage, MessagePayload]):
 class ModalRenderer(Renderer[scene.SlackModalView, View]):
     """Draw planned Slack modal scenes into SDK views."""
 
-    def __init__(self, *, adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER) -> None:
+    def __init__(self, *, adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER) -> None:
         self.adapter = adapter
 
+    @override
     def draw(
         self,
         document: scene.Scene[scene.SlackModalView],
@@ -618,9 +629,10 @@ class ModalRenderer(Renderer[scene.SlackModalView, View]):
 class HomeRenderer(Renderer[scene.SlackHomeView, View]):
     """Draw planned Slack App Home scenes into SDK views."""
 
-    def __init__(self, *, adapter: AdapterProfile[SlackSdkAdapter] = SLACK_SDK_343_ADAPTER) -> None:
+    def __init__(self, *, adapter: AdapterProfile[SlackSdkAdapter] = _DEFAULT_ADAPTER) -> None:
         self.adapter = adapter
 
+    @override
     def draw(
         self,
         document: scene.Scene[scene.SlackHomeView],

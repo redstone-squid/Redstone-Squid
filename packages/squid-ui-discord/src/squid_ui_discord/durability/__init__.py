@@ -5,6 +5,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any
 
+from squid_reactivity.core import export_state, restore_state
 from squid_storage import (
     AdmissionToken,
     ClaimToken,
@@ -25,7 +26,6 @@ from squid_ui.runtime.presentation_state import (
     SelectionState,
     StrategyState,
 )
-from squid_ui.runtime.reactivity import export_state, restore_state
 from squid_ui.sources import Direction, Position
 from squid_ui_discord.message_root import AnyMessageRoot, MessageRoot
 from squid_ui_discord.sessions import SessionKey

@@ -1,9 +1,8 @@
 """Discord workspace for querying and maintaining computed records."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Literal, Protocol, Self, override
 
-import discord
 from discord import app_commands
 
 import squid_ui as sl
@@ -15,7 +14,7 @@ from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RebuildSummary, RecordGap, RecordLookupRequest, TitleDiagnosticGap
 from squid.records.domain import BuildKind
-from squid_ui_discord.ext import Cog
+from squid_ui_discord import Cog
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -53,12 +52,10 @@ class RecordComputationOperations(Protocol):
 type RecordAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class RecordsScreen(sd.Screen):
+class RecordsScreen(sd.UserGuildSessionScreen, session_name="records"):
     """A records workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("records", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300
-    audience = "personal"
 
     def __init__(
         self,
@@ -78,6 +75,7 @@ class RecordsScreen(sd.Screen):
         self._titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target] | None = None
         self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         if self._can_inspect:
             await self._refresh_diagnostics()
@@ -131,6 +129,7 @@ class RecordsScreen(sd.Screen):
         tabs.append(sp.Tab("maintenance", tr(t"Lookup and rebuild"), self._maintenance_nodes()))
         self._tabs = sp.Tabs(tabs, key="records-tabs", title=tr(t"Records")).build_component()
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._tabs is None:
             return (sl.status(tr(t"Loading record diagnostics.")),)
@@ -148,7 +147,9 @@ class RecordsScreen(sd.Screen):
         return tuple(nodes) or (sl.note(tr(t"No maintenance actions are available.")),)
 
     @staticmethod
-    def _kind_field(*, required: bool = True) -> sl.forms.ChoiceField[BuildKind]:
+    def _kind_field[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
+        *, required: RequiredT = True
+    ) -> sl.forms.ChoiceField[BuildKind, RequiredT]:
         return sl.forms.ChoiceField(
             key="kind",
             label=tr(t"Build kind"),
@@ -158,38 +159,20 @@ class RecordsScreen(sd.Screen):
 
     @classmethod
     def _lookup_form(cls) -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"Lookup record category"),
-            (
-                cls._kind_field(),
-                sl.forms.TextField(key="base_key", label=tr(t"Definition ID or base key"), maximum=300),
-                sl.forms.TextField(
-                    key="restrictions",
-                    label=tr(t"Restriction IDs, comma separated"),
-                    required=False,
-                    maximum=300,
-                ),
-                sl.forms.IntField(key="version_id", label=tr(t"Pinned version ID"), required=False, minimum=1),
-            ),
-        )
+        return _LookupForm().spec()
 
     @classmethod
     def _rebuild_form(cls) -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"Rebuild records"),
-            (
-                cls._kind_field(required=False),
-                sl.forms.IntField(key="version_id", label=tr(t"Current version ID"), required=False, minimum=1),
-            ),
-        )
+        return _RebuildForm().spec()
 
     async def _lookup(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RECORD_ENTRY_INSPECT):
             return
-        kind = cast(BuildKind, event.values["kind"])
-        selected = cast(str, event.values["base_key"]).strip()
-        version_id = cast(int | None, event.values.get("version_id"))
-        raw_restrictions = cast(str | None, event.values.get("restrictions")) or ""
+        form = _LookupForm.from_submission(event)
+        kind = form.kind
+        selected = form.base_key.strip()
+        version_id = form.version_id
+        raw_restrictions = form.restrictions or ""
         try:
             restrictions = frozenset(int(value.strip()) for value in raw_restrictions.split(",") if value.strip())
         except ValueError:
@@ -213,8 +196,9 @@ class RecordsScreen(sd.Screen):
     async def _rebuild(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RECORD_ENTRY_REBUILD):
             return
-        kind = cast(BuildKind | None, event.values.get("kind"))
-        version_id = cast(int | None, event.values.get("version_id"))
+        form = _RebuildForm.from_submission(event)
+        kind = form.kind
+        version_id = form.version_id
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
         summary = await self._computation.rebuild(current_version_id=version_id, kinds=kinds)
         if self._can_inspect:
@@ -234,7 +218,7 @@ class RecordsScreen(sd.Screen):
         return False
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
@@ -245,28 +229,41 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
         self.records = bot.services.records
         self.computation = bot.services.record_computation
 
-    @app_commands.command(name="records", description="Inspect and maintain computed records")
+    @sd.command(name="records", description="Inspect and maintain computed records")
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
-    async def records_workspace(self, interaction: discord.Interaction[BotT]) -> None:
+    async def records_workspace(self, request: sd.Request[Self]) -> RecordsScreen:
         """Open capability-aware diagnostics, lookup, and rebuild tools."""
-        await enforce(interaction, RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
+        await enforce(request, RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
 
         async def authorize(node: PermissionNode) -> bool:
-            return await allows(interaction, node)
+            return await allows(request, node)
 
-        await self.ui.respond(
-            interaction,
-            RecordsScreen(
-                self.records,
-                self.computation,
-                can_inspect=await authorize(RECORD_ENTRY_INSPECT),
-                can_rebuild=await authorize(RECORD_ENTRY_REBUILD),
-                authorize=authorize,
-            ),
+        return RecordsScreen(
+            self.records,
+            self.computation,
+            can_inspect=await authorize(RECORD_ENTRY_INSPECT),
+            can_rebuild=await authorize(RECORD_ENTRY_REBUILD),
+            authorize=authorize,
         )
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Load the records workspace cog."""
     await bot.add_cog(RecordCog(bot))
+
+
+class _LookupForm(sl.forms.Form):
+    title = tr(t"Lookup record category")
+
+    kind = RecordsScreen._kind_field()
+    base_key = sl.forms.TextField(label=tr(t"Definition ID or base key"), maximum=300)
+    restrictions = sl.forms.TextField(label=tr(t"Restriction IDs, comma separated"), required=False, maximum=300)
+    version_id = sl.forms.IntField(label=tr(t"Pinned version ID"), required=False, minimum=1)
+
+
+class _RebuildForm(sl.forms.Form):
+    title = tr(t"Rebuild records")
+
+    kind = RecordsScreen._kind_field(required=False)
+    version_id = sl.forms.IntField(label=tr(t"Current version ID"), required=False, minimum=1)

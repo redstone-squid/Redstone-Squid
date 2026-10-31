@@ -9,7 +9,7 @@ the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
-from typing import Protocol, cast
+from typing import Protocol, cast, override
 
 import discord
 
@@ -90,12 +90,10 @@ def _error_detail(error: ValidationError) -> sl.TextLike:
     return tr(t"{message} {action}")
 
 
-class AccountScreen(sd.Screen):
+class AccountScreen(sd.UserSessionScreen, session_name="account"):
     """An account workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("account")
     timeout = SESSION_SECONDS
-    audience = "personal"
 
     selected_id: int | None = sl.state(None)
     closed: bool = sl.state(default=False)
@@ -123,6 +121,7 @@ class AccountScreen(sd.Screen):
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
@@ -149,6 +148,7 @@ class AccountScreen(sd.Screen):
     def page_hidden(self) -> bool:
         return self._profile.hidden
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.closed:
             return (sl.section(sl.heading(tr(t"Account controls closed"))),)
@@ -437,7 +437,7 @@ class AccountScreen(sd.Screen):
 
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
-        await event.finish()
+        event.finish_on_success()
 
     def _fields(self) -> list[CardField]:
         fields = self._profile_fields(self._profile)

@@ -2,19 +2,18 @@
 
 from collections.abc import Hashable, Sequence
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Unpack, cast, overload
+from typing import TYPE_CHECKING, Any, Unpack, cast
 
 import discord
 
 from squid_ui import paragraph
 from squid_ui.runtime.component import Component
-from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import Localization
 from squid_ui_discord.access import AccessPolicy, Owner
 from squid_ui_discord.audience import Audience
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, ResponseSource, SendDestination
 from squid_ui_discord.delivery import Abandoned as DeliveryAbandoned
-from squid_ui_discord.delivery import DeliveryResult, edit_to, no_mentions, send_to
+from squid_ui_discord.delivery import DeliveryResult, MessageDestination, edit_to, no_mentions, send_to
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import PauseUpdates, RenewEphemeral
@@ -24,7 +23,6 @@ from squid_ui_discord.response import (
     Abandoned,
     Presented,
     Rejected,
-    Response,
     ResponseOverrides,
     ResponseResult,
     ResponseSpec,
@@ -118,44 +116,6 @@ class Scope[OwnerT = Any]:
             strict=defaults.strict,
         )
 
-    @overload
-    async def respond[ComponentT: Component[ComponentsV2Target]](
-        self,
-        source: ResponseSource,
-        content: ComponentT | Response[ComponentT],
-        *,
-        files: Sequence[discord.File] = (),
-        parent: MessageRoot | None = None,
-        session_key: Hashable | None = None,
-        **overrides: Unpack[ResponseOverrides],
-    ) -> ResponseResult[ComponentT]: ...
-
-    @overload
-    async def respond(
-        self,
-        source: ResponseSource,
-        content: FacadeContent | Response,
-        *,
-        files: Sequence[discord.File] = (),
-        parent: MessageRoot | None = None,
-        session_key: Hashable | None = None,
-        **overrides: Unpack[ResponseOverrides],
-    ) -> ResponseResult: ...
-
-    async def respond(
-        self,
-        source: ResponseSource,
-        content: FacadeContent | Response[Any],
-        *,
-        files: Sequence[discord.File] = (),
-        parent: MessageRoot | None = None,
-        session_key: Hashable | None = None,
-        **overrides: Unpack[ResponseOverrides],
-    ) -> ResponseResult:
-        """Transitional: `(await scope.request(source)).respond(...)` for call sites not yet ported."""
-        request = await self.request(source)
-        return await request.respond(content, files=files, parent=parent, session_key=session_key, **overrides)
-
     async def send(
         self,
         destination: SendDestination,
@@ -234,7 +194,7 @@ class Scope[OwnerT = Any]:
         self,
         content: FacadeContent,
         *,
-        destination,
+        destination: MessageDestination,
         policy: ResponseSpec,
         localization: Localization,
         source: ResponseSource | None,
@@ -360,7 +320,4 @@ class Scope[OwnerT = Any]:
         self._closed = True
 
 
-# Transitional name; removed once the bot is ported.
-DiscordUI = Scope
-
-__all__ = ["DiscordUI", "Scope"]
+__all__ = ["Scope"]

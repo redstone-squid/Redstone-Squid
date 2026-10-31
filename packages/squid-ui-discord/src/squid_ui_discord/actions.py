@@ -1,12 +1,17 @@
 """Discord adapter for portable component action events."""
 
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+import asyncio
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any, override
 
 import discord
 
+from squid_reactivity.actions import ActionContext, current_action
+from squid_reactivity.core import on_action_commit, on_action_rollback
+from squid_reactivity.operations import Cancelled
 from squid_ui.forms import FieldError, FormField, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
 from squid_ui.interactions import ActionEvent, ActionMode, Visibility
+from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.text import TextLike, resolve_text
 from squid_ui_discord import delivery as deliver
 from squid_ui_discord.modal import ModalSpec, build_form_modal, build_modal
@@ -28,6 +33,11 @@ class ActionResponder:
         self.interaction = interaction
         self.message_root = message_root
         self.selected_entities = selected_entities
+        self._action_active = False
+        self._action_context: ActionContext | None = None
+        self._finish_requested = False
+        self._finish_accepted = False
+        self._after_commit: list[PostCommitOperation[Any]] = []
 
     async def acknowledge(self) -> None:
         if not self.interaction.response.is_done():
@@ -117,9 +127,13 @@ class ActionResponder:
         labels = {field.key: field.label or field.key for field in spec.items if isinstance(field, FormField)}
         for error in errors:
             if isinstance(error, FieldError):
-                label = resolve_text(labels.get(error.key, error.key), self.message_root.localization).content
+                field_labels = [
+                    resolve_text(labels.get(field.key, field.key), self.message_root.localization).content
+                    for field in error.fields
+                ]
+                field_label = ", ".join(field_labels)
                 message = resolve_text(error.message, self.message_root.localization).content
-                lines.append(f"**{label}:** {message}")
+                lines.append(f"**{field_label}:** {message}")
             else:
                 lines.append(resolve_text(error.message, self.message_root.localization).content)
         retry = _RetryButton(
@@ -145,12 +159,61 @@ class ActionResponder:
     async def redirect(self, url: str) -> None:
         await self.notice(url)
 
-    async def finish(self) -> None:
-        """End this action's message root through the current interaction."""
-        await self.message_root.finish_via(self.interaction)
+    def finish_on_success(self) -> None:
+        """Request closure once this action succeeds and its changes are accepted.
+
+        This records an intent without waiting for delivery or cleanup. A failed or
+        cancelled handler discards it. The dispatcher performs shutdown outside the
+        transaction, so cleanup errors cannot roll back a successful action.
+        """
+        if not self._action_active:
+            message = "event.finish_on_success() is only available during its action handler"
+            raise RuntimeError(message)
+        self._finish_requested = True
 
     def invalidate(self) -> None:
         self.message_root.invalidate()
+
+    def on_success[ValueT](
+        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
+    ) -> PostCommitOperation[ValueT]:
+        """Register a host-owned operation to run once this action succeeds."""
+        if not self._action_active:
+            message = "event.on_success() is only available during its action handler"
+            raise RuntimeError(message)
+        if current_action() is not self._action_context:
+            message = "after-commit work requires a dispatcher-owned transaction, not a nested dispatch"
+            raise RuntimeError(message)
+        host = self.message_root.config.execution_host
+        if host is None:
+            message = "after-commit work requires a running UIExecutionHost"
+            raise RuntimeError(message)
+        host._require_running()
+        operation = PostCommitOperation(
+            callback,
+            name=name or getattr(callback, "__qualname__", type(callback).__qualname__),
+            owner=self.message_root,
+        )
+        on_action_commit(lambda commit, continuation: operation._commit(commit, continuation, host))
+        on_action_rollback(operation._discard)
+        self._after_commit.append(operation)
+        return operation
+
+    async def _wait_after_commit(self) -> list[Exception]:
+        errors: list[Exception] = []
+        for operation in self._after_commit:
+            try:
+                await operation.wait()
+            except asyncio.CancelledError:
+                caller = asyncio.current_task()
+                if caller is not None and caller.cancelling():
+                    raise
+                if not isinstance(operation.status, Cancelled):
+                    raise
+                errors.append(RuntimeError("an after-commit operation was cancelled"))
+            except Exception as error:
+                errors.append(error)
+        return errors
 
 
 def responder(event: ActionEvent) -> ActionResponder:
@@ -180,7 +243,7 @@ def native(event: ActionEvent) -> discord.Interaction[Any]:
     host's client subclass; hosts that care can annotate the binding themselves.
 
     Do not drive `.response` yourself: the mount owns this interaction's response
-    lifecycle. Use `event.acknowledge()`, `event.notice()`, `event.finish()`, or
+    lifecycle. Use `event.acknowledge()`, `event.notice()`, `event.finish_on_success()`, or
     `responder(event).send_modal()`. A hand-rolled `defer()` survives only because
     `MessageRoot.flush` falls back to editing through the followup.
 
@@ -205,6 +268,7 @@ class _RetryButton(discord.ui.Button[discord.ui.LayoutView]):
         self.owner_id = owner_id
         self.modal = modal
 
+    @override
     async def callback(self, interaction: discord.Interaction) -> None:
         if interaction.user.id != self.owner_id:
             await deliver.respond_text(interaction, "This form attempt belongs to another member.", ephemeral=True)

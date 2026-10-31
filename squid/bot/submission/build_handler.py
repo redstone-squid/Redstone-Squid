@@ -173,7 +173,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return render_payload([await self.render_node()])
 
     async def render_container(
-        self, *, reservation: sd.ResourceCost = sd.EMPTY_RESERVATION
+        self, *, reservation: sd.ResourceCost = sd.EMPTY_COST
     ) -> discord.ui.Container[discord.ui.LayoutView]:
         """Render the build card as a detached item, for composition into a larger V2 layout.
 

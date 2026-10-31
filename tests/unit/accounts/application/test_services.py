@@ -141,10 +141,6 @@ class FakeAccountRepository:
             digest: replace(ticket, expires_at=NOW.subtract(seconds=1)) for digest, ticket in self.merge_tickets.items()
         }
 
-    async def count_identities(self, account_id: int) -> int:
-        account = self.accounts.get(account_id)
-        return 0 if account is None else len(account.identities)
-
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None:
         account = self.accounts.get(account_id)
         if account is None:
@@ -152,6 +148,8 @@ class FakeAccountRepository:
         removed = next((identity for identity in account.identities if identity.id == identity_id), None)
         if removed is None:
             return None
+        if len(account.identities) <= 1:
+            raise LastIdentityError(account_id=account_id)
         remaining = tuple(identity for identity in account.identities if identity.id != identity_id)
         self.accounts[account_id] = replace(account, identities=remaining)
         return removed
@@ -866,46 +864,13 @@ class TestIdentityManagement:
         assert len(identities) == 2
         assert not next(identity for identity in identities if identity.id == 2).is_public
 
-    async def test_unlink_removes_one_identity_and_keeps_the_other(self) -> None:
-        repository = FakeAccountRepository()
-        account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
-        assert account.id is not None
-
-        removed = await service(repository).unlink_identity(account.id, 2)
-
-        assert removed.provider is IdentityProvider.JAVA
-        assert [identity.provider for identity in repository.accounts[account.id].identities] == [
-            IdentityProvider.DISCORD
-        ]
-
-    async def test_unlink_refuses_the_last_identity(self) -> None:
+    async def test_unlink_refuses_an_identity_the_account_does_not_hold(self) -> None:
         repository = FakeAccountRepository()
         account = repository.seed_account(1, consent=CONSENT)
         assert account.id is not None
 
-        with pytest.raises(LastIdentityError):
-            await service(repository).unlink_identity(account.id, 1)
-
-        assert len(repository.accounts[account.id].identities) == 1
-
-    async def test_unlink_refuses_an_identity_the_account_does_not_hold(self) -> None:
-        repository = FakeAccountRepository()
-        account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
-        assert account.id is not None
-
         with pytest.raises(AccountIdentityNotFoundError):
             await service(repository).unlink_identity(account.id, 9999)
-
-    async def test_unlinking_does_not_touch_creator_credit(self) -> None:
-        """Attribution is a fact about a build, not about how someone signs in."""
-        repository = FakeAccountRepository()
-        account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
-        assert account.id is not None
-        repository.aliases[1] = CreatorAlias(1, "Player", account_id=account.id)
-
-        await service(repository).unlink_identity(account.id, 2)
-
-        assert repository.aliases[1].account_id == account.id
 
 
 class TestMergeCodes:

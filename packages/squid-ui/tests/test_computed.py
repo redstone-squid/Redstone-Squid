@@ -2,6 +2,7 @@
 
 import gc
 import weakref
+from typing import override
 
 import pytest
 
@@ -23,6 +24,7 @@ class Counter(Component[DiscordTarget]):
     def _ran(self, name: str) -> None:
         self.runs[name] = self.runs.get(name, 0) + 1
 
+    @override
     def render(self):
         return Text("")
 
@@ -245,6 +247,7 @@ class TestReferences:
         class Source(Component[DiscordTarget]):
             count: int = state(0)
 
+            @override
             def render(self):
                 return Text("")
 
@@ -256,6 +259,7 @@ class TestReferences:
             def doubled(self) -> int:
                 return self.source.count * 2
 
+            @override
             def render(self):
                 return Text("")
 
@@ -275,6 +279,7 @@ class TestReferences:
         class Source(Component[DiscordTarget]):
             count: int = state(0)
 
+            @override
             def render(self):
                 return Text("")
 
@@ -288,6 +293,7 @@ class TestReferences:
                 self.runs += 1
                 return self.source.count * 2
 
+            @override
             def render(self):
                 return Text("")
 

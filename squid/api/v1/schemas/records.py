@@ -1,7 +1,7 @@
 """Public computed-record representations."""
 
 from datetime import datetime
-from typing import Self
+from typing import Self, override
 from uuid import UUID
 
 from pydantic import ConfigDict
@@ -29,6 +29,7 @@ class RecordSummary(FromDomain[PublishedRecord]):
     computed_at: datetime
 
     @classmethod
+    @override
     def from_domain(cls, record: PublishedRecord, /) -> Self:
         return cls(
             id=record.id,

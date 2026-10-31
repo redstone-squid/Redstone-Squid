@@ -280,3 +280,64 @@ messages after a process restart.
 See [Durable sessions](durable-message-roots.md) for recipes, recovery, storage, leases, and the durable
 open path. Durability preserves component and presentation state; consequential domain writes still
 belong in the application's authoritative service.
+
+## Alpha policy and exact-layout conveniences
+
+Replace repeated `Screen` policy declarations with the closest preset while retaining a stable name:
+
+```python
+class Settings(sd.UserGuildSessionScreen, session_name="settings"):
+    pass
+```
+
+`UserSessionScreen` and `UserGuildSessionScreen` are personal and owner-only. A
+`SharedGuildSessionScreen` is public, admits everyone, and rejects duplicate opens; migrating a shared
+guild screen therefore changes replacement into an explicit rejection.
+
+Use `sd.v2.panel(*children)` and `sd.classic.card(*children)` when exact Discord structure is needed.
+These factories promote bare text and omit `None`/`False`; primitive dataclass constructors are not
+deprecated.
+
+DevTools mutations are no longer enabled by default. Preserve the previous operational capability
+set with an explicit allowlist, or opt into every operation:
+
+```python
+runtime = sd.devtools_runtime.DevToolsRuntime(
+    policy=sd.devtools_runtime.DevToolsPolicy.full_access(),
+)
+```
+
+The bundled Cog now exposes prefix `dev ui` and a hybrid `/dev ui` command tree. A custom command can call
+`sd.open_devtools(ctx, runtime=runtime)` instead of installing that Cog.
+
+Preset classes retain `Screen[OwnerT]` typing. For customized admission or membership limits,
+declare a complete `session = sd.SessionSpec(...)` instead of the `session_name` class keyword;
+that explicit recipe takes precedence over the preset's session defaults. Presentation still
+goes through `Request.respond(ScreenInstance())`, and `opening` is that same typed `Request`.
+The host must authorize callers of `open_devtools`; the opener restricts the resulting panel to
+that caller, while the bundled Cog defaults to bot-owner authorization.
+
+## Respond through a request
+
+`Scope.respond` has been removed. Commands declared with `@sd.command`,
+`@sd.hybrid_command`, or `@sd.prefix_command` receive a `Request`; return the
+screen and let the command wrapper present it:
+
+```python
+class Builds(sd.Cog):
+    @sd.command()
+    async def browse(self, request: sd.Request) -> BuildScreen:
+        return BuildScreen(user_id=request.user.id)
+```
+
+For native Discord callbacks, resolve the request once under the existing owner
+scope. Pass it to helpers that need to defer, prompt, or reply:
+
+```python
+request = await self.ui.request(interaction)
+await request.defer("private")
+await request.respond(BuildScreen(user_id=request.user.id))
+```
+
+Use `Scope.send` and `Scope.edit` for work without an incoming request. Closing
+the scope still finishes the screens opened by its requests.

@@ -1,6 +1,7 @@
 """Isolated tests for the strict Minecraft authorization HTTP contract."""
 
 from dataclasses import dataclass, replace
+from typing import override
 from uuid import UUID, uuid4
 
 import pytest
@@ -13,11 +14,8 @@ from whenever import Instant
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.dependencies import get_minecraft_installations, get_minecraft_player_authorization
 from squid.api.errors import register_exception_handlers
-from squid.api.security import ANONYMOUS, Caller, current_caller
-from squid.api.v1.minecraft_auth import (
-    current_account_id,
-    router,
-)
+from squid.api.security import ANONYMOUS, Caller, current_browser_account_id, current_caller
+from squid.api.v1.minecraft_auth import router
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
     FabricChallengeCreateRequest,
@@ -102,6 +100,7 @@ class FakeInstallations(InstallationCredentialService):
         self.authenticated_token: str | None = None
         self.owner_ids: list[int] = []
 
+    @override
     async def register(
         self,
         *,
@@ -116,22 +115,26 @@ class FakeInstallations(InstallationCredentialService):
             f"sqpi_{self.current.id.hex}_{INSTALLATION_SECRET}",
         )
 
+    @override
     async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
         self.owner_ids.append(owner_account_id)
         return (self.current,)
 
+    @override
     async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
         assert installation_id == self.current.id
         self.owner_ids.append(owner_account_id)
         self.current = replace(self.current, credential_version=2, rotated_at=NOW)
         return IssuedInstallationCredential(self.current, f"sqpi_{self.current.id.hex}_{ROTATED_SECRET}")
 
+    @override
     async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation:
         assert installation_id == self.current.id
         self.owner_ids.append(owner_account_id)
         self.current = replace(self.current, revoked_at=NOW)
         return self.current
 
+    @override
     async def update_profile(
         self,
         *,
@@ -144,6 +147,7 @@ class FakeInstallations(InstallationCredentialService):
         self.current = replace(self.current, profile=profile)
         return self.current
 
+    @override
     async def authenticate(self, token: str) -> AuthenticatedPaperInstallation:
         self.authenticated_token = token
         return AuthenticatedPaperInstallation(
@@ -152,6 +156,7 @@ class FakeInstallations(InstallationCredentialService):
             credential_version=self.current.credential_version,
         )
 
+    @override
     async def authenticate_headers(
         self,
         installation_id: str | None,
@@ -176,6 +181,7 @@ class FakePlayers(PlayerAuthorizationService):
         self.revoked_as: tuple[UUID, int] | None = None
         self.fabric_error: Exception | None = None
 
+    @override
     async def start_paper_challenge(
         self,
         *,
@@ -186,6 +192,7 @@ class FakePlayers(PlayerAuthorizationService):
         self.paper_installation = installation
         return challenge(origin=MinecraftClientOrigin.PAPER)
 
+    @override
     async def start_fabric_challenge(
         self,
         *,
@@ -195,6 +202,7 @@ class FakePlayers(PlayerAuthorizationService):
         self.fabric_proof = (java_uuid, pkce_s256_challenge)
         return challenge(origin=MinecraftClientOrigin.FABRIC)
 
+    @override
     async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge:
         assert user_code == USER_CODE
         self.approved_as = account_id
@@ -211,6 +219,7 @@ class FakePlayers(PlayerAuthorizationService):
             approved_at=NOW,
         )
 
+    @override
     async def exchange_paper(
         self,
         *,
@@ -221,12 +230,14 @@ class FakePlayers(PlayerAuthorizationService):
         self.paper_installation = installation
         return grant(origin=MinecraftClientOrigin.PAPER, installation_id=installation.id)
 
+    @override
     async def exchange_fabric(self, *, device_code: str, pkce_verifier: str) -> IssuedPlayerGrant:
         if self.fabric_error is not None:
             raise self.fabric_error
         assert (device_code, pkce_verifier) == (DEVICE_CODE, PKCE_VERIFIER)
         return grant(origin=MinecraftClientOrigin.FABRIC)
 
+    @override
     async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool:
         self.revoked_as = (grant_id, account_id)
         return True
@@ -280,7 +291,7 @@ def app_with_fakes(
 
     app.dependency_overrides[get_minecraft_installations] = installation_dependency
     app.dependency_overrides[get_minecraft_player_authorization] = player_dependency
-    app.dependency_overrides[current_account_id] = account_dependency
+    app.dependency_overrides[current_browser_account_id] = account_dependency
     app.dependency_overrides[current_caller] = caller_dependency
     return app
 
@@ -427,6 +438,10 @@ async def test_routes_derive_account_origin_and_paper_installation_from_dependen
         installation_revoked,
     ):
         assert response.headers["Cache-Control"] == "no-store"
+        assert response.headers["Pragma"] == "no-cache"
+    for response in (grant_revoked, installation_revoked):
+        assert response.content == b""
+        assert "content-type" not in response.headers
 
 
 async def test_one_time_device_responses_use_server_derived_idempotency_namespaces() -> None:
@@ -524,7 +539,7 @@ async def test_authorization_errors_map_to_stable_problem_context_without_secret
 
 async def test_account_dependency_rejects_services_and_stale_consent() -> None:
     with pytest.raises(AuthenticationError):
-        await current_account_id(ANONYMOUS)
+        await current_browser_account_id(ANONYMOUS)
     caller = Caller(
         kind="account",
         subject="account:42",
@@ -533,4 +548,4 @@ async def test_account_dependency_rejects_services_and_stale_consent() -> None:
     )
 
     with pytest.raises(ConsentRequiredError):
-        await current_account_id(caller)
+        await current_browser_account_id(caller)

@@ -51,7 +51,9 @@ async def task_group() -> AsyncIterator[anyio.abc.TaskGroup]:
         async with anyio.create_task_group() as tasks:
             yield tasks
     except BaseExceptionGroup as raised:
-        if len(raised.exceptions) > 1:
+        # `!= 1` rather than `> 1`: an exception group cannot be empty, and spelling it this way
+        # says so to the checker instead of indexing a tuple it has to assume may be empty.
+        if len(raised.exceptions) != 1:
             raise
         failure = raised.exceptions[0]
     # Re-raised outside the except clause, so the group anyio wrapped it in does

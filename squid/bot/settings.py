@@ -1,6 +1,6 @@
 """The guild settings workspace and guild-lifecycle registration."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import discord
 from discord import app_commands
@@ -22,21 +22,21 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Setti
         super().__init__(bot)
         self.settings_service = bot.services.settings
 
-    @app_commands.command(name="settings", description="Configure this server")
+    @sd.command(name="settings", description="Configure this server")
     @app_commands.guild_only()
     @hide_unless(manage_guild=True)
-    async def settings(self, interaction: discord.Interaction[BotT]) -> None:
+    async def settings(self, request: sd.Request[Self]) -> SettingsPanel:
         """Open this server's channel, locale, emoji, and vote-weight editor."""
         await enforce(
-            interaction,
+            request,
             SETTINGS_SERVER_VIEW,
             SETTINGS_SERVER_EDIT,
             SETTINGS_VOTING_EDIT,
             mode="any",
         )
-        guild = interaction.guild
+        guild = request.guild
         assert guild is not None
-        subject = await subject_for_interaction(interaction)
+        subject = await subject_for_interaction(request)
         permissions = self.bot.services.permissions
         capabilities = SettingsCapabilities(
             view_server=await permissions.allows(subject, SETTINGS_SERVER_VIEW),
@@ -45,18 +45,15 @@ class SettingsCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Setti
         )
 
         async def authorize(node: PermissionNode) -> bool:
-            return await allows(interaction, node)
+            return await allows(request, node)
 
-        await self.ui.respond(
-            interaction,
-            SettingsPanel(
-                settings=self.settings_service,
-                votes=self.bot.services.votes,
-                guild=guild,
-                capabilities=capabilities,
-                authorize=authorize,
-                owner_guild_id=self.bot.owner_server_id,
-            ),
+        return SettingsPanel(
+            settings=self.settings_service,
+            votes=self.bot.services.votes,
+            guild=guild,
+            capabilities=capabilities,
+            authorize=authorize,
+            owner_guild_id=self.bot.owner_server_id,
         )
 
     @sd.Cog.listener("on_guild_join")

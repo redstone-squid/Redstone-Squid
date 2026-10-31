@@ -24,6 +24,7 @@ from squid.notifications.domain import (
     NotificationCandidate,
     NotificationKind,
     NotificationPreferences,
+    NotificationSource,
     NotificationSubscription,
     PendingNotificationDelivery,
     RecordSubscriptionFilter,
@@ -336,139 +337,80 @@ class PostgresNotificationRepository:
             # whether to enqueue at all, so the cost moves rather than appearing -- and
             # the inner join means unlinking Discord suppresses a pending DM, which is
             # the correct reading of an unlink.
-            candidates = tuple(
-                (
-                    await session.execute(
-                        select(NotificationDeliveryRecord.id, AccountIdentity.subject)
-                        .join(
-                            NotificationProfile,
-                            NotificationProfile.account_id == NotificationDeliveryRecord.account_id,
-                        )
-                        .join(
-                            NotificationRecord,
-                            (NotificationRecord.id == NotificationDeliveryRecord.notification_id)
-                            & (NotificationRecord.account_id == NotificationDeliveryRecord.account_id),
-                        )
-                        .join(Account, Account.id == NotificationDeliveryRecord.account_id)
-                        .join(
-                            AccountIdentity,
-                            AccountIdentity.id
-                            == _most_recent_discord_identity_id(NotificationDeliveryRecord.account_id),
-                        )
-                        .where(
-                            NotificationDeliveryRecord.available_at <= func.now(),
-                            NotificationDeliveryRecord.dead_at.is_(None),
-                            NotificationDeliveryRecord.sent_at.is_(None),
-                            or_(
-                                NotificationDeliveryRecord.claimed_at.is_(None),
-                                NotificationDeliveryRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
-                            ),
-                            account_consent_current(),
-                            NotificationProfile.dm_enabled.is_(True),
-                            NotificationProfile.dm_suspended_at.is_(None),
-                            or_(
-                                NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED,
-                                claimable_staff,
-                            ),
-                        )
-                        .order_by(NotificationDeliveryRecord.available_at, NotificationDeliveryRecord.id)
-                        .limit(limit)
-                        .with_for_update(skip_locked=True, of=NotificationDeliveryRecord)
-                    )
-                ).all()
-            )
-            if not candidates:
-                return ()
-            discord_by_delivery = {delivery_id: int(subject) for delivery_id, subject in candidates}
-            ids = tuple(discord_by_delivery)
-            claimed = (
-                await session.execute(
-                    update(NotificationDeliveryRecord)
-                    .where(NotificationDeliveryRecord.id.in_(ids))
-                    .values(
-                        claimed_at=func.now(),
-                        claim_token=func.gen_random_uuid(),
-                        attempts=NotificationDeliveryRecord.attempts + 1,
-                    )
-                    .returning(NotificationDeliveryRecord)
+            candidates = (
+                select(
+                    NotificationDeliveryRecord.id,
+                    AccountIdentity.subject,
+                    NotificationRecord.kind,
+                    NotificationRecord.payload,
                 )
-            ).scalars()
-            deliveries = tuple(claimed)
-            notification_by_id = {
-                row.id: row
-                for row in (
-                    await session.scalars(
-                        select(NotificationRecord).where(
-                            NotificationRecord.id.in_([delivery.notification_id for delivery in deliveries])
-                        )
-                    )
-                ).all()
-            }
+                .join(NotificationProfile, NotificationProfile.account_id == NotificationDeliveryRecord.account_id)
+                .join(
+                    NotificationRecord,
+                    (NotificationRecord.id == NotificationDeliveryRecord.notification_id)
+                    & (NotificationRecord.account_id == NotificationDeliveryRecord.account_id),
+                )
+                .join(Account, Account.id == NotificationDeliveryRecord.account_id)
+                .join(
+                    AccountIdentity,
+                    AccountIdentity.id == _most_recent_discord_identity_id(NotificationDeliveryRecord.account_id),
+                )
+                .where(
+                    NotificationDeliveryRecord.available_at <= func.now(),
+                    NotificationDeliveryRecord.dead_at.is_(None),
+                    NotificationDeliveryRecord.sent_at.is_(None),
+                    or_(
+                        NotificationDeliveryRecord.claimed_at.is_(None),
+                        NotificationDeliveryRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
+                    ),
+                    account_consent_current(),
+                    NotificationProfile.dm_enabled.is_(True),
+                    NotificationProfile.dm_suspended_at.is_(None),
+                    or_(NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED, claimable_staff),
+                )
+                .order_by(NotificationDeliveryRecord.available_at, NotificationDeliveryRecord.id)
+                .limit(limit)
+                .with_for_update(skip_locked=True, of=NotificationDeliveryRecord)
+                .cte("claimable_deliveries")
+            )
+            claimed = await session.execute(
+                update(NotificationDeliveryRecord)
+                .where(NotificationDeliveryRecord.id == candidates.c.id)
+                .values(
+                    claimed_at=func.now(),
+                    claim_token=func.gen_random_uuid(),
+                    attempts=NotificationDeliveryRecord.attempts + 1,
+                )
+                .returning(NotificationDeliveryRecord, candidates.c.subject, candidates.c.kind, candidates.c.payload)
+            )
             return tuple(
                 PendingNotificationDelivery(
                     id=delivery.id,
                     generation=delivery.generation,
-                    discord_id=discord_by_delivery[delivery.id],
+                    discord_id=int(subject),
                     nonce=delivery.nonce,
                     claim_token=_claim_token(delivery),
                     attempts=delivery.attempts,
-                    kind=notification_by_id[delivery.notification_id].kind,
-                    payload=dict(notification_by_id[delivery.notification_id].payload),
+                    kind=kind,
+                    payload=dict(payload),
                 )
-                for delivery in deliveries
+                for delivery, subject, kind, payload in claimed
             )
 
     async def complete_delivery(self, delivery: PendingNotificationDelivery) -> bool:
         async with self._session_factory() as session, session.begin():
-            updated = await session.scalar(
-                update(NotificationDeliveryRecord)
-                .where(*_delivery_claim(delivery))
-                .values(sent_at=func.now(), claimed_at=None, claim_token=None, last_error=None)
-                .returning(NotificationDeliveryRecord.id)
-            )
-            return updated is not None
+            return await self._settle_delivery(session, delivery, sent_at=func.now()) is not None
 
     async def fail_delivery(self, delivery: PendingNotificationDelivery, error: str, *, max_attempts: int) -> bool:
+        dead = delivery.attempts >= max_attempts
+        values = {"dead_at": func.now()} if dead else {"available_at": func.now() + retry_delay(delivery.attempts)}
         async with self._session_factory() as session, session.begin():
-            if delivery.attempts >= max_attempts:
-                updated = await session.scalar(
-                    update(NotificationDeliveryRecord)
-                    .where(*_delivery_claim(delivery))
-                    .values(
-                        dead_at=func.now(),
-                        claimed_at=None,
-                        claim_token=None,
-                        last_error=error[:4000],
-                    )
-                    .returning(NotificationDeliveryRecord.id)
-                )
-                return updated is not None
-            await session.scalar(
-                update(NotificationDeliveryRecord)
-                .where(*_delivery_claim(delivery))
-                .values(
-                    available_at=func.now() + retry_delay(delivery.attempts),
-                    claimed_at=None,
-                    claim_token=None,
-                    last_error=error[:4000],
-                )
-                .returning(NotificationDeliveryRecord.id)
-            )
-            return False
+            account_id = await self._settle_delivery(session, delivery, error=error, **values)
+            return dead and account_id is not None
 
     async def suspend_dm(self, delivery: PendingNotificationDelivery, error: str) -> bool:
         async with self._session_factory() as session, session.begin():
-            account_id = await session.scalar(
-                update(NotificationDeliveryRecord)
-                .where(*_delivery_claim(delivery))
-                .values(
-                    dead_at=func.now(),
-                    claimed_at=None,
-                    claim_token=None,
-                    last_error=error[:4000],
-                )
-                .returning(NotificationDeliveryRecord.account_id)
-            )
+            account_id = await self._settle_delivery(session, delivery, error=error, dead_at=func.now())
             if account_id is None:
                 return False
             await session.execute(
@@ -477,6 +419,18 @@ class PostgresNotificationRepository:
                 .values(dm_enabled=False, dm_suspended_at=func.now(), updated_at=func.now())
             )
             return True
+
+    @staticmethod
+    async def _settle_delivery(
+        session: AsyncSession, delivery: PendingNotificationDelivery, *, error: str | None = None, **values: Any
+    ) -> int | None:
+        """Release only the current claim and return its owner when the transition applies."""
+        return await session.scalar(
+            update(NotificationDeliveryRecord)
+            .where(*_delivery_claim(delivery))
+            .values(claimed_at=None, claim_token=None, last_error=None if error is None else error[:4000], **values)
+            .returning(NotificationDeliveryRecord.account_id)
+        )
 
     @staticmethod
     async def _cancel_pending_deliveries(session: AsyncSession, account_id: int) -> None:
@@ -512,7 +466,7 @@ class PostgresNotificationRepository:
                 NotificationCandidate(
                     account_id=account_id,
                     kind=NotificationKind.STAFF_BUILD_SUBMITTED,
-                    source_key=f"event:{event.id}:staff:{account_id}",
+                    source_key=NotificationSource(event.id, NotificationKind.STAFF_BUILD_SUBMITTED).key_for(account_id),
                     payload=payload,
                 )
                 for account_id in staff_account_ids
@@ -535,7 +489,7 @@ class PostgresNotificationRepository:
             NotificationCandidate(
                 account_id=build.submitter_account_id,
                 kind=kind,
-                source_key=f"event:{event.id}:owner:{build.submitter_account_id}",
+                source_key=NotificationSource(event.id, kind).key_for(build.submitter_account_id),
                 payload={"build_id": build.id},
             )
         ]
@@ -559,7 +513,9 @@ class PostgresNotificationRepository:
                 NotificationCandidate(
                     account_id=account_id,
                     kind=NotificationKind.CREATOR_BUILD_CONFIRMED,
-                    source_key=f"event:{event.id}:creator:{account_id}",
+                    source_key=NotificationSource(event.id, NotificationKind.CREATOR_BUILD_CONFIRMED).key_for(
+                        account_id
+                    ),
                     payload={"build_id": build.id, "creator_ids": [str(value) for value in creator_ids]},
                 )
                 for account_id in subscriber_ids
@@ -593,7 +549,9 @@ class PostgresNotificationRepository:
                 NotificationCandidate(
                     account_id=account_id,
                     kind=NotificationKind.RECORD_GAINED,
-                    source_key=f"event:{event.id}:record-build:{build_id}:account:{account_id}",
+                    source_key=NotificationSource(event.id, NotificationKind.RECORD_GAINED, build_id).key_for(
+                        account_id
+                    ),
                     payload=payload,
                 )
                 for account_id in sorted(recipients_by_build[build_id])
@@ -754,7 +712,7 @@ class PostgresNotificationRepository:
             return recipients
         creator_rows = (
             await session.execute(
-                select(BuildCreator.build_id, CreatorAlias.account_id, Account.public_creator_id)
+                select(BuildCreator.build_id, Account.id, Account.public_creator_id)
                 .join(CreatorAlias, BuildCreator.alias_id == CreatorAlias.id)
                 .join(Account, Account.id == CreatorAlias.account_id)
                 .where(BuildCreator.build_id.in_(build_ids))

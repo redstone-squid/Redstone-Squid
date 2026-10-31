@@ -1,5 +1,7 @@
 """Engine pagination and ModalSpec tests."""
 
+from typing import override
+
 import discord
 import pytest
 from discord.state import ConnectionState
@@ -165,6 +167,7 @@ def _total_text(solved) -> int:
 
 
 class Browser(Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         body = "\n".join(f"entry {index:04d}" for index in range(2000))
         return [Heading("Entries"), Code(body, overflow=Paginate(key="entries"))]
@@ -174,6 +177,7 @@ class TwoBrowsers(Component[sl.ComponentsV2Target]):
     def __init__(self) -> None:
         self.left_version = "old"
 
+    @override
     def render(self):
         left = tuple(f"{self.left_version} left {index}" for index in range(30))
         right = tuple(f"right {index}" for index in range(30))
@@ -189,6 +193,7 @@ class Catalog(Component[sl.ComponentsV2Target]):
     def __init__(self) -> None:
         self.lead: tuple[str, ...] = ()
 
+    @override
     def render(self):
         keys = (*self.lead, *(str(index) for index in range(36)))
         return [
@@ -230,7 +235,7 @@ class TestMountPagination:
         from squid_ui_discord import message_root as message_root_module
 
         calls = 0
-        planner = message_root_module.plan_document
+        planner = message_root_module.plan_document  # pyright: ignore[reportPrivateImportUsage]  # monkeypatch target: the caller resolves it here
 
         def counted(*args, **kwargs):
             nonlocal calls
@@ -510,7 +515,7 @@ class TestBuildModal:
 
         spec = ModalSpec(title="T", items=(LabelSpec(text="Name", input=TextInputSpec(label="n", key="name")),))
         modal = build_modal(spec, on_submit=on_submit)
-        next(iter(modal._inputs.values()))._value = "steve"  # pyrefly: ignore
+        next(iter(modal._inputs.values()))._value = "steve"  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore
 
         await modal.on_submit(interaction_harness())
 

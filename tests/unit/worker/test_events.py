@@ -1,6 +1,6 @@
 """Worker event tests: the worker serves no request and knows no chat client."""
 
-from typing import Any, cast
+from typing import cast, override
 
 from whenever import Instant
 
@@ -8,7 +8,6 @@ from squid.builds.domain import Build
 from squid.config import WorkerConfig
 from squid.events import DomainEvent, DomainEventDelivery, UnsupportedEventVersionError
 from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot, VoteStatus
-from squid.worker.app import DatabaseWorker
 from squid.worker.events import ApplyBuildVoteOutcomeHandler, CoreDomainEventRunner, MaterializeNotificationHandler
 from tests.support.voting import build_snapshot
 from tests.unit.worker.fakes import (
@@ -17,6 +16,7 @@ from tests.unit.worker.fakes import (
     StubNotificationService,
     StubVoteService,
     SupervisorRecorder,
+    make_worker,
     worker_services,
 )
 
@@ -26,6 +26,7 @@ class VoteRecorder(StubVoteService):
         self.snapshot = snapshot
         self.requested_ids: list[int] = []
 
+    @override
     async def get_session_by_id(self, vote_session_id: int) -> VoteSessionSnapshot:
         self.requested_ids.append(vote_session_id)
         return self.snapshot
@@ -36,10 +37,12 @@ class BuildRecorder(StubBuildService):
         self.confirmed: list[int] = []
         self.denied: list[int] = []
 
+    @override
     async def confirm(self, build_id: int) -> Build:
         self.confirmed.append(build_id)
         return cast(Build, object())
 
+    @override
     async def deny(self, build_id: int) -> Build:
         self.denied.append(build_id)
         return cast(Build, object())
@@ -52,17 +55,21 @@ class EventRecorder(StubEventService):
         self.failed: list[tuple[DomainEventDelivery, Exception]] = []
         self.rejected: list[tuple[DomainEventDelivery, Exception]] = []
 
+    @override
     async def claim(self, consumer: str, limit: int = 20) -> tuple[DomainEventDelivery, ...]:
         return self.deliveries
 
+    @override
     async def complete(self, delivery: DomainEventDelivery) -> bool:
         self.completed.append(delivery)
         return True
 
+    @override
     async def fail(self, delivery: DomainEventDelivery, error: Exception) -> bool:
         self.failed.append((delivery, error))
         return False
 
+    @override
     async def reject(self, delivery: DomainEventDelivery, error: Exception) -> bool:
         self.rejected.append((delivery, error))
         return True
@@ -80,6 +87,7 @@ class NotificationRecorder(StubNotificationService):
     def __init__(self) -> None:
         self.materialized: list[DomainEvent] = []
 
+    @override
     async def materialize(self, event: DomainEvent) -> None:
         self.materialized.append(event)
 
@@ -195,12 +203,9 @@ async def test_periodic_poll_materializes_an_event_without_a_listen_wake_hint() 
     events = EventRecorder(delivery)
     notifications = NotificationRecorder()
     supervisor = SupervisorRecorder()
-    worker = DatabaseWorker(
+    worker = make_worker(
         worker_services(events=events, notifications=notifications),
-        cast(Any, object()),
-        WorkerConfig(event_interval_seconds=7),
-        cast(Any, object()),
-        cast(Any, object()),
+        config=WorkerConfig(event_interval_seconds=7),
         supervisor=supervisor,
     )
 

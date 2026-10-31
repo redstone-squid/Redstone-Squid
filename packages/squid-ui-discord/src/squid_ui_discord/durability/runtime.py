@@ -10,6 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import override
 from uuid import uuid4
 
 import anyio
@@ -159,6 +160,7 @@ class DurableSession(Session):
             return DurabilityHealth.CLAIM_LOST
         return self._durable_runtime.health_for(self)
 
+    @override
     async def attach(
         self,
         message_root: MessageRoot,
@@ -193,6 +195,7 @@ class DurableSession(Session):
             return Rejected((self.snapshot,), RejectionReason.NOT_DURABLE)
         return result
 
+    @override
     async def join(
         self,
         user_id: int,
@@ -203,6 +206,7 @@ class DurableSession(Session):
         """Admit `user_id` and checkpoint the new membership."""
         return await self._durably(await super().join(user_id, when=when, expect=expect))
 
+    @override
     async def leave(self, user_id: int, *, expect: frozenset[int] | None = None) -> MembershipResult:
         """Remove `user_id` and checkpoint the new membership."""
         return await self._durably(await super().leave(user_id, expect=expect))
@@ -585,18 +589,14 @@ class DurableSessionRuntime:
         if not self.components.has(recipe):
             message = f"durable component {recipe!r} is not registered"
             raise MessageRootStateError(message)
-        async with session._lifecycle_lock:
-            if session._closed or session.root.finished:
-                return Rejected((session.snapshot,), RejectionReason.SESSION_FINISHED)
-            parent = session.root if parent is None else parent
-            if parent not in session.message_roots or parent.finished:
-                return Rejected((session.snapshot,), RejectionReason.SESSION_FINISHED)
-            result = await message_root.send(message_destination)
-            if isinstance(result, Abandoned):
+        parent = session.root if parent is None else parent
+        async with session._deliver_attachment(message_root, message_destination, parent=parent) as result:
+            if not isinstance(result, Delivered):
                 return result
             promoted = await self.frontend.promote(message_root, result.result)
+            if not session._accepts_attachment(parent):
+                return Rejected((session.snapshot,), RejectionReason.SESSION_FINISHED)
             if isinstance(promoted, NotDurable):
-                await message_root.finish()
                 return promoted
             active = self._active_for(session)
             message_root_id = str(uuid4())

@@ -1,7 +1,7 @@
 """The version catalogue screen."""
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 
 from squid.bot.version_tracking import VersionScreen
 from squid.versions.application import VersionService
@@ -14,10 +14,12 @@ class VersionRecorder(VersionService):
         self.list_calls: list[tuple[Edition, int | None]] = []
         self.add_calls: list[tuple[str, Edition | None]] = []
 
+    @override
     async def list_display(self, edition: Edition, *, limit: int | None = None) -> list[str]:
         self.list_calls.append((edition, limit))
         return ["1.21", "1.20"] if edition == "Java" else ["1.21.90"]
 
+    @override
     async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion:
         self.add_calls.append((version_string, edition))
         return MinecraftVersion("Java", 1, 22, 0)

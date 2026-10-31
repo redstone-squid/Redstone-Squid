@@ -12,7 +12,7 @@ There is no global pool, no lookup by type, and no way to reach a namespace nobo
 
 from collections.abc import Callable, Hashable, Mapping
 from types import MappingProxyType
-from typing import Any, cast, overload
+from typing import Any, cast, overload, override
 
 from squid_reactivity.shared_state import SharedState
 from squid_reactivity.topics import TopicBus
@@ -172,6 +172,7 @@ class SharedStatePool[ScopeT: Hashable, SharedT: SharedState[Any]]:
             raise TypeError(message)
         return created
 
+    @override
     def __repr__(self) -> str:
         return f"SharedStatePool({self.namespace.__name__}, {len(self._handles)} active)"
 

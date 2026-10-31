@@ -4,7 +4,7 @@ import asyncio
 import gc
 import weakref
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, override
 from unittest.mock import AsyncMock
 
 import anyio
@@ -20,6 +20,7 @@ from squid_ui_discord.testing import delivered_to, interaction_harness, message_
 
 
 class Empty(Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return []
 
@@ -44,7 +45,7 @@ async def test_reactor_refreshes_different_mounts_concurrently() -> None:
         return refresh
 
     for message_root in message_roots:
-        message_root.refresh = refresh_for(message_root)  # pyrefly: ignore
+        message_root.refresh = refresh_for(message_root)  # pyright: ignore[reportAttributeAccessIssue]  # a stub for the one `refresh(links=...)` call the scheduler makes  # pyrefly: ignore
         scheduler.schedule(message_root)
 
     async with anyio.create_task_group() as tasks:
@@ -74,7 +75,7 @@ async def test_publish_during_refresh_redelivers_without_overlap() -> None:
             await release.wait()
         running = False
 
-    message_root.refresh = refresh  # pyrefly: ignore
+    message_root.refresh = refresh  # pyright: ignore[reportAttributeAccessIssue]  # a stub for the one `refresh(links=...)` call the scheduler makes  # pyrefly: ignore
     scheduler.schedule(message_root)
 
     async with anyio.create_task_group() as tasks:
@@ -108,7 +109,7 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
         received_links = links
         monotonic += 0.5
 
-    message_root.refresh = refresh  # pyrefly: ignore
+    message_root.refresh = refresh  # pyright: ignore[reportAttributeAccessIssue]  # a stub for the one `refresh(links=...)` call the scheduler makes  # pyrefly: ignore
     with profiler.operation(OperationKind.DISPATCH, name="save"):
         scheduler.schedule(message_root)
         scheduler.schedule(message_root)
@@ -127,6 +128,7 @@ async def test_reactor_profile_includes_coalesced_wait_and_links_refresh() -> No
     assert dict((attribute.key, attribute.value) for attribute in queue_wait.attributes)["triggers"] == 2
     assert freshness.duration == pytest.approx(2.5)
     assert {counter.name: counter.value for counter in delivery.counters}["scheduler.coalesced"] == 1
+    assert received_links, "the scheduler must have passed its cause link to the refresh"
     assert received_links[0].trace_id == delivery.trace_id
 
 

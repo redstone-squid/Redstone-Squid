@@ -1,7 +1,7 @@
 """Public dogfood surface for the squid-ui engine."""
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -37,6 +37,7 @@ class SettingsRecorder(SettingsService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
 
@@ -194,7 +195,9 @@ async def test_forms_exhibit_validates_then_binds_typed_values_and_prefills() ->
     binding = message_root.plan.form_bindings["feedback"]
 
     rejected = await binding.spec.evaluate({"exhibit": "data", "headline": "Readable", "score": "1"})
-    caught = [issue.key for issue in rejected.errors if isinstance(issue, sl.forms.FieldError)]
+    caught = [
+        field.key for issue in rejected.errors if isinstance(issue, sl.forms.FieldError) for field in issue.fields
+    ]
     assert caught == ["detail"], "cross-field validation sees typed values"
 
     await message_root.dispatch_submit(
@@ -443,17 +446,34 @@ class TestLobby:
         guild_id: int = 5,
         host_id: int = 7,
     ) -> tuple[Any, Lobby]:
-        bot = make_layout_bot() if bot is None else bot
+        # A new name, not a rebind: the parameter's declared type keeps `None` in the
+        # union no matter what is assigned back to it.
+        host = make_layout_bot() if bot is None else bot
         context = ContextHarness(
             message=MessageHarness(message_id=guild_id),
-            bot=bot,
+            bot=host,
             user_id=host_id,
         )
         context.guild = Guild(id=guild_id)
         panel = Lobby(host_id)
-        outcome = await bot.app_ui.respond(cast(Any, context), panel)
+        request = await host.app_ui.request(cast(Any, context))
+        outcome = await request.respond(panel)
         assert isinstance(outcome, sd.Presented)
-        return bot, panel
+        return host, panel
+
+    async def test_duplicate_guild_lobby_keeps_the_existing_session(self) -> None:
+        bot, panel = await self.opened()
+        session = _lobby_session(panel)
+        context = ContextHarness(message=MessageHarness(message_id=5), bot=bot, user_id=8)
+        context.guild = Guild(id=5)
+
+        request = await bot.app_ui.request(cast(Any, context))
+        result = await request.respond(Lobby(8))
+
+        assert isinstance(result, sd.Rejected)
+        assert tuple(bot.sessions.active()) == (session,)
+        assert session.members == frozenset({7})
+        assert not session.root.finished
 
     async def test_the_host_opens_as_the_only_member(self) -> None:
         bot, panel = await self.opened()

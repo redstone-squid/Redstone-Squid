@@ -46,37 +46,80 @@ class Counter(sd.Screen):
 
 @bot.tree.command()
 async def counter(interaction: discord.Interaction) -> None:
-    await app_ui.respond(interaction, Counter())
+    request = await app_ui.request(interaction)
+    await request.respond(Counter())
 ```
 
-The owner scope resolves localization, user, destination, acknowledgement state, and response policy.
-For a logical session, declare a `SessionSpec` alongside the common screen policy:
+The request carries localization, user, destination, acknowledgement state, and response policy.
+Its scope owns the screens it opens.
+For a common logical session policy, choose a named screen preset:
 
 ```python
-class Lobby(sd.Screen):
-    session = sd.SessionSpec("lobby", scope=sd.ScopeKind.GUILD)
-    access = sd.Everyone()
-    audience = "public"
+class Lobby(sd.SharedGuildSessionScreen, session_name="lobby"):
+    pass
 ```
+
+`UserSessionScreen` opens one owner-only session per user; `UserGuildSessionScreen` opens one
+per user and guild. Both replace a previous session. `SharedGuildSessionScreen` is public,
+admits everyone, and rejects duplicate guild opens. All three preserve `Screen[OwnerT]` typing.
+For custom admission, capacity, quota, or scope, declare a complete `session = sd.SessionSpec(...)`
+instead of the `session_name` class keyword.
 
 Use `on_load()` for request-dependent loading before the first render; `opening` is available inside
-that hook. For one-off output, use the same scope directly or resolve a typed request:
+that hook. For one-off output, resolve a request once and use it for deferral and replies:
 
 ```python
-await app_ui.respond(interaction, sl.section(sl.heading("Saved"), sl.paragraph("Your changes are live.")))
-
-request = await app_ui.resolve(interaction)
+request = await app_ui.request(interaction)
 await request.defer("private")
 await request.respond("Saved.")
 ```
 
-`sd.install()` starts no background work. If the application uses scheduled topic refreshes or
-challenge flows, the host must supervise `runtime.run()` with its other process jobs. Call
-`await runtime.close()` during shutdown; cancellation remains the responsibility of the supervisor
-that started the task.
+`sd.install()` starts no tasks. Run the installed runtime before opening panels, even when
+using neither scheduled refreshes nor challenges: ordinary panel shutdown also needs its execution
+host. Await startup readiness, then finish the runtime before cancelling its runner:
+
+```python
+import anyio
+
+
+async def main(token: str) -> None:
+    async with bot:
+        async with anyio.create_task_group() as tasks:
+            await tasks.start(runtime.run)
+            try:
+                await bot.start(token)
+            finally:
+                with anyio.CancelScope(shield=True):
+                    try:
+                        await runtime.close()
+                    finally:
+                        tasks.cancel_scope.cancel()
+```
+
+The application owns its shutdown deadline. Shielding lets accepted cleanup finish when the
+caller is cancelled; resource-specific timeouts belong in that cleanup.
 
 Use `sd.DISCORD_V2_DPY27` for Components V2. Classic-message rendering is explicitly separate under
 `sd.classic` and uses `sd.DISCORD_V1_DPY27`; there is no implicit target switch.
+
+For exact Discord structure without tuple-heavy primitive constructors, use mode-specific factories:
+
+```python
+v2_card = sd.v2.panel(
+    sd.v2.heading("Build"),
+    "Exact text is promoted automatically.",
+    sd.v2.row(sd.v2.link_button("Open", build_url)),
+    accent=0xE74C3C,
+)
+
+classic_card = sd.classic.card(
+    "Classic embed description",
+    title="Build",
+    fields=(sd.classic.card_field("Status", "Ready"),),
+)
+```
+
+The factories produce the existing primitive dataclasses; direct constructors remain available.
 
 Next, use the [API map](squid-ui-api.md) or read the complete
 [architecture and ownership guide](squid-ui-architecture.md).

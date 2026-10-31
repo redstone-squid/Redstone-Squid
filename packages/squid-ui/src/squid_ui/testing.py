@@ -14,9 +14,10 @@ no names to `squid_ui` itself.
 
 import subprocess
 import sys
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, fields, is_dataclass
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from squid_ui.forms import FormIssue, FormLike, SubmitHandler
@@ -30,6 +31,7 @@ from squid_ui.interactions import (
     Visibility,
 )
 from squid_ui.runtime.component import AnyComponent, Component, render_component_tree
+from squid_ui.runtime.continuations import PostCommitOperation
 from squid_ui.semantic import ActionControl, AnyLayoutNode, ChoiceEvent, Choices, Controlled, FormTrigger
 from squid_ui.text import NEUTRAL, TextLike, resolve_text
 
@@ -138,7 +140,7 @@ def render_tree(component: AnyComponent) -> tuple[AnyLayoutNode, ...]:
 
 @dataclass
 class RecordingResponder:
-    """An `ActionResponder` whose ``finish`` records the end of one action's response authority.
+    """Record the response intents issued by an action handler.
 
     Every method a frontend must honestly implement, answered by appending to a list. A test
     asserts against `notices`, `redirects`, `forms`, `finished` and `invalidations` rather than
@@ -151,6 +153,7 @@ class RecordingResponder:
     forms: list[FormLike] = field(default_factory=list)
     finished: bool = False
     invalidations: int = 0
+    on_success_callbacks: list[Callable[[], Awaitable[Any]]] = field(default_factory=list)
 
     async def acknowledge(self) -> None:
         self.acknowledged += 1
@@ -161,8 +164,16 @@ class RecordingResponder:
     async def redirect(self, url: str) -> None:
         self.redirects.append(url)
 
-    async def finish(self) -> None:
+    def finish_on_success(self) -> None:
+        """Record a closure request; this double does not run a transaction or cleanup."""
         self.finished = True
+
+    def on_success[ValueT](
+        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
+    ) -> PostCommitOperation[ValueT]:
+        """Record the callback without committing an action or executing the work."""
+        self.on_success_callbacks.append(callback)
+        return PostCommitOperation(callback, name=name or "recorded operation", owner=self)
 
     async def present_form(
         self,
@@ -181,7 +192,7 @@ class RecordingResponder:
 
 
 class UntouchedResponder:
-    """A responder that rejects every call, including ``finish`` ending response authority.
+    """A responder that rejects every call.
 
     For the cases whose whole claim is that no frontend call happens -- a guard answering a
     verdict, a pure machine computing a transition. An unused `RecordingResponder` proves the
@@ -201,8 +212,14 @@ class UntouchedResponder:
     async def redirect(self, url: str) -> None:
         self._unexpected("redirect")
 
-    async def finish(self) -> None:
-        self._unexpected("finish")
+    def finish_on_success(self) -> None:
+        self._unexpected("finish_on_success")
+
+    def on_success[ValueT](
+        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
+    ) -> PostCommitOperation[ValueT]:
+        message = "this code was not supposed to reach the responder, but called on_success"
+        raise AssertionError(message)
 
     async def present_form(
         self,
@@ -376,8 +393,8 @@ def text_component(*lines: Line, **declared: object) -> AnyComponent:
 
         subject = text_component(lambda self: f"count {self.count}", count=0)
     """
+    from squid_reactivity.core import state
     from squid_ui.factories import paragraph
-    from squid_ui.runtime.reactivity import state
 
     def render(self: Any) -> list[Any]:
         return [paragraph(line(self) if callable(line) else line) for line in lines]
@@ -400,41 +417,14 @@ def assert_imports_without(imports: str | Sequence[str], *blocked: str) -> None:
     interpreter on PATH is not this venv when pytest is driven from Git Bash, and the
     assertions only mean anything in the interpreter that installed the package under test.
 
-    The child runs `_isolated_import` below, so the blocker is real source this repo lints and
-    type-checks rather than a string literal nothing can see into.
+    The child runs a standalone helper by file path, installing the import blocker
+    before loading this package or any of its optional dependencies.
     """
     names = (imports,) if isinstance(imports, str) else tuple(imports)
     argument = ", ".join(repr(name) for name in (names, *blocked))
-    code = f"from squid_ui.testing import _isolated_import; _isolated_import({argument})"
+    helper = Path(__file__).with_name("_import_isolation.py")
+    code = f"import runpy; runpy.run_path({str(helper)!r})['_isolated_import']({argument})"
     subprocess.run([sys.executable, "-c", code], check=True)
-
-
-def _isolated_import(imports: Sequence[str], *blocked: str) -> None:
-    """Import each of `imports` with `blocked` unimportable, and prove none of them arrived.
-
-    The child-process half of `assert_imports_without`. Both halves are needed: refusing the
-    import proves nothing reached for the module directly, and the `sys.modules` check catches
-    a name that arrived transitively before the finder was installed.
-    """
-    import importlib
-    import importlib.abc
-    import importlib.machinery
-
-    roots = {name.split(".", 1)[0] for name in blocked}
-
-    class BlockImports(importlib.abc.MetaPathFinder):
-        def find_spec(
-            self, fullname: str, path: Sequence[str] | None = None, target: object = None
-        ) -> importlib.machinery.ModuleSpec | None:
-            if fullname.split(".", 1)[0] in roots:
-                raise ModuleNotFoundError(fullname)
-            return None
-
-    sys.meta_path.insert(0, BlockImports())
-    for name in imports:
-        importlib.import_module(name)
-    leaked = roots & set(sys.modules)
-    assert not leaked, f"{list(imports)} pulled in {sorted(leaked)}"
 
 
 __all__ = [

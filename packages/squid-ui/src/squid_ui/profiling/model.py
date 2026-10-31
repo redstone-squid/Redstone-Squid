@@ -4,6 +4,7 @@ import math
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import override
 
 
 class OperationKind(StrEnum):
@@ -106,6 +107,7 @@ class TraceId:
             message = "trace IDs must contain 16 bytes and cannot be all zero"
             raise ValueError(message)
 
+    @override
     def __str__(self) -> str:
         return self.value.hex()
 
@@ -121,6 +123,7 @@ class SpanId:
             message = "span IDs must contain 8 bytes and cannot be all zero"
             raise ValueError(message)
 
+    @override
     def __str__(self) -> str:
         return self.value.hex()
 

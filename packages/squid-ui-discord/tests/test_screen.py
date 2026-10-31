@@ -1,6 +1,6 @@
 """Declarative Screen policy presented only through owner-scoped facades."""
 
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -39,6 +39,7 @@ def _ui(*, bus: LocalTopicBus | None = None) -> tuple[sd.Scope[Owner], FakeClien
 class BasicScreen(sd.Screen[Owner]):
     session = sd.SessionSpec("basic")
 
+    @override
     def render(self):
         return sl.heading("Basic")
 
@@ -61,6 +62,7 @@ def test_screen_compiles_its_class_policy_once() -> None:
         expiry = sd.PauseUpdates(10)
         chrome = CHROME
 
+        @override
         def render(self):
             return sl.heading("Declared")
 
@@ -91,16 +93,19 @@ async def test_facade_sets_opening_and_loads_before_first_render() -> None:
             order.append(f"construct:{label}")
             self.label = label
 
+        @override
         async def on_load(self) -> None:
             assert self.opening.source is context
             assert self.opening.owner is ui.owner
             order.append("load")
 
+        @override
         def render(self):
             order.append("render")
             return sl.heading(self.label)
 
-    outcome = await ui.respond(context, Loaded("ready"))
+    request = await ui.request(context)
+    outcome = await request.respond(Loaded("ready"))
 
     assert isinstance(outcome, sd.Presented)
     assert order == ["construct:ready", "load", "render"]
@@ -118,15 +123,18 @@ async def test_rejected_session_delivers_notice_without_loading_component() -> N
             admission=AdmissionSpec(collision=Reject(notice=Message("Already open"))),
         )
 
+        @override
         async def on_load(self) -> None:
             nonlocal loads
             loads += 1
 
+        @override
         def render(self):
             return sl.heading("Exclusive")
 
-    first = await ui.respond(context, Exclusive())
-    second = await ui.respond(context, Exclusive())
+    request = await ui.request(context)
+    first = await request.respond(Exclusive())
+    second = await request.respond(Exclusive())
 
     assert isinstance(first, sd.Presented)
     assert isinstance(second, sd.Rejected)
@@ -137,10 +145,11 @@ async def test_rejected_session_delivers_notice_without_loading_component() -> N
 async def test_facade_attaches_below_parent_session() -> None:
     ui, client = _ui()
     context = _context(client)
-    parent = await ui.respond(context, BasicScreen())
+    request = await ui.request(context)
+    parent = await request.respond(BasicScreen())
     assert isinstance(parent, sd.Presented)
 
-    child = await ui.respond(context, BasicScreen(), parent=parent.root)
+    child = await request.respond(BasicScreen(), parent=parent.root)
 
     assert isinstance(child, sd.Presented)
     assert child.session is parent.session
@@ -152,7 +161,8 @@ async def test_facade_passes_a_custom_session_key() -> None:
     ui, client = _ui()
     key = sd.SessionKey.custom("build-edit", (7, 99))
 
-    outcome = await ui.respond(_context(client), BasicScreen(), session_key=key)
+    request = await ui.request(_context(client))
+    outcome = await request.respond(BasicScreen(), session_key=key)
 
     assert isinstance(outcome, sd.Presented)
     assert len(ui.runtime.sessions.get(key)) == 1
@@ -165,10 +175,12 @@ async def test_renew_ephemeral_degrades_without_scheduler() -> None:
         session = sd.SessionSpec("renewable")
         expiry = sd.RenewEphemeral(45)
 
+        @override
         def render(self):
             return sl.heading("Renewable")
 
-    outcome = await ui.respond(_context(client), Renewable())
+    request = await ui.request(_context(client))
+    outcome = await request.respond(Renewable())
 
     assert isinstance(outcome, sd.Presented)
     assert outcome.root.expiry == sd.PauseUpdates(45)
@@ -181,10 +193,12 @@ async def test_follow_topics_selects_installed_scheduler() -> None:
         session = sd.SessionSpec("following")
         follow_topics = True
 
+        @override
         def render(self):
             return sl.heading("Following")
 
-    outcome = await ui.respond(_context(client), Following())
+    request = await ui.request(_context(client))
+    outcome = await request.respond(Following())
 
     assert isinstance(outcome, sd.Presented)
     assert outcome.root.scheduler is ui.runtime.scheduler
@@ -199,10 +213,12 @@ async def test_sessionless_screen_uses_personal_invoker_mount() -> None:
     class Plain(sd.Screen[Owner]):
         timeout = None
 
+        @override
         def render(self):
             return sl.heading("Plain")
 
-    outcome = await ui.respond(interaction, Plain())
+    request = await ui.request(interaction)
+    outcome = await request.respond(Plain())
 
     assert isinstance(outcome, sd.Presented)
     assert tuple(ui.runtime.sessions.active()) == ()
@@ -213,8 +229,8 @@ async def test_sessionless_screen_uses_personal_invoker_mount() -> None:
 async def test_call_policy_overrides_screen_policy() -> None:
     ui, client = _ui()
 
-    outcome = await ui.respond(
-        _context(client),
+    request = await ui.request(_context(client))
+    outcome = await request.respond(
         sd.Response(BasicScreen(), timeout=40),
         timeout=20,
     )
@@ -227,17 +243,100 @@ async def test_one_screen_instance_cannot_be_presented_twice() -> None:
     ui, client = _ui()
     screen = BasicScreen()
 
-    await ui.respond(_context(client), screen)
+    request = await ui.request(_context(client))
+    await request.respond(screen)
 
+    request = await ui.request(_context(client))
     with pytest.raises(RuntimeError, match="already been presented"):
-        await ui.respond(_context(client), screen)
+        await request.respond(screen)
 
 
 async def test_parent_and_key_are_mutually_exclusive() -> None:
     ui, client = _ui()
     context = _context(client)
-    parent = await ui.respond(context, BasicScreen())
+    request = await ui.request(context)
+    parent = await request.respond(BasicScreen())
     assert isinstance(parent, sd.Presented)
 
     with pytest.raises(TypeError, match="cannot be combined"):
-        await ui.respond(context, BasicScreen(), parent=parent.root, session_key="ambiguous")
+        await request.respond(BasicScreen(), parent=parent.root, session_key="ambiguous")
+
+
+class PersonalPreset(sd.UserSessionScreen[Owner], session_name="preset"):
+    @override
+    def render(self):
+        return sl.heading("Personal")
+
+
+class GuildPersonalPreset(sd.UserGuildSessionScreen[Owner], session_name="preset"):
+    @override
+    def render(self):
+        return sl.heading("Guild personal")
+
+
+class SharedPreset(sd.SharedGuildSessionScreen[Owner], session_name="preset"):
+    @override
+    def render(self):
+        return sl.heading("Shared")
+
+
+@pytest.mark.parametrize(
+    ("preset", "scope", "public"),
+    [
+        (PersonalPreset, sd.ScopeKind.USER, False),
+        (GuildPersonalPreset, sd.ScopeKind.USER_GUILD, False),
+        (SharedPreset, sd.ScopeKind.GUILD, True),
+    ],
+)
+async def test_session_presets_apply_policy_through_the_facade(
+    preset: type[sd.Screen[Owner]], scope: sd.ScopeKind, public: bool
+) -> None:
+    ui, client = _ui()
+    interaction = interaction_harness(user_id=7)
+    interaction.client = client
+    interaction.guild = message_harness(guild_id=42).guild
+    request = await ui.request(interaction)
+    first = await request.respond(preset())
+
+    assert isinstance(first, sd.Presented)
+    assert preset.session is not None
+    assert preset.session.scope is scope
+    assert first.session is not None
+    assert first.session.key == preset.session.key(sd.OpenContext.of(cast(discord.Interaction, interaction)))
+    assert first.root.access == (sd.Everyone() if public else sd.Owner(7))
+    assert interaction.response.send_message.await_args.kwargs["ephemeral"] is (not public)
+
+    second = await request.respond(preset())
+    assert isinstance(second, sd.Rejected if public else sd.Presented)
+
+
+def test_session_presets_require_a_stable_name() -> None:
+    with pytest.raises(TypeError, match="requires a non-empty"):
+
+        class Missing(sd.UserSessionScreen):
+            pass
+
+    with pytest.raises(TypeError, match="requires a non-empty"):
+
+        class Empty(sd.UserGuildSessionScreen, session_name=""):
+            pass
+
+
+def test_session_presets_allow_explicit_recipes_and_inheritance() -> None:
+    recipe = sd.SessionSpec("custom", scope=sd.ScopeKind.GLOBAL, admission=AdmissionSpec(limit=2, collision=Reject()))
+
+    class Customized(sd.SharedGuildSessionScreen[Owner]):
+        session = recipe
+        audience = "personal"
+
+    class Inherited(Customized):
+        pass
+
+    assert Customized.__response_spec__.session is recipe
+    assert Inherited.__response_spec__.session is recipe
+    assert Inherited.__response_spec__.audience == "personal"
+
+    with pytest.raises(TypeError, match="either session_name or session"):
+
+        class Ambiguous(sd.UserSessionScreen, session_name="other"):
+            session = recipe

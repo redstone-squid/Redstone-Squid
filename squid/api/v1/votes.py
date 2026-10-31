@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import CurrentCaller, VoteMembers, Votes
 from squid.api.errors import responses
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.security import Caller, require_consented_account, requires
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.errors import AuthorizationError, ConflictError, ValidationError
@@ -52,7 +52,7 @@ async def get_vote_session(
     "/{vote_session_id}/votes",
     response_model=VoteSessionDetail,
     responses=responses(400, 401, 403, 404, 409, 429, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="vote_cast",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )

@@ -11,20 +11,24 @@ import logging
 import secrets
 import time
 import weakref
-from collections.abc import Awaitable, Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager, nullcontext
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Mapping, Sequence
+from contextlib import asynccontextmanager, contextmanager, nullcontext
 from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from datetime import UTC, datetime
-from typing import Any, Unpack, cast, overload
+from typing import Any, Literal, Unpack, cast, overload
 
 import anyio
 import discord
 
 # `discord.ui.select` names the decorator, so the submodule holding `BaseSelect` is only
 # reachable by importing from it directly.
-from squid_reactivity.actions import ActionContext, ActorRef
+from squid_reactivity.actions import ActionCommit, ActionContext, ActionContinuation, ActorRef, current_action
+from squid_reactivity.core import on_action_commit, readonly_transaction, transaction
+from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity.resources import AsyncBinding, PendingMode, abandon_superseded_loads
+from squid_reactivity.topics import Address, SubscriptionReconciler
 from squid_ui import scene
 from squid_ui.chrome import CHROME_CONTEXT, LOCALIZATION_CONTEXT, localize_chrome
 from squid_ui.document import Asset, Document
@@ -41,6 +45,7 @@ from squid_ui.interactions import (
     Actor,
     EntitySelectionEvent,
     InteractionKind,
+    InvalidSubmitEvent,
     PressEvent,
     SelectionEvent,
     SubmitEvent,
@@ -58,7 +63,7 @@ from squid_ui.planning.navigation import (
     default_nav,
 )
 from squid_ui.planning.planner import plan as plan_document
-from squid_ui.planning.target import AnyTarget
+from squid_ui.planning.target import AnyTarget, Target
 from squid_ui.primitives.nodes import Button, Row
 from squid_ui.profiling import (
     ActionStatus,
@@ -79,15 +84,6 @@ from squid_ui.runtime.component import Component, ComponentTree
 from squid_ui.runtime.histories import History
 from squid_ui.runtime.owner import ComponentRuntime
 from squid_ui.runtime.presentation_state import PresentationState, apply_updates
-from squid_ui.runtime.reactivity import (
-    ActionCommit,
-    ActionContinuation,
-    on_action_commit,
-    readonly_transaction,
-    transaction,
-)
-from squid_ui.runtime.resources import AsyncBinding, PendingMode, abandon_superseded_loads
-from squid_ui.runtime.topics import Address, SubscriptionReconciler
 from squid_ui.scene.model import PlanResult
 from squid_ui.semantic import Status
 from squid_ui.sources import Position
@@ -95,6 +91,7 @@ from squid_ui.target_types import ComponentsV2Target, DiscordPy27Adapter, Discor
 from squid_ui.text import Localization, TextLike, localization_scope, resolve_text
 from squid_ui_discord import delivery as deliver
 from squid_ui_discord import live
+from squid_ui_discord._shutdown import Shutdown
 from squid_ui_discord.access import AccessPolicy, Allowed, Denied, Owner
 from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.adapter import require_discord_py_target
@@ -149,7 +146,6 @@ from squid_ui_discord.message_root_wiring import (
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import MountedRenderer, RoutedItem, RoutedSelectItem, V2Renderer
 from squid_ui_discord.rendering import RenderedMessage, render_message
-from squid_ui_discord.target import Target
 
 logger = logging.getLogger(__name__)
 
@@ -304,8 +300,8 @@ _SCHEDULED_REFRESH: ContextVar[object | None] = ContextVar("squid_ui_discord_sch
 class _LifecycleHooks:
     """One mount's lifecycle observers, snapshotted per firing so hooks may register hooks.
 
-    A failing observer is logged and swallowed: it must not abort another observer's
-    cleanup, nor the mount's own. The finish set fires at most once.
+    Presentation observers log failures. Finish observers collect failures in the
+    terminal result after every callback has been attempted. Finish fires at most once.
     """
 
     presented: list[PresentedHook] = dataclass_field(default_factory=list)
@@ -334,11 +330,15 @@ class _LifecycleHooks:
         if self.finish_fired:
             return
         self.finish_fired = True
+        errors: list[Exception] = []
         for hook in tuple(self.finish):
             try:
                 await hook(message_root)
-            except Exception:
-                logger.exception("finish hook failed for mount %s", message_root.id)
+            except Exception as error:
+                errors.append(error)
+        if errors:
+            message = "finish callbacks failed"
+            raise ExceptionGroup(message, errors)
 
 
 class MessageRoot[
@@ -442,6 +442,8 @@ class MessageRoot[
         self.runtime = ComponentRuntime(
             component,
             on_invalidate=self._mark_dirty,
+            execution_host=config.execution_host,
+            on_service_error=self._service_failed,
             context={
                 CHROME_CONTEXT: self.chrome,
                 LOCALIZATION_CONTEXT: localization,
@@ -489,7 +491,7 @@ class MessageRoot[
         topic_bus = scheduler.bus if isinstance(scheduler, TopicScheduler) else None
         reconciler_ref: weakref.ReferenceType[SubscriptionReconciler] | None = None
 
-        def collected(_reference: weakref.ReferenceType[AnyMessageRoot]) -> None:
+        def collected(_reference: weakref.ReferenceType[Any]) -> None:
             if reconciler_ref is not None and (reconciler := reconciler_ref()) is not None:
                 reconciler.close()
 
@@ -540,6 +542,11 @@ class MessageRoot[
         # Renders committed without a Discord edit because the reader already had them.
         self._suppressed = 0
         self._finished = False
+        self._shutdown = Shutdown()
+        self._finishing_hooks: list[Callable[[AnyMessageRoot], None]] = []
+        self._finish_children: Callable[[bool], Awaitable[None]] | None = None
+        self._shutdown_dependencies: tuple[AnyMessageRoot, ...] = ()
+        self._acceptance_errors: list[Exception] = []
         self._hooks = _LifecycleHooks()
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
@@ -574,7 +581,7 @@ class MessageRoot[
             RuntimeError: The mount has already finished.
             StaleHandleError: The supplied handle is already expired.
         """
-        async with self._render_lock:
+        async with self._rendering():
             if self._finished:
                 message = f"mount {self.id} has already finished"
                 raise RuntimeError(message)
@@ -589,7 +596,7 @@ class MessageRoot[
             if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
                 candidate: _Candidate[RenderTargetT] | None = None
                 try:
-                    candidate = cast(_Candidate[RenderTargetT], await self._stage_loaded())
+                    candidate = await self._stage_loaded()
                     wrote = await self._deliver(candidate, through=handle)
                 except Exception:
                     if candidate is not None:
@@ -779,7 +786,7 @@ class MessageRoot[
         Runs no `on_load`, because it cannot: the paths that can await one stage through
         :meth:`_stage_loaded`, and the terminal and stage-only paths deliberately do not.
         """
-        return self._draw(self.runtime.render(), disabled=disabled)
+        return self._draw(self.runtime.render(terminal=self._finished), disabled=disabled)
 
     def _document_for(self, tree: ComponentTree[RenderTargetT]) -> Document[RenderTargetT]:
         """Build the authored document once for an identical runtime tree and status."""
@@ -1058,7 +1065,7 @@ class MessageRoot[
         subscriber index and no back-reference, only the delta the transaction already built.
         """
         if mode is ActionMode.PARALLEL_READ:
-            with readonly_transaction():
+            with readonly_transaction(action_context=context):
                 yield
             return
         with transaction(action_context=context):
@@ -1079,7 +1086,7 @@ class MessageRoot[
             return
         self.runtime.invalidate_addresses(address for address in commit.patches.addresses() if address in watched)
 
-    def _render_message(self) -> Callable[..., RenderedMessage[Any]]:
+    def _render_message(self) -> Callable[..., RenderedMessage[Any, Any]]:
         """Which plan-and-render entry point this message root's target uses."""
         return self._binding.render_message
 
@@ -1104,7 +1111,7 @@ class MessageRoot[
         restore. Either way the component tree is untouched, which is the point — the handler
         is mid-transaction and a re-render would observe half-written state.
         """
-        async with self._render_lock:
+        async with self._rendering():
             if self._finished or self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
                 return None
             plan = self._plan
@@ -1318,14 +1325,46 @@ class MessageRoot[
 
     # --- Loading -----------------------------------------------------------------------
 
-    async def _stage_loaded(
-        self,
+    # Bind the target through self: Pyrefly otherwise substitutes the class default when
+    # comparing these overloads with their implementation.
+    @overload
+    async def _stage_loaded[TargetT: DiscordTarget](
+        self: MessageRoot[TargetT, AdapterT],
+        *,
+        disabled: bool = False,
+        profile: OperationRecorder | None = None,
+        preflight: Literal[False] = False,
+        reuse_committed: bool = False,
+    ) -> _Candidate[TargetT]: ...
+
+    @overload
+    async def _stage_loaded[TargetT: DiscordTarget](
+        self: MessageRoot[TargetT, AdapterT],
+        *,
+        disabled: Literal[True],
+        profile: OperationRecorder | None = None,
+        preflight: bool,
+        reuse_committed: bool = False,
+    ) -> _Candidate[TargetT]: ...
+
+    @overload
+    async def _stage_loaded[TargetT: DiscordTarget](
+        self: MessageRoot[TargetT, AdapterT],
+        *,
+        disabled: bool = False,
+        profile: OperationRecorder | None = None,
+        preflight: bool,
+        reuse_committed: bool = False,
+    ) -> _ApplicationCandidate[TargetT]: ...
+
+    async def _stage_loaded[TargetT: DiscordTarget](
+        self: MessageRoot[TargetT, AdapterT],
         *,
         disabled: bool = False,
         profile: OperationRecorder | None = None,
         preflight: bool = False,
         reuse_committed: bool = False,
-    ) -> _ApplicationCandidate[RenderTargetT]:
+    ) -> _ApplicationCandidate[TargetT]:
         """Stage a candidate whose components and atomic resources are settled.
 
         One pass per embedding tier: the root is known without rendering anything, and each
@@ -1574,9 +1613,7 @@ class MessageRoot[
         component = type(self.component)
         name = f"{component.__module__}.{component.__qualname__}"
         with self.profiler.operation(OperationKind.SEND, name=name, attributes={"message_root_id": self.id}) as profile:
-            with profile.span("render_lock"):
-                await self._render_lock.acquire()
-            try:
+            async with self._rendering(profile):
                 if self._finished:
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return deliver.Abandoned()
@@ -1588,7 +1625,7 @@ class MessageRoot[
                         self._subscriptions.discard()
                 # Component on_load and atomic resources settle first. Visible resources
                 # deliberately make this the pending paint and settle after it commits.
-                candidate = cast(_Candidate[RenderTargetT], await self._stage_loaded(profile=profile))
+                candidate = await self._stage_loaded(profile=profile)
                 try:
                     destination_type = (
                         f"{type(message_destination).__module__}.{type(message_destination).__qualname__}"
@@ -1619,8 +1656,6 @@ class MessageRoot[
                 profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
                 settled = all(not binding.pending for binding in candidate.tree.async_bindings)
                 return deliver.Delivered(result, settled=settled)
-            finally:
-                self._render_lock.release()
 
     def _swap_view(self, view: AnyMountedView) -> None:
         if self._view is not None and self._view is not view:
@@ -1807,9 +1842,7 @@ class MessageRoot[
         source = deliver.handle_from(interaction)
         acknowledge = False
         failure: Exception | None = None
-        with profile.operation.span("render_lock"):
-            await self._render_lock.acquire()
-        try:
+        async with self._rendering(profile.operation):
             if (
                 source is None
                 or source.expired()
@@ -1825,7 +1858,7 @@ class MessageRoot[
                 self._handle = source
                 candidate: _Candidate[RenderTargetT] | None = None
                 try:
-                    candidate = cast(_Candidate[RenderTargetT], await self._stage_loaded(profile=profile.operation))
+                    candidate = await self._stage_loaded(profile=profile.operation)
                     wrote = await self._deliver(candidate, through=source, profile=profile.operation)
                 except Exception as error:
                     if candidate is not None:
@@ -1844,8 +1877,6 @@ class MessageRoot[
                         if wrote is source:
                             profile.acknowledge("interaction_write")
                         acknowledge = wrote is not source
-        finally:
-            self._render_lock.release()
         if failure is not None:
             profile.presentation = PresentationStatus.FAILED
             await self.handle_error(interaction, failure, "renewal")
@@ -2309,13 +2340,7 @@ class MessageRoot[
         )
 
         async def handle() -> None:
-            with self._action_transaction(binding.mode, action_context):
-                # Before the handler: the entry is the transaction's whole delta either
-                # way, and reserving the history here is what makes a handler's own
-                # `record` the error it is.
-                if binding.record is not None:
-                    binding.record.record(binding.label)
-                await binding.handler(event)
+            await self._run_action(binding, event, action_context)
 
         try:
             handled = await self._run_middleware(request, handle, profile.operation)
@@ -2335,7 +2360,9 @@ class MessageRoot[
         self._renew(interaction, resumed=profile.resumed)
         painted = busy is not None and await busy.close()
         try:
-            profile.presentation = await self.refresh(interaction, profile=profile)
+            profile.presentation = await self._present_action_result(
+                cast(ActionResponder, event.responder), interaction, profile
+            )
         except Exception as error:
             profile.presentation = PresentationStatus.FAILED
             profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
@@ -2406,18 +2433,41 @@ class MessageRoot[
                 evaluation.attempted,
                 evaluation.errors,
             )
-            if evaluation.errors and spec.validation is FormValidationMode.RETRY:
+            submission_handler = binding.handler
+
+            async def retry() -> None:
                 await responder.retry_form(
                     spec.with_prefill(evaluation.attempted),
                     evaluation.errors,
                     key=key,
-                    handler=binding.handler,
+                    handler=submission_handler,
                     mode=binding.mode,
                     generation=self._generation if generation is None else generation,
                     actor_id=interaction.user.id,
                     label=binding.label,
                     record=binding.record,
                 )
+
+            if evaluation.errors and spec.on_invalid is not None:
+                event = InvalidSubmitEvent(
+                    actor,
+                    responder,
+                    self.localization.locale,
+                    {"frontend": "discord"},
+                    evaluation.values,
+                    evaluation.attempted,
+                    evaluation.errors,
+                    _retry=retry,
+                )
+                invalid_handler = spec.on_invalid
+
+                async def handle_invalid(submission: SubmitEvent) -> None:
+                    assert isinstance(submission, InvalidSubmitEvent)
+                    await invalid_handler(submission)
+
+                binding = replace(binding, handler=handle_invalid)
+            elif evaluation.errors and spec.validation is FormValidationMode.RETRY:
+                await retry()
                 profile.presentation = PresentationStatus.WRITTEN
                 profile.acknowledge("validation_retry")
                 profile.finish(DispatchDisposition.VALIDATION_RETRY)
@@ -2438,10 +2488,7 @@ class MessageRoot[
             )
 
             async def handle() -> None:
-                with self._action_transaction(binding.mode, action_context):
-                    if binding.record is not None:
-                        binding.record.record(binding.label)
-                    await binding.handler(event)
+                await self._run_action(binding, event, action_context)
 
             handled = await self._run_middleware(request, handle, profile.operation)
             profile.action = ActionStatus.HANDLED if handled else ActionStatus.SHORT_CIRCUITED
@@ -2454,12 +2501,72 @@ class MessageRoot[
         profile.acknowledge("action")
         self._renew(interaction)
         try:
-            profile.presentation = await self.refresh(interaction, profile=profile)
+            profile.presentation = await self._present_action_result(
+                cast(ActionResponder, event.responder), interaction, profile
+            )
         except Exception as error:
             profile.presentation = PresentationStatus.FAILED
             profile.finish(DispatchDisposition.DELIVERY_FAILED, error)
             raise
         profile.finish(DispatchDisposition.COMPLETED)
+
+    async def _present_action_result(
+        self, adapter: ActionResponder, interaction: discord.Interaction, profile: _DispatchProfile
+    ) -> PresentationStatus:
+        errors = await adapter._wait_after_commit()
+        presentation = PresentationStatus.NOT_REQUIRED
+        try:
+            if adapter._finish_accepted or self.finished:
+                await self.wait()
+                presentation = PresentationStatus.WRITTEN
+            else:
+                presentation = await self.refresh(interaction, profile=profile)
+        except Exception as error:
+            errors.append(error)
+        if errors:
+            message = "action committed, but its subsequent work failed"
+            raise ExceptionGroup(message, errors)
+        return presentation
+
+    async def _run_action(self, binding: ActionBinding, event: ActionEvent, context: ActionContext) -> None:
+        adapter = event.responder
+        assert isinstance(adapter, ActionResponder)
+        locked = False
+        try:
+            with self._action_transaction(binding.mode, context):
+                adapter._action_active = True
+                adapter._action_context = context
+                if binding.record is not None:
+                    binding.record.record(binding.label)
+                await binding.handler(event)
+                adapter._action_active = False
+                if adapter._finish_requested or adapter._after_commit:
+                    if binding.mode is not ActionMode.PARALLEL_READ and current_action() is not context:
+                        message = "after-commit work requires a dispatcher-owned transaction, not a nested dispatch"
+                        raise RuntimeError(message)
+                    if adapter._after_commit:
+                        assert self.config.execution_host is not None
+                        self.config.execution_host._require_running()
+                if adapter._finish_requested:
+                    # Reserve delivery before commit. Cancellation while acquiring the
+                    # lock rolls back the action and leaves its closure unaccepted.
+                    await self._render_lock.acquire()
+                    locked = True
+                    if not self._finished:
+                        if self.config.execution_host is None:
+                            message = "action closure requires a running UIExecutionHost"
+                            raise RuntimeError(message)
+                        self.config.execution_host._require_running()
+            if adapter._finish_requested:
+                # Commit, capture the terminal view, and accept closure without another
+                # checkpoint. The host executes delivery and cleanup outside the action.
+                self._accept_finish_locked(interaction=adapter.interaction)
+                adapter._finish_accepted = True
+        finally:
+            adapter._action_active = False
+            adapter._action_context = None
+            if locked:
+                self._render_lock.release()
 
     async def _run_middleware(
         self,
@@ -2551,9 +2658,7 @@ class MessageRoot[
     ) -> PresentationStatus:
         acknowledge = False
         presentation = PresentationStatus.NO_CHANGE
-        with operation.span("render_lock"):
-            await self._render_lock.acquire()
-        try:
+        async with self._rendering(operation):
             if self._finished:
                 return PresentationStatus.ABANDONED
             if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
@@ -2597,53 +2702,17 @@ class MessageRoot[
                         # it. Delivery through the standing handle leaves the click unanswered,
                         # and Discord shows the user "This interaction failed" three seconds later.
                         acknowledge = wrote is not source
-        finally:
-            self._render_lock.release()
         if acknowledge:
             await self._acknowledge(interaction, profile=dispatch, source="flush")
             if presentation is PresentationStatus.NO_CHANGE:
                 presentation = PresentationStatus.ACKNOWLEDGED
         return presentation
 
-    async def finish_via(self, interaction: discord.Interaction) -> None:
-        """End this message root through an interaction edit, as a Close button needs."""
-        run_hooks = False
-        try:
-            async with self._render_lock:
-                if self._finished:
-                    return
-                # Marked before delivery: a failed disable-edit must not resurrect the mount.
-                self._finished = True
-                candidate = (
-                    self._draw_renewal(disabled=True)
-                    if self._lifecycle is MessageRootStatus.RENEWAL_ARMED
-                    else self._stage(disabled=True)
-                )
-                source = deliver.handle_from(interaction)
-                try:
-                    wrote = await self._deliver(candidate, through=source, files=False)
-                    # Editing through the interaction's own handle answers the click; nothing else
-                    # does, whether it delivered through the standing handle or not at all.
-                    if wrote is None or wrote is not source:
-                        await self._acknowledge(interaction)
-                except Exception:
-                    if isinstance(candidate, _Candidate):
-                        self._rollback(candidate)
-                    raise
-                finally:
-                    # The terminal tree is never committed, so `finish` unmounts the live one once.
-                    candidate.view.stop()
-                    self._teardown()
-                    # In the `finally` rather than after it: a raising disable-edit propagates past
-                    # this block, and the mount is finished and torn down either way. An observer
-                    # that missed it would hold a dead mount forever.
-                    run_hooks = True
-        except BaseException:
-            if run_hooks:
-                await self._hooks.run_finish(self)
-            raise
-        if run_hooks:
-            await self._hooks.run_finish(self)
+    async def finish_via(self, interaction: discord.Interaction, *, wait: bool = True) -> None:
+        """Finish through this interaction, optionally waiting for cleanup and callbacks."""
+        await self._accept_finish(interaction=interaction)
+        if wait:
+            await self.wait()
 
     async def schedule(self) -> None:
         """Ask for an out-of-band re-render (background state change, not an interaction).
@@ -2693,9 +2762,7 @@ class MessageRoot[
         with self.profiler.operation(
             OperationKind.REFRESH, name=name, attributes={"message_root_id": self.id}, links=links
         ) as profile:
-            with profile.span("render_lock"):
-                await self._render_lock.acquire()
-            try:
+            async with self._rendering(profile):
                 if self._finished:
                     profile.set_result(TraceResult(TraceStatus.ABANDONED, presentation=PresentationStatus.ABANDONED))
                     return PresentationStatus.ABANDONED
@@ -2743,8 +2810,6 @@ class MessageRoot[
                 await self._settle_visible(candidate, profile=profile)
                 profile.set_result(TraceResult(TraceStatus.COMPLETED, presentation=PresentationStatus.WRITTEN))
                 return PresentationStatus.WRITTEN
-            finally:
-                self._render_lock.release()
 
     def on_presented(self, callback: PresentedHook) -> None:
         """Synchronously observe future generations after delivery and commit succeed.
@@ -2763,34 +2828,130 @@ class MessageRoot[
         self._hooks.committed.append(callback)
 
     def on_finish(self, callback: FinishHook) -> None:
-        """Call `callback` once this mount has finished, after its teardown.
+        """Run a callback after service cleanup, before shutdown completes.
 
-        Fires from every terminal path -- `finish`, `finish_via`, and the timeout that
-        delegates to `finish` -- including one whose disable-edit failed. Callbacks run in
-        registration order, and an exception is logged and swallowed: a broken observer must
-        not abort another's cleanup, nor teardown itself.
-
-        Calling `finish` from inside a hook is a no-op, so an observer that cascades to other
-        message roots cannot loop back into this one. A hook registered on an already-finished message root
-        never fires -- `finished` is the caller's to check first.
+        All callbacks are attempted, in registration order. Their failures join the
+        shutdown result. A callback may request another closure with ``wait=False``;
+        awaiting its own panel's completion raises instead of waiting for itself.
         """
         self._hooks.finish.append(callback)
 
-    async def finish(self, *, disable: bool = True, retain_routed: bool = False) -> None:
-        """End this message root and stop dispatch, optionally retaining stateless routes."""
-        run_hooks = False
+    async def finish(self, *, disable: bool = True, retain_routed: bool = False, wait: bool = True) -> None:
+        """Stop accepting interactions and finish this panel's owned work.
+
+        By default, wait for service cleanup and finish callbacks and raise any collected
+        failures. With ``wait=False``, return once closure is accepted; the host continues
+        shutdown. Repeated calls observe the same operation and its first accepted options.
+
+        Cancellation before acceptance leaves the panel unchanged. After acceptance,
+        cancelling this caller only stops its wait. Use ``wait()`` to observe completion
+        later, including failures. Stateless routes may remain usable with ``retain_routed``.
+
+        Inside an action transaction, use ``event.finish_on_success()`` for the current
+        panel or ``event.on_success(other_panel.finish)`` for another. Immediate closure
+        is rejected there because a later rollback could not reopen the panel.
+        """
+        await self._accept_finish(disable=disable, retain_routed=retain_routed)
+        if wait:
+            await self.wait()
+
+    async def wait(self) -> None:
+        """Wait for accepted shutdown, including cleanup and callbacks, without initiating it.
+
+        Concurrent and later callers receive the same terminal result. Cancelling a
+        waiter leaves shutdown running under the host. Service and callback tasks cannot
+        await a shutdown that requires their own completion.
+        """
+        self._check_shutdown_wait()
+        await self._shutdown.wait()
+
+    def _check_shutdown_wait(self) -> None:
+        self.runtime.check_service_wait()
+        self._shutdown.check_wait()
+        for child in self._shutdown_dependencies:
+            child._check_shutdown_wait()
+
+    async def dismiss(self, *, wait: bool = True) -> None:
+        """Delete the message and finish its owned work, optionally awaiting completion."""
+        await self._accept_finish(delete=True)
+        if wait:
+            await self.wait()
+
+    async def _accept_finish(
+        self,
+        *,
+        disable: bool = True,
+        retain_routed: bool = False,
+        interaction: discord.Interaction | None = None,
+        delete: bool = False,
+    ) -> None:
+        current = CURRENT_TRANSACTION.get()
+        if current is not None and not current.closed:
+            message = (
+                "immediate panel closure is unavailable inside a transaction; use event.finish_on_success() "
+                "for this panel or event.on_success(...) for another target"
+            )
+            raise RuntimeError(message)
+        async with self._render_lock:
+            self._accept_finish_locked(
+                disable=disable, retain_routed=retain_routed, interaction=interaction, delete=delete
+            )
+
+    def _accept_finish_locked(
+        self,
+        *,
+        disable: bool = True,
+        retain_routed: bool = False,
+        interaction: discord.Interaction | None = None,
+        delete: bool = False,
+    ) -> None:
+        if self._finished:
+            return
+        candidate: _Candidate[RenderTargetT] | _LifecycleCandidate | None = None
+
+        async def work() -> None:
+            await self._finish_work(disable, retain_routed, interaction, delete, candidate)
+
+        # Registration, logical closure and the terminal snapshot contain no checkpoint.
+        # Even immediate low-level closure captures the caller's current render state.
+        self._shutdown.start(self.config.execution_host, work)
+        self._finished = True
+        if not delete and disable and (self._handle is not None or interaction is not None):
+            try:
+                candidate = (
+                    self._draw_renewal(disabled=True)
+                    if self._lifecycle is MessageRootStatus.RENEWAL_ARMED
+                    else self._stage(disabled=True)
+                )
+            except Exception as error:
+                self._acceptance_errors.append(error)
+        for callback in self._finishing_hooks:
+            try:
+                callback(self)
+            except Exception as error:
+                self._acceptance_errors.append(error)
+
+    async def _finish_work(
+        self,
+        disable: bool,
+        retain_routed: bool,
+        interaction: discord.Interaction | None,
+        delete: bool,
+        candidate: _Candidate[RenderTargetT] | _LifecycleCandidate | None,
+    ) -> None:
+        errors = self._acceptance_errors
+        if self._finish_children is not None:
+            try:
+                await self._finish_children(disable)
+            except Exception as error:
+                errors.append(error)
         try:
             async with self._render_lock:
-                if self._finished:
-                    return
-                self._finished = True
                 try:
-                    if disable and self._handle is not None:
-                        candidate = (
-                            self._draw_renewal(disabled=True)
-                            if self._lifecycle is MessageRootStatus.RENEWAL_ARMED
-                            else self._stage(disabled=True)
-                        )
+                    if delete:
+                        if self._delete_handle is not None:
+                            await self._delete_handle.delete()
+                    elif candidate is not None:
                         if retain_routed:
                             children = (
                                 candidate.view.walk_children()
@@ -2801,65 +2962,90 @@ class MessageRoot[
                                 target = item.item if isinstance(item, discord.ui.DynamicItem) else item
                                 if isinstance(target, RoutedItem | RoutedSelectItem):
                                     target.disabled = False
-                        try:
-                            if await self._deliver(candidate, files=False) is None:
-                                logger.debug("could not disable controls on finish: no live edit handle")
-                                if isinstance(candidate, _Candidate):
-                                    self._rollback(candidate)
-                        except discord.HTTPException:
-                            logger.debug("could not disable controls on finish", exc_info=True)
-                            if isinstance(candidate, _Candidate):
-                                self._rollback(candidate)
-                        finally:
-                            candidate.view.stop()
+                        source = None if interaction is None else deliver.handle_from(interaction)
+                        wrote = await self._deliver(candidate, through=source, files=False)
+                        if wrote is None and isinstance(candidate, _Candidate):
+                            self._rollback(candidate)
+                        if interaction is not None and (wrote is None or wrote is not source):
+                            await self._acknowledge(interaction)
+                except discord.NotFound:
+                    if isinstance(candidate, _Candidate):
+                        self._rollback(candidate)
+                except Exception:
+                    if isinstance(candidate, _Candidate):
+                        self._rollback(candidate)
+                    raise
                 finally:
-                    # Neither the teardown nor the hooks are conditional on the disable-edit
-                    # working, or even on it failing in a way this anticipated. The mount is
-                    # finished either way, and an observer that never heard so would hold a dead
-                    # mount forever.
-                    self._teardown()
-                    run_hooks = True
-        except BaseException:
-            if run_hooks:
-                await self._hooks.run_finish(self)
-            raise
-        if run_hooks:
-            await self._hooks.run_finish(self)
-
-    async def dismiss(self) -> None:
-        """Delete the delivered message and finish this mount."""
-        run_hooks = False
+                    if candidate is not None:
+                        candidate.view.stop()
+        except Exception as error:
+            errors.append(error)
         try:
-            async with self._render_lock:
-                if self._finished:
-                    return
-                self._finished = True
-                try:
-                    if self._delete_handle is not None:
-                        await self._delete_handle.delete()
-                finally:
-                    self._teardown()
-                    run_hooks = True
-        except BaseException:
-            if run_hooks:
-                await self._hooks.run_finish(self)
-            raise
-        if run_hooks:
+            self._teardown()
+        except Exception as error:
+            errors.append(error)
+        try:
+            await self.runtime.wait_services()
+        except Exception as error:
+            errors.append(error)
+        try:
             await self._hooks.run_finish(self)
+        except Exception as error:
+            errors.append(error)
+        if errors:
+            message = "message root shutdown failed"
+            raise ExceptionGroup(message, errors)
 
     def _teardown(self) -> None:
         """Stop the live view and unmount the committed tree, once."""
+        cleanup: list[Callable[[], object]] = []
         if self._unwatch_expiry is not None:
-            self._unwatch_expiry()
+            cleanup.append(self._unwatch_expiry)
             self._unwatch_expiry = None
         if self._view is not None:
-            self._view.stop()
+            cleanup.append(self._view.stop)
             self._view = None
-        self._subscriptions.close()
         self._expiry_arm_requested = None
-        self.runtime.finish()
+        cleanup.extend((self._subscriptions.close, self.runtime.finish))
         if self._owns_render_cache:
-            self.render_cache.clear()
+            cleanup.append(self.render_cache.clear)
+        errors: list[Exception] = []
+        for callback in cleanup:
+            try:
+                callback()
+            except Exception as error:
+                errors.append(error)
+        if errors:
+            message = "message root teardown failed"
+            raise ExceptionGroup(message, errors)
+
+    @asynccontextmanager
+    async def _rendering(self, profile: OperationRecorder | None = None) -> AsyncIterator[None]:
+        """Hold the render lock for delivery, then wait for service cleanup.
+
+        Cleanup can render again, so release the lock before waiting for it.
+        """
+        with profile.span("render_lock") if profile is not None else nullcontext():
+            await self._render_lock.acquire()
+        try:
+            yield
+        finally:
+            self._render_lock.release()
+            if not self._finished:
+                await self._wait_services()
+
+    async def _wait_services(self) -> None:
+        """Give service cleanup time to finish, even when this operation is cancelled."""
+        with anyio.CancelScope(shield=True):
+            try:
+                await self.runtime.wait_services(allow_reentry=True)
+            except Exception:
+                logger.exception("service cleanup failed for mount %s", self.id)
+
+    async def _service_failed(self, error: Exception) -> None:
+        """Finish the message root when one of its services fails."""
+        logger.error("owned service failed for mount %s", self.id, exc_info=error)
+        await self.finish(wait=False)
 
     async def handle_timeout(self) -> None:
         await self.finish(disable=True, retain_routed=self.retain_routed_on_timeout)

@@ -415,6 +415,22 @@
           "code": "VALIDATION_ERROR"
         }
       }
+    },
+    "submission_media_attach": {
+      "success": {
+        "status": 200,
+        "body": {
+          "status": "completed"
+        }
+      },
+      "problem": {
+        "status": 404,
+        "body": {
+          "title": "Media not found",
+          "status": 404,
+          "code": "NOT_FOUND"
+        }
+      }
     }
   }
 }

@@ -1,7 +1,7 @@
 """Unit tests for the build log consent banner and its routed button."""
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import AsyncMock, MagicMock
 
 import discord
@@ -17,6 +17,7 @@ from squid.bot.submission.consent_banner import (
 )
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.settings.application import SettingsService
+from squid.submissions.errors import DraftCapacityExceededError
 from squid_ui_discord.testing import InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
 
@@ -53,10 +54,12 @@ class AccountRecorder(AccountService):
         self.reads: list[tuple[IdentityProvider, str]] = []
         self.creations: list[IdentityCreation] = []
 
+    @override
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         self.reads.append((provider, subject))
         return self.account
 
+    @override
     async def get_or_create_identity(
         self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
     ) -> Account:
@@ -68,6 +71,7 @@ class SettingsRecorder(SettingsService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
 
@@ -88,9 +92,11 @@ class StickyRecorder(BuildLogConsentStickyMessage):
         self.triggers: list[discord.TextChannel] = []
         self.activity: list[int] = []
 
+    @override
     async def trigger(self, channel: discord.TextChannel) -> None:
         self.triggers.append(channel)
 
+    @override
     def record_activity(self, channel_id: int) -> None:
         self.activity.append(channel_id)
 
@@ -102,6 +108,9 @@ class InferenceBot:
         self.inference_model = "gpt-5.6-luna"
         self.inference_reasoning_effort = "low"
         self.catbox = object()
+
+    async def refresh_posts(self, resource_kind: str, resource_key: str) -> None:
+        assert resource_kind == "inference_run"
 
     def for_build(self, build: object) -> object:
         raise AssertionError("the stub ingestion returns no builds")
@@ -172,6 +181,24 @@ async def test_consented_message_records_activity_and_proceeds_with_ingestion(
     assert cog.consent_sticky.triggers == []
     assert cog.consent_sticky.activity == [message.channel.id]
     mock_ingest.assert_awaited_once()
+
+
+async def test_full_inference_intake_replies_with_recovery_instructions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cog = _make_cog(account=_discord_account(consented=True))
+    message = _make_message()
+    mock_ingest = AsyncMock(side_effect=DraftCapacityExceededError(1_000))
+    monkeypatch.setattr("squid.bot.submission.submit.ingest_message_bundle", mock_ingest)
+
+    await cog.infer_build_from_message(message)
+
+    send = cast(AsyncMock, message.channel.send)
+    send.assert_awaited_once()
+    assert send.await_args is not None
+    response = send.await_args.args[0]
+    assert "intake is full" in response
+    assert "/build drafts" in response
 
 
 def _make_interaction(accounts: AccountService) -> Any:

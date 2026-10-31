@@ -87,12 +87,10 @@ type RedstonerAuthorizer = Callable[[], Awaitable[bool]]
 type PanelPublisher = Callable[[], Awaitable[None]]
 
 
-class RedstonerScreen(sd.Screen):
+class RedstonerScreen(sd.UserGuildSessionScreen, session_name="redstoner"):
     """A Redstoner deployment screen that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("redstoner", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300
-    audience = "personal"
 
     def __init__(
         self,
@@ -138,7 +136,7 @@ class RedstonerScreen(sd.Screen):
         await event.notice(tr(t"Redstoner role controls deployed."))
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
@@ -171,7 +169,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
                     [
                         # One persistent panel is shared by the whole channel, so a
                         # requester's locale would be misleading for everyone else.
-                        sl.primitives.Text("Redstoner role controls"),
+                        sd.v2.text("Redstoner role controls"),
                         sl.action_controls(
                             sl.routed_action_control(
                                 "I'm not a redstoner",
@@ -248,7 +246,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             role = redstoner_role.mention
             url = decision.source_message_url
             presentation = render_payload(
-                [sl.primitives.Text(_role_award_notice(member.mention, role, url))],
+                [sd.v2.text(_role_award_notice(member.mention, role, url))],
                 locale=locale,
             )
         await send_to(

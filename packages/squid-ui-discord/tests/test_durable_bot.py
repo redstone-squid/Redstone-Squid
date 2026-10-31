@@ -1,6 +1,7 @@
 """DurableBot startup ordering."""
 
 from dataclasses import dataclass
+from typing import override
 
 import anyio
 import discord
@@ -15,6 +16,7 @@ class StubRuntime(DurableSessionRuntime):
     events: list[str]
     report: RecoveryReport
 
+    @override
     async def run(self, *, task_status=anyio.TASK_STATUS_IGNORED) -> None:
         self.events.append("recover")
         task_status.started(self.report)
@@ -27,10 +29,12 @@ class StubBot(DurableBot):
         self.runtime = runtime
         self.events = events
 
+    @override
     def build_durable_runtime(self) -> DurableSessionRuntime:
         self.events.append("build")
         return self.runtime
 
+    @override
     async def on_sessions_recovered(self, report: RecoveryReport) -> None:
         assert report is self.runtime.report
         self.events.append("hook")

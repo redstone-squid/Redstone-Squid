@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import override
 from uuid import UUID
 
 from whenever import Instant
@@ -37,14 +38,17 @@ class NotificationRecorder(NotificationService):
         self.inbox_reads: list[InboxVisibility] = []
         self.read_changes: list[tuple[int, int, bool, InboxVisibility]] = []
 
+    @override
     async def preferences(self, account_id: int) -> NotificationPreferences:
         return NotificationPreferences(account_id, consent_pending=False)
 
+    @override
     async def subscriptions(self, account_id: int) -> tuple[NotificationSubscription, ...]:
         assert account_id == 7
         self.subscription_reads += 1
         return ()
 
+    @override
     async def subscribe(
         self,
         account_id: int,
@@ -56,6 +60,7 @@ class NotificationRecorder(NotificationService):
         self.subscribe_calls.append(SubscribeCall(account_id, kind, subject_id, record_filter))
         return NotificationSubscription(1, account_id, kind, subject_id, record_filter, Instant.now())
 
+    @override
     async def inbox(
         self,
         account_id: int,
@@ -72,6 +77,7 @@ class NotificationRecorder(NotificationService):
             prev=None,
         )
 
+    @override
     async def mark_read(
         self,
         account_id: int,
@@ -81,6 +87,7 @@ class NotificationRecorder(NotificationService):
     ) -> None:
         self.read_changes.append((account_id, notification_id, True, visibility))
 
+    @override
     async def mark_unread(
         self,
         account_id: int,

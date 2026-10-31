@@ -21,11 +21,13 @@ from typing import TYPE_CHECKING, Any, Never, Unpack, cast, overload
 
 import anyio
 import discord
+from anyio.abc import TaskStatus
 
+from squid_reactivity.topics import TopicBus
 from squid_ui.errors import SquidUiError
 from squid_ui.profiling import Profiler
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.topics import TopicBus
+from squid_ui.runtime.services import UIExecutionHost
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
@@ -103,6 +105,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         self.localization = localization
         self.response_defaults = response_defaults
         self.config = config
+        self.execution_host = sessions.defaults.execution_host
         self._scopes: list[Scope[Any]] = []
         self._scope_roots: dict[int, set[MessageRoot]] = {}
 
@@ -133,33 +136,48 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         """
         return self.defaults.mount(component, access=access, **overrides)
 
-    async def run(self) -> None:
-        """Serve this host's scheduler and challenge runner until the caller cancels.
+    async def run(self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED) -> None:
+        """Run the scheduler, challenges, and execution host until the caller cancels.
 
-        A convenience for a host content to supervise one job. A host wanting per-job health
-        granularity starts `scheduler.run()` and `challenges.run()` separately instead; the
-        package still starts nothing on its own either way.
+        Use ``await tasks.start(runtime.run)`` to wait until services can be mounted.
+        Applications that track each job's health can start ``scheduler.run()``,
+        ``challenges.run()``, and ``execution_host.run()`` separately instead.
         """
-        # A task group rather than gather: a failing job must cancel the other one rather
-        # than leave a half-served host running.
         async with anyio.create_task_group() as tasks:
             if self.scheduler is not None:
                 tasks.start_soon(self.scheduler.run)
             tasks.start_soon(self.challenges.run)
+            if self.execution_host is not None:
+                await tasks.start(self.execution_host.run)
+            task_status.started()
 
     async def close(self) -> None:
-        """Finish every session, then stop answering :meth:`of` for this client.
+        """Finish the sessions, close the execution host, and unregister this runtime.
 
-        Does not cancel `run()`: the task belongs to whoever started it, and a supervisor
-        that owns the job is the thing entitled to end it.
+        The application's task group still owns ``run()``. Cancel it there when the
+        application is ready to stop the scheduler and challenge runner too.
         """
+        errors: list[Exception] = []
         try:
             for scope in tuple(self._scopes):
-                await scope.close()
-            await self.sessions.close_all()
+                try:
+                    await scope.close()
+                except Exception as error:
+                    errors.append(error)
+            try:
+                await self.sessions.close_all()
+            except Exception as error:
+                errors.append(error)
         finally:
-            if _INSTALLED.get(self.client) is self:
-                del _INSTALLED[self.client]
+            try:
+                if self.execution_host is not None:
+                    await self.execution_host.close()
+            finally:
+                if _INSTALLED.get(self.client) is self:
+                    del _INSTALLED[self.client]
+        if errors:
+            message = "Discord runtime shutdown failed"
+            raise ExceptionGroup(message, errors)
 
     @classmethod
     def of(cls, source: RuntimeSource) -> DiscordUIRuntime[Any]:
@@ -236,13 +254,23 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     async def _close_scope[OwnerT](self, scope: Scope[OwnerT]) -> None:
         roots = self._scope_roots.pop(id(scope), set())
-        for message_root in tuple(roots):
-            session = self.sessions.session_for(message_root)
-            if session is not None:
-                await session.finish()
-            else:
-                await message_root.finish()
+        targets = {session.root if (session := self.sessions.session_for(root)) is not None else root for root in roots}
+        errors: list[Exception] = []
+        for message_root in targets:
+            try:
+                await message_root.finish(wait=False)
+            except Exception as error:
+                errors.append(error)
+        for message_root in targets:
+            if message_root.finished:
+                try:
+                    await message_root.wait()
+                except Exception as error:
+                    errors.append(error)
         self._scopes = [candidate for candidate in self._scopes if candidate is not scope]
+        if errors:
+            message = "UI scope shutdown failed"
+            raise ExceptionGroup(message, errors)
 
 
 def install[ClientT: discord.Client](
@@ -279,6 +307,8 @@ def install[ClientT: discord.Client](
         localization=localization,
     )
     defaults = selected.defaults
+    if defaults.execution_host is None:
+        defaults = defaults.replace(execution_host=UIExecutionHost())
     bus = selected.bus
     profiler = selected.profiler
     localization = selected.localization

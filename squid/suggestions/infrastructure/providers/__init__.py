@@ -6,7 +6,6 @@ from squid.suggestions.infrastructure.providers.search_query import SearchQueryP
 from squid.suggestions.infrastructure.providers.static import CallableProvider, StaticProvider
 from squid.suggestions.infrastructure.providers.taxonomy import (
     PendingTagProvider,
-    TaxonomyIdProvider,
     TaxonomyProvider,
 )
 from squid.suggestions.infrastructure.providers.versions import VersionIdProvider, VersionProvider
@@ -19,7 +18,6 @@ __all__ = [
     "SearchQueryProvider",
     "SearchSortProvider",
     "StaticProvider",
-    "TaxonomyIdProvider",
     "TaxonomyProvider",
     "VersionIdProvider",
     "VersionProvider",

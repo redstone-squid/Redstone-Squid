@@ -1,7 +1,7 @@
 """Durable schematic job contracts shared by clients and the worker."""
 
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
@@ -19,7 +19,9 @@ type SchematicJobOperation = Literal[
     "simulate",
     "autostack",
 ]
-type SchematicJobErrorKind = Literal["invalid", "too_large", "unavailable", "timeout", "crashed", "internal"]
+type SchematicJobErrorKind = Literal[
+    "invalid", "ambiguous_simulation_input", "too_large", "unavailable", "timeout", "crashed", "internal"
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +65,10 @@ class SchematicJobRepository(Protocol):
 
     async def claim(self, *, limit: int) -> Sequence[ClaimedSchematicJob]: ...
 
+    async def register_result_object(self, job: ClaimedSchematicJob, object_key: str) -> bool:
+        """Retain an output for cleanup only while this claim owns the job."""
+        ...
+
     async def complete(
         self,
         job: ClaimedSchematicJob,
@@ -84,7 +90,9 @@ class SchematicJobRepository(Protocol):
         retention_hours: int,
     ) -> bool: ...
 
-    async def cleanup(self, *, limit: int) -> Sequence[str]: ...
+    async def cleanup(self, delete_object: Callable[[str], Awaitable[None]], *, limit: int) -> int:
+        """Delete expired jobs only after their retained objects have been deleted."""
+        ...
 
 
 class SchematicJobService:
@@ -121,6 +129,10 @@ class SchematicJobService:
             raise InvalidStateError(msg)
         return await self._repository.claim(limit=limit)
 
+    async def register_result_object(self, job: ClaimedSchematicJob, object_key: str) -> bool:
+        """Record cleanup ownership before a worker uploads an output object."""
+        return await self._repository.register_result_object(job, object_key)
+
     async def complete(
         self,
         job: ClaimedSchematicJob,
@@ -153,8 +165,8 @@ class SchematicJobService:
             retention_hours=self._retention_hours,
         )
 
-    async def cleanup(self, *, limit: int = 100) -> Sequence[str]:
+    async def cleanup(self, delete_object: Callable[[str], Awaitable[None]], *, limit: int = 100) -> int:
         if not 1 <= limit <= 500:
             msg = tr(t"Schematic job cleanup limit must be between 1 and 500.")
             raise InvalidStateError(msg)
-        return await self._repository.cleanup(limit=limit)
+        return await self._repository.cleanup(delete_object, limit=limit)

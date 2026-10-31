@@ -1,8 +1,6 @@
 """HTTP API transport tests."""
 
 import re
-from dataclasses import dataclass, field
-from typing import override
 
 import httpx
 from fastapi import FastAPI
@@ -12,14 +10,10 @@ from pytest_mock import MockerFixture
 from squid.accounts.errors import MinecraftServiceUnavailableError
 from squid.api import app as api_app
 from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
-from squid.auth.application.web import WebSessionService
-from squid.auth.domain.sessions import WebSessionIdentity
 from squid.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.errors import ErrorCode, InternalError
-from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
 from tests.unit.api.fakes import (
     NONEXISTENT_UUID,
-    TEST_CONFIG,
     TEST_SYNERGY_SECRET,
     TEST_UUID,
     TEST_VERIFICATION_CODE,
@@ -27,36 +21,6 @@ from tests.unit.api.fakes import (
     MockErrorReports,
     build_app,
 )
-
-SESSION_IDENTITY = WebSessionIdentity(session_id="session", account_id=1, consent_pending=False)
-
-
-@dataclass(slots=True)
-class WebSessionRecorder(WebSessionService):
-    identity: WebSessionIdentity = SESSION_IDENTITY
-    logout_tokens: list[str] = field(default_factory=list)
-
-    @override
-    async def authenticate(self, token: str) -> WebSessionIdentity:
-        return self.identity
-
-    @override
-    async def logout(self, token: str) -> None:
-        self.logout_tokens.append(token)
-
-
-@dataclass(slots=True)
-class IdempotencyRecorder(IdempotencyService):
-    reservations: list[dict[str, object]] = field(default_factory=list)
-
-    @override
-    async def reserve(
-        self, *, caller: str, key: str, fingerprint: bytes, method: UnsafeHttpMethod, route: str
-    ) -> PendingRequest | StoredResponse:
-        self.reservations.append(
-            {"caller": caller, "key": key, "fingerprint": fingerprint, "method": method, "route": route}
-        )
-        raise AssertionError("a rejected write must not reserve an idempotency key")
 
 
 def test_run_api_configures_proxy_headers(mocker: MockerFixture) -> None:
@@ -119,71 +83,6 @@ def test_success_returns_verification_code(client: httpx.Client):
     )
     assert resp.status_code == 201
     assert resp.json() == TEST_VERIFICATION_CODE
-
-
-def test_cookie_authenticated_write_requires_csrf_header() -> None:
-    web_auth = WebSessionRecorder()
-    idempotency = IdempotencyRecorder()
-    app, database = build_app(web_auth=web_auth, idempotency=idempotency)
-
-    with TestClient(app, base_url="https://testserver") as session_client:
-        session_client.cookies.set("__Host-squid_session", "session-token")
-        session_client.cookies.set("squid_csrf", "csrf-token")
-        response = session_client.post("/v1/auth/logout", headers={"Idempotency-Key": "logout-request"})
-
-    assert database.closed
-    assert response.status_code == 403
-    assert idempotency.reservations == []
-    assert web_auth.logout_tokens == []
-
-
-def test_cookie_authenticated_write_rejects_mismatched_csrf_header() -> None:
-    web_auth = WebSessionRecorder()
-    app, database = build_app(web_auth=web_auth)
-
-    with TestClient(app, base_url="https://testserver") as session_client:
-        session_client.cookies.set("__Host-squid_session", "session-token")
-        session_client.cookies.set("squid_csrf", "csrf-token")
-        response = session_client.post("/v1/auth/logout", headers={"CSRF-Token": "wrong-token"})
-
-    assert database.closed
-    assert response.status_code == 403
-    assert web_auth.logout_tokens == []
-
-
-def test_cookie_authenticated_write_accepts_matching_csrf_header() -> None:
-    web_auth = WebSessionRecorder()
-    app, database = build_app(web_auth=web_auth)
-
-    with TestClient(app, base_url="https://testserver") as session_client:
-        session_client.cookies.set("__Host-squid_session", "session-token")
-        session_client.cookies.set("squid_csrf", "csrf-token")
-        response = session_client.post("/v1/auth/logout", headers={"CSRF-Token": "csrf-token"})
-
-    assert database.closed
-    assert response.status_code == 204
-    assert web_auth.logout_tokens == ["session-token"]
-
-
-def test_cookie_authenticated_frontend_can_fetch_its_no_store_csrf_token() -> None:
-    web_auth = WebSessionRecorder()
-    config = TEST_CONFIG.model_copy(
-        update={"api": TEST_CONFIG.api.model_copy(update={"cors_origins": ("https://catalogue.test",)})}
-    )
-    app, database = build_app(web_auth=web_auth, config=config)
-
-    with TestClient(app, base_url="https://api.catalogue.test") as session_client:
-        session_client.cookies.set("__Host-squid_session", "session-token")
-        session_client.cookies.set("squid_csrf", "csrf-token-with-enough-entropy")
-        response = session_client.get("/v1/auth/csrf", headers={"Origin": "https://catalogue.test"})
-
-    assert database.closed
-    assert response.status_code == 200
-    assert response.json() == {"csrf_token": "csrf-token-with-enough-entropy"}
-    assert response.headers["Cache-Control"] == "no-store"
-    assert response.headers["Pragma"] == "no-cache"
-    assert response.headers["Access-Control-Allow-Origin"] == "https://catalogue.test"
-    assert response.headers["Access-Control-Allow-Credentials"] == "true"
 
 
 def test_anonymous_frontend_cannot_fetch_a_csrf_token(client: httpx.Client) -> None:

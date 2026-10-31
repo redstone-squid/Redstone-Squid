@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from textwrap import dedent
-from typing import TYPE_CHECKING, Any, Protocol, cast, override
+from typing import TYPE_CHECKING, Any, Protocol, Self, cast, override
 
 import discord
 from discord import app_commands
@@ -59,10 +59,9 @@ class HelpClient(Protocol):
     def user(self) -> discord.ClientUser | None: ...
 
 
-class HelpScreen(sd.Screen):
+class HelpScreen(sd.UserSessionScreen, session_name="help"):
     """A command browser that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("help")
     timeout = 300
     audience = "public"
 
@@ -96,7 +95,9 @@ class HelpScreen(sd.Screen):
         description = (
             getattr(command, "help", None) or getattr(command, "description", None) or tr(t"No details provided")
         )
-        children = tuple(getattr(command, "commands", ()))
+        # Only the group variants of this union carry subcommands; the annotation keeps the
+        # duck-typed lookup from collapsing to an empty tuple type.
+        children: tuple[AnyCommand, ...] = tuple(getattr(command, "commands", ()))
         return sl.section(
             sl.heading(heading),
             sl.truncate(sl.paragraph(description)),
@@ -108,6 +109,7 @@ class HelpScreen(sd.Screen):
             else None,
         )
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._needle is not None and self._focused is None:
             needle = self._needle
@@ -142,7 +144,7 @@ class HelpScreen(sd.Screen):
         )
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 def _summary(command: AnyCommand) -> str:
@@ -175,11 +177,11 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         self.bot.help_command = Help()
 
     # /help [command]
-    @app_commands.command()
+    @sd.command()
     @app_commands.describe(command=app_commands.locale_str("The command to get help for."))
-    async def help(self, interaction: discord.Interaction[BotT], command: str | None):
+    async def help(self, request: sd.Request[Self], command: str | None) -> HelpScreen:
         """Show a grouped command directory or focused command details."""
-        await self.ui.respond(interaction, HelpScreen(self.bot, self._all_commands(), command))
+        return HelpScreen(self.bot, self._all_commands(), command)
 
     def _all_commands(self) -> list[AnyCommand]:
         """Every command in either public tree, de-duplicated by qualified name."""

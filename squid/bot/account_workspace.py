@@ -1,7 +1,7 @@
 """Canonical account workflow combining identity, consent, claims, and merge operations."""
 
 from collections.abc import Awaitable, Callable
-from typing import cast
+from typing import override
 
 import discord
 
@@ -23,12 +23,10 @@ from squid_ui_discord.modal import EntityField
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class AccountWorkspace(sd.Screen):
+class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
     """An account workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("account")
     timeout = 300
-    audience = "personal"
 
     def __init__(
         self,
@@ -60,6 +58,7 @@ class AccountWorkspace(sd.Screen):
         self._merge_code: str | None = None
         self._merge_decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         await self._rebuild()
 
@@ -97,6 +96,7 @@ class AccountWorkspace(sd.Screen):
             tabs.append(sp.Tab("review", tr(t"Review claims"), self._claims))
         self._tabs = sp.Tabs(tabs, key="account-tabs", title=tr(t"Account")).build_component()
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._merge_code is not None and self._merge_decision is not None:
             return (self.boundary(self._merge_decision, key="merge-decision"),)
@@ -120,10 +120,7 @@ class AccountWorkspace(sd.Screen):
         nodes.append(
             sl.form(
                 tr(t"Link Minecraft account"),
-                sl.forms.FormSpec(
-                    tr(t"Link Minecraft account"),
-                    (sl.forms.TextField(key="code", label=tr(t"In-game link code"), maximum=100),),
-                ),
+                _LinkForm().spec(),
                 key="link",
                 on_submit=self._link,
             )
@@ -144,10 +141,7 @@ class AccountWorkspace(sd.Screen):
             nodes.append(
                 sl.form(
                     tr(t"Refresh another member's Minecraft identity"),
-                    sl.forms.FormSpec(
-                        tr(t"Refresh member identity"),
-                        (EntityField(key="user", label=tr(t"Discord member")),),
-                    ),
+                    _RefreshMemberForm().spec(),
                     key="staff-refresh",
                     on_submit=self._refresh_member_identity,
                 )
@@ -158,10 +152,7 @@ class AccountWorkspace(sd.Screen):
         return (
             sl.form(
                 tr(t"Claim creator credit"),
-                sl.forms.FormSpec(
-                    tr(t"Claim an older creator name"),
-                    (sl.forms.TextField(key="name", label=tr(t"Creator name"), maximum=100),),
-                ),
+                _ClaimForm().spec(),
                 key="claim",
                 on_submit=self._claim,
             ),
@@ -175,10 +166,7 @@ class AccountWorkspace(sd.Screen):
             ),
             sl.form(
                 tr(t"Merge another account into this one"),
-                sl.forms.FormSpec(
-                    tr(t"Preview account merge"),
-                    (sl.forms.TextField(key="code", label=tr(t"Merge code"), maximum=100),),
-                ),
+                _MergeForm().spec(),
                 key="merge",
                 on_submit=self._request_merge,
             ),
@@ -203,7 +191,8 @@ class AccountWorkspace(sd.Screen):
 
     async def _link(self, event: sl.SubmitEvent) -> None:
         account = self._account
-        code = cast(str, event.values["code"])
+        form = _LinkForm.from_submission(event)
+        code = form.code
         attempted_by = (IdentityProvider.DISCORD, str(self._actor_id))
         reservation = await self._accounts.reserve_minecraft_link(
             code,
@@ -289,7 +278,9 @@ class AccountWorkspace(sd.Screen):
         if not await self._authorize_claim(ACCOUNT_IDENTITY_REFRESH_ANY):
             await event.notice(tr(t"You are no longer allowed to refresh another member's identity."))
             return
-        member = cast(discord.Member | discord.User, event.values["user"])
+        form = _RefreshMemberForm.from_submission(event)
+        member = form.user
+        assert isinstance(member, discord.abc.Snowflake)
         account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(member.id))
         if account is None or account.id is None:
             raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(member.id))
@@ -298,7 +289,8 @@ class AccountWorkspace(sd.Screen):
         await event.notice(refresh_message(refresh))
 
     async def _claim(self, event: sl.SubmitEvent) -> None:
-        claim = await self._accounts.request_alias_claim(self._account_id(), cast(str, event.values["name"]))
+        form = _ClaimForm.from_submission(event)
+        claim = await self._accounts.request_alias_claim(self._account_id(), form.name)
         claim_id = claim.id
         alias_name = claim.alias_name
         await event.notice(tr(t"Claim #{claim_id} for **{alias_name}** is awaiting staff approval."))
@@ -311,7 +303,8 @@ class AccountWorkspace(sd.Screen):
         )
 
     async def _request_merge(self, event: sl.SubmitEvent) -> None:
-        code = cast(str, event.values["code"])
+        form = _MergeForm.from_submission(event)
+        code = form.code
         preview = await self._accounts.preview_merge(self._account_id(), code)
         aliases = len(preview.alias_names)
         identities = preview.identity_count
@@ -350,4 +343,28 @@ class AccountWorkspace(sd.Screen):
         return account.id
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
+
+
+class _LinkForm(sl.forms.Form):
+    title = tr(t"Link Minecraft account")
+
+    code = sl.forms.TextField(label=tr(t"In-game link code"), maximum=100)
+
+
+class _RefreshMemberForm(sl.forms.Form):
+    title = tr(t"Refresh member identity")
+
+    user = EntityField(label=tr(t"Discord member"))
+
+
+class _ClaimForm(sl.forms.Form):
+    title = tr(t"Claim an older creator name")
+
+    name = sl.forms.TextField(label=tr(t"Creator name"), maximum=100)
+
+
+class _MergeForm(sl.forms.Form):
+    title = tr(t"Preview account merge")
+
+    code = sl.forms.TextField(label=tr(t"Merge code"), maximum=100)

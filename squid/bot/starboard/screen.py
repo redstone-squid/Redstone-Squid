@@ -1,7 +1,7 @@
 """Canonical starboard configuration workspace."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Protocol, cast
+from typing import Protocol, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -37,12 +37,10 @@ class StarboardOperations(Protocol):
     async def set_role_multiplier(self, config: StarboardConfig, role_id: int, multiplier: float | None) -> None: ...
 
 
-class StarboardScreen(sd.Screen):
+class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
     """A guild starboard workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("starboard", scope=sd.ScopeKind.USER_GUILD)
     timeout = 300
-    audience = "personal"
 
     def __init__(
         self,
@@ -63,6 +61,7 @@ class StarboardScreen(sd.Screen):
         self._deleting: str | None = None
         self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
@@ -90,6 +89,7 @@ class StarboardScreen(sd.Screen):
             tabs.append(sp.Tab("weights", tr(t"Role weights"), self._weight_nodes()))
         self._tabs = sp.Tabs(tabs, key="starboard-tabs", title=tr(t"Starboard configuration")).build_component()
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._deleting is not None and self._decision is not None:
             board_name = self._deleting
@@ -111,14 +111,7 @@ class StarboardScreen(sd.Screen):
         return (
             sl.form(
                 tr(t"Create starboard"),
-                sl.forms.FormSpec(
-                    tr(t"Create starboard"),
-                    (
-                        sl.forms.TextField(key="name", label=tr(t"Name"), default="main", maximum=100),
-                        sl.forms.IntField(key="channel_id", label=tr(t"Destination channel ID"), minimum=1),
-                        sl.forms.FloatField(key="required", label=tr(t"Post threshold"), default=3.0),
-                    ),
-                ),
+                _CreateBoardForm().spec(),
                 key="create-board",
                 on_submit=self._create,
             ),
@@ -130,21 +123,7 @@ class StarboardScreen(sd.Screen):
             nodes.append(
                 sl.form(
                     tr(t"Edit setting"),
-                    sl.forms.FormSpec(
-                        tr(t"Edit starboard setting"),
-                        (
-                            sl.forms.TextField(key="name", label=tr(t"Starboard name"), maximum=100),
-                            sl.forms.ChoiceField(
-                                key="setting",
-                                label=tr(t"Setting"),
-                                options=tuple(
-                                    sl.forms.ChoiceOption(key, key.replace("_", " ").title(), key)
-                                    for key in EDITABLE_SETTINGS
-                                ),
-                            ),
-                            sl.forms.TextField(key="value", label=tr(t"Value"), maximum=200),
-                        ),
-                    ),
+                    _EditSettingForm().spec(),
                     key="edit-setting",
                     on_submit=self._edit,
                 )
@@ -153,10 +132,7 @@ class StarboardScreen(sd.Screen):
             nodes.append(
                 sl.form(
                     tr(t"Delete board"),
-                    sl.forms.FormSpec(
-                        tr(t"Choose starboard to delete"),
-                        (sl.forms.TextField(key="name", label=tr(t"Starboard name"), maximum=100),),
-                    ),
+                    _DeleteBoardForm().spec(),
                     key="delete-board",
                     on_submit=self._request_delete,
                 )
@@ -167,31 +143,7 @@ class StarboardScreen(sd.Screen):
         return (
             sl.form(
                 tr(t"Edit emoji"),
-                sl.forms.FormSpec(
-                    tr(t"Add or remove starboard emoji"),
-                    (
-                        sl.forms.TextField(key="name", label=tr(t"Starboard name"), maximum=100),
-                        sl.forms.ChoiceField(
-                            key="operation",
-                            label=tr(t"Operation"),
-                            options=(
-                                sl.forms.ChoiceOption("add", tr(t"Add or replace"), "add"),
-                                sl.forms.ChoiceOption("remove", tr(t"Remove"), "remove"),
-                            ),
-                        ),
-                        sl.forms.TextField(key="emoji", label=tr(t"Emoji"), maximum=100),
-                        sl.forms.ChoiceField(
-                            key="direction",
-                            label=tr(t"Direction"),
-                            default="up",
-                            options=(
-                                sl.forms.ChoiceOption("up", tr(t"Up"), "up"),
-                                sl.forms.ChoiceOption("down", tr(t"Down"), "down"),
-                            ),
-                        ),
-                        sl.forms.FloatField(key="multiplier", label=tr(t"Multiplier"), default=1.0),
-                    ),
-                ),
+                _EditEmojiForm().spec(),
                 key="edit-emoji",
                 on_submit=self._edit_emoji,
             ),
@@ -201,18 +153,7 @@ class StarboardScreen(sd.Screen):
         return (
             sl.form(
                 tr(t"Edit role weight"),
-                sl.forms.FormSpec(
-                    tr(t"Set or remove role multiplier"),
-                    (
-                        sl.forms.TextField(key="name", label=tr(t"Starboard name"), maximum=100),
-                        sl.forms.IntField(key="role_id", label=tr(t"Role ID"), minimum=1),
-                        sl.forms.FloatField(
-                            key="multiplier",
-                            label=tr(t"Multiplier; leave empty to remove"),
-                            required=False,
-                        ),
-                    ),
-                ),
+                _EditWeightForm().spec(),
                 key="edit-weight",
                 on_submit=self._edit_weight,
             ),
@@ -221,9 +162,10 @@ class StarboardScreen(sd.Screen):
     async def _create(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_CREATE):
             return
-        channel_id = cast(int, event.values["channel_id"])
-        name = cast(str, event.values["name"])
-        required = cast(float, event.values["required"])
+        form = _CreateBoardForm.from_submission(event)
+        channel_id = form.channel_id
+        name = form.name
+        required = form.required
         created = await self._create_board(channel_id, name, required)
         await self._refresh()
         created_name = created.name
@@ -232,9 +174,10 @@ class StarboardScreen(sd.Screen):
     async def _edit(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_EDIT):
             return
-        name = cast(str, event.values["name"])
-        setting = cast(str, event.values["setting"])
-        value = _parse_setting(setting, cast(str, event.values["value"]))
+        form = _EditSettingForm.from_submission(event)
+        name = form.name
+        setting = form.setting
+        value = _parse_setting(setting, form.value)
         updated = await self._operations.update_settings(self._guild_id, name, **{setting: value})
         if updated is None:
             await event.notice(tr(t"No starboard with that name exists."))
@@ -245,16 +188,18 @@ class StarboardScreen(sd.Screen):
     async def _edit_emoji(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_EMOJI_EDIT):
             return
-        config = await self._named(event, cast(str, event.values["name"]))
+        form = _EditEmojiForm.from_submission(event)
+
+        config = await self._named(event, form.name)
         if config is None:
             return
-        emoji = cast(str, event.values["emoji"])
-        operation = cast(str, event.values["operation"])
+        emoji = form.emoji
+        operation = form.operation
         aliases = tuple(item for item in config.emojis if item.emoji != emoji)
         if operation == "add":
-            direction = cast(str, event.values["direction"])
-            multiplier = cast(float, event.values["multiplier"])
-            aliases += (StarboardEmoji(emoji, cast(StarboardDirection, direction), multiplier, len(aliases)),)
+            direction = form.direction
+            multiplier = form.multiplier
+            aliases += (StarboardEmoji(emoji, direction, multiplier, len(aliases)),)
         await self._operations.set_emojis(config, aliases)
         await self._refresh()
         await event.notice(tr(t"Starboard emojis updated."))
@@ -262,18 +207,20 @@ class StarboardScreen(sd.Screen):
     async def _edit_weight(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_WEIGHT_EDIT):
             return
-        config = await self._named(event, cast(str, event.values["name"]))
+        form = _EditWeightForm.from_submission(event)
+        config = await self._named(event, form.name)
         if config is None:
             return
-        role_id = cast(int, event.values["role_id"])
-        multiplier = cast(float | None, event.values.get("multiplier"))
+        role_id = form.role_id
+        multiplier = form.multiplier
         await self._operations.set_role_multiplier(config, role_id, multiplier)
         await event.notice(tr(t"Starboard role weight updated."))
 
     async def _request_delete(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_DELETE):
             return
-        self._deleting = cast(str, event.values["name"])
+        form = _DeleteBoardForm.from_submission(event)
+        self._deleting = form.name
         self._decision = sp.Decision[sl.ComponentsV2Target](
             tr(t"Deleting a starboard keeps its audit history but disables its configuration."),
             (
@@ -312,7 +259,7 @@ class StarboardScreen(sd.Screen):
         return False
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 def _board_detail(board: StarboardConfig) -> sl.semantic.Fields:
@@ -342,3 +289,56 @@ def _parse_setting(setting: str, value: str) -> object:
         case _:
             message = f"Unknown starboard setting: {setting}"
             raise ValueError(message)
+
+
+class _CreateBoardForm(sl.forms.Form):
+    title = tr(t"Create starboard")
+
+    name = sl.forms.TextField(label=tr(t"Name"), default="main", maximum=100)
+    channel_id = sl.forms.IntField(label=tr(t"Destination channel ID"), minimum=1)
+    required = sl.forms.FloatField(label=tr(t"Post threshold"), default=3.0)
+
+
+class _EditSettingForm(sl.forms.Form):
+    title = tr(t"Edit starboard setting")
+
+    name = sl.forms.TextField(label=tr(t"Starboard name"), maximum=100)
+    setting = sl.forms.ChoiceField(
+        label=tr(t"Setting"),
+        options=tuple(sl.forms.ChoiceOption(key, key.replace("_", " ").title(), key) for key in EDITABLE_SETTINGS),
+    )
+    value = sl.forms.TextField(label=tr(t"Value"), maximum=200)
+
+
+class _DeleteBoardForm(sl.forms.Form):
+    title = tr(t"Choose starboard to delete")
+
+    name = sl.forms.TextField(label=tr(t"Starboard name"), maximum=100)
+
+
+class _EditEmojiForm(sl.forms.Form):
+    title = tr(t"Add or remove starboard emoji")
+
+    name = sl.forms.TextField(label=tr(t"Starboard name"), maximum=100)
+    operation = sl.forms.ChoiceField(
+        label=tr(t"Operation"),
+        options=(
+            sl.forms.ChoiceOption("add", tr(t"Add or replace"), "add"),
+            sl.forms.ChoiceOption("remove", tr(t"Remove"), "remove"),
+        ),
+    )
+    emoji = sl.forms.TextField(label=tr(t"Emoji"), maximum=100)
+    direction = sl.forms.ChoiceField[StarboardDirection](
+        label=tr(t"Direction"),
+        default="up",
+        options=(sl.forms.ChoiceOption("up", tr(t"Up"), "up"), sl.forms.ChoiceOption("down", tr(t"Down"), "down")),
+    )
+    multiplier = sl.forms.FloatField(label=tr(t"Multiplier"), default=1.0)
+
+
+class _EditWeightForm(sl.forms.Form):
+    title = tr(t"Set or remove role multiplier")
+
+    name = sl.forms.TextField(label=tr(t"Starboard name"), maximum=100)
+    role_id = sl.forms.IntField(label=tr(t"Role ID"), minimum=1)
+    multiplier = sl.forms.FloatField(label=tr(t"Multiplier; leave empty to remove"), required=False)

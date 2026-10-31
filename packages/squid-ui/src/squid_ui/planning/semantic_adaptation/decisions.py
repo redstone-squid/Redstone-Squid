@@ -263,7 +263,7 @@ def nominate_decisions(
                 # above because its children may hold semantic nodes, and `Variants` ladders
                 # belong to frontier.py, not to semantic nomination.
                 return
-            case _ as unreachable:
+            case _ as unreachable:  # pyright: ignore[reportUnnecessaryComparison]  # unmatchable is the point
                 assert_never(unreachable)
 
     for index, node in enumerate(nodes):

@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from string.templatelib import Interpolation, Template
-from typing import Any, Protocol
+from typing import Any, Protocol, override
 
 
 class Markup(StrEnum):
@@ -174,12 +174,15 @@ class _SafeFormatValue:
     value: object
     markup: Markup
 
+    @override
     def __str__(self) -> str:
         return _safe_value(self.value, self.markup)
 
+    @override
     def __repr__(self) -> str:
         return _safe_value(repr(self.value), self.markup)
 
+    @override
     def __format__(self, format_spec: str) -> str:
         if not format_spec:
             return _safe_value(self.value, self.markup)

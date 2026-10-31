@@ -135,7 +135,7 @@ async def test_source_byte_budget_is_checked_before_probe(tmp_path: Path) -> Non
     with pytest.raises(MediaLimitExceededError) as raised:
         await service.normalize(command)
 
-    assert raised.value.violation.measure is MediaLimitMeasure.SOURCE_BYTES
+    assert raised.value.violations[0].measure is MediaLimitMeasure.SOURCE_BYTES
     assert normalizer.probe_calls == []
 
 
@@ -169,7 +169,7 @@ async def test_decoded_work_budget_is_checked_before_decode(tmp_path: Path) -> N
     with pytest.raises(MediaLimitExceededError) as raised:
         await service.normalize(request(tmp_path))
 
-    assert raised.value.violation.measure is MediaLimitMeasure.DECODED_PIXELS_PER_SECOND
+    assert raised.value.violations[0].measure is MediaLimitMeasure.DECODED_PIXELS_PER_SECOND
     assert normalizer.normalize_calls == []
 
 
@@ -204,7 +204,7 @@ def test_submission_wide_image_and_video_counts_are_enforced() -> None:
     with pytest.raises(MediaLimitExceededError) as raised:
         service.validate_batch(MediaBatchTotals(image_count=11, video_count=3))
 
-    assert raised.value.violation.measure is MediaLimitMeasure.IMAGE_COUNT
+    assert raised.value.violations[0].measure is MediaLimitMeasure.IMAGE_COUNT
 
 
 async def test_normalizer_output_budget_is_checked_before_result_is_returned(tmp_path: Path) -> None:
@@ -215,7 +215,7 @@ async def test_normalizer_output_budget_is_checked_before_result_is_returned(tmp
     with pytest.raises(MediaLimitExceededError) as raised:
         await service.normalize(request(tmp_path))
 
-    assert raised.value.violation.measure is MediaLimitMeasure.OUTPUT_BYTES
+    assert raised.value.violations[0].measure is MediaLimitMeasure.OUTPUT_BYTES
     assert len(normalizer.discard_calls) == 1
 
 

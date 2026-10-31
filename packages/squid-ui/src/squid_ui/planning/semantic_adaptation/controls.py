@@ -37,7 +37,7 @@ from squid_ui.planning.semantic_adaptation.handlers import (
     ToggleDetails,
 )
 from squid_ui.planning.semantic_adaptation.model import (
-    LoweringContext as _Context,
+    LoweringContext,
 )
 from squid_ui.planning.structure import (
     disclosure_state,
@@ -98,7 +98,7 @@ from squid_ui.semantic import (
 from squid_ui.sources import Position
 
 
-def _form(node: FormTrigger, context: _Context) -> list[Node]:
+def _form(node: FormTrigger, context: LoweringContext) -> list[Node]:
     if Capability.FORMS_MODAL not in context.capabilities:
         message = "target does not support forms"
         raise LayoutInvariantError(message)
@@ -147,7 +147,7 @@ def _with_best_effort(node: Node) -> Node:
     return node
 
 
-def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
+def _choices(node: Choices, path: str, context: LoweringContext) -> list[Node]:
     available = tuple(choice for choice in node.choices if choice.available)
     match node.selection:
         case Controlled(value=value):
@@ -199,7 +199,7 @@ def _choices(node: Choices, path: str, context: _Context) -> list[Node]:
     return result
 
 
-def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
+def _entities(node: Entities, path: str, context: LoweringContext) -> list[Node]:
     match node.selection:
         case Controlled(value=value):
             previous = tuple(value)
@@ -249,7 +249,7 @@ def _entities(node: Entities, path: str, context: _Context) -> list[Node]:
     return _choices(fallback, path, context)
 
 
-def _routed_choices(node: RoutedChoices, path: str, context: _Context) -> list[Node]:
+def _routed_choices(node: RoutedChoices, path: str, context: LoweringContext) -> list[Node]:
     """Lower an explicitly stateless picker without inventing mount-owned pagination."""
     available = tuple(choice for choice in node.choices if choice.available)
     if not available:
@@ -277,8 +277,8 @@ def _routed_choices(node: RoutedChoices, path: str, context: _Context) -> list[N
 def _items(
     node: Items,
     path: str,
-    context: _Context,
-    lower_children: Callable[[Sequence[LayoutNode], str, _Context], list[Node]],
+    context: LoweringContext,
+    lower_children: Callable[[Sequence[LayoutNode], str, LoweringContext], list[Node]],
 ) -> list[Node]:
     opened, _fixed = _item_state(node, context.session)
     strategy = _select_strategy(_items_axis(node, path, context.limits, context.session), context)
@@ -315,7 +315,7 @@ def _items(
     return result
 
 
-def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
+def _navigation(node: Navigation, path: str, context: LoweringContext) -> list[Node]:
     available = tuple(destination for destination in node.options if destination.available)
     strategy = _select_strategy(_navigation_axis(node, path, context.limits, context.session), context)
     grouped = strategy == "grouped"
@@ -358,8 +358,8 @@ def _navigation(node: Navigation, path: str, context: _Context) -> list[Node]:
 def _details(
     node: Details,
     path: str,
-    context: _Context,
-    lower_children: Callable[[Sequence[LayoutNode], str, _Context], list[Node]],
+    context: LoweringContext,
+    lower_children: Callable[[Sequence[LayoutNode], str, LoweringContext], list[Node]],
 ) -> list[Node]:
     open_ = disclosure_state(node, context.session)
 
@@ -379,7 +379,7 @@ def _details(
     return result
 
 
-def _toggle(node: Toggle, context: _Context) -> list[Node]:
+def _toggle(node: Toggle, context: LoweringContext) -> list[Node]:
     on = toggle_state(node, context.session)
 
     state_label = node.on_label if on else node.off_label

@@ -20,7 +20,7 @@ import os
 import sys
 from collections.abc import Mapping
 from pathlib import Path
-from typing import IO, Any
+from typing import IO, Any, override
 
 try:
     import resource
@@ -55,6 +55,7 @@ class _RequestContextFilter(logging.Filter):
         super().__init__()
         self.fields: dict[str, Any] = {}
 
+    @override
     def filter(self, record: logging.LogRecord) -> bool:
         for key, value in self.fields.items():
             if not hasattr(record, key):
@@ -65,11 +66,6 @@ class _RequestContextFilter(logging.Filter):
 _request_context = _RequestContextFilter()
 
 STATM_PATH = Path("/proc/self/statm")
-"""Linux's per-process memory counters, whose first field is the mapped size in pages.
-
-Absent on the other POSIX hosts this module still has to start on, which is why every read of
-it tolerates failure rather than treating the file as guaranteed.
-"""
 
 _RESOURCE_PACK: VerifiedResourcePack | None = None
 """Cached across requests. Reading and parsing a vanilla resource pack is expensive, and it is
@@ -102,18 +98,10 @@ def apply_guardrails(limits: Mapping[str, int]) -> None:
 
 
 def _current_address_space_bytes(statm_path: Path = STATM_PATH) -> int:
-    """This process's already-mapped virtual address space, so `RLIMIT_AS` bounds the budget
-    a payload gets rather than the interpreter's own baseline footprint.
+    """Return mapped address-space bytes, or zero when procfs is unavailable or unreadable.
 
-    That baseline is not portable: Termux's bionic/Scudo allocator reserves on the order of
-    10 GB of address space before a single line of this module runs, dwarfing the configured
-    memory budget and making an absolute `RLIMIT_AS` fail during interpreter start-up, before
-    the engine is even imported. glibc hosts have a much smaller baseline, which is why this
-    went unnoticed there. `resource.getrusage` reports peak resident set size, not mapped
-    address space, so it can't stand in for this.
-
-    `statm_path` is a parameter because a real `/proc/self/statm` reports whatever the host
-    happens to have mapped, so tests can neither pin the arithmetic nor reach the fallback.
+    Add this baseline to `RLIMIT_AS`: Android's allocator reserves gigabytes before the
+    engine starts. RSS cannot measure these virtual reservations.
     """
     assert resource is not None
     try:
@@ -224,7 +212,7 @@ def _error_payload(exc: Exception) -> Mapping[str, Any]:
         # Checked before its `InvalidSchematicError` base, so the candidate coordinates the
         # caller needs survive the pipe instead of collapsing into a generic rejection.
         kind = "ambiguous_simulation_input"
-        context = {"candidates": [list(candidate) for candidate in exc.candidates], "rejected": exc.rejected}
+        context = dict(wire.encode_simulation_input_error(exc))
     elif isinstance(exc, InvalidSchematicError):
         kind = "invalid"
         context = dict(exc.context)

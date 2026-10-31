@@ -88,9 +88,6 @@ class FormattedTitle:
     diagnostics: tuple[TitleDiagnostic, ...] = ()
 
 
-CategoryText = FormattedTitle
-
-
 @dataclass(frozen=True, slots=True)
 class DoorCategory:
     """Facts used by the piston-door title grammar."""

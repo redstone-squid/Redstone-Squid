@@ -1,7 +1,7 @@
 """The Discord consent gate: ask first, then continue what was asked for."""
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 from uuid import UUID
 
 import anyio
@@ -66,10 +66,12 @@ class AccountRecorder(AccountService):
         self.identity_reads: list[tuple[IdentityProvider, str]] = []
         self.identity_creations: list[IdentityCreation] = []
 
+    @override
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         self.identity_reads.append((provider, subject))
         return self.existing
 
+    @override
     async def get_or_create_identity(
         self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
     ) -> Account:
@@ -265,6 +267,7 @@ async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: 
 
 
 class _Blank(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return [sl.primitives.Text("parent")]
 
@@ -338,6 +341,7 @@ class _Gate(sl.Component):
     granted: bool = sl.state(default=False)
     abandoned: int = sl.state(default=0)
 
+    @override
     def render(self) -> Any:
         return [
             sl.primitives.Text(f"{self.presses}"),

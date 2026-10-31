@@ -2,8 +2,10 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, override
 
+from squid_reactivity.core import state
+from squid_reactivity.resources import Failed, Pending, Ready, resource
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
 from squid_ui.errors import LayoutInvariantError
@@ -23,8 +25,6 @@ from squid_ui.factories import (
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.reactivity import state
-from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import ChoiceEvent, ControlDisplay, LayoutNode, Tone
 from squid_ui.sources import LoadedWindow, WindowLoader, WindowSource, window_footer
 from squid_ui.text import TextLike
@@ -225,6 +225,7 @@ class SearchPicker[ItemT](Component):
             )
         return tuple(nodes)
 
+    @override
     def render(self) -> DocumentLike:
         """Render query input, retained picks, and result status."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)

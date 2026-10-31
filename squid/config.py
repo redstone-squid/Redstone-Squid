@@ -496,11 +496,6 @@ class RateLimitConfig(_FrozenModel):
             )
         return value
 
-    @property
-    def principal_requests(self) -> int:
-        """Return the caller quota under its one-release compatibility name."""
-        return self.caller_requests
-
     @field_validator("redis_url")
     @classmethod
     def _validate_redis_url(cls, value: SecretStr | None) -> SecretStr | None:
@@ -700,6 +695,10 @@ def default_render_cache_dir(*, working_directory: Path | None = None) -> Path:
     return base / ".cache" / "redstone-squid" / "schematics"
 
 
+_RGBA_CHANNELS = ("red", "green", "blue", "alpha")
+"""Channel order shared by the JSON array form and the dumped dataclass form."""
+
+
 class SchematicConfig(_FrozenModel):
     """Schematic engine resource budgets and worker supervision settings.
 
@@ -801,6 +800,14 @@ class SchematicConfig(_FrozenModel):
     def _decode_render_background(cls, value: object) -> RgbaColor:
         if isinstance(value, RgbaColor):
             return value
+        if isinstance(value, Mapping):
+            # `RgbaColor` is a dataclass, so `model_dump` lowers it to its four channel keys and a
+            # process projection hands that dump straight back to this validator.
+            missing = [channel for channel in _RGBA_CHANNELS if channel not in value]
+            if missing:
+                msg = f"Render background is missing the {', '.join(missing)} channel(s)."
+                raise TypeError(msg)
+            return RgbaColor.from_channels([value[channel] for channel in _RGBA_CHANNELS])
         if not isinstance(value, list | tuple):
             msg = "Render background must be a four-channel JSON array."
             raise TypeError(msg)
@@ -915,6 +922,12 @@ class BuildConfig(_FrozenModel):
         return self
 
 
+class SubmissionConfig(_FrozenModel):
+    """Capacity for durable inferred submission intake."""
+
+    inferred_draft_capacity: int = Field(default=1_000, ge=1)
+
+
 class NotificationConfig(_FrozenModel):
     """User notification links and retention policy."""
 
@@ -944,6 +957,7 @@ class RuntimeConfig(_FrozenModel):
     schematics: SchematicConfig
     object_storage: ObjectStorageConfig
     media: MediaConfig = MediaConfig()
+    submissions: SubmissionConfig = SubmissionConfig()
     minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
     cli_auth: CliAuthConfig = CliAuthConfig()
     community: CommunityConfig
@@ -1005,10 +1019,12 @@ def _projection_type[ConfigT: BaseSettings](config_type: type[ConfigT]) -> type[
     """
 
     class _Projection(config_type):  # pyright: ignore[reportUntypedBaseClass]  # pyrefly: ignore[invalid-inheritance]
-        # No `@override`: the base is a type variable here, so neither checker can see the method
-        # it overrides.
+        # No `@override`: the base is a type variable, so Pyrefly cannot see the method this
+        # overrides and rejects the decorator outright. BasedPyright resolves it through the
+        # `BaseSettings` bound and asks for the decorator, so its request is suppressed rather
+        # than answered.
         @classmethod
-        def settings_customise_sources(
+        def settings_customise_sources(  # pyright: ignore[reportImplicitOverride]
             cls,
             settings_cls: type[BaseSettings],
             init_settings: PydanticBaseSettingsSource,
@@ -1022,16 +1038,21 @@ def _projection_type[ConfigT: BaseSettings](config_type: type[ConfigT]) -> type[
     return cast(type[ConfigT], _Projection)
 
 
-def _project[ConfigT: BaseSettings](config_type: type[ConfigT], values: Mapping[str, Any]) -> ConfigT:
+def _project[ConfigT: BaseSettings](config_type: type[ConfigT], source: BaseSettings) -> ConfigT:
     """Narrow already-loaded settings into one process's configuration.
 
     Validation still runs in full; only the environment lookups are dropped, because these values
     have already been through them once.
     """
-    return _projection_type(config_type)(**values)
+    values = source.model_dump(include=set(config_type.model_fields))
+    # `@cache` replaces the generic function with a wrapper whose result type has ConfigT
+    # already solved, so the checker cannot tie the projection back to this call's argument.
+    return _projection_type(config_type)(**values)  # pyright: ignore[reportReturnType]
 
 
-class _ProcessSettings(BaseSettings):
+class _EnvironmentSettings(BaseSettings):
+    """Shared environment source policy and unknown-key auditing controls."""
+
     model_config = SettingsConfigDict(
         env_prefix="SQUID_",
         env_nested_delimiter="_",
@@ -1043,12 +1064,18 @@ class _ProcessSettings(BaseSettings):
         validate_default=True,
     )
 
+    strict_unknown_keys: bool = False
+    """Reject unknown ``SQUID_*`` names instead of logging and ignoring them."""
+
+
+class _ProcessSettings(_EnvironmentSettings):
     database: DatabaseConfig
     verification: VerificationConfig
     openai: OpenAIConfig = OpenAIConfig()
     embedding: EmbeddingProviderConfig = EmbeddingProviderConfig()
     storage: ObjectStorageConfig = ObjectStorageConfig()
     media: MediaConfig = MediaConfig()
+    submissions: SubmissionConfig = SubmissionConfig()
     minecraft_auth: MinecraftAuthConfig = MinecraftAuthConfig()
     cli_auth: CliAuthConfig = CliAuthConfig()
     schematic: SchematicConfig = SchematicConfig()
@@ -1058,8 +1085,6 @@ class _ProcessSettings(BaseSettings):
     log: LogConfig = LogConfig()
     observability: ObservabilityConfig = ObservabilityConfig()
     diagnostics: DiagnosticsConfig = DiagnosticsConfig()
-    strict_unknown_keys: bool = False
-    """Reject unknown ``SQUID_*`` names instead of logging and ignoring them."""
     development_mode: bool = False
     """Whether this process should favour human-readable logs and verbose diagnostics."""
 
@@ -1095,6 +1120,7 @@ class _ProcessSettings(BaseSettings):
             schematics=self.schematic,
             object_storage=self.storage,
             media=self.media,
+            submissions=self.submissions,
             minecraft_auth=self.minecraft_auth,
             cli_auth=self.cli_auth,
             community=self.community,
@@ -1186,90 +1212,15 @@ class ApplicationConfig(BotProcessConfig):
 
     def bot_process(self) -> BotProcessConfig:
         """Project the combined settings into the Discord process."""
-        return _project(
-            BotProcessConfig,
-            self.model_dump(
-                include={
-                    "database",
-                    "verification",
-                    "openai",
-                    "embedding",
-                    "storage",
-                    "schematic",
-                    "media",
-                    "minecraft_auth",
-                    "cli_auth",
-                    "community",
-                    "notification",
-                    "log",
-                    "observability",
-                    "strict_unknown_keys",
-                    "development_mode",
-                    "discord",
-                    "bot",
-                    "catbox",
-                    "google",
-                    "build",
-                    "upstream_http",
-                }
-            ),
-        )
+        return _project(BotProcessConfig, self)
 
     def api_process(self) -> ApiProcessConfig:
         """Project the combined settings into the HTTP API process."""
-        return _project(
-            ApiProcessConfig,
-            self.model_dump(
-                include={
-                    "database",
-                    "verification",
-                    "openai",
-                    "embedding",
-                    "storage",
-                    "schematic",
-                    "media",
-                    "minecraft_auth",
-                    "cli_auth",
-                    "community",
-                    "notification",
-                    "log",
-                    "observability",
-                    "strict_unknown_keys",
-                    "development_mode",
-                    "oauth",
-                    "api",
-                    "rate_limit",
-                    "upstream_http",
-                }
-            ),
-        )
+        return _project(ApiProcessConfig, self)
 
     def worker_process(self) -> WorkerProcessConfig:
         """Project the combined settings into the database worker process."""
-        return _project(
-            WorkerProcessConfig,
-            self.model_dump(
-                include={
-                    "database",
-                    "verification",
-                    "openai",
-                    "embedding",
-                    "storage",
-                    "schematic",
-                    "media",
-                    "minecraft_auth",
-                    "cli_auth",
-                    "community",
-                    "notification",
-                    "log",
-                    "observability",
-                    "strict_unknown_keys",
-                    "development_mode",
-                    "worker",
-                    "upstream_http",
-                }
-            ),
-        )
+        return _project(WorkerProcessConfig, self)
 
 
 _DOTENV_KEY = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=")
@@ -1479,7 +1430,7 @@ def _configuration_error(exc: ValidationError | SettingsError) -> ConfigurationE
     )
 
 
-def _load_settings[ConfigT: _ProcessSettings](config_type: type[ConfigT], dotenv_path: Path | None) -> ConfigT:
+def _load_settings[ConfigT: _EnvironmentSettings](config_type: type[ConfigT], dotenv_path: Path | None) -> ConfigT:
     resolved = DEFAULT_DOTENV_PATH if dotenv_path is None else dotenv_path
     try:
         config = config_type(_env_file=resolved)  # type: ignore[call-arg]
@@ -1526,52 +1477,37 @@ def load_worker_process_config(*, dotenv_path: Path | None = None) -> WorkerProc
 def load_database_config(*, dotenv_path: Path | None = None) -> DatabaseConfig:
     """Load only the database settings needed by migration tooling."""
 
-    class DatabaseSettings(BaseSettings):
-        model_config = _ProcessSettings.model_config
+    class DatabaseSettings(_EnvironmentSettings):
         database: DatabaseConfig
-        strict_unknown_keys: bool = False
 
-    resolved = DEFAULT_DOTENV_PATH if dotenv_path is None else dotenv_path
-    try:
-        settings = DatabaseSettings(_env_file=resolved)  # type: ignore[call-arg]
-    except (ValidationError, SettingsError) as exc:
-        raise _configuration_error(exc) from None
-    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys, dotenv_path=resolved)
-    return settings.database
+    return _load_settings(DatabaseSettings, dotenv_path).database
+
+
+def load_build_config(*, dotenv_path: Path | None = None) -> BuildConfig:
+    """Load only the build metadata needed to attribute a migration run to a release."""
+
+    class BuildSettings(_EnvironmentSettings):
+        build: BuildConfig = BuildConfig()
+
+    return _load_settings(BuildSettings, dotenv_path).build
 
 
 def load_worker_observability_config(*, dotenv_path: Path | None = None) -> ObservabilityConfig:
     """Load only inherited observability settings in a schematic worker child."""
 
-    class WorkerObservabilitySettings(BaseSettings):
-        model_config = _ProcessSettings.model_config
+    class WorkerObservabilitySettings(_EnvironmentSettings):
         observability: ObservabilityConfig = ObservabilityConfig()
-        strict_unknown_keys: bool = False
 
-    resolved = DEFAULT_DOTENV_PATH if dotenv_path is None else dotenv_path
-    try:
-        settings = WorkerObservabilitySettings(_env_file=resolved)  # type: ignore[call-arg]
-    except (ValidationError, SettingsError) as exc:
-        raise _configuration_error(exc) from None
-    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys, dotenv_path=resolved)
-    return settings.observability
+    return _load_settings(WorkerObservabilitySettings, dotenv_path).observability
 
 
 def load_worker_log_config(*, dotenv_path: Path | None = None) -> LogConfig:
     """Load only inherited logging settings in a schematic worker child."""
 
-    class WorkerLogSettings(BaseSettings):
-        model_config = _ProcessSettings.model_config
+    class WorkerLogSettings(_EnvironmentSettings):
         log: LogConfig = LogConfig()
-        strict_unknown_keys: bool = False
 
-    resolved = DEFAULT_DOTENV_PATH if dotenv_path is None else dotenv_path
-    try:
-        settings = WorkerLogSettings(_env_file=resolved)  # type: ignore[call-arg]
-    except (ValidationError, SettingsError) as exc:
-        raise _configuration_error(exc) from None
-    _audit_unknown_environment_keys(strict=settings.strict_unknown_keys, dotenv_path=resolved)
-    return settings.log
+    return _load_settings(WorkerLogSettings, dotenv_path).log
 
 
 __all__ = [

@@ -1,7 +1,7 @@
 """The one ephemerality rule, at the sites where getting it wrong costs something (audit C2)."""
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -30,6 +30,7 @@ class SettingsRecorder(SettingsService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
 
@@ -65,7 +66,8 @@ async def test_personal_visibility_matches_the_available_transport(slash: bool, 
     bot = make_bot()
     ctx = make_context(bot, slash=slash)
 
-    await bot.app_ui.respond(cast(Context[Any], ctx), text_node("personal"), audience="personal")
+    request = await bot.app_ui.request(cast(Context[Any], ctx))
+    await request.respond(text_node("personal"), audience="personal")
 
     assert ctx.send.await_args.kwargs["ephemeral"] is ephemeral
 
@@ -74,9 +76,9 @@ async def test_a_closed_dm_delivers_nothing_rather_than_falling_back() -> None:
     """The channel is exactly what the payload must not reach, so there is nowhere to fall back to."""
     bot = make_bot()
     ctx = make_context(bot, dm_raises=discord.Forbidden(cast(Any, HttpResponse(status=403, reason="")), "no dms"))
+    request = await bot.app_ui.request(cast(Context[Any], ctx))
     with pytest.raises(sd.delivery.DeliveryAbandoned):
-        await bot.app_ui.respond(
-            cast(Context[Any], ctx),
+        await request.respond(
             text_node("secret"),
             audience=sd.Private("Because it is a credential."),
         )
@@ -89,8 +91,8 @@ async def test_a_direct_message_context_answers_where_it_was_asked() -> None:
     """A DM is already private, so routing it to another DM would just be a second message."""
     bot = make_bot()
     ctx = make_context(bot, in_guild=False)
-    await bot.app_ui.respond(
-        cast(Context[Any], ctx),
+    request = await bot.app_ui.request(cast(Context[Any], ctx))
+    await request.respond(
         text_node("secret"),
         audience=sd.Private("Because it is a credential."),
     )

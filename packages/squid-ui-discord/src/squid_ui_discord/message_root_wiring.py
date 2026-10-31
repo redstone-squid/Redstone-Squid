@@ -7,7 +7,7 @@ into :meth:`MessageRoot.dispatch`; nothing here decides behaviour beyond that ro
 import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, override
 
 import discord
 
@@ -94,6 +94,7 @@ class _WiredButton(discord.ui.Button[AnyMountedView]):
         self._key = key
         self._generation = generation
 
+    @override
     async def callback(self, interaction: discord.Interaction) -> None:
         await self._root.dispatch(self._key, interaction, generation=self._generation)
 
@@ -121,6 +122,7 @@ class _WiredSelect(discord.ui.Select[AnyMountedView]):
         self._key = key
         self._generation = generation
 
+    @override
     async def callback(self, interaction: discord.Interaction) -> None:
         await self._root.dispatch(self._key, interaction, self.values, generation=self._generation)
 
@@ -221,21 +223,25 @@ def _entity_kwargs(
 
 
 class _WiredUserSelect(_EntityDispatch, discord.ui.UserSelect[AnyMountedView]):
+    @override
     async def callback(self, interaction: discord.Interaction) -> None:
         await self._dispatch(interaction, self.values)
 
 
 class _WiredRoleSelect(_EntityDispatch, discord.ui.RoleSelect[AnyMountedView]):
+    @override
     async def callback(self, interaction: discord.Interaction) -> None:
         await self._dispatch(interaction, self.values)
 
 
 class _WiredChannelSelect(_EntityDispatch, discord.ui.ChannelSelect[AnyMountedView]):
+    @override
     async def callback(self, interaction: discord.Interaction) -> None:
         await self._dispatch(interaction, self.values)
 
 
 class _WiredMentionableSelect(_EntityDispatch, discord.ui.MentionableSelect[AnyMountedView]):
+    @override
     async def callback(self, interaction: discord.Interaction) -> None:
         await self._dispatch(interaction, self.values)
 
@@ -266,4 +272,5 @@ def _disable_all(view: discord.ui.LayoutView | discord.ui.View) -> None:
     for item in children:
         target = item.item if isinstance(item, discord.ui.DynamicItem) else item
         if isinstance(target, discord.ui.Button | discord.ui.Select) or hasattr(target, "disabled"):
-            target.disabled = True  # pyrefly: ignore  # guarded by hasattr
+            # Guarded by `hasattr`, which neither checker narrows through.
+            target.disabled = True  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore

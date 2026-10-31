@@ -2,9 +2,9 @@
 
 from squid.records.domain.categories import CategorySemantics, generate_category_subsets
 from squid.records.domain.formatting import (
-    CategoryText,
     DoorCategory,
     ExtenderCategory,
+    FormattedTitle,
     RulesTitleFormatter,
     TitleFormatter,
 )
@@ -32,9 +32,9 @@ __all__ = [
     "BuildKind",
     "CandidateGap",
     "CategorySemantics",
-    "CategoryText",
     "DoorCategory",
     "ExtenderCategory",
+    "FormattedTitle",
     "RecordCandidate",
     "RecordClass",
     "RecordResolution",

@@ -8,8 +8,8 @@ from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning import plan
 from squid_ui.planning.adapter import AdapterCapability, AdapterProfile
 from squid_ui.planning.discord import classic_target, components_v2_target
-from squid_ui.planning.types import DiscordAdapter
 from squid_ui.primitives import Text
+from squid_ui.target_types import DiscordAdapter
 from squid_ui_discord.adapter import (
     DISCORD_PY_27_ADAPTER,
     discord_py_adapter_profile,
@@ -52,7 +52,7 @@ def guarded(name, *args, **kwargs):
 builtins.__import__ = guarded
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.discord import components_v2_target
-from squid_ui.planning.types import DiscordAdapter
+from squid_ui.target_types import DiscordAdapter
 components_v2_target(AdapterProfile(DiscordAdapter, 'alternate', '>=1'))
 """
 

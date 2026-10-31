@@ -8,12 +8,14 @@ import os
 import shutil
 import signal
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_CEILING, Decimal, InvalidOperation
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, cast
+
+from anyio import CancelScope, fail_after
 
 try:
     import resource
@@ -158,8 +160,7 @@ class FfmpegMediaNormalizer:
         source_bytes: int,
         limits: MediaLimits,
     ) -> MediaNormalizationResult:
-        temporary = _temporary_destination(request.output_path, suffix=".png")
-        try:
+        with _staged_outputs((request.output_path, ".png")) as (temporary,):
             await self._run(
                 self._ffmpeg,
                 (
@@ -199,10 +200,6 @@ class FfmpegMediaNormalizer:
             output_probe = await self.probe(temporary)
             _validate_image_output(probe, output_probe)
             artifact = _artifact(temporary, "image/png", output_probe, byte_size=output_size)
-            _commit_one(temporary, request.output_path)
-        except Exception:
-            temporary.unlink(missing_ok=True)
-            raise
 
         report = MediaNormalizationReport(
             kind=MediaKind.IMAGE,
@@ -227,14 +224,10 @@ class FfmpegMediaNormalizer:
         limits: MediaLimits,
     ) -> MediaNormalizationResult:
         assert request.poster_path is not None
-        video_temporary = _temporary_destination(request.output_path, suffix=".mp4")
-        try:
-            poster_temporary = _temporary_destination(request.poster_path, suffix=".jpg")
-        except Exception:
-            video_temporary.unlink(missing_ok=True)
-            raise
-        committed_video = False
-        try:
+        with _staged_outputs((request.output_path, ".mp4"), (request.poster_path, ".jpg")) as (
+            video_temporary,
+            poster_temporary,
+        ):
             audio_arguments = ("-an",) if request.strip_audio else ("-map", "0:a:0?", "-c:a", "aac", "-b:a", "192k")
             await self._run(
                 self._ffmpeg,
@@ -341,15 +334,6 @@ class FfmpegMediaNormalizer:
 
             output_artifact = _artifact(video_temporary, "video/mp4", output_probe, byte_size=video_size)
             poster_artifact = _artifact(poster_temporary, "image/jpeg", poster_probe, byte_size=poster_size)
-            _commit_one(video_temporary, request.output_path)
-            committed_video = True
-            _commit_one(poster_temporary, request.poster_path)
-        except Exception:
-            video_temporary.unlink(missing_ok=True)
-            poster_temporary.unlink(missing_ok=True)
-            if committed_video:
-                request.output_path.unlink(missing_ok=True)
-            raise
 
         actions = [
             MediaNormalizationAction.METADATA_REMOVED,
@@ -408,13 +392,16 @@ class FfmpegMediaNormalizer:
             raise MediaToolUnavailableError(tool=executable) from exc
 
         try:
-            stdout, _stderr = await asyncio.wait_for(process.communicate(), timeout=timeout_seconds)
-        except asyncio.CancelledError:
-            await _terminate(process)
+            try:
+                with fail_after(timeout_seconds):
+                    stdout, _stderr = await process.communicate()
+            except TimeoutError as exc:
+                raise MediaProcessingTimeoutError(operation=operation) from exc
+        except BaseException:
+            # The owning task may already be cancelled; reaping must still settle before it exits.
+            with CancelScope(shield=True):
+                await _terminate(process)
             raise
-        except TimeoutError as exc:
-            await _terminate(process)
-            raise MediaProcessingTimeoutError(operation=operation) from exc
         if process.returncode != 0:
             if process.returncode == -getattr(signal, "SIGXFSZ", 25):
                 raise MediaLimitExceededError(
@@ -528,6 +515,23 @@ def _validate_combined_size(video_size: int, poster_size: int, *, limit: int) ->
     combined_size = video_size + poster_size
     if combined_size > limit:
         raise MediaLimitExceededError(MediaViolation(MediaLimitMeasure.OUTPUT_BYTES, combined_size, limit))
+
+
+@contextlib.contextmanager
+def _staged_outputs(*destinations: tuple[Path, str]) -> Iterator[tuple[Path, ...]]:
+    """Own temporary outputs until validation ends, rolling back incomplete publication."""
+    with contextlib.ExitStack() as temporary_cleanup:
+        staged: list[Path] = []
+        for destination, suffix in destinations:
+            temporary = _temporary_destination(destination, suffix=suffix)
+            temporary_cleanup.callback(temporary.unlink, missing_ok=True)
+            staged.append(temporary)
+        yield tuple(staged)
+        with contextlib.ExitStack() as rollback:
+            for temporary, (destination, _) in zip(staged, destinations, strict=True):
+                _commit_one(temporary, destination)
+                rollback.callback(destination.unlink, missing_ok=True)
+            rollback.pop_all()
 
 
 def _temporary_destination(destination: Path, *, suffix: str) -> Path:
@@ -646,13 +650,16 @@ def _frame_duration_milliseconds(probe: MediaProbe) -> int:
 
 async def _terminate(process: asyncio.subprocess.Process) -> None:
     try:
-        if os.name == "posix" and process.pid is not None:
+        # typeshed spells Process.pid as int, but it is whatever the transport's get_pid()
+        # returned, and that is None until the transport has actually spawned the child.
+        if os.name == "posix" and process.pid is not None:  # pyright: ignore[reportUnnecessaryComparison]
             os.killpg(process.pid, signal.SIGKILL)
         else:  # pragma: no cover - exercised on Windows CI
             process.kill()
     except ProcessLookupError:
         pass
-    await process.wait()
+    # A cancelled communicate() can leave paused pipe readers. Drain them so wait() can finish.
+    await process.communicate()
 
 
 def _apply_process_limits(limits: MediaProcessLimits, *, max_file_bytes: int) -> None:

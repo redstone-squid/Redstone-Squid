@@ -1,7 +1,7 @@
 """Challenged admission: a guard that asks the actor, and the press its answer resumes."""
 
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import Any, cast, override
 
 import anyio
 import discord
@@ -9,13 +9,13 @@ import pytest
 
 import squid_ui as sl
 import squid_ui_widgets as sp
+from squid_reactivity.core import readonly_transaction, transaction
 from squid_ui import ActionEvent, Component, state
 from squid_ui import form as sl_form
 from squid_ui.forms import FormSpec, TextField
 from squid_ui.guards import Challenge, ChallengeResolver, GuardDecision, GuardLedger, approvals
 from squid_ui.interactions import ActionMode
 from squid_ui.profiling import DispatchDisposition, MemoryProfiler, OperationKind
-from squid_ui.runtime.reactivity import readonly_transaction, transaction
 from squid_ui_discord import Everyone, MessageRoot, delivery
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui_discord.message_root_contracts import ChallengeRequest
@@ -32,6 +32,7 @@ class _Panel(Component[sl.ComponentsV2Target]):
         self.guard = guard
         self.mode = mode
 
+    @override
     def render(self):
         return sl.action_controls(
             sl.action_control("Go", self.go, key="go", guard=self.guard, mode=self.mode), key="panel"
@@ -148,6 +149,7 @@ class TestIssuing:
             recorded.append(str(error))
 
         class Panel(Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return sl_form(
                     "Rename",
@@ -196,6 +198,7 @@ class TestResuming:
             def __init__(self) -> None:
                 self.pressed: list[str] = []
 
+            @override
             def render(self):
                 guard = sp.guards.confirm("Sure?")
                 return sl.action_controls(
@@ -286,6 +289,7 @@ class TestResuming:
                 # A list, not state: a PARALLEL_READ handler may not write component state.
                 self.reads: list[str] = []
 
+            @override
             def render(self):
                 return sl.action_controls(
                     sl.action_control(

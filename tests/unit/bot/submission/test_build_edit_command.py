@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 
@@ -42,10 +42,12 @@ class StubBuilds(BuildService):
         self.gets = 0
         self.sorted: list[list[str]] = []
 
+    @override
     async def get(self, build_id: int) -> Any:
         self.gets += 1
         return self._build
 
+    @override
     async def sort_restrictions(self, restrictions: Sequence[str]) -> dict[RestrictionTypeLiteral, list[str]]:
         self.sorted.append(list(restrictions))
         return {
@@ -60,6 +62,7 @@ class SettingsRecorder(SettingsService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
 
@@ -73,6 +76,7 @@ class PermissionRecorder(PermissionService):
     def __init__(self, allowed: bool) -> None:
         self.allowed = allowed
 
+    @override
     async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
         return self.allowed
 

@@ -25,7 +25,7 @@ from squid.api.i18n import LocaleContextMiddleware
 from squid.api.idempotency import (
     CompleteIdempotentResponseMiddleware,
     assert_idempotency_completion_installed,
-    enforce_request_idempotency,
+    reserve_idempotent_request,
 )
 from squid.api.openapi import install_openapi_contract
 from squid.api.private_responses import PRIVATE_API_PATH_PREFIXES, PrivateResponseHeadersMiddleware
@@ -95,7 +95,7 @@ class User(BaseModel):
     "/verify",
     status_code=201,
     responses=responses(401, 403, 404, 409, 422, 429, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="verification_create_compatibility",
     openapi_extra=contract(
         security=[SERVICE, WEB_WRITE, DEVICE],
@@ -108,7 +108,7 @@ class User(BaseModel):
     status_code=201,
     responses=responses(401, 403, 404, 409, 422, 429, 503),
     tags=["users"],
-    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="verification_create",
     openapi_extra=contract(
         security=[SERVICE, WEB_WRITE, DEVICE],

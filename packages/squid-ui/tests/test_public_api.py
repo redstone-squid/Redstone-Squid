@@ -43,7 +43,7 @@ ROOT_NAMESPACES = (
 RENAMED_SUBMODULES = (
     "squid_ui.planning.layout_measurement.solver",
     "squid_ui.runtime.histories",
-    "squid_ui.runtime.topics",
+    "squid_reactivity.topics",
 )
 
 
@@ -87,8 +87,8 @@ def test_engine_imports_without_transport_or_store_dependencies() -> None:
             "squid_ui.planning",
             "squid_ui.profiling",
             "squid_ui.runtime",
-            "squid_ui.runtime.shared",
-            "squid_ui.runtime.topics",
+            "squid_reactivity.shared_state",
+            "squid_reactivity.topics",
         ],
         "discord",
         "anyio",
@@ -103,6 +103,5 @@ def test_package_metadata_names_only_the_reactive_kernel() -> None:
     project = metadata["project"]
     assert project["version"] == "0.1.0a1"
     assert project["dependencies"] == ["markdown-it-py>=4.0,<5", "squid-reactivity==0.1.0a1"]
-    # Both extras left with the adapter: `discord` carried discord.py/anyio/packaging, and
-    # `postgres` only ever forwarded to squid-storage for Discord durability.
-    assert "optional-dependencies" not in project
+    # Execution is opt-in; importing and rendering with the engine needs no AnyIO install.
+    assert project["optional-dependencies"] == {"services": ["anyio>=4.14,<5"]}

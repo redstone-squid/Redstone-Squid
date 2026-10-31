@@ -22,8 +22,8 @@ from squid.records.application.ports import RecomputeLease
 from squid.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
 from squid.records.domain import (
     BuildKind,
-    CategoryText,
     DoorCategory,
+    FormattedTitle,
     RecordCandidate,
     RecordClass,
     ResolutionStatus,
@@ -45,7 +45,7 @@ class FakeRuns:
     def __init__(self) -> None:
         self.batches: list[ComputationBatch] = []
         self.requested: dict[BuildKind, list[CategoryIdentity]] = {}
-        self.requested_titles: dict[str, dict[RecordClass, CategoryText]] = {}
+        self.requested_titles: dict[str, dict[RecordClass, FormattedTitle]] = {}
         self.definition_identities: dict[int, CategoryIdentity] = {}
         self.gap_rows: tuple[RecordGap, ...] = ()
         self.title_gap_rows: tuple[TitleDiagnosticGap, ...] = ()
@@ -104,7 +104,7 @@ class FakeRuns:
         self,
         ruleset_id: int,
         category: CategoryIdentity,
-        titles: Mapping[RecordClass, CategoryText],
+        titles: Mapping[RecordClass, FormattedTitle],
     ) -> None:
         assert ruleset_id == 7
         self.requested.setdefault(category.kind, []).append(category)

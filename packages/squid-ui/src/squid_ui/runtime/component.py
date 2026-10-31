@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
-from typing import Any, Generic, Protocol, TypeVar, cast, overload
+from typing import Any, Generic, Protocol, TypeVar, cast, overload, override
 
 from squid_reactivity.core import (
     Observation,
@@ -22,6 +22,9 @@ from squid_reactivity.core import (
     observe_render,
 )
 from squid_reactivity.internals import RENDER_OBSERVATION as _RENDER_OBSERVATION
+from squid_reactivity.internals import AtomicResourcePending
+from squid_reactivity.resources import AsyncBinding, observe_async_bindings, unique_async_bindings
+from squid_reactivity.topics import Address
 from squid_ui.document import Asset, Document, DocumentLike
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.primitives.constraints import Paginate
@@ -46,13 +49,7 @@ from squid_ui.runtime._tree import (
     map_layout_children,
 )
 from squid_ui.runtime.context import ContextKey
-from squid_ui.runtime.resources import (
-    AsyncBinding,
-    _AtomicResourcePending,
-    observe_async_bindings,
-    unique_async_bindings,
-)
-from squid_ui.runtime.topics import Address
+from squid_ui.runtime.services import ManagedService, ServiceOwner
 from squid_ui.semantic import (
     ActionControl as SemanticActionControl,
 )
@@ -222,12 +219,14 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
 
     _runtime: RuntimeOwner | None = None
     _parent: AnyComponent | None = None
+    _owned_services: ServiceOwner | None = None
     _loaded: bool = False
     """Whether this instance's :meth:`on_load` has completed. Owned by the frontend."""
     _reactive_internal_attributes = frozenset(
         {"_runtime", "_parent", "_loaded", "_state_revision", "_dependency_invalidation"}
     )
 
+    @override
     def _state_changed(self, names: frozenset[str]) -> None:
         """React to committed writes to these state slots.
 
@@ -236,20 +235,21 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
         needs drawing again. `names` is for a subclass that wants to know which fields moved.
         """
         del names
-        self.__dict__["_dependency_invalidation"] = True
+        vars(self)["_dependency_invalidation"] = True
         try:
             self.invalidate()
         finally:
-            self.__dict__.pop("_dependency_invalidation", None)
+            vars(self).pop("_dependency_invalidation", None)
 
+    @override
     def on_state_rollback(self) -> None:
-        self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
+        vars(self)["_state_revision"] = vars(self).get("_state_revision", 0) + 1
 
     @abstractmethod
     def render(self) -> DocumentLike[RenderTargetT]:
         """Describe the message for the current state. Pure and synchronous."""
 
-    def boundary(self, child: Component[RenderTargetT], *, key: str) -> Boundary:
+    def boundary(self, child: Component[RenderTargetT], *, key: str) -> Boundary[RenderTargetT]:
         """Place child in this render tree under a stable key and namespace.
 
         The child is bound to this component's own dialect. `Component` is contravariant in
@@ -283,18 +283,41 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
     def on_unmount(self) -> None:
         """Run after this component leaves a successfully drawn tree."""
 
+    def own[ServiceT: ManagedService](self, service: ServiceT) -> ServiceT:
+        """Give this component a service to run while it's mounted.
+
+        Call this during setup, before the first render. It returns the same instance,
+        ready to store on the component and share through ``provide``. The service
+        starts after a successful delivery and stops when the component unmounts.
+
+        Remounting uses the same instance and starts a fresh run after cleanup finishes.
+        """
+        if vars(self).get("_ownership_sealed", False):
+            msg = "component service ownership must be declared before rendering"
+            raise RuntimeError(msg)
+        owner = self._owned_services
+        if owner is None:
+            owner = ServiceOwner()
+            vars(self)["_owned_services"] = owner
+        return owner.own(service)
+
+    @override
     def invalidate(self) -> None:
         """Mark this component's message as needing a re-render."""
-        dependency = self.__dict__.get("_dependency_invalidation", False)
+        dependency = vars(self).get("_dependency_invalidation", False)
         if not dependency:
-            self.__dict__["_state_revision"] = self.__dict__.get("_state_revision", 0) + 1
+            vars(self)["_state_revision"] = vars(self).get("_state_revision", 0) + 1
         if self._runtime is not None:
             self._runtime.invalidate(self, check_dependencies=dependency)
         elif self._parent is not None:
             self._parent.invalidate()
 
     def provide[ValueT](self, key: ContextKey[ValueT], value: ValueT) -> None:
-        """Provide an ephemeral value to descendants rendered below this component."""
+        """Provide a value to descendants for this render.
+
+        Providing a service shares access; it neither owns nor starts the service.
+        Descendants can receive it before its run is ready.
+        """
         context = _CURRENT_CONTEXT.get()
         if context is None:
             message = "provide() is only available while rendering"
@@ -416,7 +439,7 @@ class _TreeRender[RenderTargetT: RenderTarget]:
                 nodes = tuple(self.expand(self.root, "$", self.context or {}))
             else:
                 nodes = spliced.subtree.nodes
-        except _AtomicResourcePending as pending:
+        except AtomicResourcePending as pending:
             # Atomic state is never rendered while pending. Keep the resource observation from
             # the aborted discovery pass so the frontend can settle it before retrying.
             self.observed_bindings.append(pending.resource)
@@ -473,10 +496,13 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         inherited_context: dict[ContextKey[Any], object],
     ) -> _ComponentRender[RenderTargetT]:
         """This component's render snapshot, reused when nothing it read has moved."""
+        vars(component)["_ownership_sealed"] = True
+        if (owner := component._owned_services) is not None:
+            owner.seal()
         incremental = self.incremental
         render_cache = incremental.render_cache
         cached = render_cache.get(component)
-        revision = component.__dict__.get("_state_revision", 0)
+        revision = vars(component).get("_state_revision", 0)
         dependency_check = component in incremental.dirty and component not in incremental.forced
         if (
             cached is not None
@@ -589,7 +615,7 @@ class _TreeRender[RenderTargetT: RenderTarget]:
                     raise LayoutInvariantError(message)
                 # Before the defer check: a deferred child still reaches the mount through
                 # its parent when its on_load writes state.
-                child_component = cast(Component[RenderTargetT], item.component)
+                child_component = item.component
                 child_component._parent = component
                 if self.defer is not None and self.defer(child_component):
                     self.deferred.append(child_component)
@@ -818,17 +844,9 @@ def _splice_nodes[RenderTargetT: RenderTarget](
     return rewrite(nodes, splice.route)
 
 
-@overload
 def _namespace[RenderTargetT: RenderTarget](
     nodes: list[LayoutNode[RenderTargetT]], prefix: str
-) -> list[LayoutNode[RenderTargetT]]: ...
-
-
-@overload
-def _namespace(nodes: list[AnyLayoutNode], prefix: str) -> list[AnyLayoutNode]: ...
-
-
-def _namespace(nodes: list[AnyLayoutNode], prefix: str) -> list[AnyLayoutNode]:
+) -> list[LayoutNode[RenderTargetT]]:
     """Rewrite an embedded subtree's control keys under ``prefix``.
 
     Explicit control keys are scoped under the embed path, so inserting a sibling cannot
@@ -903,4 +921,7 @@ def _namespace(nodes: list[AnyLayoutNode], prefix: str) -> list[AnyLayoutNode]:
             case _:
                 return map_layout_children(node, "$", lambda child, _path: (rewrite(child),))
 
-    return [rewrite(node) for node in nodes]
+    # `rewrite` is written over the erased union: it matches on primitive shapes, none of which
+    # carry a target, and returns the same nodes rekeyed. That costs the local walker's
+    # precision, not the caller's, so the target the caller passed in is what comes back.
+    return cast(list[LayoutNode[RenderTargetT]], [rewrite(node) for node in nodes])

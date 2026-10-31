@@ -118,7 +118,7 @@ def test_cache_hit_reuses_every_decision_without_measuring(monkeypatch) -> None:
     import squid_ui.planning.discord_planner as planner_module
 
     attempts = 0
-    original = planner_module.measure
+    original = planner_module.measure  # pyright: ignore[reportPrivateImportUsage]  # monkeypatch target: the caller resolves it here
 
     def counted(*args, **kwargs):
         nonlocal attempts

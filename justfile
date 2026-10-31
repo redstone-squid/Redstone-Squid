@@ -94,6 +94,14 @@ db-check:
 db-revision name:
     uv run alembic revision --autogenerate -m "{{name}}"
 
+# Use only on a database confirmed to have run the revision scripts now in the tree.
+db-adopt-history:
+    uv run --locked python -m scripts.migration_history adopt
+
+# Use only after confirming the edits changed no DDL the database has already run.
+db-repair-history:
+    uv run --locked python -m scripts.migration_history repair
+
 # Use only when adopting a database that already matches the frozen baseline.
 db-stamp-baseline:
     uv run alembic stamp 20260728_baseline

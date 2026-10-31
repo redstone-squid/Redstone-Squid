@@ -2,10 +2,9 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, Self, override
 
 import discord
-from discord import app_commands
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -41,12 +40,10 @@ class VersionItem:
 type VersionAuthorizer = Callable[[], Awaitable[bool]]
 
 
-class VersionScreen(sd.Screen):
+class VersionScreen(sd.UserSessionScreen, session_name="versions"):
     """A version catalogue that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("versions")
     timeout = 300
-    audience = "personal"
 
     def __init__(
         self,
@@ -60,6 +57,7 @@ class VersionScreen(sd.Screen):
         self._authorize_create = authorize_create
         self._browser: sp.Browser[VersionItem, sl.ComponentsV2Target] | None = None
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
@@ -84,6 +82,7 @@ class VersionScreen(sd.Screen):
             empty=tr(t"No Minecraft versions are recognized yet."),
         )
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
             sl.status(tr(t"Loading versions."))
@@ -94,21 +93,7 @@ class VersionScreen(sd.Screen):
             nodes.append(
                 sl.form(
                     tr(t"Add version"),
-                    sl.forms.FormSpec(
-                        tr(t"Add Minecraft version"),
-                        (
-                            sl.forms.ChoiceField(
-                                key="edition",
-                                label=tr(t"Edition"),
-                                default="Java",
-                                options=(
-                                    sl.forms.ChoiceOption("java", tr(t"Java"), "Java"),
-                                    sl.forms.ChoiceOption("bedrock", tr(t"Bedrock"), "Bedrock"),
-                                ),
-                            ),
-                            sl.forms.TextField(key="version", label=tr(t"Version"), maximum=100),
-                        ),
-                    ),
+                    _AddVersionForm().spec(),
                     key="add-version",
                     on_submit=self._add,
                 )
@@ -125,14 +110,15 @@ class VersionScreen(sd.Screen):
         if not await self._authorize_create():
             await event.notice(tr(t"You are no longer allowed to add versions."))
             return
-        edition = cast(Edition, event.values["edition"])
-        version_text = cast(str, event.values["version"])
+        form = _AddVersionForm.from_submission(event)
+        edition = form.edition
+        version_text = form.version
         version = str(await self._versions.add(version_text, edition=edition))
         await self._refresh()
         await event.notice(tr(t"Added {version}."))
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
 
 class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="VersionTracker"):
@@ -142,20 +128,17 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Ve
         super().__init__(bot)
         self.version_service = bot.services.versions
 
-    @app_commands.command(name="versions", description="Browse recognized Minecraft versions")
-    async def versions(self, interaction: discord.Interaction[BotT]) -> None:
+    @sd.command(name="versions", description="Browse recognized Minecraft versions")
+    async def versions(self, request: sd.Request[Self]) -> VersionScreen:
         """Open the paged version catalogue."""
 
         async def may_create() -> bool:
-            return await allows(interaction, VERSION_ENTRY_CREATE)
+            return await allows(request, VERSION_ENTRY_CREATE)
 
-        await self.ui.respond(
-            interaction,
-            VersionScreen(
-                self.version_service,
-                can_create=await may_create(),
-                authorize_create=may_create,
-            ),
+        return VersionScreen(
+            self.version_service,
+            can_create=await may_create(),
+            authorize_create=may_create,
         )
 
     @sd.Cog.listener(name="on_message")
@@ -176,3 +159,17 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Ve
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Load the version catalogue cog."""
     await bot.add_cog(VersionTracker(bot))
+
+
+class _AddVersionForm(sl.forms.Form):
+    title = tr(t"Add Minecraft version")
+
+    edition = sl.forms.ChoiceField[Edition](
+        label=tr(t"Edition"),
+        default="Java",
+        options=(
+            sl.forms.ChoiceOption("java", tr(t"Java"), "Java"),
+            sl.forms.ChoiceOption("bedrock", tr(t"Bedrock"), "Bedrock"),
+        ),
+    )
+    version = sl.forms.TextField(label=tr(t"Version"), maximum=100)

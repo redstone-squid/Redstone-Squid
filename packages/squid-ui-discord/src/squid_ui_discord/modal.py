@@ -8,7 +8,7 @@ crash — a `default` joined from user data fails at `send_modal` time with HTTP
 import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Literal, cast, override
 
 import discord
 
@@ -52,7 +52,7 @@ type FormSubmitHandler = Callable[[discord.Interaction, dict[str, object]], Awai
 
 
 @dataclass(frozen=True, slots=True)
-class EntityField(ExtensionField[object]):
+class EntityField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](ExtensionField[object, RequiredT]):
     """A Discord user, role, channel, or mentionable picker."""
 
     entity_type: EntityType = EntityType.USER
@@ -61,6 +61,7 @@ class EntityField(ExtensionField[object]):
     placeholder: TextLike | None = None
     capability: ClassVar[str] = Capability.FORMS_DISCORD_ENTITY
 
+    @override
     def parse(self, raw: object) -> object | None:
         values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
         if not values:
@@ -72,13 +73,14 @@ class EntityField(ExtensionField[object]):
 
 
 @dataclass(frozen=True, slots=True)
-class FileField(ExtensionField[object]):
+class FileField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](ExtensionField[object, RequiredT]):
     """One or more Discord attachments uploaded through a modal."""
 
     minimum: int = 1
     maximum: int = 1
     capability: ClassVar[str] = Capability.FORMS_DISCORD_FILE
 
+    @override
     def parse(self, raw: object) -> UploadedFile | tuple[UploadedFile, ...] | None:
         values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
         if not values:
@@ -95,11 +97,15 @@ class FileField(ExtensionField[object]):
         if not all(isinstance(value, UploadedFile) for value in values):
             message = "Discord file adapter submitted a non-upload value"
             raise TypeError(message)
-        return values[0] if self.maximum == 1 else values  # pyrefly: ignore[bad-return]
+        # Established by the `all(...)` above; neither checker narrows a tuple through it.
+        uploads = cast(tuple[UploadedFile, ...], values)
+        return uploads[0] if self.maximum == 1 else uploads
 
 
 @dataclass(frozen=True, slots=True)
-class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
+class CheckboxGroupField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](
+    ExtensionField[tuple[ValueT, ...], RequiredT]
+):
     """A Discord-native group of typed checkbox choices."""
 
     options: tuple[ChoiceOption[ValueT], ...] = ()
@@ -113,15 +119,17 @@ class CheckboxGroupField[ValueT](ExtensionField[tuple[ValueT, ...]]):
             raise ValueError(message)
         self._portable_field()
 
+    @override
     def parse(self, raw: object) -> tuple[ValueT, ...]:
         """Parse selected keys with the portable multi-choice contract."""
         return self._portable_field().parse(raw)
 
+    @override
     def format(self, value: object) -> tuple[str, ...]:
         """Format a prefill with the portable multi-choice contract."""
         return self._portable_field().format(value)
 
-    def _portable_field(self) -> MultiChoiceField[ValueT]:
+    def _portable_field(self) -> MultiChoiceField[ValueT, RequiredT]:
         """Build the portable value contract behind this native presentation."""
         return MultiChoiceField(
             label=self.label,
@@ -186,6 +194,7 @@ class _SpecModal(discord.ui.Modal):
                 discord.ui.Label(text=_resolve(label.text, NEUTRAL), description=description, component=text_input)
             )
 
+    @override
     async def on_submit(self, interaction: discord.Interaction) -> None:
         if self._handler is None:
             return
@@ -216,6 +225,7 @@ class _FormModal(discord.ui.Modal):
             self._readers[field.key] = reader
             self.add_item(discord.ui.Label(text=label, description=description, component=component))
 
+    @override
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await self._handler(interaction, {key: reader() for key, reader in self._readers.items()})
 
@@ -279,8 +289,8 @@ def _entity_defaults(prefill: object, entity_type: EntityType) -> list[discord.S
         match value:
             case discord.SelectDefaultValue():
                 defaults.append(value)
-            case EntityRef(id=int()):
-                defaults.append(discord.SelectDefaultValue(id=value.id, type=_ENTITY_DEFAULT_TYPES[value.kind]))
+            case EntityRef(id=int() as entity_id):
+                defaults.append(discord.SelectDefaultValue(id=entity_id, type=_ENTITY_DEFAULT_TYPES[value.kind]))
             case discord.Role():
                 defaults.append(discord.SelectDefaultValue(id=value.id, type=discord.SelectDefaultValueType.role))
             case discord.Member() | discord.User() | discord.ClientUser():

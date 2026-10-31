@@ -5,7 +5,7 @@ import re
 from collections.abc import Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, override
 
 import discord
 
@@ -437,6 +437,7 @@ class RolePanel(Component[DiscordTarget]):
             raise
         return toggle_route, set_route
 
+    @override
     def render(self) -> Sequence[LayoutNode[DiscordTarget]]:
         """Render stateless buttons with a planner-owned select fallback."""
         nodes: list[LayoutNode[DiscordTarget]] = [Heading(self.title)]

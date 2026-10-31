@@ -68,7 +68,7 @@ class StagedForm:
             elif isinstance(item, discord.ui.Select):
                 item._values = [str(entry) for entry in _sequence(value)]  # pyrefly: ignore[missing-attribute]
             else:
-                item._values = list(_sequence(value))  # pyrefly: ignore[missing-attribute]
+                item._values = list(_sequence(value))  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
         if remaining:
             names = ", ".join(sorted(remaining))
             message = f"staged form has no fields: {names}"
@@ -224,24 +224,22 @@ async def stage[OwnerT, ComponentT: Component[ComponentsV2Target]](
     scope = runtime.scope(owner, defaults=defaults)
     interaction = _interaction(client, user_id)
     try:
-        result = await (await scope.request(interaction.source)).respond(content, **overrides)
-        if not isinstance(result, Presented):
-            message = f"staging live content produced {type(result).__name__}"
-            raise TypeError(message)
-        staged = StagedUI(cast(Presented[ComponentT], result), client=client, user_id=user_id, interaction=interaction)
-        raised: BaseException | None = None
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(runtime.run)
+            await tasks.start(runtime.run)
             try:
+                result = await (await scope.request(interaction.source)).respond(content, **overrides)
+                if not isinstance(result, Presented):
+                    message = f"staging live content produced {type(result).__name__}"
+                    raise TypeError(message)
+                staged = StagedUI(
+                    cast(Presented[ComponentT], result), client=client, user_id=user_id, interaction=interaction
+                )
                 yield staged
-            except BaseException as error:
-                raised = error
             finally:
+                with anyio.CancelScope(shield=True):
+                    await runtime.close()
                 tasks.cancel_scope.cancel()
-        if raised is not None:
-            raise raised
     finally:
-        await runtime.close()
         await client.close()
 
 

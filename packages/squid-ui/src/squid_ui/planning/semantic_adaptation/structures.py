@@ -29,7 +29,7 @@ from squid_ui.planning.semantic_adaptation.decisions import (
 )
 from squid_ui.planning.semantic_adaptation.handlers import ForwardSelection, RouteSelection
 from squid_ui.planning.semantic_adaptation.model import (
-    LoweringContext as _Context,
+    LoweringContext,
 )
 from squid_ui.planning.semantic_adaptation.regions import (
     _cards,
@@ -79,7 +79,7 @@ from squid_ui.semantic import (
 from squid_ui.sources import Position
 
 
-def _table(node: Table, path: str, context: _Context) -> list[Node]:
+def _table(node: Table, path: str, context: LoweringContext) -> list[Node]:
     columns = node.columns.columns
     strategy = _select_strategy(_table_axis(node, path, context.session), context)
     if strategy in {"matrix", "tabular"}:
@@ -121,7 +121,7 @@ def _coordinate(index: int, columns: int) -> str:
     return f"{_column_name(index % columns)}{index // columns + 1}"
 
 
-def _grid_matrix(node: Grid, context: _Context) -> PrimitiveCode:
+def _grid_matrix(node: Grid, context: LoweringContext) -> PrimitiveCode:
     labels = [f"{'[ ]' if cell.available else '[x]'} {_resolve(cell.label, context)}" for cell in node.cells]
     column_names = [_column_name(index) for index in range(node.columns)]
     widths = [
@@ -146,11 +146,11 @@ def _grid_matrix(node: Grid, context: _Context) -> PrimitiveCode:
     return PrimitiveCode("\n".join(lines), overflow=Never())
 
 
-def _grid_option(index: int, cell: GridCell, node: Grid, context: _Context) -> Option:
+def _grid_option(index: int, cell: GridCell, node: Grid, context: LoweringContext) -> Option:
     return Option(f"{_coordinate(index, node.columns)} ??{_resolve(cell.label, context)}", cell.key)
 
 
-def _grid_select(cells: Sequence[tuple[int, GridCell]], node: Grid, key: str, context: _Context) -> SelectMenu:
+def _grid_select(cells: Sequence[tuple[int, GridCell]], node: Grid, key: str, context: LoweringContext) -> SelectMenu:
     return SelectMenu(
         tuple(_grid_option(index, cell, node, context) for index, cell in cells),
         node.on_pick,
@@ -159,7 +159,7 @@ def _grid_select(cells: Sequence[tuple[int, GridCell]], node: Grid, key: str, co
     )
 
 
-def _grid(node: Grid, path: str, context: _Context) -> list[Node]:
+def _grid(node: Grid, path: str, context: LoweringContext) -> list[Node]:
     strategy = _select_strategy(_grid_axis(node, path, context.limits, context.session), context)
     if strategy == "buttons":
         rows: list[Node] = []
@@ -191,7 +191,7 @@ def _grid(node: Grid, path: str, context: _Context) -> list[Node]:
     ]
 
 
-def _roster(node: Roster, context: _Context) -> list[Node]:
+def _roster(node: Roster, context: LoweringContext) -> list[Node]:
     lowered: list[Node] = []
     for group in node.placement.groups:
         slot = group.slot
@@ -245,7 +245,7 @@ def _roster(node: Roster, context: _Context) -> list[Node]:
     return lowered
 
 
-def _media(node: Media, path: str, context: _Context) -> list[Node]:
+def _media(node: Media, path: str, context: LoweringContext) -> list[Node]:
     strategy = _select_strategy(_media_axis(node, path, context.session), context)
     if not node.items:
         return []
@@ -280,7 +280,7 @@ def _media(node: Media, path: str, context: _Context) -> list[Node]:
     ]
 
 
-def _actions(node: ActionControls, path: str, context: _Context) -> list[Node]:
+def _actions(node: ActionControls, path: str, context: LoweringContext) -> list[Node]:
     strategy = _select_strategy(_action_axis(node, path, context.limits, context.session), context)
     groups: list[tuple[str, tuple[ActionControl, ...], str | None]] = []
     # Links and routed controls carry no binding, so they can never be folded into a select
@@ -332,12 +332,14 @@ def _actions(node: ActionControls, path: str, context: _Context) -> list[Node]:
     return result
 
 
-def _individual(actions: Sequence[ActionControl], key: str, context: _Context) -> list[Node]:
+def _individual(actions: Sequence[ActionControl], key: str, context: LoweringContext) -> list[Node]:
     controls = tuple(_button(action, context) for action in actions)
     return [PrimitiveActionGroup(controls)] if controls else []
 
 
-def _grouped(actions: Sequence[ActionControl], key: str, label: str | None, path: str, context: _Context) -> list[Node]:
+def _grouped(
+    actions: Sequence[ActionControl], key: str, label: str | None, path: str, context: LoweringContext
+) -> list[Node]:
     eligible: list[ActionControl] = []
     direct: list[ActionControl] = []
     for action in actions:
@@ -365,7 +367,9 @@ def _grouped(actions: Sequence[ActionControl], key: str, label: str | None, path
     return result
 
 
-def _paged_picker(actions: Sequence[ActionControl], key: str, label: str | None, context: _Context) -> list[Node]:
+def _paged_picker(
+    actions: Sequence[ActionControl], key: str, label: str | None, context: LoweringContext
+) -> list[Node]:
     chunk, index, pages = _page_items(actions, key, context, identity=lambda action: action.key)
     return [
         _picker(chunk, f"{key}.page", label, context),
@@ -373,7 +377,7 @@ def _paged_picker(actions: Sequence[ActionControl], key: str, label: str | None,
     ]
 
 
-def _picker(actions: Sequence[ActionControl], key: str, label: str | None, context: _Context) -> SelectMenu:
+def _picker(actions: Sequence[ActionControl], key: str, label: str | None, context: LoweringContext) -> SelectMenu:
     routes = {
         action.key: ActionBinding(
             action.key,
@@ -395,7 +399,7 @@ def _picker(actions: Sequence[ActionControl], key: str, label: str | None, conte
     )
 
 
-def _unbound_button(item: Link | RoutedActionControl, context: _Context) -> LinkButton | RoutedButton:
+def _unbound_button(item: Link | RoutedActionControl, context: LoweringContext) -> LinkButton | RoutedButton:
     """Lower a control the mount never dispatches: a URL, or a router's own custom id."""
     label = _resolve(item.label, context)
     if isinstance(item, Link):
@@ -405,7 +409,7 @@ def _unbound_button(item: Link | RoutedActionControl, context: _Context) -> Link
     )
 
 
-def _button(action: ActionControl, context: _Context) -> Button:
+def _button(action: ActionControl, context: LoweringContext) -> Button:
     return Button(
         _resolve(action.label, context),
         action.on_trigger,

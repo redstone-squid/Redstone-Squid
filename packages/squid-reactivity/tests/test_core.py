@@ -1,6 +1,7 @@
 """Standalone contracts for the transactional state kernel."""
 
 import asyncio
+from typing import override
 
 import pytest
 
@@ -29,6 +30,7 @@ class Counter(StateOwner):
     def doubled(self) -> int:
         return self.value * 2
 
+    @override
     def on_state_commit(self, names: frozenset[str]) -> None:
         self.commits.append(names)
 

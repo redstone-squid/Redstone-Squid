@@ -87,7 +87,7 @@ flowchart TB
     scene -->|mechanical draw| html
 
     subgraph discord_runtime[Discord live runtime]
-        invocation[Owner-scoped DiscordUI and DiscordRequest<br/>source · audience · localization · acknowledgement]
+        invocation[Owner-scoped Scope and Request<br/>source · audience · localization · acknowledgement]
         root[MessageRoot<br/>owns one message and one ComponentRuntime]
         session[SessionManager and Session<br/>own a graph of roots]
         router[Router and RouteGroup<br/>stateless durable route identity]
@@ -170,12 +170,12 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 | Need | API | Result |
 |---|---|---|
 | Runtime for one discord.py client | `runtime = sd.install(client, config)` | `DiscordUIRuntime`: scopes, sessions, scheduler, challenges, and localization |
-| Authority for one application owner | `ui = runtime.scope(owner, defaults=...)` | an identity-bound `DiscordUI[OwnerT]` closed with its owner |
-| Current command or routed action | `request = await ui.resolve(source)` | typed owner/source, localization, user, guild, and acknowledgement state |
-| Terminal response | `await ui.respond(source, content, audience=...)` | `Sent`, `Presented`, `Rejected`, or `Abandoned` |
-| Plain live panel | `await ui.respond(source, component, access=...)` | a `Presented` outcome with its `MessageRoot` and delivery |
-| Reusable application screen | `await ui.respond(source, MyScreen(...))` | screen class policy composed with scope and call policy |
-| Dynamic session composition | `await ui.respond(source, component, session=spec)` | a typed presentation or admission rejection |
+| Authority for one application owner | `ui = runtime.scope(owner, defaults=...)` | an identity-bound `Scope[OwnerT]` closed with its owner |
+| Current command or routed action | `request = await ui.request(source)` | typed owner/source, localization, user, guild, and acknowledgement state |
+| Terminal response | `await request.respond(content, audience=...)` | `Sent`, `Presented`, `Rejected`, or `Abandoned` |
+| Plain live panel | `await request.respond(component, access=...)` | a `Presented` outcome with its `MessageRoot` and delivery |
+| Reusable application screen | `await request.respond(MyScreen(...))` | screen class policy composed with scope and call policy |
+| Dynamic session composition | `await request.respond(component, session=spec)` | a typed presentation or admission rejection |
 | Low-level root composition | `MessageRoot(...)`, then `root.send(destination)` | explicit message-root and delivery ownership when a higher entry point cannot express it |
 | Low-level Discord destination | `sd.reply_to`, `sd.respond_to`, `sd.send_to` | a `MessageDestination` for framework internals and transport adapters |
 | Static Components V2 message | sd.render_static(document) | MessagePayload |
@@ -201,7 +201,7 @@ output object, so unknown pre-existing controls cannot undermine measurement.
 
 `DiscordUIRuntime.scope` is the product ownership boundary. It keys scopes by exact object identity;
 re-registering the same owner and defaults returns the live scope, while conflicting defaults fail.
-`DiscordUI.resolve` creates a `DiscordRequest` once for a Discord source. The request reconciles its
+`Scope.request` creates a `Request` once for a Discord source. The request reconciles its
 acknowledgement ledger with discord.py before each response, so Squid never assumes it was the only
 responder. `tr(...)` resolves strings leaving the layout system, such as autocomplete or a native
 modal API; layout nodes retain deferred `TextLike` values and resolve them when their root renders.
@@ -218,7 +218,7 @@ only when the screen reaches its first render.
 `admission` decides what happens on collision, `capacity` and `quota` bound membership, and `access`
 builds the root policy from the open context. `SessionSpec.open`/`respond`, `SessionManager`, raw
 `MessageRoot`, and `reply_to`/`respond_to` remain public lower layers for framework extensions and
-transport adapters. Application handlers normally enter through an owner-scoped `DiscordUI`, which
+transport adapters. Application handlers normally enter through an owner-scoped `Scope`, which
 derives destination, sessions, open context, and localization from one source.
 
 ## Semantic authoring, adaptation, and exact primitives
@@ -396,6 +396,54 @@ So the two predicates answer different questions, on purpose. `is_layout_node` i
 caller's own `Renderable` is a layout node, and a container factory accepts it. Lowering
 asks `is_builtin_layout_node`, because it cannot draw a node it has never heard of and has
 to say so by name.
+
+## Forms: prefills, parsed values, and submission hooks
+
+A `Form` subclass declares ordinary `FormField` descriptors. On an instance, required built-in
+fields expose `T`; fields declared with `required=False` expose `T | None`. A class attribute
+such as `Thresholds.post_at` remains the field declaration, suitable for a `FieldError`.
+
+Constructor arguments are raw prefills, available through `form.prefill`. They are not parsed
+values. Reading an instance field before it parses raises `FieldNotReadyError`, including
+optional fields. After parsing, an optional scalar blank is `None`; multi-choice fields retain
+their empty-tuple convention. Defaults seed the displayed form and still pass through parsing.
+
+```python
+class Thresholds(sl.forms.Form):
+    post_at = sl.forms.FloatField(default=3.0)
+    remove_at = sl.forms.FloatField(default=0.0)
+    note = sl.forms.TextField(required=False)
+
+    def validate(self) -> tuple[sl.forms.FormIssue, ...]:
+        if self.post_at <= self.remove_at:
+            return (
+                sl.forms.FieldError(
+                    Thresholds.post_at,
+                    Thresholds.remove_at,
+                    message="Post threshold must exceed removal threshold.",
+                ),
+            )
+        return ()
+
+    async def on_submit(self, event: sl.SubmitEvent) -> None:
+        await save_thresholds(self.post_at, self.remove_at, self.note)
+```
+
+`validate` runs after every field parses. `on_submit` runs only after both parsing and validation
+succeed. `on_invalid(event: sl.InvalidSubmitEvent)` handles rejected attempts; its default calls
+`await event.retry()`. The event exposes `attempted` raw input, `values` containing only fields
+that parsed, and `errors`. Successfully parsed fields are also readable on the form during this
+hook; failed fields raise instead of retaining an earlier attempt's value. Retry preserves raw
+input and follows the same submission pipeline. Its authority ends when the hook returns.
+
+`FieldError(*fields, message=...)` requires at least one field from the current form. Repeated
+references are deduplicated, and a shared error is displayed once with all its labels. Use
+`FormError(message)` for an error applying to the whole form.
+
+Dynamic schemas still use `FormSpec` with a mapping-based handler. A separate screen handler
+can use `MyForm.from_submission(event)` to bind an already validated event without misrepresenting
+it as prefill. `FormSpec` retains `ACCEPT_AND_MARK` for mapping-based consumers; descriptor forms
+always route invalid attempts to `on_invalid`.
 
 ## Patterns: one state machine, two shells
 
@@ -1001,6 +1049,7 @@ no longer "which layer does this belong in?" but:
 | | a session | a graph of message roots |
 | | an `EditHandle` | temporary or permanent write authority |
 | Async | the caller | a resource's or operation's execution |
+| | a component or explicit `ServiceOwner` | one active lifetime per owned service |
 | | a supervisor | long-running infrastructure tasks |
 | Durability | a store | bytes |
 | | a runtime | claims and leases |
@@ -1016,6 +1065,387 @@ them is what made `notice()` clobber the panel before plan 07.
 through one named method, and refuses to acquire a task as a side effect of a read.
 `PersistentStatePool` acquired one inside `load()` and released it inside `close()`, which anyio
 refuses across tasks — the ordinary case, and no test reached it.
+
+### Component-owned services
+
+Choose the primitive by what it does:
+
+| API | Responsibility |
+|---|---|
+| `SharedState` | Share reactive data between consumers. |
+| `resource` | Derive an async value from dependencies; safe to cancel and restart. |
+| `operation` | Represent an explicitly started execution and its outcome. |
+| `ManagedService` | Run activity under an explicit owner until it ends. |
+
+A service can publish shared state, but it need not have any. Ordinary async queries belong
+in resources; explicit submissions belong in operations. `SharedStatePool` retains handles,
+and removing a handle does not run cleanup. `provide()` and `inject()` share access without
+establishing ownership of activity.
+
+For subscriptions or ongoing work that should stop with a panel, declare a `ManagedService`
+with `self.own(service)` before the component's first render. Construction and registration
+are inert. Only a successful delivery and component mount start `run()`. Ownership is
+exclusive and permanent, while any number of consumers may borrow the same service.
+
+The framework owns activation, cancellation, and waiting for completion. Service authors
+own the resources inside each run:
+
+- Check resource availability in active methods, including during startup and remounting.
+  A retained service or a completed readiness wait does not keep a connection open.
+- Register cleanup as resources are acquired, so partial setup can unwind. Context managers
+  or `AsyncExitStack` let remaining cleanup run even when an earlier step fails.
+- Shield awaited cleanup from cancellation and put resource-specific timeouts around waits
+  that may stall. Keep child task groups inside the resources their workers use.
+
+Passive state may remain readable between runs. Define what that retained state means while
+the next activation is starting.
+
+For example, an editor can subscribe to build changes and let its children display a notice.
+Fetching the updated preview can remain a resource; the service only owns the subscription:
+
+```python
+import anyio
+from anyio.abc import TaskStatus
+
+from squid_ui import Component, ComponentsV2Target, DocumentLike, state
+from squid_ui.primitives import Text
+from squid_ui.runtime import ContextKey, ManagedService, SharedState, Topic, TopicBus
+
+
+class UpdateState(SharedState):
+    changed: bool = state(default=False)
+
+
+class BuildUpdates(ManagedService):
+    def __init__(self, bus: TopicBus, build_id: int) -> None:
+        self.bus = bus
+        self.topic = Topic("build", str(build_id))
+        self.state = UpdateState(bus)
+
+    async def run(self, *, task_status: TaskStatus[None]) -> None:
+        def changed(_: Topic) -> None:
+            self.state.changed = True
+
+        unsubscribe = self.bus.subscribe(self.topic, changed)
+        try:
+            task_status.started()
+            await anyio.sleep_forever()
+        finally:
+            unsubscribe()
+
+
+UPDATES = ContextKey[BuildUpdates]("build-updates")
+
+
+class ChangeNotice(Component[ComponentsV2Target]):
+    def render(self) -> Text:
+        updates = self.inject(UPDATES)
+        return Text("Build changed; refresh the preview." if updates.state.changed else "Build is up to date.")
+
+
+class BuildEditor(Component[ComponentsV2Target]):
+    def __init__(self, bus: TopicBus, build_id: int) -> None:
+        self.updates = self.own(BuildUpdates(bus, build_id))
+        self.notice = ChangeNotice()
+
+    def render(self) -> DocumentLike[ComponentsV2Target]:
+        self.provide(UPDATES, self.updates)
+        return self.boundary(self.notice, key="notice")
+```
+
+A toolbar can inject the same `UPDATES`. Removing a consumer leaves the subscription active;
+removing the editor unsubscribes. A panel borrowing an application-owned service stores and
+provides it without calling `own()`.
+
+`run()` contains the whole activation: acquisition, readiness, work and cleanup. Signal
+readiness exactly once with AnyIO's `task_status.started()` convention, after required setup.
+Returning without signalling readiness is an error. Returning after readiness completes the
+activation normally; rerendering does not restart it. Render initial/loading state until
+setup completes. Data required before first delivery belongs in `on_load()` or an atomic resource.
+
+The diagnostics report browser is a production example in
+`squid/bot/diagnostics_view.py`. Its update panel owns `ErrorReportRefresh`, which awaits an
+initial comparison before signalling readiness and then schedules periodic checks. The notice
+and refresh controls inject the same monitor. Its resource lives on `SharedState`, so each
+child observes changes through the topic bus. A resource owned locally by the parent would
+invalidate that parent, which is insufficient for independently cached child readers.
+Query failures remain visible resource results and leave manual refresh available; hiding the
+update panel cancels its work. Reopening it keeps the service object and starts a fresh run.
+The report being read only changes after an explicit refresh. This exercises asynchronous
+startup and shared reactive results without holding a database connection for the panel's lifetime.
+
+#### Rendering and context
+
+Context exposes the service object during rendering, before its first run starts. Children
+read initial passive state and render a useful loading view. `provide()` applies to that
+render's descendants; the nearest provider wins. Replacing a provided value changes what
+consumers receive, without transferring ownership or stopping either service. Use the default
+identity comparison for service context keys: distinct services are not interchangeable merely
+because their current data matches.
+
+The delivered tree decides which services run. A failed delivery or abandoned candidate leaves
+the previously committed services running and does not activate prospective owners. A successful
+commit reconciles ownership even when the frontend can skip an identical message edit. Rerenders
+keep existing runs. Removing and remounting a component uses the same service object, with its
+next run waiting for previous cleanup; rendering during that wait can still see retained state.
+
+Readiness is an execution signal, not reactive state. Calling `task_status.started()` wakes
+readiness waiters but does not redraw consumers. Publish UI-visible loading, ready, or error
+state through `SharedState` so the normal render subscriptions update the UI. Define what retained
+state means during a restart, and make service methods check whether their required resources
+are available. Injecting a service is not evidence that those resources are ready.
+
+Parent components mount before children, but their async setup can finish in any order. A child's
+service that needs a parent resource must explicitly await readiness supplied by that service;
+it must not wait for the whole runtime, which would include itself. Resolve borrowed inputs
+explicitly when constructing services: `inject()` is a render-time API. Mount hooks also run
+before async readiness and must not assume setup has completed.
+
+Frontends commit after successful delivery and await removed-service cleanup outside delivery
+locks. They need not wait for newly mounted services to become ready before returning from
+delivery. Await `wait_services_ready()` explicitly when a caller needs that guarantee. Loading
+required to produce the first message cannot depend on a service that starts after that message
+is delivered.
+
+Use lexical context managers and AnyIO task groups for more involved activity:
+
+```python
+class LivePreview(ManagedService):
+    async def run(self, *, task_status: TaskStatus[None]) -> None:
+        async with open_preview_client() as client:
+            async with anyio.create_task_group() as tasks:
+                await tasks.start(client.follow_updates)
+                task_status.started()
+                await anyio.sleep_forever()
+```
+
+Here `open_preview_client()` is an application context manager, and `follow_updates` signals
+its readiness through `task_status`. Workers stop before the client exits. Shield awaited
+cleanup with `anyio.CancelScope(shield=True)`; use `ExitStack` or `AsyncExitStack` when several
+resources need cleanup.
+
+Unmount stops child services before their parents, so children can finish using borrowed
+parent resources during cleanup. Independent sibling services can clean up concurrently. Remount reuses the service object and its
+passive state, then starts a fresh run after the previous one exits. Service methods manage
+access to their active resources, such as connections.
+
+Setup and worker failures unwind the run before reaching the error handler. Discord finishes
+the affected message root; other roots stay live. Handle recoverable failures inside the service.
+
+For frontend and application integration, `UIExecutionHost` supervises services, post-commit
+operations, and shutdown. `ServiceOwner` declares which services start and stop together.
+Component authors normally need neither.
+The portable engine has no mandatory AnyIO dependency: install `squid-ui[services]` for execution.
+`squid-ui-discord` includes that extra, and `DiscordUIRuntime.run()` supervises the host alongside
+the scheduler and challenge runner. Hosts supervising those jobs individually must also run
+`runtime.execution_host.run()`. Construction starts no tasks. Service runs inherit the host runner's
+context, not the interaction that activates them: request transactions must not leak into
+background work. Pass request-specific inputs explicitly when constructing a service.
+
+Standalone frontends pass a running `UIExecutionHost` to `ComponentRuntime(execution_host=...)`.
+After commit/removal or `finish()`, await `runtime.wait_services()` outside delivery locks.
+Frontends whose service cleanup can re-enter delivery use `allow_reentry=True`: a call from
+retiring activity returns instead of waiting on itself, while its outer caller or host still
+awaits completion. Every other caller waits normally.
+Use `runtime.wait_services_ready()` to await the currently committed activations, also outside
+locks. Supply `on_service_error` for the frontend's failure policy. Components declaring services
+without a running host are rejected before delivery.
+
+Borrowers can capture `run = service.current_run` to observe one specific activation.
+It is `None` before activation and after the owner releases that run through its shutdown
+wait. A captured `ServiceRun` never follows a remount and has no cancellation method.
+Its `status` is `STARTING`, `READY`, `STOPPING`, `COMPLETED`, `CANCELLED`, or `FAILED`;
+terminal states include completed cleanup. `await run.wait()` observes normal completion or
+cancellation and raises the same terminal failure on repeated waits. `run.error` exposes that
+failure after cleanup. Retaining the handle deliberately retains its outcome, including failure
+tracebacks; the owner releases its references after shutdown has been observed.
+
+`await run.wait_ready()` observes setup of that activation. It raises on failure or cancellation;
+a normally completed run can still report that it reached readiness. Readiness is a milestone,
+not permission to use a connection forever: service methods must still check their resources.
+For a child service depending on a parent's setup, capture the parent's `current_run` when the
+child starts and await that handle. Parent mounting registers its run before child work starts.
+Cancelling either observation leaves the service running. Neither wait silently follows a new
+activation, and a service cannot await its own readiness or completion.
+
+Application and session code can own services without a dummy component:
+
+```python
+owner = ServiceOwner()
+updates = owner.own(BuildUpdates(bus, build_id))
+owner.activate(host, on_error=report_failure)  # host.run() is already supervised
+await owner.wait_ready()
+# Pass updates to borrowers. At the application's/session's shutdown boundary:
+owner.cancel()
+await owner.wait()
+```
+
+An owner keeps its declarations across runs. To restart completed services or move to another
+host, call `cancel()` before activating again. Repeated activation otherwise keeps the current
+runs and error handler.
+
+`wait_ready()` observes setup of the current runs; `wait()` observes cleanup of cancelled runs.
+Cancelling either wait leaves the services alone. Shutdown waits report failures from the latest
+activation when the wait begins; reactivation never changes an existing wait's results.
+Concurrent waiters receive the same failures, and
+completed waits release those results. Later activations do not inherit earlier failures;
+use the error handler or logs for history. See the method docstrings for the wait
+and failure semantics. `UIExecutionHost.close()` awaits all remaining runs and error handlers.
+
+Component ownership is unrelated to `SharedState.scope` (a diagnostic label), pool keys, and
+Discord access policies. Work that must outlive a panel belongs to an application/session owner.
+
+### Finishing panels and sessions
+
+`finish()` closes a panel and waits for its services and finish callbacks. Use `wait=False`
+when the caller needs to continue while the host finishes cleanup:
+
+```python
+await panel.finish(wait=False)
+# The panel now rejects interactions. Its host still owns cleanup.
+await panel.wait()
+```
+
+Inside an action handler, use `event.finish_on_success()`. It records a request and returns;
+the handler can finish its work before closure starts. Success means the handler returned
+normally and the framework accepted its state changes. If the handler is cancelled,
+raises, or its changes cannot be accepted, the request is discarded. The dispatcher then captures
+the terminal view and accepts closure without another scheduling point. Delivery, cleanup,
+and callbacks run outside the transaction, so a cleanup failure cannot undo the action.
+This requires a dispatcher-owned action transaction; closure from a dispatch nested inside
+another transaction is rejected rather than committing that outer transaction early.
+
+`root.finish()` is an immediate lifecycle operation and rejects calls inside a transaction.
+A closed panel cannot be reopened by rolling back state, so action handlers schedule closure
+with `finish_on_success()` instead:
+
+```python
+async def save(self, event: ActionEvent) -> None:
+    self.saved = True
+    event.finish_on_success()
+```
+
+To close another session, or perform other async work after a successful action, pass a
+callable to `event.on_success()`:
+
+```python
+async def save(self, event: ActionEvent) -> None:
+    self.history.record("Save changes")
+    self.saved = True
+    event.on_success(other_session.finish, name="Close editor")
+```
+
+The callback runs outside the action's transaction under the host. It sees committed
+state and continues if the interaction stops waiting. The dispatcher normally waits for
+the operations and presents their resulting state. Each callback runs independently;
+combine dependent steps in one callback when their order matters. Callbacks should bound
+their own waits, just like service cleanup. They may outlive the panel and must not rely on
+resources that its services release during closure. `finish_on_success()` still captures
+the current panel's final view at commit; it does not wait for these callbacks first.
+
+`on_success()` returns a `PostCommitOperation`. Its `status` uses the existing operation
+statuses, and its `context` identifies the operation and its originating action once admitted.
+Use `await operation.wait()` outside the handler to observe completion. A rolled-back action
+leaves the handle `Discarded`; waiting then raises `ActionDiscardedError`. An operation failure
+is logged and available to waiters. The dispatcher observes all scheduled operations before
+reporting their collected failures. Failure never rolls back an action that already committed.
+This is in-process execution, with no automatic retries or persistence across restart.
+
+History and these operations share action identities. Undo and redo apply state changes;
+they do not replay callbacks or automatically reverse their effects. External work that
+needs undo still requires explicit compensation. Calling `on_success()` alone does not
+make an effect reversible. If a callback publishes new reactive state, use a fresh
+`transaction()` inside it; that action is recorded as caused by the operation.
+
+Sessions also support `finish(wait=...)` and `wait()`. Closure removes a session from active
+admission bookkeeping; its children finish before their parent's services stop. This includes a child whose closure
+was already underway. Siblings can finish concurrently. This ordering describes orderly
+shutdown: a service that has already failed may have released its resources before closure.
+
+Attachment delivery has a separate owner until the child is registered. Ordinary and durable
+sessions use the same delivery scope: if registration cannot complete after a successful send,
+the scope transfers the child to host-owned cleanup, including on cancellation. The session lock
+serializes attachments and membership changes, but closure does not take that lock. Delivery and
+durable promotion must therefore recheck the parent after awaiting external work. Recovered and
+new children share registration bookkeeping. A detached child remains a shutdown dependency until
+its cleanup and callbacks settle, then releases that reference even when cleanup failed.
+
+Replacement commits when the newcomer is registered. All selected incumbents are asked to close
+before their cleanup results are collected. Cleanup failures are logged and remain available from
+the incumbents' `wait()` methods; they do not change the successful admission into a failed `open()`.
+
+When changing lifecycle behavior here or in another subsystem, review the callers as well as the
+terminating method:
+
+- At each `await`, identify what can become invalid and who owns cleanup if the operation stops.
+- Identify the commit point and distinguish failures before it from cleanup failures afterward.
+- Inject a failure in the first cleanup and verify that all remaining resources are processed.
+- Check every owning collection and callback closure for references that must end at completion.
+
+The session lifecycle tests apply the same contract to ordinary, durable, and recovered sessions.
+They pause delivery and promotion with events to force closure at specific boundaries, and use
+weak references to check that completed children can be collected while their parent stays open.
+Keep these interaction tests alongside focused shutdown tests when changing either side of the contract.
+
+`finished` means closure was accepted. `wait()` observes completion without initiating it.
+A successful wait means cleanup and `on_finish` callbacks completed. Unexpected errors are
+collected after the remaining cleanup and callbacks have been attempted, then raised to
+waiters and logged by the host. Concurrent and later waiters receive the same terminal result.
+An already-deleted Discord message counts as successful closure. Shutdown runs in the host
+context, so callbacks see committed state rather than the initiating action's pending writes.
+
+The first accepted request determines options such as disabling or deleting the message.
+Repeated requests join that shutdown. Cancellation while waiting for acceptance leaves the
+panel unchanged; once accepted, shutdown belongs to the host. Cancelling a caller's wait
+leaves cleanup running. For example, this limits the caller's wait to two seconds:
+
+```python
+await panel.finish(wait=False)
+with anyio.move_on_after(2):
+    await panel.wait()
+```
+
+A service or finish callback can request closure with `wait=False`. Awaiting shutdown that
+needs that same task to finish raises an error. The same check covers child tasks and session
+children; a child callback cannot await its parent's completion.
+
+Installed Discord runtimes supply the host. Standalone roots also need one, even when they
+have no services, because delivery and callbacks can await:
+
+```python
+async with anyio.create_task_group() as tasks:
+    host = UIExecutionHost()
+    await tasks.start(host.run)
+    panel = MessageRoot(component, access=Everyone(), execution_host=host)
+    try:
+        await panel.send(destination)
+        # Use the panel here.
+    finally:
+        try:
+            await panel.finish()
+        finally:
+            await host.close()
+```
+
+Finish panels before closing their host. `UIExecutionHost.start_operation()` accepts work only
+while the host is open, including when called by existing host activity. `start_cleanup()` also
+accepts cleanup from existing host activity while draining, so accepted operations and shutdown
+callbacks can release their resources. External callers must submit cleanup before closure begins.
+Both callbacks inherit the host context, run shielded, and log failures without cancelling unrelated
+work. `PostCommitOperation` and panel shutdown handles additionally expose results to their waiters.
+
+`UIExecutionHost.close()` drains accepted operations and cleanup, then cancels remaining service
+runs and awaits their error handlers. The application owns its overall shutdown deadline.
+If that deadline expires, report unfinished work; cancellation cannot forcibly stop shielded
+or blocking code. Enforcing a hard process deadline belongs to the application or its process
+supervisor.
+
+Service authors choose cleanup limits for individual resources. See `ManagedService.run()`
+for a connection-close example: shielding lets the close await a response after cancellation,
+and a timeout bounds that attempt. Use context managers or `AsyncExitStack` so one failed
+attempt still leaves the other resources an opportunity to close. Operations that must
+complete after a panel disappears, such as an accepted submission, belong to a longer-lived
+application or session owner.
 
 ### Lifecycle verbs
 

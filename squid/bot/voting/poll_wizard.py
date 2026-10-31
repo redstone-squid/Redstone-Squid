@@ -3,7 +3,7 @@
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import cast
+from typing import cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -241,10 +241,9 @@ def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target]:
     return sl.section(sl.heading(draft.question), sl.paragraph(options), sl.fields(*fields))
 
 
-class PollScreen(sd.Screen):
+class PollScreen(sd.UserGuildSessionScreen, session_name="poll-wizard"):
     """A poll wizard that ends when published, cancelled, replaced, or timed out."""
 
-    session = sd.SessionSpec("poll-wizard", scope=sd.ScopeKind.USER_GUILD)
     timeout = 900
     expiry = sd.RenewEphemeral()
     follow_topics = True
@@ -270,6 +269,7 @@ class PollScreen(sd.Screen):
         self.wizard = wizard
         self.driver = wizard.build_component(on_finish=self._finish)
 
+    @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self.published_url is not None:
             published_url = self.published_url
@@ -297,8 +297,8 @@ class PollScreen(sd.Screen):
             self.driver.machine_state = replace(event.state, complete=False)
             await event.source.notice(error.message)
             return
-        await event.source.finish()
+        event.source.finish_on_success()
 
     async def _cancel(self, event: sl.PressEvent) -> None:
         self.cancelled = True
-        await event.finish()
+        event.finish_on_success()

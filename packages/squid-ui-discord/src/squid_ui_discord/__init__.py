@@ -15,8 +15,7 @@ from squid_ui.errors import (
 from squid_ui.planning import limits as limits
 from squid_ui.planning import navigation as navigation_controls
 from squid_ui.planning.limits import LIMITS as V2_LIMITS
-from squid_ui.planning.planner import EMPTY_RESERVATION
-from squid_ui.planning.target import ResourceCost
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui_discord import (
     access,
     actions,
@@ -54,6 +53,7 @@ from squid_ui_discord import (
     target,
     targets,
     testing,
+    v2,
 )
 from squid_ui_discord import (
     modal as modals,
@@ -103,7 +103,9 @@ from squid_ui_discord.delivery import (
     respond_to,
     send_to,
 )
-from squid_ui_discord.facade import DiscordUI, Scope
+from squid_ui_discord.devtools import open_devtools
+from squid_ui_discord.devtools_view import DevToolsSection
+from squid_ui_discord.facade import Scope
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
 from squid_ui_discord.live import message_roots
@@ -133,6 +135,8 @@ from squid_ui_discord.message_root_contracts import (
     ChallengeRequest,
     ChallengeSupervisor,
     MessageRootConfig,
+    MessageRootSnapshot,
+    MessageRootStatus,
     PauseUpdates,
     RenewEphemeral,
 )
@@ -185,7 +189,7 @@ from squid_ui_discord.runtime import (
     DiscordUIRuntimeMissing,
     install,
 )
-from squid_ui_discord.screen import Screen
+from squid_ui_discord.screen import Screen, SharedGuildSessionScreen, UserGuildSessionScreen, UserSessionScreen
 from squid_ui_discord.session_specs import OpenContext, ScopeKind, SessionOptions, SessionOptionsResolver, SessionSpec
 from squid_ui_discord.sessions import (
     SessionKey,
@@ -228,7 +232,7 @@ __all__ = [
     "DEFAULT_MESSAGE_ROOT_CONFIG",
     "DISCORD_V1_DPY27",
     "DISCORD_V2_DPY27",
-    "EMPTY_RESERVATION",
+    "EMPTY_COST",
     "EXACTLY_ONE",
     "V2_LIMITS",
     "Abandoned",
@@ -244,8 +248,8 @@ __all__ = [
     "CommandPolicy",
     "CommandResult",
     "Deferral",
+    "DevToolsSection",
     "DialogPresenter",
-    "DiscordUI",
     "DiscordUIConfig",
     "DiscordUIRuntime",
     "DiscordUIRuntimeMissing",
@@ -271,6 +275,8 @@ __all__ = [
     "MessageRootOptions",
     "MessageRootScheduler",
     "MessageRootSchedulerSnapshot",
+    "MessageRootSnapshot",
+    "MessageRootStatus",
     "NativeCommandKwargs",
     "NativeContextMenuKwargs",
     "NativeHybridKwargs",
@@ -312,8 +318,11 @@ __all__ = [
     "SessionOptions",
     "SessionOptionsResolver",
     "SessionSpec",
+    "SharedGuildSessionScreen",
     "StackNavigator",
     "SuccessRenderer",
+    "UserGuildSessionScreen",
+    "UserSessionScreen",
     "Users",
     "Visibility",
     "Work",
@@ -361,6 +370,7 @@ __all__ = [
     "native",
     "navigation",
     "navigation_controls",
+    "open_devtools",
     "owner_message_root",
     "prefix_command",
     "render_item",
@@ -384,4 +394,5 @@ __all__ = [
     "target",
     "targets",
     "testing",
+    "v2",
 ]

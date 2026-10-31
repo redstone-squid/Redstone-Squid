@@ -12,9 +12,9 @@ import statistics
 import time
 import tracemalloc
 from collections.abc import Callable
-from typing import Any
+from typing import Any, override
 
-from squid_reactive import LocalTopicBus, SharedState, StateOwner, state, transaction
+from squid_reactivity import LocalTopicBus, SharedState, StateOwner, state, transaction
 
 
 def _shared_type(cells: int) -> type[SharedState[str]]:
@@ -75,13 +75,12 @@ def core_baseline() -> dict[str, dict[str, int]]:
 
 
 def retention_baseline() -> dict[str, int]:
-    """Measure retained bytes for bounded action outcomes and conditional history entries."""
-    from squid_reactive import ActionLedger, add_action_outcome_sink
-
+    """Measure retained bytes for bounded action results and conditional history entries."""
+    from squid_reactivity import ActionLedger, add_action_result_sink
     from squid_ui.runtime import History
 
     ledger = ActionLedger(limit=100)
-    add_action_outcome_sink(ledger)
+    add_action_result_sink(ledger)
     gc.collect()
     tracemalloc.start()
     before = tracemalloc.take_snapshot()
@@ -96,6 +95,7 @@ def retention_baseline() -> dict[str, int]:
     class Owner(StateOwner):
         value: int = state(0)
 
+        @override
         def invalidate(self) -> None:
             pass
 
