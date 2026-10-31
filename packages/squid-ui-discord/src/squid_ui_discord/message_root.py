@@ -17,7 +17,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from datetime import UTC, datetime
-from typing import Any, Unpack, cast, overload
+from typing import Any, Literal, Unpack, cast, overload
 
 import anyio
 import discord
@@ -601,7 +601,7 @@ class MessageRoot[
             if self._lifecycle is MessageRootStatus.RENEWAL_ARMED:
                 candidate: _Candidate[RenderTargetT] | None = None
                 try:
-                    candidate = cast(_Candidate[RenderTargetT], await self._stage_loaded())
+                    candidate = await self._stage_loaded()
                     wrote = await self._deliver(candidate, through=handle)
                 except Exception:
                     if candidate is not None:
@@ -1330,6 +1330,36 @@ class MessageRoot[
 
     # --- Loading -----------------------------------------------------------------------
 
+    @overload
+    async def _stage_loaded(
+        self,
+        *,
+        disabled: bool = False,
+        profile: OperationRecorder | None = None,
+        preflight: Literal[False] = False,
+        reuse_committed: bool = False,
+    ) -> _Candidate[RenderTargetT]: ...
+
+    @overload
+    async def _stage_loaded(
+        self,
+        *,
+        disabled: Literal[True],
+        profile: OperationRecorder | None = None,
+        preflight: bool,
+        reuse_committed: bool = False,
+    ) -> _Candidate[RenderTargetT]: ...
+
+    @overload
+    async def _stage_loaded(
+        self,
+        *,
+        disabled: bool = False,
+        profile: OperationRecorder | None = None,
+        preflight: bool,
+        reuse_committed: bool = False,
+    ) -> _ApplicationCandidate[RenderTargetT]: ...
+
     async def _stage_loaded(
         self,
         *,
@@ -1598,7 +1628,7 @@ class MessageRoot[
                         self._subscriptions.discard()
                 # Component on_load and atomic resources settle first. Visible resources
                 # deliberately make this the pending paint and settle after it commits.
-                candidate = cast(_Candidate[RenderTargetT], await self._stage_loaded(profile=profile))
+                candidate = await self._stage_loaded(profile=profile)
                 try:
                     destination_type = (
                         f"{type(message_destination).__module__}.{type(message_destination).__qualname__}"
@@ -1831,7 +1861,7 @@ class MessageRoot[
                 self._handle = source
                 candidate: _Candidate[RenderTargetT] | None = None
                 try:
-                    candidate = cast(_Candidate[RenderTargetT], await self._stage_loaded(profile=profile.operation))
+                    candidate = await self._stage_loaded(profile=profile.operation)
                     wrote = await self._deliver(candidate, through=source, profile=profile.operation)
                 except Exception as error:
                     if candidate is not None:
