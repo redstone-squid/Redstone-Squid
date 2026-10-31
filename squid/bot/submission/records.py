@@ -1,7 +1,7 @@
 """Discord workspace for querying and maintaining computed records."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING, Protocol, cast, override
+from typing import TYPE_CHECKING, Protocol, override
 
 import discord
 from discord import app_commands
@@ -160,38 +160,21 @@ class RecordsScreen(sd.Screen):
 
     @classmethod
     def _lookup_form(cls) -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"Lookup record category"),
-            (
-                cls._kind_field(),
-                sl.forms.TextField(key="base_key", label=tr(t"Definition ID or base key"), maximum=300),
-                sl.forms.TextField(
-                    key="restrictions",
-                    label=tr(t"Restriction IDs, comma separated"),
-                    required=False,
-                    maximum=300,
-                ),
-                sl.forms.IntField(key="version_id", label=tr(t"Pinned version ID"), required=False, minimum=1),
-            ),
-        )
+        return _LookupForm().spec()
 
     @classmethod
     def _rebuild_form(cls) -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"Rebuild records"),
-            (
-                cls._kind_field(required=False),
-                sl.forms.IntField(key="version_id", label=tr(t"Current version ID"), required=False, minimum=1),
-            ),
-        )
+        return _RebuildForm().spec()
 
     async def _lookup(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RECORD_ENTRY_INSPECT):
             return
-        kind = cast(BuildKind, event.values["kind"])
-        selected = cast(str, event.values["base_key"]).strip()
-        version_id = cast(int | None, event.values.get("version_id"))
-        raw_restrictions = cast(str | None, event.values.get("restrictions")) or ""
+        form = _LookupForm(**event.values)
+        assert form.kind is not None and form.base_key is not None
+        kind = form.kind
+        selected = form.base_key.strip()
+        version_id = form.version_id
+        raw_restrictions = form.restrictions or ""
         try:
             restrictions = frozenset(int(value.strip()) for value in raw_restrictions.split(",") if value.strip())
         except ValueError:
@@ -215,8 +198,9 @@ class RecordsScreen(sd.Screen):
     async def _rebuild(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RECORD_ENTRY_REBUILD):
             return
-        kind = cast(BuildKind | None, event.values.get("kind"))
-        version_id = cast(int | None, event.values.get("version_id"))
+        form = _RebuildForm(**event.values)
+        kind = form.kind
+        version_id = form.version_id
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
         summary = await self._computation.rebuild(current_version_id=version_id, kinds=kinds)
         if self._can_inspect:
@@ -272,3 +256,19 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog[BotT]):
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Load the records workspace cog."""
     await bot.add_cog(RecordCog(bot))
+
+
+class _LookupForm(sl.forms.Form):
+    title = tr(t"Lookup record category")
+
+    kind = RecordsScreen._kind_field()
+    base_key = sl.forms.TextField(label=tr(t"Definition ID or base key"), maximum=300)
+    restrictions = sl.forms.TextField(label=tr(t"Restriction IDs, comma separated"), required=False, maximum=300)
+    version_id = sl.forms.IntField(label=tr(t"Pinned version ID"), required=False, minimum=1)
+
+
+class _RebuildForm(sl.forms.Form):
+    title = tr(t"Rebuild records")
+
+    kind = RecordsScreen._kind_field(required=False)
+    version_id = sl.forms.IntField(label=tr(t"Current version ID"), required=False, minimum=1)

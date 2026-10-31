@@ -16,6 +16,7 @@ from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
 from squid.voting.application import VoteService
 from squid.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
 from squid_ui.runtime.reactivity import readonly_transaction
+from squid_ui.testing import submit_event
 from squid_ui_discord.testing import commit_render
 from tests.support.discord import make_layout_bot
 
@@ -343,3 +344,18 @@ async def test_each_channel_picker_writes_its_own_setting() -> None:
 
 def _button_labels(view: Any) -> list[str | None]:
     return [item.label for item in view.walk_children() if isinstance(item, discord.ui.Button)]
+
+
+async def test_clearing_the_weight_form_removes_the_existing_role_weight() -> None:
+    panel, _, _ = make_component_panel()
+    await panel.set_weight(42, 1.5)
+    assert panel.weight_for(42) == 1.5
+    parsed = await settings_view._VoteWeightForm().spec().evaluate({"multiplier": ""})
+    assert parsed.errors == ()
+    assert parsed.values["multiplier"] is None
+
+    await panel._role_weight_submitted(submit_event(parsed.values), 42)
+
+    assert panel.weight_for(42) is None
+    await panel.open_voting()
+    assert panel.weight_for(42) is None

@@ -192,6 +192,17 @@ EDIT_FIELDS: tuple[BuildFieldSpec[Any], ...] = (
 """Every entry owns its typed read and patch operations; UI keys carry no mutation authority."""
 
 
+def _submitted_text(values: Mapping[str, object], key: str) -> str:
+    """Read a dynamic text field, restoring the blank string the build parser expects."""
+    value = values[key]
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        message = f"build field {key!r} submitted a non-text value"
+        raise TypeError(message)
+    return value
+
+
 def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.FormSpec:
     page_items = items[5 * (page - 1) : 5 * page]
     fields: list[sl.forms.FormField[Any]] = []
@@ -214,7 +225,7 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
         errors: list[sl.forms.FormIssue] = []
         for item in page_items:
             try:
-                item.spec.parser(cast(str, values[item.key]))
+                item.spec.parser(_submitted_text(values, item.key))
             except ValueError as error:
                 errors.append(sl.forms.FieldError(item.key, str(error) or tr(t"Invalid value")))
         return tuple(errors)
@@ -416,7 +427,7 @@ class BuildEditScreen(sd.Screen):
     async def _edited(self, event: sl.SubmitEvent) -> None:
         errors: list[str] = []
         for item in self.items[5 * (self.page - 1) : 5 * self.page]:
-            item.stage(cast(str, event.values[item.key]))
+            item.stage(_submitted_text(event.values, item.key))
             if item.validation_error:
                 errors.append(f"**{item.spec.label}:** {item.validation_error}")
         self.validation_error = "\n".join(errors) or None

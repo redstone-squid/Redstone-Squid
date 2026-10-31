@@ -11,6 +11,7 @@ import squid_ui_discord as sd
 from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen, _edit_form
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildCategory, DoorBuild, ExtenderBuild, UtilityBuild
+from squid_ui.testing import submit_event
 from squid_ui_discord.modal import build_form_modal
 from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
 
@@ -83,6 +84,43 @@ def test_blank_values_preserve_optional_text_numbers_and_list_semantics() -> Non
         fields["normal_opening_time"].parser(" ")
     assert fields["creators_ign"].parser(" Alice, , Bob, ") == ["Alice", "Bob"]
     assert fields["creators_ign"].parser(" , ") == []
+
+
+async def test_empty_optional_modal_fields_clear_staged_text_and_numbers() -> None:
+    class Builds(BuildService):
+        def __init__(self) -> None:
+            pass
+
+    async def authorize() -> bool:
+        return True
+
+    async def unexpected_write(*args: object) -> Never:
+        raise AssertionError("Staging edits must not publish a changed build")
+
+    build = DoorBuild()
+    fields = {field.key: field for field in EDIT_FIELDS}
+    version = fields["version_spec"].bind(build)
+    timing = fields["normal_opening_time"].bind(build)
+    version.stage("1.21")
+    timing.stage("7")
+    items = (version, timing)
+    screen = BuildEditScreen(
+        build,
+        Builds(),
+        items,
+        authorize=authorize,
+        render_build=unexpected_write,
+        refresh_posts=unexpected_write,
+    )
+    parsed = await _edit_form(items, 1).evaluate({"version_spec": "", "normal_opening_time": ""})
+    assert parsed.errors == ()
+    assert parsed.values == {"version_spec": None, "normal_opening_time": None}
+
+    await screen._edited(submit_event(parsed.values))
+
+    assert version.value is None
+    assert timing.value is None
+    assert screen.validation_error is None
 
 
 def test_edit_form_pages_preserve_field_metadata_and_fit_discord_limits() -> None:

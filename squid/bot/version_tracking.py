@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, cast, override
+from typing import TYPE_CHECKING, Protocol, override
 
 import discord
 from discord import app_commands
@@ -96,21 +96,7 @@ class VersionScreen(sd.Screen):
             nodes.append(
                 sl.form(
                     tr(t"Add version"),
-                    sl.forms.FormSpec(
-                        tr(t"Add Minecraft version"),
-                        (
-                            sl.forms.ChoiceField(
-                                key="edition",
-                                label=tr(t"Edition"),
-                                default="Java",
-                                options=(
-                                    sl.forms.ChoiceOption("java", tr(t"Java"), "Java"),
-                                    sl.forms.ChoiceOption("bedrock", tr(t"Bedrock"), "Bedrock"),
-                                ),
-                            ),
-                            sl.forms.TextField(key="version", label=tr(t"Version"), maximum=100),
-                        ),
-                    ),
+                    _AddVersionForm().spec(),
                     key="add-version",
                     on_submit=self._add,
                 )
@@ -127,8 +113,10 @@ class VersionScreen(sd.Screen):
         if not await self._authorize_create():
             await event.notice(tr(t"You are no longer allowed to add versions."))
             return
-        edition = cast(Edition, event.values["edition"])
-        version_text = cast(str, event.values["version"])
+        form = _AddVersionForm(**event.values)
+        assert form.edition is not None and form.version is not None
+        edition = form.edition
+        version_text = form.version
         version = str(await self._versions.add(version_text, edition=edition))
         await self._refresh()
         await event.notice(tr(t"Added {version}."))
@@ -178,3 +166,17 @@ class VersionTracker[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="Ve
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     """Load the version catalogue cog."""
     await bot.add_cog(VersionTracker(bot))
+
+
+class _AddVersionForm(sl.forms.Form):
+    title = tr(t"Add Minecraft version")
+
+    edition = sl.forms.ChoiceField[Edition](
+        label=tr(t"Edition"),
+        default="Java",
+        options=(
+            sl.forms.ChoiceOption("java", tr(t"Java"), "Java"),
+            sl.forms.ChoiceOption("bedrock", tr(t"Bedrock"), "Bedrock"),
+        ),
+    )
+    version = sl.forms.TextField(label=tr(t"Version"), maximum=100)
