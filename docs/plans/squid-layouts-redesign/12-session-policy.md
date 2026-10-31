@@ -65,15 +65,16 @@ consumers) and from `squid/bot/voting/sessions.py`. Owned as `self.mounts` on
 class SessionKey:
     name: str
     user_id: int
-    scope: int | None = None      # guild, build, channel -- None for user-global
+    scope: int | None = None  # guild, build, channel -- None for user-global
+
 
 class WhenOpen(Enum):
-    REPLACE = auto()              # finish the incumbent, open the new one
-    REJECT = auto()               # leave the incumbent, deliver nothing
+    REPLACE = auto()  # finish the incumbent, open the new one
+    REJECT = auto()  # leave the incumbent, deliver nothing
+
 
 class MountRegistry:
-    async def open(self, mount, destination, *, key=None,
-                   policy=WhenOpen.REPLACE, parent=None) -> Mount | None: ...
+    async def open(self, mount, destination, *, key=None, policy=WhenOpen.REPLACE, parent=None) -> Mount | None: ...
     def get(self, key) -> Mount | None: ...
     async def close(self, key, *, disable=True) -> None: ...
     async def close_all(self, *, disable=True) -> None: ...
