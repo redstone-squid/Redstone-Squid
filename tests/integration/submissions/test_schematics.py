@@ -55,7 +55,7 @@ async def test_schematics_require_explicit_primary_and_never_bypass_sanitizer(
     await repo.select_primary(await reload(sessions, draft), second.id)
     state = await repo.read_for_draft(draft.snapshot.id)
     assert state.state is SchematicArtifactState.PROCESSING
-    assert state.sanitized is None
+    assert state.artifact_id is None
     assert state.issues == ()
     await repo.discard(await reload(sessions, draft), second.id)
     assert next(item for item in await repo.list(draft.snapshot.id) if item.id == first.id).primary

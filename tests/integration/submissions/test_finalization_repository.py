@@ -437,8 +437,9 @@ async def test_status_translates_malformed_attention_entries_to_data_integrity_e
         expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
     )
     async with async_session_factory.begin() as session:
+        # Deliberately bypass the typed shape to test corrupt persisted JSON.
         await session.execute(
-            update(SubmissionDraft).where(SubmissionDraft.id == DRAFT_ID).values(preparation_issues=[42])
+            update(SubmissionDraft).where(SubmissionDraft.id == DRAFT_ID).values(preparation_issues=[42])  # pyrefly: ignore[bad-argument-type]
         )
 
     with pytest.raises(DataIntegrityError, match="attention issues"):

@@ -49,8 +49,6 @@ def project_submission(
         return SubmissionPrefill(None, {}, ("category",))
     answers: dict[str, JSONValue] = {
         "schematic_visibility": "reviewer_only",
-        "include_inventories": False,
-        "include_free_text": False,
         "ai_generated": bool(source.ai_generated),
     }
     values: dict[str, JSONValue] = {
