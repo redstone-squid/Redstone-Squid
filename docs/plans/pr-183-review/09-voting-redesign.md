@@ -129,9 +129,11 @@ class VoteKind(StrEnum):
     DELETE_LOG = "delete_log"
     GENERIC = "generic"
 
+
 class VoteStatus(StrEnum):
     OPEN = "open"
     CLOSED = "closed"
+
 
 class VoteSessionResult(StrEnum):
     APPROVED = "approved"
@@ -139,10 +141,12 @@ class VoteSessionResult(StrEnum):
     CANCELLED = "cancelled"
     PENDING = "pending"
 
+
 class VoteVisibility(StrEnum):
     ANONYMOUS_LIVE = "anonymous_live"
     VISIBLE_LIVE = "visible_live"
     ANONYMOUS_HIDDEN = "anonymous_hidden"
+
 
 class VoteRejection(StrEnum):
     NOT_FOUND = "not_found"
@@ -152,15 +156,18 @@ class VoteRejection(StrEnum):
     WRONG_GUILD = "wrong_guild"
     NOT_AUTHORIZED = "not_authorized"
 
+
 @dataclass(frozen=True, slots=True)
 class BuildVoteTarget:
     build_id: int
+
 
 @dataclass(frozen=True, slots=True)
 class DeleteLogVoteTarget:
     message_id: int
     channel_id: int
     server_id: int
+
 
 type VoteTarget = BuildVoteTarget | DeleteLogVoteTarget | None
 ```

@@ -315,7 +315,7 @@ class DiscordMemberResolver:
     async def member(self, account_id: int, discord_id: int, guild_id: int, kind: VoteKind) -> VoteActor | None:
         try:
             payload = await self._http.get_member(guild_id, discord_id)
-        except (Forbidden, NotFound):
+        except Forbidden, NotFound:
             return None
         except HTTPException as error:  # includes RateLimited past max_ratelimit_timeout
             raise DiscordMemberServiceUnavailableError(...) from error

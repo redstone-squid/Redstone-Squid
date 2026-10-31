@@ -233,7 +233,7 @@ def correlation_reference(correlation_id: str) -> str:
 
 ```python
 header: dict[str, Any] = {"id": self._next_id, "op": operation, "params": params}
-if (trace := trace_context_headers()):
+if trace := trace_context_headers():
     header["trace"] = trace
 ```
 
