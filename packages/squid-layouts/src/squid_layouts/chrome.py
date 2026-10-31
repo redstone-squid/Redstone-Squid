@@ -19,6 +19,26 @@ def _default_page_footer(page: int, pages: int) -> TextLike:
     return f"Page {page} of {pages}"
 
 
+def _default_range_footer(first: int, last: int) -> TextLike:
+    return f"{first}\N{EN DASH}{last}"
+
+
+def _default_approximate_total_footer(first: int, last: int, total: int) -> TextLike:
+    return f"{first}\N{EN DASH}{last} of ~{total}"
+
+
+def _default_total_range_footer(first: int, last: int, total: int) -> TextLike:
+    return f"{first}\N{EN DASH}{last} of {total}"
+
+
+def _default_page_option(page: int) -> TextLike:
+    return f"Page {page}"
+
+
+def _default_decided(label: TextLike) -> TextLike:
+    return f"You chose {label}."
+
+
 @dataclass(frozen=True, slots=True)
 class Chrome:
     and_n_more: Callable[[int], TextLike] = _default_and_n_more
@@ -27,13 +47,40 @@ class Chrome:
     """Ephemeral rejection shown when an author-locked control is used by another user."""
     session_ended: TextLike = "This session has ended."
     """Ephemeral rejection shown when a control on a finished mount is clicked anyway."""
+    updates_paused: TextLike = "Live updates paused — press any control to resume."
+    """Status shown before an interaction edit token expires and unattended refreshes pause."""
     previous: TextLike = "Previous"
     next: TextLike = "Next"
+    older: TextLike = "Older"
+    newer: TextLike = "Newer"
     back: TextLike = "Back"
     home: TextLike = "Home"
     close: TextLike = "Close"
+    undo: TextLike = "Undo"
+    redo: TextLike = "Redo"
+    on: TextLike = "On"
+    off: TextLike = "Off"
+    download: TextLike = "Download"
+    confirm: TextLike = "Confirm"
+    cancel: TextLike = "Cancel"
+    decided: Callable[[TextLike], TextLike] = _default_decided
+    add: TextLike = "Add"
+    edit: TextLike = "Edit"
+    remove: TextLike = "Remove"
+    move_up: TextLike = "Move up"
+    move_down: TextLike = "Move down"
     page_footer: Callable[[int, int], TextLike] = _default_page_footer
     """Small-text footer under paginated content; called with (page, pages), 1-based."""
+    range_footer: Callable[[int, int], TextLike] = _default_range_footer
+    """Visible 1-based item range for a source with known offsets."""
+    approximate_total_footer: Callable[[int, int, int], TextLike] = _default_approximate_total_footer
+    """Visible range and approximate source total."""
+    total_range_footer: Callable[[int, int, int], TextLike] = _default_total_range_footer
+    """Visible range and exact source total."""
+    jump_to_page: TextLike = "Jump to a page"
+    """Placeholder on the jump select a seekable paginator can offer."""
+    page_option: Callable[[int], TextLike] = _default_page_option
+    """One entry of that select; called with a 1-based page number."""
 
 
 DEFAULT_CHROME = Chrome()
@@ -47,10 +94,35 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         and_n_more=lambda count: resolve_text(chrome.and_n_more(count), localization).content,
         not_yours=resolve_text(chrome.not_yours, localization).content,
         session_ended=resolve_text(chrome.session_ended, localization).content,
+        updates_paused=resolve_text(chrome.updates_paused, localization).content,
         previous=resolve_text(chrome.previous, localization).content,
         next=resolve_text(chrome.next, localization).content,
+        older=resolve_text(chrome.older, localization).content,
+        newer=resolve_text(chrome.newer, localization).content,
         back=resolve_text(chrome.back, localization).content,
         home=resolve_text(chrome.home, localization).content,
         close=resolve_text(chrome.close, localization).content,
+        undo=resolve_text(chrome.undo, localization).content,
+        redo=resolve_text(chrome.redo, localization).content,
+        on=resolve_text(chrome.on, localization).content,
+        off=resolve_text(chrome.off, localization).content,
+        download=resolve_text(chrome.download, localization).content,
+        confirm=resolve_text(chrome.confirm, localization).content,
+        cancel=resolve_text(chrome.cancel, localization).content,
+        decided=lambda label: resolve_text(chrome.decided(label), localization).content,
+        add=resolve_text(chrome.add, localization).content,
+        edit=resolve_text(chrome.edit, localization).content,
+        remove=resolve_text(chrome.remove, localization).content,
+        move_up=resolve_text(chrome.move_up, localization).content,
+        move_down=resolve_text(chrome.move_down, localization).content,
         page_footer=lambda page, pages: resolve_text(chrome.page_footer(page, pages), localization).content,
+        range_footer=lambda first, last: resolve_text(chrome.range_footer(first, last), localization).content,
+        approximate_total_footer=lambda first, last, total: (
+            resolve_text(chrome.approximate_total_footer(first, last, total), localization).content
+        ),
+        total_range_footer=lambda first, last, total: (
+            resolve_text(chrome.total_range_footer(first, last, total), localization).content
+        ),
+        jump_to_page=resolve_text(chrome.jump_to_page, localization).content,
+        page_option=lambda page: resolve_text(chrome.page_option(page), localization).content,
     )

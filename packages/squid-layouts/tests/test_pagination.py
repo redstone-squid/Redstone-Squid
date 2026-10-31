@@ -23,18 +23,20 @@ from squid_layouts.discord import (
     DEFAULT_LIMITS as LIMITS,
 )
 from squid_layouts.discord import (
+    Everyone,
     LabelSpec,
     ModalSpec,
     Mount,
-    PageContext,
+    NavigationContext,
     TextInputSpec,
     build_modal,
     conform,
     default_nav,
+    page_select_nav,
 )
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
 from squid_layouts.errors import LayoutInvariantError
-from squid_layouts.planning import solve
+from squid_layouts.planning import SolveNoteCode, solve
 from squid_layouts.planning.adaptation import lower_semantics
 from squid_layouts.planning.solve import RText, _component_count, split_pages
 from squid_layouts.primitives import (
@@ -48,6 +50,7 @@ from squid_layouts.primitives import (
 )
 from squid_layouts.runtime import PresentationSession
 from squid_layouts.semantic import Item, Items, Paragraph
+from squid_layouts.sources import Direction, Position, PositionPolicy
 from squid_layouts.text import NEUTRAL
 
 
@@ -69,6 +72,59 @@ class TestSplitPages:
         pages = split_pages(text, 300)
         assert "\n".join(pages) == text
         assert all(len(page) <= 300 for page in pages)
+
+    def test_large_inputs_use_the_same_exact_balancing_objective(self):
+        text = "\n".join("x" for _ in range(300))
+
+        pages = split_pages(text, 39)
+
+        assert len(pages) == 15
+        assert {len(page) for page in pages} == {39}
+        assert "\n".join(pages) == text
+
+
+class TestPositionPolicy:
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [
+            (
+                {
+                    "override": Position("override", 8, Direction.FORWARD),
+                    "anchored": Position("anchor", 7),
+                    "stale": True,
+                    "stored": Position("stored", 6),
+                    "initial": Position(offset=5),
+                },
+                Position("override", 8, Direction.FORWARD),
+            ),
+            (
+                {
+                    "anchored": Position("anchor", 7),
+                    "stale": True,
+                    "stored": Position("stored", 6),
+                    "initial": Position(offset=5),
+                },
+                Position("anchor", 7),
+            ),
+            (
+                {"stale": True, "stored": Position("stored", 6), "fallback": Position("fallback", 4)},
+                Position("fallback", 4),
+            ),
+            ({"stored": Position("stored", 6), "initial": Position(offset=5)}, Position("stored", 6)),
+            ({"initial": Position("initial", 5)}, Position("initial", 5)),
+        ],
+    )
+    def test_precedence(self, kwargs, expected) -> None:
+        assert PositionPolicy().resolve(**kwargs) == expected
+
+    def test_clamps_only_the_offset(self) -> None:
+        policy = PositionPolicy()
+        assert policy.resolve(override=Position("item", -3, Direction.BACKWARD), upper_bound=8) == Position(
+            "item", 0, Direction.BACKWARD
+        )
+        assert policy.resolve(override=Position("item", 20, Direction.FORWARD), upper_bound=8) == Position(
+            "item", 8, Direction.FORWARD
+        )
 
 
 class TestSolvePagination:
@@ -99,9 +155,15 @@ class TestSolvePagination:
                 Text("a" * 3000, overflow=Paginate(key="alpha")),
                 Text("b" * 3000, overflow=Paginate(key="beta")),
             ],
-            page={"alpha": 0, "beta": 1},
+            position={"alpha": Position(offset=0), "beta": Position(offset=1)},
         )
         assert [(pager.key, pager.page) for pager in solved.pagers] == [("alpha", 0), ("beta", 1)]
+
+    def test_a_position_token_is_an_explicit_page_override(self):
+        body = "\n".join(f"line {index:04d}" for index in range(1000))
+        solved = solve([Code(body, overflow=Paginate(key="entries"))], position={"entries": Position(offset=2)})
+
+        assert solved.pager is not None and solved.pager.page == 2
 
 
 def _total_text(solved) -> int:
@@ -154,7 +216,7 @@ class TestMountPagination:
         return [item for item in view.walk_children() if isinstance(item, discord.ui.Button)]
 
     def test_nav_row_is_synthesized(self):
-        mount = Mount(Browser(), timeout=None)
+        mount = Mount(Browser(), access=Everyone(), timeout=None)
         view = commit_render(mount)
         prev_button, next_button = self._nav_buttons(view)
         assert prev_button.disabled  # first page
@@ -163,11 +225,11 @@ class TestMountPagination:
         assert conform(view) == []
 
     async def test_next_advances_and_edges_disable(self):
-        mount = Mount(Browser(), timeout=None)
+        mount = Mount(Browser(), access=Everyone(), timeout=None)
         commit_render(mount)
         interaction = fake_interaction()
 
-        await mount.dispatch("__page_next.entries", interaction)
+        await mount.dispatch("__cursor_next.entries", interaction)
 
         edited = interaction.response.edit_message.await_args.kwargs["view"]
         prev_button, _ = self._nav_buttons(edited)
@@ -188,17 +250,17 @@ class TestMountPagination:
             return original(*args, **kwargs)
 
         monkeypatch.setattr(mount_module, "compose", counted)
-        mount = Mount(TwoBrowsers(), timeout=None)
+        mount = Mount(TwoBrowsers(), access=Everyone(), timeout=None)
         commit_render(mount)
         assert calls == 1
 
     async def test_a_paged_picker_follows_its_anchor_through_the_mount(self):
         """The production path, which used to launder every cursor through `page=`."""
         catalog = Catalog()
-        mount = Mount(catalog, timeout=None)
+        mount = Mount(catalog, access=Everyone(), timeout=None)
         commit_render(mount)
-        await mount.dispatch("__page_next.catalog.items", fake_interaction())
-        assert mount.presentation.cursor("catalog.items").index == 1
+        await mount.dispatch("__cursor_next.catalog.items", fake_interaction())
+        assert mount.presentation.cursor("catalog.items").position.offset == 1
 
         catalog.lead = ("new",)
         view = commit_render(mount)
@@ -214,7 +276,7 @@ class TestMountPagination:
 
     def test_stopping_replaced_view_keeps_new_paginator_registered(self):
         """discord.py must retain the new generation after Mount stops the old one."""
-        mount = Mount(Browser(), timeout=None)
+        mount = Mount(Browser(), access=Everyone(), timeout=None)
         first = commit_render(mount)
         second = commit_render(mount)
         message_id = 42
@@ -229,10 +291,10 @@ class TestMountPagination:
 
     async def test_a_custom_nav_factory_replaces_the_stock_controls(self):
         def nav(context):
-            label = f"{context.page + 1}/{context.pages}"
+            label = f"{context.position.offset + 1}/{context.state.extent}"
             return (Row((Button(label=label, on_click=context.on_next, key="jump"),)),)
 
-        mount = Mount(Browser(), timeout=None, nav=nav)
+        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=nav)
         view = commit_render(mount)
         assert [button.label for button in self._nav_buttons(view)] == [
             f"1/{mount.presentation.cursor('entries').extent}"
@@ -240,37 +302,77 @@ class TestMountPagination:
 
         await mount.dispatch("jump", fake_interaction())
 
-        assert mount.presentation.cursor("entries").index == 1
+        assert mount.presentation.cursor("entries").position.offset == 1
 
-    async def test_prev_at_first_page_is_a_clean_noop(self):
-        mount = Mount(Browser(), timeout=None)
+    async def test_a_materialized_cursor_seeks_to_a_page(self):
+        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
+        view = commit_render(mount)
+        jump = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
+        assert jump.custom_id is not None and jump.custom_id.endswith("__cursor_seek.entries")
+
+        await mount.dispatch("__cursor_seek.entries", fake_interaction(), ["3"])
+
+        assert mount.presentation.cursor("entries").position.offset == 3
+
+    async def test_seeking_past_the_end_clamps_to_the_last_page(self):
+        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
+        commit_render(mount)
+        extent = mount.presentation.cursor("entries").extent
+
+        await mount.dispatch("__cursor_seek.entries", fake_interaction(), ["9999"])
+
+        assert mount.presentation.cursor("entries").position.offset == extent - 1
+
+    async def test_seeking_to_the_visible_page_is_a_clean_noop(self):
+        mount = Mount(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
         commit_render(mount)
         interaction = fake_interaction()
 
-        await mount.dispatch("__page_prev.entries", interaction)
+        await mount.dispatch("__cursor_seek.entries", interaction, ["0"])
+
+        interaction.response.defer.assert_awaited_once()
+
+    def test_the_stock_factory_still_draws_no_jump_control(self):
+        """`page_select_nav` is opt-in: a select costs a whole component row."""
+        view = commit_render(Mount(Browser(), access=Everyone(), timeout=None))
+
+        assert not [item for item in view.walk_children() if isinstance(item, discord.ui.Select)]
+
+    async def test_prev_at_first_page_is_a_clean_noop(self):
+        mount = Mount(Browser(), access=Everyone(), timeout=None)
+        commit_render(mount)
+        interaction = fake_interaction()
+
+        await mount.dispatch("__cursor_previous.entries", interaction)
 
         interaction.response.defer.assert_awaited_once()
 
     async def test_two_pagers_advance_independently(self):
-        mount = Mount(TwoBrowsers(), timeout=None)
+        mount = Mount(TwoBrowsers(), access=Everyone(), timeout=None)
         commit_render(mount)
 
-        await mount.dispatch("__page_next.left", fake_interaction())
+        await mount.dispatch("__cursor_next.left", fake_interaction())
 
-        assert {key: cursor.index for key, cursor in mount.presentation.cursors.items()} == {"left": 1, "right": 0}
+        assert {key: cursor.position.offset for key, cursor in mount.presentation.cursors.items()} == {
+            "left": 1,
+            "right": 0,
+        }
 
     async def test_changed_content_resets_only_its_pager(self):
         component = TwoBrowsers()
-        mount = Mount(component, timeout=None)
+        mount = Mount(component, access=Everyone(), timeout=None)
         commit_render(mount)
-        await mount.dispatch("__page_next.left", fake_interaction())
-        await mount.dispatch("__page_next.right", fake_interaction())
+        await mount.dispatch("__cursor_next.left", fake_interaction())
+        await mount.dispatch("__cursor_next.right", fake_interaction())
 
         component.left_version = "new"
         mount.invalidate()
         commit_render(mount)
 
-        assert {key: cursor.index for key, cursor in mount.presentation.cursors.items()} == {"left": 0, "right": 1}
+        assert {key: cursor.position.offset for key, cursor in mount.presentation.cursors.items()} == {
+            "left": 0,
+            "right": 1,
+        }
 
 
 class TestCountPages:
@@ -307,7 +409,7 @@ class TestCountPages:
     def test_count_pages_on_a_non_lines_node_fall_back_to_budget_pages(self):
         solved = solve([Text("short", overflow=Paginate(per=10))])
         assert solved.pager is None
-        assert any("not a Lines node" in note for note in solved.notes)
+        assert any(note.code is SolveNoteCode.PAGINATE_PER_FALLBACK for note in solved.notes)
 
     def test_per_must_be_positive(self):
         with pytest.raises(ValueError, match="at least 1"):
@@ -318,10 +420,10 @@ class TestSolverNav:
     def _paginated(self) -> list:
         return [Code("\n".join(f"line {index:04d}" for index in range(1000)), overflow=Paginate())]
 
-    def _nav(self, key: str, page: int, pages: int):
+    def _nav(self, state):
         async def move(interaction) -> None: ...
 
-        return default_nav(DEFAULT_CHROME)(PageContext(key=key, page=page, pages=pages, on_prev=move, on_next=move))
+        return default_nav(NavigationContext(state, move, move))
 
     def test_nav_nodes_are_realized_into_the_document(self):
         solved = solve(self._paginated(), nav=self._nav)
@@ -332,14 +434,14 @@ class TestSolverNav:
         assert not any(isinstance(child, Row) for child in solved.children)
 
     def test_the_page_is_clamped_and_reported(self):
-        assert solve(self._paginated(), page=999).page == solve(self._paginated()).pages - 1
-        assert solve(self._paginated(), page=-5).page == 0
+        assert solve(self._paginated(), position=Position(offset=999)).page == solve(self._paginated()).pages - 1
+        assert solve(self._paginated(), position=Position(offset=-5)).page == 0
 
     def test_a_text_bearing_nav_factory_is_rejected(self):
         # `NavNode` rejects this statically; the runtime guard is for callers without a
         # type checker, so the suppression here is the test doing its job.
         with pytest.raises(ValueError, match="component-bearing"):
-            solve(self._paginated(), nav=lambda key, page, pages: [Text("page {page}")])  # type: ignore
+            solve(self._paginated(), nav=lambda state: [Text(f"position {state.position.offset}")])  # type: ignore
 
 
 class TestRepage:
@@ -348,18 +450,18 @@ class TestRepage:
     def _paginated(self) -> list:
         return [Code("\n".join(f"line {index:04d}" for index in range(1000)), overflow=Paginate(key="lines"))]
 
-    def _nav(self, key: str, page: int, pages: int):
+    def _nav(self, state):
         async def move(interaction) -> None: ...
 
-        return default_nav(DEFAULT_CHROME)(PageContext(key=key, page=page, pages=pages, on_prev=move, on_next=move))
+        return default_nav(NavigationContext(state, move, move))
 
     def test_repage_moves_the_page_without_moving_the_fit(self):
         solved = solve(self._paginated(), nav=self._nav)
         before = solved.components
         pager = solved.pager
         assert pager is not None and solved.pages > 2
-        solved.repage({"lines": 2})
-        direct = solve(self._paginated(), nav=self._nav, page=2).pager
+        solved.reposition({"lines": Position(offset=2)})
+        direct = solve(self._paginated(), nav=self._nav, position=Position(offset=2)).pager
         assert direct is not None
         assert pager.page == 2
         assert pager.slot.content == direct.slot.content
@@ -369,7 +471,7 @@ class TestRepage:
         solved = solve(self._paginated(), nav=self._nav)
         previous = self._previous_button(solved)
         assert previous.disabled  # on page 0
-        solved.repage({"lines": 1})
+        solved.reposition({"lines": Position(offset=1)})
         assert not self._previous_button(solved).disabled
 
     @staticmethod
@@ -382,19 +484,19 @@ class TestRepage:
 
     def test_repage_clamps_like_the_solver_does(self):
         solved = solve(self._paginated(), nav=self._nav)
-        solved.repage({"lines": 999})
+        solved.reposition({"lines": Position(offset=999)})
         assert solved.page == solved.pages - 1
-        solved.repage({"lines": -5})
+        solved.reposition({"lines": Position(offset=-5)})
         assert solved.page == 0
 
     def test_a_nav_factory_that_hides_controls_between_pages_is_rejected(self):
-        def hiding(key: str, page: int, pages: int):
-            controls = self._nav(key, page, pages)
-            return controls if page else []
+        def hiding(state):
+            controls = self._nav(state)
+            return controls if state.position.offset else []
 
         solved = solve(self._paginated(), nav=hiding)
         with pytest.raises(LayoutInvariantError, match="changed shape between pages"):
-            solved.repage({"lines": 1})
+            solved.reposition({"lines": Position(offset=1)})
 
 
 class TestBuildModal:
@@ -461,9 +563,9 @@ def test_the_solver_counts_the_nav_it_realized():
     # so the solver's component budget matches what the built view actually contains.
     async def move(interaction) -> None: ...
 
-    def nav(key: str, page: int, pages: int):
-        return default_nav(DEFAULT_CHROME)(PageContext(key=key, page=page, pages=pages, on_prev=move, on_next=move))
+    def nav(state):
+        return default_nav(NavigationContext(state, move, move))
 
-    view = commit_render(Mount(Browser(), timeout=None))
+    view = commit_render(Mount(Browser(), access=Everyone(), timeout=None))
     solved = solve(Browser().render(), nav=nav)
     assert _component_count(solved.children) == len(list(view.walk_children()))

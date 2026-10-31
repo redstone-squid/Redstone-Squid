@@ -1,16 +1,21 @@
 """Safe semantic HTML drawing for resolved scenes."""
 
+import base64
 import json
+from collections.abc import Callable
 from html import escape
 from urllib.parse import urlsplit
 
+from squid_layouts.assets import Asset, InlineAsset, StoredAsset
 from squid_layouts.errors import DrawInvariantError
 from squid_layouts.scene.codec import SceneCodec
 from squid_layouts.scene.model import (
     PlanResult,
+    SceneAsset,
     SceneButton,
     SceneDocument,
     SceneExtension,
+    SceneFile,
     SceneGallery,
     SceneLink,
     SceneNode,
@@ -23,6 +28,7 @@ from squid_layouts.scene.model import (
     SceneSeparator,
     SceneText,
     SceneThumbnail,
+    SceneTime,
 )
 
 PREVIEW_CSS = """
@@ -37,7 +43,11 @@ background:#4e5058;color:#fff;font-weight:600}.squid-button--primary{background:
 border-radius:4px}.squid-gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:4px}
 .squid-gallery img{width:100%;border-radius:4px}.squid-separator{height:1px;margin:4px 0;border:0;background:#3f4147}
 .squid-separator--large{margin:12px 0}.squid-extension{padding:8px;border:1px dashed #6d6f78;border-radius:3px}
+.squid-file[aria-disabled=true]{opacity:.5}
 """.strip()
+
+type AssetResolver = Callable[[SceneAsset], str | None]
+type FileResolver = Callable[[SceneFile], str | None]
 
 
 def _attribute(value: object) -> str:
@@ -52,9 +62,16 @@ def _url(value: str) -> str | None:
 class Renderer:
     """Draw scenes as semantic HTML suitable for previews or browser adapters."""
 
-    def __init__(self, *, standalone: bool = False, css: str = PREVIEW_CSS) -> None:
+    def __init__(
+        self,
+        *,
+        standalone: bool = False,
+        css: str = PREVIEW_CSS,
+        asset_resolver: AssetResolver | None = None,
+    ) -> None:
         self.standalone = standalone
         self.css = css
+        self.asset_resolver = asset_resolver
 
     def draw(self, scene: SceneDocument, *, plan: PlanResult | None = None) -> str:
         if scene.protocol != SceneCodec.protocol:
@@ -67,7 +84,25 @@ class Renderer:
             [{"key": pager.key, "page": pager.page, "pages": pager.pages} for pager in scene.pagers],
             separators=(",", ":"),
         )
-        body = "".join(self._node(child) for child in scene.children)
+        assets = {asset.key: asset for asset in scene.assets}
+
+        def resolve_file(node: SceneFile) -> str | None:
+            metadata = assets.get(node.asset_key)
+            if metadata is None:
+                return None
+            if self.asset_resolver is not None and (resolved := self.asset_resolver(metadata)) is not None:
+                return resolved
+            resource = plan.resources.get(f"asset:{node.asset_key}") if plan is not None else None
+            if not isinstance(resource, Asset):
+                return None
+            if isinstance(resource.source, InlineAsset):
+                encoded = base64.b64encode(resource.source.data).decode("ascii")
+                return f"data:{resource.media_type};base64,{encoded}"
+            if isinstance(resource.source, StoredAsset):
+                return _url(resource.source.reference)
+            return None
+
+        body = "".join(self._node(child, resolve_file) for child in scene.children)
         root = (
             f'<div class="squid-view" data-squid-protocol="{scene.protocol}" '
             f'data-squid-target="{_attribute(scene.target)}" data-squid-pagers="{_attribute(pager_data)}">{body}</div>'
@@ -79,10 +114,28 @@ class Renderer:
             f"<style>{self.css}</style></head><body>{root}</body></html>"
         )
 
-    def _node(self, node: SceneNode | SceneLink | SceneButton | SceneRoutedButton) -> str:
+    def _node(
+        self,
+        node: SceneNode | SceneLink | SceneButton | SceneRoutedButton,
+        resolve_file: FileResolver,
+    ) -> str:
         match node:
             case SceneText(content=content, dialect=dialect):
                 return f'<div class="squid-text" data-squid-dialect="{dialect.value}">{escape(content)}</div>'
+            case SceneTime(instant=instant, style=style, prefix=prefix):
+                return (
+                    f'<div class="squid-text">{escape(prefix or "")}'
+                    f'<time datetime="{_attribute(instant)}" data-squid-style="{_attribute(style)}">'
+                    f"{escape(instant)}</time></div>"
+                )
+            case SceneFile(name=name):
+                resolved = resolve_file(node)
+                if resolved is None:
+                    return f'<span class="squid-button squid-file" aria-disabled="true">{escape(name)}</span>'
+                return (
+                    f'<a class="squid-button squid-link squid-file" href="{_attribute(resolved)}" '
+                    f'download="{_attribute(name)}">{escape(name)}</a>'
+                )
             case SceneSeparator(large=large, visible=visible):
                 if not visible:
                     return ""
@@ -91,13 +144,17 @@ class Renderer:
             case ScenePanel(children=children, accent=accent):
                 style = f' style="--squid-accent:#{accent:06x}"' if accent is not None else ""
                 return (
-                    f'<section class="squid-panel"{style}>{"".join(self._node(child) for child in children)}</section>'
+                    f'<section class="squid-panel"{style}>'
+                    f"{''.join(self._node(child, resolve_file) for child in children)}</section>"
                 )
             case SceneSection(texts=texts, accessory=accessory):
-                content = "".join(self._node(text) for text in texts)
-                return f'<section class="squid-section"><div>{content}</div>{self._node(accessory)}</section>'
+                content = "".join(self._node(text, resolve_file) for text in texts)
+                return (
+                    f'<section class="squid-section"><div>{content}</div>'
+                    f"{self._node(accessory, resolve_file)}</section>"
+                )
             case SceneRow(items=items):
-                return f'<div class="squid-row">{"".join(self._node(item) for item in items)}</div>'
+                return f'<div class="squid-row">{"".join(self._node(item, resolve_file) for item in items)}</div>'
             case SceneButton(
                 label=label,
                 action=action,

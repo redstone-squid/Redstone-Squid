@@ -11,11 +11,17 @@ are not re-derived or accidentally adopted later.
   model is simpler and fits the frontend-neutral tree. Cross-view updates already have a
   path: shared services + `Reactor.schedule`/`Mount.refresh`. If a real many-views-one-
   domain need appears, add a host-side event bus, not a store in the package.
+  **Revisited 2026-08-22**: the bus is [26](26-topic-bus.md), moved package-side by the
+  productization decision; the store half of this rejection stands in full — the bus is
+  payload-free precisely so it can never become one.
 - **Persistence batteries** (SQLite/Postgres `SnapshotStore` implementations,
   reattachment, pruning). The durability layer has **zero production consumers** in
   `squid/` (verified by grep). Building storage backends for an unused subsystem is
   inventory. Revisit only when a view actually needs to survive restarts; the
   `LeaseSnapshotStore` boundary is ready when that day comes.
+  **Revisited 2026-08-22**: superseded by the productization standard — the consumer is
+  the library user. [27](27-snapshot-stores.md) fills the boundary without moving it;
+  the bot itself still, correctly, has no consumer.
 - **`compose(into=view)` / adopting existing discord.py views** — re-confirmed: renderer
   ownership is what keeps budget measurement sound. Incremental interop is CascadeUI's
   advantage by design choice, not an oversight here.
@@ -23,12 +29,19 @@ are not re-derived or accidentally adopted later.
   purity; the factory layer (plan 03) is the chosen ergonomics fix.
 - **Python 3.10 backport / PyPI packaging** — irrelevant to this repo (3.14 target).
   Publishing squid-layouts is a product decision to make explicitly, not design debt.
+  **2026-08-22**: the productization decision was made — plans [24](24-session-registry-move.md)
+  through [28](28-history.md) build for the library user rather than waiting on bot
+  consumers. Actual PyPI publication remains a separate, still-unmade call; the 3.10
+  backport stays rejected.
 
 ## Deferred until a real consumer exists
 
 - **Portable permission facts on `ActionEvent`** — plan 02 gives the typed Discord
   escape hatch instead. If a second frontend ever dispatches events, design the portable
   capability surface against its actual requirements.
+  **Revisited 2026-08-22**: partially superseded by [31](31-action-ergonomics.md) — the
+  portable admission surface is `Guard`/`GuardVerdict`; frontend facts still enter through
+  plan 02's native access (`requires_role` lives in `sl.discord.guards`).
 - **Ephemeral session handoff** (Cascade-style: arm a refresh control before token
   expiry, rebuild the session from the fresh interaction). Mostly retired: plan 07's
   `EditHandle` renews on every click, so an ephemeral panel in use stays writable
@@ -36,33 +49,43 @@ are not re-derived or accidentally adopted later.
   more than 15 minutes with nobody touching it — the render simply waits in `Mount.pending`
   until someone does. Only worth building for a view that must update itself unattended,
   which none does.
+  **Resolved 2026-08-22**: [26](26-topic-bus.md)'s bus creates exactly those views, so
+  this entry's condition is met — and the answer is the paused-chrome banner plus
+  click-to-resume, not a handoff control: every control already renews on click, so
+  arming a special one adds nothing. The handoff *mechanism* stays rejected.
 - **Participant tracking / shared sessions** — plan 12 shipped instance policies and
   widened `lock_to` to accept a set of ids; participant *lifecycle* (join/leave, per-actor
   state) waits for a feature that needs it. No consumer needs even the set form today: the
   one multi-actor site, `BuildEditComponent._may_event`, needs an async permission check with
   its own wording, which a static set cannot express.
+  **Revisited 2026-08-22**: [31](31-action-ergonomics.md)'s `guards.permission` serves the
+  `_may_event` case named here; per-actor state arrives as [32](32-demand-driven.md)'s
+  `Agreement` component state. The participant *lifecycle* model is now
+  [34](34-safe-session-runtime.md) §B's scope, whose worked lobby/game example is this
+  entry's remaining removal condition.
 - **`squid_layouts.patterns` library** (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
   surface they would be built on. Revisit after the presets migration lands. **Revisited 2026-08-21**: 03/04 landed;
   plans [18](18-forms.md)/[19](19-patterns.md) now cover Form, Wizard and
-  MultiChoicePanel; Tabs/Menu/RankedList proceed separately under 19's two-shell rule.
+  MultiChoicePanel; Tabs/Menu/RankedList were also migrated under 19's two-shell rule.
+  **Revisited 2026-08-22**: continued by the survey batches
+  [29](29-control-vocabulary.md)–[32](32-demand-driven.md), including the richer
+  table/list browser this entry originally named (30's `Browser`).
 - **Grid / matrix interaction** (added 2026-08-21) — content grids are a `Table`
   display strategy (`MATRIX`), not a new node; interactive grids start as an
   `sl.button_grid` factory desugaring to `Row`s, whose exact-structure contract makes
   non-degradability free. The degradation ladder (button grid → text grid +
   coordinate select → paged select) is the semantic-node promotion, and it waits for
   a real consumer.
-- **`sl.resource` descriptor** (declared `pending | ready | failed` state with
-  `.reload()`), cut from plan 09. Under awaited `on_load` the pending state is never
-  observable at first paint, and without a dependency model it worsens its motivating
-  consumer: `SettingsPanel` fetches `_preset`/`_weights` as a function of `self._kind`,
-  which needs declared deps and an optimistic set before `.reload()` beats the explicit
-  `open_voting` method. Revisit only with a dependency design (declared deps or tracked
-  reads during the fetch), plus a staleness guard for out-of-order reloads. Plan
-  [21](21-cursor-sources.md) extracts the position policy without touching this; its
-  §5 commits cursor fetching and the load-phase/dependency design to be designed
-  together.
+  **Revisited 2026-08-22**: promoted by [32](32-demand-driven.md); the recorded three-tier
+  shape is adopted unchanged.
+- **`sl.resource` descriptor** — resolved 2026-08-22 by [33](33-resources.md). Explicit
+  `depends=(kind,)` state descriptors provide the missing dependency model; render-observed
+  resources stay lazy; monotonic tokens reject stale completions; and `replace()` supplies
+  the optimistic set the motivating `SettingsPanel` case required. Visible and awaited
+  loading share one `Pending | Ready | Failed` state machine and differ only in whether the
+  mount commits the pending discovery render before settling it.
 - **Portable form protocol** (replacing the Discord-native modal boundary) — long-noted
   in the architecture doc's gaps; superseded by plan [18](18-forms.md) (2026-08-21).
 - **Multi-message rendering** (one logical UI spanning several messages). Two features
@@ -89,6 +112,8 @@ are not re-derived or accidentally adopted later.
   [19](19-patterns.md)'s `MultiChoicePanel` supplies it (staged vs committed sets,
   per-window merge, gated Apply). The rejection of engine-side `Managed` merging
   stands.
+  **Revisited 2026-08-22**: [30](30-structures.md)'s immediate commit changes when the
+  pattern commits, not who merges; the `Managed`-merging rejection stands.
 - **Statically checking a route handler's parameters against its route** (plan 16 stage 2)
   — unavailable, and the spike is done, so do not repeat it. `Router.route` uses
   `ParamSpec`, which preserves the decorated signature but cannot constrain it: `P` is

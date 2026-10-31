@@ -6,9 +6,8 @@ import discord
 import pytest
 
 import squid_layouts as sl
-from squid.bot.devtools_view import MountInspector, scene_attachment
-from squid.bot.ui import create_mount
-from squid_layouts.discord import Mount, live
+from squid_layouts.discord import Everyone, Mount, Owner, live
+from squid_layouts.discord.devtools_view import MountInspector, metrics_text, plan_text, scene_attachment
 from squid_layouts.discord.testing import assert_within_limits, commit_render, delivered_to, fake_interaction
 from squid_layouts.primitives import Button, Heading, Row, Text
 
@@ -37,13 +36,13 @@ def _isolated_registry():
 
 
 async def live_subject(**kwargs: Any) -> Mount:
-    mount = Mount(Subject(), **kwargs)
+    mount = Mount(Subject(), access=kwargs.pop("access", Everyone()), **kwargs)
     await mount.send(delivered_to(sl.discord.testing.fake_message(message_id=42)))
     return mount
 
 
 def mount_inspector(inspector: MountInspector) -> tuple[Mount, discord.ui.LayoutView]:
-    mount = create_mount(inspector, lock_to=1)
+    mount = Mount(inspector, access=Owner(1))
     return mount, commit_render(mount)
 
 
@@ -52,6 +51,12 @@ def _texts(view: discord.ui.LayoutView) -> list[str]:
 
 
 class TestList:
+    def test_the_inspector_authors_high_level_semantic_nodes(self) -> None:
+        nodes = MountInspector().render()
+
+        assert isinstance(nodes[0], sl.Section)
+        assert isinstance(nodes[-1], sl.Actions)
+
     async def test_it_lists_a_live_mount_with_a_link_to_its_message(self) -> None:
         subject = await live_subject()
         _, view = mount_inspector(MountInspector())
@@ -87,7 +92,7 @@ class TestList:
 
 class TestDetail:
     async def test_a_detail_view_reports_state_plan_and_handlers(self) -> None:
-        subject = await live_subject(lock_to=7)
+        subject = await live_subject(access=Owner(7))
         _, view = mount_inspector(MountInspector(focus=subject.id))
 
         body = "\n".join(_texts(view))
@@ -135,6 +140,15 @@ class TestDetail:
 
         assert_within_limits(view)
 
+    async def test_a_registry_key_labels_its_mount(self) -> None:
+        registry = sl.discord.MountRegistry()
+        subject = Mount(Subject(), access=Everyone())
+        await registry.open(subject, delivered_to(sl.discord.testing.fake_message()), key=("editor", 7))
+
+        _, view = mount_inspector(MountInspector(registry=registry))
+
+        assert "('editor', 7)" in "\n".join(_texts(view))
+
 
 class TestSceneDump:
     async def test_it_serializes_the_committed_scene(self) -> None:
@@ -148,4 +162,20 @@ class TestSceneDump:
         assert sl.scene.Codec.loads(asset.source.data.decode()) == subject.snapshot().scene
 
     def test_a_mount_with_no_committed_render_has_no_scene(self) -> None:
-        assert scene_attachment(Mount(Subject()).snapshot()) is None
+        assert scene_attachment(Mount(Subject(), access=Everyone()).snapshot()) is None
+
+
+class TestPlanDiagnostics:
+    async def test_plan_and_metrics_render_the_retained_result(self) -> None:
+        subject = await live_subject()
+        snapshot = subject.snapshot()
+
+        assert "logical" in plan_text(snapshot)
+        assert "states_explored:" in metrics_text(snapshot)
+        assert "cache:" in metrics_text(snapshot)
+
+    def test_uncommitted_mounts_explain_missing_diagnostics(self) -> None:
+        snapshot = Mount(Subject(), access=Everyone()).snapshot()
+
+        assert "no plan report" in plan_text(snapshot)
+        assert "no planner metrics" in metrics_text(snapshot)

@@ -1,40 +1,32 @@
-"""A paginated ranked collection with global rank numbering."""
+"""A pure materialized ranking pattern for component and router shells."""
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 
-from squid_layouts.factories import bullet, bullets, heading, stack
-from squid_layouts.patterns._content import ContentLike, display_text, normalize_content, render_content, require_key
-from squid_layouts.runtime.component import Component
-from squid_layouts.semantic import LayoutNode, ListItem
+from squid_layouts.factories import actions, heading, note, stack
+from squid_layouts.patterns._content import ContentLike, normalize_content, require_key
+from squid_layouts.patterns._paging import window
+from squid_layouts.patterns._ranked import Projector, RankedEntry, RankedRows
+from squid_layouts.patterns.shells import ComponentShell, PatternControls
+from squid_layouts.primitives import Lines
+from squid_layouts.runtime.component import RenderResult
+from squid_layouts.semantic import LayoutNode
+from squid_layouts.sources import ORIGIN, Position
 from squid_layouts.text import TextLike
 
 
 @dataclass(frozen=True, slots=True)
-class RankedEntry:
-    """An already-ranked row for callers that do not need projection callbacks."""
+class RankedListState:
+    """Serializable cursor position for :class:`RankedList`."""
 
-    label: TextLike
-    value: object
-    key: str = ""
+    position: Position = ORIGIN
 
 
-type Projector[EntryT] = str | Callable[[EntryT], object]
 type ContentHook = ContentLike | Callable[[int], ContentLike]
 
 
-class RankedList[EntryT](Component):
-    """Render an ordered collection with ranks that remain correct across pages.
-
-    Input order is preserved: ranking belongs to the caller or data source. ``top_n`` limits
-    the materialized display, while ``page_size`` is passed to semantic ``List`` so the
-    planner adds measured pagination controls and footers without this pattern doing target
-    arithmetic.
-
-    ``label`` and ``value`` may be callables or attribute/mapping keys. Two-tuples are also
-    accepted without projectors. A ``header`` or ``footer`` hook receives the displayed row
-    count and may return any normal semantic content.
-    """
+class RankedList[EntryT]:
+    """Render a fully materialized ranking through either pattern shell."""
 
     def __init__(
         self,
@@ -43,6 +35,7 @@ class RankedList[EntryT](Component):
         key: str,
         label: Projector[EntryT] | None = None,
         value: Projector[EntryT] | None = None,
+        identity: Projector[EntryT] | None = None,
         heading: TextLike | None = None,
         header: ContentHook | None = None,
         footer: ContentHook | None = None,
@@ -50,6 +43,7 @@ class RankedList[EntryT](Component):
         top_n: int | None = None,
         limit: int | None = None,
         empty: ContentLike = "No entries",
+        initial_position: Position = ORIGIN,
     ) -> None:
         self.key = require_key(key, name="RankedList.key")
         if page_size is not None and page_size < 1:
@@ -65,68 +59,93 @@ class RankedList[EntryT](Component):
             message = "RankedList accepts either top_n or limit, not both"
             raise TypeError(message)
         self.entries = tuple(entries)
-        self.label = label
-        self.value = value
+        self.rows = RankedRows(label, value, identity)
         self.heading = heading
         self.header = header
         self.footer = footer
         self.page_size = page_size
         self.top_n = top_n if top_n is not None else limit
         self.empty = normalize_content(empty, name="RankedList.empty")
+        self._initial_state = RankedListState(initial_position)
 
-    @staticmethod
-    def _project(entry: EntryT, projector: Projector[EntryT]) -> object:
-        if callable(projector):
-            return projector(entry)
-        if isinstance(entry, Mapping):
-            try:
-                return entry[projector]
-            except KeyError as error:
-                message = f"ranked entry has no key {projector!r}"
-                raise ValueError(message) from error
-        try:
-            return getattr(entry, projector)
-        except AttributeError as error:
-            message = f"ranked entry has no attribute {projector!r}"
-            raise ValueError(message) from error
+    @property
+    def initial_state(self) -> RankedListState:
+        return self._initial_state
 
-    def _row_values(self, entry: RankedEntry | EntryT) -> tuple[object, object, str]:
-        if isinstance(entry, RankedEntry):
-            if self.label is not None or self.value is not None:
-                message = "projectors cannot be combined with RankedEntry values"
-                raise TypeError(message)
-            return entry.label, entry.value, entry.key
-        if self.label is None or self.value is None:
-            if isinstance(entry, tuple) and len(entry) == 2:
-                return entry[0], entry[1], ""
-            message = "RankedList needs label and value projectors for non-tuple entries"
-            raise TypeError(message)
-        return self._project(entry, self.label), self._project(entry, self.value), ""
+    def component(self, *, initial: RankedListState | None = None) -> ComponentShell[RankedListState]:
+        """Build the in-memory shell for this ranking."""
+        return ComponentShell(self, initial=initial)
 
-    def _hook(self, hook: ContentHook, total: int, *, name: str) -> tuple[LayoutNode, ...]:
+    def transition(
+        self,
+        state: RankedListState,
+        action: str,
+        *,
+        values: tuple[str, ...] = (),
+        submitted: Mapping[str, object] | None = None,
+    ) -> RankedListState:
+        del values, submitted
+        if action == "previous":
+            return RankedListState(Position(offset=state.position.offset - 1))
+        if action == "next":
+            return RankedListState(Position(offset=state.position.offset + 1))
+        return state
+
+    def _hook(
+        self,
+        hook: ContentHook,
+        total: int,
+        controls: PatternControls[RankedListState],
+        *,
+        name: str,
+    ) -> tuple[LayoutNode, ...]:
         value = hook(total) if callable(hook) else hook
-        return render_content(self, normalize_content(value, name=name), prefix=name)
+        return controls.content(normalize_content(value, name=name), prefix=name)
 
-    def render(self) -> LayoutNode:
+    def render(self, state: RankedListState, controls: PatternControls[RankedListState]) -> RenderResult:
         displayed = self.entries if self.top_n is None else self.entries[: self.top_n]
         total = len(displayed)
-        header = self._hook(self.header, total, name="header") if self.header is not None else ()
-        if displayed:
-            rows: tuple[ListItem, ...] = tuple(
-                bullet(
-                    f"**{display_text(label)}** — {display_text(value)}",
-                    key=entry_key or f"rank-{rank}",
-                )
-                for rank, entry in enumerate(displayed, 1)
-                for label, value, entry_key in (self._row_values(entry),)
-            )
-            body = (bullets(*rows, key=self.key, ordered=True, page_size=self.page_size),)
+        if self.page_size is None:
+            visible, position, pages = displayed, ORIGIN, 1
         else:
-            body = render_content(self, self.empty, prefix="empty")
-        footer = self._hook(self.footer, total, name="footer") if self.footer is not None else ()
+            visible, position, pages = window(
+                displayed,
+                key=self.key,
+                position=state.position,
+                per_page=self.page_size,
+                chrome=controls.chrome,
+                identity=self.rows.identity_of,
+            )
+        page = position.offset
+        offset = page * (self.page_size or max(1, total))
+        body = (Lines(self.rows.lines(visible, offset)),) if visible else controls.content(self.empty, prefix="empty")
+        pager = (
+            actions(
+                controls.action(
+                    controls.chrome.previous,
+                    "previous",
+                    key=f"{self.key}.previous",
+                    available=page > 0,
+                ),
+                controls.action(
+                    controls.chrome.next,
+                    "next",
+                    key=f"{self.key}.next",
+                    available=page < pages - 1,
+                ),
+                key=f"{self.key}.pager",
+            )
+            if pages > 1
+            else None
+        )
         return stack(
             heading(self.heading) if self.heading is not None else None,
-            *header,
+            *(self._hook(self.header, total, controls, name="header") if self.header is not None else ()),
             *body,
-            *footer,
+            note(controls.chrome.page_footer(page + 1, pages)) if pages > 1 else None,
+            pager,
+            *(self._hook(self.footer, total, controls, name="footer") if self.footer is not None else ()),
         )
+
+
+__all__ = ["RankedEntry", "RankedList", "RankedListState"]

@@ -16,16 +16,19 @@ call site, and keeps a stray dict or generator from being silently absorbed.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping
+from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
 from typing import Literal, NoReturn, TypeAliasType, get_args
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.assets import Asset
 from squid_layouts.forms import FormLike, SubmitHandler, bind_form
 from squid_layouts.primitives.styles import Color
 from squid_layouts.semantic import (
     CLOSED,
     FIRST_DESTINATION,
+    OFF,
     UNOPENED,
     UNSELECTED,
     Action,
@@ -44,6 +47,7 @@ from squid_layouts.semantic import (
     Destination,
     Details,
     DisclosureOwnership,
+    Download,
     Emphasis,
     Field,
     Fields,
@@ -81,6 +85,10 @@ from squid_layouts.semantic import (
     Table,
     TableDisplay,
     TableRow,
+    Timestamp,
+    TimeStyle,
+    Toggle,
+    ToggleOwnership,
     Tone,
 )
 from squid_layouts.text import ResolvedText, TextLike, md
@@ -321,6 +329,19 @@ def measure(value: int | float | str, label: TextValue, *, unit: str | None = No
     return Measure(value, _text(label), unit)
 
 
+def timestamp(
+    instant: datetime,
+    *,
+    style: TimeStyle = TimeStyle.SHORT_DATETIME,
+    label: TextValue | None = None,
+) -> Timestamp:
+    """A typed instant; naive datetimes are rejected before rendering."""
+    if instant.tzinfo is None or instant.utcoffset() is None:
+        message = "sl.timestamp() requires an aware datetime"
+        raise ValueError(message)
+    return Timestamp(instant, style, _opt_text(label))
+
+
 def figure(media: MediaItem | str, *, caption: TextValue | None = None) -> Figure:
     """One image with an optional caption; a bare URL becomes the media item."""
     resolved = MediaItem("", media) if isinstance(media, str) else media
@@ -432,6 +453,32 @@ def action(
 ) -> Action:
     """A control that runs ``on_trigger``; ``key`` namespaces its custom id."""
     return Action(key, _text(label), on_trigger, tone, emphasis, available, allow_grouping, policy)
+
+
+def toggle(
+    label: TextValue,
+    *,
+    key: str,
+    on: ToggleOwnership = OFF,
+    on_label: TextValue | None = None,
+    off_label: TextValue | None = None,
+    tone: Tone = Tone.NEUTRAL,
+    available: bool = True,
+) -> Toggle:
+    """A boolean control; ``on`` declares whether the author or session owns its state."""
+    return Toggle(key, _text(label), on, _opt_text(on_label), _opt_text(off_label), tone, available)
+
+
+def download(
+    label: TextValue | None,
+    asset: Asset,
+    *,
+    key: str,
+    description: TextValue | None = None,
+    emphasis: Emphasis = Emphasis.NORMAL,
+) -> Download:
+    """Offer an inline-declared asset through a visible download control."""
+    return Download(key, _opt_text(label), asset, _opt_text(description), emphasis)
 
 
 def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.NORMAL) -> Link:

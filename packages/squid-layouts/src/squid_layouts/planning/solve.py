@@ -9,21 +9,37 @@ dropped footnote genuinely returns its characters to the body.
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
+from datetime import datetime
+from enum import Enum, StrEnum
+from heapq import heappop, heappush
+from itertools import count
 
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.errors import LayoutInvariantError
+from squid_layouts.planning.breaking import BreakItem, balanced_breaks
+from squid_layouts.planning.degradation import DegradationEffect, DegradationProfile, DegradationRecorder
 from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
-from squid_layouts.planning.pagination import NavNode, PageNav
+from squid_layouts.planning.navigation import (
+    NavNode,
+    PlannedNav,
+    materialized_navigation_state,
+)
+from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
+    ActionGroup,
+    Break,
+    Budget,
     Button,
     Code,
     Embed,
+    File,
     Footer,
     Gallery,
     Heading,
     Lines,
     LinkButton,
+    MediaCollection,
     Node,
     Option,
     Panel,
@@ -36,19 +52,77 @@ from squid_layouts.primitives.nodes import (
     Sep,
     Text,
     Thumbnail,
+    Time,
     Variants,
 )
 from squid_layouts.primitives.styles import Color
+from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 type TextBearing = Text | Heading | Footer | Code | Lines
 
 
+class SolveNoteCode(StrEnum):
+    """Stable identities for diagnostics emitted by the measured solver."""
+
+    CLAMP_BUTTON_LABEL = "clamp.button_label"
+    CLAMP_SELECT_OPTIONS = "clamp.select_options"
+    CLAMP_SELECT_OPTION_TEXT = "clamp.select_option_text"
+    CLAMP_SELECT_PLACEHOLDER = "clamp.select_placeholder"
+    CLAMP_SECTION_TEXTS = "clamp.section_texts"
+    CLAMP_GALLERY_ITEMS = "clamp.gallery_items"
+    NODE_DROPPED = "degradation.node_dropped"
+    ALTERNATE = "degradation.alternate"
+    ALTERNATE_EXHAUSTED = "degradation.alternate_exhausted"
+    TRUNCATED = "degradation.truncated"
+    NEVER_CLAMPED = "degradation.never_clamped"
+    CHROME_DROP = "degradation.chrome_drop"
+    CONDENSED = "degradation.condensed"
+    CONDENSE_TRUNCATED = "degradation.condense_truncated"
+    SPILL_ALTERNATES = "degradation.spill_alternates"
+    SPILLED = "degradation.spilled"
+    SPILL_DROPPED = "degradation.spill_dropped"
+    NEVER_BUDGET = "failure.never_budget"
+    BUDGET_FLOOR = "failure.budget_floor"
+    BEST_EFFORT_FLOOR = "degradation.best_effort_floor"
+    VARIANT_STEP = "degradation.variant_step"
+    PAGINATE_PER_FALLBACK = "degradation.paginate_per_fallback"
+    COMPONENT_BUDGET = "degradation.component_budget"
+
+
+class SolveNoteSeverity(Enum):
+    """How a solver note affects feasibility and reporting."""
+
+    CLAMP = "clamp"
+    DEGRADATION = "degradation"
+    FAILURE = "failure"
+
+
+@dataclass(frozen=True, slots=True)
+class SolveNote:
+    """A stable solver diagnostic whose meaning does not depend on message wording."""
+
+    code: SolveNoteCode
+    message: str
+    severity: SolveNoteSeverity = SolveNoteSeverity.DEGRADATION
+
+    def __str__(self) -> str:
+        return self.message
+
+
+def _note(
+    code: SolveNoteCode,
+    message: str,
+    severity: SolveNoteSeverity = SolveNoteSeverity.DEGRADATION,
+) -> SolveNote:
+    return SolveNote(code, message, severity)
+
+
 class LayoutOverflowError(Exception):
     """The document cannot fit its hard constraints into Discord's budgets."""
 
-    def __init__(self, notes: list[str]) -> None:
-        super().__init__("; ".join(notes))
+    def __init__(self, notes: list[SolveNote]) -> None:
+        super().__init__("; ".join(note.message for note in notes))
         self.notes = notes
 
 
@@ -59,6 +133,13 @@ class LayoutOverflowError(Exception):
 class RText:
     content: str = ""
     dropped: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class RTime:
+    instant: datetime
+    style: str
+    prefix: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +154,28 @@ class RPanel:
     accent: Color | None
 
 
-type Realized = RText | RSection | RPanel | Sep | Row | SelectMenu | RoutedSelect | Thumbnail | Gallery | RawItem
+@dataclass(frozen=True, slots=True)
+class RGroup:
+    """A transparent realized group removed before scene conversion."""
+
+    children: list[Realized]
+
+
+type Realized = (
+    RText
+    | RTime
+    | RSection
+    | RPanel
+    | RGroup
+    | File
+    | Sep
+    | Row
+    | SelectMenu
+    | RoutedSelect
+    | Thumbnail
+    | Gallery
+    | RawItem
+)
 
 
 PAGE_FOOTER_PREFIX = "-# "
@@ -114,7 +216,7 @@ class Pager:
 @dataclass(frozen=True, slots=True)
 class SolvedLayout:
     children: list[Realized]
-    notes: list[str]
+    notes: list[SolveNote]
     pagers: tuple[Pager, ...] = ()
     components: int = 0
     """Components the built view will hold, including every pager's controls."""
@@ -126,11 +228,21 @@ class SolvedLayout:
     spilling, dropping or stepping a ladder means the content did not fit. A caller
     deciding whether more will fit — the root packer — needs to tell those apart.
     """
-    nav: PageNav | None = None
+    nav: PlannedNav | None = None
+    chrome: Chrome = DEFAULT_CHROME
     limits: V2Limits = LIMITS
+    degradation: DegradationProfile = field(default_factory=DegradationProfile)
+    states_explored: int = 1
+    search_fallback: bool = False
+    variant_positions: tuple[tuple[_VariantPath, int], ...] = ()
 
-    def repage(self, indices: Mapping[str, int]) -> None:
-        """Show a different page of each named pager without re-fitting the document.
+    @property
+    def failures(self) -> tuple[SolveNote, ...]:
+        """Constraint failures that make this solution unusable without another rung."""
+        return tuple(note for note in self.notes if note.severity is SolveNoteSeverity.FAILURE)
+
+    def reposition(self, positions: Mapping[str, Position]) -> None:
+        """Show a different position in each named pager without re-fitting.
 
         Which page is showing is a display decision, not a layout one: every fragment
         already fits the grant its pager was allocated, the footer reservation was
@@ -140,16 +252,18 @@ class SolvedLayout:
         can move the page here instead of solving again.
         """
         for pager in self.pagers:
-            index = indices.get(pager.key)
-            if index is None:
+            position = positions.get(pager.key)
+            if position is None:
                 continue
-            shown = pager.select(index)
+            shown = pager.select(position.offset)
             if self.nav is None or pager.nav_host is None:
                 continue
             window = slice(pager.nav_at, pager.nav_at + pager.nav_count)
             previous = pager.nav_host[window]
             realized = _Builder(limits=self.limits).realize_children(
-                _validated_nav(self.nav(pager.key, shown, pager.pages))
+                _validated_nav(
+                    self.nav(materialized_navigation_state(pager.key, Position(offset=shown), pager.pages, self.chrome))
+                )
             )
             if len(realized) != pager.nav_count or _component_count(realized) != _component_count(previous):
                 message = (
@@ -209,6 +323,15 @@ class _Unit:
         return self.chrome_len + len(self.content)
 
 
+@dataclass(frozen=True, slots=True)
+class _BudgetRegion:
+    units: tuple[_Unit, ...]
+    minimum: int
+    preferred: int
+    stretch: int
+    best_effort: bool
+
+
 def _escape_fences(content: str) -> str:
     # A closing fence inside the content would end the block early; break it invisibly.
     return content.replace("```", "``\N{ZERO WIDTH SPACE}`")
@@ -258,37 +381,43 @@ def _hard_split(segment: str, limit: int) -> list[str]:
     return [segment[start : start + limit] for start in range(0, len(segment), limit)]
 
 
-def split_pages(text: str, limit: int, boundary: str = "\n") -> list[str]:
-    """Split ``text`` into chunks of at most ``limit``, preferring ``boundary`` cuts.
+def split_pages(
+    text: str,
+    limit: int,
+    boundary: str = "\n",
+    *,
+    min_fill: int = 0,
+    widows: int = 1,
+) -> list[str]:
+    """Balance ``text`` across the fewest bounded pages, preferring semantic cuts."""
+    if limit < 1:
+        message = "page limit must be positive"
+        raise ValueError(message)
+    chunks: list[tuple[str, str]] = []
+    for segment_index, segment in enumerate(text.split(boundary)):
+        separator = boundary if segment_index else ""
+        pieces = _hard_split(segment, limit) if len(segment) > limit else [segment]
+        for piece_index, piece in enumerate(pieces):
+            chunks.append((separator if piece_index == 0 else "", piece))
+    if not chunks:
+        return [""]
 
-    Ported from the diagnostics view's `_paginate`/`_hard_split`: segments are kept whole
-    where they fit; a single segment longer than a page is hard-split without inserting
-    boundary characters that were never in the text.
-    """
-    pages: list[str] = []
-    current = ""
+    def page_text(start: int, end: int) -> str:
+        return chunks[start][1] + "".join(separator + content for separator, content in chunks[start + 1 : end])
 
-    def flush() -> None:
-        nonlocal current
-        if current:
-            pages.append(current)
-            current = ""
-
-    for segment in text.split(boundary):
-        if len(segment) > limit:
-            flush()
-            chunks = _hard_split(segment, limit)
-            pages.extend(chunks[:-1])
-            current = chunks[-1]
-            continue
-        candidate = segment if not current else current + boundary + segment
-        if len(candidate) <= limit:
-            current = candidate
-        else:
-            flush()
-            current = segment
-    flush()
-    return pages or [""]
+    cuts = balanced_breaks(
+        [BreakItem(len(content), leading_chars=len(separator)) for separator, content in chunks],
+        max_chars=limit,
+        min_fill=min_fill,
+        widows=widows,
+        ideal_total=len(text),
+    )
+    result: list[str] = []
+    start = 0
+    for end in cuts:
+        result.append(page_text(start, end))
+        start = end
+    return result or [""]
 
 
 def _trim_keep(text: str, limit: int, keep: str) -> str:
@@ -301,20 +430,89 @@ def _trim_keep(text: str, limit: int, keep: str) -> str:
     return text[: limit - 1].rstrip() + ELLIPSIS
 
 
+@dataclass(frozen=True, slots=True)
+class NodeMeasure:
+    """Exact preferred resource cost for a resolved primitive sequence."""
+
+    chars: int
+    components: int
+
+
+def measure_nodes(nodes: Sequence[Node], *, limits: V2Limits = LIMITS) -> NodeMeasure:
+    """Measure preferred text and component cost without applying pressure."""
+
+    def lower_shape(node: Node) -> list[Node]:
+        match node:
+            case ActionGroup(items=items):
+                return [
+                    Row(tuple(items[start : start + limits.row_buttons]))
+                    for start in range(0, len(items), limits.row_buttons)
+                ]
+            case MediaCollection(urls=urls):
+                return [
+                    Gallery(tuple(urls[start : start + limits.gallery_items]))
+                    for start in range(0, len(urls), limits.gallery_items)
+                ]
+            case Panel(children=children):
+                return [replace(node, children=tuple(child for item in children for child in lower_shape(item)))]
+            case Budget(children=children) | Break(children=children):
+                return [replace(node, children=tuple(child for item in children for child in lower_shape(item)))]
+            case _:
+                return [node]
+
+    lowered = [child for node in nodes for child in lower_shape(node)]
+    builder = _Builder(limits=limits)
+    children = builder.realize_children(_resolve_variants(lowered, {}))
+    return NodeMeasure(builder.raw_text_cost + sum(unit.need for unit in builder.units), _component_count(children))
+
+
+def split_text_node(
+    node: Node,
+    limit: int,
+    *,
+    min_fill: int = 0,
+    widows: int = 1,
+) -> tuple[Node, ...] | None:
+    """Losslessly split one text primitive into independently renderable fragments."""
+    if not isinstance(node, Text | Heading | Footer | Code | Lines):
+        return None
+    slot = RText()
+    unit = _make_unit(node, slot, 0)
+    if unit is None:
+        return (node,)
+    usable = limit - unit.chrome_len
+    if usable < 1:
+        return None
+    boundary = node.join if isinstance(node, Lines) else "\n"
+    fragments = split_pages(unit.content, usable, boundary, min_fill=min_fill, widows=widows)
+    if len(fragments) <= 1:
+        return (node,)
+    if isinstance(node, Lines):
+        return tuple(Text(fragment, overflow=Never(), priority=node.priority) for fragment in fragments)
+    return tuple(replace(node, content=fragment, overflow=Never()) for fragment in fragments)
+
+
 # --- Solve ----------------------------------------------------------------------------------
 
 
 @dataclass(slots=True)
 class _Builder:
     limits: V2Limits = LIMITS
-    notes: list[str] = field(default_factory=list)
+    notes: list[SolveNote] = field(default_factory=list)
     units: list[_Unit] = field(default_factory=list)
     raw_text_cost: int = 0
+    budgets: list[_BudgetRegion] = field(default_factory=list)
 
     def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
         if len(button.label) <= self.limits.button_label:
             return button
-        self.notes.append(f"button label clamped from {len(button.label)}")
+        self.notes.append(
+            _note(
+                SolveNoteCode.CLAMP_BUTTON_LABEL,
+                f"button label clamped from {len(button.label)}",
+                SolveNoteSeverity.CLAMP,
+            )
+        )
         trimmed = _trim_keep(button.label, self.limits.button_label, "head")
         return replace(button, label=trimmed)
 
@@ -322,7 +520,13 @@ class _Builder:
         limits = self.limits
         options = select.options
         if len(options) > limits.select_options:
-            self.notes.append(f"{len(options)} select options clamped to {limits.select_options}")
+            self.notes.append(
+                _note(
+                    SolveNoteCode.CLAMP_SELECT_OPTIONS,
+                    f"{len(options)} select options clamped to {limits.select_options}",
+                    SolveNoteSeverity.CLAMP,
+                )
+            )
             options = options[: limits.select_options]
         clamped_options = []
         for option in options:
@@ -332,12 +536,20 @@ class _Builder:
             if description is not None and len(description) > limits.option_description:
                 description = _trim_keep(description, limits.option_description, "head")
             if (label, value, description) != (option.label, option.value, option.description):
-                self.notes.append("select option text clamped")
+                self.notes.append(
+                    _note(SolveNoteCode.CLAMP_SELECT_OPTION_TEXT, "select option text clamped", SolveNoteSeverity.CLAMP)
+                )
                 option = Option(label=label, value=value, description=description, default=option.default)
             clamped_options.append(option)
         placeholder = select.placeholder
         if placeholder is not None and len(placeholder) > limits.select_placeholder:
-            self.notes.append(f"select placeholder clamped from {len(placeholder)}")
+            self.notes.append(
+                _note(
+                    SolveNoteCode.CLAMP_SELECT_PLACEHOLDER,
+                    f"select placeholder clamped from {len(placeholder)}",
+                    SolveNoteSeverity.CLAMP,
+                )
+            )
             placeholder = _trim_keep(placeholder, limits.select_placeholder, "head")
         return replace(
             select,
@@ -357,9 +569,19 @@ class _Builder:
                 if unit is not None:
                     self.units.append(unit)
                 return slot
+            case Time(instant=instant, style=style, prefix=prefix):
+                unix = int(instant.timestamp())
+                self.raw_text_cost += len(prefix or "") + len(f"<t:{unix}:{style}>")
+                return RTime(instant, style, prefix)
             case Section(texts=texts, accessory=accessory):
                 if len(texts) > 3:
-                    self.notes.append(f"section holds {len(texts)} texts; keeping 3")
+                    self.notes.append(
+                        _note(
+                            SolveNoteCode.CLAMP_SECTION_TEXTS,
+                            f"section holds {len(texts)} texts; keeping 3",
+                            SolveNoteSeverity.CLAMP,
+                        )
+                    )
                     texts = texts[:3]
                 slots: list[RText] = []
                 for text_node in texts:
@@ -373,9 +595,28 @@ class _Builder:
                 return RSection(texts=slots, accessory=accessory)
             case Panel(children=children, accent=accent):
                 return RPanel(children=self.realize_children(children), accent=accent)
+            case Budget(
+                children=children,
+                minimum=minimum,
+                preferred=preferred,
+                stretch=stretch,
+                best_effort=best_effort,
+            ):
+                first = len(self.units)
+                realized = self.realize_children(children)
+                self.budgets.append(_BudgetRegion(tuple(self.units[first:]), minimum, preferred, stretch, best_effort))
+                return RGroup(realized)
+            case Break(children=children):
+                return RGroup(self.realize_children(children))
             case Gallery(urls=urls):
                 if len(urls) > 10:
-                    self.notes.append(f"gallery holds {len(urls)} items; keeping 10")
+                    self.notes.append(
+                        _note(
+                            SolveNoteCode.CLAMP_GALLERY_ITEMS,
+                            f"gallery holds {len(urls)} items; keeping 10",
+                            SolveNoteSeverity.CLAMP,
+                        )
+                    )
                     node = Gallery(urls=urls[:10])
                 return node
             case Row(items=items):
@@ -400,10 +641,13 @@ class _Builder:
                 return node
 
 
-def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
+def _apply(unit: _Unit, chrome: Chrome, notes: list[SolveNote], degradation: DegradationRecorder) -> bool:
     """Render the unit into its slot within its grant. Returns False when the node drops."""
     if unit.count_pages is not None:
         return _apply_count_pages(unit)
+    if unit.fragments is not None and unit.grant >= unit.chrome_len + max(map(len, unit.fragments)):
+        unit.slot.content = unit.prefix + unit.fragments[0] + unit.suffix
+        return True
     if unit.grant >= unit.need:
         unit.slot.content = unit.prefix + unit.content + unit.suffix
         return True
@@ -411,37 +655,82 @@ def _apply(unit: _Unit, chrome: Chrome, notes: list[str]) -> bool:
     usable = unit.grant - unit.chrome_len
     match unit.overflow:
         case Drop():
-            notes.append(f"dropped node {unit.index} ({unit.need} chars over budget)")
+            notes.append(
+                _note(SolveNoteCode.NODE_DROPPED, f"dropped node {unit.index} ({unit.need} chars over budget)")
+            )
+            degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
             return False
         case Spill() if unit.ladders is not None:
-            return _apply_spill(unit, usable, chrome, notes)
+            return _apply_spill(unit, usable, chrome, notes, degradation)
         case Condense() if usable >= 1:
-            return _apply_condense(unit, usable, notes)
+            return _apply_condense(unit, usable, notes, degradation)
         case Alts(ladder=ladder) if usable >= 1:
-            for alternate in ladder:
+            for step, alternate in enumerate(ladder, 1):
                 if alternate and len(alternate) <= usable:
-                    notes.append(f"node {unit.index} degraded to a {len(alternate)}-char alternate")
+                    notes.append(
+                        _note(
+                            SolveNoteCode.ALTERNATE,
+                            f"node {unit.index} degraded to a {len(alternate)}-char alternate",
+                        )
+                    )
+                    degradation.record(
+                        priority=unit.priority,
+                        path=f"$.text.{unit.index}",
+                        semantic_steps=step,
+                    )
                     unit.slot.content = unit.prefix + alternate + unit.suffix
                     return True
             fallback = ladder[-1] if ladder else unit.content
-            notes.append(f"node {unit.index} exhausted its ladder; trimming the last alternate")
+            notes.append(
+                _note(
+                    SolveNoteCode.ALTERNATE_EXHAUSTED,
+                    f"node {unit.index} exhausted its ladder; trimming the last alternate",
+                )
+            )
+            degradation.record(
+                priority=unit.priority,
+                path=f"$.text.{unit.index}",
+                semantic_steps=len(ladder),
+                truncated_chars=max(0, len(fallback) - usable),
+            )
             unit.slot.content = unit.prefix + _trim_keep(fallback, usable, "head") + unit.suffix
             return True
-        case Paginate(boundary=boundary) if usable >= 1:
+        case Paginate(boundary=boundary, min_fill=min_fill, widows=widows) if usable >= 1:
             # Pagination is the policy working as intended, not a degradation: no note.
-            unit.fragments = split_pages(unit.content, usable, boundary)
+            unit.fragments = split_pages(unit.content, usable, boundary, min_fill=min_fill, widows=widows)
             unit.slot.content = unit.prefix + unit.fragments[0] + unit.suffix
             return True
         case Truncate(keep=keep) if usable >= 1:
-            notes.append(f"trimmed node {unit.index} from {len(unit.content)} to {usable}")
+            notes.append(
+                _note(
+                    SolveNoteCode.TRUNCATED,
+                    f"trimmed node {unit.index} from {len(unit.content)} to {usable}",
+                )
+            )
+            degradation.record(
+                priority=unit.priority,
+                path=f"$.text.{unit.index}",
+                truncated_chars=max(0, len(unit.content) - usable),
+            )
             unit.slot.content = unit.prefix + _trim_keep(unit.content, usable, keep) + unit.suffix
             return True
         case Never() if usable >= 1:
-            notes.append(f"clamped Never node {unit.index}: needed {unit.need}, granted {unit.grant}")
+            notes.append(
+                _note(
+                    SolveNoteCode.NEVER_CLAMPED,
+                    f"clamped Never node {unit.index}: needed {unit.need}, granted {unit.grant}",
+                )
+            )
             unit.slot.content = unit.prefix + _trim_keep(unit.content, usable, "head") + unit.suffix
             return True
         case _:
-            notes.append(f"dropped node {unit.index}: grant {unit.grant} cannot cover chrome {unit.chrome_len}")
+            notes.append(
+                _note(
+                    SolveNoteCode.CHROME_DROP,
+                    f"dropped node {unit.index}: grant {unit.grant} cannot cover chrome {unit.chrome_len}",
+                )
+            )
+            degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
             return False
 
 
@@ -455,7 +744,13 @@ def _apply_count_pages(unit: _Unit) -> bool:
     usable = max(1, unit.grant - unit.chrome_len)
     fragments: list[str] = []
     for page in pages:
-        fragments.extend([page] if len(page) <= usable else split_pages(page, usable, unit.join))
+        policy = unit.overflow
+        assert isinstance(policy, Paginate)
+        fragments.extend(
+            [page]
+            if len(page) <= usable
+            else split_pages(page, usable, unit.join, min_fill=policy.min_fill, widows=policy.widows)
+        )
     unit.fragments = fragments
     unit.slot.content = unit.prefix + fragments[0] + unit.suffix
     return True
@@ -469,35 +764,71 @@ def _step_ladders(ladders: tuple[tuple[str, ...], ...], join: str, usable: int) 
     0 for an entry that never had to move.
     """
     levels = [0] * len(ladders)
-
-    def entry(index: int) -> str:
-        return ladders[index][levels[index]]
-
-    while sum(len(entry(i)) for i in range(len(ladders))) + (len(ladders) - 1) * len(join) > usable:
-        candidates = [i for i in range(len(ladders)) if levels[i] + 1 < len(ladders[i])]
-        if not candidates:
-            break
-        largest = max(candidates, key=lambda i: len(entry(i)))
-        levels[largest] += 1
+    total = sum(len(ladder[0]) for ladder in ladders) + max(0, len(ladders) - 1) * len(join)
+    candidates: list[tuple[int, int]] = []
+    for index, ladder in enumerate(ladders):
+        if len(ladder) > 1:
+            heappush(candidates, (-len(ladder[0]), index))
+    while total > usable and candidates:
+        _negative_length, largest = heappop(candidates)
+        level = levels[largest]
+        before = len(ladders[largest][level])
+        level += 1
+        levels[largest] = level
+        after = len(ladders[largest][level])
+        total -= before - after
+        if level + 1 < len(ladders[largest]):
+            heappush(candidates, (-after, largest))
     return levels
 
 
-def _apply_condense(unit: _Unit, usable: int, notes: list[str]) -> bool:
+def _apply_condense(
+    unit: _Unit,
+    usable: int,
+    notes: list[SolveNote],
+    degradation: DegradationRecorder,
+) -> bool:
     """Shorten entries as far as their ladders go, then trim; never lose a whole entry."""
     ladders = unit.ladders or ((unit.content,),)
     levels = _step_ladders(ladders, unit.join, usable)
     body = unit.join.join(ladder[level] for ladder, level in zip(ladders, levels, strict=True))
     stepped = sum(1 for level in levels if level)
     if stepped:
-        notes.append(f"node {unit.index} condensed {stepped} of {len(ladders)} entries down their ladders")
+        notes.append(
+            _note(
+                SolveNoteCode.CONDENSED,
+                f"node {unit.index} condensed {stepped} of {len(ladders)} entries down their ladders",
+            )
+        )
+        degradation.record(
+            priority=unit.priority,
+            path=f"$.text.{unit.index}",
+            semantic_steps=sum(levels),
+        )
     if len(body) > usable:
-        notes.append(f"condensed node {unit.index} exhausted its ladders; trimming from {len(body)} to {usable}")
+        notes.append(
+            _note(
+                SolveNoteCode.CONDENSE_TRUNCATED,
+                f"condensed node {unit.index} exhausted its ladders; trimming from {len(body)} to {usable}",
+            )
+        )
+        degradation.record(
+            priority=unit.priority,
+            path=f"$.text.{unit.index}",
+            truncated_chars=len(body) - usable,
+        )
         body = _trim_keep(body, usable, "head")
     unit.slot.content = unit.prefix + body + unit.suffix
     return True
 
 
-def _apply_spill(unit: _Unit, usable: int, chrome: Chrome, notes: list[str]) -> bool:
+def _apply_spill(
+    unit: _Unit,
+    usable: int,
+    chrome: Chrome,
+    notes: list[SolveNote],
+    degradation: DegradationRecorder,
+) -> bool:
     ladders = unit.ladders or ()
     total = len(ladders)
     # First degrade the largest entries down their ladders; spill whole entries only after
@@ -512,24 +843,59 @@ def _apply_spill(unit: _Unit, usable: int, chrome: Chrome, notes: list[str]) -> 
     # what the reader can afford to lose, so it takes the lowest priority first (ties from
     # the tail, which is where a list's least important entries conventionally sit).
     drop_order = sorted(range(total), key=lambda i: (unit.ranks[i] if unit.ranks else 0, -i))
+    entry_lengths = [len(entry(index)) for index in range(total)]
+    remaining_chars = sum(entry_lengths)
     for dropped in range(total + 1):
-        omitted = set(drop_order[:dropped])
-        shown = [entry(i) for i in range(total) if i not in omitted]
-        if dropped:
-            shown.append(chrome.and_n_more(dropped))
-        body = unit.join.join(shown)
-        if body and len(body) <= usable:
+        marker = chrome.and_n_more(dropped) if dropped else ""
+        shown_entries = total - dropped
+        output_items = shown_entries + int(bool(marker))
+        body_length = remaining_chars + len(marker) + max(0, output_items - 1) * len(unit.join)
+        if body_length and body_length <= usable:
+            omitted = set(drop_order[:dropped])
+            shown = [entry(index) for index in range(total) if index not in omitted]
+            if marker:
+                shown.append(marker)
+            body = unit.join.join(shown)
             if degraded:
-                notes.append(f"node {unit.index} degraded {sum(1 for lvl in levels if lvl)} entries down their ladders")
+                notes.append(
+                    _note(
+                        SolveNoteCode.SPILL_ALTERNATES,
+                        f"node {unit.index} degraded {sum(1 for lvl in levels if lvl)} entries down their ladders",
+                    )
+                )
+                degradation.record(
+                    priority=unit.priority,
+                    path=f"$.text.{unit.index}",
+                    semantic_steps=sum(levels),
+                )
             if dropped:
-                notes.append(f"spilled node {unit.index}: showing {total - dropped} of {total} lines")
+                notes.append(
+                    _note(
+                        SolveNoteCode.SPILLED,
+                        f"spilled node {unit.index}: showing {total - dropped} of {total} lines",
+                    )
+                )
+                degradation.record(
+                    priority=unit.priority,
+                    path=f"$.text.{unit.index}",
+                    spilled_items=dropped,
+                )
             unit.slot.content = unit.prefix + body + unit.suffix
             return True
-    notes.append(f"dropped node {unit.index}: no line fits in {usable}")
+        if dropped < total:
+            remaining_chars -= entry_lengths[drop_order[dropped]]
+    notes.append(_note(SolveNoteCode.SPILL_DROPPED, f"dropped node {unit.index}: no line fits in {usable}"))
+    degradation.record(priority=unit.priority, path=f"$.text.{unit.index}", dropped_nodes=1)
     return False
 
 
-def _allocate(units: list[_Unit], budget: int, notes: list[str], chrome: Chrome) -> None:
+def _allocate(
+    units: list[_Unit],
+    budget: int,
+    notes: list[SolveNote],
+    chrome: Chrome,
+    degradation: DegradationRecorder,
+) -> None:
     active = list(units)
     for _ in range(len(units) + 1):
         remaining = budget
@@ -544,7 +910,13 @@ def _allocate(units: list[_Unit], budget: int, notes: list[str], chrome: Chrome)
                 overdraw += unit.need - unit.grant
                 remaining -= unit.grant
         if overdraw:
-            notes.append(f"Never nodes need {budget + overdraw} of {budget} available characters")
+            notes.append(
+                _note(
+                    SolveNoteCode.NEVER_BUDGET,
+                    f"Never nodes need {budget + overdraw} of {budget} available characters",
+                    SolveNoteSeverity.FAILURE,
+                )
+            )
         for unit in active:
             if isinstance(unit.overflow, Condense):
                 unit.grant = min(unit.need, max(0, remaining))
@@ -570,13 +942,128 @@ def _allocate(units: list[_Unit], budget: int, notes: list[str], chrome: Chrome)
                     unit.grant += top_up
                     leftover -= top_up
             remaining -= sum(unit.grant for unit in group)
-        dropped = [unit for unit in active if not _apply(unit, chrome, notes)]
+        iteration = DegradationRecorder.create()
+        dropped = [unit for unit in active if not _apply(unit, chrome, notes, iteration)]
         if not dropped:
+            degradation.effects.extend(iteration.effects)
             return
+        dropped_paths = {f"$.text.{unit.index}" for unit in dropped}
+        degradation.effects.extend(effect for effect in iteration.effects if effect.path in dropped_paths)
         for unit in dropped:
             unit.slot.dropped = True
             active.remove(unit)
     # The loop always terminates by emptying `active`; each pass removes at least one unit.
+
+
+@dataclass(slots=True)
+class _GrantGroup:
+    units: tuple[_Unit, ...]
+    floor: int
+    demand: int
+    priority: int
+    best_effort: bool = False
+    grant: int = 0
+
+
+def _allocate_budgeted(
+    builder: _Builder,
+    budget: int,
+    notes: list[SolveNote],
+    chrome: Chrome,
+    degradation: DegradationRecorder,
+) -> None:
+    """Allocate transparent budget regions as siblings, then solve inside each grant."""
+    claimed: set[int] = set()
+    groups: list[_GrantGroup] = []
+    # Outer regions are recorded after their descendants. Claiming them first gives a
+    # nested declaration one owner instead of charging the same unit twice.
+    for region in reversed(builder.budgets):
+        units = tuple(unit for unit in region.units if unit.index not in claimed)
+        if not units:
+            continue
+        claimed.update(unit.index for unit in units)
+        need = sum(unit.need for unit in units)
+        ceiling = region.preferred + region.stretch
+        demand = need if need <= ceiling else min(need, region.preferred)
+        if len(units) == 1 and need > ceiling and isinstance(units[0].overflow, Paginate):
+            unit = units[0]
+            usable = ceiling - unit.chrome_len
+            if usable >= 1:
+                policy = unit.overflow
+                unit.fragments = split_pages(
+                    unit.content,
+                    usable,
+                    policy.boundary,
+                    min_fill=policy.min_fill,
+                    widows=policy.widows,
+                )
+                demand = unit.chrome_len + max(map(len, unit.fragments))
+        groups.append(
+            _GrantGroup(
+                units,
+                min(region.minimum, demand),
+                demand,
+                max(unit.priority for unit in units),
+                region.best_effort,
+            )
+        )
+    for unit in builder.units:
+        if unit.index in claimed:
+            continue
+        fixed = isinstance(unit.overflow, Never | Condense)
+        groups.append(_GrantGroup((unit,), unit.need if fixed else 0, unit.need, unit.priority))
+    groups.sort(key=lambda group: min(unit.index for unit in group.units))
+
+    remaining = max(0, budget)
+    hard_floor = sum(group.floor for group in groups if not group.best_effort)
+    if hard_floor > remaining:
+        notes.append(
+            _note(
+                SolveNoteCode.BUDGET_FLOOR,
+                f"Budget floors need {hard_floor} of {remaining} available characters",
+                SolveNoteSeverity.FAILURE,
+            )
+        )
+
+    for group in groups:
+        if group.best_effort:
+            continue
+        group.grant = min(group.floor, remaining)
+        remaining -= group.grant
+    for group in groups:
+        if not group.best_effort:
+            continue
+        group.grant = min(group.floor, remaining)
+        remaining -= group.grant
+        if group.grant < group.floor:
+            notes.append(
+                _note(
+                    SolveNoteCode.BEST_EFFORT_FLOOR,
+                    f"breached best-effort budget floor {group.floor} with a {group.grant}-character grant",
+                )
+            )
+
+    for priority in sorted({group.priority for group in groups}, reverse=True):
+        peers = [group for group in groups if group.priority == priority and group.grant < group.demand]
+        wanted = sum(group.demand - group.grant for group in peers)
+        share = min(remaining, wanted)
+        if wanted:
+            distributed = 0
+            for group in peers:
+                extra = (group.demand - group.grant) * share // wanted
+                group.grant += extra
+                distributed += extra
+            leftover = share - distributed
+            for group in peers:
+                if leftover <= 0:
+                    break
+                top_up = min(leftover, group.demand - group.grant)
+                group.grant += top_up
+                leftover -= top_up
+            remaining = max(0, budget - sum(group.grant for group in groups))
+
+    for group in groups:
+        _allocate(list(group.units), group.grant, notes, chrome, degradation)
 
 
 def _prune(children: list[Realized]) -> list[Realized]:
@@ -589,6 +1076,8 @@ def _prune(children: list[Realized]) -> list[Realized]:
                 kept = _prune(inner)
                 if kept:
                     pruned.append(RPanel(children=kept, accent=accent))
+            case RGroup(children=inner):
+                pruned.extend(_prune(inner))
             case RSection(texts=texts, accessory=accessory):
                 kept_texts = [slot for slot in texts if not slot.dropped]
                 # A Section needs at least one text child, and its accessory cannot stand
@@ -649,6 +1138,8 @@ def _component_count(children: list[Realized]) -> int:
         match child:
             case RPanel(children=inner):
                 count += 1 + _component_count(inner)
+            case RGroup(children=inner):
+                count += _component_count(inner)
             case RSection(texts=texts, accessory=accessory):
                 count += 1 + len(texts) + _item_component_cost(accessory)
             case Row(items=items):
@@ -689,7 +1180,7 @@ def _walk_ladders(nodes: Sequence[Node], positions: _Positions, visit) -> None:
                 # their positions rather than reinterpreting them against a different subtree.
                 for index, child in enumerate(variants[rung].nodes):
                     walk(child, (*path, rung, index))
-            case Panel(children=children):
+            case Panel(children=children) | Budget(children=children) | Break(children=children):
                 for index, child in enumerate(children):
                     walk(child, (*path, "panel", index))
             case _:
@@ -711,6 +1202,153 @@ def _steppable(nodes: Sequence[Node], positions: _Positions) -> list[tuple[_Vari
     return found
 
 
+def _canonical_positions(nodes: Sequence[Node], positions: _Positions) -> dict[_VariantPath, int]:
+    """Discard zero and unreachable positions after a parent changes rungs."""
+    canonical: dict[_VariantPath, int] = {}
+
+    def visit(path: _VariantPath, _node: Variants, rung: int) -> None:
+        if rung:
+            canonical[path] = rung
+
+    _walk_ladders(nodes, positions, visit)
+    return canonical
+
+
+def _variant_profile(nodes: Sequence[Node], positions: _Positions) -> DegradationProfile:
+    profile = DegradationProfile()
+
+    def visit(path: _VariantPath, node: Variants, rung: int) -> None:
+        nonlocal profile
+        if rung:
+            profile = profile.with_effect(
+                DegradationEffect(
+                    priority=node.priority,
+                    path=_format_path(path),
+                    semantic_steps=rung,
+                )
+            )
+
+    _walk_ladders(nodes, positions, visit)
+    return profile
+
+
+def _variant_notes(nodes: Sequence[Node], positions: _Positions) -> list[SolveNote]:
+    notes: list[SolveNote] = []
+
+    def visit(path: _VariantPath, node: Variants, rung: int) -> None:
+        notes.extend(
+            _note(
+                SolveNoteCode.VARIANT_STEP,
+                f"{_format_path(path)} stepped to variant {step + 2} of {len(node.variants)} "
+                f"(priority {node.priority}) under layout pressure",
+            )
+            for step in range(rung)
+        )
+
+    _walk_ladders(nodes, positions, visit)
+    return notes
+
+
+def _variant_state_bound(nodes: Sequence[Node], cutoff: int) -> int:
+    """Count reachable rung assignments, stopping once the bounded search cannot exhaust them."""
+
+    def multiply(values: Sequence[int]) -> int:
+        product = 1
+        for value in values:
+            product *= value
+            if product > cutoff:
+                return cutoff + 1
+        return product
+
+    def count_node(node: Node) -> int:
+        match node:
+            case Variants(variants=variants):
+                total = 0
+                for variant in variants:
+                    total += multiply([count_node(child) for child in variant.nodes])
+                    if total > cutoff:
+                        return cutoff + 1
+                return total
+            case Panel(children=children) | Budget(children=children) | Break(children=children):
+                return multiply([count_node(child) for child in children])
+            case _:
+                return 1
+
+    return multiply([count_node(node) for node in nodes])
+
+
+def _static_components(nodes: Sequence[Node], limits: V2Limits) -> int:
+    builder = _Builder(limits=limits)
+    return _component_count(_prune(builder.realize_children(_resolve_variants(nodes, {}))))
+
+
+def _guided_variant_solve(
+    tree: list[Node],
+    *,
+    limits: V2Limits,
+    chrome: Chrome,
+    reserved_text: int,
+    position: PositionState,
+    nav: PlannedNav | None,
+    search_budget: int,
+) -> SolvedLayout:
+    """Preserve priority and breadth while guiding an intractable product by component savings."""
+    positions: dict[_VariantPath, int] = {}
+    states_explored = 0
+    solved: SolvedLayout | None = None
+    while states_explored < search_budget:
+        structural = _variant_profile(tree, positions)
+        solved = _solve_once(
+            tree,
+            positions=positions,
+            limits=limits,
+            chrome=chrome,
+            reserved_text=reserved_text,
+            position=position,
+            nav=nav,
+            notes=_variant_notes(tree, positions),
+        )
+        states_explored += 1
+        solved = replace(
+            solved,
+            degradation=solved.degradation.merged(structural),
+            states_explored=states_explored,
+            search_fallback=bool(positions) or solved.components > limits.total_components,
+            variant_positions=tuple(positions.items()),
+        )
+        if solved.components <= limits.total_components and not solved.failures:
+            break
+        remaining = _steppable(tree, positions)
+        if not remaining:
+            break
+        priority, rung = min((ladder.priority, current) for _path, ladder, current in remaining)
+        peers = [
+            (path, ladder, current)
+            for path, ladder, current in remaining
+            if ladder.priority == priority and current == rung
+        ]
+
+        def candidate(
+            order: int,
+            path: _VariantPath,
+            ladder: Variants,
+            current: int,
+            base_positions: dict[_VariantPath, int],
+        ) -> tuple[int, int, dict[_VariantPath, int]]:
+            neighbor = dict(base_positions)
+            neighbor[path] = current + 1
+            neighbor = _canonical_positions(tree, neighbor)
+            current_components = _static_components(ladder.variants[current].nodes, limits)
+            next_components = _static_components(ladder.variants[current + 1].nodes, limits)
+            return next_components - current_components, order, neighbor
+
+        _delta, _order, positions = min(
+            candidate(order, path, ladder, current, positions) for order, (path, ladder, current) in enumerate(peers)
+        )
+    assert solved is not None
+    return solved
+
+
 def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node]:
     """Splice each ladder's selected rung into its parent for this measuring pass."""
 
@@ -727,6 +1365,16 @@ def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node
                 for index, child in enumerate(children):
                     inner.extend(rewrite(child, (*path, "panel", index)))
                 return [Panel(children=tuple(inner), accent=accent)]
+            case Budget(children=children):
+                inner = []
+                for index, child in enumerate(children):
+                    inner.extend(rewrite(child, (*path, "budget", index)))
+                return [replace(node, children=tuple(inner))]
+            case Break(children=children):
+                inner = []
+                for index, child in enumerate(children):
+                    inner.extend(rewrite(child, (*path, "break", index)))
+                return [replace(node, children=tuple(inner))]
             case _:
                 return [node]
 
@@ -736,7 +1384,7 @@ def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node
     return resolved
 
 
-type PageState = Mapping[str, int] | int | None
+type PositionState = Mapping[str, Position] | Position | None
 
 
 def solve(
@@ -747,8 +1395,9 @@ def solve(
     localization: Localization = NEUTRAL,
     strict: bool = False,
     reserved_text: int = 0,
-    page: PageState = None,
-    nav: PageNav | None = None,
+    position: PositionState = None,
+    nav: PlannedNav | None = None,
+    search_budget: int = DEFAULT_SEARCH_BUDGET,
 ) -> SolvedLayout:
     """Fit nodes into target budgets with independently keyed pagination.
 
@@ -756,48 +1405,87 @@ def solve(
     which is the only layer that knows the target. A ladder reaching the solver is a pure
     budget ladder whose rungs are all available.
     """
+    if search_budget < 1:
+        message = "solver search budget must be positive"
+        raise ValueError(message)
     chrome = localize_chrome(chrome, localization)
     tree = list(nodes)
-    positions: dict[_VariantPath, int] = {}
-    step_notes: list[str] = []
-    solved = _solve_once(
-        tree,
-        positions=positions,
-        limits=limits,
-        chrome=chrome,
-        reserved_text=reserved_text,
-        page=page,
-        nav=nav,
-        notes=[],
-    )
-    while solved.components > limits.total_components:
-        remaining = _steppable(tree, positions)
-        if not remaining:
-            break
-        # Priority decides which ladder gives way; the rung it already sits on decides which
-        # of several equals gives way next, so equal-priority ladders step breadth-first
-        # rather than one collapsing to nothing while its twin stays whole. `min` is stable,
-        # so a full tie still falls to document order.
-        path, ladder, rung = min(remaining, key=lambda candidate: (candidate[1].priority, candidate[2]))
-        step_notes.append(
-            f"{_format_path(path)} stepped to variant {rung + 2} of {len(ladder.variants)} "
-            f"(priority {ladder.priority}) under component pressure"
+    if _variant_state_bound(tree, search_budget) > search_budget:
+        selected = _guided_variant_solve(
+            tree,
+            limits=limits,
+            chrome=chrome,
+            reserved_text=reserved_text,
+            position=position,
+            nav=nav,
+            search_budget=search_budget,
         )
-        positions[path] = rung + 1
+        if strict and selected.notes:
+            raise LayoutOverflowError(selected.notes)
+        return selected
+    frontier: list[tuple[DegradationProfile, int, dict[_VariantPath, int]]] = []
+    serial = count()
+    heappush(frontier, (DegradationProfile(), next(serial), {}))
+    seen: set[frozenset[tuple[_VariantPath, int]]] = {frozenset()}
+    best: SolvedLayout | None = None
+    best_overflow: SolvedLayout | None = None
+    states_explored = 0
+
+    while frontier and states_explored < search_budget:
+        structural, _order, positions = heappop(frontier)
+        if best is not None and best.degradation < structural:
+            break
         solved = _solve_once(
             tree,
             positions=positions,
             limits=limits,
             chrome=chrome,
             reserved_text=reserved_text,
-            page=page,
+            position=position,
             nav=nav,
-            notes=list(step_notes),
+            notes=_variant_notes(tree, positions),
         )
+        states_explored += 1
+        solved = replace(
+            solved,
+            degradation=solved.degradation.merged(structural),
+            states_explored=states_explored,
+            variant_positions=tuple(positions.items()),
+        )
+        valid = solved.components <= limits.total_components and not solved.failures
+        if valid and (best is None or solved.degradation < best.degradation):
+            best = solved
+            if solved.degradation.lossless:
+                break
+        if best_overflow is None or (solved.components, solved.degradation) < (
+            best_overflow.components,
+            best_overflow.degradation,
+        ):
+            best_overflow = solved
 
-    if strict and solved.notes:
-        raise LayoutOverflowError(solved.notes)
-    return solved
+        if solved.components <= limits.total_components and not solved.failures:
+            continue
+
+        for path, _ladder, rung in _steppable(tree, positions):
+            neighbor = dict(positions)
+            neighbor[path] = rung + 1
+            neighbor = _canonical_positions(tree, neighbor)
+            key = frozenset(neighbor.items())
+            if key in seen:
+                continue
+            seen.add(key)
+            lower_bound = _variant_profile(tree, neighbor)
+            if best is not None and best.degradation < lower_bound:
+                continue
+            heappush(frontier, (lower_bound, next(serial), neighbor))
+
+    selected = best or best_overflow
+    assert selected is not None
+    fallback = bool(frontier) and states_explored >= search_budget
+    selected = replace(selected, states_explored=states_explored, search_fallback=fallback)
+    if strict and selected.notes:
+        raise LayoutOverflowError(selected.notes)
+    return selected
 
 
 def _configure_paginators(
@@ -822,7 +1510,12 @@ def _configure_paginators(
             if isinstance(unit.node, Lines):
                 unit.count_pages = _count_pages(unit, policy.per)
             else:
-                builder.notes.append(f"node {unit.index} is not a Lines node; paging on overflow instead of per entry")
+                builder.notes.append(
+                    _note(
+                        SolveNoteCode.PAGINATE_PER_FALLBACK,
+                        f"node {unit.index} is not a Lines node; paging on overflow instead of per entry",
+                    )
+                )
                 unit.overflow = replace(policy, per=None)
     return units, keys, footers
 
@@ -835,15 +1528,18 @@ def _insert_after(
         if child is target:
             children[index + 1 : index + 1] = additions
             return children, index + 1
-        if isinstance(child, RPanel) and (found := _insert_after(child.children, target, additions)) is not None:
+        if (
+            isinstance(child, RPanel | RGroup)
+            and (found := _insert_after(child.children, target, additions)) is not None
+        ):
             return found
     return None
 
 
-def _requested_page(state: PageState, key: str, *, first: bool) -> int | None:
+def _requested_position(state: PositionState, key: str, *, first: bool) -> Position | None:
     if isinstance(state, Mapping):
         return state.get(key)
-    if isinstance(state, int) and first:
+    if isinstance(state, Position) and first:
         return state
     return None
 
@@ -855,9 +1551,9 @@ def _solve_once(
     limits: V2Limits,
     chrome: Chrome,
     reserved_text: int,
-    page: PageState,
-    nav: PageNav | None,
-    notes: list[str],
+    position: PositionState,
+    nav: PlannedNav | None,
+    notes: list[SolveNote],
 ) -> SolvedLayout:
     """One measuring pass, including a fixed point for all measured pager footers."""
     resolved = _resolve_variants(nodes, positions)
@@ -870,6 +1566,7 @@ def _solve_once(
             dict[int, str],
             dict[int, Callable[[int, int], str]],
             int,
+            DegradationProfile,
         ]
         | None
     ) = None
@@ -878,6 +1575,7 @@ def _solve_once(
     # The component ceiling is a safe bound even when many paginators are nested in one Panel.
     for _ in range(limits.total_components + 1):
         pass_notes = list(notes)
+        degradation = DegradationRecorder.create()
         builder = _Builder(limits=limits, notes=pass_notes)
         children = builder.realize_children(resolved)
         paginate_units, keys, footers = _configure_paginators(builder, chrome)
@@ -887,17 +1585,20 @@ def _solve_once(
             _footer_cost(footers[unit.index], len(unit.content)) for unit in paginate_units if unit.index in active
         )
         budget = limits.total_text - builder.raw_text_cost - reserved_text - footer_reservation
-        _allocate(builder.units, budget, pass_notes, chrome)
+        if builder.budgets:
+            _allocate_budgeted(builder, budget, pass_notes, chrome, degradation)
+        else:
+            _allocate(builder.units, budget, pass_notes, chrome, degradation)
         children = _prune(children)
         detected = {unit.index for unit in paginate_units if unit.fragments is not None and len(unit.fragments) > 1}
-        final = (builder, children, paginate_units, keys, footers, clamps)
+        final = (builder, children, paginate_units, keys, footers, clamps, degradation.freeze())
         expanded = active | detected
         if expanded == active:
             break
         active = expanded
 
     assert final is not None
-    builder, children, paginate_units, keys, footers, clamps = final
+    builder, children, paginate_units, keys, footers, clamps, degradation = final
     pagers: list[Pager] = []
     for unit in paginate_units:
         if unit.fragments is None or len(unit.fragments) <= 1:
@@ -917,11 +1618,15 @@ def _solve_once(
             footer=footers[unit.index],
             initial=initial,
         )
-        requested = _requested_page(page, key, first=not pagers)
-        shown = pager.select(initial if requested is None else requested)
+        requested = _requested_position(position, key, first=not pagers)
+        shown = pager.select(initial if requested is None else requested.offset)
         additions: list[Realized] = [footer_slot]
         if nav is not None:
-            additions.extend(builder.realize_children(_validated_nav(nav(key, shown, pager.pages))))
+            additions.extend(
+                builder.realize_children(
+                    _validated_nav(nav(materialized_navigation_state(key, Position(offset=shown), pager.pages, chrome)))
+                )
+            )
         placement = _insert_after(children, unit.slot, additions)
         if placement is None:
             placement = (children, len(children))
@@ -932,7 +1637,12 @@ def _solve_once(
 
     count = _component_count(children)
     if count > limits.total_components:
-        builder.notes.append(f"{count} components exceed {limits.total_components}; the document needs restructuring")
+        builder.notes.append(
+            _note(
+                SolveNoteCode.COMPONENT_BUDGET,
+                f"{count} components exceed {limits.total_components}; the document needs restructuring",
+            )
+        )
     return SolvedLayout(
         children=children,
         notes=builder.notes,
@@ -942,5 +1652,7 @@ def _solve_once(
         # themselves a response to overflow.
         overflowed=bool(notes) or len(builder.notes) > clamps,
         nav=nav,
+        chrome=chrome,
         limits=limits,
+        degradation=degradation,
     )

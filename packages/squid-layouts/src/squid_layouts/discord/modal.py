@@ -19,14 +19,19 @@ from squid_layouts.forms import (
     BoolField,
     ChoiceField,
     DateField,
+    DateTimeField,
     DurationField,
     ExtensionField,
     FloatField,
     FormField,
     FormSpec,
+    FormValueError,
     IntField,
+    MultiChoiceField,
     TextAreaField,
     TextField,
+    TimeField,
+    UploadedFile,
 )
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
@@ -61,7 +66,7 @@ class EntityField(ExtensionField[object]):
         if not values:
             if self.required:
                 message = "This field is required."
-                raise ValueError(message)
+                raise FormValueError(message)
             return None if self.maximum == 1 else ()
         return values[0] if self.maximum == 1 else values
 
@@ -74,14 +79,23 @@ class FileField(ExtensionField[object]):
     maximum: int = 1
     capability: ClassVar[str] = "forms.discord.file"
 
-    def parse(self, raw: object) -> object | None:
+    def parse(self, raw: object) -> UploadedFile | tuple[UploadedFile, ...] | None:
         values = tuple(raw) if isinstance(raw, list | tuple) else (() if raw is None else (raw,))
         if not values:
             if self.required:
                 message = "This field is required."
-                raise ValueError(message)
+                raise FormValueError(message)
             return None if self.maximum == 1 else ()
-        return values[0] if self.maximum == 1 else values
+        if len(values) < self.minimum:
+            message = f"Upload at least {self.minimum} files."
+            raise FormValueError(message)
+        if len(values) > self.maximum:
+            message = f"Upload no more than {self.maximum} files."
+            raise FormValueError(message)
+        if not all(isinstance(value, UploadedFile) for value in values):
+            message = "Discord file adapter submitted a non-upload value"
+            raise TypeError(message)
+        return values[0] if self.maximum == 1 else values  # pyrefly: ignore[bad-return]
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,7 +177,7 @@ def _resolve(value: TextLike, localization: Localization) -> str:
 
 
 def _text_input(
-    field: TextField | IntField | FloatField | DurationField | DateField,
+    field: TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField,
     prefill: object,
     localization: Localization,
 ) -> discord.ui.TextInput:
@@ -185,7 +199,7 @@ def _form_component(
     prefill: object,
     localization: Localization,
 ) -> tuple[discord.ui.Item[Any], Callable[[], object]]:
-    if isinstance(field, TextField | IntField | FloatField | DurationField | DateField):
+    if isinstance(field, TextField | IntField | FloatField | DurationField | DateField | TimeField | DateTimeField):
         component = _text_input(field, prefill, localization)
         return component, lambda: component.value
     if isinstance(field, ChoiceField):
@@ -209,6 +223,30 @@ def _form_component(
             ],
         )
         return component, lambda: component.value
+    if isinstance(field, MultiChoiceField):
+        if not 1 <= len(field.options) <= 25:
+            message = f"Discord multi-choice field {field.key!r} needs 1-25 options"
+            raise LayoutInvariantError(message)
+        selected = set(field.format_prefill(prefill))
+        maximum = len(field.options) if field.maximum is None else field.maximum
+        component = discord.ui.Select(
+            custom_id=field.key,
+            min_values=field.minimum,
+            max_values=maximum,
+            required=field.required,
+            options=[
+                discord.SelectOption(
+                    label=_resolve(option.label, localization),
+                    value=option.key,
+                    description=(
+                        _resolve(option.description, localization) if option.description is not None else None
+                    ),
+                    default=option.key in selected,
+                )
+                for option in field.options
+            ],
+        )
+        return component, lambda: component.values
     if isinstance(field, BoolField):
         component = discord.ui.Checkbox(custom_id=field.key, default=bool(prefill))
         return component, lambda: component.value
@@ -231,15 +269,28 @@ def _form_component(
         )
         return component, lambda: component.values
     if isinstance(field, FileField):
+        if not 0 <= field.minimum <= field.maximum <= 10:
+            message = f"Discord file field {field.key!r} needs 0-10 files"
+            raise LayoutInvariantError(message)
         component = discord.ui.FileUpload(
             custom_id=field.key,
             required=field.required,
             min_values=field.minimum,
             max_values=field.maximum,
         )
-        return component, lambda: component.values
+        return component, lambda: tuple(_uploaded_file(attachment) for attachment in component.values)
     message = f"Discord has no adapter for form field {type(field).__name__}"
     raise LayoutInvariantError(message)
+
+
+def _uploaded_file(attachment: discord.Attachment) -> UploadedFile:
+    return UploadedFile(
+        name=attachment.filename,
+        media_type=attachment.content_type or "application/octet-stream",
+        size=attachment.size,
+        url=attachment.url,
+        read=attachment.read,
+    )
 
 
 def build_modal(

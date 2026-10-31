@@ -1,22 +1,13 @@
-"""A semantic drill-down menu with breadcrumb navigation chrome."""
+"""A semantic drill-down menu with component and routed shells."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from squid_layouts.actions import ActionEvent
-from squid_layouts.chrome import CHROME_CONTEXT, DEFAULT_CHROME
-from squid_layouts.factories import action, actions, controlled, destination, heading, navigation, stack
-from squid_layouts.patterns._content import (
-    ContentItem,
-    ContentLike,
-    normalize_content,
-    render_content,
-    require_key,
-    slug,
-)
-from squid_layouts.runtime.component import Component
-from squid_layouts.runtime.reactivity import state
-from squid_layouts.semantic import Action, ActionDisplay, LayoutNode, NavigateEvent, NavigationDisplay
+from squid_layouts.factories import actions, choice, heading, stack
+from squid_layouts.patterns._content import ContentItem, ContentLike, normalize_content, require_key, slug
+from squid_layouts.patterns.shells import ComponentShell, PatternControls
+from squid_layouts.runtime.component import RenderResult
+from squid_layouts.semantic import ActionDisplay
 from squid_layouts.text import Message, ResolvedText, TextLike
 
 _MISSING = object()
@@ -41,10 +32,7 @@ class MenuEntry:
         entries: Iterable[MenuEntry] = (),
     ) -> None:
         if content is _MISSING:
-            if key is None:
-                resolved_key = slug(key_or_label)
-            else:
-                resolved_key = key
+            resolved_key = slug(key_or_label) if key is None else key
             label = key_or_label
             raw_content = label_or_content
         else:
@@ -62,20 +50,21 @@ class MenuEntry:
         if any(not isinstance(entry, MenuEntry) for entry in child_entries):
             message = "MenuEntry.entries must contain MenuEntry instances"
             raise TypeError(message)
-        keys = [entry.key for entry in child_entries]
-        if len(set(keys)) != len(keys):
-            message = f"MenuEntry child keys must be unique: {keys!r}"
-            raise ValueError(message)
         object.__setattr__(self, "key", resolved_key)
         object.__setattr__(self, "label", label)
         object.__setattr__(self, "content", normalize_content(raw_content, name=f"MenuEntry {resolved_key!r}.content"))
         object.__setattr__(self, "entries", child_entries)
 
 
-class Menu(Component):
-    """A keyed menu that drills into destinations and owns Back/Home/Close actions."""
+@dataclass(frozen=True, slots=True)
+class MenuState:
+    """Serializable drill-down path for :class:`Menu`."""
 
-    path: tuple[str, ...] = state(())
+    path: tuple[str, ...] = ()
+
+
+class Menu:
+    """A pure keyed drill-down menu."""
 
     def __init__(
         self,
@@ -84,16 +73,22 @@ class Menu(Component):
         *,
         key: str = "menu",
         initial: Iterable[str] = (),
-        display: NavigationDisplay = NavigationDisplay.AUTO,
     ) -> None:
         self.key = require_key(key, name="Menu.key")
         self.title = title
         self.entries = tuple(entries)
-        self.display = display
         self._validate_entries(self.entries, where="Menu.entries")
         initial_path = tuple(initial)
         self._resolve_path(initial_path)
-        self.path = initial_path
+        self._initial_state = MenuState(initial_path)
+
+    @property
+    def initial_state(self) -> MenuState:
+        return self._initial_state
+
+    def component(self, *, initial: MenuState | None = None) -> ComponentShell[MenuState]:
+        """Build the in-memory shell, with Close ending its mount."""
+        return ComponentShell(self, initial=initial, finish_actions=("close",))
 
     @staticmethod
     def _validate_entries(entries: tuple[MenuEntry, ...], *, where: str) -> None:
@@ -115,67 +110,65 @@ class Menu(Component):
             entries = current.entries
         return current, entries
 
-    @property
-    def current(self) -> MenuEntry | None:
-        """The selected destination, or ``None`` while the root menu is shown."""
-        return self._resolve_path(self.path)[0]
+    def transition(
+        self,
+        state: MenuState,
+        action: str,
+        *,
+        values: tuple[str, ...] = (),
+        submitted: Mapping[str, object] | None = None,
+    ) -> MenuState:
+        del submitted
+        if action == "back":
+            return MenuState(state.path[:-1])
+        if action == "home":
+            return MenuState()
+        if action == "close":
+            return state
+        destination = values[0] if action == "open" and len(values) == 1 else action.removeprefix("open:")
+        if action != "open" and not action.startswith("open:"):
+            return state
+        _current, entries = self._resolve_path(state.path)
+        if destination not in {entry.key for entry in entries}:
+            return state
+        return MenuState((*state.path, destination))
 
-    def back(self) -> None:
-        """Return to the parent menu, if the menu is drilled down."""
-        if self.path:
-            self.path = self.path[:-1]
-
-    def home(self) -> None:
-        """Return to the root menu."""
-        if self.path:
-            self.path = ()
-
-    async def _open(self, event: NavigateEvent) -> None:
-        _current, entries = self._resolve_path(self.path)
-        if any(entry.key == event.destination for entry in entries):
-            self.path = (*self.path, event.destination)
-
-    async def _back(self, event: ActionEvent) -> None:
-        self.back()
-
-    async def _home(self, event: ActionEvent) -> None:
-        self.home()
-
-    async def _close(self, event: ActionEvent) -> None:
-        await event.finish()
-
-    def _chrome(self) -> tuple[Action, ...]:
-        try:
-            chrome = self.inject(CHROME_CONTEXT)
-        except LookupError:
-            chrome = DEFAULT_CHROME
-        return (
-            action(chrome.back, self._back, key=f"{self.key}.back", available=bool(self.path)),
-            *((action(chrome.home, self._home, key=f"{self.key}.home"),) if len(self.path) > 1 else ()),
-            action(chrome.close, self._close, key=f"{self.key}.close"),
-        )
-
-    def render(self) -> LayoutNode:
-        current, entries = self._resolve_path(self.path)
-        content = render_content(self, current.content, prefix="content") if current is not None else ()
-        destinations = (
-            navigation(
-                *(destination(entry.label, key=entry.key) for entry in entries),
-                key=self.key,
-                current=controlled(None, self._open),
-                display=self.display,
+    def render(self, state: MenuState, controls: PatternControls[MenuState]) -> RenderResult:
+        current, entries = self._resolve_path(state.path)
+        if len(entries) <= 5:
+            destinations = (
+                actions(
+                    *(
+                        controls.action(entry.label, f"open:{entry.key}", key=f"{self.key}.{entry.key}")
+                        for entry in entries
+                    ),
+                    key=f"{self.key}.destinations",
+                    display=ActionDisplay.INDIVIDUAL,
+                )
+                if entries
+                else None
             )
-            if entries
-            else None
+        else:
+            destinations = controls.choices(
+                tuple(choice(entry.label, key=entry.key) for entry in entries),
+                "open",
+                key=f"{self.key}.destinations",
+                selected=(),
+                minimum=1,
+                maximum=1,
+                placeholder="Choose a destination",
+            )
+        chrome = actions(
+            controls.action(controls.chrome.back, "back", key=f"{self.key}.back", available=bool(state.path)),
+            controls.action(controls.chrome.home, "home", key=f"{self.key}.home", available=len(state.path) > 1),
+            controls.action(controls.chrome.close, "close", key=f"{self.key}.close"),
+            key=f"{self.key}.chrome",
+            display=ActionDisplay.INDIVIDUAL,
         )
         return stack(
             heading(self.title),
             heading(current.label, level=3) if current is not None else None,
-            *content,
+            *(controls.content(current.content, prefix="content") if current is not None else ()),
             destinations,
-            actions(
-                *self._chrome(),
-                key=f"{self.key}.chrome",
-                display=ActionDisplay.INDIVIDUAL,
-            ),
+            chrome,
         )

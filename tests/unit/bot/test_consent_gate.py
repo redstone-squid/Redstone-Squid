@@ -15,6 +15,7 @@ from squid.accounts.application import AccountService
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
 from squid.bot.consent import NOT_ASKED, ensure_consented_account, prompt_for_consent
 from squid.bot.utils.mount_registry import MountRegistry, SessionKey
+from squid_layouts.discord import Everyone
 from squid_layouts.discord.testing import fake_message
 
 AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
@@ -190,7 +191,7 @@ async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
     the 120 s, which is the leak this was supposed to close.
     """
     ctx = make_context()
-    parent = sl.discord.Mount(_Blank(), timeout=None)
+    parent = sl.discord.Mount(_Blank(), access=Everyone(), timeout=None)
     outcomes: list[Any] = []
 
     # Bounded well under the prompt's own 120 s: a wait that only ends when the timeout

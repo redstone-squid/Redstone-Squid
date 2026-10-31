@@ -1,9 +1,8 @@
 """Mounted squid-layouts component for interactive search results."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-import discord
 from discord.utils import escape_markdown
 
 import squid_layouts as sl
@@ -26,8 +25,8 @@ class SearchResultsView(sl.Component):
     """A cursor-driven search surface rendered and owned by a squid-layouts mount.
 
     The historical class name is retained because commands and extensions import it, but the
-    object is now a portable component rather than a discord.py LayoutView. Compatibility
-    helpers at the bottom keep structural callers useful while the command path uses mount.
+    object is now a portable component rather than a discord.py LayoutView; the command path
+    drives it through :meth:`mount`.
     """
 
     detail_index: int | None = sl.state(None)
@@ -52,9 +51,6 @@ class SearchResultsView(sl.Component):
         self._load_build = load_build
         self._render_build = render_build
         self._build_node: sl.LayoutNode | None = None
-        self._compat_mount: sl.discord.Mount | None = None
-        self._compat_disabled = False
-        self._bound_message: discord.Message | None = None
 
     @property
     def request(self) -> SearchRequest:
@@ -223,36 +219,7 @@ class SearchResultsView(sl.Component):
 
     def mount(self) -> sl.discord.Mount:
         """Create the mount used by the command transport."""
-        return create_mount(self, locale=self.locale, timeout=180, lock_to=self._author_id)
-
-    def bind_message(self, message: discord.Message) -> None:
-        """Bind a compatibility message; production mounts bind through Mount.bind."""
-        self._bound_message = message
-
-    async def on_timeout(self) -> None:
-        """Disable compatibility-rendered controls when an old caller owns the message."""
-        self._compat_disabled = True
-        if self._bound_message is not None:
-            await self._bound_message.edit(view=self._compat_view())
-
-    # Compatibility helpers for structural callers that used to inspect a discord.py view.
-    def _compat_view(self) -> discord.ui.LayoutView:
-        if self._compat_mount is None:
-            self._compat_mount = self.mount()
-        return self._compat_mount.build_view(disabled=self._compat_disabled)
-
-    def to_components(self) -> list[dict[str, Any]]:
-        """Return the current rendered Components V2 payload for inspection."""
-        return self._compat_view().to_components()
-
-    def walk_children(self) -> list[discord.ui.Item[Any]]:
-        """Walk the compatibility-rendered view."""
-        return list(self._compat_view().walk_children())
-
-    def render_detail(self, hit: SearchHit) -> None:
-        """Select a result for compatibility callers."""
-        self.detail_index = self.hits.index(hit)
-        self._build_node = None
+        return create_mount(self, access=sl.discord.Owner(self._author_id), locale=self.locale, timeout=180)
 
 
 def _build_id(hit: SearchHit) -> int | None:

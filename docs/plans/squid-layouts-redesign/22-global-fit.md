@@ -50,6 +50,42 @@ greedy picks, not as a search.
    cross-node interactions; building them on locally greedy selection deepens the hole.
    This plan is the concrete charter for 20 §8's global redesign pass.
 
+## Implementation contract
+
+The search boundary is the planner, not semantic lowering. A `StrategyAxis` records the
+semantic path, adapter identity/version, flexibility, remembered baseline, preferred
+strategy, and finite candidates for one node. Paths identify occurrences within one
+plan; semantic keys remain the durable identity written to `PresentationSession`.
+
+`iter_assignments` walks the Cartesian product of the axes with a heap. Each axis ranks
+its candidates by `CostVector`; the heap starts at the tuple of local minima and advances
+one axis at a time. Assignment costs sum the six numeric tiers and use the complete
+path/strategy tuple for deterministic ties. This is best-first without materializing an
+exponential product.
+
+One attempted assignment owns one fresh `CursorCoordinator`, semantic lowering, target lowering,
+validation, and exact solve. Nothing from a rejected attempt is committed or reused. The
+planner keeps the first component-feasible degraded result but continues looking for an
+assignment whose solve did not consume a degradation rung. Therefore the observable
+ladder is:
+
+1. cheapest lossless, whole-document-fit assignment;
+2. cheapest component-fit assignment after author-granted degradation;
+3. root pagination of the cheapest assignment, under the existing root-pager rules.
+
+The attempt budget is checked before accepting the state that consumes its final slot
+when more assignments remain. At that boundary the planner returns the local-minimum
+assignment and adds `planner.search_fallback`; this preserves the previous result and its
+failure behavior when the global guarantee could not be completed. A cache entry records
+the winning path-to-strategy assignment so a hit can re-lower current callbacks without
+re-running feasibility solves.
+
+Candidate validity remains adapter-owned. An adapter may omit a mechanically illegal
+shape (for example, more individual action components than the target can ever hold).
+Selection/open state remains authoritative for `Items`: global strategy search must not
+reopen an item after Back or ignore a controlled selection. Every other display enum is a
+preference, as it was before this change, rather than a hard constraint.
+
 ## Rejected
 
 - **Remaining-budget estimates fed into local adapters** ("context pressure"): still
@@ -72,4 +108,26 @@ greedy picks, not as a search.
 
 ## Status
 
-Agreed 2026-08-21 (external audit, verified in-repo); not started.
+Implemented 2026-08-21. The planner now enumerates path-keyed assignments in aggregate
+`CostVector` order, gives every attempt isolated lowering/pager state, prefers an
+undegraded whole-document fit, and caches the winning assignment. The audit construction
+and its stronger local-pager form both select grouped actions in two attempts; a roomy
+document still selects individual actions in one.
+
+Algorithmic follow-up implemented 2026-08-22: the same bounded search budget now accounts for
+measured structural variant states as well as semantic assignments. Degraded candidates carry
+a priority-aware structured loss profile, letting the planner choose semantic fallback before
+truncation, spill, or whole-node drop and use semantic strategy cost only as the tie. Winning
+variant positions are cached alongside strategy assignments. Structural products that fit the
+budget are enumerated exactly; larger products use a deterministic guided fallback that preserves
+priority and breadth while choosing the equal-cost rung with the greatest local component saving.
+This keeps large independent ladder sets bounded without weakening exact search for tractable
+documents.
+
+Validation: focused breaking, pagination, solver-pressure, degradation, structure, search,
+semantic-action, and cache regressions pass; the complete package suite passes all 622 tests;
+and `just typecheck` reports zero errors.
+
+Diagnostics follow-up: measured-solver notes now carry a `SolveNoteCode` `StrEnum`, severity,
+and message. Feasibility consumes the failure severity directly, so changing user-facing wording
+cannot change the search result; plan events preserve the specific solver code.

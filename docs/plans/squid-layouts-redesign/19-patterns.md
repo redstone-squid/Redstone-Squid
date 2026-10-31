@@ -18,7 +18,7 @@ Three pieces; the first is a rule, not code.
    injects `sl.action` closures; the router shell stores state in route parameters and
    injects `sl.routed_action`, rebuilding the whole document per interaction — the
    message is its own session, every control encoding the next state.
-   `PageBroker.overrides` (the explicit page that outranks the stored cursor) is the
+   `CursorCoordinator.overrides` (the explicit position that outranks the stored cursor) is the
    stateless render's pagination entry, since no stored cursor exists. The rule binds
    Tabs/Menu/RankedList (tracked separately) as much as the two patterns below.
 
@@ -65,4 +65,23 @@ pattern implemented in the meantime.
 
 ## Status
 
-Agreed 2026-08-21 (design session); not started.
+Implemented 2026-08-21.
+
+## Implemented API
+
+All five patterns implement one pure `initial_state` / `transition` / `render(state, controls)`
+contract. `ComponentShell` owns `pattern_state` in `sl.state` and injects callback controls;
+`RouterShell` accepts explicit state and a `PatternRoute -> route_id` builder and injects routed
+controls. `PatternRoute.phase` distinguishes deterministic button state (`next`) from state awaiting
+select or form input (`input`). There is no parallel `PersistentFoo` class hierarchy.
+
+- `Tabs.component()`, `Menu.component()`, `RankedList.component()`, `Wizard.component()`, and
+  `MultiChoicePanel.component()` are convenience constructors for the same generic component shell.
+- `WizardStep` accepts a `FormSpec`/`Form` or plain content. `WizardState.answers` retains hidden
+  branch values, `Wizard.live_answers()` filters them at Finish, and `Wizard.form_for()` supports
+  routed modal presentation with restored prefill.
+- `MultiChoiceGroup` declares explicit group exclusions. `MultiChoiceState` carries staged,
+  committed, and per-group page state; `MultiChoicePanel.form_for()` supplies the small-cardinality
+  modal alternate.
+- Explicit RankedList and MultiChoicePanel windows resolve their route/component position through
+  `CursorCoordinator.overrides`, rather than growing a second clamping policy.

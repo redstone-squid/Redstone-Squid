@@ -18,13 +18,12 @@
 > chrome says no more than that.
 
 1. **Extract `PositionPolicy`**: the precedence ladder as a pure function over an
-   abstract position `{anchor key, offset, direction}`. The broker becomes its first
-   caller — existing slicers derive index/pages from positions, behavior unchanged;
-   this is the refactor plan 06 arguably owed. Patterns are its second caller, so
-   there is one pagination brain even while there are two fetch paths.
+   abstract position `{anchor key, offset, direction}`. `CursorCoordinator` becomes its
+   materialized caller; patterns are its second caller, so there is one pagination brain
+   even while there are two fetch paths.
 
-2. **`WindowSource` protocol**: capability flags `countable`, `bidirectional`,
-   `jumpable`; `async fetch(position, extent) -> Window(items, has_prev, has_next,
+2. **`WindowSource` protocol**: one `SourceCapabilities` value and
+   `async fetch(position, extent) -> Window(position, items, has_previous, has_next,
    total | None)`.
 
 3. **Chrome degrades by capability**, through the existing nav-factory
@@ -37,16 +36,52 @@
    anchor-outranks-reset philosophy; reset-to-start remains the materialized-list
    policy, not the universal one.
 
-5. **Fetch stays out of planning.** Now: pattern-level — the prev/next handlers are
-   already async; they fetch, write `{window, position}` into component state, and
-   invalidate, with a per-key monotonic token dropping out-of-order results. Later: a
-   core load phase that re-runs when a declared input changes — which is the
-   dependency model whose absence cut `sl.resource` from plan 09. The two are the
-   same missing design and must be designed together or not at all.
+5. **Fetch stays out of planning.** At landing, prev/next handlers fetched and wrote
+   `{window, position}` into component state. [Plan 33](33-resources.md) now supplies the
+   missing core load phase: `SourceRankedList` declares a visible resource dependent on its
+   request state. The synchronous render sees pending, stale-ready, failed, or ready data;
+   the Discord mount owns settlement and delivery. Planning itself remains synchronous and
+   fetch-free.
 
-6. **Overrides generalize.** The explicit `page=N` map becomes position tokens — also
+6. **Overrides generalize.** Explicit page maps become position tokens — also
    the two-shell rule's stateless entry (plan 19): a routed panel carries its position
    in the custom id and passes it as an override, having no session to consult.
+
+## Final API
+
+This implementation deliberately breaks the transitional page-shaped API. The package
+is still on its development branch, so preserving internal compatibility would make the
+temporary bridge permanent.
+
+There are no external consumers. Superseded public names and snapshot fields are removed
+rather than deprecated or aliased; every in-repository caller moves in the same change.
+
+- `Position(anchor, offset, direction)` is the only cursor token. `Direction` is an
+  enum (`AROUND`, `FORWARD`, `BACKWARD`), and `CursorState` stores the position directly
+  instead of splitting it into index and anchor fields.
+- `PositionPolicy.resolve(...)` remains the pure precedence function. A
+  `CursorCoordinator` adapts materialized slicers to it; slicers project the resolved
+  offset only at their actual cut boundary.
+- `SourceCapabilities(backward, offsets, jumpable, count)` replaces three unrelated
+  booleans. `CountPrecision` is `NONE`, `APPROXIMATE`, or `EXACT`; validation rejects
+  jump/count claims from a source that cannot know offsets.
+- `Window(position, items, has_previous, has_next, total)` always returns its resolved
+  position. Anchor-gone fallback is therefore explicit rather than hidden behind an
+  optional correction.
+- `WindowLoader` returns an immutable `LoadedWindow` and owns source-position ordering;
+  the component's resource owns the loaded value and its request generation. A stale
+  completion can
+  never mutate the visible cursor behind the component's back.
+- `NavigationContext` and one `NavFactory` serve materialized and source windows. The
+  mount injects its factory into components, so a custom navigation factory applies to
+  both paths. The context carries proven boundaries, position, extent/range/total facts,
+  labels, and handlers rather than assuming every cursor has a page count.
+- `RankedList` returns to being a materialized, pure two-shell pattern.
+  `SourceRankedList` is an explicit async component. Its distinct type makes loading,
+  durability, and router limitations visible in the API rather than constructor modes.
+- Numeric chrome derives from `SourceCapabilities`: exact+jumpable becomes a page
+  count, known offsets plus a count become a range and total, offsets alone become a
+  range, and keyset-only navigation has no numeric footer.
 
 ## Verification
 
@@ -58,4 +93,12 @@
 
 ## Status
 
-Agreed 2026-08-21 (extract now); not started.
+Implemented 2026-08-21.
+
+Amended 2026-08-22 by plan 33: `SourceRankedList` now loads through a visible resource.
+
+`test_pagination.py` keeps materialized cursor behavior under the extracted policy and
+covers position-token overrides. `test_sources.py` covers window-scoped refresh,
+source-selected anchor fallback, directional boundaries, and out-of-order completion.
+`test_patterns.py` exercises source loading and the shared navigation factory through a
+real mount, including all five supported numeric-chrome shapes.

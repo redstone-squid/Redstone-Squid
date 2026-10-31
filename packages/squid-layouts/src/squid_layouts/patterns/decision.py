@@ -1,0 +1,174 @@
+"""One-way decisions and confirmation sugar over the shared pattern shells."""
+
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping
+from dataclasses import dataclass
+
+from squid_layouts.factories import actions, stack, status
+from squid_layouts.patterns._content import ContentLike, normalize_content, require_key
+from squid_layouts.patterns.shells import ComponentShell, PatternControls, PatternEvent
+from squid_layouts.runtime.component import RenderResult
+from squid_layouts.semantic import ActionDisplay, Emphasis, Tone
+from squid_layouts.text import TextLike
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionOption:
+    key: str
+    label: TextLike
+    tone: Tone = Tone.NEUTRAL
+    emphasis: Emphasis = Emphasis.NORMAL
+
+
+@dataclass(frozen=True, slots=True)
+class DecisionState:
+    decided: str | None = None
+
+
+type DecisionHandler = Callable[[PatternEvent[DecisionState], str], Awaitable[None]]
+
+
+class Decision:
+    """A pending prompt that becomes immutable after one valid choice."""
+
+    def __init__(
+        self,
+        prompt: ContentLike,
+        options: Iterable[DecisionOption],
+        *,
+        key: str = "decision",
+    ) -> None:
+        self.key = require_key(key, name="Decision.key")
+        self.prompt = normalize_content(prompt, name="Decision.prompt")
+        self.options = tuple(options)
+        keys = [option.key for option in self.options]
+        if not self.options:
+            message = "Decision needs at least one option"
+            raise ValueError(message)
+        if any(not key for key in keys) or len(set(keys)) != len(keys):
+            message = f"Decision option keys must be non-empty and unique: {keys!r}"
+            raise ValueError(message)
+
+    @property
+    def initial_state(self) -> DecisionState:
+        return DecisionState()
+
+    def finish_actions(self) -> frozenset[str]:
+        return frozenset(f"choose:{option.key}" for option in self.options)
+
+    def component(
+        self,
+        *,
+        on_decide: DecisionHandler | None = None,
+        finish_on: Collection[str] = (),
+    ) -> ComponentShell[DecisionState]:
+        handlers = {}
+        if on_decide is not None:
+            handlers = {f"choose:{option.key}": self._handler(on_decide, option.key) for option in self.options}
+        requested = frozenset(item if item.startswith("choose:") else f"choose:{item}" for item in finish_on)
+        finish_actions = self.finish_actions() & requested
+        return ComponentShell(self, handlers=handlers, finish_actions=finish_actions)
+
+    @staticmethod
+    def _handler(handler: DecisionHandler, key: str):
+        async def decided(event: PatternEvent[DecisionState]) -> None:
+            await handler(event, key)
+
+        return decided
+
+    def transition(
+        self,
+        state: DecisionState,
+        action: str,
+        *,
+        values: tuple[str, ...] = (),
+        submitted: Mapping[str, object] | None = None,
+    ) -> DecisionState:
+        del values, submitted
+        if state.decided is not None or not action.startswith("choose:"):
+            return state
+        key = action.removeprefix("choose:")
+        return DecisionState(key) if key in {option.key for option in self.options} else state
+
+    def render(self, state: DecisionState, controls: PatternControls[DecisionState]) -> RenderResult:
+        options = self._options(controls)
+        selected = next((option for option in options if option.key == state.decided), None)
+        return stack(
+            *controls.content(self.prompt, prefix=f"{self.key}.prompt"),
+            actions(
+                *(
+                    controls.action(
+                        option.label,
+                        f"choose:{option.key}",
+                        key=f"{self.key}.{option.key}",
+                        tone=option.tone,
+                        emphasis=option.emphasis,
+                        available=state.decided is None,
+                    )
+                    for option in options
+                ),
+                key=f"{self.key}.options",
+                display=ActionDisplay.INDIVIDUAL,
+            ),
+            status(controls.chrome.decided(selected.label), tone=selected.tone) if selected is not None else None,
+        )
+
+    def _options(self, controls: PatternControls[DecisionState]) -> tuple[DecisionOption, ...]:
+        del controls
+        return self.options
+
+
+class _Confirmation(Decision):
+    def __init__(
+        self,
+        prompt: ContentLike,
+        *,
+        key: str,
+        confirm_label: TextLike | None,
+        cancel_label: TextLike | None,
+        tone: Tone,
+    ) -> None:
+        super().__init__(
+            prompt,
+            (
+                DecisionOption("confirm", confirm_label or "Confirm", tone, Emphasis.STRONG),
+                DecisionOption("cancel", cancel_label or "Cancel"),
+            ),
+            key=key,
+        )
+        self.confirm_label = confirm_label
+        self.cancel_label = cancel_label
+
+    def _options(self, controls: PatternControls[DecisionState]) -> tuple[DecisionOption, ...]:
+        return (
+            DecisionOption(
+                "confirm",
+                self.confirm_label or controls.chrome.confirm,
+                self.options[0].tone,
+                self.options[0].emphasis,
+            ),
+            DecisionOption("cancel", self.cancel_label or controls.chrome.cancel),
+        )
+
+
+def confirm(
+    prompt: ContentLike,
+    *,
+    key: str = "confirm",
+    on_confirm: Callable[[PatternEvent[DecisionState]], Awaitable[None]],
+    on_cancel: Callable[[PatternEvent[DecisionState]], Awaitable[None]] | None = None,
+    confirm_label: TextLike | None = None,
+    cancel_label: TextLike | None = None,
+    tone: Tone = Tone.DANGER,
+) -> ComponentShell[DecisionState]:
+    """Build a ready two-option decision shell."""
+    pattern = _Confirmation(
+        prompt,
+        key=key,
+        confirm_label=confirm_label,
+        cancel_label=cancel_label,
+        tone=tone,
+    )
+    handlers = {"choose:confirm": on_confirm}
+    if on_cancel is not None:
+        handlers["choose:cancel"] = on_cancel
+    return ComponentShell(pattern, handlers=handlers)

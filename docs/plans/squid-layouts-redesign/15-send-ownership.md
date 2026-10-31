@@ -25,39 +25,44 @@ Plan 01 §6 chose host-owned initial delivery: `build_view()` stages, the host s
 Split the initial delivery the way plan 07 split edits: **the framework owns
 sequencing, the host owns destination.**
 
-> A `Destination` is a way to create the message: `async (view, files) -> Message |
-> None`. Every discord.py kwarg lives on the destination. `Mount.send(destination)` owns
-> everything around the call.
+> A `Destination` is a way to create the message: `async (view, files) ->
+> DeliveryReceipt`. Every discord.py kwarg lives on the destination.
+> `Mount.send(destination)` owns everything around the call.
+
+Plan 23 amended the original `Message | None` return after proving that a message object
+does not reveal whether its edit method uses the bot token or an expiring interaction token.
+The receipt carries `message: Message | None` and `handle: EditHandle | None` separately.
 
 Named `Destination` rather than `SendTarget` because `sl.discord.Target` — the render
 target — already lives in this subpackage.
 
 1. **`delivery.Destination` protocol plus two adapters**, mirroring `handle_for` /
-   `handle_from`. The return value says what the mount gets to keep, not whether it
+   `handle_from`. The receipt says what the mount gets to keep, not whether delivery
    worked:
-   - a `Message` — delivered, and here are the credentials to edit it later;
-   - `None` — delivered, but no handle came back. The mount commits and mints its handle
-     from the first click, which plan 07's pending semantics already define;
+   - `message` records observable location and is returned to the caller;
+   - `handle` records the exact edit authority the operation created, independently of
+     whether a message object was requested or returned;
    - raise `DeliveryAbandoned` — nothing was delivered, deliberately, and the user
      already knows;
    - raise anything else — the delivery failed.
 
-   `DeliveryAbandoned` exists because `None` was otherwise overloaded across the two
-   real cases: `respond_to(wait=False)` returns `None` *having delivered* (must commit),
-   while the closed-DM path returns `None` *having delivered nothing* (must roll back).
+   `DeliveryAbandoned` still distinguishes a receipt with no message from the closed-DM
+   path, which delivered nothing and must roll back.
 
    The adapters: `reply_to(ctx, *, ephemeral=False)` — `ctx.send` with `no_mentions()`;
    `respond_to(interaction, *, ephemeral=True, wait=False)` — response or followup by
-   `is_done()`, subsuming and replacing `delivery.respond`. `wait=False` skips the
-   `original_response()` round trip two sites used to pay. Both carry the one
-   `# pyrefly: ignore[no-matching-overload]` four host sites used to repeat.
+   `is_done()`, subsuming and replacing `delivery.respond`. A fresh `wait=False` skips
+   the `original_response()` round trip while retaining `@original` edit authority.
+   Both carry the one `# pyrefly: ignore[no-matching-overload]` four host sites used to
+   repeat.
 
 2. **`await Mount.send(destination) -> discord.Message | None`**: supersede any
-   stage-only candidate → stage → `destination(view, attachment_files)` → `handle_for`
-   on a returned message → commit. A raising destination discards the candidate exactly
-   as plan 01 specifies — `_dirty` stays set, the mount is cleanly re-sendable — so a
-   second `send` is a clean retry. `send` on a finished mount is a no-op; a repeat `send`
-   is legal and replaces the handle. This is the seam plan 09 awaits `on_load` inside.
+   stage-only candidate → stage → `destination(view, attachment_files)` → retain the
+   receipt's handle and message address → commit. A raising destination discards the
+   candidate exactly as plan 01 specifies — `_dirty` stays set, the mount is cleanly
+   re-sendable — so a second `send` is a clean retry. `send` on a finished mount is a
+   no-op; a repeat `send` is legal and replaces the handle. This is the seam plan 09
+   awaits `on_load` inside.
 
 3. **`Mount.send` takes no discord kwargs, ever.** `ephemeral`, `wait`, `silent`,
    `delete_after` are the adapter's business; the package does not chase discord.py's
@@ -118,8 +123,8 @@ target — already lives in this subpackage.
 ## Verification
 
 - `packages/squid-layouts/tests/test_mount.py`, `TestSend`: a successful send commits and
-  mints a permanent handle; a destination returning `None` commits with no standing
-  handle and the next interaction's `_renew` takes over; a destination raising
+  retains the receipt's handle without reconstructing it; a handle-less receipt commits
+  with no standing handle and the next interaction's `_renew` takes over; a destination raising
   `DeliveryAbandoned` leaves the generation unchanged, `_dirty` set and no handle;
   anything else rolls back *and propagates*, and a second `send` succeeds fully (the
   send-path mirror of plan 01's failed-flush test); `attachment_files` reach the

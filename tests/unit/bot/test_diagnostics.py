@@ -21,8 +21,10 @@ from squid_layouts.discord import (
 from squid_layouts.discord import (
     Mount,
     MountedView,
+    Owner,
 )
 from squid_layouts.discord.testing import assert_within_limits, commit_render, fake_interaction
+from squid_layouts.sources import Position
 
 
 def make_report(
@@ -56,8 +58,15 @@ def make_context(
 ) -> Any:
     """A context stub exposing only what the cog's delivery path touches."""
     author_send = AsyncMock(side_effect=dm_raises, return_value=AsyncMock(spec=discord.Message))
+    interaction = SimpleNamespace(
+        guild_locale=None,
+        locale="en-US",
+        expires_at=None,
+        is_expired=lambda: False,
+        response=SimpleNamespace(is_done=lambda: False),
+    )
     return SimpleNamespace(
-        interaction=SimpleNamespace(guild_locale=None, locale="en-US") if slash else None,
+        interaction=interaction if slash else None,
         guild=SimpleNamespace(id=5, preferred_locale="en-US") if in_guild else None,
         author=SimpleNamespace(id=1, send=author_send),
         send=AsyncMock(return_value=AsyncMock(spec=discord.Message)),
@@ -76,7 +85,7 @@ def make_cog(*, report: ErrorReport | None = None, reports: tuple[ErrorReport, .
 
 
 def mount_browser(browser: ErrorReportBrowser) -> tuple[Mount, discord.ui.LayoutView]:
-    mount = create_mount(browser, chrome=browser.chrome(), lock_to=1)
+    mount = create_mount(browser, access=Owner(1), chrome=browser.chrome())
     return mount, commit_render(mount)
 
 
@@ -93,12 +102,12 @@ def _code_pages(mount: Mount) -> list[str]:
         next_button = next(
             item
             for item in view.walk_children()
-            if isinstance(item, discord.ui.Button) and item.custom_id and ":__page_next" in item.custom_id
+            if isinstance(item, discord.ui.Button) and item.custom_id and ":__cursor_next" in item.custom_id
         )
         if next_button.disabled:
             return pages
         cursor = mount.presentation.cursor("traceback")
-        mount.presentation.move_cursor("traceback", cursor.index + 1)
+        mount.presentation.move_cursor("traceback", Position(offset=cursor.position.offset + 1))
 
 
 async def test_recent_list_offers_every_entry_for_opening() -> None:
@@ -138,7 +147,7 @@ async def test_a_long_traceback_is_readable_past_one_page() -> None:
     assert footers
     assert "page 1 of" not in footers[0]
 
-    mount.presentation.move_cursor("traceback", 0)
+    mount.presentation.move_cursor("traceback", Position())
     earliest = commit_render(mount)
     assert "frame0" in "\n".join(_texts(earliest))
 
@@ -157,10 +166,10 @@ async def test_paging_stops_at_both_ends() -> None:
     mount, view = mount_browser(browser)
 
     nav = [item for item in view.walk_children() if isinstance(item, discord.ui.Button) and item.custom_id]
-    later = next(item for item in nav if ":__page_next" in (item.custom_id or ""))
+    later = next(item for item in nav if ":__cursor_next" in (item.custom_id or ""))
     assert later.disabled  # opened at the end
     interaction = fake_interaction()
-    await mount.dispatch("__page_next.traceback", interaction)
+    await mount.dispatch("__cursor_next.traceback", interaction)
     interaction.response.defer.assert_awaited_once()  # nothing to advance to
 
 
@@ -179,11 +188,11 @@ async def test_every_page_fits_the_real_display_budget() -> None:
     browser = ErrorReportBrowser(report=make_report(traceback=f"{long_line}\nValueError: boom"))
     mount, _ = mount_browser(browser)
 
-    mount.presentation.move_cursor("traceback", 0)
+    mount.presentation.move_cursor("traceback", Position())
     pages = _code_pages(mount)
     assert len(pages) > 1
     for page_index in range(len(pages)):
-        mount.presentation.move_cursor("traceback", page_index)
+        mount.presentation.move_cursor("traceback", Position(offset=page_index))
         view = commit_render(mount)
         assert_within_limits(view)
         assert sum(len(text) for text in _texts(view)) <= LIMITS.total_text

@@ -1,6 +1,7 @@
 """Discord composition convenience built on the portable plan/draw seam."""
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import discord
@@ -11,12 +12,13 @@ from squid_layouts.discord.target import Target
 from squid_layouts.document import DocumentLike
 from squid_layouts.planning.cache import PlanCache
 from squid_layouts.planning.limits import LIMITS, V2Limits
+from squid_layouts.planning.navigation import PlannedNav
 from squid_layouts.planning.planner import plan as plan_document
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
-from squid_layouts.planning.solve import PageNav, PageState
 from squid_layouts.planning.target import ResourceCost
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.model import PlanResult
+from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 logger = logging.getLogger(__name__)
@@ -48,8 +50,8 @@ def compose(
     localization: Localization = NEUTRAL,
     strict: bool = False,
     reserved_text: int = 0,
-    page: PageState = None,
-    nav: PageNav | None = None,
+    positions: Mapping[str, Position] | None = None,
+    nav: PlannedNav | None = None,
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
@@ -62,7 +64,7 @@ def compose(
         localization=localization,
         strict=strict,
         reservation=ResourceCost({"display_text": reserved_text}),
-        page=page,
+        positions=positions,
         nav=nav,
         session=session,
         cache=cache,

@@ -2,10 +2,10 @@
 
 import pytest
 
-from squid_layouts import Component, PressEvent, TextLike
+from squid_layouts import ActionPolicy, Component, FormLike, PressEvent, SubmitHandler, TextLike
 from squid_layouts.actions import ActionResponder as ActionResponderProtocol
 from squid_layouts.actions import Actor, Visibility
-from squid_layouts.discord import Mount, native, responder
+from squid_layouts.discord import Everyone, Mount, native, responder
 from squid_layouts.discord.actions import ActionResponder
 from squid_layouts.discord.testing import commit_render, fake_interaction
 from squid_layouts.primitives import Button, Row
@@ -22,20 +22,27 @@ class Portable:
 
     async def finish(self) -> None: ...
 
-    async def present_form(self, form, *, key, on_submit=None, policy=None) -> None: ...
+    async def present_form(
+        self,
+        form: FormLike,
+        *,
+        key: str = "form",
+        on_submit: SubmitHandler | None = None,
+        policy: ActionPolicy | None = None,
+    ) -> None: ...
 
     def invalidate(self) -> None: ...
 
 
 def test_native_returns_the_interaction_behind_a_discord_event() -> None:
     interaction = fake_interaction(user_id=7)
-    event = PressEvent(Actor("7"), ActionResponder(interaction, Mount(Component(), timeout=None)))
+    event = PressEvent(Actor("7"), ActionResponder(interaction, Mount(Component(), access=Everyone(), timeout=None)))
 
     assert native(event) is interaction
 
 
 def test_responder_returns_the_adapter_holding_the_native_surfaces() -> None:
-    adapter = ActionResponder(fake_interaction(), Mount(Component(), timeout=None))
+    adapter = ActionResponder(fake_interaction(), Mount(Component(), access=Everyone(), timeout=None))
     event = PressEvent(Actor("7"), adapter)
 
     assert responder(event) is adapter
@@ -81,7 +88,7 @@ async def test_handlers_reach_the_dispatching_interaction_through_native() -> No
         async def inspect(self, event) -> None:
             seen.append(native(event))
 
-    mount = Mount(Inspect(), timeout=None)
+    mount = Mount(Inspect(), access=Everyone(), timeout=None)
     commit_render(mount)
     interaction = fake_interaction()
 

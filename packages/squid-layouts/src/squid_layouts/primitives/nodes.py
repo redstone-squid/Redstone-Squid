@@ -7,8 +7,10 @@ resulting scene — authors never do budget arithmetic.
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from squid_layouts.actions import ActionBinding, ActionPolicy, PressHandler, SelectionHandler
+from squid_layouts.forms import FormBinding
 from squid_layouts.primitives.constraints import Alt, Overflow, Spill, Truncate
 from squid_layouts.primitives.styles import ActionStyle, Color
 from squid_layouts.text import TextLike
@@ -66,6 +68,24 @@ class Lines:
 
 
 @dataclass(frozen=True, slots=True)
+class Time:
+    """A typed instant retained through scene conversion."""
+
+    instant: datetime
+    style: str
+    prefix: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class File:
+    """A visible file component backed by a separately carried asset resource."""
+
+    asset_key: str
+    name: str
+    media_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class Sep:
     large: bool = False
     visible: bool = True
@@ -88,6 +108,17 @@ class Button:
     emoji: str | None = None
     disabled: bool = False
     policy: ActionPolicy = ActionPolicy.EXCLUSIVE
+
+
+@dataclass(frozen=True, slots=True)
+class FormButton(Button):
+    """A button that presents a form, carrying the binding its handler closes over.
+
+    The handler alone is opaque: a frontend holding it cannot tell which form it presents,
+    so it cannot resolve the newest one for a submission that arrived late. This states it.
+    """
+
+    form: FormBinding | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +262,26 @@ class Panel:
 
 
 @dataclass(frozen=True, slots=True)
+class Budget:
+    """Transparent group carrying an author-sized character reservation and ceiling."""
+
+    children: tuple[Node, ...]
+    minimum: int
+    preferred: int
+    stretch: int = 0
+    best_effort: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Break:
+    """Transparent group carrying region-break annotations through semantic lowering."""
+
+    children: tuple[Node, ...]
+    unbreakable: bool = False
+    keep_with_next: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class Variant:
     """One structural representation of a region and the capabilities it requires.
 
@@ -257,16 +308,15 @@ class Variants:
     something to give up: a button panel stepping to one select, a gallery to a link row.
 
     Rungs unsupported by the target are dropped at planning time; the survivors form a budget
-    ladder. The solver opens every ladder at rung 0 and, under component pressure, steps the
-    lowest-priority one down a single rung, re-solving after each step — the decision is made
-    before anything is measured, so it stays out of the text-policy matrix.
+    ladder. The solver opens every ladder at rung 0 and searches reachable rung assignments
+    best-first under component pressure. Every candidate is measured together with text loss,
+    so an ineffective early ladder cannot force a later sibling to degrade as well.
 
     Two rules follow from stepping being a whole-tree decision. ``priority`` compares
-    **globally**, not among siblings: the lowest-priority ladder anywhere in the document
-    steps first, and equal priorities step breadth-first, each reaching rung 1 before any
-    reaches rung 2. And a nested ladder only becomes steppable once its ancestor's *selected*
-    rung exposes it; stepping the ancestor abandons it and opens whatever the new rung holds
-    at rung 0.
+    **globally**, not among siblings: lower-priority loss is cheaper, and equal priorities
+    compare breadth-first, each reaching rung 1 before any reaches rung 2. A nested ladder only
+    becomes searchable once its ancestor's *selected* rung exposes it; stepping the ancestor
+    abandons it and opens whatever the new rung holds at rung 0.
     """
 
     variants: tuple[Variant, ...]
@@ -289,6 +339,8 @@ type Node = (
     | Footer
     | Code
     | Lines
+    | Time
+    | File
     | Sep
     | Row
     | ActionGroup
@@ -300,6 +352,8 @@ type Node = (
     | MediaCollection
     | Section
     | Panel
+    | Budget
+    | Break
     | RawItem
     | Embed
     | Extension

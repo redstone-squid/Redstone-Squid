@@ -17,6 +17,7 @@ from squid_layouts.discord import (
 from squid_layouts.discord.testing import assert_within_limits
 from squid_layouts.planning import (
     LayoutOverflowError,
+    SolveNoteCode,
     solve,
 )
 from squid_layouts.primitives import (
@@ -109,7 +110,7 @@ class TestFitting:
         dropper = Text("d" * 500, overflow=Drop(), priority=-1)
         solved = solve([keeper, dropper])
         assert [child.content for child in solved.children] == ["k" * 3999]  # pyrefly: ignore
-        assert any("dropped" in note for note in solved.notes)
+        assert any(note.code is SolveNoteCode.NODE_DROPPED for note in solved.notes)
 
     def test_never_wins_over_higher_priority_flexible_nodes(self):
         pinned = Text("p" * 3500, overflow=Never(), priority=-100)
@@ -126,6 +127,8 @@ class TestFitting:
     def test_unsatisfiable_never_clamps_outside_strict_mode(self):
         solved = solve([Text("x" * 5000, overflow=Never())])
         assert len(solved.children[0].content) <= LIMITS.total_text  # pyrefly: ignore
+        assert solved.failures[0].code is SolveNoteCode.NEVER_BUDGET
+        assert isinstance(solved.failures[0].code, str)
 
     def test_truncate_tail_keeps_the_end(self):
         view = render_static([Text("start " + "x" * 4000 + " end", overflow=Truncate(keep="tail"))])

@@ -1,38 +1,45 @@
 """Plan logical documents into immutable target-resolved scenes."""
 
-import hashlib
-import json
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field, fields, is_dataclass
-from enum import Enum
+from dataclasses import dataclass, field, replace
+from datetime import UTC
 
 from squid_layouts.actions import ActionBinding
+from squid_layouts.assets import Asset
 from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
-from squid_layouts.document import DocumentLike, as_document
+from squid_layouts.document import Document, DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
-from squid_layouts.planning.adaptation import lower_semantics
+from squid_layouts.forms import FormBinding
+from squid_layouts.planning.adaptation import SemanticLowering, lower_semantics, nominate_strategies
 from squid_layouts.planning.cache import CachedPlan, PlanCache
-from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
+from squid_layouts.planning.cursors import CursorCoordinator, MaterializedCursorRequest, content_fingerprint
+from squid_layouts.planning.degradation import DegradationProfile
+from squid_layouts.planning.identity import stable_fingerprint, stable_value
 from squid_layouts.planning.limits import LIMITS, V2Limits
-from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
+from squid_layouts.planning.navigation import PlannedNav, materialized_navigation_state
+from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET, CostVector, StrategyAssignment, iter_assignments
 from squid_layouts.planning.solve import (
-    PageNav,
-    PageState,
     Realized,
     RPanel,
     RSection,
     RText,
+    RTime,
     SolvedLayout,
+    _resolve_variants,
     solve,
 )
 from squid_layouts.planning.target import ResourceCost, TargetProfile
 from squid_layouts.primitives.constraints import Never, Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
+    Break,
+    Budget,
     Button,
     Embed,
     Extension,
+    File,
     Footer,
+    FormButton,
     Gallery,
     LinkButton,
     MediaCollection,
@@ -61,6 +68,7 @@ from squid_layouts.scene.model import (
     SceneButton,
     SceneDocument,
     SceneExtension,
+    SceneFile,
     SceneGallery,
     SceneGalleryItem,
     SceneLink,
@@ -75,19 +83,37 @@ from squid_layouts.scene.model import (
     SceneSeparator,
     SceneText,
     SceneThumbnail,
+    SceneTime,
 )
+from squid_layouts.sources import Position
 from squid_layouts.text import NEUTRAL, Localization
 
 EMPTY_RESERVATION = ResourceCost()
 
 
+def _merge_assets(*groups: Sequence[Asset]) -> tuple[Asset, ...]:
+    merged: dict[str, Asset] = {}
+    for asset in (asset for group in groups for asset in group):
+        existing = merged.get(asset.key)
+        if existing is not None and existing != asset:
+            message = f"asset key {asset.key!r} identifies two different assets"
+            raise LayoutInvariantError(message)
+        merged.setdefault(asset.key, asset)
+    return tuple(merged.values())
+
+
 @dataclass(slots=True)
 class _Converter:
     bindings: dict[str, ActionBinding] = field(default_factory=dict)
+    form_bindings: dict[str, FormBinding] = field(default_factory=dict)
     resources: dict[str, object] = field(default_factory=dict)
 
     def action(self, node: Button | SelectMenu) -> str:
         key = node.key
+        if isinstance(node, FormButton) and node.form is not None:
+            # Recorded beside the binding, not in place of it: the button presents the form
+            # and the binding submits it, and both answer to the same key.
+            self.form_bindings[key] = node.form
         if key in self.bindings:
             message = f"duplicate action key {key!r}"
             raise LayoutInvariantError(message)
@@ -134,6 +160,10 @@ class _Converter:
         match node:
             case RText(content=content):
                 return SceneText(content)
+            case RTime(instant=instant, style=style, prefix=prefix):
+                return SceneTime(instant.astimezone(UTC).isoformat(), style, prefix)
+            case File(asset_key=asset_key, name=name, media_type=media_type):
+                return SceneFile(asset_key, name, media_type)
             case RPanel(children=children, accent=accent):
                 return ScenePanel(
                     tuple(self.node(child, f"{path}.{index}") for index, child in enumerate(children)), accent
@@ -211,6 +241,8 @@ def _lower_children(
                 )
             case Panel(children=children, accent=accent):
                 lowered.append(Panel(_lower_children(children, target, limits), accent))
+            case Budget(children=children) | Break(children=children):
+                lowered.append(replace(node, children=_lower_children(children, target, limits)))
             case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
                 adapter = target.extensions.get(kind)
                 if adapter is None:
@@ -314,7 +346,7 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
                             "Paginate cannot be nested in a Section; place it beside the Section",
                         )
                     walk(text, f"{path}.text.{index}")
-            case Panel(children=children):
+            case Panel(children=children) | Budget(children=children) | Break(children=children):
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
             case Variants(variants=variants):
@@ -332,6 +364,173 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
         walk(node, f"$.{index}")
 
 
+@dataclass(frozen=True, slots=True)
+class _StrategyAttempt:
+    assignment: StrategyAssignment
+    semantic: SemanticLowering
+    lowered: tuple[Node, ...]
+    solved: SolvedLayout
+    broker: CursorCoordinator
+
+
+def _attempt_strategy(
+    assignment: StrategyAssignment,
+    *,
+    document: Document,
+    target: TargetProfile,
+    limits: V2Limits,
+    chrome: Chrome,
+    localization: Localization,
+    presentation: PresentationSession,
+    reservation: ResourceCost,
+    positions: Mapping[str, Position] | None,
+    nav: PlannedNav | None,
+    search_budget: int,
+) -> _StrategyAttempt:
+    broker = CursorCoordinator(presentation, chrome, nav, positions)
+    semantic = lower_semantics(
+        document.children,
+        limits=limits,
+        chrome=chrome,
+        localization=localization,
+        session=presentation,
+        pages=broker,
+        capabilities=target.capabilities,
+        strategies=dict(assignment.strategies),
+    )
+    lowered = _lower_children(semantic.nodes, target, limits)
+    _validate(lowered, limits)
+    solved = solve(
+        lowered,
+        limits=limits,
+        chrome=chrome,
+        strict=False,
+        reserved_text=reservation.get("display_text"),
+        nav=nav,
+        search_budget=search_budget,
+    )
+    return _StrategyAttempt(assignment, semantic, lowered, solved, broker)
+
+
+def _search_strategies(
+    *,
+    document: Document,
+    target: TargetProfile,
+    limits: V2Limits,
+    chrome: Chrome,
+    localization: Localization,
+    presentation: PresentationSession,
+    reservation: ResourceCost,
+    positions: Mapping[str, Position] | None,
+    nav: PlannedNav | None,
+    search_budget: int,
+) -> _StrategyAttempt:
+    axes = nominate_strategies(document.children, limits=limits, session=presentation)
+    assignments = iter(iter_assignments(axes))
+    current = next(assignments)
+    first: _StrategyAttempt | None = None
+    degraded: _StrategyAttempt | None = None
+    phase_one: list[_StrategyAttempt] = []
+    selected: _StrategyAttempt | None = None
+    fallback = False
+    states_explored = 0
+
+    # Lossless semantic representations always outrank author-granted degradation. Give
+    # every semantic assignment its preferred structural rungs before spending another
+    # state inside any one assignment's variant product.
+    while True:
+        attempted = _attempt_strategy(
+            current,
+            document=document,
+            target=target,
+            limits=limits,
+            chrome=chrome,
+            localization=localization,
+            presentation=presentation,
+            reservation=reservation,
+            positions=positions,
+            nav=nav,
+            search_budget=1,
+        )
+        states_explored += attempted.solved.states_explored
+        phase_one.append(attempted)
+        if first is None:
+            first = attempted
+        fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
+        if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
+            degraded = attempted
+
+        following = next(assignments, None)
+        if following is not None and states_explored >= search_budget:
+            selected = degraded or first
+            fallback = True
+            break
+        if fits and attempted.solved.degradation.lossless:
+            selected = attempted
+            break
+        if following is None:
+            break
+        current = following
+
+    # No preferred-rung assignment was lossless. Resume only assignments that actually
+    # had unexplored variant states, retaining the best incumbent across the full product.
+    if selected is None:
+        for initial in phase_one:
+            if not initial.solved.search_fallback:
+                continue
+            remaining = search_budget - states_explored
+            if remaining < 1:
+                fallback = True
+                break
+            attempted = _attempt_strategy(
+                initial.assignment,
+                document=document,
+                target=target,
+                limits=limits,
+                chrome=chrome,
+                localization=localization,
+                presentation=presentation,
+                reservation=reservation,
+                positions=positions,
+                nav=nav,
+                search_budget=remaining,
+            )
+            states_explored += attempted.solved.states_explored
+            fits = attempted.solved.components <= limits.total_components and not attempted.solved.failures
+            if fits and (degraded is None or _degraded_key(attempted) < _degraded_key(degraded)):
+                degraded = attempted
+            if attempted.solved.search_fallback:
+                fallback = True
+                break
+        selected = degraded or first
+
+    assert selected is not None
+    fallback_events: tuple[PlanEvent, ...] = ()
+    if fallback:
+        fallback_events = (
+            PlanEvent(
+                code="planner.search_fallback",
+                path="$",
+                message=(
+                    f"Strategy search used its bounded fallback within {search_budget} attempts; "
+                    "selected the best incumbent"
+                ),
+                severity=PlanSeverity.WARNING,
+            ),
+        )
+    semantic = replace(
+        selected.semantic,
+        events=fallback_events + selected.semantic.events,
+        states_explored=states_explored,
+        search_fallback=fallback,
+    )
+    return replace(selected, semantic=semantic)
+
+
+def _degraded_key(attempt: _StrategyAttempt) -> tuple[DegradationProfile, CostVector]:
+    return attempt.solved.degradation, attempt.assignment.cost
+
+
 def plan(
     rendered: DocumentLike,
     *,
@@ -340,8 +539,8 @@ def plan(
     localization: Localization = NEUTRAL,
     strict: bool = False,
     reservation: ResourceCost = EMPTY_RESERVATION,
-    page: PageState = None,
-    nav: PageNav | None = None,
+    positions: Mapping[str, Position] | None = None,
+    nav: PlannedNav | None = None,
     session: PresentationSession | None = None,
     cache: PlanCache | None = None,
     search_budget: int = DEFAULT_SEARCH_BUDGET,
@@ -358,20 +557,6 @@ def plan(
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
     presentation = session if session is not None else PresentationSession()
     chrome = localize_chrome(chrome, localization)
-    # One broker owns every page position in this plan, whichever layer does the slicing.
-    broker = PageBroker(presentation, chrome, nav, page if isinstance(page, Mapping) else None)
-    semantic = lower_semantics(
-        document.children,
-        limits=limits,
-        chrome=chrome,
-        localization=localization,
-        session=presentation,
-        pages=broker,
-        capabilities=target.capabilities,
-        search_budget=search_budget,
-    )
-    lowered = _lower_children(semantic.nodes, target, limits)
-    _validate(lowered, limits)
     cache_key = _plan_cache_key(
         (document,),
         target=target,
@@ -382,33 +567,59 @@ def plan(
         reservation=reservation,
         strict=strict,
         nav=nav,
-        page=page,
+        positions=positions,
         search_budget=search_budget,
     )
-    if cache is not None and _cacheable(lowered) and (cached := cache.get(cache_key)) is not None:
-        converter = _collect_cached_bindings(lowered, cached.scene, nav)
-        resources = {f"asset:{asset.key}": asset for asset in document.assets}
+    cached = cache.get(cache_key) if cache is not None else None
+    if cached is not None:
+        broker = CursorCoordinator(presentation, chrome, nav, positions)
+        semantic = lower_semantics(
+            document.children,
+            limits=limits,
+            chrome=chrome,
+            localization=localization,
+            session=presentation,
+            pages=broker,
+            capabilities=target.capabilities,
+            strategies=dict(cached.strategies),
+        )
+        lowered = _lower_children(semantic.nodes, target, limits)
+        assets = _merge_assets(document.assets, semantic.assets)
+        _validate(lowered, limits)
+        selected_nodes = _resolve_variants(lowered, dict(cached.variant_positions))
+        converter = _collect_cached_bindings(selected_nodes, cached.scene, nav, chrome)
+        resources = {f"asset:{asset.key}": asset for asset in assets}
         return PlanResult(
             scene=cached.scene,
             bindings=converter.bindings,
+            form_bindings=converter.form_bindings,
             report=cached.report,
             resources=resources,
             metrics=PlanMetrics(
-                states_explored=semantic.states_explored,
+                states_explored=cached.states_explored,
                 cache_hit=True,
-                search_fallback=semantic.search_fallback,
+                search_fallback=cached.search_fallback,
             ),
             session_updates=cached.session_updates,
         )
-    # No `page=`: which page shows is settled below, once the page count exists.
-    solved = solve(
-        lowered,
+
+    attempt = _search_strategies(
+        document=document,
+        target=target,
         limits=limits,
         chrome=chrome,
-        strict=False,
-        reserved_text=reservation.get("display_text"),
+        localization=localization,
+        presentation=presentation,
+        reservation=reservation,
+        positions=positions,
         nav=nav,
+        search_budget=search_budget,
     )
+    broker = attempt.broker
+    semantic = attempt.semantic
+    assets = _merge_assets(document.assets, semantic.assets)
+    lowered = attempt.lowered
+    solved = attempt.solved
     root_events: tuple[PlanEvent, ...] = ()
     if solved.components > limits.total_components:
         local_pagers = [*broker.pagers, *solved.pagers]
@@ -448,9 +659,10 @@ def plan(
         )
     _reconcile_pagers(solved, broker)
     if strict and solved.notes:
-        raise LayoutDegradedError("; ".join(solved.notes))
-    if any(note.startswith("Never nodes need") for note in solved.notes):
-        message = "; ".join(note for note in solved.notes if note.startswith("Never nodes need"))
+        raise LayoutDegradedError("; ".join(note.message for note in solved.notes))
+    hard_failures = solved.failures
+    if hard_failures:
+        message = "; ".join(note.message for note in hard_failures)
         raise UnsolvableLayoutError(message)
     converter = _Converter()
     scene = SceneDocument(
@@ -458,7 +670,7 @@ def plan(
         target=target.id,
         target_version=target.version,
         children=converter.children(solved.children),
-        assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in document.assets),
+        assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in assets),
         pagers=broker.pagers,
     )
     fingerprint = SceneCodec.fingerprint(scene)
@@ -467,22 +679,23 @@ def plan(
         + root_events
         + tuple(
             PlanEvent(
-                code="layout.degraded",
+                code=f"layout.{note.code}",
                 path="$",
-                message=note,
+                message=note.message,
                 severity=PlanSeverity.DEGRADATION,
             )
             for note in solved.notes
         ),
-        logical_fingerprint=_logical_fingerprint((document,)),
+        logical_fingerprint=stable_fingerprint((document,)),
         scene_fingerprint=fingerprint,
     )
     resources = dict(converter.resources)
-    resources.update({f"asset:{asset.key}": asset for asset in document.assets})
+    resources.update({f"asset:{asset.key}": asset for asset in assets})
     updates = semantic.updates + broker.updates
     result = PlanResult(
         scene=scene,
         bindings=converter.bindings,
+        form_bindings=converter.form_bindings,
         report=report,
         resources=resources,
         metrics=PlanMetrics(
@@ -492,11 +705,22 @@ def plan(
         session_updates=updates,
     )
     if cache is not None and _cacheable(lowered):
-        cache.put(cache_key, CachedPlan(scene, report, updates))
+        cache.put(
+            cache_key,
+            CachedPlan(
+                scene,
+                report,
+                updates,
+                attempt.assignment.strategies,
+                semantic.states_explored,
+                semantic.search_fallback,
+                attempt.solved.variant_positions,
+            ),
+        )
     return result
 
 
-def _reconcile_pagers(solved: SolvedLayout, broker: PageBroker) -> None:
+def _reconcile_pagers(solved: SolvedLayout, broker: CursorCoordinator) -> None:
     """Move each solved pager to the page its reader belongs on.
 
     The solver has to render *some* page to measure one, and it picks before anyone knows
@@ -505,18 +729,18 @@ def _reconcile_pagers(solved: SolvedLayout, broker: PageBroker) -> None:
     costs a slot rewrite rather than a second solve. The mount used to do this by drawing
     twice.
     """
-    indices: dict[str, int] = {}
+    positions: dict[str, Position] = {}
     for pager in solved.pagers:
-        request = PageRequest(
+        request = MaterializedCursorRequest(
             key=pager.key,
-            pages=pager.pages,
+            extent=pager.pages,
             fingerprint=content_fingerprint(pager.fragments),
             initial="end" if pager.initial else "start",
         )
         grant = broker.grant(request)
-        broker.record(request, grant.index)
-        indices[pager.key] = grant.index
-    solved.repage(indices)
+        broker.record(request, grant.position)
+        positions[pager.key] = grant.position
+    solved.reposition(positions)
 
 
 def _root_paginate(
@@ -526,15 +750,15 @@ def _root_paginate(
     target_limits: V2Limits,
     chrome: Chrome,
     reserved_text: int,
-    nav: PageNav,
-    broker: PageBroker,
+    nav: PlannedNav,
+    broker: CursorCoordinator,
 ) -> tuple[SolvedLayout, int]:
     maximum_pages = max(1, len(nodes))
 
     def solve_page(children: Sequence[Node], index: int, pages: int) -> SolvedLayout:
         chrome_nodes: tuple[Node, ...] = (
             Footer(chrome.page_footer(index + 1, pages), overflow=Never()),
-            *nav(key, index, pages),
+            *nav(materialized_navigation_state(key, Position(offset=index), pages, chrome)),
         )
         return solve(
             (*children, *chrome_nodes),
@@ -568,37 +792,11 @@ def _root_paginate(
     if current:
         pages.append(current)
 
-    request = PageRequest(key=key, pages=len(pages), fingerprint=_logical_fingerprint(nodes))
+    request = MaterializedCursorRequest(key=key, extent=len(pages), fingerprint=stable_fingerprint(nodes))
     grant = broker.grant(request)
-    broker.record(request, grant.index)
-    return solve_page(pages[grant.index], grant.index, grant.pages), grant.pages
-
-
-def _logical_fingerprint(nodes: Sequence[object]) -> str:
-    """Hash semantic structure without callback identity or process addresses."""
-    payload = json.dumps(_stable_value(nodes), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.blake2s(payload.encode(), digest_size=16).hexdigest()
-
-
-def _stable_value(value: object) -> object:
-    if callable(value):
-        return "<callback>"
-    if isinstance(value, Enum):
-        return value.value
-    if is_dataclass(value) and not isinstance(value, type):
-        return {
-            "type": type(value).__qualname__,
-            "fields": {item.name: _stable_value(getattr(value, item.name)) for item in fields(value)},
-        }
-    if isinstance(value, Mapping):
-        return {str(key): _stable_value(item) for key, item in sorted(value.items(), key=lambda item: str(item[0]))}
-    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
-        return [_stable_value(item) for item in value]
-    if isinstance(value, bytes):
-        return hashlib.blake2s(value, digest_size=16).hexdigest()
-    if isinstance(value, str | int | float | bool) or value is None:
-        return value
-    return type(value).__qualname__
+    broker.record(request, grant.position)
+    index = grant.position.offset
+    return solve_page(pages[index], index, grant.extent), grant.extent
 
 
 def _plan_cache_key(
@@ -611,15 +809,15 @@ def _plan_cache_key(
     presentation: PresentationSession,
     reservation: ResourceCost,
     strict: bool,
-    nav: PageNav | None,
-    page: PageState,
+    nav: PlannedNav | None,
+    positions: Mapping[str, Position] | None,
     search_budget: int,
 ) -> str:
     relevant = {
-        "document": _stable_value(nodes),
+        "document": stable_value(nodes),
         "target": (target.id, target.version),
-        "limits": _stable_value(limits),
-        "presentation": _stable_value(presentation),
+        "limits": stable_value(limits),
+        "presentation": stable_value(presentation),
         "chrome": (
             chrome.previous,
             chrome.next,
@@ -630,9 +828,9 @@ def _plan_cache_key(
             chrome.and_n_more(2),
         ),
         "locale": localization.locale,
-        "reservation": _stable_value(reservation),
+        "reservation": stable_value(reservation),
         "strict": strict,
-        "page": _stable_value(page),
+        "positions": stable_value(positions),
         "search_budget": search_budget,
         "nav": (
             None
@@ -644,15 +842,16 @@ def _plan_cache_key(
             )
         ),
     }
-    payload = json.dumps(relevant, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-    return hashlib.blake2s(payload.encode(), digest_size=16).hexdigest()
+    return stable_fingerprint((relevant,))
 
 
 def _cacheable(nodes: Sequence[Node]) -> bool:
     def check(node: Node) -> bool:
-        if isinstance(node, Extension | RawItem | Variants):
+        if isinstance(node, Extension | RawItem):
             return False
-        if isinstance(node, Panel):
+        if isinstance(node, Variants):
+            return all(check(child) for variant in node.variants for child in variant.nodes)
+        if isinstance(node, Panel | Budget | Break):
             return all(check(child) for child in node.children)
         return True
 
@@ -673,7 +872,7 @@ def _collect_bindings(nodes: Sequence[Node]) -> _Converter:
             case Section(accessory=accessory):
                 if isinstance(accessory, Button):
                     converter.action(accessory)
-            case Panel(children=children):
+            case Panel(children=children) | Budget(children=children) | Break(children=children):
                 for child in children:
                     collect(child)
             case _:
@@ -687,13 +886,16 @@ def _collect_bindings(nodes: Sequence[Node]) -> _Converter:
 def _collect_cached_bindings(
     nodes: Sequence[Node],
     scene: SceneDocument,
-    nav: PageNav | None,
+    nav: PlannedNav | None,
+    chrome: Chrome,
 ) -> _Converter:
     converter = _collect_bindings(nodes)
     if nav is None:
         return converter
     for pager in scene.pagers:
-        generated = _collect_bindings(nav(pager.key, pager.page, pager.pages))
+        generated = _collect_bindings(
+            nav(materialized_navigation_state(pager.key, Position(offset=pager.page), pager.pages, chrome))
+        )
         for key, binding in generated.bindings.items():
             converter.bindings.setdefault(key, binding)
     return converter

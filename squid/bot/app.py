@@ -24,8 +24,8 @@ from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRen
 from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
+from squid.bot.topics import resource_topic
 from squid.bot.utils.embeds import RunningMessage
-from squid.bot.utils.mount_registry import MountRegistry
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
@@ -50,6 +50,8 @@ from squid.runtime import (
     start_log_capture,
     start_permission_epoch_watch,
 )
+from squid_layouts import TopicBus
+from squid_layouts.discord import MountRegistry, Reactor
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -155,6 +157,8 @@ class RedstoneSquid(Bot):
         # How many of each panel a user may have open, and which mounts die with their
         # parent. Reached from a handler as `interaction.client.mounts`.
         self.mounts = MountRegistry()
+        self.topic_bus = TopicBus()
+        self.layout_reactor = Reactor(self.topic_bus)
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -199,6 +203,8 @@ class RedstoneSquid(Bot):
         # watcher keeps honest, so it runs before any extension loads rather than
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
+        self.background_tasks.start(self.topic_bus.run(), name="layout-topics")
+        self.background_tasks.start(self.layout_reactor.run(), name="layout-reactor")
 
         extensions = [*EXTENSIONS]
         if self.development_mode:
@@ -298,6 +304,7 @@ class RedstoneSquid(Bot):
         way to publish: the write that prompted it already enqueued durable work, so a
         failure here is retried rather than lost, and a duplicate run is a no-op.
         """
+        self.topic_bus.publish(resource_topic(resource_kind, resource_key))
         generation = await self.services.posts.pending_generation(resource_kind, resource_key)
         if generation is None:
             return

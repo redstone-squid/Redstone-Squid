@@ -88,21 +88,27 @@ honestly express that domain operation without an explicit grouping or commit mo
 Strategy ranking is lexicographic rather than scalar: representation stability by
 `Flexibility`, author display preference, pager count, transition distance, then stable path
 and strategy identifiers. Per-adapter versions invalidate only that adapter's sticky state.
-The default search budget is 512 states. Budget exhaustion selects a deterministic lossless
-fallback and records `planner.search_fallback`; it never spends an author degradation grant.
+The solver first gives every semantic assignment its preferred structural rungs, then searches
+reachable `Variants` assignments best-first. If no wholly lossless candidate exists, author
+priority is compared before loss kind: semantic substitutions beat truncation, truncation beats
+spilling entries, and spilling beats dropping a whole node. Semantic strategy cost breaks the
+remaining tie. The default search budget is 512 measured whole-layout candidates. Exhaustion
+selects the best valid incumbent and records `planner.search_fallback`.
 
 Target-shaped nodes live under `squid_layouts.primitives`. Their policies are explicit:
 
 - `Truncate` and `Spill` shorten content only when the author wraps or configures it.
 - `Alt`/`Alts` supply text ladders and per-entry drop priority.
-- `Paginate` has an explicit key and measured footer/navigation chrome.
+- `Paginate` has an explicit key, measured footer/navigation chrome, and optional `min_fill`
+  and `widows` break preferences.
 - `Variants` supplies an ordered ladder of complete structural alternates for component
-  pressure; rungs may be capability-gated, and the planner filters them before the solver
-  steps the survivors.
+  pressure; rungs may be capability-gated, and the planner filters them before a bounded
+  global search considers the survivors.
 - `Drop` and `Never` make omission or non-degradation explicit.
 
 Semantic helpers `truncate`, `spill`, `optional`, `fallback`, and `best_effort` grant the
-same losses at intent level. Consequential actions, status, and code are never silently lost.
+same losses at intent level. `budget` adds a hard minimum reservation, preferred size, and
+lossless stretch band. Consequential actions, status, and code are never silently lost.
 
 Target-native features use Extension(kind, version, payload, fallback). A target adapter
 prepares and measures the native resource once. Unsupported targets use the mandatory
@@ -113,6 +119,51 @@ strings are trusted author markup. `md(t"Build {title}")` safely escapes Python 
 interpolations and neutralizes mentions; `plain()` requests literal text; `raw_md()` opts one
 known-safe interpolation back into trusted markup. Scenes preserve the dialect so every
 renderer can choose an appropriate Markdown implementation.
+
+## Patterns: one state machine, two shells
+
+Reusable interaction patterns are authored as pure `state -> tree` state machines. Control and
+content construction enter through `PatternControls`; a pattern never hard-codes `sl.action`, a
+route id, or a frontend mount. The same specification therefore has two execution paths:
+
+| Shell | State location | Controls | Interaction result |
+|---|---|---|---|
+| `ComponentShell` | its declared `pattern_state = sl.state()` | closure-backed `Action`, `Choices`, and `FormTrigger` | mutate state and let the mount redraw |
+| `RouterShell` | caller-defined route parameters | `RoutedAction` and `RoutedChoices` | decode state and replace the complete document |
+
+`PatternRoute(action, state, phase)` is the route-builder boundary. A deterministic button has
+`phase="next"`; the pattern transition has already run and `state` is what the replacement document
+renders. A select or form has `phase="input"`; its route carries the state the submitted values apply
+to, and the handler passes those values to `RouterShell.transition`. Routed form handlers obtain the
+prefilled schema from the pattern's `form_for` method. This distinction prevents a routed shell from
+smuggling an in-process callback into a supposedly restart-surviving control.
+
+Explicit pattern windows use `CursorCoordinator` position overrides, so route-carried positions outrank
+stored cursors and are clamped by the same policy as planner-owned lists. The current pattern catalogue is:
+
+- `TabsState.selected` and `MenuState.path` keep navigation stable by key.
+- `RankedListState.position` preserves global rank numbers across explicit windows.
+- `WizardState` retains answers by step key. Computed steps may hide answers without deleting them;
+  returning to the branch restores their prefill, while `live_answers` excludes those orphans from
+  Finish. A content-to-form Next can present the modal directly. Consecutive form steps necessarily
+  render the next step's Continue trigger after submission because Discord forbids opening a modal
+  from a modal-submit response.
+- `MultiChoiceState` separates staged and committed sets. A visible-window submit replaces only that
+  window's membership, group exclusions are applied during the merge, validation gates Apply, and an
+  Apply edge dispatches only when the committed set changes. Panels with at most five options expose
+  a form alternate to the planner.
+
+`SourceRankedList` is intentionally outside the two-shell catalogue. It is an async component whose
+visible resource owns one immutable `LoadedWindow`; `WindowLoader` owns source-position ordering. Its
+`SourceCapabilities` determine whether navigation is backward, whether numeric ranges are meaningful,
+and whether totals are absent, approximate, or exact. A source always returns its resolved `Position`,
+so anchor fallback is explicit. The mount's one `NavigationContext` factory renders controls for both
+these windows and materialized planner cursors. Pending navigation retains the previous window, and a
+failed request renders that stale window with retry chrome.
+
+Route state still has to fit the target's custom-id budget. Large domain drafts should be represented
+by a compact stored identifier; the shell deliberately does not hide a database or persistence
+policy behind pattern state.
 
 ## Components and Vue-inspired reactivity
 
@@ -142,6 +193,28 @@ That guarantee reaches declared state, and only declared state:
 | `sl.state(copy="ref")` | on assignment | to the previous reference |
 | a plain attribute | no | no |
 | anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
+
+`sl.resource` is a descriptor-owned, runtime-only state machine rather than snapshot state:
+
+    class Search(sl.Component):
+        query: str = sl.state("")
+
+        @sl.resource(depends=(query,))
+        async def results(self) -> tuple[Result, ...]:
+            return await index.search(self.query)
+
+        def render(self):
+            match self.results.state:
+                case sl.Pending(previous=previous): ...
+                case sl.Failed(error=error, previous=previous): ...
+                case sl.Ready(value=results): ...
+
+Dependencies are exact `sl.state` fields and invalidate the resource only when their transaction
+commits. Render observation keeps hidden resources lazy. The default visible delivery commits the
+`Pending` branch before settling it; `ResourceDelivery.ATOMIC` settles the same state machine before
+delivery. Siblings settle concurrently under the frontend's task group, and newly revealed resources
+are discovered on the next bounded render pass. `.reload()` is awaited sugar over the same transition;
+`.replace(value)` publishes an authoritative local result.
 
 A plain attribute assigned during a transaction is therefore uncovered, so the framework says
 so: a read-only action raises `ReactiveWriteError`, and a mutating one logs a warning naming
@@ -205,16 +278,19 @@ still owes a load, so the tier is loaded and then re-rendered rather than render
 delivered view is therefore the loaded one -- one delivery, no loading paint, and no `load()`
 for a call site to forget. Siblings in a tier load concurrently; a raise delivers nothing and
 leaves the load eligible to retry. `Mount.send`, `flush` and `refresh_now` load; `finish`,
-`finish_via` and `build_view` deliberately do not. Data the component can degrade without
-belongs in declared state with a render branch, refreshed by a handler.
+`finish_via` and `_stage_view` deliberately do not. Use `sl.resource` for reactive async data whose
+pending, stale, or failed states the component can render. `on_load` remains the imperative, atomic
+hook for initialization that must finish before the component can render at all.
 
 Presentation state is deliberately a closed vocabulary: `CursorState`, `SelectionState`,
 `DisclosureState`, and `StrategyState`. It is per mounted message/viewer session and separate
-from domain state. Generic cursors therefore do not leak into component fields, while apps
-cannot store arbitrary operational objects in presentation snapshots.
+from domain state. Materialized cursors therefore do not leak into component fields, while apps
+cannot store arbitrary operational objects in presentation snapshots. Resource state is likewise
+runtime-only: it is an input to synchronous rendering, not durable domain or generic presentation
+metadata.
 
 Each runtime keeps a small callback-free plan LRU. Cache keys include semantic structure,
-assets, target/version/limits, chrome, reservation, presentation/page state, nav factory
+assets, target/version/limits, chrome, reservation, presentation/position state, nav factory
 version, strictness, and search budget. Cache hits always recollect current callbacks,
 including solver-generated pager controls.
 
@@ -233,6 +309,24 @@ which is the one place webhook tokens and response shapes are understood. When n
 live the render waits in `Mount.pending` for the next interaction — `refresh()` has always
 promised the next opportunity rather than the current instant.
 
+Cross-mount refresh uses a payload-free `sl.TopicBus`: a topic is an exact hashable address,
+not state. Subscribers re-read application services before asking their mount to refresh, so the
+data layer remains the only source of truth. Publishes coalesce per topic, reactor scheduling
+coalesces per mount, and different mounts refresh concurrently without one mount rendering over
+itself. The host supervises `TopicBus.run()` and `Reactor.run()` explicitly. `TopicBus.drain()` is
+the deterministic no-background-task seam for subscriber tests.
+
+Publish from the existing committed-change funnel or durable change-feed drain. Never attach the
+bus to a message already owned by a durable reconciliation loop: that creates a second writer. In
+this bot, build panels follow `("build", str(build_id))`, while posted build cards remain solely
+owned by the Discord reconciliation queue. The same queue drain publishes locally after a
+successful reconciliation, which carries database changes from other processes into live panels.
+
+A followed mount with expiring interaction credentials is swept before its handle dies. Its final
+reachable render includes “Live updates paused — press any control to resume”; an accepted click
+renews the handle, clears the framework-drawn status, and flushes current state. Background edits
+retain the remaining idle timeout rather than restarting the mount's lifetime.
+
 | Policy | Concurrency | Stale control | State writes |
 |---|---|---|---|
 | EXCLUSIVE | serialized per mount | ignored and acknowledged | transactional |
@@ -243,6 +337,15 @@ promised the next opportunity rather than the current instant.
 Use EXCLUSIVE for ordinary mutations, REBASE when the same logical action should apply to
 newest state after waiting, PARALLEL_READ for side-effect-free reads, and IMMEDIATE only when
 concurrency is deliberately handled elsewhere.
+
+Form submissions run the same funnel, so REBASE resolves the newest binding there too: a
+`FormTrigger` declares one per render, planning carries it in `PlanResult.form_bindings`, and
+a late submission is rebased onto the newest one for its key. It is rebased only when that
+binding parses the same field keys -- a schema that changed shape cannot read what the reader
+typed. A form presented ad hoc from a handler has no render-declared binding, and a trigger the
+newest render dropped has no newer one; both run what the reader submitted, since discarding a
+filled-in form is the worse surprise. Note that the presenting button and the submission answer
+to the same key in two different tables: `bindings` opens the form, `form_bindings` submits it.
 
 ## Pagination
 
@@ -255,6 +358,26 @@ A paginator scene record contains a content fingerprint. When content under one 
 reordering where possible. `per=N` is count-based pagination; the default fills by target text
 budget. Semantic Choices, Items, Navigation, and large Actions use keyed 25-option windows.
 All use the same `NavFactory`.
+
+A `NavFactory` receives `on_previous`, `on_next`, and `on_seek`. `on_seek` takes a zero-based
+page and is present only where the cursor can address one: always for a materialized cursor,
+and for a source window only when it declares `SourceCapabilities.jumpable` with an exact count.
+It is a page rather than a `Position` because `NavigationState.position.offset` is a page index
+for a materialized cursor but an item offset for a source window; `NavigationState.page` is the
+comparable one, and pairs with `extent`. The stock `default_nav` draws no jump control, since a
+select costs a whole component row on every paginator in the process; `sl.discord.page_select_nav`
+opts into one, offering every page when there are at most 25 and an evenly spaced ladder across
+the whole range beyond that.
+
+`sl.paged(container, key=..., chars=...)` applies an author-sized budget and pages between the
+container's heterogeneous children. Children are atomic unless a text child must split;
+`sl.unbreakable` groups several lowered primitives into one atomic item and
+`sl.keep_with_next` forbids the following break. Region breaks minimize preference violations,
+then page count and squared fill badness. Text and heterogeneous regions share this exact
+prefix-summed fragmentation engine at every input size; there is no size-dependent heuristic.
+A section heading is kept with its first body child automatically. Region fingerprints hash
+every child's stable logical identity, so callbacks do not make an otherwise unchanged page
+stale across processes.
 
 Root structural pagination is opt-in: return `Document(..., key="screen")` from the root
 component. If top-level structure still exceeds the component limit after lossless adaptation,
@@ -297,10 +420,89 @@ claims live records and returns each restored mount beside its locator; the host
 frontend and periodically calls `renew_claims()` under its own task supervisor. This prevents
 two workers from dispatching the same visible controls after a restart.
 
+## Durable route graph and dispatch onion
+
+`RouteGroup` is both the namespace root and the feature-composition unit; there is no special
+namespace subtype. A root such as `RouteGroup("r")` reserves the gone-response prefix when passed
+to `Router`, while its children compose stable final identities immediately. Group structure,
+identities, and middleware freeze when the router registers; an existing identity may replace its
+handler afterward so a discord.py extension reload remains safe.
+
+Dispatch builds one middleware onion in deterministic order:
+
+```text
+acknowledgement watchdog and unhandled-error boundary
+└─ router middleware (first attached outermost)
+   ├─ matched: root group middleware
+   │  └─ descendant group middleware, root to leaf
+   │     └─ routed handler
+   └─ unmatched reserved id: gone hook
+```
+
+Only router middleware applies to an unmatched id admitted by the reserved namespace. A matched
+route additionally inherits every group attachment in its lineage. Each layer may perform work
+before and after its one `proceed`, catch an inner failure, or short-circuit. The immutable
+`RouteRequest` exposes the component kind, canonical `Route`, read-only converted parameters,
+selected values, matched group, and whether an alias matched. It deliberately has no mutable
+dependency bag.
+
+The watchdog acknowledges an unused interaction response before Discord's three-second deadline
+and immediately after an operation returns without responding. It does not claim that later
+followups completed, and it never invents private thinking or modal semantics. Error presentation
+is the single framework boundary outside the whole user onion.
+
+## Library binding: discord.py, not Discord alone
+
+The portable seam is the scene. Everything above it — semantic vocabulary, planner,
+solver, `CursorCoordinator`, components — binds to Discord's *shape* (budgets, option windows,
+row widths) but imports no discord.py; `sl.html` consumes scenes. Everything below it —
+`renderer`, `mount`, `delivery`, `routing` — is a **discord.py adapter**, not a
+Discord-protocol adapter, and its dependencies sort into three strata:
+
+- **Protocol facts** — component budgets, token lifetimes, callback-type restrictions,
+  custom-id length, error codes 10015/10062/50027/50035. Depending on these is the
+  adapter's job.
+- **Library object model** — `Message`, `LayoutView`, `DynamicItem`, passed through as
+  transport without interpretation. Mostly harmless.
+- **Library behaviours** — the semantics of how discord.py *mediates* the protocol. This
+  is the dangerous stratum: every externally audited defect to date lived here
+  (`InteractionMessage.edit`'s hidden token routing, ViewStore scheduling), while the
+  scene and planner layers, which touch only protocol facts, have produced none.
+
+Stratum-3 inventory. Each entry is owed a pin test that exercises the real library, so a
+discord.py upgrade breaks in the suite rather than in production — the same discipline
+CLAUDE.md mandates for Nucleation, applied to discord.py:
+
+| Behaviour relied on | Where | Pin |
+|---|---|---|
+| ViewStore schedules one call per matching dynamic-item class | Router's one-class design, exact-overlap rejection, register idempotence (plan 16) | overlap and registration pins in `test_routing.py` |
+| `is_dispatchable() == False` keeps mounted routed controls out of ViewStore | single dispatch path for mounted controls | `test_routing.py` mounted double-dispatch assertions |
+| `InteractionMessage.edit`/`WebhookMessage.edit` route through interaction endpoints; application followups force wait | edit-authority semantics; plan 23's defect and fix | real-library pins in `test_mount.py` |
+| current modal controls serialize inside `Label` through `Modal.to_dict` | plan 18's Discord field ceiling and the host clamp gate | inventory pin in `test_form_discord.py`; host modal tests |
+| `interaction.response.is_done()` switches response vs followup writes | `_WebhookMessageHandle.write`, `respond_to` | mount handle tests |
+
+Policy:
+
+- A discord.py version bump is a defined event: run the pins, review this inventory.
+  `uv.lock` pins exactly, so bumps are always deliberate.
+- **Durable artifacts speak protocol; in-process machinery may speak discord.py.** A
+  routed custom id lives in posted messages for years, so route *identity* is
+  protocol-only (plan 16 built it so); route *dispatch* is re-established at startup and
+  may bind to the library.
+- Feature ceilings are `min(protocol, discord.py)`, and the two release trains are
+  independent. The modal field inventory (plan 18) is protocol-complete on discord.py
+  2.7.1 (`Label`, modal selects, `FileUpload`, `RadioGroup`, `CheckboxGroup` all ship);
+  re-verify both sides whenever a plan leans on a new component type.
+- No library-abstraction layer. A second-library adapter has zero consumers, and the
+  scene is already the seam one would attach to; below it the binding is admitted, not
+  abstracted. The DynamicItem binding in particular is chosen, not accidental: a raw
+  `on_interaction` router would have to peek into ViewStore to avoid double-handling
+  live views, so the sanctioned hook wins and gets pinned instead.
+
 ## Deliberate boundaries and current gaps
 
-- Modal submission still uses the Discord modal adapter. A portable form protocol is future
-  work.
+- Form schemas, parsing, validation, and submission events are portable. Discord presentation
+  remains a modal adapter, including its native entity and file extension fields.
 - Exact `primitives.SelectMenu` overflow is intentionally a planning error; semantic
   interactions own legal paging. Cross-page multi-select needs an explicit grouping or commit
   model and is rejected rather than approximated.
