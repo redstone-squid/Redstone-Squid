@@ -102,6 +102,7 @@ adapter and one test fake, and a package would be three files holding what fits 
 @dataclass(frozen=True, slots=True)
 class ExternalIdentity:
     """A verified subject returned by one authorization-code exchange."""
+
     provider: IdentityProvider
     subject: str
     display_name: str | None = None
@@ -140,6 +141,7 @@ environment. Keep the existing field names and add a derived accessor:
 @dataclass(frozen=True, slots=True)
 class OAuthClientCredentials:
     """One provider's complete authorization-code client registration."""
+
     client_id: str
     client_secret: SecretStr
     redirect_uri: AnyHttpUrl
@@ -236,8 +238,12 @@ Format validation moves into a new exhaustive domain constructor:
 ```python
 @classmethod
 def for_provider(
-    cls, provider: IdentityProvider, subject: str, *,
-    display_name: str | None = None, verified_at: Instant | None = None,
+    cls,
+    provider: IdentityProvider,
+    subject: str,
+    *,
+    display_name: str | None = None,
+    verified_at: Instant | None = None,
 ) -> "AccountIdentity":
     """Build an identity in a provider's canonical subject form.
 
