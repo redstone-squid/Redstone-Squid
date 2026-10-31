@@ -223,11 +223,11 @@ _SET_COMPARED = {
     "creators_ign",
     "links",
 }
-# The ORM fills submission_time at insert (default_factory=Instant.now), so a
-# None on the domain object does not survive the trip. save() likewise stamps
-# edited_time with a nanosecond Instant.now() that PostgreSQL truncates to
-# microseconds, so the caller's in-memory value never equals the stored one.
-_DB_GENERATED = {"submission_time", "edited_time"}
+# The ORM fills submission_time at insert (default_factory=now), so a None on the
+# domain object does not survive the trip. edited_time is no longer excluded:
+# save() stamps it at storage precision, so the caller's in-memory value and the
+# stored one are the same value.
+_DB_GENERATED = {"submission_time"}
 # Compared structurally below rather than by dataclass equality.
 _TAG_FIELDS = {"tags"}
 

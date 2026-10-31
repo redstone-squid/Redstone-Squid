@@ -9,11 +9,10 @@ from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
 from squid.api.security import UNBOUNDED, Caller
-from squid.api.v1.notifications import accept_notice, create_subscription, list_inbox
+from squid.api.v1.notifications import create_subscription, list_inbox, update_preferences
 from squid.api.v1.schemas.notifications import NotificationPreferenceUpdate, NotificationSubscriptionCreate
 from squid.core.pagination import Page, PageSelector
 from squid.notifications import (
-    CURRENT_NOTIFICATION_NOTICE_VERSION,
     InboxNotification,
     NotificationPreferences,
     NotificationSubscription,
@@ -26,24 +25,21 @@ from squid.notifications.domain import NotificationKind
 ACCOUNT = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
 
 
-async def test_notification_consent_is_independent_and_defaults_channels_off() -> None:
+async def test_channels_stay_off_until_they_are_explicitly_turned_on() -> None:
+    """Accepting the privacy notice permits notifications; it does not enable any channel."""
     notifications = AsyncMock()
-    notifications.accept_notice.return_value = NotificationPreferences(
-        account_id=7,
-        notice_version=CURRENT_NOTIFICATION_NOTICE_VERSION,
-        consented_at=Instant.now(),
-    )
+    notifications.set_preferences.return_value = NotificationPreferences(account_id=7, consent_pending=False)
 
-    response = await accept_notice(
+    response = await update_preferences(
         NotificationPreferenceUpdate(),
         cast(Any, notifications),
         ACCOUNT,
     )
 
-    assert response.consented is True
+    assert response.consent_pending is False
     assert response.web_enabled is False
     assert response.dm_enabled is False
-    notifications.accept_notice.assert_awaited_once_with(7, web_enabled=False, dm_enabled=False)
+    notifications.set_preferences.assert_awaited_once_with(7, web_enabled=False, dm_enabled=False)
 
 
 async def test_record_filter_subscription_preserves_presence_and_exact_predicates() -> None:

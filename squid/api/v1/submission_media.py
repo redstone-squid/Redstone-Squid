@@ -11,6 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 
+from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
 from squid.api.v1.schemas.submission_media import (
@@ -153,7 +154,14 @@ router = APIRouter(prefix="/submissions/drafts/{draft_id}/media", tags=["submiss
     response_model=DraftMediaResponse,
     status_code=status.HTTP_202_ACCEPTED,
     responses=responses(400, 401, 403, 404, 409, 422, 503),
-    openapi_extra={"requestBody": _STREAMING_REQUEST_BODY},
+    operation_id="submission_media_upload",
+    openapi_extra={
+        "requestBody": _STREAMING_REQUEST_BODY,
+        **contract(
+            security=[WEB_WRITE, DEVICE, MINECRAFT],
+            cli=cli_command("media.upload", features=("submission-media",), interaction="direct"),
+        ),
+    },
 )
 async def upload_draft_media(
     draft_id: UUID,
@@ -213,6 +221,11 @@ async def upload_draft_media(
     "",
     response_model=DraftMediaListResponse,
     responses=responses(400, 401, 403, 404, 422, 503),
+    operation_id="submission_media_list",
+    openapi_extra=contract(
+        security=[WEB, DEVICE, MINECRAFT],
+        cli=cli_command("media.list", features=("submission-media",), interaction="direct"),
+    ),
 )
 async def list_draft_media(
     draft_id: UUID,
@@ -238,6 +251,11 @@ async def list_draft_media(
     "/{upload_id}",
     response_model=DraftMediaResponse,
     responses=responses(400, 401, 403, 404, 422, 503),
+    operation_id="submission_media_get",
+    openapi_extra=contract(
+        security=[WEB, DEVICE, MINECRAFT],
+        cli=cli_command("media.status", features=("submission-media",), interaction="direct"),
+    ),
 )
 async def get_draft_media(
     draft_id: UUID,
@@ -263,6 +281,11 @@ async def get_draft_media(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="submission_media_discard",
+    openapi_extra=contract(
+        security=[WEB_WRITE, DEVICE, MINECRAFT],
+        cli=cli_command("media.discard", features=("submission-media",), interaction="direct"),
+    ),
 )
 async def discard_draft_media(
     draft_id: UUID,

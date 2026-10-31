@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
 
+from squid.api.contract import WEB, WEB_WRITE, browser_only, contract
 from squid.api.dependencies import Notifications, Permissions
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
@@ -31,37 +32,25 @@ router = APIRouter(prefix="/users/me/notifications", tags=["notifications"])
 UserCaller = Annotated[Caller, Depends(requires(ACCOUNT_SELF_READ))]
 
 
-@router.get("/preferences", response_model=NotificationPreferencesDetail, responses=responses(401, 403, 503))
+@router.get(
+    "/preferences",
+    response_model=NotificationPreferencesDetail,
+    responses=responses(401, 403, 503),
+    operation_id="notification_preferences_get",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
+)
 async def get_preferences(notifications: Notifications, caller: UserCaller) -> NotificationPreferencesDetail:
     """Return disabled defaults before the notification notice has been accepted."""
     return NotificationPreferencesDetail.from_domain(await notifications.preferences(_account_id(caller)))
 
 
-@router.post(
-    "/consent",
-    response_model=NotificationPreferencesDetail,
-    responses=responses(401, 403, 409, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
-)
-async def accept_notice(
-    request: NotificationPreferenceUpdate,
-    notifications: Notifications,
-    caller: UserCaller,
-) -> NotificationPreferencesDetail:
-    """Accept the notification-specific notice and choose initial channels."""
-    preferences = await notifications.accept_notice(
-        _account_id(caller),
-        web_enabled=request.web_enabled,
-        dm_enabled=request.dm_enabled,
-    )
-    return NotificationPreferencesDetail.from_domain(preferences)
-
-
 @router.patch(
     "/preferences",
     response_model=NotificationPreferencesDetail,
-    responses=responses(401, 403, 409, 503),
+    responses=responses(400, 401, 403, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="notification_preferences_update",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def update_preferences(
     request: NotificationPreferenceUpdate,
@@ -81,6 +70,8 @@ async def update_preferences(
     "/subscriptions",
     response_model=list[NotificationSubscriptionDetail],
     responses=responses(401, 403, 503),
+    operation_id="notification_subscriptions_list",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def list_subscriptions(
     notifications: Notifications,
@@ -95,8 +86,10 @@ async def list_subscriptions(
     "/subscriptions",
     response_model=NotificationSubscriptionDetail,
     status_code=status.HTTP_201_CREATED,
-    responses=responses(401, 403, 404, 409, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="notification_subscription_create",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def create_subscription(
     request: NotificationSubscriptionCreate,
@@ -118,6 +111,8 @@ async def create_subscription(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="notification_subscription_delete",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def delete_subscription(
     subscription_id: int,
@@ -129,7 +124,13 @@ async def delete_subscription(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.get("/inbox", response_model=Page[InboxNotificationDetail], responses=responses(400, 401, 403, 503))
+@router.get(
+    "/inbox",
+    response_model=Page[InboxNotificationDetail],
+    responses=responses(400, 401, 403, 503),
+    operation_id="notification_inbox_list",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
+)
 async def list_inbox(
     notifications: Notifications,
     permissions: Permissions,
@@ -161,6 +162,8 @@ async def list_inbox(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 404, 409, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="notification_inbox_mark_read",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def mark_read(
     notification_id: int,

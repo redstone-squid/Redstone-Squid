@@ -9,6 +9,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from squid.accounts.errors import ConsentRequiredError
 from squid.bot.utils.components import StaticLayout, edit_layout, error_layout, no_mentions
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.errors import DomainError, JSONValue, SquidError
@@ -173,6 +174,14 @@ def _present_missing_nodes(error: PermissionNodeRequired, locale: str | None) ->
 def build_error_presentation(error: BaseException, locale: str | None = None) -> ErrorPresentation:
     """Classify an exception into safe Discord-facing text, translated into `locale`."""
     error = unwrap_error(error)
+    if isinstance(error, ConsentRequiredError):
+        # Every Discord path that needs consent asks for it first, so reaching here means one
+        # slipped the gate. Name the command that can fix it rather than rendering the API's
+        # wording, which tells a Discord user to go and accept a notice somewhere they are not.
+        return ErrorPresentation(
+            translate(locale, _("Consent required")),
+            translate(locale, _("Run `/account consent` to read the privacy notice and accept it.")),
+        )
     if isinstance(error, DomainError):
         return ErrorPresentation(error.localized_title(locale), error.localized_public_detail(locale))
     if isinstance(error, commands.NoPrivateMessage):

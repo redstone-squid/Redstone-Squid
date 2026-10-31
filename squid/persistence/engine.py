@@ -67,10 +67,23 @@ class DatabaseEngine:
             raise DataIntegrityError(msg)
 
 
-@cache
-def expected_migration_heads() -> frozenset[str]:
-    """Read the migration heads shipped in this source/image exactly once."""
-    root = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+"""Source tree root, where `alembic.ini` and the `alembic/` script directory live."""
+
+
+def migration_heads(root: Path = PROJECT_ROOT) -> frozenset[str]:
+    """Heads of the migration scripts under `root`.
+
+    `root` is a parameter because `check_readiness` compares the deployed revision against this
+    set: a test can otherwise only assert the mismatch branch, never a passing readiness check
+    against a known head.
+    """
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
     return frozenset(ScriptDirectory.from_config(config).get_heads())
+
+
+@cache
+def expected_migration_heads() -> frozenset[str]:
+    """Read the migration heads shipped in this source/image exactly once."""
+    return migration_heads()

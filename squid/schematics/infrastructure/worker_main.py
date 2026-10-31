@@ -20,6 +20,7 @@ import logging
 import os
 import sys
 from collections.abc import Mapping
+from pathlib import Path
 from typing import IO, Any, cast
 
 try:
@@ -69,6 +70,13 @@ class _RequestContextFilter(logging.Filter):
 
 _request_context = _RequestContextFilter()
 
+STATM_PATH = Path("/proc/self/statm")
+"""Linux's per-process memory counters, whose first field is the mapped size in pages.
+
+Absent on the other POSIX hosts this module still has to start on, which is why every read of
+it tolerates failure rather than treating the file as guaranteed.
+"""
+
 _RESOURCE_PACK: bytes | None = None
 """Cached across requests. Reading and parsing a vanilla resource pack is expensive, and it is
 the only reason this is a persistent worker rather than a one-shot subprocess. A `Schematic`
@@ -99,7 +107,7 @@ def apply_guardrails(limits: Mapping[str, int]) -> None:
         logger.debug("Could not lower worker priority.", exc_info=True)
 
 
-def _current_address_space_bytes() -> int:
+def _current_address_space_bytes(statm_path: Path = STATM_PATH) -> int:
     """This process's already-mapped virtual address space, so `RLIMIT_AS` bounds the budget
     a payload gets rather than the interpreter's own baseline footprint.
 
@@ -109,12 +117,15 @@ def _current_address_space_bytes() -> int:
     the engine is even imported. glibc hosts have a much smaller baseline, which is why this
     went unnoticed there. `resource.getrusage` reports peak resident set size, not mapped
     address space, so it can't stand in for this.
+
+    `statm_path` is a parameter because a real `/proc/self/statm` reports whatever the host
+    happens to have mapped, so tests can neither pin the arithmetic nor reach the fallback.
     """
     assert resource is not None
     try:
-        with open("/proc/self/statm", "rb") as handle:
+        with statm_path.open("rb") as handle:
             size_pages = int(handle.readline().split()[0])
-    except OSError, ValueError, IndexError:  # pragma: no cover - non-Linux POSIX has no /proc
+    except OSError, ValueError, IndexError:
         return 0
     return size_pages * resource.getpagesize()
 

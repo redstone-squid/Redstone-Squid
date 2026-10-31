@@ -25,7 +25,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 _EFFECT_VALUES = "effect IN (1, -1, -2)"
 """Allow, deny, forbid. See `squid.permissions.domain.models.Effect`."""
@@ -51,6 +51,7 @@ class PermissionRole(Base, kw_only=True):
 
     __tablename__ = "permission_roles"
     __table_args__ = (
+        Index("permission_roles_created_by_idx", "created_by_account_id"),
         UniqueConstraint(
             "guild_id", "slug", name="permission_roles_guild_slug_key", postgresql_nulls_not_distinct=True
         ),
@@ -82,7 +83,7 @@ class PermissionRole(Base, kw_only=True):
         default=None,
     )
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -96,7 +97,10 @@ class PermissionRolePattern(Base, kw_only=True):
     """
 
     __tablename__ = "permission_role_patterns"
-    __table_args__ = (CheckConstraint("mode IN (1, -1)", name="permission_role_patterns_mode_check"),)
+    __table_args__ = (
+        Index("permission_role_patterns_added_by_idx", "added_by_account_id"),
+        CheckConstraint("mode IN (1, -1)", name="permission_role_patterns_mode_check"),
+    )
 
     role_id: Mapped[int] = mapped_column(
         Integer,
@@ -115,7 +119,7 @@ class PermissionRolePattern(Base, kw_only=True):
         default=None,
     )
     added_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -123,7 +127,11 @@ class PermissionRoleInclude(Base, kw_only=True):
     """A composition edge: one role including another's patterns."""
 
     __tablename__ = "permission_role_includes"
-    __table_args__ = (CheckConstraint("role_id <> included_role_id", name="permission_role_includes_no_self_include"),)
+    __table_args__ = (
+        Index("permission_role_includes_added_by_idx", "added_by_account_id"),
+        Index("permission_role_includes_included_idx", "included_role_id"),
+        CheckConstraint("role_id <> included_role_id", name="permission_role_includes_no_self_include"),
+    )
 
     role_id: Mapped[int] = mapped_column(
         Integer,
@@ -142,7 +150,7 @@ class PermissionRoleInclude(Base, kw_only=True):
         default=None,
     )
     added_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -151,6 +159,7 @@ class PermissionGrant(Base, kw_only=True):
 
     __tablename__ = "permission_grants"
     __table_args__ = (
+        Index("permission_grants_granted_by_idx", "granted_by_account_id"),
         CheckConstraint(_ONE_SUBJECT, name="permission_grants_one_subject"),
         CheckConstraint(_ROLE_SUBJECT_HAS_GUILD, name="permission_grants_role_subject_has_guild"),
         CheckConstraint(_ROLE_SUBJECT_STAYS_HOME, name="permission_grants_role_subject_stays_home"),
@@ -214,7 +223,7 @@ class PermissionGrant(Base, kw_only=True):
     declared scope, so nodes added later are safe under old grants."""
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     granted_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
@@ -224,6 +233,8 @@ class PermissionRoleAssignment(Base, kw_only=True):
 
     __tablename__ = "permission_role_assignments"
     __table_args__ = (
+        Index("permission_role_assignments_granted_by_idx", "granted_by_account_id"),
+        Index("permission_role_assignments_role_idx", "role_id"),
         CheckConstraint(_ONE_SUBJECT, name="permission_role_assignments_one_subject"),
         CheckConstraint(_ROLE_SUBJECT_HAS_GUILD, name="permission_role_assignments_role_subject_has_guild"),
         CheckConstraint(_ROLE_SUBJECT_STAYS_HOME, name="permission_role_assignments_role_subject_stays_home"),
@@ -282,7 +293,7 @@ class PermissionRoleAssignment(Base, kw_only=True):
     scope_guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     granted_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
@@ -296,6 +307,7 @@ class PermissionAuditEntry(Base, kw_only=True):
 
     __tablename__ = "permission_audit_log"
     __table_args__ = (
+        Index("permission_audit_log_actor_idx", "actor_account_id"),
         Index("permission_audit_log_recent", "at"),
         Index("permission_audit_log_by_subject", "subject_kind", "subject_id"),
     )
@@ -321,9 +333,7 @@ class PermissionAuditEntry(Base, kw_only=True):
     """Mandatory for `forbid`, enforced by the service rather than the schema so
     the column stays usable for the actions that do not need it."""
     details: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True, default=None)
-    at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
-    )
+    at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False, server_default=func.now(), default_factory=now)
 
 
 class PermissionEpoch(Base, kw_only=True):
@@ -341,5 +351,5 @@ class PermissionEpoch(Base, kw_only=True):
     id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=1)
     version: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )

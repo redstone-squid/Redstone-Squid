@@ -8,11 +8,14 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from pythonjsonlogger.json import JsonFormatter
 
 from squid.config import LoggingConfig
 from squid.core.errors import ConfigurationError
 from squid.logging_config import (
     build_logging_config,
+    configure_api_logging,
+    configure_service_worker_logging,
     configure_worker_logging,
     prepare_log_path,
     resolve_level,
@@ -270,3 +273,49 @@ class TestConfigureWorkerLogging:
         assert handler is not None
         assert handler.level == logging.INFO
         assert logging.getLogger().level == logging.WARNING
+
+
+class TestConfigureApiAndWorkerLogging:
+    """The API and service worker processes should honour dev_mode like the bot does."""
+
+    @pytest.fixture(autouse=True)
+    def _restore_logging(self) -> Iterator[None]:
+        yield
+        logging.config.dictConfig({"version": 1, "disable_existing_loggers": False})
+
+    def _logging_config(self, tmp_path: Path) -> LoggingConfig:
+        return LoggingConfig(
+            level="INFO",
+            root_level="WARNING",
+            directory=tmp_path,
+            log_file=None,
+            access_log_file=None,
+        )
+
+    def test_api_logging_defaults_to_json(self, tmp_path: Path) -> None:
+        configure_api_logging(self._logging_config(tmp_path))
+
+        handler = logging.getHandlerByName("console")
+        assert isinstance(handler, logging.StreamHandler)
+        assert isinstance(handler.formatter, JsonFormatter)
+
+    def test_api_logging_uses_human_formatter_in_dev_mode(self, tmp_path: Path) -> None:
+        configure_api_logging(self._logging_config(tmp_path), dev_mode=True)
+
+        handler = logging.getHandlerByName("console")
+        assert isinstance(handler, logging.StreamHandler)
+        assert not isinstance(handler.formatter, JsonFormatter)
+
+    def test_worker_logging_defaults_to_json(self, tmp_path: Path) -> None:
+        configure_service_worker_logging(self._logging_config(tmp_path))
+
+        handler = logging.getHandlerByName("console")
+        assert isinstance(handler, logging.StreamHandler)
+        assert isinstance(handler.formatter, JsonFormatter)
+
+    def test_worker_logging_uses_human_formatter_in_dev_mode(self, tmp_path: Path) -> None:
+        configure_service_worker_logging(self._logging_config(tmp_path), dev_mode=True)
+
+        handler = logging.getHandlerByName("console")
+        assert isinstance(handler, logging.StreamHandler)
+        assert not isinstance(handler.formatter, JsonFormatter)

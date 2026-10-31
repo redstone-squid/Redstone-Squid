@@ -5,13 +5,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, ConfigDict, Field
 
-from squid.accounts.errors import ConsentRequiredError
+from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import CurrentCaller, VoteMembers, Votes
 from squid.api.errors import responses
 from squid.api.idempotency import enforce_request_idempotency
-from squid.api.security import Caller, requires
+from squid.api.security import Caller, require_consented_account, requires
 from squid.api.v1.schemas.votes import VoteSessionDetail
-from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
+from squid.core.errors import AuthorizationError, ConflictError, ValidationError
 from squid.permissions.domain.catalogue import VOTE_POLL_CAST
 from squid.voting.domain import CastVoteResult, VoteRejection
 from squid.voting.errors import VoteSessionNotFoundError
@@ -29,7 +29,13 @@ class VoteInput(BaseModel):
     option_id: str = Field(min_length=1, max_length=200)
 
 
-@router.get("/{vote_session_id}", response_model=VoteSessionDetail, responses=responses(404, 422, 503))
+@router.get(
+    "/{vote_session_id}",
+    response_model=VoteSessionDetail,
+    responses=responses(404, 422, 503),
+    operation_id="vote_session_get",
+    openapi_extra=contract(security=[ANONYMOUS, SERVICE, WEB, DEVICE], cli=transport_only()),
+)
 async def get_vote_session(
     vote_session_id: int,
     votes: Votes,
@@ -47,6 +53,8 @@ async def get_vote_session(
     response_model=VoteSessionDetail,
     responses=responses(400, 401, 403, 404, 409, 429, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="vote_cast",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def cast_vote(
     vote_session_id: int,
@@ -56,27 +64,19 @@ async def cast_vote(
     caller: UserVoter,
 ) -> VoteSessionDetail:
     """Cast the authenticated Discord member's weighted vote."""
-    # Keyed on `account_id` alone: the `kind` test was redundant with it, and the
-    # `discord_id` test refused a CLI device that holds a perfectly good account.
-    if caller.account_id is None:
-        raise AuthenticationError
-    if caller.consent_pending:
-        raise ConsentRequiredError(account_id=caller.account_id).with_context(
-            public_context={"consent_url": "/v1/users/me/consent"},
-            end_user_action="Accept the current privacy notice and retry.",
-        )
+    account_id = require_consented_account(caller)
     session = await votes.get_session_by_id(vote_session_id)
     if session is None:
         raise VoteSessionNotFoundError(vote_session_id)
     if vote_members is None:
         raise AuthorizationError
-    actor = await vote_members.member(caller.account_id, vote.guild_id, session.kind)
+    actor = await vote_members.member(account_id, vote.guild_id, session.kind)
     if actor is None:
         raise AuthorizationError
     result = await votes.cast_vote_by_session(vote_session_id, actor, vote.option_id)
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
-    return VoteSessionDetail.from_domain(result.session, caller_account_id=caller.account_id)
+    return VoteSessionDetail.from_domain(result.session, caller_account_id=account_id)
 
 
 def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:

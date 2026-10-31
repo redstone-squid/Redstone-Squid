@@ -54,7 +54,7 @@ class SearchResultsView(ExpiringLayoutView):
     def render_results(self) -> None:
         """Render the current result page and its controls."""
         self.clear_items()
-        lines = [_result_line(index, hit) for index, hit in enumerate(self._page.hits, start=1)]
+        lines = [_result_line(index, hit, self.locale) for index, hit in enumerate(self._page.hits, start=1)]
         if not lines:
             lines.append(t(self.locale, _("No results match this query.")))
         warning = "\n".join(f"-# ⚠ {escape_markdown(item)}" for item in self._page.warnings)
@@ -148,7 +148,7 @@ class SearchResultSelect(discord.ui.Select[SearchResultsView]):
             discord.SelectOption(
                 label=hit.title[:100],
                 value=str(index),
-                description=_result_description(hit)[:100],
+                description=_result_description(hit, view.locale)[:100],
             )
             for index, hit in enumerate(view.hits)
         ]
@@ -239,22 +239,38 @@ def _build_id(hit: SearchHit) -> int | None:
     return None
 
 
-def _result_description(hit: SearchHit) -> str:
+_METADATA_LABELS = {
+    "restriction": _("Restriction"),
+    "pattern": _("Pattern"),
+    "showcase": _("Showcase tag"),
+    "creator": _("Creator"),
+    "version": _("Version"),
+    "tag": _("Tag"),
+}
+"""What a taxonomy result calls itself. Named rather than title-cased so it translates."""
+
+
+def _metadata_label(kind: str, locale: str | None) -> str:
+    label = _METADATA_LABELS.get(kind)
+    return t(locale, label) if label is not None else kind
+
+
+def _result_description(hit: SearchHit, locale: str | None) -> str:
     if isinstance(hit, RecordSearchHit):
         return f"Record · {hit.record_class} · {hit.build_title}"
     if isinstance(hit, BuildSearchHit):
         return f"Build · {hit.status}"
-    return f"{hit.metadata_kind} · metadata"
+    return _metadata_label(hit.metadata_kind, locale)
 
 
-def _result_line(index: int, hit: SearchHit) -> str:
+def _result_line(index: int, hit: SearchHit, locale: str | None) -> str:
     subtitle = ""
     if isinstance(hit, RecordSearchHit):
         subtitle = f" — {hit.build_title}"
     elif isinstance(hit, BuildSearchHit) and hit.description:
         subtitle = f" — {hit.description}"
     elif isinstance(hit, MetadataSearchHit):
-        subtitle = f" — {hit.metadata_kind}"
+        subtitle = f" — {_metadata_label(hit.metadata_kind, locale)}"
     return f"\n**{index}. {escape_markdown(hit.title)}**{escape_markdown(subtitle)}"
 
 
@@ -281,7 +297,7 @@ def _detail_text(hit: SearchHit, locale: str | None) -> str:
         description = hit.description or ""
     else:
         tags = ", ".join(escape_markdown(alias) for alias in hit.aliases)
-        fields = t(locale, _("**Kind**\n{kind}"), kind=escape_markdown(hit.metadata_kind))
+        fields = t(locale, _("**Kind**\n{kind}"), kind=escape_markdown(_metadata_label(hit.metadata_kind, locale)))
         description = hit.description or ""
     if tags:
         fields += t(locale, _("\n**Tags**\n{tags}"), tags=tags)

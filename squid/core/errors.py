@@ -13,6 +13,7 @@ class ErrorCode(StrEnum):
     """Stable machine-readable application error codes."""
 
     ACCOUNT_ALREADY_LINKED = "ACCOUNT_ALREADY_LINKED"
+    ACCOUNT_IDENTITY_NOT_FOUND = "ACCOUNT_IDENTITY_NOT_FOUND"
     ACCOUNT_NOT_FOUND = "ACCOUNT_NOT_FOUND"
     ALIAS_ALREADY_ADDED = "ALIAS_ALREADY_ADDED"
     ALIAS_ALREADY_CLAIMED = "ALIAS_ALREADY_CLAIMED"
@@ -26,6 +27,7 @@ class ErrorCode(StrEnum):
     CREATOR_NOT_FOUND = "CREATOR_NOT_FOUND"
     CONFIGURATION_ERROR = "CONFIGURATION_ERROR"
     CONSENT_REQUIRED = "CONSENT_REQUIRED"
+    CONSENT_VERSION_STALE = "CONSENT_VERSION_STALE"
     DATA_INTEGRITY_ERROR = "DATA_INTEGRITY_ERROR"
     DOMAIN_ERROR = "DOMAIN_ERROR"
     INFRASTRUCTURE_ERROR = "INFRASTRUCTURE_ERROR"
@@ -38,8 +40,11 @@ class ErrorCode(StrEnum):
     INVALID_REQUEST = "INVALID_REQUEST"
     INVALID_STATE = "INVALID_STATE"
     INVALID_ACCOUNT = "INVALID_ACCOUNT"
+    INVALID_MERGE_CODE = "INVALID_MERGE_CODE"
+    INVALID_PROFILE = "INVALID_PROFILE"
     INVALID_VERIFICATION_CODE = "INVALID_VERIFICATION_CODE"
     INVALID_VERSION = "INVALID_VERSION"
+    LAST_IDENTITY = "LAST_IDENTITY"
     LINK_RESERVATION_EXPIRED = "LINK_RESERVATION_EXPIRED"
     INVALID_VOTE_CONFIGURATION = "INVALID_VOTE_CONFIGURATION"
     MESSAGE_NOT_FOUND = "MESSAGE_NOT_FOUND"
@@ -140,14 +145,27 @@ class SquidError(Exception):
         *,
         context: Mapping[str, JSONValue] | None = None,
         public_context: Mapping[str, JSONValue] | None = None,
+        message: str | None = None,
+        message_params: Mapping[str, JSONValue] | None = None,
         developer_action: str | None = None,
         end_user_action: str | None = None,
     ) -> Self:
-        """Enrich this exception in place while preserving its traceback."""
+        """Enrich this exception in place while preserving its traceback.
+
+        `message` is here because enrichment that cannot restate the message is only half a helper:
+        a layer that resolves *what* the conflict was usually wants to say so, and assigning
+        `self.message` by hand skips the `args` refresh at the bottom. Pass the untranslated msgid,
+        as a constructor would; `message_params` merges, so a caller can add one placeholder without
+        repeating the others.
+        """
         if context:
             self.context = {**self.context, **context}
         if public_context:
             self.public_context = {**self.public_context, **public_context}
+        if message is not None:
+            self.message = message
+        if message_params:
+            self.message_params = {**self.message_params, **message_params}
         if developer_action is not None:
             self.developer_action = developer_action
         if end_user_action is not None:

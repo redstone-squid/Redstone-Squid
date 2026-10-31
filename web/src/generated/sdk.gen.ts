@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AccountBuildsListData, AccountBuildsListErrors, AccountBuildsListResponses, AccountConsentGrantData, AccountConsentGrantErrors, AccountConsentGrantResponses, AccountGetData, AccountGetErrors, AccountGetResponses, AccountMinecraftRefreshData, AccountMinecraftRefreshErrors, AccountMinecraftRefreshForData, AccountMinecraftRefreshForErrors, AccountMinecraftRefreshForResponses, AccountMinecraftRefreshResponses, BrowserAuthorizationCallbackData, BrowserAuthorizationCallbackErrors, BrowserAuthorizationStartData, BrowserAuthorizationStartErrors, BrowserCsrfGetData, BrowserCsrfGetErrors, BrowserCsrfGetResponses, BrowserSessionRevokeData, BrowserSessionRevokeErrors, BrowserSessionRevokeResponses, BuildSchematicContentGetData, BuildSchematicContentGetErrors, BuildSchematicContentGetResponses, BuildSchematicRenderGetData, BuildSchematicRenderGetErrors, BuildSchematicRenderGetResponses, BuildSchematicsListData, BuildSchematicsListErrors, BuildSchematicsListResponses, BuildsCreateData, BuildsCreateErrors, BuildsCreateResponses, BuildsGetData, BuildsGetErrors, BuildsGetResponses, BuildsListData, BuildsListErrors, BuildsListResponses, BuildsUpdateData, BuildsUpdateErrors, BuildsUpdateResponses, CapabilitiesGetData, CapabilitiesGetErrors, CapabilitiesGetResponses, CliDeviceRevokeData, CliDeviceRevokeErrors, CliDeviceRevokeResponses, CliDevicesListData, CliDevicesListErrors, CliDevicesListResponses, CliEnrollmentApproveData, CliEnrollmentApproveErrors, CliEnrollmentApproveResponses, CliEnrollmentExchangeData, CliEnrollmentExchangeErrors, CliEnrollmentExchangeResponses, CliEnrollmentPreviewData, CliEnrollmentPreviewErrors, CliEnrollmentPreviewResponses, CliEnrollmentStartData, CliEnrollmentStartErrors, CliEnrollmentStartResponses, CliSessionChallengeStartData, CliSessionChallengeStartErrors, CliSessionChallengeStartResponses, CliSessionExchangeData, CliSessionExchangeErrors, CliSessionExchangeResponses, CliSessionRevokeData, CliSessionRevokeErrors, CliSessionRevokeResponses, CreatorAliasGetData, CreatorAliasGetErrors, CreatorAliasGetResponses, CreatorProfileGetData, CreatorProfileGetErrors, CreatorProfileGetResponses, DiagnosticsErrorGetData, DiagnosticsErrorGetErrors, DiagnosticsErrorGetResponses, DiagnosticsErrorsListData, DiagnosticsErrorsListErrors, DiagnosticsErrorsListResponses, FabricChallengeExchangeData, FabricChallengeExchangeErrors, FabricChallengeExchangeResponses, FabricChallengeStartData, FabricChallengeStartErrors, FabricChallengeStartResponses, HealthLiveData, HealthLiveResponses, HealthReadyCompatibilityData, HealthReadyCompatibilityResponses, HealthReadyData, HealthReadyResponses, MinecraftChallengeApproveData, MinecraftChallengeApproveErrors, MinecraftChallengeApproveResponses, MinecraftGrantRevokeData, MinecraftGrantRevokeErrors, MinecraftGrantRevokeResponses, MinecraftVersionsListData, MinecraftVersionsListErrors, MinecraftVersionsListResponses, NotificationConsentGrantData, NotificationConsentGrantErrors, NotificationConsentGrantResponses, NotificationInboxListData, NotificationInboxListErrors, NotificationInboxListResponses, NotificationInboxMarkReadData, NotificationInboxMarkReadErrors, NotificationInboxMarkReadResponses, NotificationPreferencesGetData, NotificationPreferencesGetErrors, NotificationPreferencesGetResponses, NotificationPreferencesUpdateData, NotificationPreferencesUpdateErrors, NotificationPreferencesUpdateResponses, NotificationSubscriptionCreateData, NotificationSubscriptionCreateErrors, NotificationSubscriptionCreateResponses, NotificationSubscriptionDeleteData, NotificationSubscriptionDeleteErrors, NotificationSubscriptionDeleteResponses, NotificationSubscriptionsListData, NotificationSubscriptionsListErrors, NotificationSubscriptionsListResponses, PaperChallengeExchangeData, PaperChallengeExchangeErrors, PaperChallengeExchangeResponses, PaperChallengeStartData, PaperChallengeStartErrors, PaperChallengeStartResponses, PaperInstallationCreateData, PaperInstallationCreateErrors, PaperInstallationCreateResponses, PaperInstallationProfileUpdateData, PaperInstallationProfileUpdateErrors, PaperInstallationProfileUpdateResponses, PaperInstallationRevokeData, PaperInstallationRevokeErrors, PaperInstallationRevokeResponses, PaperInstallationRotateData, PaperInstallationRotateErrors, PaperInstallationRotateResponses, PaperInstallationsListData, PaperInstallationsListErrors, PaperInstallationsListResponses, RecordsGetData, RecordsGetErrors, RecordsGetResponses, RecordsListData, RecordsListErrors, RecordsListResponses, SchematicRenderContentGetData, SchematicRenderContentGetErrors, SchematicRenderContentGetResponses, SearchExecuteData, SearchExecuteErrors, SearchExecuteResponses, SearchFieldsListData, SearchFieldsListErrors, SearchFieldsListResponses, SearchTermsSuggestData, SearchTermsSuggestErrors, SearchTermsSuggestResponses, SubmissionDraftChangeData, SubmissionDraftChangeErrors, SubmissionDraftChangeResponses, SubmissionDraftCreateData, SubmissionDraftCreateErrors, SubmissionDraftCreateResponses, SubmissionDraftDeleteData, SubmissionDraftDeleteErrors, SubmissionDraftDeleteResponses, SubmissionDraftGetData, SubmissionDraftGetErrors, SubmissionDraftGetResponses, SubmissionDraftsListData, SubmissionDraftsListErrors, SubmissionDraftsListResponses, SubmissionFinalizationGetData, SubmissionFinalizationGetErrors, SubmissionFinalizationGetResponses, SubmissionFinalizationStartData, SubmissionFinalizationStartErrors, SubmissionFinalizationStartResponses, SubmissionFormCurrentData, SubmissionFormCurrentErrors, SubmissionFormCurrentResponses, SubmissionFormOptionsGetData, SubmissionFormOptionsGetErrors, SubmissionFormOptionsGetResponses, SubmissionFormRevisionGetData, SubmissionFormRevisionGetErrors, SubmissionFormRevisionGetResponses, SubmissionMediaDiscardData, SubmissionMediaDiscardErrors, SubmissionMediaDiscardResponses, SubmissionMediaGetData, SubmissionMediaGetErrors, SubmissionMediaGetResponses, SubmissionMediaListData, SubmissionMediaListErrors, SubmissionMediaListResponses, SubmissionMediaUploadData, SubmissionMediaUploadErrors, SubmissionMediaUploadResponses, SuggestionsGetData, SuggestionsGetErrors, SuggestionsGetResponses, SuggestionSourcesListData, SuggestionSourcesListErrors, SuggestionSourcesListResponses, TagsGetData, TagsGetErrors, TagsGetResponses, TagsListData, TagsListErrors, TagsListResponses, VerificationCreateCompatibilityData, VerificationCreateCompatibilityErrors, VerificationCreateCompatibilityResponses, VerificationCreateData, VerificationCreateErrors, VerificationCreateResponses, VoteCastData, VoteCastErrors, VoteCastResponses, VoteSessionGetData, VoteSessionGetErrors, VoteSessionGetResponses } from './types.gen';
+import type { AccountBuildsListData, AccountBuildsListErrors, AccountBuildsListResponses, AccountConsentGrantData, AccountConsentGrantErrors, AccountConsentGrantResponses, AccountGetData, AccountGetErrors, AccountGetResponses, AccountIdentityListData, AccountIdentityListErrors, AccountIdentityListResponses, AccountIdentityUnlinkData, AccountIdentityUnlinkErrors, AccountIdentityUnlinkResponses, AccountIdentityVisibilitySetData, AccountIdentityVisibilitySetErrors, AccountIdentityVisibilitySetResponses, AccountMergeCodeCreateData, AccountMergeCodeCreateErrors, AccountMergeCodeCreateResponses, AccountMergeCompleteData, AccountMergeCompleteErrors, AccountMergeCompleteResponses, AccountMergePreviewData, AccountMergePreviewErrors, AccountMergePreviewResponses, AccountMinecraftRefreshData, AccountMinecraftRefreshErrors, AccountMinecraftRefreshForData, AccountMinecraftRefreshForErrors, AccountMinecraftRefreshForResponses, AccountMinecraftRefreshResponses, AccountProfileClearData, AccountProfileClearErrors, AccountProfileClearResponses, AccountProfileUpdateData, AccountProfileUpdateErrors, AccountProfileUpdateResponses, BrowserAuthorizationCallbackData, BrowserAuthorizationCallbackErrors, BrowserAuthorizationStartData, BrowserAuthorizationStartErrors, BrowserCsrfGetData, BrowserCsrfGetErrors, BrowserCsrfGetResponses, BrowserSessionRevokeData, BrowserSessionRevokeErrors, BrowserSessionRevokeResponses, BuildSchematicContentGetData, BuildSchematicContentGetErrors, BuildSchematicContentGetResponses, BuildSchematicRenderGetData, BuildSchematicRenderGetErrors, BuildSchematicRenderGetResponses, BuildSchematicsListData, BuildSchematicsListErrors, BuildSchematicsListResponses, BuildsCreateData, BuildsCreateErrors, BuildsCreateResponses, BuildsGetData, BuildsGetErrors, BuildsGetResponses, BuildsListData, BuildsListErrors, BuildsListResponses, BuildsUpdateData, BuildsUpdateErrors, BuildsUpdateResponses, CapabilitiesGetData, CapabilitiesGetErrors, CapabilitiesGetResponses, CliDeviceRevokeData, CliDeviceRevokeErrors, CliDeviceRevokeResponses, CliDevicesListData, CliDevicesListErrors, CliDevicesListResponses, CliEnrollmentApproveData, CliEnrollmentApproveErrors, CliEnrollmentApproveResponses, CliEnrollmentExchangeData, CliEnrollmentExchangeErrors, CliEnrollmentExchangeResponses, CliEnrollmentPreviewData, CliEnrollmentPreviewErrors, CliEnrollmentPreviewResponses, CliEnrollmentStartData, CliEnrollmentStartErrors, CliEnrollmentStartResponses, CliSessionChallengeStartData, CliSessionChallengeStartErrors, CliSessionChallengeStartResponses, CliSessionExchangeData, CliSessionExchangeErrors, CliSessionExchangeResponses, CliSessionRevokeData, CliSessionRevokeErrors, CliSessionRevokeResponses, ConsentNoticeGetData, ConsentNoticeGetErrors, ConsentNoticeGetResponses, CreatorAliasGetData, CreatorAliasGetErrors, CreatorAliasGetResponses, CreatorProfileGetData, CreatorProfileGetErrors, CreatorProfileGetResponses, DiagnosticsErrorGetData, DiagnosticsErrorGetErrors, DiagnosticsErrorGetResponses, DiagnosticsErrorsClearData, DiagnosticsErrorsClearErrors, DiagnosticsErrorsClearResponses, DiagnosticsErrorsListData, DiagnosticsErrorsListErrors, DiagnosticsErrorsListResponses, FabricChallengeExchangeData, FabricChallengeExchangeErrors, FabricChallengeExchangeResponses, FabricChallengeStartData, FabricChallengeStartErrors, FabricChallengeStartResponses, HealthLiveData, HealthLiveResponses, HealthReadyCompatibilityData, HealthReadyCompatibilityResponses, HealthReadyData, HealthReadyResponses, MinecraftChallengeApproveData, MinecraftChallengeApproveErrors, MinecraftChallengeApproveResponses, MinecraftGrantRevokeData, MinecraftGrantRevokeErrors, MinecraftGrantRevokeResponses, MinecraftVersionsListData, MinecraftVersionsListErrors, MinecraftVersionsListResponses, NotificationInboxListData, NotificationInboxListErrors, NotificationInboxListResponses, NotificationInboxMarkReadData, NotificationInboxMarkReadErrors, NotificationInboxMarkReadResponses, NotificationPreferencesGetData, NotificationPreferencesGetErrors, NotificationPreferencesGetResponses, NotificationPreferencesUpdateData, NotificationPreferencesUpdateErrors, NotificationPreferencesUpdateResponses, NotificationSubscriptionCreateData, NotificationSubscriptionCreateErrors, NotificationSubscriptionCreateResponses, NotificationSubscriptionDeleteData, NotificationSubscriptionDeleteErrors, NotificationSubscriptionDeleteResponses, NotificationSubscriptionsListData, NotificationSubscriptionsListErrors, NotificationSubscriptionsListResponses, PaperChallengeExchangeData, PaperChallengeExchangeErrors, PaperChallengeExchangeResponses, PaperChallengeStartData, PaperChallengeStartErrors, PaperChallengeStartResponses, PaperInstallationCreateData, PaperInstallationCreateErrors, PaperInstallationCreateResponses, PaperInstallationProfileUpdateData, PaperInstallationProfileUpdateErrors, PaperInstallationProfileUpdateResponses, PaperInstallationRevokeData, PaperInstallationRevokeErrors, PaperInstallationRevokeResponses, PaperInstallationRotateData, PaperInstallationRotateErrors, PaperInstallationRotateResponses, PaperInstallationsListData, PaperInstallationsListErrors, PaperInstallationsListResponses, RecordsGetData, RecordsGetErrors, RecordsGetResponses, RecordsListData, RecordsListErrors, RecordsListResponses, SchematicRenderContentGetData, SchematicRenderContentGetErrors, SchematicRenderContentGetResponses, SearchExecuteData, SearchExecuteErrors, SearchExecuteResponses, SearchFieldsListData, SearchFieldsListErrors, SearchFieldsListResponses, SearchTermsSuggestData, SearchTermsSuggestErrors, SearchTermsSuggestResponses, SubmissionDraftChangeData, SubmissionDraftChangeErrors, SubmissionDraftChangeResponses, SubmissionDraftCreateData, SubmissionDraftCreateErrors, SubmissionDraftCreateResponses, SubmissionDraftDeleteData, SubmissionDraftDeleteErrors, SubmissionDraftDeleteResponses, SubmissionDraftGetData, SubmissionDraftGetErrors, SubmissionDraftGetResponses, SubmissionDraftsListData, SubmissionDraftsListErrors, SubmissionDraftsListResponses, SubmissionFinalizationGetData, SubmissionFinalizationGetErrors, SubmissionFinalizationGetResponses, SubmissionFinalizationStartData, SubmissionFinalizationStartErrors, SubmissionFinalizationStartResponses, SubmissionFormCurrentData, SubmissionFormCurrentErrors, SubmissionFormCurrentResponses, SubmissionFormOptionsGetData, SubmissionFormOptionsGetErrors, SubmissionFormOptionsGetResponses, SubmissionFormRevisionGetData, SubmissionFormRevisionGetErrors, SubmissionFormRevisionGetResponses, SubmissionMediaDiscardData, SubmissionMediaDiscardErrors, SubmissionMediaDiscardResponses, SubmissionMediaGetData, SubmissionMediaGetErrors, SubmissionMediaGetResponses, SubmissionMediaListData, SubmissionMediaListErrors, SubmissionMediaListResponses, SubmissionMediaUploadData, SubmissionMediaUploadErrors, SubmissionMediaUploadResponses, SuggestionsGetData, SuggestionsGetErrors, SuggestionsGetResponses, SuggestionSourcesListData, SuggestionSourcesListErrors, SuggestionSourcesListResponses, TagsGetData, TagsGetErrors, TagsGetResponses, TagsListData, TagsListErrors, TagsListResponses, VerificationCreateCompatibilityData, VerificationCreateCompatibilityErrors, VerificationCreateCompatibilityResponses, VerificationCreateData, VerificationCreateErrors, VerificationCreateResponses, VoteCastData, VoteCastErrors, VoteCastResponses, VoteSessionGetData, VoteSessionGetErrors, VoteSessionGetResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -354,6 +354,26 @@ export const cliSessionRevoke = <ThrowOnError extends boolean = false>(options?:
 });
 
 /**
+ * Get Notice
+ *
+ * Return the notice a client must display before recording consent to it.
+ *
+ * One msgid shared with the Discord prompt, so the version a receipt names refers to a single
+ * piece of text however the reader met it.
+ */
+export const consentNoticeGet = <ThrowOnError extends boolean = false>(options?: Options<ConsentNoticeGetData, ThrowOnError>): RequestResult<ConsentNoticeGetResponses, ConsentNoticeGetErrors, ThrowOnError> => (options?.client ?? client).get<ConsentNoticeGetResponses, ConsentNoticeGetErrors, ThrowOnError>({ url: '/v1/consent/notice', ...options });
+
+/**
+ * Clear Error Reports
+ *
+ * Delete every stored error report, expired or not.
+ *
+ * Denied by default to everyone but the bot owner: `diagnostics.error.clear` is tagged
+ * destructive, which both built-in admin roles explicitly exclude.
+ */
+export const diagnosticsErrorsClear = <ThrowOnError extends boolean = false>(options?: Options<DiagnosticsErrorsClearData, ThrowOnError>): RequestResult<DiagnosticsErrorsClearResponses, DiagnosticsErrorsClearErrors, ThrowOnError> => (options?.client ?? client).delete<DiagnosticsErrorsClearResponses, DiagnosticsErrorsClearErrors, ThrowOnError>({ url: '/v1/diagnostics/errors', ...options });
+
+/**
  * List Error Reports
  *
  * List the most recent unexpired error reports, newest first.
@@ -395,6 +415,9 @@ export const accountGet = <ThrowOnError extends boolean = false>(options?: Optio
  * Grant Consent
  *
  * Accept the current privacy notice for future writes.
+ *
+ * A client that names the version it displayed is held to it: consent recorded against text the
+ * user never saw is the failure that versioning the notice exists to prevent.
  */
 export const accountConsentGrant = <ThrowOnError extends boolean = false>(options?: Options<AccountConsentGrantData, ThrowOnError>): RequestResult<AccountConsentGrantResponses, AccountConsentGrantErrors, ThrowOnError> => (options?.client ?? client).post<AccountConsentGrantResponses, AccountConsentGrantErrors, ThrowOnError>({
     security: [{
@@ -403,7 +426,181 @@ export const accountConsentGrant = <ThrowOnError extends boolean = false>(option
             type: 'apiKey'
         }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/consent',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options?.headers
+    }
+});
+
+/**
+ * Update Profile
+ *
+ * Edit the caller's own public profile.
+ *
+ * Partial: an omitted field is left alone and an explicit `null` clears it, so a client that
+ * only knows about some fields cannot wipe the ones it has never heard of.
+ */
+export const accountProfileUpdate = <ThrowOnError extends boolean = false>(options: Options<AccountProfileUpdateData, ThrowOnError>): RequestResult<AccountProfileUpdateResponses, AccountProfileUpdateErrors, ThrowOnError> => (options.client ?? client).patch<AccountProfileUpdateResponses, AccountProfileUpdateErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
+    url: '/v1/users/me/profile',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * List Identities
+ *
+ * List every identity linked to the caller's account, hidden ones included.
+ *
+ * Unfiltered by visibility on purpose: you can only unhide what you can see listed.
+ */
+export const accountIdentityList = <ThrowOnError extends boolean = false>(options?: Options<AccountIdentityListData, ThrowOnError>): RequestResult<AccountIdentityListResponses, AccountIdentityListErrors, ThrowOnError> => (options?.client ?? client).get<AccountIdentityListResponses, AccountIdentityListErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }],
+    url: '/v1/users/me/identities',
     ...options
+});
+
+/**
+ * Set Identity Visibility
+ *
+ * Publish or withhold one linked identity on the public creator profile.
+ */
+export const accountIdentityVisibilitySet = <ThrowOnError extends boolean = false>(options: Options<AccountIdentityVisibilitySetData, ThrowOnError>): RequestResult<AccountIdentityVisibilitySetResponses, AccountIdentityVisibilitySetErrors, ThrowOnError> => (options.client ?? client).put<AccountIdentityVisibilitySetResponses, AccountIdentityVisibilitySetErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
+    url: '/v1/users/me/identities/{identity_id}/visibility',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Unlink Identity
+ *
+ * Unlink one identity from the caller's account.
+ *
+ * Refuses the last one with 409: every sign-in path resolves an account from a provider
+ * subject, so an account with no identities is one nobody can reach again. Creator credit is
+ * untouched — attribution is a fact about a build, not about how its author signs in.
+ */
+export const accountIdentityUnlink = <ThrowOnError extends boolean = false>(options: Options<AccountIdentityUnlinkData, ThrowOnError>): RequestResult<AccountIdentityUnlinkResponses, AccountIdentityUnlinkErrors, ThrowOnError> => (options.client ?? client).delete<AccountIdentityUnlinkResponses, AccountIdentityUnlinkErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/users/me/identities/{identity_id}',
+    ...options
+});
+
+/**
+ * Create Merge Code
+ *
+ * Offer this account up to be absorbed by another one you hold.
+ *
+ * Run this as the account you are giving up: it loses its public creator id to a permanent
+ * redirect, so minting the code is that side's consent. Redeem it as the account you are
+ * keeping. The code is shown once and replaces any previous one.
+ */
+export const accountMergeCodeCreate = <ThrowOnError extends boolean = false>(options?: Options<AccountMergeCodeCreateData, ThrowOnError>): RequestResult<AccountMergeCodeCreateResponses, AccountMergeCodeCreateErrors, ThrowOnError> => (options?.client ?? client).post<AccountMergeCodeCreateResponses, AccountMergeCodeCreateErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/users/me/merge-code',
+    ...options
+});
+
+/**
+ * Preview Merge
+ *
+ * Describe what redeeming a merge code would move, without spending it.
+ *
+ * A merge cannot be undone, so this exists to be shown before the irreversible call.
+ */
+export const accountMergePreview = <ThrowOnError extends boolean = false>(options: Options<AccountMergePreviewData, ThrowOnError>): RequestResult<AccountMergePreviewResponses, AccountMergePreviewErrors, ThrowOnError> => (options.client ?? client).post<AccountMergePreviewResponses, AccountMergePreviewErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/users/me/merge/preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Complete Merge
+ *
+ * Absorb the account that minted this code into the caller's account.
+ *
+ * Irreversible: the absorbed account's creator id becomes a permanent redirect to the caller's.
+ */
+export const accountMergeComplete = <ThrowOnError extends boolean = false>(options: Options<AccountMergeCompleteData, ThrowOnError>): RequestResult<AccountMergeCompleteResponses, AccountMergeCompleteErrors, ThrowOnError> => (options.client ?? client).post<AccountMergeCompleteResponses, AccountMergeCompleteErrors, ThrowOnError>({
+    security: [
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/users/me/merge',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
 });
 
 /**
@@ -445,6 +642,24 @@ export const accountMinecraftRefreshFor = <ThrowOnError extends boolean = false>
             type: 'apiKey'
         }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/accounts/{account_id}/minecraft/refresh',
+    ...options
+});
+
+/**
+ * Clear Profile
+ *
+ * Reset another account's profile to empty, for staff handling abuse.
+ *
+ * Deliberately leaves the profile visible: `hidden` belongs to its owner, and a takedown that
+ * also flipped it would take that decision away from them.
+ */
+export const accountProfileClear = <ThrowOnError extends boolean = false>(options: Options<AccountProfileClearData, ThrowOnError>): RequestResult<AccountProfileClearResponses, AccountProfileClearErrors, ThrowOnError> => (options.client ?? client).delete<AccountProfileClearResponses, AccountProfileClearErrors, ThrowOnError>({
+    security: [{
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        }, { name: 'CSRF-Token', type: 'apiKey' }],
+    url: '/v1/accounts/{account_id}/profile',
     ...options
 });
 
@@ -650,25 +865,6 @@ export const notificationPreferencesUpdate = <ThrowOnError extends boolean = fal
             type: 'apiKey'
         }, { name: 'CSRF-Token', type: 'apiKey' }],
     url: '/v1/users/me/notifications/preferences',
-    ...options,
-    headers: {
-        'Content-Type': 'application/json',
-        ...options.headers
-    }
-});
-
-/**
- * Accept Notice
- *
- * Accept the notification-specific notice and choose initial channels.
- */
-export const notificationConsentGrant = <ThrowOnError extends boolean = false>(options: Options<NotificationConsentGrantData, ThrowOnError>): RequestResult<NotificationConsentGrantResponses, NotificationConsentGrantErrors, ThrowOnError> => (options.client ?? client).post<NotificationConsentGrantResponses, NotificationConsentGrantErrors, ThrowOnError>({
-    security: [{
-            in: 'cookie',
-            name: '__Host-squid_session',
-            type: 'apiKey'
-        }, { name: 'CSRF-Token', type: 'apiKey' }],
-    url: '/v1/users/me/notifications/consent',
     ...options,
     headers: {
         'Content-Type': 'application/json',
@@ -1202,7 +1398,10 @@ export const creatorAliasGet = <ThrowOnError extends boolean = false>(options: O
 /**
  * Get Creator Profile
  *
- * Return every public alias grouped under a stable creator identity.
+ * Return a creator's public page, following permanent merge redirects.
+ *
+ * Visibility is applied in the domain, not here: `present_public_profile` is the one authority
+ * on what a stranger sees, so this route cannot accidentally disagree with the bot about it.
  */
 export const creatorProfileGet = <ThrowOnError extends boolean = false>(options: Options<CreatorProfileGetData, ThrowOnError>): RequestResult<CreatorProfileGetResponses, CreatorProfileGetErrors, ThrowOnError> => (options.client ?? client).get<CreatorProfileGetResponses, CreatorProfileGetErrors, ThrowOnError>({ url: '/v1/creators/{creator_id}', ...options });
 

@@ -18,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class Starboard(Base, kw_only=True):
@@ -68,13 +68,13 @@ class Starboard(Base, kw_only=True):
     link_edits: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     link_deletes: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     display_emoji: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'⭐'"), default="⭐")
-    colour: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("4415105"), default=0x435E81)
+    colour: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("4415105"), default=0x435E81)
     jump_to_message: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     attachments_list: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     replied_to: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     ping_author: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -106,6 +106,7 @@ class StarboardSource(Base, kw_only=True):
     """A guild or channel whose messages feed a starboard."""
 
     __tablename__ = "starboard_sources"
+    __table_args__ = (Index("starboard_sources_guild_idx", "guild_id"),)
     starboard_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("starboards.id", ondelete="CASCADE"), primary_key=True
     )
@@ -121,6 +122,7 @@ class StarboardOriginMessage(Base, kw_only=True):
     """A source message that has been evaluated by at least one starboard."""
 
     __tablename__ = "starboard_origin_messages"
+    __table_args__ = (Index("starboard_origin_messages_guild_idx", "guild_id"),)
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     guild_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("server_settings.server_id", ondelete="CASCADE"), nullable=False
@@ -132,7 +134,7 @@ class StarboardOriginMessage(Base, kw_only=True):
     has_image: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     posted_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     seen_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     deleted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
 
@@ -163,7 +165,7 @@ class StarboardVote(Base, kw_only=True):
     weight: Mapped[float] = mapped_column(Float, nullable=False)
     target_author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -171,7 +173,10 @@ class StarboardEntry(Base, kw_only=True):
     """The materialized-post state for one source message on one starboard."""
 
     __tablename__ = "starboard_entries"
-    __table_args__ = (Index("starboard_entries_score_idx", "starboard_id", text("score DESC")),)
+    __table_args__ = (
+        Index("starboard_entries_origin_message_idx", "origin_message_id"),
+        Index("starboard_entries_score_idx", "starboard_id", text("score DESC")),
+    )
 
     starboard_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("starboards.id", ondelete="CASCADE"), primary_key=True

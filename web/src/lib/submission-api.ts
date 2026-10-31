@@ -1,6 +1,8 @@
 import {
+  accountConsentGrant,
   browserCsrfGet,
   cliEnrollmentApprove,
+  consentNoticeGet,
   cliEnrollmentPreview,
   minecraftChallengeApprove,
   submissionDraftChange,
@@ -26,6 +28,7 @@ import type {
   FormManifestResponse,
   FormOptionSetResponse,
   MediaKind,
+  PrivacyNoticeDetail,
   ProblemDetail,
   StoredDraftResponse,
   SubmissionFinalizationResponse,
@@ -94,6 +97,11 @@ export type SubmissionApi = {
 export type MinecraftLinkApi = {
   approve: (userCode: string) => Promise<ChallengeApprovalResponse>;
   signInUrl: (returnTo: string) => string;
+};
+
+export type ConsentApi = {
+  notice: () => Promise<PrivacyNoticeDetail>;
+  grant: (version: string) => Promise<void>;
 };
 
 export type CliLinkApi = {
@@ -422,4 +430,69 @@ export function createCliLinkApi(
 export function asSubmissionError(error: unknown): SubmissionApiError {
   if (error instanceof SubmissionApiError) return error;
   return new SubmissionApiError(503, undefined, { cause: error, networkFailure: true });
+}
+
+/**
+ * Read the privacy notice, and record acceptance of the exact version that was read.
+ *
+ * Lives here rather than in its own module so it inherits the CSRF and idempotency handling
+ * every other mutation already goes through. The notice itself is fetched from the API rather
+ * than kept in the web dictionary: the version a receipt names has to identify one piece of
+ * text, and a second copy on the client is how that stops being true.
+ */
+export function createConsentApi(
+  locale: Locale,
+  config: RuntimeConfig = getRuntimeConfig(),
+): ConsentApi {
+  const client = createSubmissionClient(locale, config);
+  const mutations = createMutationSession(client);
+  return {
+    notice: async () => unwrap(await consentNoticeGet({ client })),
+    grant: async (version) => {
+      const idempotencyKey = requestId();
+      await mutations.execute(idempotencyKey, async (headers) =>
+        unwrap(
+          await accountConsentGrant({
+            client,
+            // Sent so the server refuses acceptance of a notice this client never displayed.
+            body: { version },
+            headers,
+          }),
+        ),
+      );
+    },
+  };
+}
+
+/**
+ * Wrap an API so a consent refusal hands back the call that was refused.
+ *
+ * `SubmissionFlow` can fail the consent gate on any of a dozen calls -- creating a draft,
+ * changing a field, uploading media, finalizing -- and each one would otherwise need its own
+ * copy of "remember this and retry it". Wrapping once means every method recovers, including
+ * ones added later, and the components keep their existing error handling untouched.
+ */
+export function withConsentRetry<T extends object>(
+  api: T,
+  onConsentRequired: (retry: () => Promise<unknown>) => void,
+): T {
+  return new Proxy(api, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver) as unknown;
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        const call = () => (value as (...a: unknown[]) => unknown).apply(target, args);
+        const result = call();
+        if (!(result instanceof Promise)) return result;
+        return result.catch((error: unknown) => {
+          if (error instanceof SubmissionApiError && error.kind === "consent") {
+            onConsentRequired(async () => {
+              await call();
+            });
+          }
+          throw error;
+        });
+      };
+    },
+  });
 }

@@ -9,7 +9,7 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import info_layout, no_mentions
-from squid.bot.utils.permissions import requires
+from squid.bot.utils.permissions import hide_unless, requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.records.application import RecordLookupRequest
@@ -29,6 +29,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @hybrid_group(name="admin")
     @requires(RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD, mode="any")
+    @hide_unless(manage_guild=True)
     async def admin_group(self, ctx: Context[BotT]) -> None:
         """Inspect and maintain internal bot data."""
         await ctx.send_help("admin")
@@ -42,8 +43,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         gaps = await self.records.gaps(kind=kind)
         if gaps:
             description = "\n".join(
-                f"`{gap.definition_id}` **{gap.record_class.value.upper()}** "
-                f"{gap.category_key} — builds {', '.join(map(str, gap.build_ids))}; "
+                f"`{gap.definition_id}` **{gap.title}** — builds {', '.join(map(str, gap.build_ids))}; "
                 f"missing {', '.join(gap.fields)}"
                 for gap in gaps[:30]
             )
@@ -52,7 +52,9 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         else:
             description = t(locale, _("No unresolved active record categories."))
         await ctx.send(
-            view=info_layout(t(locale, _("Record evidence gaps")), description), allowed_mentions=no_mentions()
+            view=info_layout(t(locale, _("Record evidence gaps")), description),
+            ephemeral=ctx.interaction is not None,
+            allowed_mentions=no_mentions(),
         )
 
     @admin_group.command(name="records-title-issues")
@@ -114,7 +116,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         )
 
     @autocompletes(
-        base_key="record_base_keys",
+        base_key="record_definitions",
         version_id="version_ids",
         restrictions=suggests("restriction_ids", multi=True),
     )
@@ -123,7 +125,7 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     @commands.cooldown(2, 60, commands.BucketType.user)
     @app_commands.describe(
         kind=app_commands.locale_str(_("The typed record family.")),
-        base_key=app_commands.locale_str(_("Canonical base key shown by search or records tooling.")),
+        base_key=app_commands.locale_str(_("Pick a record category, or paste a raw base key.")),
         restrictions=app_commands.locale_str(
             _("Comma-separated restriction IDs; large exact categories are saved for reuse.")
         ),
@@ -144,15 +146,24 @@ class RecordCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         except ValueError as error:
             msg = t(locale, _("Restrictions must be comma-separated numeric IDs."))
             raise commands.BadArgument(msg) from error
-        await ctx.defer()
-        summary = await self.records.lookup_or_materialize(
-            RecordLookupRequest(
-                kind=kind,
-                base_key=base_key,
-                restriction_ids=restriction_ids,
-                version_id=version_id,
+        # An autocomplete pick submits a definition id; a raw base key always contains "|".
+        selected = base_key.strip()
+        if selected.isdigit():
+            if restriction_ids:
+                msg = t(locale, _("Restrictions can only be combined with a hand-typed base key."))
+                raise commands.BadArgument(msg)
+            await ctx.defer()
+            summary = await self.records.materialize_definition(int(selected), kind=kind, version_id=version_id)
+        else:
+            await ctx.defer()
+            summary = await self.records.lookup_or_materialize(
+                RecordLookupRequest(
+                    kind=kind,
+                    base_key=selected,
+                    restriction_ids=restriction_ids,
+                    version_id=version_id,
+                )
             )
-        )
         await ctx.send(
             view=info_layout(
                 t(locale, _("Record category materialized")),

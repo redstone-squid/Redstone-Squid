@@ -283,13 +283,14 @@ def configure_bot_logging(config: LoggingConfig, *, dev_mode: bool = False) -> Q
     return queue_handler.listener
 
 
-def configure_api_logging(config: LoggingConfig) -> None:
+def configure_api_logging(config: LoggingConfig, *, dev_mode: bool = False) -> None:
     """Configure logging for the FastAPI and uvicorn process."""
     logging.config.dictConfig(
         build_logging_config(
             config=config,
             named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
             include_uvicorn_loggers=True,
+            development_mode=dev_mode,
             service_name="redstone-squid-api",
             log_tail_records=config.tail_records,
         )
@@ -299,12 +300,13 @@ def configure_api_logging(config: LoggingConfig) -> None:
     install_trace_context_log_filter()
 
 
-def configure_service_worker_logging(config: LoggingConfig) -> None:
+def configure_service_worker_logging(config: LoggingConfig, *, dev_mode: bool = False) -> None:
     """Configure logging for the long-lived database worker process."""
     logging.config.dictConfig(
         build_logging_config(
             config=config,
             named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
+            development_mode=dev_mode,
             service_name="redstone-squid-worker",
             log_tail_records=config.tail_records,
         )

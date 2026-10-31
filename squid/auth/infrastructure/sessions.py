@@ -6,10 +6,9 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION
+from squid.accounts.domain import consent_refresh_required
 from squid.accounts.infrastructure.models import Account
 from squid.auth.application.ports import WebSessionRepository
-from squid.auth.application.web import consent_pending
 from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
 from squid.auth.infrastructure.session_models import OAuthStateModel, WebSession
 
@@ -89,7 +88,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
             return WebSessionIdentity(
                 str(web_session.id),
                 account.id,
-                consent_pending(account.created_at, account.consent_version, CURRENT_CONSENT_VERSION),
+                consent_refresh_required(account.created_at, account.consent_version),
             )
 
     @override

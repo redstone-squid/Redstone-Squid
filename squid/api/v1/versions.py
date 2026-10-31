@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import Versions
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageSizeParam, render_page
@@ -11,7 +12,13 @@ from squid.core.pagination import offset_page
 router = APIRouter(prefix="/versions", tags=["versions"])
 
 
-@router.get("", response_model=Page[VersionDetail], responses=responses(400, 422, 503))
+@router.get(
+    "",
+    response_model=Page[VersionDetail],
+    responses=responses(400, 422, 503),
+    operation_id="minecraft_versions_list",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
+)
 async def list_versions(
     versions_service: Versions,
     page_size: PageSizeParam = 50,

@@ -128,10 +128,10 @@ class SchematicRenderRefusedError(ConflictError):
 class SchematicRenderUnavailableError(ServiceUnavailableError):
     """Rendering is disabled, unconfigured, or has no usable GPU adapter."""
 
-    default_message = _("Schematic rendering is not configured on this instance.")
+    default_message = _("Schematic rendering is unavailable.")
     default_code = ErrorCode.SCHEMATIC_RENDER_UNAVAILABLE
     default_resource = "schematic"
-    default_developer_action = "Configure a resource pack and verify a Vulkan adapter is available."
+    default_developer_action = "Check the schematic render configuration and worker logs for the cause."
 
 
 class SchematicTimeoutError(InfrastructureError, TimeoutError):

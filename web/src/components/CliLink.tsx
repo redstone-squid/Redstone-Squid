@@ -5,16 +5,19 @@ import {
   asSubmissionError,
   createCliLinkApi,
   type CliLinkApi,
+  type ConsentApi,
   type SubmissionApiError,
 } from "../lib/submission-api";
 import type { RuntimeConfig } from "../lib/config";
 import type { Locale } from "../lib/i18n";
+import ConsentGate from "./ConsentGate";
 
 type Props = {
   locale: Locale;
   config: RuntimeConfig;
   initialCode?: string;
   api?: CliLinkApi;
+  consentApi?: ConsentApi;
 };
 
 const USER_CODE = /^[A-Za-z0-9-]{8,32}$/;
@@ -102,7 +105,13 @@ function consumeFragmentCode(): string {
   }
 }
 
-export default function CliLink({ locale, config, initialCode = "", api: suppliedApi }: Props) {
+export default function CliLink({
+  locale,
+  config,
+  initialCode = "",
+  api: suppliedApi,
+  consentApi,
+}: Props) {
   const copy = COPY[locale];
   const api = useMemo(
     () => suppliedApi ?? createCliLinkApi(locale, config),
@@ -113,6 +122,7 @@ export default function CliLink({ locale, config, initialCode = "", api: supplie
   const [error, setError] = useState<SubmissionApiError | string>();
   const [preview, setPreview] = useState<CliEnrollmentApprovalResponse>();
   const [approved, setApproved] = useState(false);
+  const [needsConsent, setNeedsConsent] = useState(false);
 
   useEffect(() => {
     const restored = consumeFragmentCode();
@@ -153,8 +163,12 @@ export default function CliLink({ locale, config, initialCode = "", api: supplie
       await api.approve(normalized);
       rememberCode("");
       setApproved(true);
+      setNeedsConsent(false);
     } catch (caught) {
-      setError(asSubmissionError(caught));
+      const failure = asSubmissionError(caught);
+      // Recoverable in place: show the notice, and on acceptance run the same approval again.
+      if (failure.kind === "consent") setNeedsConsent(true);
+      setError(failure);
     } finally {
       setBusy(undefined);
     }
@@ -194,6 +208,19 @@ export default function CliLink({ locale, config, initialCode = "", api: supplie
             </a>
           )}
         </div>
+      )}
+      {needsConsent && (
+        <ConsentGate
+          locale={locale}
+          config={config}
+          api={consentApi}
+          onAccepted={() => {
+            setNeedsConsent(false);
+            setError(undefined);
+            return approve();
+          }}
+          onCancel={() => setNeedsConsent(false)}
+        />
       )}
       <div className="field">
         <label htmlFor="cli-user-code">{copy.code}</label>

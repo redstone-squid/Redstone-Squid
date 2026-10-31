@@ -3,6 +3,8 @@
 from collections.abc import Iterable
 from typing import Any, cast
 
+import discord
+from discord import app_commands
 from discord.ext.commands import Command, HybridCommand, HybridGroup
 
 from squid.bot.admin import Admin
@@ -25,12 +27,19 @@ UNGATED_COMMANDS = frozenset(
         # Public: anyone may run these.
         "account",
         "account claim",
+        "account consent",
+        "account identities",
         "account link",
+        "account merge",
+        "account merge-code",
+        "account profile",
+        "account profile-edit",
         # Refreshing your own Minecraft name is default-allow, so the command declares no
         # node. Its `user:` form checks `account.identity.refresh_any` inline instead, which
         # a decorator could not express without gating the self case too.
         "account refresh",
         "account unlink",
+        "account visibility",
         "build",
         "build queue",
         "build schematic",
@@ -38,16 +47,12 @@ UNGATED_COMMANDS = frozenset(
         "build schematic download",
         "build schematic info",
         "build schematic render",
-        "build submit-full",
         "build view",
         "info",
         "info docs",
         "info form",
         "info invite",
         "info source",
-        "patterns",
-        "patterns list",
-        "patterns search",
         # Anyone in a guild may open a poll, so `poll create` needs no node. Closing and
         # refreshing one are authorized against the session rather than the caller: both
         # run `VoteSessionSnapshot.can_close`, which admits the poll's author as well as
@@ -57,8 +62,6 @@ UNGATED_COMMANDS = frozenset(
         "poll close",
         "poll create",
         "poll refresh",
-        "restrictions",
-        "restrictions search",
         "search",
         "tag",
         "tag apply",
@@ -99,7 +102,22 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     # takes a documented entry point away with no failing test, and a command added
     # without a plan ships to every guild. Neither shows up in a behavioural test,
     # because the behaviour of a command nobody calls is nothing.
-    "account": ("approve-claim", "claim", "claims", "link", "refresh", "reject-claim", "unlink"),
+    "account": (
+        "approve-claim",
+        "claim",
+        "claims",
+        "consent",
+        "identities",
+        "link",
+        "merge",
+        "merge-code",
+        "profile",
+        "profile-edit",
+        "refresh",
+        "reject-claim",
+        "unlink",
+        "visibility",
+    ),
     "admin": (
         "records-gaps",
         "records-lookup",
@@ -108,7 +126,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     ),
     "archive": (),
     # `error` is a hybrid group with a `show` fallback, so bare `error <reference>` works.
-    "error": ("recent",),
+    "error": ("clear", "recent"),
     "build": (
         "approve",
         "debug",
@@ -123,11 +141,9 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "schematic download",
         "schematic info",
         "schematic render",
-        "submit-full",
         "view",
     ),
     "info": ("docs", "form", "invite", "source"),
-    "patterns": ("list", "search"),
     "perm": (
         "audit",
         "deny",
@@ -145,7 +161,7 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     # opened it. `vote poll` survives only as a deprecated alias for `poll create`.
     "poll": ("close", "create", "refresh"),
     "redstoner": ("panel", "resync"),
-    "restrictions": ("add-alias", "search"),
+    "restrictions": ("add-alias",),
     "role": (
         "add-role",
         "assign",
@@ -161,16 +177,14 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
         "unassign",
     ),
     "search": (),
+    # `settings` is a hybrid group with a `show` fallback, so bare `settings` opens the panel
+    # that `list`, `get`, `clear`, `voting show` and `voting emojis` used to answer one key at
+    # a time (docs/plans/command-redesign/04-settings.md).
     "settings": (
-        "clear",
-        "get",
-        "list",
         "locale",
         "set",
         "voting",
-        "voting emojis",
         "voting reset",
-        "voting show",
         "voting weight-remove",
         "voting weight-set",
     ),
@@ -194,6 +208,37 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     "version": ("add", "list"),
     "vote": ("delete", "poll"),
 }
+
+
+PICKER_VISIBILITY: dict[str, frozenset[str]] = {
+    # Discord permissions that a viewer must hold for a top-level command to appear
+    # in their picker at all (audit finding C1). Everything absent from this map is
+    # visible to everyone, which is the default and has to stay a deliberate choice:
+    # before this map existed, all ~108 commands showed up for every user and the
+    # staff-only ones failed only after being invoked.
+    #
+    # These are visibility hints, never gates. `requires(...)` decides, and a guild
+    # admin can override any of these per command in Server Settings; the bits below
+    # are chosen to match the operation, so the override is rarely needed.
+    "admin": frozenset({"manage_guild"}),
+    "archive": frozenset({"manage_messages"}),
+    "error": frozenset({"manage_guild"}),
+    "perm": frozenset({"manage_guild"}),
+    "redstoner": frozenset({"manage_roles"}),
+    "restrictions": frozenset({"manage_guild"}),
+    "role": frozenset({"manage_guild"}),
+    "settings": frozenset({"manage_guild"}),
+    "starboard": frozenset({"manage_guild"}),
+}
+"""Top-level commands hidden from pickers, and what a viewer needs to see them."""
+
+
+def _default_permissions(command: AnyCommand) -> frozenset[str] | None:
+    """The Discord permissions gating a command's visibility, by name."""
+    permissions = getattr(getattr(command, "app_command", None), "default_permissions", None)
+    if not isinstance(permissions, discord.Permissions):
+        return None
+    return frozenset(name for name, enabled in permissions if enabled)
 
 
 def _public_command_names() -> set[str]:
@@ -245,6 +290,23 @@ def test_build_slash_group_includes_app_only_guided_submit() -> None:
     assert {command.qualified_name for command in build_group.app_command.walk_commands()} == expected_commands
 
 
+def test_guided_submit_puts_attachments_last() -> None:
+    """The tab order through the options is the form: typed fields first, attachments trailing.
+
+    Attachments-first was the original dogfooding complaint against `/build submit`
+    (docs/plans/command-redesign/01-build-submit.md), so the order is pinned.
+    """
+    cog = SearchCog.__new__(SearchCog)
+    build_group = cast(HybridGroup, _command(cog.__cog_commands__, "build"))
+    submit = next(
+        command for command in build_group.app_command.walk_commands() if command.qualified_name == "build submit"
+    )
+    names = [parameter.name for parameter in cast(app_commands.Command[Any, ..., Any], submit).parameters]
+
+    assert names[0] == "door_size"
+    assert [name for name in names if name.endswith("_attachment")] == names[-4:]
+
+
 def test_search_modes_have_user_friendly_labels() -> None:
     cog = SearchCog.__new__(SearchCog)
     search = cast(HybridCommand, _command(cog.__cog_commands__, "search"))
@@ -271,11 +333,13 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "build recalc") == {"build.submission.recalc"}
     assert _nodes(search.__cog_commands__, "build measure-timing") == {"build.schematic.measure_timing"}
     assert _nodes(search.__cog_commands__, "build detect-lattice") == {"build.schematic.detect_lattice"}
+    assert _nodes(search.__cog_commands__, "restrictions") == {"restriction.alias.create"}
     assert _nodes(search.__cog_commands__, "restrictions add-alias") == {"restriction.alias.create"}
 
     settings = SettingsCog.__new__(SettingsCog)
     assert _nodes(settings.__cog_commands__, "settings set") == {"settings.server.edit"}
-    assert _nodes(settings.__cog_commands__, "settings list") == {"settings.server.view"}
+    assert _nodes(settings.__cog_commands__, "settings locale") == {"settings.server.edit"}
+    assert _nodes(settings.__cog_commands__, "settings voting") == {"settings.voting.edit"}
 
     starboard = StarboardCog.__new__(StarboardCog)
     assert _nodes(starboard.__cog_commands__, "starboard create") == {"starboard.board.create"}
@@ -284,6 +348,7 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     diagnostics = Diagnostics.__new__(Diagnostics)
     assert _nodes(diagnostics.__cog_commands__, "error") == {"diagnostics.error.read"}
     assert _nodes(diagnostics.__cog_commands__, "error recent") == {"diagnostics.error.read"}
+    assert _nodes(diagnostics.__cog_commands__, "error clear") == {"diagnostics.error.clear"}
 
     admin = Admin.__new__(Admin)
     assert _nodes(admin.__cog_commands__, "tag approve") == {"tag.proposal.approve"}
@@ -309,8 +374,11 @@ def test_group_gates_admit_anyone_holding_one_of_their_commands_nodes() -> None:
     """
     for cog, group, member in (
         (SettingsCog, "settings", "settings set"),
+        (SettingsCog, "settings", "settings voting"),
+        (SettingsCog, "settings voting", "settings voting reset"),
         (StarboardCog, "starboard", "starboard recount"),
         (RecordCog, "admin", "admin records-rebuild"),
+        (SearchCog, "restrictions", "restrictions add-alias"),
     ):
         commands = _commands_of(cog)
         assert _nodes(commands, member) <= _nodes(commands, group)
@@ -332,3 +400,65 @@ def test_every_privileged_command_declares_a_node() -> None:
                     ungated.add(entry.qualified_name)
 
     assert ungated == UNGATED_COMMANDS
+
+
+def test_staff_groups_are_hidden_from_non_staff_pickers() -> None:
+    """Which commands the picker offers is part of the public surface.
+
+    A staff group shipped without a visibility hint is invisible in review and
+    very visible to users, so the whole map is pinned rather than each entry.
+    """
+    visibility = {
+        command.qualified_name: names
+        for cog in PUBLIC_COGS
+        for command in _commands_of(cog)
+        if command.parent is None and (names := _default_permissions(command)) is not None
+    }
+
+    assert visibility == PICKER_VISIBILITY
+
+
+def test_subcommands_do_not_claim_a_visibility_they_would_not_get() -> None:
+    """Discord reads `default_member_permissions` on top-level commands only.
+
+    On a subcommand it is accepted and ignored, so one written there would read
+    as a gate in the source while doing nothing at all.
+    """
+    mislabelled = {
+        command.qualified_name
+        for cog in PUBLIC_COGS
+        for command in _commands_of(cog)
+        if command.parent is not None and _default_permissions(command) is not None
+    }
+
+    assert mislabelled == set()
+
+
+def test_the_error_group_binds_a_reference_from_the_prefix_form() -> None:
+    """`!error <reference>` works, contrary to what the redesign audit recorded.
+
+    `HybridGroup.__init__` always sets `invoke_without_command`, and `Group.invoke` rewinds the
+    argument view when the first word is not a subcommand, so the fallback's parameter binds on
+    the prefix side too. Pinned because converting the group away from `hybrid_group` would take
+    the prefix form away with nothing else failing.
+    """
+    cog = Diagnostics.__new__(Diagnostics)
+    error = cast(HybridGroup, _command(cog.__cog_commands__, "error"))
+
+    assert error.invoke_without_command is True
+    assert error.fallback == "show"
+    assert "reference" in error.clean_params
+
+
+def test_the_settings_group_opens_the_panel_from_its_fallback() -> None:
+    """`/settings` and `!settings` both have to reach the panel, not a help page.
+
+    The panel is the phase 4 answer to setting a guild up one key per invocation, so it is the
+    group's own callback rather than another subcommand somebody has to know about.
+    """
+    cog = SettingsCog.__new__(SettingsCog)
+    group = cast(HybridGroup, _command(cog.__cog_commands__, "settings"))
+
+    assert group.fallback == "show"
+    assert group.invoke_without_command is True
+    assert not group.clean_params

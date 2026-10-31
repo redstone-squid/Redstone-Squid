@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic_utils.pg_function import PGFunction
 
 from alembic import op
-from squid.persistence.alembic_entities import ALEMBIC_UTIL_ENTITIES
+from squid.persistence.alembic_entities import alembic_util_entities
 
 revision: str = "a3c4e5f6a7b8"
 down_revision: str | Sequence[str] | None = "f2a3b4c5d6e7"
@@ -88,6 +88,6 @@ def downgrade() -> None:
 def _function(name: str) -> PGFunction:
     return next(
         entity
-        for entity in ALEMBIC_UTIL_ENTITIES
+        for entity in alembic_util_entities()
         if isinstance(entity, PGFunction) and entity.signature.partition("(")[0] == name
     )

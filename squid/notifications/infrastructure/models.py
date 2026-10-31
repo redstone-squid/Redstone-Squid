@@ -21,35 +21,31 @@ from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, now
 
 
 class NotificationProfile(Base, kw_only=True):
-    """A notification-specific notice receipt and independent channel preferences."""
+    """Independent notification channel preferences.
+
+    Carries no consent receipt: notifications are covered by the one privacy notice, whose
+    receipt lives on `accounts`. A row here means "these switches", not "this person agreed".
+    """
 
     __tablename__ = "notification_profiles"
-    __table_args__ = (
-        CheckConstraint(
-            "(notice_version IS NULL) = (consented_at IS NULL)",
-            name="notification_profiles_notice_receipt_complete",
-        ),
-    )
 
     account_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="notification_profiles_account_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
-    notice_version: Mapped[str | None] = mapped_column(Text, default=None)
-    consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     web_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     dm_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     dm_suspended_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     updated_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -101,7 +97,7 @@ class NotificationSubscriptionRecord(Base, kw_only=True):
     filter: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
@@ -138,7 +134,7 @@ class NotificationRecord(Base, kw_only=True):
     )
     web_visible: Mapped[bool] = mapped_column(Boolean, nullable=False)
     created_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     read_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
@@ -148,6 +144,7 @@ class NotificationDeliveryRecord(Base, kw_only=True):
 
     __tablename__ = "notification_deliveries"
     __table_args__ = (
+        Index("notification_deliveries_account_idx", "account_id"),
         UniqueConstraint("notification_id", name="notification_deliveries_notification_id_key"),
         CheckConstraint("attempts >= 0", name="notification_deliveries_attempts_nonnegative"),
         CheckConstraint("generation > 0", name="notification_deliveries_generation_positive"),
@@ -178,7 +175,7 @@ class NotificationDeliveryRecord(Base, kw_only=True):
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
     available_at: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)

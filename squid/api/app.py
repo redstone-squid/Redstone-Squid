@@ -9,6 +9,16 @@ from fastapi import APIRouter, Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from squid.api.contract import (
+    ANONYMOUS,
+    DEVICE,
+    SERVICE,
+    WEB_WRITE,
+    compatibility_alias,
+    contract,
+    internal,
+    transport_only,
+)
 from squid.api.dependencies import Accounts
 from squid.api.errors import register_exception_handlers, responses
 from squid.api.idempotency import IdempotencyResponseMiddleware, enforce_request_idempotency
@@ -40,14 +50,26 @@ ConfigFactory = Callable[[], ApiProcessConfig]
 router = APIRouter()
 
 
-@router.get("/livez")
+@router.get(
+    "/livez",
+    operation_id="health_live",
+    openapi_extra=contract(security=[ANONYMOUS], cli=internal("Process liveness probe.")),
+)
 async def live() -> dict[str, str]:
     """Report only whether the API process can service requests."""
     return {"status": "ok"}
 
 
-@router.get("/health")
-@router.get("/readyz")
+@router.get(
+    "/health",
+    operation_id="health_ready_compatibility",
+    openapi_extra=contract(security=[ANONYMOUS], cli=compatibility_alias("health_ready")),
+)
+@router.get(
+    "/readyz",
+    operation_id="health_ready",
+    openapi_extra=contract(security=[ANONYMOUS], cli=internal("Deployment readiness probe.")),
+)
 async def ready(request: Request, response: Response) -> dict[str, str]:
     """Report whether required database state matches this release."""
     try:
@@ -69,6 +91,12 @@ class User(BaseModel):
     status_code=201,
     responses=responses(401, 403, 404, 409, 422, 429, 503),
     dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    operation_id="verification_create_compatibility",
+    openapi_extra=contract(
+        security=[SERVICE, WEB_WRITE, DEVICE],
+        cli=compatibility_alias("verification_create"),
+        scopes=("account.verify.relay",),
+    ),
 )
 @router.post(
     "/v1/verify",
@@ -76,6 +104,12 @@ class User(BaseModel):
     responses=responses(401, 403, 404, 409, 422, 429, 503),
     tags=["users"],
     dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    operation_id="verification_create",
+    openapi_extra=contract(
+        security=[SERVICE, WEB_WRITE, DEVICE],
+        cli=transport_only(),
+        scopes=("account.verify.relay",),
+    ),
 )
 async def get_verification_code(
     user: User,
@@ -179,7 +213,7 @@ def main(process_config: ApiProcessConfig | None = None) -> None:
     import uvicorn
 
     resolved_config = process_config or load_or_exit(load_api_process_config)
-    configure_api_logging(resolved_config.logging)
+    configure_api_logging(resolved_config.logging, dev_mode=resolved_config.development_mode)
     observability = configure_observability(resolved_config.observability, service_name="api")
     try:
         uvicorn.run(

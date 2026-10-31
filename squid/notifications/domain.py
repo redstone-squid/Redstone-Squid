@@ -10,7 +10,6 @@ from whenever import Instant
 from squid.core.errors import DataIntegrityError, ValidationError
 from squid.core.i18n import _
 
-CURRENT_NOTIFICATION_NOTICE_VERSION = "2026-08-10"
 _BUILD_KINDS = frozenset({"door", "entrance", "extender", "utility"})
 _RECORD_CLASSES = frozenset({"first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"})
 _VERSION_SCOPES = frozenset({"all_time", "current"})
@@ -36,19 +35,24 @@ class NotificationKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class NotificationPreferences:
-    """An account's separate notice receipt and channel switches."""
+    """An account's notification channel switches, and whether it may use them yet.
+
+    There is no notification-specific notice any more. Notifications are described by the one
+    privacy notice, so `consent_pending` is the account's answer to that, read from the account
+    rather than stored again here. The channel switches stay independent: accepting the notice
+    permits notifications, it does not turn any on.
+    """
 
     account_id: int
-    notice_version: str | None
-    consented_at: Instant | None
+    consent_pending: bool = True
     web_enabled: bool = False
     dm_enabled: bool = False
     dm_suspended_at: Instant | None = None
 
     @property
     def has_current_consent(self) -> bool:
-        """Whether the current notification-specific notice was accepted."""
-        return self.notice_version == CURRENT_NOTIFICATION_NOTICE_VERSION and self.consented_at is not None
+        """Whether the account may enable and receive notifications at all."""
+        return not self.consent_pending
 
 
 @dataclass(frozen=True, slots=True)

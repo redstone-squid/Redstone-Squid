@@ -8,10 +8,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from pydantic import AnyHttpUrl
 
-from squid.accounts.errors import ConsentRequiredError
+from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract, transport_only
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
-from squid.api.security import Caller, current_caller
+from squid.api.security import Caller, current_caller, require_consented_account
 from squid.api.v1.schemas.cli_auth import (
     CliDeviceListResponse,
     CliDeviceResponse,
@@ -112,9 +112,7 @@ async def current_browser_account_id(caller: Annotated[Caller, Depends(current_c
     """Require a signed-in browser account with current privacy consent."""
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
-    if caller.consent_pending:
-        raise ConsentRequiredError(account_id=caller.account_id)
-    return caller.account_id
+    return require_consented_account(caller)
 
 
 async def current_cli_identity(caller: Annotated[Caller, Depends(current_caller)]) -> CliIdentity:
@@ -158,6 +156,11 @@ router = APIRouter(prefix="/cli/auth", tags=["cli-authentication"])
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 409, 422, 429, 503),
     dependencies=[Depends(enforce_anonymous_cli_idempotency)],
+    operation_id="cli_enrollment_start",
+    openapi_extra=contract(
+        security=[ANONYMOUS],
+        cli=cli_command("auth.login", features=("cli-device-auth",), interaction="browser-continuation"),
+    ),
 )
 async def start_enrollment(
     payload: CliEnrollmentCreateRequest,
@@ -182,6 +185,8 @@ async def start_enrollment(
     response_model=IssuedCliSessionResponse,
     responses=responses(400, 409, 422, 503),
     dependencies=[Depends(enforce_anonymous_cli_idempotency)],
+    operation_id="cli_enrollment_exchange",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def exchange_enrollment(
     payload: CliEnrollmentExchangeRequest,
@@ -200,6 +205,8 @@ async def exchange_enrollment(
     "/enrollments/approval",
     response_model=CliEnrollmentApprovalResponse,
     responses=responses(400, 401, 403, 409, 422, 503),
+    operation_id="cli_enrollment_preview",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def preview_enrollment(
     response: Response,
@@ -218,6 +225,8 @@ async def preview_enrollment(
     response_model=CliEnrollmentApprovalResponse,
     responses=responses(400, 401, 403, 409, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="cli_enrollment_approve",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def approve_enrollment(
     payload: CliEnrollmentApprovalRequest,
@@ -237,6 +246,8 @@ async def approve_enrollment(
     status_code=status.HTTP_201_CREATED,
     responses=responses(400, 404, 409, 422, 429, 503),
     dependencies=[Depends(enforce_anonymous_cli_idempotency)],
+    operation_id="cli_session_challenge_start",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def start_session_challenge(
     payload: CliSessionChallengeRequest,
@@ -259,6 +270,8 @@ async def start_session_challenge(
     response_model=IssuedCliSessionResponse,
     responses=responses(400, 404, 409, 422, 503),
     dependencies=[Depends(enforce_anonymous_cli_idempotency)],
+    operation_id="cli_session_exchange",
+    openapi_extra=contract(security=[ANONYMOUS], cli=transport_only()),
 )
 async def exchange_session_challenge(
     payload: CliSessionExchangeRequest,
@@ -282,6 +295,8 @@ async def exchange_session_challenge(
     "/devices",
     response_model=CliDeviceListResponse,
     responses=responses(400, 401, 403, 503),
+    operation_id="cli_devices_list",
+    openapi_extra=contract(security=[WEB], cli=browser_only()),
 )
 async def list_devices(
     response: Response,
@@ -299,6 +314,8 @@ async def list_devices(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 404, 422, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="cli_device_revoke",
+    openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
 async def revoke_device(
     device_id: UUID,
@@ -316,6 +333,11 @@ async def revoke_device(
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(400, 401, 403, 503),
     dependencies=[Depends(enforce_request_idempotency)],
+    operation_id="cli_session_revoke",
+    openapi_extra=contract(
+        security=[DEVICE],
+        cli=cli_command("auth.logout", features=("cli-device-auth",), interaction="direct"),
+    ),
 )
 async def revoke_current_session(
     cli: CliAuthorization,

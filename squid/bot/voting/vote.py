@@ -9,9 +9,9 @@ from discord import app_commands
 from discord.ext.commands import Cog, Context, guild_only, hybrid_group
 
 from squid.accounts.domain import IdentityProvider
+from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import build_subject
 from squid.bot.voting.poll_wizard import PollModal
@@ -113,7 +113,12 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if payload.guild_id is None:
             return  # Voting in DMs is not implemented.
 
-        actor = await self._actor(user, snapshot.kind)
+        account_id = await self._consented_account_id(user.id)
+        if account_id is None:
+            await self._decline_unconsented_vote(message, user, payload.emoji)
+            return
+
+        actor = await self._actor(user, snapshot.kind, account_id=account_id)
         previous = snapshot.selection_for(actor.account_id)
         result = await self.vote_service.cast_vote(payload.message_id, actor, emoji_name)
         if result.rejection is not None:
@@ -137,13 +142,15 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         # Read-only resolution: someone with no account cannot have a selection here,
         # and removing a reaction is no reason to write a row for them.
         account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, payload.user_id)
-        selection = None if account_id is None else snapshot.selection_for(account_id)
+        if account_id is None:
+            return
+        selection = snapshot.selection_for(account_id)
         if selection is None or selection.emoji != str(payload.emoji):
             return
         member = await event.resolve_member()
         if member is None or member.bot:
             return
-        actor = await self._actor(member, snapshot.kind)
+        actor = await self._actor(member, snapshot.kind, account_id=account_id)
         # Re-casting the same option toggles it off, which is what removing the
         # reaction means for a poll whose reactions are the ballots.
         result = await self.vote_service.cast_vote(payload.message_id, actor, selection.emoji)
@@ -213,7 +220,23 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if ctx.interaction is None:
             await ctx.send("Use the slash command `/poll create` to open the poll editor.")
             return
-        await ctx.interaction.response.send_modal(PollModal(self.publisher))  # pyrefly: ignore[no-matching-overload]
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        # A modal has to open on an unspent interaction, and showing the notice spends this one,
+        # so an unconsented author is asked here and re-runs to get the editor.
+        account = await self.bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(ctx.author.id))
+        if account is None or account.id is None or account.needs_consent_refresh:
+            if await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale) is None:
+                return
+            await ctx.send(
+                view=text_layout(t(locale, _("Thanks. Run `/poll create` again to open the editor."))),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+            return
+        allow_network = isinstance(ctx.author, discord.Member) and await self.publisher.may_create_network(ctx.author)
+        await ctx.interaction.response.send_modal(  # pyrefly: ignore[no-matching-overload]
+            PollModal(self.publisher, account.id, allow_network=allow_network)
+        )
 
     @poll_group.command(name="create")
     @guild_only()
@@ -233,7 +256,11 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """Close a poll early as its creator or a configured staff member."""
         assert ctx.guild is not None and isinstance(ctx.author, discord.Member)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        result = await self.vote_service.close(message.id, await self._actor(ctx.author, VoteKind.GENERIC))
+        account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
+        if account_id is None:
+            return
+        actor = await self._actor(ctx.author, VoteKind.GENERIC, account_id=account_id)
+        result = await self.vote_service.close(message.id, actor)
         if result.rejection is not None or result.session is None:
             await ctx.send(describe_rejection(locale, result.rejection or VoteRejection.NOT_FOUND), ephemeral=True)
             return
@@ -250,7 +277,10 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         if snapshot is None:
             await ctx.send(describe_rejection(locale, VoteRejection.NOT_FOUND), ephemeral=True)
             return
-        actor = await self._actor(ctx.author, VoteKind.GENERIC)
+        account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
+        if account_id is None:
+            return
+        actor = await self._actor(ctx.author, VoteKind.GENERIC, account_id=account_id)
         # Refreshing recomputes the weights a close would act on, so it is gated by the
         # same rule rather than a second copy of it.
         rejection = snapshot.can_close(actor)
@@ -263,11 +293,52 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         suffix = "" if result.complete else f" Some accounts could not be resolved: {result.unresolved_account_ids}."
         await ctx.send(f"{t(locale, _('Poll weights refreshed.'))}{suffix}", ephemeral=True)
 
-    async def _actor(self, member: discord.Member, kind: VoteKind, *, account_id: int | None = None) -> VoteActor:
+    async def _consented_account_id(self, discord_id: int) -> int | None:
+        """Resolve a voter's account without creating one.
+
+        A reaction is not evidence that anybody asked to be remembered, and casting a ballot
+        stores a row naming them. There is no ephemeral surface on a raw reaction to ask in, so
+        the answer here is only ever "already agreed" or "not yet".
+        """
+        account = await self.bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(discord_id))
+        if account is None or account.id is None or account.needs_consent_refresh:
+            return None
+        return account.id
+
+    async def _decline_unconsented_vote(
+        self,
+        message: discord.Message,
+        user: discord.Member | discord.User,
+        emoji: discord.PartialEmoji | str,
+    ) -> None:
+        """Take the reaction back and say, once and briefly, how to make it count.
+
+        A raw reaction has no ephemeral surface, so this is in-channel and self-deleting. It is
+        deliberately not a DM: an unsolicited consent prompt arriving from a bot is worse than the
+        gap it closes.
+        """
+        await self._remove_reaction(message, emoji, user)
+        locale = await resolve_locale(message, self.bot.services.settings)
+        with contextlib.suppress(discord.HTTPException):
+            await message.channel.send(
+                t(
+                    locale,
+                    _("{user}, voting stores your Discord user ID. Run `/account consent` first."),
+                    user=user.mention,
+                ),
+                delete_after=30,
+                allowed_mentions=no_mentions(),
+            )
+
+    async def _actor(self, member: discord.Member, kind: VoteKind, *, account_id: int) -> VoteActor:
         """Resolve one member's vote capabilities in a single permission load.
 
         The tiers this replaces cost up to four round trips here -- a global
         admin lookup, a guild lookup and a settings read, twice over.
+
+        The account id is required rather than resolved here. This used to mint one on sight,
+        which meant a raw reaction wrote a row naming somebody who had never been asked; every
+        caller now establishes consent first, and the ones that cannot ask refuse instead.
         """
         del kind  # Every kind's nodes are resolved together; one load answers all.
         subject = await build_subject(self.bot, member, member.guild.id)
@@ -275,8 +346,6 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             subject,
             (VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY),
         )
-        if account_id is None:
-            account_id = await account_id_for(self.bot.services.accounts, member)
         return VoteActor(
             account_id,
             member.id,
@@ -289,22 +358,27 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         """Resolve current member facts for a service-level weight refresh.
 
         A ballot records an account, so the snowflake to look the member up by is read
-        here. An account with no Discord identity resolves to `None`, which the caller
-        already reads as "not a member" -- correct, since it has no guild role weight.
+        here. Somebody who is definitely not in the guild resolves to an actor holding
+        nothing, which weighs the default; `None` is kept for the questions we could
+        not ask, so the caller leaves the cached weight alone instead of rewriting it
+        from an answer we never got.
         """
         guild = self.bot.get_guild(guild_id)
-        if guild is None:
-            return None
         account = await self.bot.services.accounts.get_account_by_id(account_id)
         identity = None if account is None else account.identity(IdentityProvider.DISCORD)
         if identity is None or identity.discord_id is None:
-            return None
+            # No Discord identity at all, so no roles anywhere.
+            return VoteActor(account_id, discord_id=0, guild_id=guild_id)
         discord_id = identity.discord_id
+        if guild is None:
+            return None
         member = guild.get_member(discord_id)
         if member is None:
             try:
                 member = await guild.fetch_member(discord_id)
-            except discord.NotFound, discord.Forbidden:
+            except discord.NotFound:
+                return VoteActor(account_id, discord_id, guild_id)
+            except discord.Forbidden:
                 return None
         return await self._actor(member, kind, account_id=account_id)
 
@@ -322,10 +396,14 @@ class VoteCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             )
             return
 
+        author_account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
+        if author_account_id is None:
+            return
+
         async with self.bot.get_running_message(ctx, locale=locale) as message:
             await start_delete_log_vote(
                 self.bot,
-                author_id=ctx.author.id,
+                author_account_id=author_account_id,
                 target_message=target_message,
                 published_message=message,
             )

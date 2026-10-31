@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from squid.voting.domain import (
     BuildVoteTarget,
+    PollScope,
     VoteKind,
     VoteOption,
     VoteSelection,
@@ -51,6 +52,8 @@ class VotePollSummary(BaseModel):
 
     question: str
     visibility: VoteVisibility
+    scope: PollScope
+    """Whether the poll accepts ballots from one server or from every server."""
     deadline: datetime
 
 
@@ -118,6 +121,7 @@ class VoteSessionDetail(BaseModel):
                 else VotePollSummary(
                     question=poll.question,
                     visibility=poll.visibility,
+                    scope=poll.scope,
                     deadline=poll.deadline.to_stdlib(),
                 )
             ),

@@ -38,6 +38,7 @@ from squid.search.infrastructure.models import (
     SearchEmbeddingQueueItem,
     SearchProjectionQueueItem,
 )
+from squid.tags.domain import TagSemanticKind
 from squid.tags.infrastructure.models import BuildTagAssignment as TagAssignment
 from squid.tags.infrastructure.models import TagAlias, TagDefinition
 from squid.versions.infrastructure.models import Version
@@ -437,15 +438,11 @@ class SearchProjectionLoader:
             ).all()
         )
         first_holder = holders[0] if holders else None
-        title = (
-            first_holder.title
-            if first_holder is not None
-            else f"{definition.record_class.title()} {definition.category_key}"
-        )
-        subtitle = first_holder.subtitle if first_holder is not None else None
+        title = first_holder.title if first_holder is not None else definition.title
+        subtitle = first_holder.subtitle if first_holder is not None else definition.subtitle
         holder_ids = tuple(holder.build_id for holder in holders)
         metric = first_holder.metric_snapshot if first_holder is not None else {}
-        tags = (definition.record_class, definition.build_kind, definition.category_key, definition.version_scope)
+        tags = (definition.record_class, definition.build_kind, definition.version_scope)
         facets = (
             ProjectionFacet("record_class", definition.record_class),
             ProjectionFacet("record_state", "current"),
@@ -487,11 +484,14 @@ class SearchProjectionLoader:
                     )
                 ).all()
             )
+            # The kind is projected so `kind:pattern` and `kind:restriction` are answerable;
+            # `kind:tag` is kept alongside because it used to be the only answer.
             return _metadata_projection(
                 source_key=f"tag:{source_id}",
                 title=definition.display_name,
-                subtype="tag",
+                subtype=TagSemanticKind(definition.semantic_kind).value,
                 tags=aliases,
+                extra_facets=(ProjectionFacet("kind", "tag"),),
                 data={
                     "tag_id": source_id,
                     "aliases": aliases,
@@ -594,6 +594,7 @@ def _metadata_projection(
     title: str,
     subtype: str,
     tags: Sequence[str] = (),
+    extra_facets: Sequence[ProjectionFacet] = (),
     data: dict[str, object],
 ) -> SearchProjection:
     return SearchProjection(
@@ -602,7 +603,7 @@ def _metadata_projection(
         title=title,
         tags=tuple(tags),
         document_data={"metadata_kind": subtype, **data},
-        facets=(ProjectionFacet("kind", subtype), ProjectionFacet(subtype, title)),
+        facets=(ProjectionFacet("kind", subtype), ProjectionFacet(subtype, title), *extra_facets),
     )
 
 

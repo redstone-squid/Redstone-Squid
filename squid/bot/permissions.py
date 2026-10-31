@@ -17,7 +17,7 @@ from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes, guild_context, suggests
 from squid.bot.utils.components import info_layout, no_mentions
-from squid.bot.utils.permissions import build_subject, requires, subject_for
+from squid.bot.utils.permissions import build_subject, hide_unless, requires, subject_for
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
 from squid.permissions.application.administration import (
@@ -84,6 +84,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
 
     @hybrid_group(name="perm")
     @requires(PERM_NODE_VIEW, PERM_SUBJECT_INSPECT, PERM_GRANT_GUILD, PERM_AUDIT_VIEW, mode="any")
+    @hide_unless(manage_guild=True)
     async def perm_group(self, ctx: Context[BotT]) -> None:
         """Inspect and grant permissions."""
         await ctx.send_help("perm")
@@ -288,6 +289,7 @@ class PermissionCog[BotT: "squid.bot.app.RedstoneSquid"](Cog, name="Permissions"
 
     @hybrid_group(name="role")
     @requires(ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE, mode="any")
+    @hide_unless(manage_guild=True)
     async def role_group(self, ctx: Context[BotT]) -> None:
         """Create and compose permission roles."""
         await ctx.send_help("role")

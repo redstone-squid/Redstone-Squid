@@ -25,7 +25,14 @@ What remains is real:
   Decision 2 chose file scraping deliberately, so logs survive a stopped collector, an unchosen
   backend, and a `just deploy` with no container at all. That reasoning is sound and is nowhere the
   operator can see it; the duplicate stream, its rotation policy, and the volume's owner are
-  undocumented.
+  undocumented. That plan has since moved to `docs/plans/completed/observability.md` (`f9eca04a`),
+  which is the path any write-up here should cite, not the old one.
+  `8713c9df` (`docker: fix log files permission error`) swapped the bind-mounted `./logs` directory
+  for a named `squid-logs` volume, read-write into the app containers and read-only into the
+  collector (`compose.yml:17,172,177`) - that incidentally answers the "volume's owner" question
+  this subplan was meant to write down, but it is still a `compose.yml` diff with no comment, and
+  the duplicate-stream rationale and rotation policy remain undocumented anywhere an operator would
+  look.
 
 - **The full 128-bit trace ID leaks into a user-facing string.** `build_error_presentation`
   (`squid/bot/errors.py:190`) puts `correlation_id()` straight into
@@ -89,7 +96,10 @@ What remains is real:
 
 ## Subplans
 
-1. **Decide and document the log transport**
+1. **Decide and document the log transport** — *not started*. `8713c9df` moved the log volume from
+   a bind mount to a named volume for an unrelated permissions fix, which happens to settle the
+   ownership question below, but no documentation landed and the source plan is now at
+   `docs/plans/completed/observability.md`.
    - Keep `filelog` as the collector's authoritative input and record why in
      `deploy/otel-collector.yaml` and the deployment docs: log delivery must not depend on the
      collector being up, on the observability extra being installed, or on a container runtime's

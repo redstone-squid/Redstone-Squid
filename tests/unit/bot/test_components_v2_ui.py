@@ -10,7 +10,7 @@ import discord
 import pytest
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, CreditPreview, LinkPreview
-from squid.bot.consent import UserDataConsentView
+from squid.bot.consent import ConsentPromptView, LinkConsentView
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.ui.components import get_text_input
@@ -195,13 +195,13 @@ def _rendered_text(payload: dict[str, Any]) -> str:
     return "\n".join(_rendered_text(child) for child in payload.get("components", []))
 
 
-def test_user_data_consent_view_discloses_storage_and_actions() -> None:
+def test_link_consent_view_discloses_storage_and_actions() -> None:
     """The card must still name the stored categories itself.
 
     The full notice moved behind a button, which is only acceptable while the prompt in front of the
     user says what it will store. This is the assertion that keeps that true.
     """
-    view = UserDataConsentView(123, _link_preview())
+    view = LinkConsentView(123, _link_preview())
     payload = view.to_components()
     rendered = _rendered_text(payload[0])
 
@@ -217,9 +217,9 @@ def test_user_data_consent_view_discloses_storage_and_actions() -> None:
     assert view.consent is None
 
 
-def test_user_data_consent_view_previews_what_will_be_stored() -> None:
+def test_link_consent_view_previews_what_will_be_stored() -> None:
     """The point of holding the code: the prompt names the link instead of describing categories."""
-    view = UserDataConsentView(123, _link_preview(credit=CreditPreview("Notch", 12)))
+    view = LinkConsentView(123, _link_preview(credit=CreditPreview("Notch", 12)))
     rendered = _rendered_text(view.to_components()[0])
 
     assert "Notch" in rendered
@@ -230,9 +230,9 @@ def test_user_data_consent_view_previews_what_will_be_stored() -> None:
     assert CURRENT_CONSENT_VERSION in rendered
 
 
-def test_user_data_consent_view_warns_that_a_contested_credit_moves_nothing() -> None:
+def test_link_consent_view_warns_that_a_contested_credit_moves_nothing() -> None:
     """The one branch where agreeing does not do what the rest of the card implies."""
-    view = UserDataConsentView(
+    view = LinkConsentView(
         123,
         _link_preview(credit=CreditPreview("Notch", 1, held_by_public_creator_id=UUID(int=9))),
     )
@@ -243,11 +243,30 @@ def test_user_data_consent_view_warns_that_a_contested_credit_moves_nothing() ->
     assert "moves nothing" in rendered
 
 
-def test_user_data_consent_view_says_when_no_credit_moves() -> None:
-    view = UserDataConsentView(123, _link_preview())
+def test_link_consent_view_says_when_no_credit_moves() -> None:
+    view = LinkConsentView(123, _link_preview())
     rendered = _rendered_text(view.to_components()[0])
 
     assert "No build credits **Notch** yet" in rendered
+
+
+def test_consent_prompt_view_discloses_storage_without_a_link_preview() -> None:
+    """The generic prompt fronts every other gated action, so it owes the same disclosure.
+
+    Same invariant as the link card: what will be stored is named in front of the user, and only
+    the full notice sits behind a button.
+    """
+    view = ConsentPromptView(123)
+    payload = view.to_components()
+    rendered = _rendered_text(payload[0])
+
+    assert view.has_components_v2()
+    assert "Discord user ID" in rendered
+    assert "Cancelling stores nothing" in rendered
+    assert "<@123>" in rendered
+    assert CURRENT_CONSENT_VERSION in rendered
+    assert [button["label"] for button in payload[1]["components"]] == ["Agree", "Cancel", "Privacy notice"]
+    assert view.consent is None
 
 
 def test_modals_wrap_text_inputs_in_labels(display_build: Build) -> None:

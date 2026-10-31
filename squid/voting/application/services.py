@@ -14,7 +14,9 @@ from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
     CastVoteResult,
+    DeleteLogVoteTarget,
     EmojiPreset,
+    PollScope,
     RoleWeight,
     VoteActor,
     VoteChange,
@@ -23,6 +25,7 @@ from squid.voting.domain import (
     VoteOption,
     VoteRefreshResult,
     VoteRejection,
+    VoteSelection,
     VoteSessionSnapshot,
     VoteVisibility,
     normalize_vote_options,
@@ -40,11 +43,14 @@ class VoteService:
         repository: VoteRepository,
         policy: VoteWeightPolicy | None = None,
         actor_resolver: VoteActorResolver | None = None,
+        *,
+        build_owner_guild_id: int | None = None,
     ):
         self._repository = repository
         provider = getattr(repository, "get_role_weights", self._empty_role_weights)
         self._policy = policy or RoleVoteWeightPolicy(provider)
         self._actor_resolver = actor_resolver
+        self._build_owner_guild_id = build_owner_guild_id
 
     def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
         """Attach the presentation adapter that can resolve current guild-member facts."""
@@ -53,6 +59,38 @@ class VoteService:
     @staticmethod
     async def _empty_role_weights(guild_id: int, kind: str) -> Sequence[RoleWeight]:
         return ()
+
+    def _owner_guild_id(self, snapshot: VoteSessionSnapshot) -> int | None:
+        """Return the guild whose role weights govern this session.
+
+        Role ids only mean anything inside one guild, so a session shared across
+        guilds has to pick one authority; otherwise any guild hosting a card could
+        set its own multipliers and decide the shared outcome.
+        """
+        match snapshot.kind:
+            case VoteKind.BUILD:
+                return self._build_owner_guild_id
+            case VoteKind.DELETE_LOG:
+                return snapshot.target.server_id if isinstance(snapshot.target, DeleteLogVoteTarget) else None
+            case VoteKind.GENERIC:
+                return snapshot.poll.guild_id if snapshot.poll is not None else None
+
+    async def _weight_actor(
+        self, actor: VoteActor, snapshot: VoteSessionSnapshot, owner_guild_id: int | None
+    ) -> VoteActor | None:
+        """Return `actor` as seen in the owner guild, or `None` if that is unknowable.
+
+        A non-member resolves to an actor with no roles or capabilities, which the
+        policy scores at the default weight; `None` means the lookup itself failed
+        and callers should keep whatever weight they already had. With no owner
+        guild the actor stands as-is, which decides eligibility only — the caller
+        drops the multiplier.
+        """
+        if owner_guild_id is None or actor.guild_id == owner_guild_id:
+            return actor
+        if self._actor_resolver is None:
+            return VoteActor(account_id=actor.account_id, discord_id=actor.discord_id, guild_id=owner_guild_id)
+        return await self._actor_resolver.resolve(actor.account_id, owner_guild_id, snapshot.kind)
 
     async def start_build_vote(
         self,
@@ -133,6 +171,7 @@ class VoteService:
         duration_seconds: int,
         options: Sequence[VoteOption],
         guild_id: int | None = None,
+        scope: PollScope = PollScope.GUILD,
         now: Instant | None = None,
     ) -> int:
         """Create a generic poll independently of where it will be shown.
@@ -151,6 +190,15 @@ class VoteService:
         if guild_id is not None and any(option.guild_id not in (None, guild_id) for option in options):
             msg = "Poll options must belong to the poll guild."
             raise InvalidVoteConfigurationError(msg)
+        if scope is PollScope.NETWORK:
+            if guild_id is None:
+                # The owning guild weighs the ballots cast on every card.
+                msg = "A network poll must belong to a guild."
+                raise InvalidVoteConfigurationError(msg)
+            if any(option.guild_id is not None for option in options):
+                # Guild-scoped aliases would leave the other guilds' cards unvotable.
+                msg = "Network poll options must not be scoped to one guild."
+                raise InvalidVoteConfigurationError(msg)
         return await self._repository.create_generic_session(
             author_account_id=author_account_id,
             question=question.strip(),
@@ -158,6 +206,7 @@ class VoteService:
             deadline=(now or Instant.now()).add(seconds=duration_seconds),
             options=options,
             guild_id=guild_id,
+            scope=scope,
         )
 
     async def get_session(self, message_id: int) -> VoteSessionSnapshot | None:
@@ -201,15 +250,33 @@ class VoteService:
         option = snapshot.option_by_emoji(emoji, message_guild_id)
         if option is None:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.INVALID_OPTION)
-        weight = await self._policy.calculate(actor, snapshot, emoji)
-        if weight is None:
-            return CastVoteResult(session=snapshot, rejection=VoteRejection.NOT_ELIGIBLE)
+        owner_guild_id = self._owner_guild_id(snapshot)
+        weight_actor = await self._weight_actor(actor, snapshot, owner_guild_id)
+        if weight_actor is None:
+            # The owner guild is unreachable right now. Land the ballot at the
+            # default weight rather than letting a Discord blip veto the vote; the
+            # next refresh corrects it.
+            logger.warning(
+                "Vote session %s could not resolve account %s in owner guild %s; weighting at 1.0",
+                snapshot.id,
+                actor.account_id,
+                owner_guild_id,
+                extra={"squid.vote.session_id": snapshot.id},
+            )
+            weight = 1.0
+        else:
+            calculated = await self._policy.calculate(weight_actor, snapshot, emoji)
+            if calculated is None:
+                return CastVoteResult(session=snapshot, rejection=VoteRejection.NOT_ELIGIBLE)
+            # Without a designated authority no guild's role table may speak for the
+            # session, but eligibility still had to be judged.
+            weight = calculated if owner_guild_id is not None else 1.0
         if not isfinite(weight) or weight <= 0:
             msg = "Vote policies must return a positive finite weight."
             raise InvalidVoteConfigurationError(msg)
         weight *= option.multiplier
 
-        refreshed, unresolved = await self._calculate_refresh(snapshot, replacing=actor)
+        refreshed, unresolved = await self._calculate_refresh(snapshot, replacing=weight_actor)
         if unresolved:
             logger.warning(
                 "Vote session %s refresh retained cached weights for accounts %s",
@@ -242,6 +309,10 @@ class VoteService:
         snapshot = await self._repository.get_by_message(message_id)
         if snapshot is None:
             return VoteRefreshResult(None)
+        return await self._refresh_snapshot(snapshot)
+
+    async def _refresh_snapshot(self, snapshot: VoteSessionSnapshot) -> VoteRefreshResult:
+        """Recompute cached weights for a session already read, carded or not."""
         weights, unresolved = await self._calculate_refresh(snapshot)
         mutation = await self._repository.refresh_weights(snapshot.id, weights)
         if unresolved:
@@ -275,18 +346,7 @@ class VoteService:
         """Close all expired generic polls; safe to call repeatedly after restarts."""
         closed: list[VoteSessionSnapshot] = []
         for snapshot in await self._repository.list_due(now or Instant.now()):
-            if snapshot.messages:
-                await self.refresh(snapshot.messages[0].id)
-            else:
-                weights, unresolved = await self._calculate_refresh(snapshot)
-                await self._repository.refresh_weights(snapshot.id, weights)
-                if unresolved:
-                    logger.warning(
-                        "Due poll %s retained unresolved cached weights for %s",
-                        snapshot.id,
-                        unresolved,
-                        extra={"squid.vote.session_id": snapshot.id},
-                    )
+            await self._refresh_snapshot(snapshot)
             mutation = await self._repository.close_by_id(snapshot.id)
             if mutation is not None and mutation.just_closed:
                 closed.append(mutation.session)
@@ -334,22 +394,29 @@ class VoteService:
             await self._refresh_kind(guild_id, current_kind)
 
     async def _refresh_kind(self, guild_id: int, kind: VoteKind) -> None:
+        """Reweigh the open sessions this guild's table governs.
+
+        Only the sessions it owns: editing a multiplier used to rewrite cached
+        weights on every session merely carded here, including shared build
+        reviews this guild has no say over.
+        """
         for snapshot in await self.list_open(kind):
-            if any(message.guild_id == guild_id for message in snapshot.messages):
-                await self.refresh(snapshot.messages[0].id)
+            if self._owner_guild_id(snapshot) == guild_id:
+                await self._refresh_snapshot(snapshot)
 
     async def _calculate_refresh(
         self, snapshot: VoteSessionSnapshot, *, replacing: VoteActor | None = None
     ) -> tuple[dict[int, float], list[int]]:
         if self._actor_resolver is None:
             return {}, []
+        owner_guild_id = self._owner_guild_id(snapshot)
         weights: dict[int, float] = {}
         unresolved: list[int] = []
         for selection in snapshot.selections:
             actor = replacing if replacing is not None and replacing.account_id == selection.account_id else None
             actor = actor or await self._actor_resolver.resolve(
                 selection.account_id,
-                selection.guild_id,
+                owner_guild_id if owner_guild_id is not None else selection.guild_id,
                 snapshot.kind,
             )
             if actor is None:
@@ -359,15 +426,26 @@ class VoteService:
             if weight is None:
                 weights[selection.account_id] = 0
             elif isfinite(weight) and weight > 0:
-                option = next(
-                    (
-                        item
-                        for item in snapshot.options
-                        if item.identifier == selection.option_id
-                        and item.emoji == selection.emoji
-                        and item.guild_id in (None, selection.guild_id)
-                    ),
-                    None,
-                )
-                weights[selection.account_id] = weight * (option.multiplier if option is not None else 1)
+                # Mirror the cast path: no authority guild means no role multipliers.
+                scored = weight if owner_guild_id is not None else 1.0
+                weights[selection.account_id] = scored * self._option_multiplier(snapshot, selection)
         return weights, unresolved
+
+    @staticmethod
+    def _option_multiplier(snapshot: VoteSessionSnapshot, selection: VoteSelection) -> float:
+        """Return the multiplier of the option this ballot picked.
+
+        Matched against the guild the ballot was cast in, which still aliases
+        options even though it no longer decides the voter's weight.
+        """
+        option = next(
+            (
+                item
+                for item in snapshot.options
+                if item.identifier == selection.option_id
+                and item.emoji == selection.emoji
+                and item.guild_id in (None, selection.guild_id)
+            ),
+            None,
+        )
+        return option.multiplier if option is not None else 1

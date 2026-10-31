@@ -8,12 +8,12 @@ from discord import app_commands
 from discord.ext import commands
 from discord.ext.commands import Context, Greedy
 
+from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent
-from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import info_layout, link_layout, no_mentions, text_layout
-from squid.bot.utils.permissions import requires
+from squid.bot.utils.permissions import hide_unless, requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
@@ -61,13 +61,16 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         query_name: str | None = None,
     ) -> None:
         """Propose a build tag for staff review."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
+        if account_id is None:
+            return
         definition = await self.tags.propose_showcase(
             name,
             value_type=value_type,
             query_name=query_name,
-            created_by_account_id=await account_id_for(self.bot.services.accounts, ctx.author),
+            created_by_account_id=account_id,
         )
-        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=info_layout(
                 t(locale, _("Tag proposed")),
@@ -92,13 +95,16 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         value: str | None = None,
     ) -> None:
         """Apply an approved tag to one of your builds."""
+        locale = await resolve_locale(ctx, self.bot.services.settings)
+        account_id = await ensure_consented_account(ctx, self.bot.services.accounts, locale=locale)
+        if account_id is None:
+            return
         tag = await self.tags.assign_showcase(
             build_id,
             tag_id,
             value,
-            actor_account_id=await account_id_for(self.bot.services.accounts, ctx.author),
+            actor_account_id=account_id,
         )
-        locale = await resolve_locale(ctx, self.bot.services.settings)
         await ctx.send(
             view=info_layout(
                 t(locale, _("Build tagged")),
@@ -174,6 +180,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
 
     @commands.hybrid_command(name="archive")
     @requires(MESSAGE_ARCHIVE_CREATE, guild_only=True)
+    @hide_unless(manage_messages=True)
     async def archive_message(self, ctx: Context[BotT], message: discord.Message, delete_original: bool = True):
         """Makes a copy of the message in the current channel."""
         if isinstance(message.author, discord.User):

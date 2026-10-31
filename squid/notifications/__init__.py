@@ -2,7 +2,6 @@
 
 from squid.notifications.application import NotificationService
 from squid.notifications.domain import (
-    CURRENT_NOTIFICATION_NOTICE_VERSION,
     InboxNotification,
     NotificationPreferences,
     NotificationSubscription,
@@ -13,7 +12,6 @@ from squid.notifications.domain import (
 )
 
 __all__ = [
-    "CURRENT_NOTIFICATION_NOTICE_VERSION",
     "InboxNotification",
     "NotificationPreferences",
     "NotificationService",

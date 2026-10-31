@@ -11,17 +11,13 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.accounts.domain.consent import AccountConsent, consent_refresh_required
 from squid.core.errors import ValidationError
 from squid.core.i18n import _
-
-CURRENT_CONSENT_VERSION = "2026-08-04"
 
 _POSITIVE_DECIMAL = re.compile(r"[1-9][0-9]*")
 """ASCII decimal without a leading zero. Deliberately not `str.isdigit`, which accepts
 non-ASCII digits such as U+0661 that `int()` then happily parses into a different string."""
-
-CONSENT_CUTOFF = "2026-08-04T00:00:00+00:00"
-"""Accounts created before this instant predate consent receipts and are grandfathered."""
 
 MERGE_PROOF_MAX_AGE_SECONDS = 10 * 60
 """Maximum age of an identity proof accepted for a self-service account merge."""
@@ -62,6 +58,20 @@ class AccountIdentity:
     display_name: str | None = None
     verified_at: Instant | None = None
     id: int | None = None
+    is_public: bool = True
+    """Whether this identity appears on the account's public creator profile.
+
+    Public by default: the point of a creator profile is being findable as the person who built
+    the thing. Hiding is per identity rather than all-or-nothing because the reasons differ —
+    plenty of people will publish an IGN and not a Discord account.
+    """
+
+    avatar_key: str | None = None
+    """Provider-specific rendering key, needed only where the subject is not enough.
+
+    Discord avatar URLs need the hash, which only the gateway knows, so the bot refreshes it.
+    Java heads derive from the UUID, so this stays `None` there.
+    """
 
     @classmethod
     def for_provider(
@@ -141,19 +151,6 @@ class AccountIdentity:
 
 
 @dataclass(frozen=True, slots=True)
-class AccountConsent:
-    """Evidence that an account accepted a particular privacy notice."""
-
-    version: str
-    granted_at: Instant
-
-    @classmethod
-    def grant_current(cls) -> AccountConsent:
-        """Create a receipt for the currently published privacy notice."""
-        return cls(version=CURRENT_CONSENT_VERSION, granted_at=Instant.now())
-
-
-@dataclass(frozen=True, slots=True)
 class Account:
     """One internal caller with any number of verified external identities."""
 
@@ -170,7 +167,10 @@ class Account:
     @property
     def needs_consent_refresh(self) -> bool:
         """Whether the current privacy notice must be accepted before storing more identity data."""
-        return self.consent is None or self.consent.version != CURRENT_CONSENT_VERSION
+        return consent_refresh_required(
+            self.created_at,
+            None if self.consent is None else self.consent.version,
+        )
 
 
 @dataclass(frozen=True, slots=True)

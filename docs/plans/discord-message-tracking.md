@@ -1,5 +1,12 @@
 # Discord message tracking
 
+> **Status.** Design implemented and verified in-tree on 2026-08-18: the `messages` fact table,
+> `discord_posts`/`build_source_messages` links, `discord_sync_queue`/`discord_sync_generation_seq`,
+> and the `PostRenderer`/`PostReconciler` split all exist as described (`squid/messages/`,
+> `squid/posts/`, `squid/sync/`, `squid/bot/posts/reconciler.py`). One item under
+> [Still open](#still-open) has since landed; the `VoteTarget`/`get_by_message` item remains open
+> and is tracked separately under `docs/plans/pr-183-review/09-voting-redesign.md`.
+
 ## The problem this replaced
 
 Six mechanisms tracked Discord messages, and they overlapped badly.
@@ -104,6 +111,10 @@ applied. This is what the per-resource counter got wrong.
   still addressed by `message_id` rather than session id. `get_by_message` was
   repointed at `discord_posts` rather than rewriting the addressing model; see
   `docs/plans/pr-183-review/09-voting-redesign.md`.
-- `Base.__init_subclass__` extracts attribute docstrings intending to become column
-  comments, but the columns are not resolvable at that point, so it silently does
-  nothing. Only explicit `comment=` kwargs work — three columns across the whole schema.
+
+Resolved since this section was written: `Base.__init_subclass__` used to extract attribute
+docstrings intending to become column comments, but looked the column up after SQLAlchemy had
+already replaced `MappedColumn` with `InstrumentedAttribute`, so the pass silently did nothing
+(three columns, all with explicit `comment=`, were documented out of 823). Fixed by reading the
+column before delegating to `DeclarativeBase.__init_subclass__`
+(`squid/persistence/base.py`).

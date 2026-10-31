@@ -27,7 +27,6 @@ from squid.builds.application import (
 )
 from squid.builds.infrastructure.embeddings import OpenAIEmbeddingModel, PostgresBuildIndex
 from squid.builds.infrastructure.locks import BuildLockRepository
-from squid.builds.infrastructure.queries import BuildMetadataRepository
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import BuildTagsManager, OfficialTagResolver
@@ -36,7 +35,7 @@ from squid.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.community.application import RedstonerService, WelcomeRelayService
 from squid.community.domain import RedstonerPolicy, WelcomeRelayPolicy
-from squid.config import RuntimeConfig, SchematicConfig
+from squid.config import BotIdentityConfig, RuntimeConfig, SchematicConfig
 from squid.diagnostics.application import ErrorReportService
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.events.application import DomainEventService
@@ -291,7 +290,6 @@ class _ServiceGraph:
     def build_queries(self) -> BuildQueryService:
         return BuildQueryService(
             self.build_repository,
-            BuildMetadataRepository(self.db.async_session),
             self.embedding_service,
         )
 
@@ -518,7 +516,13 @@ class _ServiceGraph:
 
     @cached_property
     def votes(self) -> VoteService:
-        return VoteService(VoteRepository(self.db.async_session))
+        # Build reviews are shared across every guild with a vote channel, so their
+        # weights answer to the network's own server. BotIdentityConfig is
+        # code-owned, so reading it here matches what the bot itself uses.
+        return VoteService(
+            VoteRepository(self.db.async_session),
+            build_owner_guild_id=BotIdentityConfig().owner_server_id,
+        )
 
     @cached_property
     def vote_members(self) -> DiscordRestActorResolver | None:
