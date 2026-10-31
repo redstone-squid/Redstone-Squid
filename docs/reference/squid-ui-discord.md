@@ -26,6 +26,12 @@ opening policy and is always presented through an owner scope.
 
 ::: squid_ui_discord.Screen
 
+::: squid_ui_discord.UserSessionScreen
+
+::: squid_ui_discord.UserGuildSessionScreen
+
+::: squid_ui_discord.SharedGuildSessionScreen
+
 ::: squid_ui_discord.DiscordUI
 
 ::: squid_ui_discord.DiscordRequest
@@ -41,6 +47,10 @@ opening policy and is always presented through an owner scope.
 ::: squid_ui_discord.ResponseSource
 
 ::: squid_ui_discord.StackNavigator
+
+::: squid_ui_discord.open_devtools
+
+::: squid_ui_discord.DevToolsSection
 
 ## Optional discord.py integration
 
@@ -263,6 +273,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui_discord.adapter` | The verified discord.py adapter profile and boundary checks. |
 | `squid_ui_discord.challenges` | Showing a guard's challenge, and running the approved press. |
 | `squid_ui_discord.classic` | Composing classic Discord messages. |
+| `squid_ui_discord.v2` | Exact Components V2 layout factories. |
 | `squid_ui_discord.classic_renderer` | Mechanical drawing of resolved classic messages. |
 | `squid_ui_discord.conformance` | Boundary gate that keeps built views inside Discord's limits. |
 | `squid_ui_discord.delivery` | Send/edit mechanics for rendered Discord messages. |

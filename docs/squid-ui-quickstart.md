@@ -50,14 +50,18 @@ async def counter(interaction: discord.Interaction) -> None:
 ```
 
 The owner scope resolves localization, user, destination, acknowledgement state, and response policy.
-For a logical session, declare a `SessionSpec` alongside the common screen policy:
+For a common logical session policy, choose a named screen preset:
 
 ```python
-class Lobby(sd.Screen):
-    session = sd.SessionSpec("lobby", scope=sd.ScopeKind.GUILD)
-    access = sd.Everyone()
-    audience = "public"
+class Lobby(sd.SharedGuildSessionScreen, session_name="lobby"):
+    pass
 ```
+
+`UserSessionScreen` opens one owner-only session per user; `UserGuildSessionScreen` opens one
+per user and guild. Both replace a previous session. `SharedGuildSessionScreen` is public,
+admits everyone, and rejects duplicate guild opens. All three preserve `Screen[OwnerT]` typing.
+For custom admission, capacity, quota, or scope, declare a complete `session = sd.SessionSpec(...)`
+instead of the `session_name` class keyword.
 
 Use `on_load()` for request-dependent loading before the first render; `opening` is available inside
 that hook. For one-off output, use the same scope directly or resolve a typed request:
@@ -97,6 +101,25 @@ caller is cancelled; resource-specific timeouts belong in that cleanup.
 
 Use `sd.DISCORD_V2_DPY27` for Components V2. Classic-message rendering is explicitly separate under
 `sd.classic` and uses `sd.DISCORD_V1_DPY27`; there is no implicit target switch.
+
+For exact Discord structure without tuple-heavy primitive constructors, use mode-specific factories:
+
+```python
+v2_card = sd.v2.panel(
+    sd.v2.heading("Build"),
+    "Exact text is promoted automatically.",
+    sd.v2.row(sd.v2.link_button("Open", build_url)),
+    accent=0xE74C3C,
+)
+
+classic_card = sd.classic.card(
+    "Classic embed description",
+    title="Build",
+    fields=(sd.classic.card_field("Status", "Ready"),),
+)
+```
+
+The factories produce the existing primitive dataclasses; direct constructors remain available.
 
 Next, use the [API map](squid-ui-api.md) or read the complete
 [architecture and ownership guide](squid-ui-architecture.md).
