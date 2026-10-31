@@ -169,6 +169,7 @@ anyio==4.15.1 \
     #   httpx
     #   httpx2
     #   openai
+    #   redstone-squid
     #   schemathesis
     #   starlette
 asgiref==3.13.0 \
@@ -777,7 +778,9 @@ cryptography==50.0.2 \
     --hash=sha256:f9f6143a8c75945eb960d9eb98905a441394abfa24afaae239d514ffb2586480 \
     --hash=sha256:fa8f5efb344d6908a1ce62f4a24e2e5780f825d6f53f5f50ec5ffacac72936cb \
     --hash=sha256:fdd28f912fccfec1846a94e2e1e8f9b0012f557f0c46fe4f3eb0d7a87afcf90b
-    # via google-auth
+    # via
+    #   google-auth
+    #   redstone-squid
 discord-ext-menus @ git+https://github.com/Rapptz/discord-ext-menus@8686b5d1bbc1d3c862292eb436ab630d6e9c9b53
     # via redstone-squid
 discord-py==2.7.1 \
