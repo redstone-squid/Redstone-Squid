@@ -23,7 +23,7 @@ from squid.accounts.domain import (
     CreatorAlias,
     IdentityRefresh,
 )
-from squid.api.security import Principal
+from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.me import get_me, grant_consent, refresh_minecraft_identity, refresh_minecraft_identity_for
 from squid.core.errors import AuthenticationError
 
@@ -42,21 +42,16 @@ def _account(*, discord: bool = True) -> Account:
     )
 
 
-def _principal(kind: str = "account", *, discord_id: int | None = 7) -> Principal:
-    return Principal(
-        kind=cast(Any, kind),
-        subject=f"{kind}:1",
-        nodes=frozenset({"**"}),
-        discord_id=discord_id,
-        account_id=1,
-    )
+def _caller(kind: str = "account") -> Caller:
+    """A caller carries an account and nothing about how it authenticated."""
+    return Caller(kind=cast(Any, kind), subject=f"{kind}:1", nodes=UNBOUNDED, account_id=1)
 
 
-async def test_a_cli_principal_can_read_its_own_account() -> None:
+async def test_a_cli_caller_can_read_its_own_account() -> None:
     """The regression: no Discord identity, but a real account."""
     accounts = SimpleNamespace(get_account_by_id=AsyncMock(return_value=_account(discord=False)))
 
-    response = await get_me(cast(Any, accounts), _principal("cli", discord_id=None))
+    response = await get_me(cast(Any, accounts), _caller("cli"))
 
     accounts.get_account_by_id.assert_awaited_once_with(1)
     assert response.id == 1
@@ -64,28 +59,39 @@ async def test_a_cli_principal_can_read_its_own_account() -> None:
     assert response.ign == "Steve"
 
 
-async def test_a_discord_principal_still_reports_its_discord_id() -> None:
+async def test_the_response_reports_the_discord_id_off_the_accounts_identities() -> None:
+    """`UserMe.discord_id` is derived from the loaded account, not from the caller.
+
+    This used to pass for the right reason through the wrong field: the caller carried a
+    snowflake, so an implementation reading it would have passed too. The caller no
+    longer has one, and the same account still reports the same id.
+    """
     accounts = SimpleNamespace(get_account_by_id=AsyncMock(return_value=_account()))
 
-    response = await get_me(cast(Any, accounts), _principal())
+    response = await get_me(cast(Any, accounts), _caller())
 
     assert response.discord_id == 7
+    assert (
+        await get_me(
+            cast(Any, SimpleNamespace(get_account_by_id=AsyncMock(return_value=_account(discord=False)))), _caller()
+        )
+    ).discord_id is None
 
 
-async def test_a_principal_without_an_account_is_rejected() -> None:
+async def test_a_caller_without_an_account_is_rejected() -> None:
     accounts = SimpleNamespace(get_account_by_id=AsyncMock())
-    anonymous = Principal(kind="anonymous", subject="anonymous")
+    anonymous = Caller(kind="anonymous", subject="anonymous")
 
     with pytest.raises(AuthenticationError):
         await get_me(cast(Any, accounts), anonymous)
 
 
 async def test_consent_is_granted_by_account_not_discord_id() -> None:
-    accounts = SimpleNamespace(grant_current_consent_for_account=AsyncMock(return_value=_account(discord=False)))
+    accounts = SimpleNamespace(grant_current_consent=AsyncMock(return_value=_account(discord=False)))
 
-    response = await grant_consent(cast(Any, accounts), _principal("cli", discord_id=None))
+    response = await grant_consent(cast(Any, accounts), _caller("cli"))
 
-    accounts.grant_current_consent_for_account.assert_awaited_once_with(1)
+    accounts.grant_current_consent.assert_awaited_once_with(1)
     assert response.consent_pending is False
 
 
@@ -100,7 +106,7 @@ async def test_refresh_reports_a_rename_and_its_new_credit() -> None:
     )
     accounts = SimpleNamespace(refresh_java_identity=AsyncMock(return_value=refresh))
 
-    response = await refresh_minecraft_identity(cast(Any, accounts), _principal())
+    response = await refresh_minecraft_identity(cast(Any, accounts), _caller())
 
     accounts.refresh_java_identity.assert_awaited_once_with(1)
     assert response.renamed is True
@@ -123,7 +129,7 @@ async def test_refresh_reports_a_contested_name_without_claiming_it() -> None:
     )
     accounts = SimpleNamespace(refresh_java_identity=AsyncMock(return_value=refresh))
 
-    response = await refresh_minecraft_identity(cast(Any, accounts), _principal())
+    response = await refresh_minecraft_identity(cast(Any, accounts), _caller())
 
     assert response.claimed_creator_name is None
     assert response.contested_creator_name == "Contested"
@@ -140,7 +146,7 @@ async def test_refresh_reports_an_unchanged_name() -> None:
     )
     accounts = SimpleNamespace(refresh_java_identity=AsyncMock(return_value=refresh))
 
-    response = await refresh_minecraft_identity(cast(Any, accounts), _principal())
+    response = await refresh_minecraft_identity(cast(Any, accounts), _caller())
 
     assert response.renamed is False
     assert response.previous_ign == "Steve"

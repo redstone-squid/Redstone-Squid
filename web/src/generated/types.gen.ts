@@ -380,7 +380,7 @@ export type BuildSummary = {
 /**
  * BuildTag
  *
- * A public tag assignment without moderation provenance.
+ * A tag on a build, without who applied it or how.
  */
 export type BuildTag = {
     /**
@@ -737,7 +737,7 @@ export type CliSessionExchangeRequest = {
 /**
  * ControlKind
  *
- * Small renderer-neutral set of supported form controls.
+ * The small set of controls every client knows how to draw.
  */
 export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'duration' | 'boolean';
 
@@ -1178,7 +1178,106 @@ export type DraftSummaryResponse = {
  *
  * Stable machine-readable application error codes.
  */
-export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE';
+export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CREATOR_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
+
+/**
+ * ErrorReportDetail
+ *
+ * One stored failure with everything kept about it.
+ *
+ * Only reachable with `diagnostics.error.read`: the message and traceback are the unredacted
+ * internals that every other surface deliberately withholds from the user who triggered them.
+ */
+export type ErrorReportDetail = {
+    /**
+     * Reference
+     */
+    reference: string;
+    /**
+     * Correlation Id
+     */
+    correlation_id: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    /**
+     * Surface
+     */
+    surface: string;
+    /**
+     * Origin
+     */
+    origin?: string | null;
+    /**
+     * Exception Type
+     */
+    exception_type: string;
+    code?: ErrorCode | null;
+    /**
+     * Work Lost
+     */
+    work_lost?: boolean;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Traceback
+     */
+    traceback: string;
+    /**
+     * Context
+     */
+    context?: {
+        [key: string]: JsonValue;
+    };
+    /**
+     * Log Tail
+     */
+    log_tail?: Array<string>;
+    /**
+     * Matching References
+     */
+    matching_references?: number;
+};
+
+/**
+ * ErrorReportSummary
+ *
+ * One stored failure, without its traceback or logs.
+ */
+export type ErrorReportSummary = {
+    /**
+     * Reference
+     */
+    reference: string;
+    /**
+     * Correlation Id
+     */
+    correlation_id: string;
+    /**
+     * Occurred At
+     */
+    occurred_at: string;
+    /**
+     * Surface
+     */
+    surface: string;
+    /**
+     * Origin
+     */
+    origin?: string | null;
+    /**
+     * Exception Type
+     */
+    exception_type: string;
+    code?: ErrorCode | null;
+    /**
+     * Work Lost
+     */
+    work_lost?: boolean;
+};
 
 /**
  * ExtenderDetails
@@ -1357,7 +1456,7 @@ export type FormFieldResponse = {
 /**
  * FormManifestResponse
  *
- * One immutable renderer-neutral submission form revision.
+ * One immutable submission form revision, drawn however the client chooses.
  */
 export type FormManifestResponse = {
     /**
@@ -1675,6 +1774,46 @@ export type MetadataSearchResult = {
 export type MinecraftClientOrigin = 'paper' | 'fabric';
 
 /**
+ * MinecraftIdentityRefresh
+ *
+ * What re-reading the linked Minecraft name changed.
+ */
+export type MinecraftIdentityRefresh = {
+    /**
+     * Minecraft Uuid
+     */
+    minecraft_uuid: string;
+    /**
+     * Ign
+     */
+    ign: string;
+    /**
+     * Previous Ign
+     */
+    previous_ign: string | null;
+    /**
+     * Renamed
+     */
+    renamed: boolean;
+    /**
+     * Claimed Creator Name
+     */
+    claimed_creator_name: string | null;
+    /**
+     * Retained Creator Names
+     */
+    retained_creator_names: Array<string>;
+    /**
+     * Contested Creator Name
+     */
+    contested_creator_name: string | null;
+    /**
+     * Pending Claim Id
+     */
+    pending_claim_id: number | null;
+};
+
+/**
  * NotificationPreferenceUpdate
  *
  * A complete pair of independently configurable notification channels.
@@ -1811,6 +1950,22 @@ export type PageBuildSummary = {
      * Items
      */
     items: Array<BuildSummary>;
+    /**
+     * Total
+     */
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[ErrorReportSummary]
+ */
+export type PageErrorReportSummary = {
+    /**
+     * Items
+     */
+    items: Array<ErrorReportSummary>;
     /**
      * Total
      */
@@ -1990,7 +2145,7 @@ export type ProtocolInterval = {
 /**
  * RecordDetail
  *
- * One active record result with its ordered holder builds.
+ * One published record result with its ordered holder builds.
  */
 export type RecordDetail = {
     /**
@@ -2136,7 +2291,7 @@ export type RecordSearchResult = {
 /**
  * RecordSummary
  *
- * One active computed record result.
+ * One published computed record result.
  */
 export type RecordSummary = {
     /**
@@ -2643,9 +2798,9 @@ export type TagDetail = {
      */
     display_unit: string | null;
     /**
-     * Numeric Quantum
+     * Numeric Step
      */
-    numeric_quantum: string | null;
+    numeric_step: string | null;
 };
 
 /**
@@ -2729,7 +2884,7 @@ export type UserMe = {
     /**
      * Discord Id
      */
-    discord_id: number;
+    discord_id: number | null;
     /**
      * Minecraft Uuid
      */
@@ -2828,7 +2983,7 @@ export type VisibilityOperator = 'equals' | 'not_equals' | 'in';
 /**
  * VisibilityRuleResponse
  *
- * A renderer-neutral condition controlling whether a field is shown.
+ * A condition controlling whether a field is shown, evaluated by any client.
  */
 export type VisibilityRuleResponse = {
     /**
@@ -2854,6 +3009,13 @@ export type VoteInput = {
      */
     option_id: string;
 };
+
+/**
+ * VoteKind
+ *
+ * What a vote session decides, and therefore how it closes.
+ */
+export type VoteKind = 'build' | 'delete_log' | 'generic';
 
 /**
  * VoteOptionSummary
@@ -2889,10 +3051,7 @@ export type VotePollSummary = {
      * Question
      */
     question: string;
-    /**
-     * Visibility
-     */
-    visibility: string;
+    visibility: VoteVisibility;
     /**
      * Deadline
      */
@@ -2909,26 +3068,17 @@ export type VoteSessionDetail = {
      * Id
      */
     id: number;
-    /**
-     * Kind
-     */
-    kind: string;
-    /**
-     * Status
-     */
-    status: string;
-    /**
-     * Result
-     */
-    result: string;
+    kind: VoteKind;
+    status: VoteStatus;
+    result: VoteSessionResult;
     /**
      * Pass Threshold
      */
-    pass_threshold: number;
+    pass_threshold: number | null;
     /**
      * Fail Threshold
      */
-    fail_threshold: number;
+    fail_threshold: number | null;
     /**
      * Build Id
      */
@@ -2941,6 +3091,20 @@ export type VoteSessionDetail = {
     poll: VotePollSummary | null;
     own_selection: OwnVoteSelection | null;
 };
+
+/**
+ * VoteSessionResult
+ *
+ * The decision a closed session reached.
+ */
+export type VoteSessionResult = 'approved' | 'denied' | 'cancelled' | 'pending';
+
+/**
+ * VoteStatus
+ *
+ * Whether a session still accepts ballots.
+ */
+export type VoteStatus = 'open' | 'closed';
 
 /**
  * VoteTallies
@@ -2973,6 +3137,13 @@ export type VoteTallies = {
      */
     net: number;
 };
+
+/**
+ * VoteVisibility
+ *
+ * How much of a generic poll's state is disclosed while it is open.
+ */
+export type VoteVisibility = 'anonymous_live' | 'visible_live' | 'anonymous_hidden';
 
 export type HealthLiveData = {
     body?: never;
@@ -3067,7 +3238,7 @@ export type VerificationCreateErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3126,7 +3297,7 @@ export type VerificationCreateCompatibilityErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3185,80 +3356,6 @@ export type BrowserCsrfGetResponses = {
 
 export type BrowserCsrfGetResponse = BrowserCsrfGetResponses[keyof BrowserCsrfGetResponses];
 
-export type BrowserAuthorizationStartData = {
-    body?: never;
-    path?: never;
-    query?: {
-        /**
-         * Redirect To
-         */
-        redirect_to?: string | null;
-    };
-    url: '/v1/auth/discord';
-};
-
-export type BrowserAuthorizationStartErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetail;
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type BrowserAuthorizationStartError = BrowserAuthorizationStartErrors[keyof BrowserAuthorizationStartErrors];
-
-export type BrowserAuthorizationCallbackData = {
-    body?: never;
-    path?: never;
-    query: {
-        /**
-         * Code
-         */
-        code: string;
-        /**
-         * State
-         */
-        state: string;
-    };
-    url: '/v1/auth/discord/callback';
-};
-
-export type BrowserAuthorizationCallbackErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetail;
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Validation Error
-     */
-    422: HttpValidationError;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type BrowserAuthorizationCallbackError = BrowserAuthorizationCallbackErrors[keyof BrowserAuthorizationCallbackErrors];
-
 export type BrowserSessionRevokeData = {
     body?: never;
     headers?: {
@@ -3311,6 +3408,98 @@ export type BrowserSessionRevokeResponses = {
 };
 
 export type BrowserSessionRevokeResponse = BrowserSessionRevokeResponses[keyof BrowserSessionRevokeResponses];
+
+export type BrowserAuthorizationStartData = {
+    body?: never;
+    path: {
+        /**
+         * Provider
+         */
+        provider: string;
+    };
+    query?: {
+        /**
+         * Redirect To
+         */
+        redirect_to?: string | null;
+    };
+    url: '/v1/auth/{provider}';
+};
+
+export type BrowserAuthorizationStartErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type BrowserAuthorizationStartError = BrowserAuthorizationStartErrors[keyof BrowserAuthorizationStartErrors];
+
+export type BrowserAuthorizationCallbackData = {
+    body?: never;
+    path: {
+        /**
+         * Provider
+         */
+        provider: string;
+    };
+    query: {
+        /**
+         * Code
+         */
+        code: string;
+        /**
+         * State
+         */
+        state: string;
+    };
+    url: '/v1/auth/{provider}/callback';
+};
+
+export type BrowserAuthorizationCallbackErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type BrowserAuthorizationCallbackError = BrowserAuthorizationCallbackErrors[keyof BrowserAuthorizationCallbackErrors];
 
 export type BuildsListData = {
     body?: never;
@@ -3370,7 +3559,7 @@ export type BuildsListErrors = {
      */
     403: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3427,7 +3616,7 @@ export type BuildsCreateErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3465,11 +3654,11 @@ export type BuildsGetData = {
 
 export type BuildsGetErrors = {
     /**
-     * Not Found
+     * No confirmed build with this identifier. A pending build answers 404 as well.
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3543,7 +3732,7 @@ export type BuildsUpdateErrors = {
      */
     412: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3621,7 +3810,7 @@ export type CliEnrollmentStartErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3670,7 +3859,7 @@ export type CliEnrollmentExchangeErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3724,7 +3913,7 @@ export type CliEnrollmentPreviewErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3781,7 +3970,7 @@ export type CliEnrollmentApproveErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3834,7 +4023,7 @@ export type CliSessionChallengeStartErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3887,7 +4076,7 @@ export type CliSessionExchangeErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -3990,7 +4179,7 @@ export type CliDeviceRevokeErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4066,6 +4255,104 @@ export type CliSessionRevokeResponses = {
 };
 
 export type CliSessionRevokeResponse = CliSessionRevokeResponses[keyof CliSessionRevokeResponses];
+
+export type DiagnosticsErrorsListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Page Size
+         *
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Work Lost
+         *
+         * Return only failures that permanently abandoned work, such as a dead-lettered job.
+         */
+        work_lost?: boolean;
+    };
+    url: '/v1/diagnostics/errors';
+};
+
+export type DiagnosticsErrorsListErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type DiagnosticsErrorsListError = DiagnosticsErrorsListErrors[keyof DiagnosticsErrorsListErrors];
+
+export type DiagnosticsErrorsListResponses = {
+    /**
+     * Successful Response
+     */
+    200: PageErrorReportSummary;
+};
+
+export type DiagnosticsErrorsListResponse = DiagnosticsErrorsListResponses[keyof DiagnosticsErrorsListResponses];
+
+export type DiagnosticsErrorGetData = {
+    body?: never;
+    path: {
+        /**
+         * Reference
+         *
+         * The short reference a user was shown, or the full correlation ID from a Request-Id header.
+         */
+        reference: string;
+    };
+    query?: never;
+    url: '/v1/diagnostics/errors/{reference}';
+};
+
+export type DiagnosticsErrorGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * No stored report matches the reference, or it has passed its retention window.
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type DiagnosticsErrorGetError = DiagnosticsErrorGetErrors[keyof DiagnosticsErrorGetErrors];
+
+export type DiagnosticsErrorGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: ErrorReportDetail;
+};
+
+export type DiagnosticsErrorGetResponse = DiagnosticsErrorGetResponses[keyof DiagnosticsErrorGetResponses];
 
 export type AccountGetData = {
     body?: never;
@@ -4165,6 +4452,63 @@ export type AccountConsentGrantResponses = {
 
 export type AccountConsentGrantResponse = AccountConsentGrantResponses[keyof AccountConsentGrantResponses];
 
+export type AccountMinecraftRefreshData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/users/me/minecraft/refresh';
+};
+
+export type AccountMinecraftRefreshErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountMinecraftRefreshError = AccountMinecraftRefreshErrors[keyof AccountMinecraftRefreshErrors];
+
+export type AccountMinecraftRefreshResponses = {
+    /**
+     * Successful Response
+     */
+    200: MinecraftIdentityRefresh;
+};
+
+export type AccountMinecraftRefreshResponse = AccountMinecraftRefreshResponses[keyof AccountMinecraftRefreshResponses];
+
 export type AccountBuildsListData = {
     body?: never;
     path?: never;
@@ -4215,7 +4559,7 @@ export type AccountBuildsListErrors = {
      */
     403: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4238,6 +4582,68 @@ export type AccountBuildsListResponses = {
 };
 
 export type AccountBuildsListResponse = AccountBuildsListResponses[keyof AccountBuildsListResponses];
+
+export type AccountMinecraftRefreshForData = {
+    body?: never;
+    headers?: {
+        /**
+         * Idempotency-Key
+         *
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        /**
+         * Account Id
+         */
+        account_id: number;
+    };
+    query?: never;
+    url: '/v1/accounts/{account_id}/minecraft/refresh';
+};
+
+export type AccountMinecraftRefreshForErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountMinecraftRefreshForError = AccountMinecraftRefreshForErrors[keyof AccountMinecraftRefreshForErrors];
+
+export type AccountMinecraftRefreshForResponses = {
+    /**
+     * Successful Response
+     */
+    200: MinecraftIdentityRefresh;
+};
+
+export type AccountMinecraftRefreshForResponse = AccountMinecraftRefreshForResponses[keyof AccountMinecraftRefreshForResponses];
 
 export type PaperInstallationsListData = {
     body?: never;
@@ -4309,7 +4715,7 @@ export type PaperInstallationCreateErrors = {
      */
     403: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4371,7 +4777,7 @@ export type PaperInstallationRotateErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4433,7 +4839,7 @@ export type PaperInstallationProfileUpdateErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4495,7 +4901,7 @@ export type PaperInstallationRevokeErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4556,7 +4962,7 @@ export type PaperChallengeStartErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4617,7 +5023,7 @@ export type PaperChallengeExchangeErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4666,7 +5072,7 @@ export type FabricChallengeStartErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4715,7 +5121,7 @@ export type FabricChallengeExchangeErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4772,7 +5178,7 @@ export type MinecraftChallengeApproveErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -4834,7 +5240,7 @@ export type MinecraftGrantRevokeErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5073,7 +5479,7 @@ export type NotificationSubscriptionCreateErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5309,7 +5715,7 @@ export type RecordsGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5379,7 +5785,7 @@ export type RecordsListErrors = {
      */
     400: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5434,11 +5840,11 @@ export type BuildSchematicsListErrors = {
      */
     400: ProblemDetail;
     /**
-     * Not Found
+     * No confirmed build with this identifier. A pending build answers 404 as well.
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5484,7 +5890,7 @@ export type BuildSchematicContentGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5508,6 +5914,71 @@ export type BuildSchematicContentGetResponses = {
 
 export type BuildSchematicContentGetResponse = BuildSchematicContentGetResponses[keyof BuildSchematicContentGetResponses];
 
+export type BuildSchematicRenderGetData = {
+    body?: never;
+    path: {
+        /**
+         * Build Id
+         */
+        build_id: number;
+    };
+    query?: {
+        /**
+         * Width
+         */
+        width?: number | null;
+        /**
+         * Height
+         */
+        height?: number | null;
+        /**
+         * Yaw
+         */
+        yaw?: number | null;
+        /**
+         * Pitch
+         */
+        pitch?: number | null;
+        /**
+         * Zoom
+         */
+        zoom?: number | null;
+    };
+    url: '/v1/builds/{build_id}/schematics/render';
+};
+
+export type BuildSchematicRenderGetErrors = {
+    /**
+     * No confirmed build with this identifier, or it has no schematic attached.
+     */
+    404: ProblemDetail;
+    /**
+     * The attached schematic will never be previewed; `context.reason` says why.
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Previews are not configured on this instance, or the renderer is unavailable.
+     */
+    503: ProblemDetail;
+};
+
+export type BuildSchematicRenderGetError = BuildSchematicRenderGetErrors[keyof BuildSchematicRenderGetErrors];
+
+export type BuildSchematicRenderGetResponses = {
+    /**
+     * Rendered schematic preview
+     */
+    200: unknown;
+};
+
 export type SchematicRenderContentGetData = {
     body?: never;
     path: {
@@ -5526,7 +5997,7 @@ export type SchematicRenderContentGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5601,7 +6072,7 @@ export type SearchTermsSuggestErrors = {
      */
     400: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5660,7 +6131,7 @@ export type SearchExecuteErrors = {
      */
     400: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5766,7 +6237,7 @@ export type SubmissionDraftCreateErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5861,7 +6332,7 @@ export type SubmissionFormRevisionGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5920,7 +6391,7 @@ export type SubmissionFormOptionsGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -5978,7 +6449,7 @@ export type SubmissionDraftDeleteErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6036,7 +6507,7 @@ export type SubmissionDraftGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6102,7 +6573,7 @@ export type SubmissionDraftChangeErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6160,7 +6631,7 @@ export type SubmissionFinalizationGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6226,7 +6697,7 @@ export type SubmissionFinalizationStartErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6298,7 +6769,7 @@ export type SubmissionMediaUploadErrors = {
      */
     409: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6352,7 +6823,7 @@ export type SubmissionMediaListErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6418,7 +6889,7 @@ export type SubmissionMediaDiscardErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6476,7 +6947,7 @@ export type SubmissionMediaGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6566,7 +7037,7 @@ export type SuggestionsGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6616,7 +7087,7 @@ export type TagsListErrors = {
      */
     400: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6658,7 +7129,7 @@ export type TagsGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6700,7 +7171,7 @@ export type CreatorAliasGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6742,7 +7213,7 @@ export type CreatorProfileGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6792,7 +7263,7 @@ export type MinecraftVersionsListErrors = {
      */
     400: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**
@@ -6834,7 +7305,7 @@ export type VoteSessionGetErrors = {
      */
     404: ProblemDetail;
     /**
-     * Unprocessable Entity
+     * Unprocessable Content
      */
     422: ProblemDetail;
     /**

@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Self, override
+from typing import Any, Self, override
 
 import discord
 from discord import Webhook
@@ -17,7 +17,7 @@ from squid.bootstrap import create_bot_runtime
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
-from squid.bot.errors import SquidCommandTree
+from squid.bot.errors import SquidCommandTree, set_error_reporter
 from squid.bot.i18n import SquidAppCommandTranslator
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
@@ -39,9 +39,14 @@ from squid.config import (
 )
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_bot_logging
-from squid.observability import configure_observability
+from squid.observability import configure_observability, correlation_scope
 from squid.posts.domain import ResourceKind
-from squid.runtime import BackgroundTaskSupervisor, BotServices, start_permission_epoch_watch
+from squid.runtime import (
+    BackgroundTaskSupervisor,
+    BotServices,
+    start_log_capture,
+    start_permission_epoch_watch,
+)
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -51,6 +56,34 @@ DEFAULT_BUILD_CONFIG = BuildConfig()
 DEFAULT_COMMUNITY_CONFIG = CommunityConfig()
 DEFAULT_NOTIFICATION_CONFIG = NotificationConfig()
 CRITICAL_BOT_JOBS = frozenset({"discord-domain-events", "discord-reconciliation", "notification-deliveries"})
+
+EXTENSIONS = (
+    "squid.bot.reactions",
+    "squid.bot.messages",
+    "squid.bot.misc_commands",
+    "squid.bot.settings",
+    "squid.bot.submission",
+    "squid.bot.log",
+    "squid.bot.help",
+    "squid.bot.voting.vote",
+    "squid.bot.starboard.cog",
+    "squid.bot.sync",
+    "squid.bot.events",
+    "squid.bot.notifications",
+    "squid.bot.verify",
+    "squid.bot.admin",
+    "squid.bot.diagnostics",
+    "squid.bot.permissions",
+    "squid.bot.give_redstoner",
+    "squid.bot.version_tracking",
+    "squid.bot.welcome_relay",
+)
+"""Every cog the bot loads, in load order.
+
+Module-level rather than local to `setup_hook` so a test can load the real set. A name collision
+between two cogs is only raised when they are registered onto the same bot, which no per-cog test
+does -- it used to surface as the process failing to start.
+"""
 
 
 class RedstoneSquid(Bot):
@@ -114,6 +147,18 @@ class RedstoneSquid(Bot):
         return self.is_ready() and self.background_tasks.is_healthy(CRITICAL_BOT_JOBS, max_age_seconds=60)
 
     @override
+    async def invoke(self, ctx: commands.Context[Any]) -> None:
+        """Run a prefix command under one correlation ID, error dispatch included.
+
+        `Bot.invoke` dispatches `on_command_error` itself, so the scope has to wrap it rather than
+        the callback alone -- otherwise the handler that presents the error would see no binding
+        and mint a second ID unrelated to the log lines the command produced. A hybrid command
+        reaching here from the application command tree keeps the ID that tree already bound.
+        """
+        with correlation_scope():
+            await super().invoke(ctx)
+
+    @override
     async def close(self) -> None:
         """Stop gateway-triggered and background work before application resources close."""
         await self.reactions.close()
@@ -125,32 +170,18 @@ class RedstoneSquid(Bot):
     @override
     async def setup_hook(self) -> None:
         """Called when the bot is ready to start."""
+        # Progress-message failures are handled from a `Messageable` that does not expose the
+        # client, so the store has to be reachable without one. Registered here rather than in
+        # `__init__` so merely constructing a bot in a test does not install a live service.
+        set_error_reporter(self.services.error_reports)
+        self.background_tasks.capture_failures_into(self.services.error_reports)
         await self.tree.set_translator(SquidAppCommandTranslator())
         # Not a cog: every command's permission check reads through the cache this
         # watcher keeps honest, so it runs before any extension loads rather than
         # as a side effect of one of them being enabled.
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
 
-        extensions = [
-            "squid.bot.reactions",
-            "squid.bot.messages",
-            "squid.bot.misc_commands",
-            "squid.bot.settings",
-            "squid.bot.submission",
-            "squid.bot.log",
-            "squid.bot.help",
-            "squid.bot.voting.vote",
-            "squid.bot.starboard.cog",
-            "squid.bot.sync",
-            "squid.bot.events",
-            "squid.bot.notifications",
-            "squid.bot.verify",
-            "squid.bot.admin",
-            "squid.bot.permissions",
-            "squid.bot.give_redstoner",
-            "squid.bot.version_tracking",
-            "squid.bot.welcome_relay",
-        ]
+        extensions = [*EXTENSIONS]
         if self.development_mode:
             extensions.append("jishaku")
 
@@ -285,6 +316,12 @@ async def main(
                 bot,
                 ProcessHealthServer(bot_ready, port=resolved_config.bot.health_port),
             ):
+                start_log_capture(
+                    bot.background_tasks,
+                    runtime.services.error_reports,
+                    enabled=resolved_config.diagnostics.capture_logged_errors,
+                    capacity=resolved_config.diagnostics.log_capture_queue,
+                )
                 await bot.start(resolved_config.discord.token.get_secret_value())
     finally:
         observability.shutdown()

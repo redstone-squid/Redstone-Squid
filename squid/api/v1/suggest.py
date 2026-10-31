@@ -9,9 +9,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query, Request, Response
 
-from squid.api.dependencies import CurrentPrincipal, Suggestions
+from squid.api.dependencies import CurrentCaller, Suggestions
 from squid.api.errors import responses
-from squid.api.security import Principal, principal_allows
+from squid.api.security import Caller, caller_allows
 from squid.api.v1.schemas.suggest import SuggestionPage, SuggestionSourceInfo
 from squid.core.i18n import negotiate_locale
 from squid.permissions.domain.catalogue import CATALOGUE
@@ -37,7 +37,7 @@ async def suggest(
     request: Request,
     response: Response,
     suggestions: Suggestions,
-    principal: CurrentPrincipal,
+    caller: CurrentCaller,
     q: Annotated[str, Query(max_length=200)] = "",
     limit: Annotated[int, Query(ge=1, le=MAX_SUGGESTIONS)] = 10,
     cursor: Annotated[int | None, Query(ge=0)] = None,
@@ -57,10 +57,10 @@ async def suggest(
             limit=limit,
             context={} if category is None else {"category": category},
             locale=negotiate_locale(request.headers.get("accept-language")),
-            viewer=SuggestionViewer(account_id=principal.account_id),
+            viewer=SuggestionViewer(account_id=caller.account_id),
             cursor=cursor,
         ),
-        authorizer=_PrincipalAuthorizer(request, principal),
+        authorizer=_CallerAuthorizer(request, caller),
     )
     if definition.kind is SourceKind.ENUMERABLE and result.revision is not None:
         # Enumerable sets are content-addressed, so a client that already holds this revision can
@@ -70,16 +70,16 @@ async def suggest(
     return SuggestionPage.from_domain(source, result)
 
 
-class _PrincipalAuthorizer:
+class _CallerAuthorizer:
     """Answer permission questions for an HTTP caller."""
 
-    def __init__(self, request: Request, principal: Principal) -> None:
+    def __init__(self, request: Request, caller: Caller) -> None:
         self._request = request
-        self._principal = principal
+        self._caller = caller
 
     async def allows(self, node: str) -> bool:
         permissions = self._request.app.state.runtime.services.permissions
-        return await principal_allows(permissions, self._principal, CATALOGUE[node])
+        return await caller_allows(permissions, self._caller, CATALOGUE[node])
 
 
 __all__ = ["SuggestionService", "router"]

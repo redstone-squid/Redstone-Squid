@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Worker frame and value-encoding tests.
 
 These run without the native engine: the point of the wire format is that the parent process
@@ -5,6 +6,7 @@ never has to load it.
 """
 
 import asyncio
+import json
 
 import pytest
 
@@ -16,10 +18,14 @@ from squid.schematics.domain.models import (
     SchematicSign,
     SimulationResult,
     SimulationSample,
+    Vector3,
     VersionLossEntry,
 )
+from squid.schematics.errors import AmbiguousSimulationInputError
 from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.wire import Frame, FrameStreamClosed
+from squid.schematics.infrastructure.worker import _translate
+from squid.schematics.infrastructure.worker_main import _error_payload
 from tests.unit.schematics.fakes import make_analysis
 
 
@@ -142,3 +148,37 @@ def test_loss_entries_survive_encoding_and_decoding() -> None:
 
 def test_a_missing_loss_report_decodes_to_no_losses() -> None:
     assert wire.decode_losses(None) == ()
+
+
+@pytest.mark.parametrize(
+    ("candidates", "rejected"),
+    [
+        ([(12, 5, -3), (0, 1, 2)], None),
+        ([(0, 1, 2)], (9, 9, 9)),
+        ([], None),
+    ],
+)
+def test_candidate_input_coordinates_survive_the_worker_pipe(
+    candidates: list[Vector3], rejected: Vector3 | None
+) -> None:
+    """The refusal is useless without them, and the child cannot ship an exception object."""
+    original = AmbiguousSimulationInputError(candidates=candidates, rejected=rejected)
+
+    # Through real JSON, because that is what the pipe carries: tuples arrive as lists.
+    rebuilt = _translate(json.loads(json.dumps(_error_payload(original))), "simulate")
+
+    assert isinstance(rebuilt, AmbiguousSimulationInputError)
+    assert rebuilt.candidates == tuple(sorted(candidates))
+    assert rebuilt.rejected == rejected
+    assert rebuilt.public_detail() == original.public_detail()
+    assert rebuilt.context["operation"] == "simulate"
+
+
+@pytest.mark.parametrize("context", [{}, {"candidates": "not a list", "rejected": [1, 2]}, {"candidates": [[1, 2]]}])
+def test_a_malformed_candidate_list_degrades_to_no_candidates(context: dict[str, object]) -> None:
+    """The child is our own code, but it is still JSON arriving down a pipe."""
+    rebuilt = _translate({"kind": "ambiguous_simulation_input", "context": context}, "simulate")
+
+    assert isinstance(rebuilt, AmbiguousSimulationInputError)
+    assert rebuilt.candidates == ()
+    assert rebuilt.rejected is None

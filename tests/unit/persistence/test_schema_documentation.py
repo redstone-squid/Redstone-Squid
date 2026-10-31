@@ -1,5 +1,7 @@
 """Model docstrings reach the database as table and column comments."""
 
+from typing import ClassVar
+
 from sqlalchemy import BigInteger, ForeignKey, Integer, MetaData, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,7 +18,7 @@ class SandboxBase(Base):
     """
 
     __abstract__ = True
-    metadata = MetaData()
+    metadata: ClassVar[MetaData] = MetaData()
 
 
 def table_of(model: type[Base]) -> Table:

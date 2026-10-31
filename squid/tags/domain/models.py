@@ -66,7 +66,7 @@ class TagDefinition:
     record_operator: RecordOperator | None = None
     canonical_unit: str | None = None
     default_display_unit: str | None = None
-    numeric_quantum: Decimal | None = None
+    numeric_step: Decimal | None = None
     render_template: str = "{name}"
     default_display_order: int = 0
 

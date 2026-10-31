@@ -271,7 +271,7 @@ def _detail_text(hit: SearchHit, locale: str | None) -> str:
         )
         if hit.metrics:
             metrics = ", ".join(
-                f"{escape_markdown(str(key))}: {escape_markdown(str(value))}" for key, value in hit.metrics.items()
+                f"{escape_markdown(key)}: {escape_markdown(str(value))}" for key, value in hit.metrics.items()
             )
             fields += t(locale, _("\n**Metrics**\n{metrics}"), metrics=metrics)
         description = hit.subtitle or ""

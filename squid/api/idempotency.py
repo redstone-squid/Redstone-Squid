@@ -8,7 +8,7 @@ from fastapi import Depends, Header, Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from squid.api.security import Principal, current_principal
+from squid.api.security import Caller, current_caller
 from squid.idempotency import IdempotencyService, PendingRequest, StoredResponse
 
 _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -43,26 +43,26 @@ class _PendingResponse:
 
 async def enforce_request_idempotency(
     request: Request,
-    principal: Annotated[Principal, Depends(current_principal)],
+    caller: Annotated[Caller, Depends(current_caller)],
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Reserve a caller key when an unsafe request supplies one."""
-    await enforce_request_idempotency_for(request, principal.subject, idempotency_key)
+    await enforce_request_idempotency_for(request, caller.subject, idempotency_key)
 
 
 async def enforce_request_idempotency_for(
     request: Request,
-    principal: str,
+    caller: str,
     idempotency_key: str | None,
 ) -> None:
-    """Reserve a key in a server-derived principal namespace."""
+    """Reserve a key in a server-derived caller namespace."""
     if request.method not in _UNSAFE_METHODS or idempotency_key is None:
         return
     service = cast(IdempotencyService, request.app.state.runtime.services.idempotency)
     route = request.scope.get("route")
     route_path = cast(str, getattr(route, "path", request.url.path))
     reservation = await service.reserve(
-        principal=principal,
+        caller=caller,
         key=idempotency_key,
         fingerprint=await _request_fingerprint(request, route_path),
         method=request.method,

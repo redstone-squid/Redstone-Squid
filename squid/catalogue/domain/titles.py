@@ -5,6 +5,9 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Final
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
+
 
 class TitleSection(StrEnum):
     """A semantic section of a catalogue title."""
@@ -49,8 +52,8 @@ class TitleToken:
 
     def __post_init__(self) -> None:
         if not self.value.strip():
-            msg = "A title token cannot be blank."
-            raise ValueError(msg)
+            msg = _("A title token cannot be blank.")
+            raise ValidationError(msg)
         if not self.source_value:
             object.__setattr__(self, "source_value", self.value)
 
@@ -115,8 +118,8 @@ class ExtenderCategory:
 
     def __post_init__(self) -> None:
         if self.length <= 0:
-            msg = "Piston extender length must be positive."
-            raise ValueError(msg)
+            msg = _("Piston extender length must be positive.")
+            raise ValidationError(msg)
 
 
 _WIRING_ORDER: Final = (
@@ -291,7 +294,7 @@ class RulesTitleFormatter:
         return _formatted(title_tokens, subtitle_tokens, diagnostics)
 
     def format_record(self, record_class: str, category: FormattedTitle) -> FormattedTitle:
-        record_name = str(record_class).replace("_", " ").title()
+        record_name = record_class.replace("_", " ").title()
         record_token = _fixed_token(record_name, TitleSection.RECORD_CLASS)
         category_tokens = category.title_tokens or (_fixed_token(category.title, TitleSection.FIXED_NOUN),)
         title_tokens = (record_token, *category_tokens)
@@ -406,7 +409,7 @@ class RulesTitleFormatter:
             ),
             key=lambda pair: (pair[0], pair[1]),
         )
-        for _, value in unknown:
+        for _unknown_key, value in unknown:
             diagnostics.append(
                 TitleDiagnostic(
                     code=TitleDiagnosticCode.UNKNOWN_TERM,

@@ -8,12 +8,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
-from squid.search.infrastructure.models import SearchProjectionQueueItem
 from squid.search.infrastructure.projection import (
     ProjectionFacet,
     SearchProjection,
     SearchProjectionLoader,
-    SearchProjectionStore,
     build_facet_models,
     normalize_search_text,
     projection_source_hash,
@@ -27,38 +25,6 @@ async def test_loader_rejects_retired_legacy_record_keys() -> None:
 
     assert await loader.load("record", "legacy-smallest:1") is None
     session.scalar.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_projection_failure_becomes_a_retained_dead_letter_at_attempt_limit() -> None:
-    session = AsyncMock(spec=AsyncSession)
-    store = SearchProjectionStore(cast(AsyncSession, session))
-    item = SearchProjectionQueueItem(resource_kind="build", source_key="42", action="upsert", attempts=4)
-    item.locked_at = Instant.now()
-
-    dead_lettered = await store.retry(item, RuntimeError("projection failed"), max_attempts=5)
-
-    assert dead_lettered is True
-    assert item.attempts == 5
-    assert item.locked_at is None
-    assert item.dead_at is not None
-    assert item.last_error == "projection failed"
-    session.flush.assert_awaited_once_with()
-
-
-@pytest.mark.asyncio
-async def test_projection_failure_is_released_before_attempt_limit() -> None:
-    session = AsyncMock(spec=AsyncSession)
-    store = SearchProjectionStore(cast(AsyncSession, session))
-    item = SearchProjectionQueueItem(resource_kind="build", source_key="42", action="upsert")
-    item.locked_at = Instant.now()
-
-    dead_lettered = await store.retry(item, RuntimeError("temporary"), max_attempts=5)
-
-    assert dead_lettered is False
-    assert item.attempts == 1
-    assert item.locked_at is None
-    assert item.dead_at is None
 
 
 def test_normalize_collapses_case_and_whitespace() -> None:

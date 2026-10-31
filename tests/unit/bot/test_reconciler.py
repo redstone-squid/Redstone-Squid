@@ -4,29 +4,27 @@ What each resource renders is covered in `tests/unit/bot/posts/test_reconciler.p
 this is only about claiming, acknowledging, and dead-lettering.
 """
 
-from typing import Literal
+import uuid
 from unittest.mock import AsyncMock, Mock
 
-from whenever import Instant
-
 from squid.bot.sync.reconciler import ReconciliationCog
-from squid.sync import SyncJob
+from squid.sync import ReconciliationAction, ReconciliationJob, ReconciliationResource
 
 
 def _job(
     *,
-    action: Literal["refresh", "delete"] = "refresh",
+    action: ReconciliationAction = ReconciliationAction.REFRESH,
     generation: int = 3,
-    resource_kind: Literal["build", "vote_session"] = "build",
-) -> SyncJob:
-    return SyncJob(
+    resource_kind: ReconciliationResource = ReconciliationResource.BUILD,
+) -> ReconciliationJob:
+    return ReconciliationJob(
         id=1,
         resource_kind=resource_kind,
         source_key="42",
         action=action,
         generation=generation,
         attempts=0,
-        claimed_at=Instant.now(),
+        claim_token=uuid.uuid4(),
     )
 
 
@@ -62,25 +60,31 @@ async def test_a_claimed_job_is_rendered_then_acknowledged() -> None:
     await cog._process_job(_job(generation=7))
 
     bot.post_reconciler.reconcile.assert_awaited_once_with("build", "42", 7)
-    bot.services.discord_sync.complete.assert_awaited_once()
+    bot.services.discord_reconciliation.complete.assert_awaited_once()
 
 
 async def test_deletion_needs_no_branch_of_its_own() -> None:
     """A vanished resource wants no posts, so the diff loop removes what is left."""
     cog, bot = _cog()
 
-    await cog._process_job(_job(action="delete", generation=7, resource_kind="vote_session"))
+    await cog._process_job(
+        _job(
+            action=ReconciliationAction.DELETE,
+            generation=7,
+            resource_kind=ReconciliationResource.VOTE_SESSION,
+        )
+    )
 
     bot.post_reconciler.reconcile.assert_awaited_once_with("vote_session", "42", 7)
-    bot.services.discord_sync.complete.assert_awaited_once()
+    bot.services.discord_reconciliation.complete.assert_awaited_once()
 
 
 async def test_a_failed_render_is_retried_rather_than_acknowledged() -> None:
     cog, bot = _cog()
     bot.post_reconciler.reconcile.side_effect = RuntimeError("discord is down")
-    bot.services.discord_sync.fail.return_value = False
+    bot.services.discord_reconciliation.fail.return_value = False
 
     await cog._process_job(_job())
 
-    bot.services.discord_sync.fail.assert_awaited_once()
-    bot.services.discord_sync.complete.assert_not_awaited()
+    bot.services.discord_reconciliation.fail.assert_awaited_once()
+    bot.services.discord_reconciliation.complete.assert_not_awaited()

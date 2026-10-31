@@ -9,8 +9,6 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import IdentityProvider
-from squid.accounts.infrastructure.models import AccountIdentity
 from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.infrastructure.models import Build
 from squid.tags.application import TagDefinitionRepository
@@ -41,7 +39,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         normalized_name: str,
         value_type: TagValueType,
         query_name: str | None,
-        created_by_discord_id: int,
+        created_by_account_id: int,
     ) -> TagDefinition:
         row = SQLTagDefinition(
             stable_key=stable_key,
@@ -55,11 +53,11 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             record_operator=None,
             canonical_unit_key=None,
             default_display_unit_key=None,
-            numeric_quantum=None,
+            numeric_step=None,
             render_template="{name}" if value_type is TagValueType.NONE else "{name}: {value}{unit}",
             default_display_order=0,
             moderation_status=TagModerationStatus.PENDING,
-            created_by_discord_id=created_by_discord_id,
+            created_by_account_id=created_by_account_id,
             archived_at=None,
         )
         async with self._session_factory.begin() as session:
@@ -112,11 +110,13 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             await session.execute(
                 text(
                     """
-                    INSERT INTO search_projection_queue (resource_kind, source_key, action, enqueued_at)
-                    VALUES ('metadata', :source_key, :action, now())
+                    INSERT INTO search_projection_queue
+                        (resource_kind, source_key, action, enqueued_at, available_at)
+                    VALUES ('metadata', :source_key, :action, now(), now())
                     ON CONFLICT (resource_kind, source_key) DO UPDATE
                     SET action = EXCLUDED.action, enqueued_at = EXCLUDED.enqueued_at,
-                        attempts = 0, locked_at = NULL, dead_at = NULL, last_error = NULL
+                        available_at = EXCLUDED.available_at, attempts = 0,
+                        locked_at = NULL, claim_token = NULL, dead_at = NULL, last_error = NULL
                     """
                 ),
                 {
@@ -133,24 +133,27 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         build_id: int,
         tag_id: int,
         value: TagValue,
-        actor_discord_id: int,
+        actor_account_id: int,
     ) -> bool:
         async with self._session_factory.begin() as session:
+            # Compares the build's owning account to the actor's, rather than joining
+            # `account_identities` to compare two snowflakes -- which also means an
+            # account with no Discord identity can tag its own build.
             owned_build_id = await session.scalar(
-                select(Build.id)
-                .join(AccountIdentity, AccountIdentity.account_id == Build.submitter_account_id)
-                .where(
-                    Build.id == build_id,
-                    AccountIdentity.provider == IdentityProvider.DISCORD,
-                    AccountIdentity.subject == str(actor_discord_id),
-                )
+                select(Build.id).where(Build.id == build_id, Build.submitter_account_id == actor_account_id)
             )
             if owned_build_id is None:
                 return False
             definition = await session.get(SQLTagDefinition, tag_id)
             if definition is None:
                 return False
-            numeric_value, text_value, boolean_value = _split_value(definition.value_type, value)
+            # `value_type` is a bare `Text` column with no TypeDecorator, so a row read
+            # back from the database carries a `str` where the annotation promises the
+            # enum. `_split_value` compares with `is`, so every branch fell through and
+            # every assignment raised. Coerced here rather than in `_split_value` so the
+            # helper keeps a single, honest input type.
+            value_type = TagValueType(definition.value_type)
+            numeric_value, text_value, boolean_value = _split_value(value_type, value)
             statement = insert(BuildTagAssignment).values(
                 build_id=build_id,
                 tag_id=tag_id,
@@ -159,7 +162,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                 text_value=text_value,
                 boolean_value=boolean_value,
                 provenance="submitted",
-                created_by_discord_id=actor_discord_id,
+                created_by_account_id=actor_account_id,
             )
             await session.execute(
                 statement.on_conflict_do_update(
@@ -168,7 +171,10 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                         "numeric_value": statement.excluded.numeric_value,
                         "text_value": statement.excluded.text_value,
                         "boolean_value": statement.excluded.boolean_value,
-                        "updated_at": Instant.now().to_stdlib(),
+                        # An `Instant`, not a stdlib datetime: the column's `InstantUTC`
+                        # decorator does the conversion, and pre-converting made its
+                        # `process_bind_param` raise on every upsert.
+                        "updated_at": Instant.now(),
                     },
                 )
             )

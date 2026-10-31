@@ -130,7 +130,7 @@ def test_parser_coerces_units_for_database_defined_data_tag() -> None:
                 supports_range=True,
                 storage_name="tag:42",
                 unit_scales=(("s", Decimal("20")), ("gt", Decimal("1"))),
-                numeric_quantum=Decimal("1"),
+                numeric_step=Decimal("1"),
             ),
         )
     )

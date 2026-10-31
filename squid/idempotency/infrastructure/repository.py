@@ -36,7 +36,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
     async def reserve(
         self,
         *,
-        principal: str,
+        caller: str,
         key: str,
         fingerprint: bytes,
         method: str,
@@ -51,7 +51,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
                 insert(IdempotencyRequest)
                 .values(
                     id=candidate_id,
-                    principal=principal,
+                    principal=caller,
                     idempotency_key=key,
                     request_fingerprint=fingerprint,
                     method=method,
@@ -67,7 +67,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
                 return PendingRequest(request_id)
             existing = await session.scalar(
                 select(IdempotencyRequest).where(
-                    IdempotencyRequest.principal == principal,
+                    IdempotencyRequest.principal == caller,
                     IdempotencyRequest.idempotency_key == key,
                 )
             )
@@ -146,7 +146,7 @@ class PostgresIdempotencyRepository(IdempotencyRepository):
     ) -> ResponseEncryptionMetadata:
         return ResponseEncryptionMetadata(
             request_id=request.id,
-            principal=request.principal,
+            caller=request.principal,
             idempotency_key=request.idempotency_key,
             request_fingerprint=bytes(request.request_fingerprint),
             method=request.method,

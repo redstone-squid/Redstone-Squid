@@ -1,10 +1,13 @@
-"""Persistence-neutral ranking helpers."""
+"""Ranking helpers that mention no table, column, or index."""
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
+
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
 
 
 class RankingBranch(StrEnum):
@@ -52,18 +55,18 @@ def reciprocal_rank_fusion(
 ) -> tuple[RankedCandidate, ...]:
     """Fuse ranked candidate branches with deterministic tie-breaking."""
     if k <= 0:
-        msg = "k must be positive"
-        raise ValueError(msg)
+        msg = _("k must be positive")
+        raise ValidationError(msg)
     if branch_limit <= 0:
-        msg = "branch_limit must be positive"
-        raise ValueError(msg)
+        msg = _("branch_limit must be positive")
+        raise ValidationError(msg)
     scores: defaultdict[tuple[str, str], float] = defaultdict(float)
     documents: dict[tuple[str, str], RankedCandidate] = {}
     for branch, candidates in branches.items():
         weight = weights.get(branch, 0)
         if weight < 0:
-            msg = f"weight for {branch.value} cannot be negative"
-            raise ValueError(msg)
+            msg = _("weight for {branch} cannot be negative")
+            raise ValidationError(msg, message_params={"branch": branch.value})
         seen: set[tuple[str, str]] = set()
         rank = 0
         for candidate in candidates[:branch_limit]:

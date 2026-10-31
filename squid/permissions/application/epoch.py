@@ -12,6 +12,8 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Protocol
 
+from squid.core.errors import InvalidStateError
+from squid.core.i18n import _
 from squid.permissions.application.cache import SubjectRuleCache
 from squid.permissions.application.ports import PermissionStore
 
@@ -54,6 +56,6 @@ class PermissionEpochWatcher:
     async def listen(self) -> None:
         """Follow the notification channel, refreshing on every hint."""
         if self._listener is None:
-            msg = "This watcher was built without a wake listener."
-            raise RuntimeError(msg)
+            msg = _("This watcher was built without a wake listener.")
+            raise InvalidStateError(msg)
         await self._listener.run(self.refresh)

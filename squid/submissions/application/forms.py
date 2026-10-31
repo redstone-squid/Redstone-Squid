@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
+from squid.core.errors import InvalidStateError
 from squid.core.i18n import _, translate
 from squid.submissions.domain import (
     CategoryForm,
@@ -47,8 +48,8 @@ class FormOptionSet:
 
     def __post_init__(self) -> None:
         if self.revision < 1:
-            msg = "option revisions must be positive"
-            raise ValueError(msg)
+            msg = _("option revisions must be positive")
+            raise InvalidStateError(msg)
 
 
 class SubmissionFormService:

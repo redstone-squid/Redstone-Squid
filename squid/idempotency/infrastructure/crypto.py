@@ -9,15 +9,18 @@ from uuid import UUID
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from squid.core.errors import ConfigurationError, DataIntegrityError
+from squid.core.i18n import _
+
 _NONCE_BYTES = 12
 _AAD_DOMAIN = b"redstone-squid:idempotency-response:v1"
 
 
-class IdempotencyCiphertextError(RuntimeError):
+class IdempotencyCiphertextError(DataIntegrityError):
     """A retained response could not be authenticated or decrypted."""
 
 
-class IdempotencyEncryptionUnavailableError(RuntimeError):
+class IdempotencyEncryptionUnavailableError(ConfigurationError):
     """Response encryption was requested without an API keyring."""
 
 
@@ -26,7 +29,7 @@ class ResponseEncryptionMetadata:
     """Stable record and response fields bound to one ciphertext."""
 
     request_id: UUID
-    principal: str
+    caller: str
     idempotency_key: str
     request_fingerprint: bytes
     method: str
@@ -49,11 +52,11 @@ class IdempotencyResponseCipher:
 
     def __init__(self, *, active_key_id: str, keys: Mapping[str, bytes]) -> None:
         if active_key_id not in keys:
-            msg = "The active idempotency encryption key is absent from the keyring."
-            raise ValueError(msg)
+            msg = _("The active idempotency encryption key is absent from the keyring.")
+            raise IdempotencyEncryptionUnavailableError(msg)
         if any(len(key) != 32 for key in keys.values()):
-            msg = "Idempotency encryption keys must be exactly 32 bytes."
-            raise ValueError(msg)
+            msg = _("Idempotency encryption keys must be exactly 32 bytes.")
+            raise IdempotencyEncryptionUnavailableError(msg)
         self._active_key_id = active_key_id
         self._keys = dict(keys)
 
@@ -99,7 +102,7 @@ def _associated_data(metadata: ResponseEncryptionMetadata, key_id: str) -> bytes
         _AAD_DOMAIN,
         key_id.encode(),
         metadata.request_id.bytes,
-        metadata.principal.encode(),
+        metadata.caller.encode(),
         metadata.idempotency_key.encode(),
         metadata.request_fingerprint,
         metadata.method.encode(),

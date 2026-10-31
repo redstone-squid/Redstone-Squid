@@ -304,6 +304,13 @@ ROLE_DEFINITION_MANAGE = _b.node(
     _("Create and edit global permission roles."),
 )
 
+DIAGNOSTICS_ERROR_READ = _b.node(
+    "diagnostics.error.read",
+    NodeScope.GLOBAL,
+    _("Read a stored error report by the reference its user was shown."),
+    tags=(Tag.DIAGNOSTIC, Tag.READONLY),
+)
+
 BOT_TREE_SYNC = _b.node(
     "bot.tree.sync",
     NodeScope.GLOBAL,
@@ -502,6 +509,9 @@ GLOBAL_ADMIN = RoleDefinition(
         "message.**",
         "redstoner.**",
         "vote.**",
+        # A new top-level namespace is not reached by any include above, so it has to be named
+        # here or global administrators silently do not hold it.
+        "diagnostics.**",
         "perm.subject.inspect",
         "perm.audit.view",
         "perm.grant.guild",

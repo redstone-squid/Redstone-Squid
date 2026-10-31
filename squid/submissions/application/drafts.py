@@ -7,7 +7,8 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
-from squid.core.errors import JSONValue
+from squid.core.errors import InvalidStateError, JSONValue, ValidationError
+from squid.core.i18n import _
 from squid.submissions.domain import (
     DraftChange,
     DraftSnapshot,
@@ -41,8 +42,8 @@ class StoredDraft:
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
-            msg = "Only Paper drafts may retain an installation provenance ID."
-            raise ValueError(msg)
+            msg = _("Only Paper drafts may retain an installation provenance ID.")
+            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,8 +131,8 @@ class FixedAccountDraftCapacity:
 
     def __init__(self, limit: int = DEFAULT_ACCOUNT_DRAFT_CAPACITY) -> None:
         if limit < 1:
-            msg = "draft capacity must be positive"
-            raise ValueError(msg)
+            msg = _("draft capacity must be positive")
+            raise InvalidStateError(msg)
         self._limit = limit
 
     async def limit_for(self, account_id: int) -> int:
@@ -153,8 +154,8 @@ class SubmissionDraftService:
         now: Callable[[], Instant] = Instant.now,
     ) -> None:
         if retention_days < 1:
-            msg = "draft retention must be positive"
-            raise ValueError(msg)
+            msg = _("draft retention must be positive")
+            raise InvalidStateError(msg)
         self._repository = repository
         self._manifests = manifests
         self._capacity = capacity or FixedAccountDraftCapacity()
@@ -175,8 +176,8 @@ class SubmissionDraftService:
     ) -> StoredDraft:
         """Create an empty synchronized draft pinned to the current schema revision."""
         if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
-            msg = "Paper drafts require server-derived installation provenance."
-            raise ValueError(msg)
+            msg = _("Paper drafts require server-derived installation provenance.")
+            raise ValidationError(msg)
         limit = await self._capacity.limit_for(owner_account_id)
         if await self._repository.count_active_for_account(owner_account_id) >= limit:
             raise DraftCapacityExceededError(limit)
@@ -205,8 +206,8 @@ class SubmissionDraftService:
     async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
         """List a bounded newest-first view of one account's unexpired active drafts."""
         if not 1 <= limit <= DEFAULT_ACCOUNT_DRAFT_CAPACITY:
-            msg = f"draft discovery limit must be between 1 and {DEFAULT_ACCOUNT_DRAFT_CAPACITY}"
-            raise ValueError(msg)
+            msg = _("draft discovery limit must be between 1 and {maximum}")
+            raise InvalidStateError(msg, message_params={"maximum": DEFAULT_ACCOUNT_DRAFT_CAPACITY})
         return await self._repository.list_active_for_account(account_id, now=self._now(), limit=limit)
 
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
@@ -233,8 +234,8 @@ class SubmissionDraftService:
     async def expire_due(self, *, limit: int = 100, now: Instant | None = None) -> int:
         """Expire one bounded batch using the same authoritative service clock."""
         if not 1 <= limit <= 1_000:
-            msg = "draft expiry limit must be between 1 and 1000"
-            raise ValueError(msg)
+            msg = _("draft expiry limit must be between 1 and 1000")
+            raise InvalidStateError(msg)
         return await self._repository.expire_due(now=now or self._now(), limit=limit)
 
     async def apply_change(

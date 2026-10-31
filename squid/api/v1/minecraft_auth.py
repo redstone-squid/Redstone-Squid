@@ -2,7 +2,7 @@
 
 import hashlib
 from collections.abc import Awaitable
-from typing import Annotated, Never, Protocol, TypeVar, cast
+from typing import Annotated, Protocol, TypeVar, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request, Response, status
@@ -11,7 +11,7 @@ from pydantic import AnyHttpUrl
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
-from squid.api.security import Principal, current_principal
+from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
     ChallengeApprovalResponse,
@@ -27,16 +27,7 @@ from squid.api.v1.schemas.minecraft_auth import (
     PaperChallengeExchangeRequest,
     ServerProfileSchema,
 )
-from squid.core.errors import (
-    AuthenticationError,
-    AuthorizationError,
-    ConflictError,
-    NotFoundError,
-    RateLimitedError,
-    ServiceUnavailableError,
-    SquidError,
-    ValidationError,
-)
+from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
 from squid.minecraft_auth.application.crypto import INSTALLATION_TOKEN_PREFIX
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
@@ -47,24 +38,9 @@ from squid.minecraft_auth.domain import (
     PlayerAuthorizationChallenge,
     PublicServerProfile,
 )
-from squid.minecraft_auth.errors import (
-    AccountConsentRequiredError,
-    AuthorizationPendingError,
-    ChallengeAlreadyExchangedError,
-    ChallengeApprovalDeniedError,
-    ChallengeExpiredError,
-    InstallationUnavailableError,
-    InvalidChallengeError,
-    InvalidInstallationCredentialError,
-    InvalidPkceError,
-    InvalidPlayerTokenError,
-    MinecraftAuthorizationError,
-    TooManyActiveChallengesError,
-)
 
 _T = TypeVar("_T")
 _NO_STORE = "no-store"
-_RATE_LIMIT_RETRY_SECONDS = 60
 
 
 class PaperInstallationHttpService(Protocol):
@@ -170,13 +146,13 @@ def get_minecraft_verification_uri(request: Request) -> AnyHttpUrl:
     return verification_uri
 
 
-async def current_account_id(principal: Annotated[Principal, Depends(current_principal)]) -> int:
+async def current_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
     """Require a signed-in human account with current privacy consent."""
-    if principal.kind != "account" or principal.account_id is None:
+    if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
-    if principal.consent_pending:
-        raise ConsentRequiredError(principal.discord_id, account_id=principal.account_id)
-    return principal.account_id
+    if caller.consent_pending:
+        raise ConsentRequiredError(account_id=caller.account_id)
+    return caller.account_id
 
 
 Installations = Annotated[PaperInstallationHttpService, Depends(get_installation_service)]
@@ -214,8 +190,8 @@ async def enforce_paper_request_idempotency(
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Partition one-time Paper responses by an authenticated credential generation."""
-    principal = f"minecraft-installation:{installation.id}:{installation.credential_version}"
-    await enforce_request_idempotency_for(request, principal, idempotency_key)
+    caller = f"minecraft-installation:{installation.id}:{installation.credential_version}"
+    await enforce_request_idempotency_for(request, caller, idempotency_key)
 
 
 async def enforce_fabric_request_idempotency(
@@ -454,33 +430,7 @@ async def revoke_grant(
 
 
 async def _execute(operation: Awaitable[_T]) -> _T:
-    try:
-        return await operation
-    except MinecraftAuthorizationError as error:
-        _raise_transport_error(error)
-
-
-def _raise_transport_error(error: MinecraftAuthorizationError) -> Never:
-    public_context = {"minecraft_auth_code": error.code}
-    mapped: SquidError
-    if isinstance(error, (InvalidInstallationCredentialError, InvalidPlayerTokenError)):
-        mapped = AuthenticationError(str(error), public_context=public_context)
-    elif isinstance(error, InstallationUnavailableError):
-        mapped = NotFoundError(str(error), public_context=public_context)
-    elif isinstance(error, (AccountConsentRequiredError, ChallengeApprovalDeniedError)):
-        mapped = AuthorizationError(str(error), public_context=public_context)
-    elif isinstance(error, TooManyActiveChallengesError):
-        mapped = RateLimitedError(_RATE_LIMIT_RETRY_SECONDS).with_context(public_context=public_context)
-    elif isinstance(error, (InvalidChallengeError, InvalidPkceError)):
-        mapped = ValidationError(str(error), public_context=public_context)
-    elif isinstance(
-        error,
-        (AuthorizationPendingError, ChallengeAlreadyExchangedError, ChallengeExpiredError),
-    ):
-        mapped = ConflictError(str(error), public_context=public_context)
-    else:
-        mapped = ValidationError(public_context=public_context)
-    raise mapped from None
+    return await operation
 
 
 def _prevent_storage(response: Response) -> None:

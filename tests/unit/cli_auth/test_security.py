@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from pydantic import SecretStr
 from starlette.requests import Request
 
-from squid.api.security import current_principal
+from squid.api.security import current_caller
 from squid.cli_auth.domain import CliIdentity
 from squid.cli_auth.errors import InvalidCliSessionError
 from squid.core.errors import AuthenticationError
@@ -57,19 +57,19 @@ def request_with_service(cli: FakeCliAuthorization) -> Request:
     )
 
 
-async def test_cli_token_derives_account_device_and_session_principal() -> None:
+async def test_cli_token_derives_account_device_and_session_caller() -> None:
     cli = FakeCliAuthorization()
 
-    principal = await current_principal(request_with_service(cli), f"Bearer {TOKEN}")
+    caller = await current_caller(request_with_service(cli), f"Bearer {TOKEN}")
 
-    assert principal.kind == "cli"
-    assert principal.account_id == 42
-    assert principal.cli_device_id == DEVICE_ID
-    assert principal.cli_session_id == SESSION_ID
-    assert principal.subject == f"cli-session:{SESSION_ID}"
+    assert caller.kind == "cli"
+    assert caller.account_id == 42
+    assert caller.cli_device_id == DEVICE_ID
+    assert caller.cli_session_id == SESSION_ID
+    assert caller.subject == f"cli-session:{SESSION_ID}"
     assert cli.token == TOKEN
 
 
 async def test_invalid_cli_token_does_not_fall_through_to_api_key_authentication() -> None:
     with pytest.raises(AuthenticationError):
-        await current_principal(request_with_service(FakeCliAuthorization(valid=False)), f"Bearer {TOKEN}")
+        await current_caller(request_with_service(FakeCliAuthorization(valid=False)), f"Bearer {TOKEN}")

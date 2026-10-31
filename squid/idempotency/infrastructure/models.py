@@ -31,6 +31,15 @@ class IdempotencyRequest(Base, kw_only=True):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default_factory=uuid.uuid4)
     principal: Mapped[str] = mapped_column(Text, nullable=False)
+    """The caller namespace a key is reserved in.
+
+    The application layer calls this the *caller*; the column keeps the older
+    word because renaming it needs a migration, a rewrite of the unique index it
+    anchors, and a redeploy window, for a name no client ever sees. The same
+    trade applies to the `principal` partition in `RateLimit-Policy` and to
+    `SQUID_API_RATE_LIMIT_PRINCIPAL_REQUESTS`, both of which deployments and
+    clients can observe. If the ban is meant repo-wide, that is its own commit.
+    """
     idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
     request_fingerprint: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     method: Mapped[str] = mapped_column(Text, nullable=False)

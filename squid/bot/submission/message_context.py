@@ -213,7 +213,7 @@ async def assemble_bundle(
     reply_cache: dict[int, discord.Message | None] | None = None,
     include_images: bool = True,
 ) -> BuildInferenceInput:
-    """Resolve reply context and images into one framework-neutral inference input."""
+    """Resolve reply context and images into one inference input holding no Discord objects."""
     if not primary:
         msg = "A bundle requires at least one primary message"
         raise ValueError(msg)

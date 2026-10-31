@@ -42,6 +42,7 @@ async def test_raw_schematic_is_recorded_privately_without_public_mirroring(
         saved.id = 42
 
     services.builds.submit = AsyncMock(side_effect=submit)
+    services.accounts.get_or_create_identity = AsyncMock(return_value=Mock(id=7))
     services.messages.track = AsyncMock()
     mirror = Mock(upload=AsyncMock())
     monkeypatch.setattr(ingestion, "assemble_bundle", AsyncMock(return_value=object()))

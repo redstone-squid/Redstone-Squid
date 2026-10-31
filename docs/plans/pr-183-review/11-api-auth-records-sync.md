@@ -79,7 +79,8 @@ What remains is real:
   statements in `squid/persistence/postgres_entities.sql`, which is where the coalescing actually
   happens — and the only consumer renders Discord posts (`squid/bot/sync/reconciler.py:53`). Discord
   specificity is therefore correct at the table and wrong nowhere — but `SyncJob`, `SyncAction`, and
-  `DiscordSyncService` name a transfer, not a reconciliation. The `assert` comment points at the real defect underneath the name:
+  `DiscordSyncService` name a transfer, not a reconciliation. The `assert` comment points at the
+  real defect underneath the name:
   `squid/sync/infrastructure/repository.py:46,48` `cast()`s two text columns into `Literal` types,
   so a row that violated its check constraint would flow into the reconciler as a valid job and fail
   somewhere else entirely.
@@ -146,11 +147,11 @@ What remains is real:
      it (inline suppression behaviour differs between the default setup and the advanced workflow in
      `.github/workflows/codeql.yml`), dismiss alert 7 as "used in tests"/"won't fix" and link the
      written rationale in the dismissal comment.
-   - Out of cluster, worth one line to plan 2: `AccountRepository.hash_verification_code`
-     (`squid/accounts/infrastructure/repository.py:419`) is the one place the reviewer's instinct
-     bites. A six-digit code is ~19.8 bits, and it is hashed with pepper-prefixed plain SHA-256
-     rather than HMAC. The fix there is HMAC plus attempt caps, not a KDF — the code lives ten
-     minutes and is single-use.
+   - Out of cluster, and now owned by [plan 2](02-user-identity-persistence.md) subplan 6:
+     `AccountRepository.hash_verification_code` (`squid/accounts/infrastructure/repository.py:419`)
+     is the one place the reviewer's instinct bites. A six-digit code is ~19.8 bits, hashed with
+     pepper-prefixed plain SHA-256 rather than HMAC, and looked up by code alone across every
+     outstanding code. The fix there is HMAC, a wider code, and attempt caps — not a KDF.
 
 2. **Make permission patterns a validated value everywhere they are stored**
    - Parse at every boundary that accepts a pattern: `ApiKeyService.issue` (unconditionally, not
@@ -398,6 +399,7 @@ async def apply_edit(
 | # | Thread | Comment | Disposition |
 |---|---|---|---|
 | 3787898986 | `squid/auth/application/services.py:115` | "lets use something safer than sha256" | **Retained, documented.** 256-bit random secrets, peppered HMAC, constant-time compare; a KDF defends entropy that does not exist here and adds per-request work reachable by anyone holding a key ID. Rationale written at the call site and in the deployment docs. |
+| — | `squid/accounts/infrastructure/repository.py:419` | (no thread; found auditing 3787898986) | **Handed to [plan 2](02-user-identity-persistence.md) §6.** The verification code is the one peppered digest with real entropy pressure, and it is an accounts credential, not an API one. |
 | — | `tests/fuzz/api/database.py:335` (CodeQL alert 7) | `py/weak-sensitive-data-hashing` | **Fix by reuse, then suppress.** The fixture calls `hash_secret` instead of re-deriving it; the surviving site carries an inline suppression, with UI dismissal as the fallback. Bot comment, post-cutoff, tracked here because it is the same question. |
 | 3784699433 | `squid/auth/application/ports.py:19` | "lieral or enum" | **Fix, as neither.** Scopes become `frozenset[Pattern]`. The catalogue is open by design, so a `Literal` or enum would need a migration per registered node. |
 | 3787903592 | `squid/auth/infrastructure/models.py:29` | "enum? normalize it?" | **Fix.** Normalized (parsed, de-duplicated, sorted) on write; unparsable stored rows raise `DataIntegrityError` on read. Column stays `ARRAY(Text)`, with the reason in the docstring. |
@@ -432,6 +434,40 @@ not-found errors are most of what the new service methods raise. Subplan 7 is me
 keep it in its own commits (one per rename), each regenerating `contracts/openapi.json` and the web
 SDK, so review can read the behaviour changes without the rename diff on top. Subplan 8 is
 independent.
+
+## Implementation notes
+
+Landed across `9311019d`…`5ac64ea4`. Four things the plan did not anticipate:
+
+- **The contract export was not deterministic.** `responses()` took its OpenAPI description from
+  `HTTPStatus.phrase`, which Python 3.13 changed for 422 ("Unprocessable Entity" →
+  "Unprocessable Content"). The unit suite runs on 3.12, 3.13 and 3.14, so
+  `test_committed_openapi_document_matches_application` could only ever match the interpreter that
+  last exported the document — and it was failing on 3.12 before any of this work started. Pinned
+  in `0a492f8c`, which also surfaced what the breakage was hiding: the two Java-identity refresh
+  routes from `b489c5e6` had never had their `Request-Id` response headers exported.
+- **`ReconciliationResource` needs one seam.** `squid.posts.domain.ResourceKind` is the same three
+  values as a `Literal`, and a `StrEnum` member is not assignable to it. Converting the posts
+  context too would remove two more `cast()`s, but it reaches `starboard_renderer.py` and the rest
+  of the starboard paths this review excludes. `ReconciliationResource.post_kind` writes the
+  mapping out rather than casting it, so adding a resource fails there instead of at the renderer
+  lookup.
+- **Three uses of "principal" are external contracts and stay.** The
+  `idempotency_requests.principal` column and the unique index it anchors, the `principal`
+  partition in `RateLimit-Policy`, and `SQUID_API_RATE_LIMIT_PRINCIPAL_REQUESTS`. The column
+  docstring records the trade. The idempotency application layer speaks `caller` and the repository
+  maps it, which is the same split the reconciliation queue uses.
+- **The web SDK was regenerated by hand.** `bun` is not installed in this environment, so the
+  affected JSDoc descriptions in `web/src/generated/` were edited to match what `openapi-ts` emits.
+  CI's `sdk:check` (`bun run sdk:generate && git diff --exit-code -- src/generated`) is the
+  authority; if it disagrees, take its output.
+
+Three pre-existing failures were unrelated to this plan and are fixed separately in `ce067b25`:
+`tests/unit/bot/test_command_taxonomy.py` had not been updated for the `/poll` command tree that
+`509406c2` added, and
+`tests/unit/api/test_rate_limit.py::test_api_ip_limit_returns_quota_headers_and_retry_after`
+asserted an exact `Retry-After` of 300 against a real clock, which only holds while both requests
+land inside the same second. `tests/unit/` and `tests/architecture/` are green.
 
 ## Validation
 

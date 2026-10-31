@@ -52,9 +52,25 @@ OPERATIONS = (
         canonical_operation_id="verification_create",
     ),
     _operation("get", "/v1/capabilities", "capabilities_get"),
+    _operation(
+        "get",
+        "/v1/diagnostics/errors",
+        "diagnostics_errors_list",
+        "command",
+        command="errors.list",
+        interaction="direct",
+    ),
+    _operation(
+        "get",
+        "/v1/diagnostics/errors/{reference}",
+        "diagnostics_error_get",
+        "command",
+        command="errors.show",
+        interaction="direct",
+    ),
     _operation("get", "/v1/auth/csrf", "browser_csrf_get", "browser-only"),
-    _operation("get", "/v1/auth/discord", "browser_authorization_start", "browser-only"),
-    _operation("get", "/v1/auth/discord/callback", "browser_authorization_callback", "browser-only"),
+    _operation("get", "/v1/auth/{provider}", "browser_authorization_start", "browser-only"),
+    _operation("get", "/v1/auth/{provider}/callback", "browser_authorization_callback", "browser-only"),
     _operation("post", "/v1/auth/logout", "browser_session_revoke", "browser-only"),
     _operation("get", "/v1/builds", "builds_list"),
     _operation("post", "/v1/builds", "builds_create", "browser-only"),
@@ -151,6 +167,7 @@ OPERATIONS = (
     _operation("get", "/v1/records/{record_id}", "records_get"),
     _operation("get", "/v1/records", "records_list"),
     _operation("get", "/v1/builds/{build_id}/schematics", "build_schematics_list"),
+    _operation("get", "/v1/builds/{build_id}/schematics/render", "build_schematic_render_get"),
     _operation("get", "/v1/builds/{build_id}/schematics/{schematic_id}/content", "build_schematic_content_get"),
     _operation("get", "/v1/schematic-renders/{recipe_hash}/content", "schematic_render_content_get"),
     _operation("get", "/v1/search/fields", "search_fields_list"),
@@ -307,6 +324,8 @@ _VERIFY = frozenset({"verification_create", "verification_create_compatibility"}
 _SCOPES = {
     "verification_create": ("account.verify.relay",),
     "verification_create_compatibility": ("account.verify.relay",),
+    "diagnostics_errors_list": ("diagnostics.error.read",),
+    "diagnostics_error_get": ("diagnostics.error.read",),
 }
 """Permission nodes a credential must carry, published in the contract.
 

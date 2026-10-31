@@ -5,7 +5,7 @@ import contextlib
 import logging
 import signal
 from collections.abc import AsyncGenerator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 
 from whenever import Instant
 
@@ -14,7 +14,7 @@ from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_w
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
 from squid.observability import configure_observability, record_histogram, trace_span
-from squid.runtime import BackgroundTaskSupervisor, WorkerServices
+from squid.runtime import BackgroundTaskSupervisor, WorkerServices, start_log_capture
 from squid.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.schematics.infrastructure.durable import SchematicJobRunner
 from squid.schematics.infrastructure.worker import SchematicWorkerPool
@@ -45,6 +45,7 @@ class DatabaseWorker:
         self._schematic_renders = schematic_renders
         self._schematic_pool = schematic_pool
         self._supervisor = supervisor or BackgroundTaskSupervisor()
+        self._supervisor.capture_failures_into(services.error_reports)
         self._event_lock = asyncio.Lock()
         outcome_handler = ApplyBuildVoteOutcomeHandler(services.votes, services.builds)
         notification_handler = MaterializeNotificationHandler(services.notifications)
@@ -162,11 +163,21 @@ class DatabaseWorker:
             interval=max(maintenance_interval, 300),
         )
         self._supervisor.start_periodic(
+            self._cleanup_error_reports,
+            name="error-report-retention",
+            interval=max(maintenance_interval, 300),
+        )
+        self._supervisor.start_periodic(
             self._keep_database_active,
             name="database-keepalive",
             interval=self._config.keepalive_interval_seconds,
             run_immediately=False,
         )
+
+    @property
+    def supervisor(self) -> BackgroundTaskSupervisor:
+        """The task group owner, so `main` can attach process-level jobs to it."""
+        return self._supervisor
 
     async def close(self) -> None:
         """Stop and await every worker job before application resources close."""
@@ -298,6 +309,15 @@ class DatabaseWorker:
                 extra={"squid.submissions.drafts_expired": expired},
             )
 
+    async def _cleanup_error_reports(self) -> None:
+        with trace_span("squid.worker.error_report_retention", {"squid.surface": "background_loop"}):
+            deleted = await self._services.error_reports.purge_expired()
+        if deleted:
+            logger.info(
+                "Expired error reports removed",
+                extra={"squid.diagnostics.deleted": deleted},
+            )
+
 
 async def main(process_config: WorkerProcessConfig | None = None, *, stop_event: asyncio.Event | None = None) -> None:
     """Run the worker until a process signal or caller-owned stop event fires."""
@@ -312,10 +332,13 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
                 loop.add_signal_handler(process_signal, stop.set)
 
     try:
-        async with create_worker_runtime(resolved_config.runtime) as runtime:
+        async with create_worker_runtime(resolved_config.runtime) as runtime, AsyncExitStack() as analyzers:
             schematic_config = resolved_config.runtime.schematics
             if schematic_config.enabled and engine_installed():
-                native_analyzer = SchematicWorkerPool(schematic_config)
+                # `running()` owns the workers' stderr pumps, and an anyio task group can only
+                # be exited by the task that entered it -- this one.
+                pool = SchematicWorkerPool(schematic_config)
+                native_analyzer = await analyzers.enter_async_context(pool.running())
             else:
                 native_analyzer = NullSchematicAnalyzer("The worker does not have the schematic engine installed.")
             schematic_jobs = SchematicJobRunner(
@@ -350,12 +373,21 @@ async def main(process_config: WorkerProcessConfig | None = None, *, stop_event:
             # task, so it is held here rather than inside DatabaseWorker.
             async with worker.running():
                 worker.start()
+                start_log_capture(
+                    worker.supervisor,
+                    runtime.services.error_reports,
+                    enabled=resolved_config.diagnostics.capture_logged_errors,
+                    capacity=resolved_config.diagnostics.log_capture_queue,
+                )
                 try:
                     async with ProcessHealthServer(worker_ready, port=resolved_config.worker.health_port):
                         await stop.wait()
                 finally:
                     await worker.close()
-                    await native_analyzer.aclose()
+                    # The pool's own `running()` closes it; only the null analyzer, which owns
+                    # no task group and so is not on the stack, still needs closing here.
+                    if not isinstance(native_analyzer, SchematicWorkerPool):
+                        await native_analyzer.aclose()
     finally:
         observability.shutdown()
 

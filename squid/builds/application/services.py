@@ -1,6 +1,7 @@
 """Application services for build submission and editing."""
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from uuid import UUID
 
 from whenever import Instant
@@ -17,7 +18,22 @@ from squid.builds.application.restrictions import RestrictionRepository
 from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy
 from squid.builds.domain import Build, BuildDraft, BuildLink, DoorBuild, Status
 from squid.builds.errors import BuildNotFoundError
-from squid.core.errors import InvalidStateError
+from squid.core.errors import AuthorizationError, InvalidStateError
+from squid.permissions.application.services import PermissionService
+from squid.permissions.domain import Subject
+from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+
+
+@dataclass(frozen=True, slots=True)
+class BuildEditor:
+    """Who is editing a build, in the terms the edit policy asks about.
+
+    One fact and no transport: the permission subject behind the caller, which already
+    carries the account ownership is recorded against. An HTTP request, a slash command,
+    and a modal submission all reduce to this.
+    """
+
+    subject: Subject
 
 
 class BuildService:
@@ -31,6 +47,8 @@ class BuildService:
         versions: DefaultVersionResolver,
         embeddings: BuildEmbeddingCoordinator,
         taxonomy: BuildTaxonomyResolver,
+        *,
+        permissions: PermissionService | None = None,
     ) -> None:
         self._repository = repository
         self._locks = locks
@@ -38,6 +56,7 @@ class BuildService:
         self._versions = versions
         self._embeddings = embeddings
         self._taxonomy = taxonomy
+        self._permissions = permissions
 
     async def get(self, build_id: int) -> Build | None:
         return await self._repository.get_by_id(build_id)
@@ -52,7 +71,7 @@ class BuildService:
 
     async def submit_door(self, submission: DoorSubmissionInput) -> DoorBuild:
         build = DoorBuild(
-            submitter_id=submission.submitter_id,
+            submitter_account_id=submission.submitter_account_id,
             ai_generated=submission.ai_generated,
             submission_status=Status.PENDING,
             version_spec=submission.works_in,
@@ -108,14 +127,13 @@ class BuildService:
         build.classify_restrictions(restrictions, {definition.name: definition.type for definition in definitions})
         return build
 
-    async def submit(self, build: Build, *, submitter_id: int, ai_generated: bool) -> Build:
-        """Apply legacy Discord submission metadata and persist an already prepared build.
+    async def submit(self, build: Build, *, submitter_account_id: int, ai_generated: bool) -> Build:
+        """Apply submission metadata and persist an already prepared build.
 
         The build's category is a fact of its type; callers construct the right
         subclass (or finalize a :class:`BuildDraft`) before submitting.
         """
-        build.submitter_account_id = None
-        build.submitter_id = submitter_id
+        build.submitter_account_id = submitter_account_id
         build.ai_generated = ai_generated
         build.submission_status = Status.PENDING
         await self._persist(build)
@@ -130,7 +148,7 @@ class BuildService:
         display_name: str | None,
         ai_generated: bool,
     ) -> Build:
-        """Finalize one synchronized draft under a provider-neutral account.
+        """Finalize one synchronized draft under an account, whatever identity it linked.
 
         The draft UUID is both persisted for audit and used as the retry key. A later
         finalization attempt returns the already-created build without requiring any
@@ -152,7 +170,6 @@ class BuildService:
                 )
             return existing
         build.submitter_account_id = submitter_account_id
-        build.submitter_id = None
         build.source_submission_draft_id = source_submission_draft_id
         build.display_name = display_name.strip() if display_name is not None and display_name.strip() else None
         build.ai_generated = ai_generated
@@ -179,6 +196,38 @@ class BuildService:
             timeout=timeout,
             expected_revision=expected_revision,
         )
+
+    async def apply_edit(
+        self,
+        actor: BuildEditor,
+        build_id: int,
+        patch: BuildEditPatch,
+        *,
+        expected_revision: int | None = None,
+    ) -> Build:
+        """Edit an owned pending build, or any build with `build.submission.edit`.
+
+        The authorizing wrapper around `edit()`, not a replacement for it. This
+        policy used to live in the HTTP route, which read the leased build's
+        status and submitter and decided there -- so the bot's two edit paths
+        could not reuse it, and the rule existed only for HTTP callers.
+
+        Authorization happens inside the lease because it reads the build: a
+        check before the load would race an approval that flips the build out of
+        `PENDING` between the two.
+        """
+        if self._permissions is None:
+            msg = "Authorized editing requires a permission service."
+            raise InvalidStateError(msg)
+        async with self.edit(build_id, patch, blocking=False, expected_revision=expected_revision) as lease:
+            owns = (
+                lease.build.submission_status is Status.PENDING
+                and actor.subject.account_id is not None
+                and lease.build.submitter_account_id == actor.subject.account_id
+            )
+            if not owns and not await self._permissions.allows(actor.subject, BUILD_SUBMISSION_EDIT):
+                raise AuthorizationError
+            return await lease.commit()
 
     async def confirm(self, build_id: int) -> Build:
         async with self._locks.locked(build_id):

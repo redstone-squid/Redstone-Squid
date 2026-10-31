@@ -12,6 +12,8 @@ from collections.abc import Sequence
 
 import anyio
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
 from squid.observability import add_counter, trace_span
 from squid.suggestions.application.matching import rank
 from squid.suggestions.application.ports import ComposedSuggestionProvider, SuggestionAuthorizer
@@ -99,8 +101,8 @@ class SuggestionService:
         """
         source = self._registry.resolve(source_id)
         if source.kind is not SourceKind.ENUMERABLE:
-            msg = f"{source_id} cannot be enumerated"
-            raise ValueError(msg)
+            msg = _("{source_id} cannot be enumerated")
+            raise ValidationError(msg, message_params={"source_id": source_id})
         request = SuggestionRequest(
             source=source_id,
             limit=0,

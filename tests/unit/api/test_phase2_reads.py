@@ -11,9 +11,11 @@ from fastapi.testclient import TestClient
 from squid.accounts.application import AccountService
 from squid.accounts.domain import CreatorAlias, CreatorProfile
 from squid.api.dependencies import get_services
+from squid.builds.application import BuildQueryService
+from squid.builds.domain import Build, DoorBuild, Status
 from squid.runtime import ApiServices
-from squid.schematics.application import SchematicService
-from squid.schematics.errors import SchematicNotFoundError
+from squid.schematics.application import RenderedSchematic, RenderRequest, RenderSkipReason, SchematicService
+from squid.schematics.errors import SchematicNotFoundError, SchematicRenderRefusedError
 from squid.tags.application import TagService
 from squid.tags.domain import (
     TagAuthority,
@@ -91,6 +93,40 @@ class SchematicFake(SchematicService):
         return b"\x89PNG\r\n\x1a\npreview"
 
 
+class RefusingRenderFake(SchematicService):
+    """A build whose attachment can never be previewed, whatever the camera does."""
+
+    def __init__(self) -> None:
+        pass
+
+    @override
+    def render_recipe(self, **_overrides: object) -> RenderRequest:  # type: ignore[override]
+        return RenderRequest()
+
+    @override
+    async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
+        reason = RenderSkipReason.OVER_VOLUME_BUDGET
+        raise SchematicRenderRefusedError(reason.value, reason.description)
+
+
+class ConfirmedBuildFake(BuildQueryService):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def get_public(self, build_id: int) -> Build:
+        return DoorBuild(
+            id=build_id,
+            submitter_account_id=1,
+            submission_status=Status.CONFIRMED,
+            versions=["1.21"],
+            door_width=2,
+            door_height=2,
+            patterns=["Regular"],
+            orientation="Door",
+        )
+
+
 class VoteFake(VoteService):
     def __init__(self, session: VoteSessionSnapshot) -> None:
         self.session = session
@@ -145,7 +181,7 @@ def test_tag_and_version_collections_use_page_envelope(
             "record_operator": None,
             "canonical_unit": None,
             "display_unit": None,
-            "numeric_quantum": None,
+            "numeric_step": None,
         }
     ]
     assert tags.json()["total"] == 1
@@ -185,6 +221,35 @@ def test_creator_profile_groups_public_aliases(app_factory: tuple[FastAPI, MockD
     }
 
 
+def test_an_unpreviewable_build_answers_409_with_the_reason(
+    app_factory: tuple[FastAPI, MockDatabaseManager],
+) -> None:
+    """A refusal is about the build's state, so it is a conflict rather than a 404 or a 500."""
+    app, _database = app_factory
+    _override(app, build_queries=ConfirmedBuildFake(), schematics=RefusingRenderFake())
+
+    with TestClient(app) as client:
+        response = client.get("/v1/builds/7/schematics/render")
+
+    assert response.status_code == 409
+    assert response.headers["content-type"].startswith("application/problem+json")
+    body = response.json()
+    assert body["code"] == "SCHEMATIC_RENDER_REFUSED"
+    assert body["context"] == {"reason": "over_volume_budget"}
+
+
+def test_a_render_rejects_a_camera_outside_the_supported_range(
+    app_factory: tuple[FastAPI, MockDatabaseManager],
+) -> None:
+    app, _database = app_factory
+    _override(app, build_queries=ConfirmedBuildFake(), schematics=RefusingRenderFake())
+
+    with TestClient(app) as client:
+        response = client.get("/v1/builds/7/schematics/render", params={"pitch": 120})
+
+    assert response.status_code == 422
+
+
 def test_schematic_render_content_is_immutable_png(app_factory: tuple[FastAPI, MockDatabaseManager]) -> None:
     app, _database = app_factory
     _override(app, schematics=SchematicFake())
@@ -209,7 +274,7 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
         visibility=VoteVisibility.ANONYMOUS_HIDDEN,
         guild_id=99,
         options=(VoteOption("1", VoteChoice.GENERIC, identifier="red", label="Red"),),
-        selections=(VoteSelection(111, 222, 99, "red", "1", 2.5),),
+        selections=(VoteSelection(111, 99, "red", "1", 2.5),),
     )
     _override(app, votes=VoteFake(session))
 
@@ -222,3 +287,48 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
     assert payload["options"] == [{"id": "red", "label": "Red", "choice": "generic", "position": 0}]
     assert "111" not in response.text
     assert "author_id" not in response.text
+
+
+class TestTypedNotFound:
+    """Each missing resource names itself, rather than sharing one bare
+    `NotFoundError` carrying a `resource=` string.
+
+    The default app's fakes miss on every lookup, which is exactly the case
+    under test.
+    """
+
+    def test_a_missing_tag_names_its_identifier(self, client: TestClient) -> None:
+        response = client.get("/v1/tags/404")
+
+        assert response.status_code == 404
+        problem = response.json()
+        assert problem["code"] == "TAG_NOT_FOUND"
+        assert problem["resource"] == "tag"
+        assert problem["context"] == {"tag_id": 404}
+
+    def test_a_missing_vote_session_names_its_identifier(self, client: TestClient) -> None:
+        response = client.get("/v1/vote-sessions/1234")
+
+        assert response.status_code == 404
+        problem = response.json()
+        assert problem["code"] == "VOTE_SESSION_NOT_FOUND"
+        assert problem["resource"] == "vote_session"
+        assert problem["context"] == {"vote_session_id": 1234}
+
+    def test_a_missing_creator_profile_names_its_identifier(self, client: TestClient) -> None:
+        response = client.get(f"/v1/creators/{CREATOR_PUBLIC_ID}")
+
+        assert response.status_code == 404
+        problem = response.json()
+        assert problem["code"] == "CREATOR_NOT_FOUND"
+        assert problem["resource"] == "creator"
+        assert problem["context"] == {"creator_id": str(CREATOR_PUBLIC_ID)}
+
+    def test_a_missing_record_names_its_identifier(self, client: TestClient) -> None:
+        response = client.get("/v1/records/77")
+
+        assert response.status_code == 404
+        problem = response.json()
+        assert problem["code"] == "RECORD_NOT_FOUND"
+        assert problem["resource"] == "record"
+        assert problem["context"] == {"record_id": 77}

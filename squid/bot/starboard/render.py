@@ -15,7 +15,7 @@ def starboard_layout(state: EntryState, message: discord.Message, *, locale: str
     config = state.config
     entry = state.entry
     author_name = getattr(message.author, "display_name", message.author.name)
-    avatar_url = str(message.author.display_avatar.url)
+    avatar_url = message.author.display_avatar.url
     heading = f"**{author_name}**"
     if config.ping_author:
         heading = f"{message.author.mention} · {heading}"

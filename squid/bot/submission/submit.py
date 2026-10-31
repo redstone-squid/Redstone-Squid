@@ -21,6 +21,7 @@ from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
 from squid.bot.submission.ui.views import BuildSubmissionForm
+from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.autocomplete import autocompletes, suggests
 from squid.bot.utils.components import StaticLayout, edit_layout, info_layout, no_mentions, text_layout
 from squid.bot.utils.converters import DimensionsConverter, ListConverter, fix_converter_annotations
@@ -58,10 +59,10 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     class SubmitDoorFlags(commands.FlagConverter):
         """Parameters for the `/build submit-full` command."""
 
-        def to_submission(self, submitter_id: int) -> DoorSubmissionInput:
-            """Convert Discord flags to framework-neutral submission input."""
+        def to_submission(self, submitter_account_id: int) -> DoorSubmissionInput:
+            """Convert Discord flags to the submission input the service accepts."""
             return DoorSubmissionInput(
-                submitter_id=submitter_id,
+                submitter_account_id=submitter_account_id,
                 door_size=self.door_size,
                 pattern=tuple(self.pattern),
                 door_type=self.door_type,
@@ -122,7 +123,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             locale = await resolve_locale(ctx, self.bot.services.settings)
 
             async with RunningMessage(followup, locale=locale) as message:
-                build = await self.builds.submit_door(flags.to_submission(ctx.author.id))
+                submitter_account_id = await account_id_for(self.bot.services.accounts, ctx.author)
+                build = await self.builds.submit_door(flags.to_submission(submitter_account_id))
                 build_handler = self.bot.for_build(build)
                 await followup.send(
                     view=StaticLayout(
@@ -205,16 +207,34 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         # Prefilling is safe here: `draft` was constructed empty a few lines above, so there is
         # no human-declared value to overwrite. The modal shows these as editable defaults, and
         # whatever the human submits wins from that point on.
-        analyses = await self._analyse_attachments(pending_schematics, uploader_id=interaction.user.id)
+        uploader_account_id = await account_id_for(self.bot.services.accounts, interaction.user)
+        analyses = await self._analyse_attachments(pending_schematics, uploader_account_id=uploader_account_id)
         if analyses:
             measured = analyses[0][1].analysis.metrics.dimensions
             draft.dimensions = (measured.width, measured.height, measured.length)
+
+        submitted: Build | None = None
+
+        async def persist_draft() -> None:
+            """Commit the draft from inside the form's submit button.
+
+            Anything raised here leaves the workspace message alive and clickable, so the user
+            retries from the draft they already filled in instead of rerunning the command.
+            """
+            nonlocal submitted
+            build = draft.finalize()
+            self._note_dimension_mismatch(build, analyses)
+            await self._note_schematic_duplicates(build, analyses)
+            await self.builds.submit(build, submitter_account_id=uploader_account_id, ai_generated=False)
+            await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
+            submitted = build
 
         view = BuildSubmissionForm(
             draft,
             self.builds,
             author_id=interaction.user.id,
             locale=locale,
+            on_submit=persist_draft,
         )
         workspace_message = await interaction.followup.send(  # pyrefly: ignore[no-matching-overload]
             view=view,
@@ -238,11 +258,8 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             )
             return
 
-        build = draft.finalize()
-        self._note_dimension_mismatch(build, analyses)
-        await self._note_schematic_duplicates(build, analyses)
-        await self.builds.submit(build, submitter_id=interaction.user.id, ai_generated=False)
-        await self._record_analyses(build, analyses, uploader_id=interaction.user.id)
+        assert submitted is not None, "The form only reports success once the build is persisted."
+        build = submitted
 
         preview = StaticLayout(
             discord.ui.TextDisplay(
@@ -261,7 +278,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         )
 
     async def _analyse_attachments(
-        self, pending: Sequence[tuple[str, bytes]], *, uploader_id: int
+        self, pending: Sequence[tuple[str, bytes]], *, uploader_account_id: int
     ) -> list[tuple[IngestRequest, IngestedSchematic]]:
         """Analyze uploaded schematics, dropping any the engine cannot read.
 
@@ -275,7 +292,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
 
         analysed: list[tuple[IngestRequest, IngestedSchematic]] = []
         for filename, data in pending:
-            request = IngestRequest(data=data, filename=filename, uploaded_by_discord_id=uploader_id)
+            request = IngestRequest(data=data, filename=filename, uploaded_by_account_id=uploader_account_id)
             try:
                 analysed.append((request, await schematics.ingest(request)))
             except SquidError:
@@ -283,7 +300,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         return analysed
 
     async def _record_analyses(
-        self, build: Build, analyses: Sequence[tuple[IngestRequest, IngestedSchematic]], *, uploader_id: int
+        self, build: Build, analyses: Sequence[tuple[IngestRequest, IngestedSchematic]], *, uploader_account_id: int
     ) -> None:
         """Persist the analyses now that the build has an id. The first upload is primary."""
         if build.id is None or not analyses:

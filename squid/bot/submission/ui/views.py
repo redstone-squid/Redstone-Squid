@@ -1,8 +1,9 @@
 """Models and views for discord interactions."""
 
 import asyncio
+import contextlib
 import logging
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast, override
 
@@ -34,9 +35,9 @@ from squid.bot.utils.components import (
     StaticLayout,
     card_container,
     edit_interaction_layout,
-    edit_layout,
     error_layout,
     no_mentions,
+    text_layout,
 )
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
@@ -296,7 +297,13 @@ class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
 
 
 class BuildSubmissionForm(ErrorHandledLayoutView):
-    """A private, resumable workspace for a minimal build submission."""
+    """A private, resumable workspace for a minimal build submission.
+
+    `on_submit` performs the actual submission from inside the button callback, so a
+    failure can leave the form standing for a retry. Without it the view merely records
+    the choice in `value` and stops, leaving the caller to submit after `wait()` — which
+    is fine for a caller that has nothing that can fail.
+    """
 
     actions = discord.ui.ActionRow()
 
@@ -308,6 +315,7 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
         author_id: int | None = None,
         locale: str | None = None,
         timeout: float | None = 300.0,
+        on_submit: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         super().__init__(timeout=timeout)
         build.submission_status = Status.PENDING
@@ -318,8 +326,10 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
         self.builds = builds
         self.author_id = author_id
         self.locale = locale
+        self.on_submit = on_submit
         self.validation_error: str | None = None
         self.value: bool | None = None
+        self._submitting = False
         self.edit_basics.label = t(locale, _("Edit basics"))
         self.edit_details.label = t(locale, _("Add links & details"))
         self.submit.label = t(locale, _("Submit for review"))
@@ -411,8 +421,34 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
             self.render()
             await edit_interaction_layout(interaction, self)
             return
+        if self._submitting:
+            await interaction.response.send_message(
+                view=text_layout(t(self.locale, _("This build is still being submitted. Give it a moment."))),
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+            return
+
         await interaction.response.defer()
-        self.build.submitter_id = interaction.user.id
+        if self.on_submit is not None:
+            self._submitting = True
+            try:
+                await self.on_submit()
+            except Exception:
+                # Never stop the view here: this message and its filled-in draft are the only
+                # way back, so the form has to survive the failure and stay clickable. The
+                # exception still reaches the view's error handler, which reports it beside
+                # the form as its own card.
+                self.validation_error = t(
+                    self.locale,
+                    _("Submitting failed and nothing was saved. Press “Submit for review” to try again."),
+                )
+                self.render()
+                with contextlib.suppress(discord.HTTPException):
+                    await interaction.edit_original_response(view=self, allowed_mentions=no_mentions())
+                raise
+            finally:
+                self._submitting = False
         self.value = True
         self.stop()
 
@@ -499,7 +535,17 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         was made rather than from a hardcoded comparison -- and a DM, which used
         to be refused outright, is fine for someone who holds the node.
         """
-        if self.build.submission_status is Status.PENDING and self.build.submitter_id == interaction.user.id:
+        # Compares accounts, not snowflakes: ownership is `submitter_account_id`, and
+        # `submitter_discord_id` is derived state that is absent on a freshly submitted
+        # build. Read-only resolution, so opening an edit view never mints an account.
+        actor_account_id = await interaction.client.account_ids.resolve(
+            interaction.client.services.accounts, interaction.user.id
+        )
+        if (
+            self.build.submission_status is Status.PENDING
+            and actor_account_id is not None
+            and self.build.submitter_account_id == actor_account_id
+        ):
             return True
         return await allows(interaction, BUILD_SUBMISSION_EDIT)
 
@@ -584,7 +630,9 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
     def summary_text(self) -> str:
         start = 5 * (self.page - 1)
         page_items = self.items[start : start + 5]
-        summaries = [f"{'•' if item.modified else '○'} {item.summary}" for item in page_items]
+        # Both markers are circles from the same family so only the fill differs; U+2022 BULLET
+        # renders smaller and lower than U+25CB, which made a changed field look less prominent.
+        summaries = [f"{'●' if item.modified else '○'} {item.summary}" for item in page_items]
         if self.validation_error:
             summaries.insert(
                 0, t(self.locale, _("Fix these values before review:\n{errors}"), errors=self.validation_error)
@@ -645,8 +693,16 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
             t(self.locale, _("## Review changes\n{changes}\n\nApply these changes?"), changes=changes),
             locale=self.locale,
         )
-        await interaction.response.send_message(view=confirmation, ephemeral=True, allowed_mentions=no_mentions())
-        confirmation_message = await interaction.original_response()
+        # Deferring as an update keeps this interaction's original response pointing at the
+        # workspace message, so the result can be rendered into it once the prompt is answered.
+        # The confirmation goes out as a followup because the response slot is spent on the defer.
+        await interaction.response.defer()
+        confirmation_message = await interaction.followup.send(  # pyrefly: ignore[no-matching-overload]
+            view=confirmation,
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+            wait=True,
+        )
         await confirmation.wait()
         await confirmation_message.delete()
         if confirmation.value is not True:
@@ -665,8 +721,9 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
             discord.ui.TextDisplay(t(self.locale, _("## Changes saved"))),
             await self.get_handler(interaction).render_container(),
         )
-        if interaction.message is not None:
-            await edit_layout(interaction.message, success, allowed_mentions=no_mentions())
+        # The workspace is ephemeral, and an ephemeral message only exists inside the interaction:
+        # editing it through the channel endpoint (`Message.edit`) is a 404, so go via the webhook.
+        await interaction.edit_original_response(view=success, allowed_mentions=no_mentions())
 
 
 class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]):

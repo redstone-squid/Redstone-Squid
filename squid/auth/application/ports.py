@@ -5,6 +5,29 @@ from typing import Protocol
 from whenever import Instant
 
 from squid.auth.domain import ApiKey
+from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
+from squid.permissions.domain import Pattern
+
+
+class WebSessionRepository(Protocol):
+    """Persistence required for OAuth state and opaque browser sessions."""
+
+    async def save_state(self, state: OAuthState) -> None: ...
+
+    async def consume_state(self, state: str, *, now: Instant) -> OAuthState | None: ...
+
+    async def create_session(
+        self,
+        *,
+        token_hash: bytes,
+        account_id: int,
+        expires_at: Instant,
+        user_agent: str | None,
+    ) -> str: ...
+
+    async def authenticate(self, token_hash: bytes, *, now: Instant) -> WebSessionIdentity | None: ...
+
+    async def revoke(self, token_hash: bytes, *, now: Instant) -> None: ...
 
 
 class ApiKeyRepository(Protocol):
@@ -16,7 +39,7 @@ class ApiKeyRepository(Protocol):
         key_id: str,
         secret_hash: bytes,
         label: str,
-        scopes: frozenset[str],
+        scopes: frozenset[Pattern],
         owner_account_id: int | None,
         created_by_account_id: int | None,
         expires_at: Instant | None,

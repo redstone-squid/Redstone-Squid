@@ -6,6 +6,9 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import _
+
 
 class MinecraftClientOrigin(StrEnum):
     """A server-established Minecraft client transport."""
@@ -34,11 +37,11 @@ class PublicServerProfile:
         )
         for label, value, maximum in values:
             if value is not None and (not value.strip() or len(value) > maximum):
-                msg = f"Server profile {label} must contain 1 to {maximum} characters."
-                raise ValueError(msg)
+                msg = _("Server profile {label} must contain 1 to {maximum} characters.")
+                raise ValidationError(msg, message_params={"label": label, "maximum": maximum})
         if self.sponsor_opt_in and not self.enabled:
-            msg = "Sponsor opt-in requires an enabled public server profile."
-            raise ValueError(msg)
+            msg = _("Sponsor opt-in requires an enabled public server profile.")
+            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,8 +73,8 @@ class PublishedPaperServer:
 
     def __post_init__(self) -> None:
         if not self.profile.enabled:
-            msg = "A published Paper server must have its public profile enabled."
-            raise ValueError(msg)
+            msg = _("A published Paper server must have its public profile enabled.")
+            raise ValidationError(msg)
 
 
 @dataclass(frozen=True, slots=True)

@@ -134,6 +134,11 @@ def test_api_ip_limit_returns_quota_headers_and_retry_after() -> None:
     app, database = build_app(config=config)
 
     with TestClient(app) as client:
+        # `Retry-After` is `ceil(first_event + window - now)`, so on a real clock this
+        # asserts 300 only while both requests land inside the same second. Freeze the
+        # clock the limiter reads: the value under test is the full window, not how
+        # long the test itself took.
+        app.state.rate_limiter = DistributedRateLimiter(LocalSlidingWindowRateLimiter(clock=lambda: 1_000.0))
         accepted = client.get("/v1/tags")
         denied = client.get("/v1/tags")
 

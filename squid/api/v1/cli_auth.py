@@ -2,7 +2,7 @@
 
 import hashlib
 from collections.abc import Awaitable
-from typing import Annotated, Never, Protocol, TypeVar, cast
+from typing import Annotated, Protocol, TypeVar, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
@@ -11,7 +11,7 @@ from pydantic import AnyHttpUrl
 from squid.accounts.errors import ConsentRequiredError
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
-from squid.api.security import Principal, current_principal
+from squid.api.security import Caller, current_caller
 from squid.api.v1.schemas.cli_auth import (
     CliDeviceListResponse,
     CliDeviceResponse,
@@ -34,33 +34,9 @@ from squid.cli_auth.domain import (
     IssuedCliSession,
     IssuedCliSessionChallenge,
 )
-from squid.cli_auth.errors import (
-    CliAuthorizationError,
-    CliAuthorizationPendingError,
-    CliDeviceUnavailableError,
-    CliEnrollmentAlreadyExchangedError,
-    CliEnrollmentApprovalDeniedError,
-    CliEnrollmentExpiredError,
-    CliSessionChallengeExpiredError,
-    InvalidCliDeviceProofError,
-    InvalidCliEnrollmentError,
-    InvalidCliSessionChallengeError,
-    InvalidCliSessionError,
-    TooManyActiveCliAuthorizationsError,
-)
-from squid.core.errors import (
-    AuthenticationError,
-    AuthorizationError,
-    ConflictError,
-    NotFoundError,
-    RateLimitedError,
-    ServiceUnavailableError,
-    SquidError,
-    ValidationError,
-)
+from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
 
 _T = TypeVar("_T")
-_RATE_LIMIT_RETRY_SECONDS = 60
 
 
 class CliAuthorizationHttpService(Protocol):
@@ -132,29 +108,29 @@ def get_cli_verification_uri(request: Request) -> AnyHttpUrl:
     return verification_uri
 
 
-async def current_browser_account_id(principal: Annotated[Principal, Depends(current_principal)]) -> int:
+async def current_browser_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
     """Require a signed-in browser account with current privacy consent."""
-    if principal.kind != "account" or principal.account_id is None:
+    if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
-    if principal.consent_pending:
-        raise ConsentRequiredError(principal.discord_id, account_id=principal.account_id)
-    return principal.account_id
+    if caller.consent_pending:
+        raise ConsentRequiredError(account_id=caller.account_id)
+    return caller.account_id
 
 
-async def current_cli_identity(principal: Annotated[Principal, Depends(current_principal)]) -> CliIdentity:
+async def current_cli_identity(caller: Annotated[Caller, Depends(current_caller)]) -> CliIdentity:
     """Require an authenticated CLI session with its exact device provenance."""
     if (
-        principal.kind != "cli"
-        or principal.account_id is None
-        or principal.cli_device_id is None
-        or principal.cli_session_id is None
+        caller.kind != "cli"
+        or caller.account_id is None
+        or caller.cli_device_id is None
+        or caller.cli_session_id is None
     ):
         raise AuthenticationError
     return CliIdentity(
-        account_id=principal.account_id,
-        device_id=principal.cli_device_id,
-        session_id=principal.cli_session_id,
-        consent_pending=principal.consent_pending,
+        account_id=caller.account_id,
+        device_id=caller.cli_device_id,
+        session_id=caller.cli_session_id,
+        consent_pending=caller.consent_pending,
     )
 
 
@@ -352,38 +328,7 @@ async def revoke_current_session(
 
 
 async def _execute(operation: Awaitable[_T]) -> _T:
-    try:
-        return await operation
-    except CliAuthorizationError as error:
-        _raise_transport_error(error)
-
-
-def _raise_transport_error(error: CliAuthorizationError) -> Never:
-    public_context = {"cli_auth_code": error.code}
-    mapped: SquidError
-    if isinstance(error, InvalidCliSessionError):
-        mapped = AuthenticationError(str(error), public_context=public_context)
-    elif isinstance(error, CliDeviceUnavailableError):
-        mapped = NotFoundError(str(error), public_context=public_context)
-    elif isinstance(error, CliEnrollmentApprovalDeniedError):
-        mapped = AuthorizationError(str(error), public_context=public_context)
-    elif isinstance(error, TooManyActiveCliAuthorizationsError):
-        mapped = RateLimitedError(_RATE_LIMIT_RETRY_SECONDS).with_context(public_context=public_context)
-    elif isinstance(error, (InvalidCliEnrollmentError, InvalidCliDeviceProofError, InvalidCliSessionChallengeError)):
-        mapped = ValidationError(str(error), public_context=public_context)
-    elif isinstance(
-        error,
-        (
-            CliAuthorizationPendingError,
-            CliEnrollmentAlreadyExchangedError,
-            CliEnrollmentExpiredError,
-            CliSessionChallengeExpiredError,
-        ),
-    ):
-        mapped = ConflictError(str(error), public_context=public_context)
-    else:
-        mapped = ValidationError(public_context=public_context)
-    raise mapped from None
+    return await operation
 
 
 def _prevent_storage(response: Response) -> None:

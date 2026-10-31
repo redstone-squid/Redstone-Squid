@@ -9,7 +9,8 @@ import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 
-from squid.core.errors import ErrorCode, NotFoundError
+from squid.core.errors import ErrorCode, InvalidStateError, NotFoundError
+from squid.core.i18n import _
 from squid.suggestions.application.ports import ComposedSuggestionProvider, SuggestionProvider
 from squid.suggestions.domain import SourceKind, ValueType, Visibility
 
@@ -49,11 +50,11 @@ class SuggestionSource:
 
     def __post_init__(self) -> None:
         if not SOURCE_ID_PATTERN.match(self.id):
-            msg = f"invalid suggestion source id: {self.id!r}"
-            raise ValueError(msg)
+            msg = _("invalid suggestion source id: {source_id!r}")
+            raise InvalidStateError(msg, message_params={"source_id": self.id})
         if (self.visibility is Visibility.REQUIRES_NODE) != (self.required_node is not None):
-            msg = f"{self.id}: required_node must be set exactly when visibility is requires_node"
-            raise ValueError(msg)
+            msg = _("{source_id}: required_node must be set exactly when visibility is requires_node")
+            raise InvalidStateError(msg, message_params={"source_id": self.id})
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,8 +69,8 @@ class SuggestionRegistry:
         registered: dict[str, SuggestionSource] = {}
         for source in sources:
             if source.id in registered:
-                msg = f"duplicate suggestion source: {source.id}"
-                raise ValueError(msg)
+                msg = _("duplicate suggestion source: {source_id}")
+                raise InvalidStateError(msg, message_params={"source_id": source.id})
             registered[source.id] = source
         return cls(registered)
 

@@ -10,7 +10,7 @@ from itertools import pairwise
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
@@ -18,16 +18,18 @@ from whenever import Instant
 
 from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Door, Extender
+from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.application.models import (
-    ActiveRecord,
     CandidateFacet,
     CategoryIdentity,
     ComputationBatch,
     ComputedRecord,
+    PublishedRecord,
     RecordGap,
     RecordSourceCandidate,
     TitleDiagnosticGap,
 )
+from squid.records.application.ports import RecomputeLease
 from squid.records.domain import (
     BuildKind,
     DoorCategory,
@@ -58,12 +60,28 @@ RULESET_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb
 CALCULATOR_VERSION = "3"
 FORMATTER_VERSION = "2"
 
+RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
+    name="record_recomputation",
+    model=RecordRecomputeQueueItem,
+    key=(RecordRecomputeQueueItem.id,),
+    available_at=RecordRecomputeQueueItem.available_at,
+    enqueued_at=RecordRecomputeQueueItem.enqueued_at,
+    claimed_at=RecordRecomputeQueueItem.locked_at,
+    claim_token=RecordRecomputeQueueItem.claim_token,
+    attempts=RecordRecomputeQueueItem.attempts,
+    last_error=RecordRecomputeQueueItem.last_error,
+    # No `dead_at`: this queue must never stop retrying. A stuck recomputation is a
+    # visible staleness bug, where a dead-lettered one is invisible -- at the cost
+    # that a poisoned scope can spin forever.
+)
+
 
 class PostgresRecordRepository:
     """Load record candidates and atomically publish computation runs."""
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
+        self._recompute_queue = ClaimedRowQueue(RECORD_RECOMPUTE_QUEUE_SPEC, session_factory)
 
     async def list_confirmed(self, kind: BuildKind) -> Sequence[RecordSourceCandidate]:
         """Load confirmed fixed candidates of one supported kind."""
@@ -128,8 +146,10 @@ class PostgresRecordRepository:
                         set_={
                             "reasons": ["ruleset_activation"],
                             "enqueued_at": func.now(),
+                            "available_at": func.now(),
                             "attempts": 0,
                             "locked_at": None,
+                            "claim_token": None,
                             "last_error": None,
                         },
                     )
@@ -313,12 +333,12 @@ class PostgresRecordRepository:
                 for definition in definitions
             )
 
-    async def get_active_record(self, result_id: int) -> ActiveRecord | None:
-        """Return an active result by its public result identifier."""
+    async def get_published_record(self, result_id: int) -> PublishedRecord | None:
+        """Return a published result by its public result identifier."""
         records = await self._active_records(result_id=result_id, limit=1)
         return records[0] if records else None
 
-    async def list_active_records(
+    async def list_published_records(
         self,
         *,
         offset: int,
@@ -326,8 +346,8 @@ class PostgresRecordRepository:
         before_id: int | None,
         descending: bool,
         limit: int,
-    ) -> Sequence[ActiveRecord]:
-        """List one page of active results in display order.
+    ) -> Sequence[PublishedRecord]:
+        """List one page of published results in display order.
 
         ID anchors page relative to the display order; a `before_id` page is fetched in reversed
         order and restored in memory, leaving its overfetched row at the front for the caller.
@@ -341,8 +361,8 @@ class PostgresRecordRepository:
             limit=limit,
         )
 
-    async def count_active_records(self) -> int:
-        """Count active results across the currently active computation runs."""
+    async def count_published_records(self) -> int:
+        """Count the results belonging to the currently active computation runs."""
         async with self._session_factory() as session:
             statement = (
                 select(func.count())
@@ -361,7 +381,7 @@ class PostgresRecordRepository:
         before_id: int | None = None,
         descending: bool = True,
         limit: int,
-    ) -> tuple[ActiveRecord, ...]:
+    ) -> tuple[PublishedRecord, ...]:
         async with self._session_factory() as session:
             statement = (
                 select(RecordResult, RecordDefinition)
@@ -402,7 +422,7 @@ class PostgresRecordRepository:
             for holder_result_id, build_id in holder_rows:
                 holders.setdefault(holder_result_id, []).append(build_id)
             return tuple(
-                ActiveRecord(
+                PublishedRecord(
                     id=result.id,
                     definition_id=definition.id,
                     competition_id=definition.competition_id,
@@ -502,55 +522,43 @@ class PostgresRecordRepository:
                     set_={
                         "reasons": [reason],
                         "enqueued_at": func.now(),
+                        "available_at": func.now(),
                         "locked_at": None,
+                        "claim_token": None,
                         "last_error": None,
                     },
                 )
             )
             await session.execute(statement)
 
-    async def claim_recompute_kinds(self, *, limit: int) -> Sequence[BuildKind]:
-        """Lease queued scopes without holding locks during computation."""
-        async with self._session_factory() as session, session.begin():
-            statement = (
-                select(RecordRecomputeQueueItem)
-                .where(RecordRecomputeQueueItem.locked_at.is_(None))
-                .order_by(RecordRecomputeQueueItem.enqueued_at)
-                .limit(limit)
-                .with_for_update(skip_locked=True)
-            )
-            items = tuple((await session.execute(statement)).scalars())
-            now = Instant.now()
-            for item in items:
-                item.locked_at = now
-                item.attempts += 1
-            return tuple(dict.fromkeys(BuildKind(item.build_kind) for item in items))
+    async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
+        """Lease queued scopes without holding locks during computation.
 
-    async def complete_recompute(self, kinds: Sequence[BuildKind]) -> None:
-        """Acknowledge successfully rebuilt leased scopes."""
-        if not kinds:
-            return
-        async with self._session_factory() as session, session.begin():
-            await session.execute(
-                delete(RecordRecomputeQueueItem).where(
-                    RecordRecomputeQueueItem.build_kind.in_(kind.value for kind in kinds),
-                    RecordRecomputeQueueItem.locked_at.is_not(None),
-                )
-            )
+        A crashed worker used to hold its lease forever: the claim filtered
+        `locked_at IS NULL` with no visibility timeout at all, so a row locked by a
+        killed process was never reclaimed and reported as in-flight indefinitely.
+        The shared readiness predicate brings the timeout with it.
+        """
+        rows = await self._recompute_queue.claim(limit=limit)
+        return RecomputeLease(
+            kinds=tuple(dict.fromkeys(BuildKind(row.build_kind) for row in rows)),
+            claim_tokens=tuple(self._recompute_queue.token_of(row) for row in rows),
+        )
 
-    async def fail_recompute(self, kinds: Sequence[BuildKind], error: str) -> None:
-        """Release failed leases for a later retry."""
-        if not kinds:
-            return
-        async with self._session_factory() as session, session.begin():
-            await session.execute(
-                update(RecordRecomputeQueueItem)
-                .where(
-                    RecordRecomputeQueueItem.build_kind.in_(kind.value for kind in kinds),
-                    RecordRecomputeQueueItem.locked_at.is_not(None),
-                )
-                .values(locked_at=None, last_error=error)
-            )
+    async def complete_recompute(self, lease: RecomputeLease) -> None:
+        """Acknowledge the leased scopes this worker still owns.
+
+        Acknowledging by kind destroyed work: `enqueue` upserts on `scope_key` and
+        clears the lock, so new work arriving for a kind mid-run was claimed by a
+        second worker and then deleted by the first one's `WHERE build_kind IN (...)
+        AND locked_at IS NOT NULL`. Fencing on the tokens this worker was handed
+        leaves the other worker's row alone.
+        """
+        await self._recompute_queue.complete_batch(lease.claim_tokens)
+
+    async def fail_recompute(self, lease: RecomputeLease, error: str) -> None:
+        """Release the failed leases this worker still owns for a later retry."""
+        await self._recompute_queue.fail_batch(lease.claim_tokens, error=error)
 
     async def _list_doors(self, session: AsyncSession) -> Sequence[RecordSourceCandidate]:
         statement = (

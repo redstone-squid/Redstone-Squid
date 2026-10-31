@@ -139,7 +139,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         }
         footer = f"Submission ID: {build.id}"
         if build.edited_time is not None:
-            footer += f" • Updated <t:{int(build.edited_time.timestamp())}:R>"
+            footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
         container = card_container(
             format_build_display_title(build, markdown=True, current_version=current_java_version),
             await self.get_description(),
@@ -241,7 +241,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             fields["Creators"] = ", ".join(sorted(build.creators_ign))
 
         if build.completion_time:
-            fields["Date Of Completion"] = str(build.completion_time)
+            fields["Date Of Completion"] = build.completion_time
 
         if sponsor := build.sponsor:
             credit = sponsor.display_name or sponsor.address or "Public Paper server"

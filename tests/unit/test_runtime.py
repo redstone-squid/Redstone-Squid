@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 from dataclasses import fields
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import anyio
@@ -15,7 +16,7 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
     bot = {field.name for field in fields(BotServices)}
     worker = {field.name for field in fields(WorkerServices)}
 
-    assert api.isdisjoint({"build_inference", "discord_sync", "domain_events", "search_embeddings"})
+    assert api.isdisjoint({"build_inference", "discord_reconciliation", "domain_events", "search_embeddings"})
     assert bot.isdisjoint(
         {"api_keys", "web_auth", "cli_authorization", "vote_members", "search_embeddings", "schematic_jobs"}
     )
@@ -38,6 +39,9 @@ def test_process_service_bundles_expose_only_owned_capabilities() -> None:
         "record_queue_health",
         "purge_idempotency",
         "expire_submission_drafts",
+        # Shared with the API and bot bundles rather than owned: all three capture failures, and
+        # the worker is only the one that sweeps expired reports.
+        "error_reports",
     }
 
 
@@ -94,6 +98,62 @@ async def test_background_task_supervisor_reports_fresh_periodic_heartbeats() ->
 
         assert supervisor.is_healthy({"heartbeat"}, max_age_seconds=1) is True
         assert supervisor.is_healthy({"heartbeat", "missing"}, max_age_seconds=1) is False
+
+
+async def test_background_task_supervisor_captures_a_failed_run() -> None:
+    """A background job answers nobody, so a log line was the only trace it ever left."""
+    captured: list[dict[str, object]] = []
+    failed = anyio.Event()
+
+    class Reports:
+        async def record(self, error: BaseException, **kwargs: object) -> None:
+            captured.append({"error": error, **kwargs})
+
+    async def operation() -> None:
+        failed.set()
+        msg = "job exploded"
+        raise RuntimeError(msg)
+
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        supervisor.capture_failures_into(cast(Any, Reports()))
+        supervisor.start_periodic(operation, name="doomed", interval=60)
+        await failed.wait()
+        await asyncio.sleep(0)
+        await supervisor.close()
+
+    assert captured
+    assert captured[0]["surface"] == "background_job"
+    assert captured[0]["origin"] == "doomed"
+    correlation = captured[0]["correlation_id"]
+    assert isinstance(correlation, str)
+    assert captured[0]["reference"] == correlation[:12]
+
+
+async def test_background_task_supervisor_survives_a_failing_report_store() -> None:
+    """Losing the diagnostic must not also stop the loop that produced it."""
+    runs = 0
+    twice = anyio.Event()
+
+    class Reports:
+        async def record(self, error: BaseException, **kwargs: object) -> None:
+            msg = "the database is down"
+            raise RuntimeError(msg)
+
+    async def operation() -> None:
+        nonlocal runs
+        runs += 1
+        if runs >= 2:
+            twice.set()
+        msg = "job exploded"
+        raise RuntimeError(msg)
+
+    async with BackgroundTaskSupervisor().running() as supervisor:
+        supervisor.capture_failures_into(cast(Any, Reports()))
+        supervisor.start_periodic(operation, name="doomed", interval=0.001)
+        await twice.wait()
+        await supervisor.close()
+
+    assert runs >= 2
 
 
 async def test_background_task_supervisor_bounds_feature_cancellation() -> None:

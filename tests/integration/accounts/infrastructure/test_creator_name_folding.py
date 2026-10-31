@@ -10,7 +10,7 @@ skip, plus a check constraint for the paths that bypass the ORM entirely.
 # matter here: they are the inputs whose folding this file exists to pin.
 
 import pytest
-from sqlalchemy import select, text
+from sqlalchemy import Table, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -56,8 +56,10 @@ async def test_core_on_conflict_insert_writes_the_fold(
 async def test_executemany_writes_the_fold(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
+    alias_table = CreatorAlias.__table__
+    assert isinstance(alias_table, Table)  # Declarative only promises the wider `FromClause`.
     async with migrated_session_factory.begin() as session:
-        await session.execute(CreatorAlias.__table__.insert(), [{"name": "ﬁx"}, {"name": " Bob "}])
+        await session.execute(alias_table.insert(), [{"name": "ﬁx"}, {"name": " Bob "}])
 
     assert await _stored_fold(migrated_session_factory, "ﬁx") == "fix"
     assert await _stored_fold(migrated_session_factory, " Bob ") == "bob"

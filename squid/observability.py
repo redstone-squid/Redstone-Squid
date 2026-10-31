@@ -3,7 +3,8 @@
 import logging
 import os
 import threading
-from collections.abc import Callable, Iterator, Mapping
+from collections import OrderedDict, deque
+from collections.abc import Callable, Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from typing import TYPE_CHECKING, Any, override
@@ -17,6 +18,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 type SpanAttribute = str | bool | int | float
+
+CORRELATION_REFERENCE_LENGTH = 12
+"""Hex characters shown to users: 48 bits, and the width of the untraced fallback.
+
+The requirement is that one reported reference resolves to one incident within the retention
+window, so the bound is `N / 2**48`: at 10 000 unexpected errors per window that is ~4e-11, and
+even the stricter all-pairs-distinct bound, `N**2 / 2**49`, is ~2e-7. Eight characters would put
+that all-pairs bound near 1% for the same volume, which is why the prefix is not shortened further.
+"""
 
 # Request-scoped correlation id, bound by the API's RequestContextMiddleware. When set it wins
 # over the trace-derived id so a whole request shares one id even without the observability extra.
@@ -74,6 +84,89 @@ class TraceContextFilter(logging.Filter):
         if not hasattr(record, "request_id"):
             record.request_id = _bound_correlation_id.get()
         return True
+
+
+CORRELATION_BUFFER_HANDLER = "correlation_buffer"
+"""dictConfig name under which `CorrelatedLogBuffer` is installed, when it is enabled."""
+
+
+class CorrelatedLogBuffer(logging.Handler):
+    """Keep the most recent log lines per correlation ID so an error can be explained.
+
+    Records are formatted on arrival rather than held: a `LogRecord` keeps its `args` and
+    `exc_info` alive, so buffering thousands of them would pin arbitrary application objects for
+    as long as the correlation lives. Formatting eagerly costs a little CPU on the logging path
+    and bounds the memory to text we already know we want.
+
+    Both dimensions are bounded. `max_correlations` evicts whole correlations in insertion order,
+    which for request-scoped IDs is close enough to least-recently-used, and `max_records` caps
+    each one, so a single pathological loop cannot displace every other correlation's tail.
+    """
+
+    def __init__(self, *, max_records: int = 50, max_correlations: int = 256) -> None:
+        super().__init__()
+        self._max_records = max_records
+        self._max_correlations = max_correlations
+        self._buffers: OrderedDict[str, deque[str]] = OrderedDict()
+
+    @override
+    def emit(self, record: logging.LogRecord) -> None:
+        correlation = getattr(record, "request_id", None)
+        if not isinstance(correlation, str):
+            return
+        try:
+            formatted = self.format(record)
+        except Exception:
+            self.handleError(record)
+            return
+        # `acquire`/`release` rather than `with self.lock`: Handler.lock is optional, and these
+        # tolerate its absence the way the rest of logging does.
+        self.acquire()
+        try:
+            buffer = self._buffers.get(correlation)
+            if buffer is None:
+                buffer = deque(maxlen=self._max_records)
+                self._buffers[correlation] = buffer
+                while len(self._buffers) > self._max_correlations:
+                    self._buffers.popitem(last=False)
+            else:
+                self._buffers.move_to_end(correlation)
+            buffer.append(formatted)
+        finally:
+            self.release()
+
+    def snapshot(self, correlation: str) -> tuple[str, ...]:
+        """Read a correlation's buffered lines without consuming them.
+
+        Log-driven capture uses this rather than `drain`: one run can log several failures, and
+        the first of them must not take the context away from the rest, or from a later explicit
+        capture on the same correlation.
+        """
+        self.acquire()
+        try:
+            buffer = self._buffers.get(correlation)
+            return tuple(buffer) if buffer is not None else ()
+        finally:
+            self.release()
+
+    def drain(self, correlation: str) -> tuple[str, ...]:
+        """Take and forget everything buffered under `correlation`.
+
+        Draining rather than copying keeps a captured error from being reported twice with the
+        same tail, and releases the memory at the one moment we know the correlation is over.
+        """
+        self.acquire()
+        try:
+            buffer = self._buffers.pop(correlation, None)
+        finally:
+            self.release()
+        return tuple(buffer) if buffer is not None else ()
+
+
+def correlated_log_buffer() -> CorrelatedLogBuffer | None:
+    """Return this process's installed log buffer, if logging was configured with one."""
+    handler = logging.getHandlerByName(CORRELATION_BUFFER_HANDLER)
+    return handler if isinstance(handler, CorrelatedLogBuffer) else None
 
 
 class ObservabilityHandle:
@@ -165,7 +258,37 @@ def correlation_id() -> str:
 
 
 @contextmanager
-def trace_span(name: str, attributes: Mapping[str, SpanAttribute] | None = None) -> Iterator[TraceSpan]:
+def correlation_scope() -> Generator[str]:
+    """Bind one correlation ID for the duration of a unit of work, and yield it.
+
+    Re-entrant on purpose: a nested scope keeps the outer binding rather than minting a second
+    ID. A hybrid command arrives through the application command tree and is then invoked through
+    the prefix path, so both scopes open around the same invocation and must agree.
+    """
+    existing = _bound_correlation_id.get()
+    if existing is not None:
+        yield existing
+        return
+    resolved = correlation_id()
+    token = bind_correlation_id(resolved)
+    try:
+        yield resolved
+    finally:
+        unbind_correlation_id(token)
+
+
+def correlation_reference(correlation_id: str) -> str:
+    """Shorten a correlation ID for display without changing what is stored or sent.
+
+    A 32-hex trace ID becomes its first 12 characters; the untraced fallback is already that
+    width, so this is the identity function for it. Both paths therefore look the same to a user
+    reading an error card and to whoever they report it to.
+    """
+    return correlation_id[:CORRELATION_REFERENCE_LENGTH]
+
+
+@contextmanager
+def trace_span(name: str, attributes: Mapping[str, SpanAttribute] | None = None) -> Generator[TraceSpan]:
     """Start an application-edge span, or yield a no-op facade without the extra."""
     if _telemetry_active_pid != os.getpid():
         yield TraceSpan()
@@ -208,7 +331,7 @@ def extracted_trace_span(
     name: str,
     carrier: Mapping[str, Any],
     attributes: Mapping[str, SpanAttribute] | None = None,
-) -> Iterator[TraceSpan]:
+) -> Generator[TraceSpan]:
     """Extract a parent context and start a child span, tolerating absent propagation."""
     if _telemetry_active_pid != os.getpid():
         yield TraceSpan()
@@ -401,6 +524,9 @@ def _signal_endpoint(endpoint: str, signal: str) -> str:
 
 
 __all__ = [
+    "CORRELATION_BUFFER_HANDLER",
+    "CORRELATION_REFERENCE_LENGTH",
+    "CorrelatedLogBuffer",
     "ObservabilityHandle",
     "TraceContextFilter",
     "TraceSpan",
@@ -408,7 +534,10 @@ __all__ = [
     "add_counter",
     "bind_correlation_id",
     "configure_observability",
+    "correlated_log_buffer",
     "correlation_id",
+    "correlation_reference",
+    "correlation_scope",
     "extracted_trace_span",
     "inject_trace_context",
     "install_trace_context_log_filter",

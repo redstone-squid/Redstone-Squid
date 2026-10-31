@@ -1,5 +1,7 @@
-"""Provider-neutral account application services."""
+"""Account application services: one account may hold Discord and Java identities alike."""
 
+import logging
+import secrets
 from collections.abc import Awaitable, Callable, Sequence
 from uuid import UUID
 
@@ -16,6 +18,7 @@ from squid.accounts.domain import (
     CreatorProfile,
     IdentityProvider,
     IdentityRefresh,
+    LinkReservation,
     RecentAccountProof,
 )
 from squid.accounts.errors import (
@@ -25,9 +28,48 @@ from squid.accounts.errors import (
     ConsentRequiredError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
+    LinkReservationExpiredError,
     MinecraftAccountNotFoundError,
     NoLinkedMinecraftAccountError,
+    VerificationAttemptsExhaustedError,
 )
+from squid.core.errors import InvalidStateError
+
+logger = logging.getLogger(__name__)
+
+VERIFICATION_MAX_CONSECUTIVE_FAILURES = 5
+"""Wrong codes tolerated in a row before an identity has to wait.
+
+Generous enough that mistyping a ten-digit code is never the problem, and small enough that the
+guessing budget stays far below the code space even across many windows.
+"""
+
+VERIFICATION_LOCKOUT_SECONDS = 15 * 60
+"""Longer than a code lives, so a lockout always outlasts the codes it was protecting."""
+
+VERIFICATION_CODE_DIGITS = 10
+
+LINK_RESERVATION_TTL_SECONDS = 180
+"""How long a held code waits for its consent prompt to be answered.
+
+Comfortably longer than the prompt's own 120-second timeout, so the view always expires first and
+the user sees a disabled prompt rather than a hold that lapsed underneath a live one.
+"""
+
+
+def generate_verification_code() -> int:
+    """Mint a ten-digit verification code, about 33 bits.
+
+    Six digits was about 19.8 bits, and the redemption looks a code up by code alone across every
+    outstanding code, so the chance per attempt was `outstanding / 900_000` rather than one in
+    900 000 — and a hit links the victim's Minecraft account to the guesser.
+
+    Stays numeric on purpose: `/verify` returns an `int` to the in-game plugin that shows the code
+    to the player, so base32 would be stronger and would also change that response type. Thirty-three
+    bits against a ten-minute window and a capped attempt budget is already decisive.
+    """
+    lower = 10 ** (VERIFICATION_CODE_DIGITS - 1)
+    return secrets.randbelow(9 * lower) + lower
 
 
 class AccountService:
@@ -43,26 +85,32 @@ class AccountService:
         self._minecraft_username_lookup = minecraft_username_lookup
         self._verification_code_factory = verification_code_factory
 
-    async def get_account(self, discord_id: int) -> Account | None:
-        """Return the account holding *discord_id*, or ``None``."""
-        return await self._repository.get_by_discord_id(discord_id)
+    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
+        """Return the account holding one canonical provider subject, or ``None``."""
+        return await self._repository.get_by_identity(provider, subject)
 
     async def get_account_by_id(self, account_id: int) -> Account | None:
         """Return an account by its internal identifier."""
         return await self._repository.get_by_id(account_id)
 
-    async def get_or_create_account(self, discord_id: int) -> Account:
-        """Resolve the account established by a Discord OAuth or gateway identity."""
-        return await self._repository.get_or_create_discord(discord_id)
+    async def get_accounts(self, account_ids: Sequence[int]) -> dict[int, Account]:
+        """Return several accounts, with their identities, at a fixed query cost.
 
-    async def grant_current_consent(self, discord_id: int) -> Account:
-        """Record acceptance of the current privacy notice for a Discord-identified caller."""
-        account = await self._repository.get_by_discord_id(discord_id)
-        if account is None or account.id is None:
-            raise AccountNotFoundError(discord_id=discord_id)
-        return await self._repository.update_consent(account.id, AccountConsent.grant_current())
+        Anything rendering a list of account-keyed rows needs this rather than a
+        `get_account_by_id` per row.
+        """
+        return await self._repository.get_many(account_ids)
 
-    async def grant_current_consent_for_account(self, account_id: int) -> Account:
+    async def get_or_create_identity(self, provider: IdentityProvider, subject: str) -> Account:
+        """Resolve the account established by a verified external identity, creating it if absent.
+
+        Every caller holds evidence of the *provider* subject it passes — an OAuth exchange, a
+        gateway event — which is what makes creating an account here legitimate. Nothing that
+        merely observes a subject may use this; see `AccountIdCache`'s never-create rule.
+        """
+        return await self._repository.get_or_create_identity(provider, subject)
+
+    async def grant_current_consent(self, account_id: int) -> Account:
         """Record consent for any authenticated caller, however they proved their identity."""
         return await self._repository.update_consent(account_id, AccountConsent.grant_current())
 
@@ -91,27 +139,124 @@ class AccountService:
         """Return a public creator profile, following permanent merge redirects."""
         return await self._repository.get_creator_profile(public_id)
 
+    async def guard_verification_attempts(self, attempted_by: tuple[IdentityProvider, str]) -> None:
+        """Refuse a redemption while *attempted_by* is in its cooling-off period.
+
+        Separate from the redemption itself so anything that tests a code — a redemption now, a
+        reservation later — passes through one cap instead of each surface growing its own.
+        """
+        provider, subject = attempted_by
+        locked_until = await self._repository.verification_lockout(provider, subject)
+        if locked_until is not None:
+            retry_after = max(1, round((locked_until - Instant.now()).total("seconds")))
+            # The subject is deliberately not logged: for Discord it is a user ID, which
+            # `_safe_log_context` strips everywhere else. The provider and the wait are what an
+            # operator needs to tell abuse from a confused user.
+            logger.warning(
+                "verification.locked_out",
+                extra={"provider": provider.value, "retry_after": retry_after},
+            )
+            raise VerificationAttemptsExhaustedError(retry_after)
+
+    async def reserve_minecraft_link(
+        self,
+        code: str,
+        *,
+        attempted_by: tuple[IdentityProvider, str],
+        ttl_seconds: int = LINK_RESERVATION_TTL_SECONDS,
+    ) -> LinkReservation:
+        """Hold a code so a consent prompt can say what agreeing to it will do.
+
+        This is where a wrong code now fails — before the notice is read, rather than after it has
+        been agreed to. It is also where the guessing happens, so it is capped like a redemption:
+        without that, reserving would be an uncapped oracle sitting beside a capped one.
+        """
+        await self.guard_verification_attempts(attempted_by)
+        reservation = await self._repository.reserve_verification_code(code, ttl_seconds=ttl_seconds)
+        if reservation is None:
+            await self._record_verification_failure(attempted_by)
+            raise InvalidVerificationCodeError
+        return reservation
+
+    async def release_minecraft_link(self, code: str, reservation: LinkReservation) -> None:
+        """Give a held code back after a declined or abandoned prompt.
+
+        Best-effort by design: if this never runs, `reserved_until` lapses on its own, so a crash
+        costs one prompt's delay rather than a permanently stuck code.
+        """
+        await self._repository.release_verification_code(code, reservation.token)
+
     async def link_minecraft_account(
-        self, discord_id: int, code: str, *, consent: AccountConsent
-    ) -> CreatorAlias | None:
-        """Attach a verified Java identity using a valid one-time code."""
+        self,
+        account_id: int,
+        code: str,
+        *,
+        consent: AccountConsent,
+        attempted_by: tuple[IdentityProvider, str],
+        reservation: LinkReservation | None = None,
+    ) -> IdentityRefresh:
+        """Attach a verified Java identity to an existing account using a valid one-time code.
+
+        *attempted_by* is the identity being rate-limited, which is not the same thing as
+        *account_id*: the cap has to survive a caller who has no account yet, and it is keyed on the
+        external identity doing the guessing.
+
+        Passing the *reservation* taken before the consent prompt commits that hold. The guessing was
+        already charged and capped at reservation time, so this path does not charge again — the
+        caller has demonstrably held a valid code since then.
+
+        Returns the whole reconciliation rather than just the alias it claimed, so linking can describe
+        its outcome in the same words as a refresh — including the contested case, which the alias
+        alone cannot express.
+        """
+        if reservation is None:
+            await self.guard_verification_attempts(attempted_by)
         result = await self._repository.consume_code_and_link_account(
-            discord_id=discord_id,
+            account_id=account_id,
             code=code,
             consent=consent,
+            reservation_token=None if reservation is None else reservation.token,
         )
+        if result.reservation_expired:
+            raise LinkReservationExpiredError
         if result.account is None:
+            # A wrong code is the only failure that counts: the conflicts below prove the caller
+            # held a *correct* code, so charging them for it would let anyone lock out a user
+            # whose account is already linked.
+            if reservation is None:
+                await self._record_verification_failure(attempted_by)
             raise InvalidVerificationCodeError
         if result.conflicting_java_uuid is not None:
             raise AccountAlreadyLinkedError(
-                discord_id=discord_id,
+                account_id=account_id,
                 minecraft_uuid=result.conflicting_java_uuid,
             )
-        return result.claimed_alias
+        await self._repository.clear_verification_failures(*attempted_by)
+        if result.refresh is None:
+            # The repository sets `refresh` on every path that consumed a code, so this is a broken
+            # adapter rather than a reachable state.
+            message = "A consumed verification code produced no identity reconciliation."
+            raise InvalidStateError(message)
+        return result.refresh
 
-    async def unlink_minecraft_account(self, discord_id: int) -> bool:
-        """Unlink every Java identity from the Discord-linked account."""
-        return await self._repository.unlink_java_identity(discord_id)
+    async def _record_verification_failure(self, attempted_by: tuple[IdentityProvider, str]) -> None:
+        """Charge one refused code against an identity's budget and log a resulting lockout."""
+        provider, subject = attempted_by
+        locked_until = await self._repository.record_verification_failure(
+            provider,
+            subject,
+            max_failures=VERIFICATION_MAX_CONSECUTIVE_FAILURES,
+            lockout_seconds=VERIFICATION_LOCKOUT_SECONDS,
+        )
+        if locked_until is not None:
+            logger.warning(
+                "verification.lockout_started",
+                extra={"provider": provider.value, "locked_until": str(locked_until)},
+            )
+
+    async def unlink_minecraft_account(self, account_id: int) -> bool:
+        """Unlink every Java identity from an account."""
+        return await self._repository.unlink_java_identity(account_id)
 
     async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
         """Re-read the linked Java name from Mojang and reconcile the creator credit.
@@ -145,13 +290,13 @@ class AccountService:
             username=username,
         )
 
-    async def request_alias_claim(self, discord_id: int, name: str) -> AliasClaim:
+    async def request_alias_claim(self, account_id: int, name: str) -> AliasClaim:
         """Open a staff-reviewed request to be credited under a creator name."""
-        account = await self._repository.get_by_discord_id(discord_id)
+        account = await self._repository.get_by_id(account_id)
         if account is None or account.id is None:
-            raise AccountNotFoundError(discord_id=discord_id)
+            raise AccountNotFoundError(account_id)
         if account.needs_consent_refresh:
-            raise ConsentRequiredError(discord_id)
+            raise ConsentRequiredError(account_id=account_id)
         return await self._repository.request_claim(name=name, account_id=account.id)
 
     async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:

@@ -187,6 +187,87 @@ def test_trace_context_filter_preserves_preset_request_id(mocker: MockerFixture)
     assert vars(record)["request_id"] == "already-set"
 
 
+def test_correlation_reference_shortens_a_trace_id_and_leaves_the_fallback_alone(
+    mocker: MockerFixture,
+) -> None:
+    """The two transports must show the same width, whether or not the SDK is installed.
+
+    A user reading an error card cannot tell which deployment they hit, so a reference quoted
+    from a traced process and one quoted from an untraced process have to look alike -- otherwise
+    the moderator looking it up has to know which is which.
+    """
+    assert observability.correlation_reference("a" * 32) == "a" * 12
+
+    mocker.patch.object(observability, "_current_trace_id", return_value=None)
+    fallback = observability.correlation_id()
+
+    assert observability.correlation_reference(fallback) == fallback
+
+
+def test_correlation_scope_is_reentrant_and_unbinds(mocker: MockerFixture) -> None:
+    """A hybrid command opens both the tree's scope and the prefix path's, and must get one ID."""
+    mocker.patch.object(observability, "_current_trace_id", return_value=None)
+
+    with observability.correlation_scope() as outer:
+        with observability.correlation_scope() as inner:
+            assert inner == outer
+        # The nested scope must not have unbound the outer one on the way out.
+        assert observability.correlation_id() == outer
+
+    assert observability.correlation_id() != outer
+
+
+def test_correlated_log_buffer_keeps_the_most_recent_records_per_correlation() -> None:
+    buffer = observability.CorrelatedLogBuffer(max_records=2)
+    buffer.setFormatter(logging.Formatter("%(message)s"))
+
+    for index in range(3):
+        buffer.handle(_correlated_record(f"first-{index}", correlation="one"))
+    buffer.handle(_correlated_record("other", correlation="two"))
+
+    assert buffer.drain("one") == ("first-1", "first-2")
+    assert buffer.drain("two") == ("other",)
+
+
+def test_correlated_log_buffer_drains_once() -> None:
+    """A drained tail must not reappear on a second error sharing the correlation."""
+    buffer = observability.CorrelatedLogBuffer()
+    buffer.setFormatter(logging.Formatter("%(message)s"))
+    buffer.handle(_correlated_record("only", correlation="one"))
+
+    assert buffer.drain("one") == ("only",)
+    assert buffer.drain("one") == ()
+
+
+def test_correlated_log_buffer_evicts_whole_correlations_past_its_bound() -> None:
+    """One pathological correlation must not be able to displace every other tail."""
+    buffer = observability.CorrelatedLogBuffer(max_records=4, max_correlations=2)
+    buffer.setFormatter(logging.Formatter("%(message)s"))
+
+    for name in ("one", "two", "three"):
+        buffer.handle(_correlated_record(name, correlation=name))
+
+    assert buffer.drain("one") == ()
+    assert buffer.drain("two") == ("two",)
+    assert buffer.drain("three") == ("three",)
+
+
+def test_correlated_log_buffer_ignores_records_without_a_correlation() -> None:
+    """Records logged outside any command or request have no tail to belong to."""
+    buffer = observability.CorrelatedLogBuffer()
+    buffer.setFormatter(logging.Formatter("%(message)s"))
+
+    buffer.handle(logging.LogRecord("squid.test", logging.INFO, __file__, 1, "loose", (), None))
+
+    assert buffer.drain("one") == ()
+
+
+def _correlated_record(message: str, *, correlation: str) -> logging.LogRecord:
+    record = logging.LogRecord("squid.test", logging.INFO, __file__, 1, message, (), None)
+    record.request_id = correlation
+    return record
+
+
 def test_install_trace_context_log_filter_is_idempotent() -> None:
     handler = logging.NullHandler()
     handler.set_name("squid-test-idempotent-handler")

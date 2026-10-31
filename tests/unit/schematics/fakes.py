@@ -82,9 +82,11 @@ class FakeSchematicAnalyzer:
             trustworthy=True,
         )
         self.comparisons: dict[bytes, SchematicComparison] = {}
+        self.capabilities_calls = 0
         self.closed = False
 
     async def capabilities(self) -> AnalyzerCapabilities:
+        self.capabilities_calls += 1
         return AnalyzerCapabilities(
             available=True,
             analyzer_version=self.analysis.analyzer_version,
@@ -152,6 +154,9 @@ class FakeSchematicStore:
         self.records: list[tuple[int, str, SchematicAnalysis, bool]] = []
         self.stored: list[StoredSchematic] = []
         self.renders: dict[tuple[int, str], StoredRender] = {}
+        self.render_content: dict[str, bytes] = {}
+        """Preview bytes as object storage would hold them, keyed by recipe hash. Populated
+        separately from `renders` because the real transport uploads the artifact itself."""
         self.simulations: dict[int, SimulationResult] = {}
 
     async def put_file(self, data: bytes, *, source_format: SchematicFormat) -> str:
@@ -172,7 +177,7 @@ class FakeSchematicStore:
         *,
         primary: bool,
         original_filename: str | None = None,
-        uploaded_by_discord_id: int | None = None,
+        uploaded_by_account_id: int | None = None,
         publication: SchematicPublication | None = None,
     ) -> int:
         self.records.append((build_id, sha256, analysis, primary))
@@ -292,7 +297,8 @@ class FakeSchematicStore:
         return stored is not None and stored.is_primary and render is not None and render.url == url
 
     async def get_render_content(self, recipe_hash: str, *, max_bytes: int) -> bytes | None:
-        return None
+        content = self.render_content.get(recipe_hash)
+        return content if content is not None and len(content) <= max_bytes else None
 
     async def record_simulation(self, schematic_id: int, result: SimulationResult) -> None:
         self.simulations[schematic_id] = result

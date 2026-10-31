@@ -63,9 +63,9 @@ async def test_delete_policy_rejects_a_member_without_the_delete_log_node() -> N
 def test_generic_tallies_keep_raw_counts_separate_from_weights() -> None:
     snapshot = poll_snapshot(
         selections=(
-            VoteSelection(1, 101, 10, "one", "1️⃣", 1),
-            VoteSelection(2, 102, 10, "one", "1️⃣", 3),
-            VoteSelection(3, 103, 10, "two", "2️⃣", 2),
+            VoteSelection(1, 10, "one", "1️⃣", 1),
+            VoteSelection(2, 10, "one", "1️⃣", 3),
+            VoteSelection(3, 10, "two", "2️⃣", 2),
         )
     )
 
@@ -77,8 +77,8 @@ def test_hidden_poll_suppresses_live_totals_and_reports_tie_at_close() -> None:
     hidden = poll_snapshot(
         visibility=VoteVisibility.ANONYMOUS_HIDDEN,
         selections=(
-            VoteSelection(1, 101, 10, "one", "1️⃣", 2),
-            VoteSelection(2, 102, 10, "two", "2️⃣", 2),
+            VoteSelection(1, 10, "one", "1️⃣", 2),
+            VoteSelection(2, 10, "two", "2️⃣", 2),
         ),
     )
     closed = replace(hidden, status=VoteStatus.CLOSED, result=VoteSessionResult.CANCELLED)
@@ -92,12 +92,12 @@ def test_hidden_poll_suppresses_live_totals_and_reports_tie_at_close() -> None:
 def test_visible_poll_lists_voters_and_keeps_their_reactions() -> None:
     visible = poll_snapshot(
         visibility=VoteVisibility.VISIBLE_LIVE,
-        selections=(VoteSelection(42, 420, 10, "one", "1️⃣", 1),),
+        selections=(VoteSelection(42, 10, "one", "1️⃣", 1),),
     )
 
     assert not visible.is_anonymous
     assert not visible.should_remove_reaction_on_cast()
-    assert "<@420>" in generic_poll_text(visible)
+    assert "<@420>" in generic_poll_text(visible, {42: 420})
 
 
 @pytest.mark.parametrize(
@@ -107,12 +107,12 @@ def test_visible_poll_lists_voters_and_keeps_their_reactions() -> None:
 def test_anonymous_polls_strip_the_voter_reaction(visibility: VoteVisibility) -> None:
     snapshot = poll_snapshot(
         visibility=visibility,
-        selections=(VoteSelection(42, 420, 10, "one", "1️⃣", 1),),
+        selections=(VoteSelection(42, 10, "one", "1️⃣", 1),),
     )
 
     assert snapshot.is_anonymous
     assert snapshot.should_remove_reaction_on_cast()
-    assert "<@420>" not in generic_poll_text(snapshot)
+    assert "<@420>" not in generic_poll_text(snapshot, {42: 420})
 
 
 @pytest.mark.parametrize("kind", [VoteKind.BUILD, VoteKind.DELETE_LOG])

@@ -19,7 +19,8 @@ from squid.api.pagination import (
 from squid.api.v1.schemas.builds import BuildSummary
 from squid.api.v1.schemas.records import RecordDetail, RecordSummary
 from squid.builds.domain import Status
-from squid.core.errors import DataIntegrityError, NotFoundError
+from squid.core.errors import DataIntegrityError
+from squid.records.errors import RecordNotFoundError
 
 router = APIRouter(prefix="/records", tags=["records"])
 # Result identifiers ascend with computation, so recency needs no separate indexed column.
@@ -31,7 +32,7 @@ async def get_record(record_id: int, records: Records, build_queries: BuildQueri
     """Return one result only while its computation run is active."""
     record = await records.get(record_id)
     if record is None:
-        raise NotFoundError(resource="record", public_context={"record_id": record_id})
+        raise RecordNotFoundError(record_id)
 
     found = await build_queries.get_many(record.holder_build_ids)
     public_builds = {
@@ -39,7 +40,7 @@ async def get_record(record_id: int, records: Records, build_queries: BuildQueri
     }
     unavailable_ids = [build_id for build_id in record.holder_build_ids if build_id not in public_builds]
     if unavailable_ids:
-        msg = "An active record references holder builds that are unavailable to the public catalogue."
+        msg = "A published record references holder builds that are unavailable to the public catalogue."
         raise DataIntegrityError(
             msg,
             context={"record_id": record.id, "unavailable_holder_build_ids": unavailable_ids},
@@ -61,7 +62,7 @@ async def list_records(
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[RecordSummary]:
-    """List authoritative active record results."""
+    """List authoritative published record results."""
     _, descending = parse_page_sort(sort, allowed=_SORT_FIELDS, default="-id")
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await records.list_page(selector=selector, descending=descending, page_size=page_size)

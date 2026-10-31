@@ -8,7 +8,8 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION
 from squid.accounts.infrastructure.models import Account
-from squid.auth.application.web import WebSessionRepository, consent_pending
+from squid.auth.application.ports import WebSessionRepository
+from squid.auth.application.web import consent_pending
 from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
 from squid.auth.infrastructure.session_models import OAuthStateModel, WebSession
 
@@ -28,6 +29,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
                     code_verifier=state.code_verifier,
                     redirect_to=state.redirect_to,
                     expires_at=state.expires_at,
+                    provider=state.provider,
                 )
             )
             await session.commit()
@@ -41,7 +43,9 @@ class PostgresWebSessionRepository(WebSessionRepository):
             await session.commit()
             if model is None or model.expires_at <= now:
                 return None
-            return OAuthState(model.state, model.code_verifier, model.redirect_to, model.expires_at)
+            return OAuthState(
+                model.state, model.code_verifier, model.redirect_to, model.expires_at, provider=model.provider
+            )
 
     @override
     async def create_session(
@@ -49,7 +53,6 @@ class PostgresWebSessionRepository(WebSessionRepository):
         *,
         token_hash: bytes,
         account_id: int,
-        discord_id: int,
         expires_at: Instant,
         user_agent: str | None,
     ) -> str:
@@ -57,7 +60,6 @@ class PostgresWebSessionRepository(WebSessionRepository):
             model = WebSession(
                 token_hash=token_hash,
                 account_id=account_id,
-                discord_id=discord_id,
                 expires_at=expires_at,
                 user_agent=user_agent,
             )
@@ -87,7 +89,6 @@ class PostgresWebSessionRepository(WebSessionRepository):
             return WebSessionIdentity(
                 str(web_session.id),
                 account.id,
-                web_session.discord_id,
                 consent_pending(account.created_at, account.consent_version, CURRENT_CONSENT_VERSION),
             )
 

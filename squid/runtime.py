@@ -1,4 +1,4 @@
-"""Framework-neutral application services and process runtime."""
+"""Application services and process runtime, defined without reference to a web framework."""
 
 import logging
 import time
@@ -15,10 +15,12 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.artifacts import ArtifactStore
 from squid.auth.application import ApiKeyService
-from squid.auth.application.web import DiscordOAuthService
+from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.cli_auth import CliAuthorizationService
 from squid.community.application import RedstonerService, WelcomeRelayService
+from squid.diagnostics.application import ErrorReportService
+from squid.diagnostics.log_capture import captured, install_log_capture
 from squid.events.application import DomainEventService
 from squid.events.infrastructure.listener import DomainEventWakeListener
 from squid.idempotency import IdempotencyService
@@ -26,7 +28,14 @@ from squid.media.application.jobs import MediaNormalizationJobRunner, MediaNorma
 from squid.messages.application import MessageService
 from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.notifications import NotificationService
-from squid.observability import add_counter, record_gauge, record_histogram
+from squid.observability import (
+    add_counter,
+    correlated_log_buffer,
+    correlation_reference,
+    correlation_scope,
+    record_gauge,
+    record_histogram,
+)
 from squid.permissions.application import (
     PermissionAdministrationService,
     PermissionEpochWatcher,
@@ -46,7 +55,7 @@ from squid.submissions.application import (
     SubmissionFormService,
 )
 from squid.suggestions.application import SuggestionService
-from squid.sync import DiscordSyncService
+from squid.sync import DiscordReconciliationService
 from squid.tags.application import TagService
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
@@ -63,8 +72,9 @@ class ApiServices:
     """Capabilities exposed by the HTTP API process."""
 
     builds: BuildService
+    error_reports: ErrorReportService
     api_keys: ApiKeyService | None
-    web_auth: DiscordOAuthService | None
+    web_auth: WebSessionService | None
     cli_authorization: CliAuthorizationService | None
     idempotency: IdempotencyService
     notifications: NotificationService
@@ -93,6 +103,7 @@ class BotServices:
     """Capabilities exposed to Discord gateway features."""
 
     builds: BuildService
+    error_reports: ErrorReportService
     build_inference: BuildInferenceService
     restrictions: RestrictionService
     build_queries: BuildQueryService
@@ -112,7 +123,7 @@ class BotServices:
     accounts: AccountService
     versions: VersionService
     votes: VoteService
-    discord_sync: DiscordSyncService
+    discord_reconciliation: DiscordReconciliationService
     domain_events: DomainEventService
     notifications: NotificationService
     redstoner: RedstonerService
@@ -121,9 +132,10 @@ class BotServices:
 
 @dataclass(frozen=True, slots=True)
 class WorkerServices:
-    """Capabilities exposed to transport-neutral background jobs."""
+    """Capabilities exposed to background jobs, which serve no request."""
 
     builds: BuildService
+    error_reports: ErrorReportService
     artifacts: ArtifactStore
     votes: VoteService
     records: RecordComputationService
@@ -170,6 +182,28 @@ class ApplicationRuntime[ServicesT]:
         traceback: TracebackType | None,
     ) -> None:
         await self.close()
+
+
+LOG_CAPTURE_JOB = "error-log-capture"
+"""Name of the job that stores logged exceptions as error reports."""
+
+
+def start_log_capture(
+    supervisor: BackgroundTaskSupervisor,
+    service: ErrorReportService,
+    *,
+    enabled: bool = True,
+    capacity: int = 256,
+) -> None:
+    """Store every logged exception, not only the failures a transport captures itself.
+
+    This is what makes worker failures reachable at all: its queue consumers absorb a failure,
+    dead-letter the job and log it, so nothing reaches the supervisor that would have captured it.
+    """
+    if not enabled:
+        return
+    handler = install_log_capture(capacity=capacity)
+    supervisor.start(handler.run(service), name=LOG_CAPTURE_JOB)
 
 
 def start_permission_epoch_watch(
@@ -224,6 +258,15 @@ class BackgroundTaskSupervisor:
         self._handles: set[JobHandle] = set()
         self._closing = False
         self._last_success: dict[str, Instant] = {}
+        self._error_reports: ErrorReportService | None = None
+
+    def capture_failures_into(self, service: ErrorReportService | None) -> None:
+        """Store background job failures, which otherwise only ever reach a log file.
+
+        Set after construction because the supervisor is built before the service graph in every
+        process that owns one, and a job that fails before this is called is still logged.
+        """
+        self._error_reports = service
 
     @asynccontextmanager
     async def running(self) -> AsyncGenerator[Self]:
@@ -338,29 +381,58 @@ class BackgroundTaskSupervisor:
         while True:
             started = time.perf_counter()
             attributes = {"squid.job.name": name}
-            try:
-                await operation()
-            except anyio.get_cancelled_exc_class():
-                raise
-            except Exception:
-                logger.exception("Background job %s failed", name)
-                add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "error"})
-                record_histogram(
-                    "squid.background.job.duration",
-                    time.perf_counter() - started,
-                    attributes={**attributes, "squid.outcome": "error"},
-                )
-            else:
-                succeeded_at = Instant.now()
-                self._last_success[name] = succeeded_at
-                add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "ok"})
-                record_histogram(
-                    "squid.background.job.duration",
-                    time.perf_counter() - started,
-                    attributes={**attributes, "squid.outcome": "ok"},
-                )
-                record_gauge("squid.background.job.last_success", time.time(), attributes=attributes)
+            # One correlation per run, so a failure's stored report carries the lines this run
+            # logged rather than a slice of whatever else the process was doing. The logging call
+            # stays inside the scope; only then does it carry the id the report is filed under.
+            with correlation_scope() as correlation:
+                try:
+                    await operation()
+                except anyio.get_cancelled_exc_class():
+                    raise
+                except Exception as error:
+                    # Captured before logging, so the tail is the run rather than an echo of the
+                    # traceback the report already holds.
+                    await self._capture(error, name=name, correlation=correlation)
+                    logger.exception(
+                        "Background job %s failed",
+                        name,
+                        extra={"squid.job.error_id": correlation, **captured()},
+                    )
+                    add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "error"})
+                    record_histogram(
+                        "squid.background.job.duration",
+                        time.perf_counter() - started,
+                        attributes={**attributes, "squid.outcome": "error"},
+                    )
+                else:
+                    succeeded_at = Instant.now()
+                    self._last_success[name] = succeeded_at
+                    add_counter("squid.background.job.runs", attributes={**attributes, "squid.outcome": "ok"})
+                    record_histogram(
+                        "squid.background.job.duration",
+                        time.perf_counter() - started,
+                        attributes={**attributes, "squid.outcome": "ok"},
+                    )
+                    record_gauge("squid.background.job.last_success", time.time(), attributes=attributes)
             await anyio.sleep(interval)
+
+    async def _capture(self, error: BaseException, *, name: str, correlation: str) -> None:
+        """Store one background job failure, never letting the attempt kill the loop."""
+        if self._error_reports is None:
+            return
+        try:
+            buffer = correlated_log_buffer()
+            await self._error_reports.record(
+                error,
+                correlation_id=correlation,
+                reference=correlation_reference(correlation),
+                surface="background_job",
+                origin=name,
+                context={"job": name},
+                log_tail=buffer.drain(correlation) if buffer is not None else (),
+            )
+        except Exception:
+            logger.exception("Could not capture a background job failure [job=%s]", name)
 
     async def _run_owned(self, coroutine: Coroutine[Any, Any, None], handle: JobHandle) -> None:
         try:

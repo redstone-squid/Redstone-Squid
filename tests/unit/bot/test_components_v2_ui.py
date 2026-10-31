@@ -2,13 +2,14 @@
 
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock
 from uuid import UUID
 
 import discord
 import pytest
 
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, CreditPreview, LinkPreview
 from squid.bot.consent import UserDataConsentView
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.submission.search_view import SearchResultsView
@@ -176,15 +177,77 @@ def test_confirmation_view_contains_prompt_and_actions() -> None:
     assert [button["label"] for button in payload[1]["components"]] == ["Confirm", "Cancel"]
 
 
+JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
+
+
+def _link_preview(*, credit: CreditPreview | None = None) -> LinkPreview:
+    return LinkPreview(java_uuid=JAVA_UUID, username="Notch", credit=credit)
+
+
+def _rendered_text(payload: dict[str, Any]) -> str:
+    """Flatten a Components V2 container into the text a reader would see.
+
+    The consent prompt is a container of text displays now rather than one blob, so assertions read
+    the whole card instead of a single `content` key.
+    """
+    if "content" in payload:
+        return str(payload["content"])
+    return "\n".join(_rendered_text(child) for child in payload.get("components", []))
+
+
 def test_user_data_consent_view_discloses_storage_and_actions() -> None:
-    view = UserDataConsentView(123)
+    """The card must still name the stored categories itself.
+
+    The full notice moved behind a button, which is only acceptable while the prompt in front of the
+    user says what it will store. This is the assertion that keeps that true.
+    """
+    view = UserDataConsentView(123, _link_preview())
     payload = view.to_components()
+    rendered = _rendered_text(payload[0])
 
     assert view.has_components_v2()
-    assert "Discord user ID, Minecraft UUID" in payload[0]["content"]
-    assert "stores no user account information" in payload[0]["content"]
-    assert [button["label"] for button in payload[1]["components"]] == ["Agree and link", "Cancel"]
+    assert "Discord user ID" in rendered
+    assert "Minecraft UUID" in rendered
+    assert "Cancelling stores nothing" in rendered
+    assert [button["label"] for button in payload[1]["components"]] == [
+        "Agree and link",
+        "Cancel",
+        "Privacy notice",
+    ]
     assert view.consent is None
+
+
+def test_user_data_consent_view_previews_what_will_be_stored() -> None:
+    """The point of holding the code: the prompt names the link instead of describing categories."""
+    view = UserDataConsentView(123, _link_preview(credit=CreditPreview("Notch", 12)))
+    rendered = _rendered_text(view.to_components()[0])
+
+    assert "Notch" in rendered
+    assert str(JAVA_UUID) in rendered
+    assert "<@123>" in rendered
+    assert "12 builds" in rendered
+    assert "becomes attributed to your account" in rendered
+    assert CURRENT_CONSENT_VERSION in rendered
+
+
+def test_user_data_consent_view_warns_that_a_contested_credit_moves_nothing() -> None:
+    """The one branch where agreeing does not do what the rest of the card implies."""
+    view = UserDataConsentView(
+        123,
+        _link_preview(credit=CreditPreview("Notch", 1, held_by_public_creator_id=UUID(int=9))),
+    )
+    rendered = _rendered_text(view.to_components()[0])
+
+    assert "1 build" in rendered
+    assert "already credited to another creator" in rendered
+    assert "moves nothing" in rendered
+
+
+def test_user_data_consent_view_says_when_no_credit_moves() -> None:
+    view = UserDataConsentView(123, _link_preview())
+    rendered = _rendered_text(view.to_components()[0])
+
+    assert "No build credits **Notch** yet" in rendered
 
 
 def test_modals_wrap_text_inputs_in_labels(display_build: Build) -> None:
@@ -205,6 +268,18 @@ def test_submission_requires_only_type_and_opening_size() -> None:
     draft.door_orientation = "Door"
     draft.door_dimensions = (2, 2, None)
     assert form.is_ready is True
+
+
+def test_change_markers_differ_only_by_fill(display_build: Build) -> None:
+    """A changed field must read as more prominent, which a smaller BULLET glyph undid."""
+    unchanged = get_text_input(display_build, "width")
+    changed = get_text_input(display_build, "height")
+    changed.modified = True
+    view = BuildEditView(display_build, cast(BuildService, object()), [unchanged, changed])
+
+    markers = [line[0] for line in view.summary_text().splitlines()]
+
+    assert markers == ["○", "●"]
 
 
 def test_optional_edit_field_is_not_marked_required(display_build: Build) -> None:

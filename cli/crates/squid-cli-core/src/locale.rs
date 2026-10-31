@@ -238,6 +238,24 @@ impl Locale {
             }
             (Self::En, MessageKey::DraftListEmpty) => "no active synchronized drafts",
             (Self::ZhCn, MessageKey::DraftListEmpty) => "没有活动的同步草稿",
+            (Self::En, MessageKey::ErrorListEmpty) => {
+                "no stored errors within the retention window"
+            }
+            (Self::ZhCn, MessageKey::ErrorListEmpty) => "保留期内没有已存储的错误",
+            (Self::En, MessageKey::ErrorWorkLost) => {
+                "this job was abandoned; nothing will retry it"
+            }
+            (Self::ZhCn, MessageKey::ErrorWorkLost) => "此任务已被放弃；不会再重试",
+            (Self::En, MessageKey::ErrorLogTailHeading) => "log tail:",
+            (Self::ZhCn, MessageKey::ErrorLogTailHeading) => "日志尾部：",
+            (Self::En, MessageKey::ErrorReferenceAmbiguous) => {
+                "warning: several reports share this reference; showing the newest"
+            }
+            (Self::ZhCn, MessageKey::ErrorReferenceAmbiguous) => {
+                "警告：多个报告共用此引用；显示最新的一个"
+            }
+            (Self::En, MessageKey::InvalidErrorReference) => "the error reference is not usable",
+            (Self::ZhCn, MessageKey::InvalidErrorReference) => "错误引用不可用",
             (Self::En, MessageKey::DraftCreated) => "created draft {draft_id} for {category}",
             (Self::ZhCn, MessageKey::DraftCreated) => "已为 {category} 创建草稿 {draft_id}",
             (Self::En, MessageKey::DraftChanged) => {
@@ -491,6 +509,11 @@ pub enum MessageKey {
     SuggestedRetry,
     SuggestedApproveDevice,
     DraftListEmpty,
+    ErrorListEmpty,
+    ErrorLogTailHeading,
+    ErrorWorkLost,
+    ErrorReferenceAmbiguous,
+    InvalidErrorReference,
     DraftCreated,
     DraftChanged,
     DraftDeleted,

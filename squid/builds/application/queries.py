@@ -1,10 +1,11 @@
-"""Framework-neutral application queries for builds."""
+"""Application queries for builds, shared by the bot, the API, and the worker."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal, Protocol, get_args
 
 from squid.builds.domain import Build, Status
+from squid.builds.errors import BuildNotFoundError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 
 
@@ -49,7 +50,6 @@ class BuildQueryRepository(Protocol):
         self,
         *,
         statuses: frozenset[Status],
-        submitter_id: int | None,
         submitter_account_id: int | None,
         sort: BuildListSort,
         offset: int,
@@ -62,7 +62,6 @@ class BuildQueryRepository(Protocol):
         self,
         *,
         statuses: frozenset[Status],
-        submitter_id: int | None,
         submitter_account_id: int | None,
     ) -> int: ...
 
@@ -101,6 +100,23 @@ class BuildQueryService:
     async def get(self, build_id: int) -> Build | None:
         return await self._builds.get_by_id(build_id)
 
+    async def get_public(self, build_id: int) -> Build:
+        """Return a build the public catalogue may show, or raise `BuildNotFoundError`.
+
+        One rule, one place. Four routes each wrote `build is None or
+        build.submission_status is not Status.CONFIRMED`, which meant the
+        definition of "public" lived in the transport layer in four copies.
+
+        A pending build raises the same error as a missing one on purpose: the
+        two are indistinguishable to a caller without
+        `build.submission.view_pending`, which is what keeps a submission's
+        existence private until it is confirmed.
+        """
+        build = await self._builds.get_by_id(build_id)
+        if build is None or build.submission_status is not Status.CONFIRMED:
+            raise BuildNotFoundError(build_id)
+        return build
+
     async def pending(self) -> Sequence[Build]:
         return await self._builds.get_pending()
 
@@ -112,7 +128,6 @@ class BuildQueryService:
         self,
         *,
         statuses: frozenset[Status],
-        submitter_id: int | None = None,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         selector: PageSelector = FIRST_PAGE,
@@ -121,7 +136,6 @@ class BuildQueryService:
         """Return one page of authoritative builds in display order under a visibility policy."""
         rows = await self._builds.list_page(
             statuses=statuses,
-            submitter_id=submitter_id,
             submitter_account_id=submitter_account_id,
             sort=sort,
             offset=selector.offset,
@@ -132,7 +146,6 @@ class BuildQueryService:
         )
         total = await self._builds.count(
             statuses=statuses,
-            submitter_id=submitter_id,
             submitter_account_id=submitter_account_id,
         )
         return keyset_page(

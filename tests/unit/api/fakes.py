@@ -10,6 +10,7 @@ from fastapi import FastAPI
 
 from squid.accounts.errors import MinecraftAccountNotFoundError
 from squid.api.app import create_api_app
+from squid.builds.errors import BuildNotFoundError
 from squid.cli_auth.errors import InvalidCliEnrollmentError
 from squid.config import ApiProcessConfig
 from squid.core.pagination import Page
@@ -19,12 +20,19 @@ from squid.media.domain import MediaLimits
 from squid.minecraft_auth.errors import InvalidChallengeError, InvalidInstallationCredentialError
 from squid.notifications import NotificationPreferences
 from squid.permissions.application import PermissionService, SubjectRecords
+from squid.permissions.domain import Pattern
 from squid.runtime import ApiServices, ApplicationRuntime
 from squid.schematics.errors import SchematicNotFoundError
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.search.domain import SearchPage
 from squid.submissions.application import FormOptionSet, build_submission_manifest
 from squid.suggestions.application import SuggestionRegistry, SuggestionService
+
+
+def credential_nodes(*raw: str) -> frozenset[Pattern]:
+    """Build the parsed patterns a credential carries, as the real boundaries do."""
+    return frozenset(Pattern.parse(pattern) for pattern in raw)
+
 
 TEST_UUID = UUID("11111111-1111-1111-1111-111111111111")
 NONEXISTENT_UUID = UUID("00000000-0000-0000-0000-000000000000")
@@ -103,6 +111,9 @@ class MockBuildQueries:
     async def get(self, _build_id: int):
         return None
 
+    async def get_public(self, build_id: int):
+        raise BuildNotFoundError(build_id)
+
     async def get_many(self, _build_ids: list[int]):
         return []
 
@@ -132,6 +143,16 @@ class MockTags:
 class MockVersions:
     async def list_all(self):
         return []
+
+
+class MockErrorReports:
+    """Records what the exception handlers captured, without a database."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def record(self, error: BaseException, **kwargs: object) -> None:
+        self.calls.append({"error": error, **kwargs})
 
 
 class MockSchematics:
@@ -245,13 +266,10 @@ class MockNotifications:
         return ()
 
     async def subscribe(self, _account_id: int, **_kwargs: object):
-        raise AssertionError("service principals cannot create notification subscriptions")
+        raise AssertionError("service callers cannot create notification subscriptions")
 
     async def unsubscribe(self, _account_id: int, _subscription_id: int) -> None:
         return None
-
-    async def can_view_staff(self, _discord_id: int) -> bool:
-        return False
 
     async def inbox(self, _account_id: int, **_kwargs: object):
         return ()
@@ -295,6 +313,7 @@ def build_app(
     cli_authorization: object | None = None,
     idempotency: object | None = None,
     accounts: object | None = None,
+    error_reports: object | None = None,
     config: ApiProcessConfig = TEST_CONFIG,
 ) -> tuple[FastAPI, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
@@ -328,6 +347,7 @@ def build_app(
             media_jobs=MockMediaJobs(),
             minecraft_installations=MockMinecraftInstallations(),
             minecraft_player_authorization=MockMinecraftPlayerAuthorization(),
+            error_reports=error_reports or MockErrorReports(),
         ),
     )
     runtime = ApplicationRuntime(services, database.close, AsyncMock())

@@ -20,6 +20,7 @@ from squid.config import (
 )
 from squid.core.errors import ConfigurationError
 from squid.media.application.jobs import MEDIA_ARTIFACT_PUBLICATION_LEASE
+from squid.permissions.domain import Pattern
 
 BASE_ENVIRONMENT = {
     "SQUID_DATABASE_URL": "postgresql://user:password@database.example/squid",
@@ -137,7 +138,6 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
         SQUID_BUILD_COMMIT_MESSAGE="configuration rewrite",
         SQUID_NOTIFICATION_PUBLIC_SITE_URL="https://catalogue.example/",
         SQUID_NOTIFICATION_RETENTION_DAYS="120",
-        SQUID_NOTIFICATION_STAFF_DISCORD_IDS="[123,456]",
         SQUID_OBSERVABILITY_ENABLED="true",
         SQUID_OBSERVABILITY_ENDPOINT="http://collector.example:4318",
         SQUID_OBSERVABILITY_HEADERS='{"Authorization":"secret-token"}',
@@ -174,7 +174,6 @@ def test_application_config_groups_and_resolves_settings(monkeypatch: pytest.Mon
     for process_config in (config.bot_process(), config.api_process(), config.worker_process()):
         assert str(process_config.notification.public_site_url) == "https://catalogue.example/"
         assert process_config.notification.retention_days == 120
-        assert process_config.notification.staff_discord_ids == (123, 456)
         assert process_config.observability.enabled is True
         assert str(process_config.observability.endpoint) == "http://collector.example:4318/"
         assert process_config.observability.headers["Authorization"].get_secret_value() == "secret-token"
@@ -410,6 +409,37 @@ def test_schematic_duplicate_thresholds_load_from_flat_environment_names(
     assert config.duplicate_total_timeout_seconds == 12
 
 
+def test_diagnostics_settings_load_from_flat_environment_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_DIAGNOSTICS_RETENTION_HOURS="24",
+        SQUID_DIAGNOSTICS_LOG_TAIL_RECORDS="7",
+        SQUID_DIAGNOSTICS_MAX_TRACEBACK_CHARS="5000",
+    )
+
+    config = load_bot_process_config()
+
+    assert config.diagnostics.retention_hours == 24
+    assert config.diagnostics.max_traceback_chars == 5000
+    # The logging projection carries the tail size, since the buffer is a logging handler.
+    assert config.logging.tail_records == 7
+
+
+def test_diagnostics_retention_rejects_a_zero_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Zero retention would store every report and immediately make it unreadable."""
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_DIAGNOSTICS_RETENTION_HOURS="0",
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_bot_process_config()
+
+    assert any(issue["field"] == "diagnostics.retention_hours" for issue in _issues(exc_info.value))
+
+
 def test_schematic_render_settings_load_from_flat_environment_names(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -558,6 +588,27 @@ def test_a_retired_key_left_behind_by_a_deployment_does_not_block_boot(monkeypat
     assert load_bot_process_config().database is not None
 
 
+def test_compose_only_keys_in_the_shared_dotenv_do_not_block_boot(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Compose interpolates these, then hands the same `.env` to every container via `env_file`.
+
+    So they reach this audit even though no process reads them, and under strict mode that made
+    moving the API's published host port off a taken 8000 fail the whole stack at boot.
+    """
+    _set_environment(
+        monkeypatch,
+        SQUID_DISCORD_TOKEN="discord-token",
+        SQUID_STRICT_UNKNOWN_KEYS="true",
+        SQUID_API_HOST_PORT="8001",
+        SQUID_DB_PORT="5433",
+        SQUID_PGWEB_PORT="8081",
+        SQUID_ENV_FILE=".env",
+        SQUID_APP_IMAGE="ghcr.io/example/app:latest",
+        SQUID_WORKER_IMAGE="ghcr.io/example/worker:latest",
+    )
+
+    assert load_bot_process_config().database is not None
+
+
 def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_environment(monkeypatch, SQUID_API_SECRET="api-secret-long-enough", SQUID_API_KEY_PEPPER="too-short")
 
@@ -565,6 +616,33 @@ def test_api_key_pepper_requires_enough_entropy_material(monkeypatch: pytest.Mon
         load_api_process_config()
 
     assert any(issue["field"] == "api.key_pepper" for issue in _issues(exc_info.value))
+
+
+def test_a_malformed_bootstrap_secret_node_fails_configuration_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The column downstream is free text, so a typo here would otherwise become
+    a credential that authenticates and then silently authorizes nothing."""
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret-long-enough",
+        SQUID_API_SECRET_NODES='["build.re*.read"]',
+    )
+
+    with pytest.raises(ConfigurationError) as exc_info:
+        load_api_process_config()
+
+    assert any(issue["field"] == "api.secret_nodes" for issue in _issues(exc_info.value))
+
+
+def test_bootstrap_secret_nodes_are_parsed_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_environment(
+        monkeypatch,
+        SQUID_API_SECRET="api-secret-long-enough",
+        SQUID_API_SECRET_NODES='["account.verify.relay"]',
+    )
+
+    config = load_api_process_config()
+
+    assert config.api.secret_patterns == {Pattern.parse("account.verify.relay")}
 
 
 @pytest.mark.parametrize(

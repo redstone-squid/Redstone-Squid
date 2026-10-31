@@ -1,4 +1,4 @@
-"""Integration coverage for provider-neutral accounts and creator alias claiming."""
+"""Integration coverage for account-keyed identities and creator alias claiming."""
 
 import asyncio
 from collections.abc import AsyncGenerator
@@ -20,7 +20,7 @@ from squid.accounts.domain import (
 from squid.accounts.domain import (
     AccountIdentity as AccountIdentityValue,
 )
-from squid.accounts.errors import AliasAlreadyClaimedError, CreatorAliasNotFoundError
+from squid.accounts.errors import AccountNotFoundError, AliasAlreadyClaimedError, CreatorAliasNotFoundError
 from squid.accounts.infrastructure.models import (
     Account as AccountModel,
 )
@@ -120,13 +120,16 @@ async def test_account_can_hold_discord_java_and_bedrock_identities(repository: 
     assert (await repository.get_by_identity(IdentityProvider.BEDROCK, str(2**63))) == account
 
 
-async def test_concurrent_discord_resolution_creates_one_account(
+@pytest.mark.parametrize("provider", [IdentityProvider.DISCORD, IdentityProvider.BEDROCK])
+async def test_concurrent_identity_resolution_creates_one_account(
+    provider: IdentityProvider,
     repository: AccountRepository,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
+    """The race-safe insert is per-namespace, not Discord's alone."""
     first, second = await asyncio.gather(
-        repository.get_or_create_discord(1),
-        repository.get_or_create_discord(1),
+        repository.get_or_create_identity(provider, "1"),
+        repository.get_or_create_identity(provider, "1"),
     )
 
     assert first.id == second.id
@@ -191,12 +194,18 @@ async def test_verification_code_is_consumed_by_exactly_one_link(
         username="Player",
     )
 
+    one = await _create_discord_account(repository, 1)
+    two = await _create_discord_account(repository, 2)
+    assert one.id is not None
+    assert two.id is not None
+
     first, second = await asyncio.gather(
-        repository.consume_code_and_link_account(discord_id=1, code="123456", consent=CONSENT),
-        repository.consume_code_and_link_account(discord_id=2, code="123456", consent=CONSENT),
+        repository.consume_code_and_link_account(account_id=one.id, code="123456", consent=CONSENT),
+        repository.consume_code_and_link_account(account_id=two.id, code="123456", consent=CONSENT),
     )
 
-    assert sum(result.account is not None for result in (first, second)) == 1
+    # Both callers now have an account, so both results carry one; exactly one link lands.
+    assert sum(result.claimed_alias is not None or result.refresh is not None for result in (first, second)) == 1
     async with async_session_factory() as session:
         code = await session.scalar(select(VerificationCode))
         assert code is not None
@@ -212,6 +221,48 @@ async def test_verification_code_is_consumed_by_exactly_one_link(
         assert len(java_identities) == 1
 
 
+async def test_linking_a_code_mints_no_identity_outside_the_java_namespace(
+    repository: AccountRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """Redeeming a code is evidence of a Java subject and of nothing else.
+
+    A Bedrock-only account can therefore link, which was impossible while the redemption
+    looked its caller up by Discord identity and minted one when absent.
+    """
+    account = await repository.create(consent=CONSENT, identities=(AccountIdentityValue.bedrock(99),))
+    assert account.id is not None
+    await repository.replace_verification_code(minecraft_uuid=MINECRAFT_UUID, code="123456", username="Player")
+
+    result = await repository.consume_code_and_link_account(account_id=account.id, code="123456", consent=CONSENT)
+
+    assert result.account is not None
+    assert {identity.provider for identity in result.account.identities} == {
+        IdentityProvider.BEDROCK,
+        IdentityProvider.JAVA,
+    }
+    async with async_session_factory() as session:
+        discord_identities = await session.scalar(
+            select(func.count())
+            .select_from(AccountIdentity)
+            .where(AccountIdentity.provider == IdentityProvider.DISCORD)
+        )
+        assert discord_identities == 0
+
+
+async def test_linking_a_code_for_a_missing_account_creates_nothing(
+    repository: AccountRepository,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await repository.replace_verification_code(minecraft_uuid=MINECRAFT_UUID, code="123456", username="Player")
+
+    with pytest.raises(AccountNotFoundError):
+        await repository.consume_code_and_link_account(account_id=999, code="123456", consent=CONSENT)
+
+    async with async_session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(AccountModel)) == 0
+
+
 async def test_unlink_removes_all_java_identities(repository: AccountRepository) -> None:
     account = await repository.create(
         consent=CONSENT,
@@ -222,8 +273,8 @@ async def test_unlink_removes_all_java_identities(repository: AccountRepository)
         ),
     )
 
-    assert await repository.unlink_java_identity(1)
     assert account.id is not None
+    assert await repository.unlink_java_identity(account.id)
     reloaded = await repository.get_by_id(account.id)
     assert reloaded is not None
     assert all(identity.provider is not IdentityProvider.JAVA for identity in reloaded.identities)

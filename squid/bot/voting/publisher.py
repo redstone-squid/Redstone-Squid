@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Protocol
 import discord
 
 from squid.bot._types import GuildMessageable
+from squid.bot.utils.accounts import account_id_for
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.voting.domain import VoteKind, VoteOption, VoteVisibility
 
@@ -73,10 +74,9 @@ class DiscordPollPublisher:
         decision -- the channel the command was run in -- so it is sent here and
         adopted, rather than the renderer inventing somewhere to put it.
         """
-        author = await self._bot.services.accounts.get_or_create_account(author_discord_id)
-        assert author.id is not None
+        author_account_id = await account_id_for(self._bot.services.accounts, author_discord_id)
         session_id = await self._bot.services.votes.create_generic_poll(
-            author_account_id=author.id,
+            author_account_id=author_account_id,
             question=question,
             visibility=visibility,
             duration_seconds=duration_seconds,

@@ -6,8 +6,11 @@ import io
 import json
 import logging
 import signal
+from collections.abc import Callable, Coroutine
 from pathlib import Path
+from typing import Any, NoReturn, cast
 
+import anyio
 import pytest
 from pytest_mock import MockerFixture
 from pythonjsonlogger.json import JsonFormatter
@@ -28,6 +31,15 @@ from squid.schematics.infrastructure.worker import (
     _worker_log_record,
     current_schematic_job_id,
 )
+
+
+def unowned_worker(config: SchematicConfig | None = None) -> _Worker:
+    """A worker for the tests that drive its pump themselves rather than spawning one."""
+
+    def refuse(_pump: Callable[[], Coroutine[Any, Any, None]]) -> NoReturn:
+        raise AssertionError("This test must not spawn an unowned stderr pump.")
+
+    return _Worker(config or SchematicConfig(), refuse)
 
 
 def test_worker_log_record_preserves_child_identity_and_fields() -> None:
@@ -111,7 +123,7 @@ async def test_stderr_pump_reemits_json_and_falls_back_for_native_output(mocker:
     emit = mocker.patch.object(worker_module, "_emit_child_record")
     warning = mocker.patch.object(worker_module.worker_logger, "warning")
 
-    await _Worker(SchematicConfig())._pump_stderr(process)  # pyright: ignore[reportPrivateUsage]
+    await unowned_worker()._pump_stderr(process)
 
     record = emit.call_args.args[0]
     assert record.levelno == logging.DEBUG
@@ -132,7 +144,7 @@ async def test_stderr_pump_survives_an_oversized_line(mocker: MockerFixture) -> 
     emit = mocker.patch.object(worker_module, "_emit_child_record")
     warning = mocker.patch.object(worker_module.worker_logger, "warning")
 
-    await _Worker(SchematicConfig())._pump_stderr(process)
+    await unowned_worker()._pump_stderr(process)
 
     warning.assert_called_once_with(
         "Schematic worker emitted an oversized stderr line; it was dropped.",
@@ -147,7 +159,7 @@ async def test_stderr_pump_logs_when_it_dies(mocker: MockerFixture) -> None:
     process = mocker.Mock(stderr=stderr, pid=2718)
     exception = mocker.patch.object(worker_module.logger, "exception")
 
-    await _Worker(SchematicConfig())._pump_stderr(process)
+    await unowned_worker()._pump_stderr(process)
 
     exception.assert_called_once()
     assert "further worker logs are lost" in exception.call_args.args[0]
@@ -160,11 +172,16 @@ async def test_terminate_drains_buffered_stderr_before_finishing(mocker: MockerF
     process = mocker.Mock(stderr=stream, pid=2718, returncode=0)
     process.wait = mocker.AsyncMock(return_value=0)
     emit = mocker.patch.object(worker_module, "_emit_child_record")
-    worker = _Worker(SchematicConfig())
-    worker._process = process
-    worker._stderr_pump = asyncio.create_task(worker._pump_stderr(process))
+    async with anyio.create_task_group() as pumps:
 
-    await worker._terminate()
+        def spawn(pump: Callable[[], Coroutine[Any, Any, None]]) -> None:
+            pumps.start_soon(pump)
+
+        worker = _Worker(SchematicConfig(), spawn)
+        worker._process = process
+        worker._start_pump(process)
+
+        await worker._terminate()
 
     assert emit.call_args.args[0].getMessage() == "dying words"
 
@@ -175,7 +192,7 @@ async def test_terminate_logs_expected_exits_below_warning(
 ) -> None:
     process = mocker.Mock(stderr=None, pid=2718, returncode=returncode)
     process.wait = mocker.AsyncMock(return_value=returncode)
-    worker = _Worker(SchematicConfig())
+    worker = unowned_worker()
     worker._process = process
 
     with caplog.at_level(logging.INFO, logger=worker_module.logger.name):
@@ -242,8 +259,44 @@ def test_child_records_obey_parent_side_levels_for_their_logger(caplog: pytest.L
     assert caplog.records == []
 
 
+async def test_a_pool_that_was_never_entered_refuses_to_start_a_worker() -> None:
+    """The pump would otherwise be an unowned task, which is what `running()` exists to stop."""
+    pool = SchematicWorkerPool(SchematicConfig(workers=1))
+    process = object()
+
+    with pytest.raises(RuntimeError, match="running"):
+        pool._workers[0]._start_pump(cast(asyncio.subprocess.Process, process))
+
+
+async def test_a_pool_cannot_be_entered_twice() -> None:
+    pool = SchematicWorkerPool(SchematicConfig(workers=1))
+
+    async with pool.running():
+        with pytest.raises(RuntimeError, match="already running"):
+            async with pool.running():
+                pass  # pragma: no cover - the second entry must not succeed
+
+
+async def test_leaving_the_pool_lifetime_stops_every_stderr_pump(mocker: MockerFixture) -> None:
+    """A pump outliving its pool would hold a dead child's pipe open for the whole process.
+
+    The stream here is never fed, so the pump is parked in `readline` and can only end by
+    being cancelled -- which is the pool's shutdown doing its job, not the pipe closing.
+    """
+    process = mocker.Mock(stderr=asyncio.StreamReader(), pid=2718, returncode=None)
+    pool = SchematicWorkerPool(SchematicConfig(workers=1))
+    worker = pool._workers[0]
+
+    with anyio.fail_after(5):
+        async with pool.running():
+            pump = worker._start_pump(process)
+            assert not pump.finished.is_set()
+
+    assert pump.finished.is_set()
+
+
 async def test_worker_request_injects_trace_context_into_frame(mocker: MockerFixture) -> None:
-    worker = _Worker(SchematicConfig())  # pyright: ignore[reportPrivateUsage]
+    worker = unowned_worker()
     stdout = asyncio.StreamReader()
     stdout.feed_data(Frame({"id": 1, "ok": True}).encode())
     stdin = mocker.Mock()
@@ -265,7 +318,7 @@ async def test_worker_request_injects_trace_context_into_frame(mocker: MockerFix
 
 @pytest.mark.parametrize("job_id", [4242, None])
 async def test_worker_request_carries_the_durable_job_id(mocker: MockerFixture, job_id: int | None) -> None:
-    worker = _Worker(SchematicConfig())
+    worker = unowned_worker()
     stdout = asyncio.StreamReader()
     stdout.feed_data(Frame({"id": 1, "ok": True}).encode())
     stdin = mocker.Mock()

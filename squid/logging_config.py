@@ -9,6 +9,7 @@ from pathlib import Path
 
 from squid.config import LoggingConfig
 from squid.core.errors import ConfigurationError
+from squid.observability import CORRELATION_BUFFER_HANDLER, install_trace_context_log_filter
 
 DEFAULT_LOG_LEVEL = "INFO"
 """Default log level for application loggers when SQUID_LOG_LEVEL is not set."""
@@ -108,8 +109,14 @@ def build_logging_config(
     use_queue: bool = False,
     development_mode: bool = False,
     service_name: str = "redstone-squid",
+    log_tail_records: int = 0,
 ) -> dict[str, object]:
-    """Build a logging configuration dictionary for dictConfig."""
+    """Build a logging configuration dictionary for dictConfig.
+
+    `log_tail_records` installs a `CorrelatedLogBuffer` keeping that many records per correlation
+    ID, so a stored error report can show what the process was doing around the failure. Zero
+    disables it and costs nothing.
+    """
     level = resolve_level(config.level)
     root_level = resolve_level(config.root_level)
     resolved_log_file = prepare_log_path(config.directory, config.log_file)
@@ -146,6 +153,19 @@ def build_logging_config(
             "handlers": output_handlers,
         }
         base_handlers = ["queue"]
+
+    if log_tail_records > 0:
+        handlers[CORRELATION_BUFFER_HANDLER] = {
+            "()": "squid.observability.CorrelatedLogBuffer",
+            "level": level,
+            "formatter": default_formatter,
+            "max_records": log_tail_records,
+        }
+        # Deliberately a sibling of the queue rather than one of its targets. A queued record
+        # reaches its handlers on the listener thread, so an error captured moments after the
+        # lines that explain it would drain a tail that is still in flight. Appending to a deque
+        # in the emitting thread is cheap enough to pay for that ordering guarantee.
+        base_handlers = [*base_handlers, CORRELATION_BUFFER_HANDLER]
 
     if include_uvicorn_loggers:
         handlers["access_console"] = {
@@ -247,8 +267,10 @@ def configure_bot_logging(config: LoggingConfig, *, dev_mode: bool = False) -> Q
             use_queue=True,
             development_mode=dev_mode,
             service_name="redstone-squid-bot",
+            log_tail_records=config.tail_records,
         )
     )
+    install_trace_context_log_filter()
     queue_handler = logging.getHandlerByName("queue")
     if not isinstance(queue_handler, QueueHandler):
         msg = "Queue-backed logging configuration did not create a queue handler"
@@ -269,12 +291,11 @@ def configure_api_logging(config: LoggingConfig) -> None:
             named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
             include_uvicorn_loggers=True,
             service_name="redstone-squid-api",
+            log_tail_records=config.tail_records,
         )
     )
     # Stamp trace/request-id correlation onto records even when the observability extra is absent,
     # so the API's RequestContextMiddleware id reaches log lines without OpenTelemetry configured.
-    from squid.observability import install_trace_context_log_filter
-
     install_trace_context_log_filter()
 
 
@@ -285,8 +306,10 @@ def configure_service_worker_logging(config: LoggingConfig) -> None:
             config=config,
             named_logger_levels={"squid": DEFAULT_LOG_LEVEL},
             service_name="redstone-squid-worker",
+            log_tail_records=config.tail_records,
         )
     )
+    install_trace_context_log_filter()
 
 
 def configure_worker_logging(*, level: str = DEFAULT_LOG_LEVEL, root_level: str = DEFAULT_ROOT_LOG_LEVEL) -> None:

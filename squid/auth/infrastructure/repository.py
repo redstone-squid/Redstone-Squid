@@ -6,15 +6,22 @@ from whenever import Instant
 
 from squid.auth.domain import ApiKey
 from squid.auth.infrastructure.models import ApiKey as ApiKeyModel
+from squid.core.errors import DataIntegrityError
+from squid.permissions.domain import InvalidPatternError, Pattern
 
 
 def _to_domain(model: ApiKeyModel) -> ApiKey:
+    try:
+        scopes = frozenset(Pattern.parse(raw) for raw in model.scopes)
+    except InvalidPatternError as error:
+        msg = "A stored API key carries an unparsable permission pattern."
+        raise DataIntegrityError(msg, context={"key_id": model.key_id}) from error
     return ApiKey(
         id=model.id,
         key_id=model.key_id,
         secret_hash=model.secret_hash,
         label=model.label,
-        scopes=frozenset(model.scopes),
+        scopes=scopes,
         owner_account_id=model.owner_account_id,
         created_by_account_id=model.created_by_account_id,
         created_at=model.created_at,
@@ -37,7 +44,7 @@ class PostgresApiKeyRepository:
         key_id: str,
         secret_hash: bytes,
         label: str,
-        scopes: frozenset[str],
+        scopes: frozenset[Pattern],
         owner_account_id: int | None,
         created_by_account_id: int | None,
         expires_at: Instant | None,
@@ -48,7 +55,11 @@ class PostgresApiKeyRepository:
                 key_id=key_id,
                 secret_hash=secret_hash,
                 label=label,
-                scopes=sorted(scopes),
+                # A set has no order, and the column is an array: normalize on write
+                # so key diffs, audit output, and fixture comparisons are stable.
+                # `frozenset[Pattern]` has already de-duplicated by parsed value, so
+                # `build.**` given twice, or once with whitespace, stores once.
+                scopes=sorted(pattern.raw for pattern in scopes),
                 owner_account_id=owner_account_id,
                 created_by_account_id=created_by_account_id,
                 expires_at=expires_at,

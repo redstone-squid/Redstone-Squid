@@ -1,4 +1,4 @@
-"""Transport-neutral worker event tests."""
+"""Worker event tests: the worker serves no request and knows no chat client."""
 
 from unittest.mock import AsyncMock
 
@@ -33,7 +33,7 @@ def _snapshot(result: VoteSessionResult) -> VoteSessionSnapshot:
     )
 
 
-async def test_apply_build_vote_outcome_is_transport_neutral() -> None:
+async def test_apply_build_vote_outcome_names_no_chat_client() -> None:
     votes = AsyncMock()
     votes.get_session_by_id.return_value = _snapshot(VoteSessionResult.APPROVED)
     builds = AsyncMock()
@@ -87,7 +87,7 @@ async def test_core_runner_rejects_unsupported_event_versions_without_retry() ->
     events.complete.assert_not_awaited()
 
 
-async def test_notification_handler_accepts_current_provider_neutral_build_event_versions() -> None:
+async def test_notification_handler_accepts_current_account_keyed_build_event_versions() -> None:
     notifications = AsyncMock()
     handler = MaterializeNotificationHandler(notifications)
 

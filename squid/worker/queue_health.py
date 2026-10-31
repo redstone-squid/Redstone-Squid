@@ -1,116 +1,84 @@
-"""Database-derived health metrics for durable work queues."""
+"""Database-derived health metrics for durable work queues.
+
+The union below is generated from the same `QueueSpec` constants the claim path
+uses, so the readiness predicate is one Python expression rather than eight
+hand-written copies. The copies were the defect: the raw SQL in this module wrote
+`dead_at IS NULL AND (claimed_at IS NULL OR claimed_at < now() - ...)` seven times,
+and nothing made them agree with the adapters or with each other.
+"""
 
 from dataclasses import dataclass
+from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import Select, extract, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.events.infrastructure.repository import DOMAIN_EVENT_DELIVERY_SPEC
 from squid.observability import record_gauge
-from squid.persistence.queue import VISIBILITY_TIMEOUT
+from squid.persistence.queue import VISIBILITY_TIMEOUT, ClaimedRowQueue, QueueSpec
+from squid.records.infrastructure.repository import RECORD_RECOMPUTE_QUEUE_SPEC
+from squid.schematics.infrastructure.jobs import SCHEMATIC_JOB_SPEC
+from squid.schematics.infrastructure.render_jobs import SCHEMATIC_RENDER_QUEUE_SPEC
+from squid.search.infrastructure.embeddings import SEARCH_EMBEDDING_QUEUE_SPEC
+from squid.search.infrastructure.projection import SEARCH_PROJECTION_QUEUE_SPEC
+from squid.sync.infrastructure.repository import DISCORD_SYNC_QUEUE_SPEC
 
 VISIBILITY_TIMEOUT_SECONDS = int(VISIBILITY_TIMEOUT.total_seconds())
-QUEUE_HEALTH_SQL = f"""
-SELECT 'discord_sync' AS queue,
-       count(*) FILTER (WHERE dead_at IS NULL
-           AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-           AND enqueued_at <= now()) AS ready,
-       count(*) FILTER (WHERE dead_at IS NULL AND claimed_at IS NOT NULL
-           AND claimed_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second') AS in_flight,
-       count(*) FILTER (WHERE dead_at IS NOT NULL) AS dead_letters,
-       extract(epoch FROM now() - min(enqueued_at) FILTER (
-           WHERE dead_at IS NULL
-               AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-               AND enqueued_at <= now()
-       )) AS oldest_ready_age
-FROM discord_sync_queue
-UNION ALL
-SELECT 'domain_events.' || consumers.name,
-       count(deliveries.event_id) FILTER (
-           WHERE deliveries.dead_at IS NULL
-               AND (deliveries.claimed_at IS NULL
-                   OR deliveries.claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-               AND deliveries.available_at <= now()
-       ),
-       count(deliveries.event_id) FILTER (
-           WHERE deliveries.dead_at IS NULL AND deliveries.claimed_at IS NOT NULL
-               AND deliveries.claimed_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second'
-       ),
-       count(deliveries.event_id) FILTER (WHERE deliveries.dead_at IS NOT NULL),
-       extract(epoch FROM now() - min(deliveries.available_at) FILTER (
-           WHERE deliveries.dead_at IS NULL
-               AND (deliveries.claimed_at IS NULL
-                   OR deliveries.claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-               AND deliveries.available_at <= now()
-       ))
-FROM domain_event_consumers AS consumers
-LEFT JOIN domain_event_deliveries AS deliveries ON deliveries.consumer = consumers.name
-GROUP BY consumers.name
-UNION ALL
-SELECT 'schematic_jobs',
-       count(*) FILTER (
-           WHERE completed_at IS NULL AND dead_at IS NULL
-               AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-               AND available_at <= now()
-       ),
-       count(*) FILTER (WHERE completed_at IS NULL AND dead_at IS NULL AND claimed_at IS NOT NULL
-           AND claimed_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second'),
-       count(*) FILTER (WHERE dead_at IS NOT NULL),
-       extract(epoch FROM now() - min(available_at) FILTER (
-           WHERE completed_at IS NULL AND dead_at IS NULL
-               AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-               AND available_at <= now()
-       ))
-FROM schematic_jobs
-UNION ALL
-SELECT 'schematic_renders',
-       count(*) FILTER (WHERE dead_at IS NULL
-           AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-           AND enqueued_at <= now()),
-       count(*) FILTER (WHERE dead_at IS NULL AND claimed_at IS NOT NULL
-           AND claimed_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second'),
-       count(*) FILTER (WHERE dead_at IS NOT NULL),
-       extract(epoch FROM now() - min(enqueued_at) FILTER (
-           WHERE dead_at IS NULL
-               AND (claimed_at IS NULL OR claimed_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-               AND enqueued_at <= now()
-       ))
-FROM schematic_render_queue
-UNION ALL
-SELECT 'search_projections',
-       count(*) FILTER (WHERE dead_at IS NULL
-           AND (locked_at IS NULL OR locked_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-           AND enqueued_at <= now()),
-       count(*) FILTER (WHERE dead_at IS NULL AND locked_at IS NOT NULL
-           AND locked_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second'),
-       count(*) FILTER (WHERE dead_at IS NOT NULL),
-       extract(epoch FROM now() - min(enqueued_at) FILTER (
-           WHERE dead_at IS NULL
-               AND (locked_at IS NULL OR locked_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-               AND enqueued_at <= now()
-       ))
-FROM search_projection_queue
-UNION ALL
-SELECT 'search_embeddings',
-       count(*) FILTER (WHERE dead_at IS NULL
-           AND (locked_at IS NULL OR locked_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-           AND enqueued_at <= now()),
-       count(*) FILTER (WHERE dead_at IS NULL AND locked_at IS NOT NULL
-           AND locked_at >= now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second'),
-       count(*) FILTER (WHERE dead_at IS NOT NULL),
-       extract(epoch FROM now() - min(enqueued_at) FILTER (
-           WHERE dead_at IS NULL
-               AND (locked_at IS NULL OR locked_at < now() - {VISIBILITY_TIMEOUT_SECONDS} * interval '1 second')
-               AND enqueued_at <= now()
-       ))
-FROM search_embedding_queue
-UNION ALL
-SELECT 'record_recomputation',
-       count(*) FILTER (WHERE locked_at IS NULL),
-       count(*) FILTER (WHERE locked_at IS NOT NULL),
-       0,
-       extract(epoch FROM now() - min(enqueued_at) FILTER (WHERE locked_at IS NULL))
-FROM record_recompute_queue
-"""
+
+QUEUE_SPECS: tuple[QueueSpec[Any], ...] = (
+    DISCORD_SYNC_QUEUE_SPEC,
+    DOMAIN_EVENT_DELIVERY_SPEC,
+    RECORD_RECOMPUTE_QUEUE_SPEC,
+    SCHEMATIC_JOB_SPEC,
+    SCHEMATIC_RENDER_QUEUE_SPEC,
+    SEARCH_EMBEDDING_QUEUE_SPEC,
+    SEARCH_PROJECTION_QUEUE_SPEC,
+)
+"""Every durable work queue in the application, in label order."""
+
+
+def _queue_health_select(spec: QueueSpec[Any]) -> Select[Any]:
+    """Count one queue's ready, in-flight and dead rows, and its oldest ready age."""
+    queue = ClaimedRowQueue(spec)
+    ready = queue.ready()
+    claimed_at = spec.claimed_at
+    in_flight_conditions = [
+        claimed_at.is_not(None),
+        claimed_at >= func.now() - VISIBILITY_TIMEOUT,
+    ]
+    if spec.dead_at is not None:
+        in_flight_conditions.append(spec.dead_at.is_(None))
+    if spec.pending is not None:
+        in_flight_conditions.append(spec.pending)
+
+    shape = spec.health
+    # Domain events count per registered consumer through an outer join, so a
+    # consumer with no outstanding rows still reports zero instead of vanishing.
+    counted = shape.counted if shape is not None and shape.counted is not None else literal(1)
+    label = shape.label if shape is not None else literal(spec.name)
+
+    statement = select(
+        label.label("queue"),
+        func.count(counted).filter(ready).label("ready"),
+        func.count(counted).filter(*in_flight_conditions).label("in_flight"),
+        (
+            func.count(counted).filter(spec.dead_at.is_not(None))
+            if spec.dead_at is not None
+            # A queue with no dead-letter state reports a constant zero rather than
+            # dropping the series, so the gauge stays comparable across queues.
+            else literal(0)
+        ).label("dead_letters"),
+        extract("epoch", func.now() - func.min(spec.available_at).filter(ready)).label("oldest_ready_age"),
+    )
+    if shape is not None:
+        statement = statement.select_from(shape.source).group_by(*shape.group_by)
+    else:
+        statement = statement.select_from(spec.model)
+    return statement
+
+
+QUEUE_HEALTH_STATEMENT = union_all(*(_queue_health_select(spec) for spec in QUEUE_SPECS))
+"""One read-only round trip covering every queue."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,7 +100,7 @@ class PostgresQueueHealthMonitor:
 
     async def record(self) -> None:
         async with self._session_factory() as session:
-            rows = (await session.execute(text(QUEUE_HEALTH_SQL))).mappings().all()
+            rows = (await session.execute(QUEUE_HEALTH_STATEMENT)).mappings().all()
         for row in rows:
             emit_queue_health(
                 QueueHealthSnapshot(
@@ -146,7 +114,7 @@ class PostgresQueueHealthMonitor:
 
 
 def emit_queue_health(snapshot: QueueHealthSnapshot) -> None:
-    """Export one queue snapshot through vendor-neutral OpenTelemetry gauges."""
+    """Export one queue snapshot through OpenTelemetry gauges any collector can read."""
     attributes = {"squid.queue.name": snapshot.queue}
     record_gauge("squid.queue.ready", snapshot.ready, attributes=attributes)
     record_gauge("squid.queue.in_flight", snapshot.in_flight, attributes=attributes)

@@ -1,10 +1,14 @@
 """Durable schematic job contracts shared by clients and the worker."""
 
+import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol
 
 from whenever import Instant
+
+from squid.core.errors import InvalidStateError
+from squid.core.i18n import _
 
 type SchematicJobOperation = Literal[
     "capabilities",
@@ -27,7 +31,8 @@ class ClaimedSchematicJob:
     params: Mapping[str, Any]
     input_keys: tuple[str, ...]
     attempts: int
-    claimed_at: Instant
+    claim_token: uuid.UUID
+    """The database-minted fence this worker's acknowledgement must still match."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,8 +98,8 @@ class SchematicJobService:
         retention_hours: int = 24,
     ) -> None:
         if max_attempts < 1 or retention_hours < 1:
-            msg = "Schematic job retry and retention settings must be positive."
-            raise ValueError(msg)
+            msg = _("Schematic job retry and retention settings must be positive.")
+            raise InvalidStateError(msg)
         self._repository = repository
         self._max_attempts = max_attempts
         self._retention_hours = retention_hours
@@ -112,8 +117,8 @@ class SchematicJobService:
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedSchematicJob]:
         if not 1 <= limit <= 32:
-            msg = "Schematic job claim limit must be between 1 and 32."
-            raise ValueError(msg)
+            msg = _("Schematic job claim limit must be between 1 and 32.")
+            raise InvalidStateError(msg)
         return await self._repository.claim(limit=limit)
 
     async def complete(
@@ -150,6 +155,6 @@ class SchematicJobService:
 
     async def cleanup(self, *, limit: int = 100) -> Sequence[str]:
         if not 1 <= limit <= 500:
-            msg = "Schematic job cleanup limit must be between 1 and 500."
-            raise ValueError(msg)
+            msg = _("Schematic job cleanup limit must be between 1 and 500.")
+            raise InvalidStateError(msg)
         return await self._repository.cleanup(limit=limit)

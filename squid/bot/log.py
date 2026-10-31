@@ -28,7 +28,8 @@ class LoggingCog[BotT: commands.Bot](Cog, command_attrs=dict(hidden=True)):
         """Logs when the bot is ready."""
         assert self.bot.user is not None
         logger.info(
-            "Discord gateway ready",
+            "Discord gateway ready, logged in as %s",
+            self.bot.user,
             extra={
                 "squid.discord.bot_id": self.bot.user.id,
                 "squid.discord.guild_count": len(self.bot.guilds),

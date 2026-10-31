@@ -31,3 +31,52 @@
 - **Fix:** typed render outcomes, service decomposition, candidate-coordinate UX, shared crash policy, task ownership.
 - **Already fixed:** bounded render attempts via durable work, failure propagation, primary fencing, configurable render/simulation timeouts.
 - **Investigate before change:** renaming `SimulationResult`; retain it if a broader name adds churn without clearer UI/domain meaning.
+
+## Implementation notes
+
+Landed across `74c17dea`…`47e6f053`. Four things the plan did not anticipate:
+
+- **The candidate coordinates could not have reached a caller at all.** `_translate` rebuilds a
+  child's `invalid` error from its wire kind alone, discarding the message, the end-user action,
+  and the context — so the "run the command again with input_position" refusal never left the
+  supervisor intact either. That discarding is deliberate (nothing the engine writes should reach
+  a user), so the fix was a fourth wire kind, `ambiguous_simulation_input`, that the supervisor
+  reconstructs from the coordinates rather than from a string. `AmbiguousSimulationInputError`
+  subclasses `InvalidSchematicError` and keeps `ErrorCode.SCHEMATIC_INVALID`, so
+  `contracts/openapi.json` is untouched.
+- **A named input coordinate was being ignored, not just under-explained.** `_resolve_simulation_input`
+  checked the Insign annotation and the sole-control heuristic *before* `manual`, so passing
+  coordinates for the second of two buttons silently timed the first and reported the result as
+  the answer. The manual coordinate is now checked first. Covered by two new integration tests
+  against the real engine.
+- **`running()` cannot be held by a pytest-asyncio fixture.** Setup and finalization run in
+  different tasks and an anyio task group can only be exited by the task that entered it, so the
+  integration fixture holds the lifetime in an owner task of its own. Unit tests that only drive a
+  pump directly use an `unowned_worker()` helper whose spawn callable refuses.
+- **`SimulationResult` is retained.** Checked the whole path before deciding: the persisted column
+  (`schematics.simulation_evidence`), the read-model field (`StoredSchematic.simulation_evidence`),
+  and the Discord card ("Simulated timing evidence", "Moderator evidence only") already say
+  "evidence", and the type itself really is one run's result. Renaming it touches thirteen modules
+  and the wire encoder names to make the vocabulary no clearer than it already is.
+
+The plan's step 3 asked for skip reasons on "moderator/UI callers" without naming a surface;
+`prepare_render` cannot be one, because asking it costs a GPU render. `explain_render_skip` answers
+from configuration and the stored analysis alone and is rendered on `/build schematic info`, which
+is where a moderator already asks what the bot knows about a build.
+
+New user-facing strings are not in `locales/squid.pot`. That catalog is already ~40 msgids behind
+HEAD from earlier plans in this series, so refreshing it is its own commit rather than a partial
+sweep hidden inside this one.
+
+## Validation
+
+- Focused, with `--no-cov`: `tests/unit/schematics/`, `tests/unit/worker/`,
+  `tests/unit/bot/submission/test_schematic_commands.py`,
+  `tests/integration/schematics/test_worker_pool.py` (against the installed engine).
+- Full `tests/unit/` once after the task-ownership change, since the pool's lifetime is process-wide:
+  1977 passed.
+- Changed-file Ruff via the commit hooks, plus `git diff --check`. No persistence structure changes,
+  so no `alembic heads` run.
+- `just typecheck`: 17 errors, all in `tests/*/accounts/` and `tests/unit/persistence/` from
+  `ee0d2ec1`, none in files this plan touched. The two it did find here are fixed in `8f715f74`:
+  `TaskGroup.start_soon` wants a callable returning a `Coroutine`, not an `Awaitable`.
