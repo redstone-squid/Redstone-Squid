@@ -432,7 +432,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert pinned_manifest_response.status_code == 200
     assert pinned_manifest_response.json()["revision"] == 2
     assert forms.revision_calls == [
-        ("build_submission.v1", 1, "zh-CN"),
+        ("build_submission.v1", 2, "zh-CN"),
         ("build_submission.v1", 999, "en"),
     ]
     assert options_response.status_code == 200
