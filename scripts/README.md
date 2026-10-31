@@ -14,4 +14,21 @@ The scripts in `migrations/` are used to provide additional information accompan
 
 `just dependency-report` exports a CycloneDX 1.5 software bill of materials from `uv.lock`. `just gha-analysis` analyzes GitHub Actions workflows with `zizmor` and requires an authenticated `gh` CLI. `just visualize-dependencies` writes an SVG dependency graph to `docs/dependencies.svg`.
 
-`android-link-with-libpython3.sh` is not meant to be run directly; it's a cargo linker override (wired in via `CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER` in `pyproject.toml`'s `[tool.uv.extra-build-variables]`) that gets PyO3 extension modules (`cryptography`, `jsonschema-rs`) to actually link against Termux's `libpython3.so` when built from source on Android. See the script's own header comment for why this is needed.
+## Termux
+
+From the repository root, run `sh scripts/termux.sh` to install the locked dependencies.
+Pass a command to use the same build environment for other operations:
+
+```sh
+sh scripts/termux.sh uv sync --locked --extra schematics
+sh scripts/termux.sh just typecheck
+```
+
+The wrapper uses the checkout location and Termux's `$PREFIX`, so the repository can live
+anywhere. It keeps uv's cache in `.cache/uv`, uses copy installs, sets Android API 24, and
+disables release LTO to reduce Rust build memory use. `UV_CACHE_DIR`, `UV_LINK_MODE`,
+`ANDROID_API_LEVEL`, and `CARGO_PROFILE_RELEASE_LTO` can override those defaults.
+
+`android-link-with-libpython3.sh` keeps the Python library linked into aarch64 Android
+Rust extensions. The wrapper also supplies Nucleation's feature and CMake settings; see
+[the upstream issue record](../docs/plans/completed/nucleation-android-build.md).
