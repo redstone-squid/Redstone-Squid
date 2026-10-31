@@ -431,3 +431,60 @@ def test_mentionable_entity_prefill_drops_bare_ids_it_cannot_type() -> None:
     defaults = _entity_defaults([5, EntityRef(kind=EntityKind.ROLE, id=6)], EntityType.MENTIONABLE)
 
     assert [(value.id, value.type) for value in defaults] == [(6, discord.SelectDefaultValueType.role)]
+
+
+@pytest.mark.parametrize("custom_invalid", [False, True])
+async def test_descriptor_form_hooks_keep_invalid_attempts_out_of_on_submit(custom_invalid: bool) -> None:
+    submitted: list[tuple[int, str | None]] = []
+    invalid: list[sl.InvalidSubmitEvent] = []
+
+    class DurationForm(sl.forms.Form):
+        duration = sl.forms.IntField()
+        note = sl.forms.TextField(required=False)
+
+        @override
+        async def on_submit(self, event: sl.SubmitEvent) -> None:
+            submitted.append((self.duration, self.note))
+
+    class CustomForm(DurationForm):
+        @override
+        async def on_invalid(self, event: sl.InvalidSubmitEvent) -> None:
+            invalid.append(event)
+            with pytest.raises(sl.forms.FieldNotReadyError):
+                _ = self.duration
+            assert self.note is None
+            await event.retry()
+
+    form = CustomForm(duration="initial") if custom_invalid else DurationForm(duration="initial")
+
+    class Panel(sl.Component[sl.ComponentsV2Target]):
+        @override
+        def render(self) -> sl.LayoutNode:
+            return sl.form("Duration", form, key="duration")
+
+    root = MessageRoot(Panel(), access=Everyone(), timeout=None)
+    commit_render(root)
+    opening = interaction_harness()
+    await root.dispatch("duration", opening)
+    modal = opening.response.send_modal.await_args.args[0]
+    inputs = [item for item in modal.walk_children() if isinstance(item, discord.ui.TextInput)]
+    inputs[0]._value = "bad"  # pyrefly: ignore[missing-attribute]
+    inputs[1]._value = ""  # pyrefly: ignore[missing-attribute]
+    attempt = interaction_harness()
+    await modal.on_submit(attempt)
+    assert submitted == []
+    if custom_invalid:
+        assert len(invalid) == 1
+        assert invalid[0].attempted == {"duration": "bad", "note": ""}
+        assert invalid[0].values == {"note": None}
+    view = attempt.response.send_message.await_args.kwargs["view"]
+    retry = next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
+    opening = interaction_harness()
+    await retry.callback(opening)
+    modal = opening.response.send_modal.await_args.args[0]
+    inputs = [item for item in modal.walk_children() if isinstance(item, discord.ui.TextInput)]
+    assert inputs[0].default == "bad"
+    inputs[0]._value = "42"  # pyrefly: ignore[missing-attribute]
+    inputs[1]._value = ""  # pyrefly: ignore[missing-attribute]
+    await modal.on_submit(interaction_harness())
+    assert submitted == [(42, None)]

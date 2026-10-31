@@ -164,8 +164,7 @@ class StarboardScreen(sd.Screen):
     async def _create(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_CREATE):
             return
-        form = _CreateBoardForm(**event.values)
-        assert form.channel_id is not None and form.name is not None and form.required is not None
+        form = _CreateBoardForm.from_submission(event)
         channel_id = form.channel_id
         name = form.name
         required = form.required
@@ -177,8 +176,7 @@ class StarboardScreen(sd.Screen):
     async def _edit(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_EDIT):
             return
-        form = _EditSettingForm(**event.values)
-        assert form.name is not None and form.setting is not None and form.value is not None
+        form = _EditSettingForm.from_submission(event)
         name = form.name
         setting = form.setting
         value = _parse_setting(setting, form.value)
@@ -192,14 +190,8 @@ class StarboardScreen(sd.Screen):
     async def _edit_emoji(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_EMOJI_EDIT):
             return
-        form = _EditEmojiForm(**event.values)
-        assert (
-            form.emoji is not None
-            and form.operation is not None
-            and form.direction is not None
-            and form.multiplier is not None
-            and form.name is not None
-        )
+        form = _EditEmojiForm.from_submission(event)
+
         config = await self._named(event, form.name)
         if config is None:
             return
@@ -217,8 +209,7 @@ class StarboardScreen(sd.Screen):
     async def _edit_weight(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_WEIGHT_EDIT):
             return
-        form = _EditWeightForm(**event.values)
-        assert form.role_id is not None and form.name is not None
+        form = _EditWeightForm.from_submission(event)
         config = await self._named(event, form.name)
         if config is None:
             return
@@ -230,8 +221,7 @@ class StarboardScreen(sd.Screen):
     async def _request_delete(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, STARBOARD_BOARD_DELETE):
             return
-        form = _DeleteBoardForm(**event.values)
-        assert form.name is not None
+        form = _DeleteBoardForm.from_submission(event)
         self._deleting = form.name
         self._decision = sp.Decision[sl.ComponentsV2Target](
             tr(t"Deleting a starboard keeps its audit history but disables its configuration."),

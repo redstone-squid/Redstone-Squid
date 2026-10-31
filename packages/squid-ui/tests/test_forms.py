@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta, timezone
-from typing import ClassVar, override
+from typing import Any, ClassVar, override
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -72,7 +72,7 @@ def test_parallel_read_form_cannot_declare_history_recording() -> None:
 
 def _multi_choice(
     *, required: bool = True, minimum: int = 0, maximum: int | None = None
-) -> sl.forms.MultiChoiceField[int]:
+) -> sl.forms.MultiChoiceField[int, Any]:
     return sl.forms.MultiChoiceField(
         key="values",
         label="Values",
@@ -578,3 +578,41 @@ def test_field_error_requires_field_objects() -> None:
         sl.forms.FieldError(message="No field")
     with pytest.raises(TypeError, match="one or more"):
         sl.forms.FieldError("name", message="Not a field")  # type: ignore
+
+
+def test_prefill_does_not_claim_to_be_a_parsed_value() -> None:
+    form = ProfileForm(name="Ada", age="not an age")
+    assert form.prefill["age"] == "not an age"
+    with pytest.raises(sl.forms.FieldNotReadyError, match="age"):
+        _ = form.age
+
+
+async def test_optional_blank_and_zero_are_distinct_parsed_values() -> None:
+    class Values(sl.forms.Form):
+        number = sl.forms.IntField(required=False)
+        flag = sl.forms.BoolField()
+
+    form = Values()
+    with pytest.raises(sl.forms.FieldNotReadyError):
+        _ = form.number
+    await form.spec().evaluate({"number": "", "flag": False})
+    assert form.number is None
+    assert form.flag is False
+    await form.spec().evaluate({"number": "0", "flag": False})
+    assert form.number == 0
+
+
+async def test_from_submission_binds_values_without_treating_them_as_prefill() -> None:
+    from squid_ui.testing import submit_event
+
+    form = ProfileForm.from_submission(submit_event({"name": "Ada", "age": 36, "public": False}))
+    assert form.name == "Ada"
+    assert form.age == 36
+    assert form.public is False
+    assert form.prefill == {"public": False}
+
+    event = submit_event({"name": "Ada"})
+    from dataclasses import replace
+
+    with pytest.raises(ValueError, match="invalid submission"):
+        ProfileForm.from_submission(replace(event, errors=(sl.forms.FormError("Rejected"),)))

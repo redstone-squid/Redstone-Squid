@@ -113,8 +113,7 @@ class VersionScreen(sd.Screen):
         if not await self._authorize_create():
             await event.notice(tr(t"You are no longer allowed to add versions."))
             return
-        form = _AddVersionForm(**event.values)
-        assert form.edition is not None and form.version is not None
+        form = _AddVersionForm.from_submission(event)
         edition = form.edition
         version_text = form.version
         version = str(await self._versions.add(version_text, edition=edition))

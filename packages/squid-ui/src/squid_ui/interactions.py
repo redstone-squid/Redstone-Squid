@@ -200,6 +200,17 @@ class SubmitEvent(ActionEvent):
     errors: tuple[FormIssue, ...] = ()
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class InvalidSubmitEvent(SubmitEvent):
+    """An invalid attempt with partial values; retry authority ends when the handler returns."""
+
+    _retry: Callable[[], Awaitable[None]] = field(repr=False, compare=False)
+
+    async def retry(self) -> None:
+        """Offer the same form again with the attempted input preserved."""
+        await self._retry()
+
+
 @dataclass(frozen=True, slots=True)
 class ActionRequest:
     """One admitted mounted action supplied to application middleware.

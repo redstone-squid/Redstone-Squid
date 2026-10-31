@@ -291,8 +291,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
     async def _convert(self, event: sl.SubmitEvent) -> None:
         if await self._primary(event) is None:
             return
-        form = _ConvertForm(**event.values)
-        assert form.format is not None
+        form = _ConvertForm.from_submission(event)
         file_format = form.format
         data_version = form.data_version
         version = form.version or None
@@ -308,7 +307,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
     async def _timing(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, BUILD_SCHEMATIC_MEASURE_TIMING) or await self._primary(event) is None:
             return
-        form = _TimingForm(**event.values)
+        form = _TimingForm.from_submission(event)
         raw = form.input or None
         position = _parse_position(raw)
         if raw is not None and position is None:
@@ -465,15 +464,13 @@ class BuildBrowseScreen(sd.Screen):
         return True
 
     async def _open_id(self, event: sl.SubmitEvent) -> None:
-        form = _OpenBuildForm(**event.values)
-        assert form.id is not None
+        form = _OpenBuildForm.from_submission(event)
         build_id = form.id
         if not await self._select(build_id):
             await event.notice(tr(t"No visible build has that ID."))
 
     async def _search(self, event: sl.SubmitEvent) -> None:
-        form = _SearchForm(**event.values)
-        assert form.query is not None
+        form = _SearchForm.from_submission(event)
         build = await self._queries.semantic(form.query)
         if build is None or build.id is None or not await self._select(build.id):
             await event.notice(tr(t"No visible build matches that search."))

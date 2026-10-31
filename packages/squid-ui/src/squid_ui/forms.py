@@ -12,11 +12,11 @@ from datetime import datetime as DateTimeValue
 from datetime import time as TimeValue
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, Self, cast, overload, override
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, NoReturn, Self, cast, overload, override
 
 from squid_ui.emoji import EmojiLike, normalize_emoji
 from squid_ui.errors import LayoutInvariantError, SquidUiError
-from squid_ui.interactions import ActionMode, SubmitEvent
+from squid_ui.interactions import ActionMode, InvalidSubmitEvent, SubmitEvent
 from squid_ui.temporal import (
     AmbiguousLocalTimeError,
     AmbiguousTimeMode,
@@ -67,6 +67,10 @@ class FormValidationMode(StrEnum):
     ACCEPT_AND_MARK = "accept_and_mark"
 
 
+class FieldNotReadyError(SquidUiError, RuntimeError):
+    """A form field was read before its submitted value parsed successfully."""
+
+
 class FormValueError(SquidUiError, ValueError):
     """A user-correctable parse failure, converted to :class:`FieldError`.
 
@@ -113,7 +117,7 @@ def _prefill(value: object) -> PrefillValue:
 
 
 @dataclass(frozen=True, slots=True)
-class FormField[ValueT](ABC):
+class FormField[ValueT, RequiredT: bool = bool](ABC):
     """One typed value in a portable form schema.
 
     The same object can be used dynamically in :class:`FormSpec` or as a descriptor on
@@ -124,7 +128,7 @@ class FormField[ValueT](ABC):
     label: TextLike | None = None
     key: str = ""
     description: TextLike | None = None
-    required: bool = True
+    required: RequiredT = cast(RequiredT, True)  # noqa: FBT003 -- the cast preserves the generic constructor default.
     default: ValueT | None = None
     _name: str = dataclass_field(default="", init=False, repr=False, compare=False)
     _declaration: FormField[Any] | None = dataclass_field(default=None, repr=False, compare=False)
@@ -137,16 +141,25 @@ class FormField[ValueT](ABC):
     def __get__(self, instance: None, owner: type[Form]) -> Self: ...
 
     @overload
+    def __get__(self: FormField[ValueT, Literal[True]], instance: Form, owner: type[Form]) -> ValueT: ...
+
+    @overload
     def __get__(self, instance: Form, owner: type[Form]) -> ValueT | None: ...
 
     def __get__(self, instance: Form | None, owner: type[Form]) -> Self | ValueT | None:
         del owner
         if instance is None:
             return self
-        return instance.__dict__.get(self._name, self.default)
+        if self._name not in instance._values:
+            message = f"Form field {self._name!r} has no parsed value"
+            raise FieldNotReadyError(message)
+        return instance._values[self._name]
 
     def __set__(self, instance: Form, value: ValueT | None) -> None:
-        instance.__dict__[self._name] = value
+        if value is None and self.required:
+            message = f"Required form field {self._name!r} cannot contain None"
+            raise ValueError(message)
+        instance._values[self._name] = value
 
     def bind(self, name: str) -> Self:
         """Fill descriptor-derived schema metadata without mutating the declaration."""
@@ -182,7 +195,7 @@ class FormField[ValueT](ABC):
 
 
 @dataclass(frozen=True, slots=True)
-class TextField(FormField[str]):
+class TextField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[str, RequiredT]):
     """A single-line text value."""
 
     placeholder: TextLike | None = None
@@ -207,12 +220,12 @@ class TextField(FormField[str]):
 
 
 @dataclass(frozen=True, slots=True)
-class TextAreaField(TextField):
+class TextAreaField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](TextField[RequiredT]):
     """A multi-line text value."""
 
 
 @dataclass(frozen=True, slots=True)
-class IntField(FormField[int]):
+class IntField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """An integer constrained by optional inclusive bounds."""
 
     minimum: int | None = None
@@ -235,7 +248,7 @@ class IntField(FormField[int]):
 
 
 @dataclass(frozen=True, slots=True)
-class FloatField(FormField[float]):
+class FloatField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[float, RequiredT]):
     """A finite floating-point number constrained by optional inclusive bounds."""
 
     minimum: float | None = None
@@ -264,7 +277,7 @@ _DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 
 
 @dataclass(frozen=True, slots=True)
-class DurationField(FormField[int]):
+class DurationField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """A compact duration such as ``30m``, parsed to seconds."""
 
     minimum: int | None = None
@@ -307,7 +320,7 @@ class DurationField(FormField[int]):
 
 
 @dataclass(frozen=True, slots=True)
-class DateField(FormField[date]):
+class DateField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[date, RequiredT]):
     """An ISO-8601 calendar date."""
 
     minimum: date | None = None
@@ -334,7 +347,7 @@ class DateField(FormField[date]):
 
 
 @dataclass(frozen=True, slots=True)
-class TimeField(FormField[TimeValue]):
+class TimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[TimeValue, RequiredT]):
     """An ISO-8601 wall-clock time with optional inclusive bounds."""
 
     minimum: TimeValue | None = None
@@ -361,7 +374,7 @@ class TimeField(FormField[TimeValue]):
 
 
 @dataclass(frozen=True, slots=True)
-class DateTimeField(FormField[DateTimeValue]):
+class DateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[DateTimeValue, RequiredT]):
     """An ISO-8601 instant; naive input is resolved in ``timezone``.
 
     Ambiguous and nonexistent local times reject by default. Explicitly offset
@@ -418,7 +431,9 @@ class DateTimeField(FormField[DateTimeValue]):
 
 
 @dataclass(frozen=True, slots=True)
-class ZonedDateTimeField(FormField[ZonedDateTime]):
+class ZonedDateTimeField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](
+    FormField[ZonedDateTime, RequiredT]
+):
     """A local ISO-8601 datetime resolved in one named IANA timezone."""
 
     timezone: str = "UTC"
@@ -480,7 +495,7 @@ class ZonedDateTimeField(FormField[ZonedDateTime]):
 
 
 @dataclass(frozen=True, slots=True)
-class ScaleField(FormField[int]):
+class ScaleField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[int, RequiredT]):
     """One point on an inclusive ordinal scale, such as a 1-5 rating.
 
     Portable by construction: a target with a radio-group shape draws the whole span, and one
@@ -540,7 +555,7 @@ class ChoiceOption[ValueT]:
 
 
 @dataclass(frozen=True, slots=True)
-class ChoiceField[ValueT](FormField[ValueT]):
+class ChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[ValueT, RequiredT]):
     """A single choice mapped from a stable submitted key to a typed value."""
 
     options: tuple[ChoiceOption[ValueT], ...] = ()
@@ -568,7 +583,9 @@ class ChoiceField[ValueT](FormField[ValueT]):
 
 
 @dataclass(frozen=True, slots=True)
-class MultiChoiceField[ValueT](FormField[tuple[ValueT, ...]]):
+class MultiChoiceField[ValueT, RequiredT: (Literal[True], Literal[False]) = Literal[True]](
+    FormField[tuple[ValueT, ...], RequiredT]
+):
     """Several declared choices returned in declaration order."""
 
     options: tuple[ChoiceOption[ValueT], ...] = ()
@@ -626,7 +643,7 @@ class UploadedFile:
 
 
 @dataclass(frozen=True, slots=True)
-class BoolField(FormField[bool]):
+class BoolField[RequiredT: (Literal[True], Literal[False]) = Literal[True]](FormField[bool, RequiredT]):
     """A boolean checkbox."""
 
     @override
@@ -644,7 +661,7 @@ class BoolField(FormField[bool]):
 
 
 @dataclass(frozen=True, slots=True)
-class ExtensionField[ValueT](FormField[ValueT]):
+class ExtensionField[ValueT, RequiredT: bool = bool](FormField[ValueT, RequiredT]):
     """A frontend-specific field with an optional portable fallback."""
 
     fallback: FormField[ValueT] | None = None
@@ -676,6 +693,9 @@ class FormSpec:
     prefill: Mapping[str, object] = dataclass_field(default_factory=dict)
     validator: FormValidator | None = dataclass_field(default=None, repr=False, compare=False)
     validation: FormValidationMode = FormValidationMode.RETRY
+    on_invalid: Callable[[InvalidSubmitEvent], Awaitable[None]] | None = dataclass_field(
+        default=None, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         normalized = tuple(self.items)
@@ -783,7 +803,12 @@ class FormSpec:
 
 
 class Form:
-    """Descriptor sugar that compiles typed class attributes into a :class:`FormSpec`."""
+    """A form whose field attributes expose parsed submission values.
+
+    Constructor values are raw prefills, available through `prefill`. Reading a field before
+    it parses raises `FieldNotReadyError`; a parsed optional blank is `None`. Validation
+    runs after parsing, then either `on_submit` or `on_invalid` handles the attempt.
+    """
 
     title: ClassVar[TextLike] = "Form"
     validation: ClassVar[FormValidationMode] = FormValidationMode.RETRY
@@ -808,19 +833,36 @@ class Form:
         if unknown:
             message = f"unknown form fields: {sorted(unknown)!r}"
             raise TypeError(message)
+        self._values: dict[str, Any] = {}
+        self._prefill: dict[str, object] = {}
         for name, field in self._form_fields:
             if name in prefill:
-                setattr(self, name, prefill[name])
+                self._prefill[name] = prefill[name]
             elif field.default is not None:
-                setattr(self, name, field.default)
+                self._prefill[name] = field.default
+
+    @property
+    def prefill(self) -> Mapping[str, object]:
+        """Raw initial values, keyed by attribute name; these have not been parsed."""
+        return MappingProxyType(self._prefill)
+
+    @classmethod
+    def from_submission(cls, event: SubmitEvent) -> Self:
+        """Bind an already validated event for a separate screen handler."""
+        if event.errors:
+            message = "Cannot bind an invalid submission as a validated form"
+            raise ValueError(message)
+        form = cls()
+        form._bind(event.values)
+        return form
 
     def spec(self) -> FormSpec:
-        """Compile this instance's declarations and current values."""
+        """Compile this instance's declarations and raw prefills."""
         fields = tuple(field.bind(name) for name, field in self._form_fields)
         prefill = {
-            field.key: self.__dict__[name]
+            field.key: self._prefill[name]
             for (name, _declaration), field in zip(self._form_fields, fields, strict=True)
-            if name in self.__dict__
+            if name in self._prefill
         }
         return FormSpec(
             self.title,
@@ -828,9 +870,11 @@ class Form:
             prefill,
             validator=self._validate_values,
             validation=self.validation,
+            on_invalid=self._invalid,
         )
 
     def _bind(self, values: Mapping[str, object]) -> None:
+        self._values.clear()
         for name, declaration in self._form_fields:
             key = declaration.key or name
             if key in values:
@@ -842,15 +886,26 @@ class Form:
         return await result if inspect.isawaitable(result) else result
 
     async def _submit(self, event: SubmitEvent) -> None:
+        if event.errors:
+            message = "Invalid submissions must use on_invalid"
+            raise ValueError(message)
         self._bind(event.values)
         await self.on_submit(event)
+
+    async def _invalid(self, event: InvalidSubmitEvent) -> None:
+        self._bind(event.values)
+        await self.on_invalid(event)
+
+    async def on_invalid(self, event: InvalidSubmitEvent) -> None:
+        """Handle an invalid attempt; the default offers a retry with the attempted input."""
+        await event.retry()
 
     def validate(self) -> Iterable[FormIssue] | Awaitable[Iterable[FormIssue]]:
         """Return cross-field errors after every field has parsed successfully."""
         return ()
 
     async def on_submit(self, event: SubmitEvent) -> None:
-        """Handle a successfully parsed submission, or an accepted invalid one."""
+        """Handle a submission after parsing and cross-field validation succeed."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -896,6 +951,7 @@ __all__ = [
     "DurationField",
     "ExtensionField",
     "FieldError",
+    "FieldNotReadyError",
     "FloatField",
     "Form",
     "FormBinding",

@@ -346,7 +346,7 @@ class SettingsPanel(sd.Screen):
             )
 
     async def _role_weight_submitted(self, event: sl.SubmitEvent, role_id: int) -> None:
-        form = _VoteWeightForm(**event.values)
+        form = _VoteWeightForm.from_submission(event)
         text = (form.multiplier or "").strip()
         try:
             await self.set_weight(role_id, float(text) if text else None)
@@ -354,9 +354,8 @@ class SettingsPanel(sd.Screen):
             await event.notice(tr(t"A vote multiplier must be a positive number, such as 1.5."))
 
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
-        form = _VoteEmojisForm(**event.values)
+        form = _VoteEmojisForm.from_submission(event)
         text = form.aliases
-        assert text is not None
         options: list[VoteOption] = []
         for position, line in enumerate(filter(None, (line.strip() for line in text.splitlines()))):
             parts = [part.strip() for part in line.split("|", 1)]

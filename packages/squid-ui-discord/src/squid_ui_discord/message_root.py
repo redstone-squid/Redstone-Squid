@@ -42,6 +42,7 @@ from squid_ui.interactions import (
     Actor,
     EntitySelectionEvent,
     InteractionKind,
+    InvalidSubmitEvent,
     PressEvent,
     SelectionEvent,
     SubmitEvent,
@@ -2438,18 +2439,41 @@ class MessageRoot[
                 evaluation.attempted,
                 evaluation.errors,
             )
-            if evaluation.errors and spec.validation is FormValidationMode.RETRY:
+            submission_handler = binding.handler
+
+            async def retry() -> None:
                 await responder.retry_form(
                     spec.with_prefill(evaluation.attempted),
                     evaluation.errors,
                     key=key,
-                    handler=binding.handler,
+                    handler=submission_handler,
                     mode=binding.mode,
                     generation=self._generation if generation is None else generation,
                     actor_id=interaction.user.id,
                     label=binding.label,
                     record=binding.record,
                 )
+
+            if evaluation.errors and spec.on_invalid is not None:
+                event = InvalidSubmitEvent(
+                    actor,
+                    responder,
+                    self.localization.locale,
+                    {"frontend": "discord"},
+                    evaluation.values,
+                    evaluation.attempted,
+                    evaluation.errors,
+                    _retry=retry,
+                )
+                invalid_handler = spec.on_invalid
+
+                async def handle_invalid(submission: SubmitEvent) -> None:
+                    assert isinstance(submission, InvalidSubmitEvent)
+                    await invalid_handler(submission)
+
+                binding = replace(binding, handler=handle_invalid)
+            elif evaluation.errors and spec.validation is FormValidationMode.RETRY:
+                await retry()
                 profile.presentation = PresentationStatus.WRITTEN
                 profile.acknowledge("validation_retry")
                 profile.finish(DispatchDisposition.VALIDATION_RETRY)
