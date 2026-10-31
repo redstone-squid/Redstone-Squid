@@ -2,9 +2,11 @@
 
 from typing import Any, cast, override
 
+import anyio
 import discord
 from discord.ext import commands
 
+import squid_layouts as sl
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
@@ -15,6 +17,7 @@ from squid.accounts.domain import (
 )
 from squid.bot.errors import ExpiringLayoutView
 from squid.bot.i18n import t
+from squid.bot.ui import create_mount
 from squid.bot.utils.components import CardField, card_container, edit_interaction_layout, no_mentions, text_layout
 from squid.core.i18n import _, ntranslate
 
@@ -24,6 +27,97 @@ type ConsentTarget = commands.Context[Any] | discord.Interaction[Any]
 Prefix commands, hybrid commands, slash-only cogs, modals and view buttons all reach the gate,
 and the difference between them is only how a message gets sent.
 """
+
+
+class ConsentPrompt(sl.Component):
+    """A semantic consent prompt with a native-free waiting lifecycle."""
+
+    closed: bool = sl.state(default=False)
+
+    def __init__(
+        self,
+        *,
+        user_id: int,
+        title: str,
+        summary: str,
+        fields: tuple[CardField, ...],
+        accept_label: str,
+        locale: str | None,
+        timeout: float,
+    ) -> None:
+        self.user_id = user_id
+        self.locale = locale
+        self._title = title
+        self._summary = summary
+        self._fields = fields
+        self._accept_label = accept_label
+        self._timeout = timeout
+        self._consent: AccountConsent | None = None
+        self._done = anyio.Event()
+        self._mount: sl.discord.Mount | None = None
+
+    @property
+    def consent(self) -> AccountConsent | None:
+        return self._consent
+
+    @property
+    def notice_version(self) -> str:
+        return CURRENT_CONSENT_VERSION
+
+    def render(self) -> tuple[sl.LayoutNode, ...]:
+        card_fields = tuple(sl.primitives.presets.Field(field.name, field.value) for field in self._fields)
+        return (
+            sl.primitives.card(self._title, self._summary, fields=card_fields),
+            sl.primitives.Row(
+                (
+                    sl.primitives.Button(
+                        self._accept_label,
+                        self._accept,
+                        "accept",
+                        style=sl.primitives.ActionStyle.SUCCESS,
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Cancel")),
+                        self._cancel,
+                        "cancel",
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Privacy notice")),
+                        self._privacy,
+                        "privacy",
+                    ),
+                )
+            ),
+        )
+
+    async def _accept(self, event: sl.PressEvent) -> None:
+        self._consent = AccountConsent.grant_current()
+        await self._finish(event)
+
+    async def _cancel(self, event: sl.PressEvent) -> None:
+        await self._finish(event)
+
+    async def _privacy(self, event: sl.PressEvent) -> None:
+        await event.notice(t(self.locale, PRIVACY_NOTICE))
+
+    async def _finish(self, event: sl.PressEvent) -> None:
+        self.closed = True
+        self._done.set()
+        await event.finish()
+
+    async def wait(self) -> AccountConsent | None:
+        with anyio.move_on_after(self._timeout) as scope:
+            await self._done.wait()
+        return None if scope.cancel_called else self._consent
+
+    def mount(self) -> sl.discord.Mount:
+        self._mount = create_mount(
+            self,
+            locale=self.locale,
+            timeout=self._timeout,
+            lock_to=self.user_id,
+        )
+        return self._mount
 
 
 class ConsentPromptView(ExpiringLayoutView):
@@ -256,6 +350,39 @@ def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
     return cast(discord.Interaction[Any], target).user
 
 
+def _link_credit_value(preview: LinkPreview, locale: str | None) -> str:
+    credit = preview.credit
+    if credit is None:
+        return t(
+            locale,
+            _("No build credits **{username}** yet, so nothing is reattributed."),
+            username=preview.username,
+        )
+    builds = ntranslate(
+        locale,
+        _("{count} build"),
+        _("{count} builds"),
+        credit.build_count,
+        count=credit.build_count,
+    )
+    if credit.is_contested:
+        return t(
+            locale,
+            _(
+                "**{name}** ({builds}) is already credited to another creator, so agreeing moves "
+                "nothing and opens a claim for staff to review."
+            ),
+            name=credit.name,
+            builds=builds,
+        )
+    return t(
+        locale,
+        _("**{name}** ({builds}) becomes attributed to your account."),
+        name=credit.name,
+        builds=builds,
+    )
+
+
 async def prompt_for_consent(
     target: ConsentTarget,
     *,
@@ -269,15 +396,79 @@ async def prompt_for_consent(
     `None` covers both cancelling and letting the prompt expire; neither stores anything, so the
     caller treats them the same and only the wording differs.
     """
-    view = (
-        ConsentPromptView(user_id, locale=locale, timeout=timeout)
-        if preview is None
-        else LinkConsentView(user_id, preview, locale=locale, timeout=timeout)
-    )
-    message = await _send(target, view, ephemeral=_default_ephemeral(target))
-    view.bind_message(message)
-    await view.wait()
-    return view.consent
+    if preview is None:
+        component = ConsentPrompt(
+            user_id=user_id,
+            title=t(locale, _("Before Redstone Squid stores anything about you")),
+            summary=t(
+                locale,
+                _(
+                    "Agreeing stores your Discord user ID and records this consent, so the bot can "
+                    "recognise you and attribute your builds. Cancelling stores nothing."
+                ),
+            ),
+            fields=(
+                CardField(
+                    t(locale, _("Discord account")),
+                    t(locale, _("<@{user_id}> (\x60{user_id}\x60)"), user_id=user_id),
+                ),
+                CardField(
+                    t(locale, _("Consent recorded")),
+                    t(
+                        locale,
+                        _("Notice {version}, timed at the moment you agree."),
+                        version=CURRENT_CONSENT_VERSION,
+                    ),
+                ),
+            ),
+            accept_label=t(locale, _("Agree")),
+            locale=locale,
+            timeout=timeout,
+        )
+    else:
+        component = ConsentPrompt(
+            user_id=user_id,
+            title=t(locale, _("Link {username} to your Discord account"), username=preview.username),
+            summary=t(
+                locale,
+                _(
+                    "Agreeing stores your Discord user ID, your Minecraft UUID and your current "
+                    "Minecraft username, and records this consent. Cancelling stores nothing."
+                ),
+            ),
+            fields=(
+                CardField(
+                    t(locale, _("Minecraft account")),
+                    t(
+                        locale,
+                        _("**{username}**\n\x60{uuid}\x60"),
+                        username=preview.username,
+                        uuid=preview.java_uuid,
+                    ),
+                ),
+                CardField(
+                    t(locale, _("Discord account")),
+                    t(locale, _("<@{user_id}> (\x60{user_id}\x60)"), user_id=user_id),
+                ),
+                CardField(t(locale, _("Build credit")), _link_credit_value(preview, locale)),
+                CardField(
+                    t(locale, _("Consent recorded")),
+                    t(
+                        locale,
+                        _("Notice {version}, timed at the moment you agree."),
+                        version=CURRENT_CONSENT_VERSION,
+                    ),
+                ),
+            ),
+            accept_label=t(locale, _("Agree and link")),
+            locale=locale,
+            timeout=timeout,
+        )
+    mount = component.mount()
+    rendered = mount.build_view()
+    message = await _send(target, rendered, ephemeral=_default_ephemeral(target))
+    mount.bind(message, rendered)
+    return await component.wait()
 
 
 async def ensure_consented_account(

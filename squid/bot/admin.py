@@ -14,6 +14,7 @@ from squid.bot.reactions import ReactionClearEvent, ReactionEvent
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import info_layout, link_layout, no_mentions, text_layout
 from squid.bot.utils.permissions import hide_unless, requires
+from squid.bot.utils.visibility import personal
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
@@ -76,7 +77,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
                 t(locale, _("Tag proposed")),
                 t(locale, _("Tag #{id} is awaiting staff approval."), id=definition.id),
             ),
-            ephemeral=ctx.interaction is not None,
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 
@@ -110,7 +111,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
                 t(locale, _("Build tagged")),
                 t(locale, _("Attached **{name}** to build #{id}."), name=tag.display_name, id=build_id),
             ),
-            ephemeral=ctx.interaction is not None,
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 
@@ -129,7 +130,7 @@ class Admin[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
                 t(locale, _("Pending tags")),
                 body or t(locale, _("No tags are awaiting review.")),
             ),
-            ephemeral=ctx.interaction is not None,
+            ephemeral=personal(ctx),
             allowed_mentions=no_mentions(),
         )
 

@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING
 
 import discord
 from discord import Message, app_commands
-from discord.ext.commands import Cog, Context
+from discord.ext.commands import Cog
 
+import squid_layouts as sl
+from squid.accounts.domain import IdentityProvider
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.attachments import AttachmentKind, classify_attachment
@@ -17,10 +19,17 @@ from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.media import CatboxMirror
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.components import EphemeralBuildEditButton
-from squid.bot.submission.ui.views import BuildSubmissionForm
+from squid.bot.submission.ui.views import SubmissionFormComponent
 from squid.bot.utils.autocomplete import autocompletes, suggests
-from squid.bot.utils.components import StaticLayout, edit_layout, error_layout, no_mentions, text_layout
-from squid.bot.utils.permissions import requires
+from squid.bot.utils.components import (
+    edit_layout,
+    error_layout,
+    no_mentions,
+    reply_layout,
+    text_layout,
+)
+from squid.bot.utils.permissions import enforce
+from squid.bot.utils.sticky_message import StickyMessage
 from squid.builds.application import (
     BuildInferenceService,
     BuildService,
@@ -37,6 +46,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Kill switch while ingestion is not live yet; flip to True to bring the sticky back.
+# Typed `bool`, not the inferred `Literal[False]`, so the guarded branches are not unreachable.
+CONSENT_STICKY_ENABLED: bool = False
+
 # TODO: Set up a webhook for the bot to handle google form submissions.
 
 
@@ -52,6 +65,7 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
     builds: BuildService
     inference: BuildInferenceService
     messages: MessageService
+    consent_sticky: StickyMessage
 
     @autocompletes(
         pattern=suggests("approved_patterns", multi=True),
@@ -184,28 +198,32 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             await self._record_analyses(build, analyses, uploader_account_id=uploader_account_id)
             submitted = build
 
-        view = BuildSubmissionForm(
+        component = SubmissionFormComponent(
             draft,
             self.builds,
             author_id=interaction.user.id,
             locale=locale,
             on_submit=persist_draft,
         )
+        mount = component.mount()
+        rendered = mount.build_view()
         workspace_message = await interaction.followup.send(  # pyrefly: ignore[no-matching-overload]
-            view=view,
+            view=rendered,
+            files=mount.attachment_files(),
             ephemeral=True,
             wait=True,
             allowed_mentions=no_mentions(),
         )
-        await view.wait()
-        if view.value is None:
+        mount.bind(workspace_message, rendered)
+        await component.wait()
+        if component.value is None:
             await edit_layout(
                 workspace_message,
                 text_layout(t(locale, _("Submission expired. Nothing was saved."))),
                 allowed_mentions=no_mentions(),
             )
             return
-        if view.value is False:
+        if component.value is False:
             await edit_layout(
                 workspace_message,
                 text_layout(t(locale, _("Submission cancelled. Nothing was saved."))),
@@ -216,16 +234,25 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         assert submitted is not None, "The form only reports success once the build is persisted."
         build = submitted
 
-        preview = StaticLayout(
-            discord.ui.TextDisplay(
-                t(
-                    locale,
-                    _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
-                    id=build.id,
-                )
-            ),
-            await self.bot.for_build(build).render_container(),
-            discord.ui.ActionRow(EphemeralBuildEditButton(build)),
+        heading = t(
+            locale,
+            _("## Submitted for review\nSubmission ID: `{id}`\nStaff can now review and vote on this build."),
+            id=build.id,
+        )
+        preview = sl.discord.render_static(
+            [
+                sl.primitives.Text(heading),
+                await self.bot.for_build(build).render_node(),
+                sl.primitives.Row(
+                    (
+                        sl.primitives.RawItem(
+                            lambda: EphemeralBuildEditButton(build),
+                            kind="discord.item",
+                            version=1,
+                        ),
+                    )
+                ),
+            ]
         )
         await asyncio.gather(
             edit_layout(workspace_message, preview, allowed_mentions=no_mentions()),
@@ -321,16 +348,39 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
             f"schematic measures {measured.width}x{measured.height}x{measured.length}"
         )
 
+    def _is_build_log_message(self, message: Message) -> bool:
+        """Whether inference has anything to read this message for.
+
+        Split out of the listener so the right-click can say "not a build log message" instead
+        of reporting a recalculation that never ran.
+        """
+        return (
+            not message.author.bot
+            and isinstance(message.channel, discord.TextChannel)
+            and message.channel.id in self.bot.community_config.build_log_channel_ids
+        )
+
     @Cog.listener(name="on_message")
     async def infer_build_from_message(self, message: Message):
         """Infer a build from a message."""
-        if message.author.bot:
+        if not self._is_build_log_message(message):
+            return
+        assert isinstance(message.channel, discord.TextChannel)
+        account = await self.bot.services.accounts.get_account_by_identity(
+            IdentityProvider.DISCORD, str(message.author.id)
+        )
+        if account is None or account.id is None or account.needs_consent_refresh:
+            logger.debug(
+                "Skipping build inference for unconsented author %s in channel %s",
+                message.author.id,
+                message.channel.id,
+            )
+            if CONSENT_STICKY_ENABLED:
+                await self.consent_sticky.trigger(message.channel)
             return
 
-        if message.channel.id not in self.bot.community_config.build_log_channel_ids:
-            return
-        if not isinstance(message.channel, discord.TextChannel):
-            return
+        if CONSENT_STICKY_ENABLED:
+            self.consent_sticky.record_activity(message.channel.id)
         preceding = [item async for item in message.channel.history(before=message, limit=3)]
         preceding.reverse()
         builds = await ingest_message_bundle(
@@ -344,15 +394,57 @@ class BuildSubmitCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup
         for build in builds:
             await self.bot.for_build(build).post_for_voting(type="add")
 
-    @BuildCommandGroup.build_hybrid_group.command(name="recalc")  # type: ignore
-    @requires(BUILD_SUBMISSION_RECALC)
-    async def recalc(self, ctx: Context[BotT], message: discord.Message):
-        """Recalculate a build from a message."""
-        await ctx.defer(ephemeral=True)
-        await self.infer_build_from_message(message)
-        locale = await resolve_locale(ctx, self.bot.services.settings)
-        await ctx.send(
-            view=text_layout(t(locale, _("Build recalculated."))),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
+    def register_recalc_context_menu(self) -> None:
+        """Register the build recalculation context menu."""
+        # https://github.com/Rapptz/discord.py/issues/7823#issuecomment-1086830458
+        self.recalc_ctx_menu = app_commands.ContextMenu(
+            name="Recalculate Build",
+            callback=self.recalc_context_menu,
         )
+        self.bot.tree.add_command(self.recalc_ctx_menu)
+
+    async def recalc_context_menu(self, interaction: discord.Interaction[BotT], message: discord.Message) -> None:
+        """Re-read a build out of the message that was right-clicked.
+
+        This was `/build recalc <message>`, which in slash form meant copying a link to a
+        message and pasting it back at the bot (audit C4). Inference is a judgement about one
+        specific message, which is what a message context menu is.
+        """
+        await interaction.response.defer(ephemeral=True)
+        locale = await resolve_locale(interaction, self.bot.services.settings)
+        # A context menu cannot carry `requires(...)`, so the same denial is raised by hand.
+        await enforce(interaction, BUILD_SUBMISSION_RECALC)
+        if not self._is_build_log_message(message):
+            await reply_layout(
+                interaction,
+                error_layout(
+                    t(locale, _("Nothing to recalculate")),
+                    t(locale, _("Builds are only read out of messages posted in a build log channel.")),
+                ),
+            )
+            return
+
+        account = await self.bot.services.accounts.get_account_by_identity(
+            IdentityProvider.DISCORD, str(message.author.id)
+        )
+        if account is None or account.id is None or account.needs_consent_refresh:
+            await reply_layout(
+                interaction,
+                error_layout(
+                    t(locale, _("Author has not consented")),
+                    t(
+                        locale,
+                        _(
+                            "The author of this message (<@{user_id}>) has not consented to data storage. "
+                            "They must grant consent before this build can be ingested."
+                        ),
+                        user_id=message.author.id,
+                    ),
+                ),
+            )
+            if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
+                await self.consent_sticky.trigger(message.channel)
+            return
+
+        await self.infer_build_from_message(message)
+        await reply_layout(interaction, text_layout(t(locale, _("Build recalculated."))))

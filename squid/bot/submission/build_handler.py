@@ -7,16 +7,13 @@ from typing import TYPE_CHECKING, Literal, cast, override
 import discord
 from discord.utils import escape_markdown
 
+import squid_layouts as sl
 from squid.bot._types import GuildMessageable
+from squid.bot.ui import render_item, truncate_display_text
 from squid.bot.utils.components import (
     DISCORD_GREEN,
     DISCORD_RED,
     DISCORD_YELLOW,
-    CardField,
-    CardSection,
-    StaticLayout,
-    card_container,
-    truncate_display_text,
 )
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
 from squid.builds.domain import Build, DoorBuild, Status
@@ -97,12 +94,22 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
                 return await self.bot.get_or_fetch_message(source.channel_id, source.message_id)
         return None
 
-    async def render_layout(self) -> StaticLayout:
+    async def render_layout(self) -> discord.ui.LayoutView:
         """Render a standalone Components V2 layout for the build."""
-        return StaticLayout(await self.render_container())
+        return sl.discord.render_static([await self.render_node()])
 
-    async def render_container(self) -> discord.ui.Container[discord.ui.LayoutView]:
-        """Render the build card for composition into a larger V2 layout."""
+    async def render_container(self, *, reserved_text: int = 0) -> discord.ui.Container[discord.ui.LayoutView]:
+        """Render the build card as a detached item, for composition into a larger V2 layout.
+
+        ``reserved_text`` withholds display characters the caller spends on the rest of the
+        message, so the card shrinks to leave room for content the solver cannot see.
+        """
+        container = render_item(await self.render_node(), reserved_text=reserved_text)
+        assert isinstance(container, discord.ui.Container)
+        return container
+
+    async def render_node(self) -> sl.primitives.Node:
+        """The build card as layout IR, for callers composing a whole message at once."""
         build = self.build
         current_java_version = await self.bot.services.versions.newest("Java")
         metadata = self.get_metadata_fields()
@@ -126,10 +133,20 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         credit_names = {"Creators", "Date Of Completion", "Sponsoring Server"}
         review_names = {"⚠ Possible duplicate"}
 
-        def section(title: str, names: set[str]) -> CardSection:
-            return CardSection(
+        ladders = self._field_ladders()
+
+        def section(title: str, names: set[str]) -> sl.primitives.FieldGroup:
+            return sl.primitives.FieldGroup(
                 title,
-                tuple(CardField(name, escape_markdown(value)) for name, value in metadata.items() if name in names),
+                tuple(
+                    sl.primitives.presets.Field(
+                        name,
+                        escape_markdown(value),
+                        alts=tuple(escape_markdown(alt) for alt in ladders.get(name, ())),
+                    )
+                    for name, value in metadata.items()
+                    if name in names
+                ),
             )
 
         status_colours: dict[Status | None, int] = {
@@ -140,11 +157,14 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         footer = f"Submission ID: {build.id}"
         if build.edited_time is not None:
             footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
-        container = card_container(
+        rows = ()
+        if build.original_link is not None:
+            rows = (sl.primitives.Row((sl.primitives.LinkButton("Original submission", build.original_link),)),)
+        return sl.primitives.card(
             format_build_display_title(build, markdown=True, current_version=current_java_version),
             await self.get_description(),
-            accent_colour=status_colours.get(build.submission_status, DISCORD_GREEN),
-            sections=(
+            accent=status_colours.get(build.submission_status, DISCORD_GREEN),
+            groups=(
                 section("Review warnings", review_names),
                 section("Size & performance", performance_names),
                 section("Compatibility", {"Versions"}),
@@ -153,14 +173,28 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
             ),
             footer=footer,
             media=await self._get_media_urls(),
+            rows=rows,
         )
-        if build.original_link is not None:
-            container.add_item(
-                discord.ui.ActionRow(
-                    discord.ui.Button(label="Original submission", url=build.original_link),
-                )
-            )
-        return container
+
+    def _field_ladders(self) -> dict[str, tuple[str, ...]]:
+        """Degradation ladders for the fields whose values are unbounded user data.
+
+        A build can carry a hundred URLs per list; showing them all is the preferred form,
+        but under budget pressure a count beats a mid-URL ellipsis.
+        """
+        build = self.build
+        ladders: dict[str, tuple[str, ...]] = {}
+        for name, urls in (
+            ("World Download", build.world_download_urls),
+            ("Schematic", build.schematic_urls),
+            ("Videos", build.video_urls),
+        ):
+            if len(urls) > 1:
+                ladders[name] = (f"{len(urls)} links — first: {urls[0]}", f"{len(urls)} links")
+        creators = sorted(build.creators_ign)
+        if len(creators) > 3:
+            ladders["Creators"] = (f"{creators[0]} and {len(creators) - 1} others",)
+        return ladders
 
     async def _get_media_urls(self) -> list[str]:
         media: list[str] = []

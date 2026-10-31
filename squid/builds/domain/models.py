@@ -252,6 +252,40 @@ class StagedMedia:
         return self.urls_of("render")
 
 
+def sort_restrictions(
+    restrictions: Sequence[str],
+    definitions: Mapping[str, RestrictionTypeLiteral | None],
+) -> dict[RestrictionTypeLiteral, list[str]]:
+    """Group restriction names into their buckets, canonicalizing the spelling.
+
+    A free function rather than a method, because a caller staging an edit needs the buckets
+    without a build to write them onto: `/build edit` takes restrictions as one option and has
+    to distribute them across the workspace's per-bucket fields before anything is applied.
+
+    Raises:
+        DataIntegrityError: If a known restriction has no type recorded.
+    """
+    definitions_by_name: dict[str, tuple[str, RestrictionTypeLiteral | None]] = {
+        name.lower(): (name, restriction_type) for name, restriction_type in definitions.items()
+    }
+    buckets: dict[RestrictionTypeLiteral, list[str]] = {
+        "wiring-placement": [],
+        "animated": [],
+        "component": [],
+        "miscellaneous": [],
+    }
+    for restriction in restrictions:
+        definition = definitions_by_name.get(restriction.lower())
+        if definition is None:
+            continue
+        canonical_name, restriction_type = definition
+        if restriction_type is None:
+            msg = "The type is supposed to never be None, this is a bug in the database."
+            raise DataIntegrityError(msg, context={"restriction": canonical_name})
+        buckets[restriction_type].append(canonical_name)
+    return buckets
+
+
 class StagedTaxonomy:
     """Staged restriction helpers shared by the entity and the draft.
 
@@ -290,30 +324,11 @@ class StagedTaxonomy:
         definitions: Mapping[str, RestrictionTypeLiteral | None],
     ) -> None:
         """Replace restrictions using already-loaded classification metadata."""
-        self.wiring_placement_restrictions = []
-        self.animated_restrictions = []
-        self.component_restrictions = []
-        self.miscellaneous_restrictions = []
-
-        definitions_by_name: dict[str, tuple[str, RestrictionTypeLiteral | None]] = {
-            name.lower(): (name, restriction_type) for name, restriction_type in definitions.items()
-        }
-        bucket: dict[RestrictionTypeLiteral, list[str]] = {
-            "wiring-placement": self.wiring_placement_restrictions,
-            "animated": self.animated_restrictions,
-            "component": self.component_restrictions,
-            "miscellaneous": self.miscellaneous_restrictions,
-        }
-
-        for restriction in restrictions:
-            definition = definitions_by_name.get(restriction.lower())
-            if definition is None:
-                continue
-            canonical_name, restriction_type = definition
-            if restriction_type is None:
-                msg = "The type is supposed to never be None, this is a bug in the database."
-                raise DataIntegrityError(msg, context={"restriction": canonical_name})
-            bucket[restriction_type].append(canonical_name)
+        sorted_restrictions = sort_restrictions(restrictions, definitions)
+        self.wiring_placement_restrictions = sorted_restrictions["wiring-placement"]
+        self.animated_restrictions = sorted_restrictions["animated"]
+        self.component_restrictions = sorted_restrictions["component"]
+        self.miscellaneous_restrictions = sorted_restrictions["miscellaneous"]
 
 
 @freeze_fields

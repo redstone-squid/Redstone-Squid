@@ -2,12 +2,16 @@
 
 > **Status.** Findings inventory, compiled 2026-08-17 by reading every cog with a UX eye. This
 > expands the complaint list in [README.md](README.md); each finding is tagged with the phase
-> that should absorb it. Phase 5 (condensation) owns anything untagged.
+> that should absorb it. Anything untagged was originally phase 5's; what phase 5 turned out
+> to be too large to hold is now phases 6–10, and [README.md](README.md) is the map.
 
-The surface today: **~108 commands across 19 top-level groups** (`build` 14, `settings` 11,
+The surface when this was written: **~108 commands across 19 top-level groups**
+(`build` 14, `settings` 11,
 `starboard` 14, `role` 12, `perm` 10, `notifications` 8, `account` 7, `tag` 6, `admin` 4,
 `info` 4, plus `search`, `restrictions`, `patterns`, `vote`, `poll`, `version`, `error`,
 `redstoner`, `help`, `archive`). A typical non-staff user needs perhaps eight of them.
+*(The `account` figure is wrong: it had 14 members, not 7. Corrected here rather than in
+the count above, which is the number the redesign was argued from.)*
 
 ## Cross-cutting findings
 
@@ -24,7 +28,10 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
   `ephemeral=ctx.interaction is not None` (11 sites), and always-public. Near-identical
   commands differ: `account approve-claim` answers publicly, `account claims` ephemerally.
   Decide a rule (mutations of shared state public, personal/staff reads ephemeral, errors
-  ephemeral) and apply it once.
+  ephemeral) and apply it once. *(5.7: the rule is in `squid/bot/utils/visibility.py`, close to
+  the one suggested here. The claims pair kept its difference and gained a reason — the
+  decision is public, the queue is not. The sweep also found `account merge-code` posting a
+  credential into the channel from its prefix form.)*
 - **C3 — Some replies bypass i18n and the layout system entirely.** The `settings voting`
   subcommands, the notifications cog, and parts of the poll flow send raw untranslated strings
   (`await ctx.send("Voting role weight updated.", ephemeral=True)`) while the rest of the bot
@@ -34,21 +41,31 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
   `vote delete`, `build recalc`, `redstoner resync` all take a `discord.Message`, which in
   slash form means pasting a message link. These are right-click actions; only build edit has a
   context menu today. Adding context menus (Discord allows 5 per app — budget them) would let
-  several commands disappear.
+  several commands disappear. *(Phase 5.1 settled the poll three: `close` and `refresh` became
+  buttons on the card, which is cheaper than a context menu because it costs none of the five,
+  and `vote delete` took the second slot. Phase 6.3 made `build recalc` the third,
+  "Recalculate Build"; `redstoner resync` remains.)*
 - **C5 — Raw internals leak into user-facing output.** `build queue` prints the submitter's
   numeric Discord ID instead of a mention or name; `restrictions search` prints
   `restriction_id: name` lines; `patterns search` prints match scores; `admin records-lookup`
   demands comma-separated numeric restriction IDs as input; notifications display bare UUIDs.
+  *(Phase 2 settled the two search cases. `records lookup` keeps its ids: the autocomplete
+  already turns names into them, and accepting names outright needs `RestrictionDefinition`
+  to carry an id, which is a change in another bounded context. `build queue` names its
+  submitters as of phase 6.1. The rest is phase 5.3.)*
 - **C6 — Pagination is ad hoc.** `search` has a real paginator; `build queue` renders
   everything into one card (overflow risk); `version list` truncates at 20 with a TODO;
   `account claims` caps at 10 with a "N more not shown" footer; `admin records-gaps` caps
   at 30. One shared list-paginator applied everywhere would retire three bespoke truncation
-  schemes.
+  schemes. *(Done. The paginator landed in phase 6.1, `squid/bot/utils/pagination.py`, applied
+  to `build queue`; `account claims` took it in 5.4 and `version list` and both records
+  diagnostics in 5.6.)*
 - **C7 — "Hybrid" commands that aren't.** Several hybrid commands immediately bail without an
   interaction ("Use the slash command to open the editor"): `poll create`,
   `settings voting emojis`, and (until phase 1) `build submit-full`. Each should either work
   from prefix or be declared app-only, so the taxonomy stops advertising entry points that
-  refuse to run.
+  refuse to run. *(All three settled: phase 1 for `build submit-full`, phase 4 for
+  `voting emojis`, and phase 5.1 declared `/poll` app-only.)*
 
 ## Per-group findings
 
@@ -96,55 +113,66 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
   text when the role cache misses. *(Both fixed; `voting show` and `voting emojis` are now the
   panel's voting page, which also settles C7 for `voting emojis`.)*
 
-### `/build` *(mostly done in phase 1; leftovers)*
-- `build queue`: prints raw `submitter_discord_id`, no pagination (C5, C6), and titles the
-  card "Open Records" while the command says "pending submissions".
-- `build edit` is gated on `build.submission.edit`, so a submitter cannot invoke it on their
+### `/build` *(phase 1, then phase 6; done 2026-08-19)*
+- ~~`build queue`: prints raw `submitter_discord_id`, no pagination (C5, C6), and titles the
+  card "Open Records" while the command says "pending submissions".~~ *(6.1: all three.)*
+- ~~`build edit` is gated on `build.submission.edit`, so a submitter cannot invoke it on their
   own pending build — yet the edit *button* on the submission preview allows exactly that via
   `BuildEditView.can_edit`. Same operation, two authorization answers depending on entry
-  point. Align the command gate with the view's owner-or-node rule.
-- Two divergent edit surfaces: the 22-flag `build edit` command (near the 25-option cap) and
+  point. Align the command gate with the view's owner-or-node rule.~~ *(6.2: the command now
+  opens the view, so the view's rule is the only rule.)*
+- ~~Two divergent edit surfaces: the 22-flag `build edit` command (near the 25-option cap) and
   the interactive `BuildEditView`. After phase 1 the same consolidation argument applies:
-  typed options for the autocompleted fields, the view for everything else.
-- `build recalc` takes a `discord.Message` (C4 — context menu candidate).
-- `build debug` dumps `str(build.__dict__)` into a message; an attached JSON file would
-  survive size limits and be readable.
-- `measure-timing` and `detect-lattice` are schematic tools living directly under `build`
-  while four other schematic tools live under `build schematic` — move them in.
+  typed options for the autocompleted fields, the view for everything else.~~ *(6.2, exactly
+  that shape.)*
+- ~~`build recalc` takes a `discord.Message` (C4 — context menu candidate).~~ *(6.3.)*
+- ~~`build debug` dumps `str(build.__dict__)` into a message; an attached JSON file would
+  survive size limits and be readable.~~ *(6.4.)*
+- ~~`measure-timing` and `detect-lattice` are schematic tools living directly under `build`
+  while four other schematic tools live under `build schematic` — move them in.~~ *(6.5.)*
 
-### `/vote`, `/poll` *(phase 5)*
-- `vote` retains two members: the deprecated `vote poll` alias and `vote delete`. Retire the
+### `/vote`, `/poll` *(phase 5.1, done 2026-08-19)*
+- ~~`vote` retains two members: the deprecated `vote poll` alias and `vote delete`. Retire the
   alias, move deletion votes to a context menu or `/poll delete-message`, and the whole `vote`
-  group disappears.
-- `poll close`/`poll refresh` take message links (C4); both are also buttons-on-the-poll
-  candidates, which would empty the `poll` group down to `create`.
+  group disappears.~~ *(Context menu. The group is gone.)*
+- ~~`poll close`/`poll refresh` take message links (C4); both are also buttons-on-the-poll
+  candidates, which would empty the `poll` group down to `create`.~~ *(Buttons on the poll.
+  `create` then had no group left to sit in, so `/poll` is one app-only command.)*
 
-### `/account` *(phase 5)*
-- Self-service (`link`, `unlink`, `refresh`, `claim`) and staff review (`claims`,
+### `/account` *(phase 5.4 took the review trio, 2026-08-19; the rest is phase 7)*
+- ~~Self-service (`link`, `unlink`, `refresh`, `claim`) and staff review (`claims`,
   `approve-claim`, `reject-claim`) share one public group. The review trio should be buttons
   on the `claims` list view — staff currently read a claim ID off a card and retype it into a
-  second command that already autocompletes it. With C1, the split becomes invisible anyway.
+  second command that already autocompletes it.~~ *(Buttons on the list, exactly as described;
+  `reassign` became the second click rather than a flag. With C1 the split is invisible
+  anyway, so the group keeps both halves.)*
 
-### `/notifications` *(phase 5)*
-- `consent` (accept notice + choose channels) and `channels` (choose channels) are
-  near-duplicates; one settings-style command or panel covers both.
-- `follow-creator`, `follow-record`, `follow-records` are three commands for "follow
+### `/notifications` *(phase 5.3, done 2026-08-19)*
+- ~~`consent` (accept notice + choose channels) and `channels` (choose channels) are
+  near-duplicates; one settings-style command or panel covers both.~~ *(`consent` had already
+  moved to `/account consent`; `status` and `channels` are the panel.)*
+- ~~`follow-creator`, `follow-record`, `follow-records` are three commands for "follow
   something"; one `follow` with a kind choice (or just the structured filter form) reads
-  better in the picker.
-- Replies are raw strings (C3); `list` prints UUIDs (C5); `unfollow` autocompletes ids that
-  `list` makes you read manually — same button-instead-of-retype shape as account claims.
+  better in the picker.~~ *(One `follow`; the kind is inferred from which argument was given,
+  so there is no kind choice to get wrong.)*
+- ~~Replies are raw strings (C3); `list` prints UUIDs (C5); `unfollow` autocompletes ids that
+  `list` makes you read manually — same button-instead-of-retype shape as account claims.~~
+  *(Layouts throughout; the select removes subscriptions directly. The strings were already
+  translated — the finding was half right. Subject UUIDs remain, deliberately: see the plan.)*
 
-### `/admin` *(phase 5)*
-- The group is named `admin` but contains only record-computation tooling (`records-gaps`,
+### `/admin` *(phase 5.2, done 2026-08-19)*
+- ~~The group is named `admin` but contains only record-computation tooling (`records-gaps`,
   `records-title-issues`, `records-rebuild`, `records-lookup`). Either it becomes `/records`
   (staff-gated via C1) or the commands move under `build`. The `records-` prefix on every
-  member is the group name it actually wanted.
+  member is the group name it actually wanted.~~ *(It became `/records`, and every member
+  dropped the prefix. It keeps C1's `manage_guild` visibility.)*
 
-### `/perm`, `/role` *(phase 5)*
-- 22 staff commands, the two biggest groups after `build`. `whoami`, `test`, and `explain` are
+### `/perm`, `/role` *(phase 5.5 took the `perm` half, 2026-08-19)*
+- ~~22 staff commands, the two biggest groups after `build`. `whoami`, `test`, and `explain` are
   three ways to ask "what can I do" — one command with an optional node argument covers all
-  three. The `role` group name collides with Discord's own roles in conversation; it manages
-  permission-role objects. Low urgency once C1 hides them from non-staff.
+  three.~~ *(`perm can [user] [node]`, exactly as described.)* The `role` group name collides
+  with Discord's own roles in conversation; it manages permission-role objects. Low urgency
+  once C1 hides them from non-staff.
 
 ### `/starboard` *(phase 5)*
 - 14 commands including `emoji`/`weight` subgroups of pure CRUD. A `starboard show`-style
@@ -155,8 +183,8 @@ The surface today: **~108 commands across 19 top-level groups** (`build` 14, `se
 - `info` is four static links; a single `/links` (or a section in `/help`) suffices.
   `info form` points at the legacy Google form and should retire or clearly mark itself
   legacy now that `/build submit` is the path.
-- `version list` truncates at 20 with a TODO (C6); `version add` is staff-plus-listener and
-  fine.
+- ~~`version list` truncates at 20 with a TODO (C6)~~ *(5.6: it pages.)*; `version add` is
+  staff-plus-listener and fine.
 - `redstoner panel`'s callback is literally named `abc` (cosmetic, but it will bite grep).
 - `help` duplicates part of `info`'s job already; fold link discovery into it.
 

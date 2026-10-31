@@ -10,10 +10,11 @@ from discord.ext import commands
 
 from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.notifications_view import NotificationPanel
 from squid.bot.utils.autocomplete import autocompletes
+from squid.bot.utils.components import error_layout, info_layout, no_mentions, reply_layout
 from squid.core.i18n import _
 from squid.notifications import (
-    NotificationSubscription,
     PendingNotificationDelivery,
     RecordSubscriptionFilter,
     SubscriptionKind,
@@ -47,130 +48,118 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
         if self._delivery_task is not None:
             await self.bot.background_tasks.cancel(self._delivery_task)
 
-    @app_commands.command(name="status", description="Show your notification channels")
-    async def status(self, interaction: discord.Interaction) -> None:
+    @app_commands.command(name="show", description="Open your notification channels and subscriptions")
+    async def show(self, interaction: discord.Interaction) -> None:
+        """Open the panel that `status`, `channels`, `list` and `unfollow` used to be."""
         locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
         if account_id is None:
             return
-        preferences = await self.bot.services.notifications.preferences(account_id)
-        lines = [
-            t(
-                locale,
-                _("Web inbox: {state}"),
-                state=t(locale, _("on")) if preferences.web_enabled else t(locale, _("off")),
-            ),
-            t(
-                locale,
-                _("Discord DMs: {state}"),
-                state=t(locale, _("on")) if preferences.dm_enabled else t(locale, _("off")),
-            ),
-        ]
-        if preferences.dm_suspended_at is not None:
-            lines.append(t(locale, _("DMs are suspended because Discord rejected one.")))
-        await interaction.response.send_message("\n".join(lines), ephemeral=True)
-
-    @app_commands.command(name="channels", description="Change web and Discord DM channels")
-    async def channels(self, interaction: discord.Interaction, web: bool, dm: bool) -> None:
-        locale = await resolve_locale(interaction, self.bot.services.settings)
-        account_id = await self._account_id(interaction)
-        if account_id is None:
-            return
-        await self.bot.services.notifications.set_preferences(account_id, web_enabled=web, dm_enabled=dm)
-        await interaction.response.send_message(t(locale, _("Notification channels updated.")), ephemeral=True)
-
-    @autocompletes(creator_id="creator_profiles")
-    @app_commands.command(name="follow-creator", description="Follow a public creator profile UUID")
-    async def follow_creator(self, interaction: discord.Interaction, creator_id: str) -> None:
-        locale = await resolve_locale(interaction, self.bot.services.settings)
-        account_id = await self._account_id(interaction)
-        if account_id is None:
-            return
-        subscription = await self.bot.services.notifications.subscribe(
-            account_id,
-            kind=SubscriptionKind.CREATOR,
-            subject_id=UUID(creator_id),
+        component = NotificationPanel(
+            notifications=self.bot.services.notifications,
+            account_id=account_id,
+            author_id=interaction.user.id,
+            locale=locale,
         )
-        await interaction.response.send_message(
-            t(locale, _("Creator subscription #{id} saved."), id=subscription.id), ephemeral=True
-        )
-
-    @autocompletes(competition_id="competitions")
-    @app_commands.command(name="follow-record", description="Follow one stable record competition UUID")
-    async def follow_record(self, interaction: discord.Interaction, competition_id: str) -> None:
-        locale = await resolve_locale(interaction, self.bot.services.settings)
-        account_id = await self._account_id(interaction)
-        if account_id is None:
-            return
-        subscription = await self.bot.services.notifications.subscribe(
-            account_id,
-            kind=SubscriptionKind.RECORD,
-            subject_id=UUID(competition_id),
-        )
-        await interaction.response.send_message(
-            t(locale, _("Record subscription #{id} saved."), id=subscription.id), ephemeral=True
-        )
+        await component.load()
+        mount = component.mount()
+        rendered = mount.build_view()
+        if interaction.response.is_done():
+            message = await interaction.followup.send(
+                view=rendered,
+                ephemeral=True,
+                wait=True,
+                allowed_mentions=no_mentions(),
+            )
+        else:
+            await interaction.response.send_message(
+                view=rendered,
+                ephemeral=True,
+                allowed_mentions=no_mentions(),
+            )
+            message = await interaction.original_response()
+        mount.bind(message, rendered)
 
     @autocompletes(
+        creator="creator_profiles",
+        competition="competitions",
         build_kind="build_kinds",
         record_class="record_classes",
         version_scope="version_scopes",
-        tag_id="showcase_tag_ids",
+        tag="showcase_tag_ids",
     )
-    @app_commands.command(name="follow-records", description="Follow records matching broad structured predicates")
-    async def follow_records(
+    @app_commands.command(name="follow", description="Follow a creator, a record, or records matching a filter")
+    @app_commands.describe(
+        creator=app_commands.locale_str(_("A creator profile to follow.")),
+        competition=app_commands.locale_str(_("One stable record competition to follow.")),
+        build_kind=app_commands.locale_str(_("Follow records of this build kind.")),
+        record_class=app_commands.locale_str(_("Follow records of this class.")),
+        version_scope=app_commands.locale_str(_("Follow records pinned to this version scope.")),
+        tag=app_commands.locale_str(_("Follow records carrying this showcase tag.")),
+        tag_value=app_commands.locale_str(_("Require an exact value for that tag.")),
+    )
+    async def follow(
         self,
         interaction: discord.Interaction,
+        creator: str | None = None,
+        competition: str | None = None,
         build_kind: str | None = None,
         record_class: str | None = None,
         version_scope: str | None = None,
-        tag_id: int | None = None,
+        tag: int | None = None,
         tag_value: str | None = None,
     ) -> None:
-        locale = await resolve_locale(interaction, self.bot.services.settings)
-        account_id = await self._account_id(interaction)
-        if account_id is None:
-            return
-        tags = ()
-        if tag_id is not None:
-            tags = (TagPredicate(tag_id, "present" if tag_value is None else "exact", tag_value),)
-        record_filter = RecordSubscriptionFilter(
-            build_kinds=frozenset({build_kind}) if build_kind else frozenset(),
-            record_classes=frozenset({record_class}) if record_class else frozenset(),
-            version_scopes=frozenset({version_scope}) if version_scope else frozenset(),
-            tags=tags,
-        )
-        subscription = await self.bot.services.notifications.subscribe(
-            account_id,
-            kind=SubscriptionKind.RECORD_FILTER,
-            record_filter=record_filter,
-        )
-        await interaction.response.send_message(
-            t(locale, _("Record filter #{id} saved."), id=subscription.id), ephemeral=True
-        )
+        """Follow one subject, whichever kind of subject it is.
 
-    @app_commands.command(name="list", description="List your notification subscriptions")
-    async def list_subscriptions(self, interaction: discord.Interaction) -> None:
+        `follow-creator`, `follow-record` and `follow-records` were three commands for one
+        verb, told apart only by which argument you had. Which argument you have still tells
+        them apart; it just no longer costs a picker entry each.
+        """
         locale = await resolve_locale(interaction, self.bot.services.settings)
         account_id = await self._account_id(interaction)
         if account_id is None:
             return
-        subscriptions = await self.bot.services.notifications.subscriptions(account_id)
-        content = "\n".join(
-            f"#{subscription.id}: {subscription.kind.value} {_subscription_target(subscription)}"
-            for subscription in subscriptions
-        )
-        await interaction.response.send_message(content or t(locale, _("You have no subscriptions.")), ephemeral=True)
 
-    @autocompletes(subscription_id="notification_subscriptions")
-    @app_commands.command(name="unfollow", description="Remove one notification subscription")
-    async def unfollow(self, interaction: discord.Interaction, subscription_id: int) -> None:
-        locale = await resolve_locale(interaction, self.bot.services.settings)
-        account_id = await self._account_id(interaction)
-        if account_id is None:
+        filters = (build_kind, record_class, version_scope, tag)
+        chosen = [bool(creator), bool(competition), any(value is not None for value in filters)]
+        if sum(chosen) != 1:
+            await reply_layout(
+                interaction,
+                error_layout(
+                    t(locale, _("Nothing to follow")),
+                    t(locale, _("Give exactly one of a creator, a record, or a record filter.")),
+                ),
+            )
             return
-        await self.bot.services.notifications.unsubscribe(account_id, subscription_id)
-        await interaction.response.send_message(t(locale, _("Subscription removed.")), ephemeral=True)
+
+        if creator:
+            subscription = await self.bot.services.notifications.subscribe(
+                account_id, kind=SubscriptionKind.CREATOR, subject_id=UUID(creator)
+            )
+            followed = t(locale, _("Following a creator."))
+        elif competition:
+            subscription = await self.bot.services.notifications.subscribe(
+                account_id, kind=SubscriptionKind.RECORD, subject_id=UUID(competition)
+            )
+            followed = t(locale, _("Following a record."))
+        else:
+            record_filter = RecordSubscriptionFilter(
+                build_kinds=frozenset({build_kind}) if build_kind else frozenset(),
+                record_classes=frozenset({record_class}) if record_class else frozenset(),
+                version_scopes=frozenset({version_scope}) if version_scope else frozenset(),
+                tags=()
+                if tag is None
+                else (TagPredicate(tag, "present" if tag_value is None else "exact", tag_value),),
+            )
+            subscription = await self.bot.services.notifications.subscribe(
+                account_id, kind=SubscriptionKind.RECORD_FILTER, record_filter=record_filter
+            )
+            followed = t(locale, _("Following records matching that filter."))
+        del subscription  # Nothing user-facing needs its id: `/notifications` lists and removes it.
+        await reply_layout(
+            interaction,
+            info_layout(followed, t(locale, _("Open `/notifications` to see or undo everything you follow."))),
+        )
 
     async def process_deliveries(self) -> None:
         """Drain a bounded DM batch; retry ambiguous failures and suspend explicit forbiddens."""
@@ -223,12 +212,6 @@ def render_delivery(delivery: PendingNotificationDelivery, site_url: str | None)
     else:
         message = "A build notification is available."
     return f"{message}\n{build_link}" if build_link is not None else message
-
-
-def _subscription_target(subscription: NotificationSubscription) -> str:
-    if subscription.subject_id is not None:
-        return str(subscription.subject_id)
-    return str(subscription.record_filter.as_dict()) if subscription.record_filter is not None else ""
 
 
 async def setup(bot: RedstoneSquid) -> None:

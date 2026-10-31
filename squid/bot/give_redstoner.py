@@ -10,8 +10,8 @@ from discord import Interaction
 from discord.ext.commands import Cog, Context, hybrid_group
 from discord.ui import Item
 
+import squid_layouts as sl
 from squid.bot._types import GuildMessageable
-from squid.bot.errors import ErrorHandledLayoutView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
@@ -115,8 +115,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def abc(self, ctx: Context[BotT]):
         """Post the Redstoner role controls."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        view = ErrorHandledLayoutView(timeout=None)
-        view.add_item(discord.ui.TextDisplay(t(locale, _("Redstoner role controls"))))
+        view = sl.discord.render_static([sl.primitives.Text(t(locale, _("Redstoner role controls")))])
         await ctx.send(view=view, allowed_mentions=no_mentions())
 
     @redstoner_group.command(name="resync")
@@ -162,17 +161,18 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-        view = ErrorHandledLayoutView(timeout=None)
-        view.add_item(
-            discord.ui.TextDisplay(
-                t(
-                    locale,
-                    _("Hi {member}, you received the {role} role after reaching 15 upvotes in {url}."),
-                    member=member.mention,
-                    role=redstoner_role.mention,
-                    url=decision.source_message_url,
+        view = sl.discord.render_static(
+            [
+                sl.primitives.Text(
+                    t(
+                        locale,
+                        _("Hi {member}, you received the {role} role after reaching 15 upvotes in {url}."),
+                        member=member.mention,
+                        role=redstoner_role.mention,
+                        url=decision.source_message_url,
+                    )
                 )
-            )
+            ]
         )
         await self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id).send(
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),

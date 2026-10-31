@@ -7,8 +7,10 @@ from typing import TYPE_CHECKING, cast, override
 
 import discord
 
+import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
+from squid.bot.ui import create_mount
 from squid.bot.utils.components import edit_interaction_layout, no_mentions, text_layout
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
@@ -191,7 +193,7 @@ class PollModal(ErrorHandledModal):
         except InvalidVoteConfigurationError as error:
             await interaction.response.send_message(str(error), ephemeral=True)
             return
-        confirmation = PollConfirmation(
+        component = PollConfirmationComponent(
             self.publisher,
             interaction.user.id,
             self.author_account_id,
@@ -199,14 +201,21 @@ class PollModal(ErrorHandledModal):
             options,
             allow_network=self.allow_network,
         )
-        await interaction.response.send_message(view=confirmation, ephemeral=True, allowed_mentions=no_mentions())
-        confirmation.bind_message(await interaction.original_response())
+        mount = component.mount()
+        rendered = mount.build_view()
+        await interaction.response.send_message(
+            view=rendered,
+            files=mount.attachment_files(),
+            ephemeral=True,
+            allowed_mentions=no_mentions(),
+        )
+        mount.bind(await interaction.original_response(), rendered)
 
 
 class CustomDurationModal(ErrorHandledModal):
     """Accept a duration outside the presets."""
 
-    def __init__(self, confirmation: PollConfirmation):
+    def __init__(self, confirmation: PollConfirmation | PollConfirmationComponent):
         super().__init__(title="Custom poll duration")
         self.confirmation = confirmation
         self.duration = discord.ui.TextInput(default="24h", max_length=8, placeholder="30m, 12h, 7d")
@@ -428,3 +437,175 @@ class PollConfirmation(ExpiringLayoutView):
         del button
         self.stop()
         await edit_interaction_layout(interaction, text_layout("Poll cancelled."))
+
+
+class PollConfirmationComponent(sl.Component):
+    """A semantic poll preview and publication workspace."""
+
+    published: bool = sl.state(default=False)
+
+    def __init__(
+        self,
+        publisher: PollPublisher,
+        owner_id: int,
+        author_account_id: int,
+        draft: PollDraft,
+        options: tuple[VoteOption, ...],
+        *,
+        allow_network: bool = False,
+        timeout: float = 900,
+    ) -> None:
+        self.publisher = publisher
+        self.owner_id = owner_id
+        self.author_account_id = author_account_id
+        self.draft = draft
+        self.options = options
+        self.allow_network = allow_network
+        self._timeout = timeout
+        self._mount: sl.discord.Mount | None = None
+
+    def render(self) -> tuple[sl.LayoutNode, ...]:
+        if self.published:
+            return (sl.primitives.banner("Poll published."),)
+        preview = "\n".join(
+            [
+                f"## {self.draft.question}",
+                *(f"{option.emoji} {option.label}" for option in self.options),
+            ]
+        )
+        fields = [
+            sl.primitives.presets.Field("Visibility", self._visibility_label()),
+            sl.primitives.presets.Field("Closes after", format_duration(self.draft.duration_seconds)),
+        ]
+        if self.allow_network:
+            fields.append(sl.primitives.presets.Field("Reaches", self._scope_label()))
+        nodes: list[sl.LayoutNode] = [
+            sl.primitives.card(preview, fields=tuple(fields)),
+            sl.Choices(
+                key="visibility",
+                choices=tuple(
+                    sl.Choice(value.value, label, description) for value, label, description in VISIBILITY_CHOICES
+                ),
+                selected=(self.draft.visibility.value,),
+                on_change=self._visibility_changed,
+            ),
+            sl.Choices(
+                key="duration",
+                choices=tuple(
+                    sl.Choice(str(seconds), label)
+                    for label, seconds in (*DURATION_PRESETS, ("Custom…", CUSTOM_DURATION))
+                ),
+                selected=(str(self.draft.duration_seconds),),
+                on_change=self._duration_changed,
+            ),
+        ]
+        if self.allow_network:
+            nodes.append(
+                sl.Choices(
+                    key="scope",
+                    choices=tuple(
+                        sl.Choice(value.value, label, description) for value, label, description in SCOPE_CHOICES
+                    ),
+                    selected=(self.draft.scope.value,),
+                    on_change=self._scope_changed,
+                )
+            )
+        nodes.append(
+            sl.primitives.Row(
+                (
+                    sl.primitives.Button(
+                        "Publish",
+                        self._publish,
+                        "publish",
+                        style=sl.primitives.ActionStyle.SUCCESS,
+                    ),
+                    sl.primitives.Button("Edit", self._edit, "edit"),
+                    sl.primitives.Button(
+                        "Cancel",
+                        self._cancel,
+                        "cancel",
+                        style=sl.primitives.ActionStyle.DANGER,
+                    ),
+                )
+            )
+        )
+        return tuple(nodes)
+
+    async def _visibility_changed(self, event: sl.ChoiceEvent) -> None:
+        self.draft = replace(self.draft, visibility=VoteVisibility(event.selected[0]))
+        self.invalidate()
+
+    async def _duration_changed(self, event: sl.ChoiceEvent) -> None:
+        chosen = event.selected[0]
+        if chosen == CUSTOM_DURATION:
+            await sl.discord.responder(event).send_modal(CustomDurationModal(self))
+            return
+        self.draft = replace(self.draft, duration_seconds=int(chosen))
+        self.invalidate()
+
+    async def _scope_changed(self, event: sl.ChoiceEvent) -> None:
+        self.draft = replace(self.draft, scope=PollScope(event.selected[0]))
+        self.invalidate()
+
+    async def set_duration(self, interaction: discord.Interaction, seconds: int) -> None:
+        self.draft = replace(self.draft, duration_seconds=seconds)
+        self.invalidate()
+        if self._mount is None:
+            return
+        rendered = self._mount.build_view()
+        await edit_interaction_layout(interaction, rendered)
+        # bind is the commit point, so it runs whether or not this mount holds a message.
+        self._mount.bind(self._mount.message, rendered)
+
+    async def _publish(self, event: sl.PressEvent) -> None:
+        interaction = sl.discord.native(event)
+        if interaction.guild is None or interaction.channel is None:
+            await event.notice("Polls can only be published in a server.")
+            return
+        if self.draft.scope is PollScope.NETWORK and not (
+            isinstance(interaction.user, discord.Member) and await self.publisher.may_create_network(interaction.user)
+        ):
+            await event.notice("You may no longer publish a poll to every server.")
+            return
+        self.published = True
+        await event.acknowledge()
+        try:
+            message = await self.publisher.create_and_publish(
+                author_account_id=self.author_account_id,
+                channel=cast(GuildMessageable, interaction.channel),
+                question=self.draft.question,
+                visibility=self.draft.visibility,
+                duration_seconds=self.draft.duration_seconds,
+                options=self.options,
+                scope=self.draft.scope,
+            )
+        except InvalidVoteConfigurationError as error:
+            self.published = False
+            await event.notice(str(error))
+            return
+        await event.notice(f"Published: {message.jump_url}")
+        await event.finish()
+
+    async def _edit(self, event: sl.PressEvent) -> None:
+        await sl.discord.responder(event).send_modal(
+            PollModal(
+                self.publisher,
+                self.author_account_id,
+                self.draft,
+                allow_network=self.allow_network,
+            )
+        )
+
+    async def _cancel(self, event: sl.PressEvent) -> None:
+        await event.notice("Poll cancelled.")
+        await event.finish()
+
+    def _visibility_label(self) -> str:
+        return next(label for value, label, _ in VISIBILITY_CHOICES if value is self.draft.visibility)
+
+    def _scope_label(self) -> str:
+        return next(label for value, label, _ in SCOPE_CHOICES if value is self.draft.scope)
+
+    def mount(self) -> sl.discord.Mount:
+        self._mount = create_mount(self, timeout=self._timeout, lock_to=self.owner_id)
+        return self._mount

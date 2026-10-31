@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import override
 
 BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
+LAYOUTS_ROOT = Path(__file__).parents[2] / "packages" / "squid-layouts" / "src"
 MESSAGE_METHODS = {"edit", "edit_message", "send", "send_message"}
 LEGACY_KEYWORDS = {"content", "embed", "embeds"}
 
@@ -36,10 +37,12 @@ class DiscordUiVisitor(ast.NodeVisitor):
                 keyword.arg for keyword in node.keywords if keyword.arg is not None and keyword.arg in LEGACY_KEYWORDS
             }
             is_archive_relay = self.path.name == "admin.py" and self.function_names[-1:] == ["archive_message"]
-            is_conversion_boundary = self.path.name == "components.py" and self.function_names[-1:] in [
-                ["edit_layout"],
-                ["edit_interaction_layout"],
-            ]
+            # The legacy->V2 conversion boundaries: the framework's deliver module and, until
+            # its consumers migrate, the old components helpers.
+            is_conversion_boundary = (
+                self.path.name == "components.py"
+                and self.function_names[-1:] in [["edit_layout"], ["edit_interaction_layout"]]
+            ) or (self.path.name == "delivery.py" and self.function_names[-1:] in [["apply"], ["apply_interaction"]])
             if legacy and not is_archive_relay and not is_conversion_boundary:
                 self.violations.append(f"{self.path}:{node.lineno}: legacy message fields {sorted(legacy)}")
         self.generic_visit(node)
@@ -61,10 +64,11 @@ class DiscordUiVisitor(ast.NodeVisitor):
 
 def test_bot_uses_components_v2_outside_archive_relay() -> None:
     violations: list[str] = []
-    for path in BOT_ROOT.rglob("*.py"):
-        visitor = DiscordUiVisitor(path)
-        visitor.visit(ast.parse(path.read_text(encoding="utf-8")))
-        violations.extend(visitor.violations)
+    for root in (BOT_ROOT, LAYOUTS_ROOT):
+        for path in root.rglob("*.py"):
+            visitor = DiscordUiVisitor(path)
+            visitor.visit(ast.parse(path.read_text(encoding="utf-8")))
+            violations.extend(visitor.violations)
 
     assert not violations, "\n".join(violations)
 

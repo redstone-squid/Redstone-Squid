@@ -5,12 +5,14 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast, override
+from typing import TYPE_CHECKING, Any, Literal, cast, override
 
+import anyio
 import discord
 from discord import Interaction
 from whenever import Instant
 
+import squid_layouts as sl
 from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.submission.navigation_view import (
@@ -27,12 +29,12 @@ from squid.bot.submission.ui.components import (
     EphemeralBuildEditButton,
     get_text_input,
 )
+from squid.bot.ui import create_mount, display_text_length
 from squid.bot.utils.components import (
     DISCORD_BLUE,
     DISCORD_YELLOW,
     CardField,
     CardSection,
-    StaticLayout,
     card_container,
     edit_interaction_layout,
     error_layout,
@@ -42,7 +44,7 @@ from squid.bot.utils.components import (
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
-from squid.builds.domain import Build, BuildCategory, BuildDraft, Status
+from squid.builds.domain import DOOR_ORIENTATION_NAMES, Build, BuildCategory, BuildDraft, Status
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 
@@ -85,6 +87,7 @@ EDIT_FIELDS: tuple[EditFieldSpec, ...] = (
     EditFieldSpec("door_type", "Full lamp, Funnel"),
     EditFieldSpec("door_orientation_type", "Door, Trapdoor, Skydoor", categories=_DOOR_ONLY),
     EditFieldSpec("wiring_placement_restrictions", "Seamless, Full Flush"),
+    EditFieldSpec("animated_restrictions", "Symmetrical, Full Sync"),
     EditFieldSpec("component_restrictions", "Observerless"),
     EditFieldSpec("miscellaneous_restrictions", "Directional, Locational"),
     EditFieldSpec("normal_closing_time", "in gameticks", categories=_DOOR_ONLY),
@@ -94,6 +97,10 @@ EDIT_FIELDS: tuple[EditFieldSpec, ...] = (
     EditFieldSpec("video_urls", "any urls, comma separated"),
     EditFieldSpec("world_download_urls", "any urls, comma separated"),
     EditFieldSpec("completion_time", "Any time format works"),
+    EditFieldSpec("extra_user_info", "Anything a reader should know"),
+    EditFieldSpec("server_ip", "play.example.com"),
+    EditFieldSpec("coordinates", "x y z"),
+    EditFieldSpec("command_to_get_to_build", "/warp door"),
 )
 """Every entry must name a BuildEditPatch field; a test pins that."""
 
@@ -117,7 +124,7 @@ class SubmissionModal(ErrorHandledModal):
         self,
         build: BuildDraft,
         builds: BuildService,
-        parent: BuildSubmissionForm | None = None,
+        parent: BuildSubmissionForm | SubmissionFormComponent | None = None,
         *,
         locale: str | None = None,
     ) -> None:
@@ -192,14 +199,17 @@ class SubmissionModal(ErrorHandledModal):
             await interaction.response.defer()
             return
         self.parent.validation_error = None
-        self.parent.render()
-        await edit_interaction_layout(interaction, self.parent)
+        if isinstance(self.parent, SubmissionFormComponent):
+            await self.parent.refresh(interaction)
+        else:
+            self.parent.render()
+            await edit_interaction_layout(interaction, self.parent)
 
 
 class SubmissionDetailsModal(ErrorHandledModal):
     """Collect optional restrictions, links, and notes in an explicit format."""
 
-    def __init__(self, parent: BuildSubmissionForm) -> None:
+    def __init__(self, parent: BuildSubmissionForm | SubmissionFormComponent) -> None:
         super().__init__(title=t(parent.locale, _("Links and optional details")))
         self.parent = parent
         build = parent.build
@@ -276,10 +286,14 @@ class SubmissionDetailsModal(ErrorHandledModal):
 
 
 class EditModal[BotT: "squid.bot.app.RedstoneSquid"](ErrorHandledModal):
-    """This is a modal that allows users to edit a build. Exclusively for BuildEditView."""
+    """This modal serves both the compatibility View and the semantic editor component."""
 
     def __init__(
-        self, parent: BuildEditView[BotT], title: str, timeout: float | None = 60, custom_id: str | None = None
+        self,
+        parent: BuildEditView[BotT] | BuildEditComponent,
+        title: str,
+        timeout: float | None = 60,
+        custom_id: str | None = None,
     ):
         self.parent = parent
         if custom_id:
@@ -459,6 +473,208 @@ class BuildSubmissionForm(ErrorHandledLayoutView):
         self.stop()
 
 
+class SubmissionFormComponent(sl.Component):
+    """A semantic, resumable submission workspace around the native detail modals."""
+
+    value: bool | None = sl.state(None)
+    validation_error: str | None = sl.state(None)
+    submitting: bool = sl.state(default=False)
+    closed: bool = sl.state(default=False)
+
+    def __init__(
+        self,
+        build: BuildDraft,
+        builds: BuildService,
+        *,
+        author_id: int | None = None,
+        locale: str | None = None,
+        timeout: float = 300,
+        on_submit: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
+        build.submission_status = Status.PENDING
+        build.category = BuildCategory.DOOR
+        build.patterns = build.patterns or ["Regular"]
+        self.build = build
+        self.builds = builds
+        self.author_id = author_id
+        self.locale = locale
+        self._timeout = timeout
+        self.on_submit = on_submit
+        self._done = anyio.Event()
+        self._mount: sl.discord.Mount | None = None
+
+    @property
+    def is_ready(self) -> bool:
+        width, height, _depth = self.build.door_dimensions
+        return self.build.door_orientation is not None and width is not None and height is not None
+
+    def render(self) -> tuple[sl.LayoutNode, ...]:
+        if self.closed:
+            return (sl.primitives.banner(t(self.locale, _("Submission closed")), accent=DISCORD_BLUE),)
+        missing = []
+        if self.build.door_orientation is None:
+            missing.append(t(self.locale, _("door type")))
+        if not self.build.door_width or not self.build.door_height:
+            missing.append(t(self.locale, _("door opening size")))
+        guidance = self.validation_error
+        if guidance is None and missing:
+            guidance = t(self.locale, _("Required before review: {fields}."), fields=", ".join(missing))
+        if guidance is None:
+            guidance = t(self.locale, _("Ready to submit. Optional details can be added later."))
+        fields = (
+            sl.primitives.presets.Field(
+                t(self.locale, _("Door type")),
+                self.build.door_orientation or "—",
+            ),
+            sl.primitives.presets.Field(
+                t(self.locale, _("Opening size")),
+                _format_dimensions(self.build.door_dimensions) or "—",
+            ),
+            sl.primitives.presets.Field(t(self.locale, _("Pattern")), ", ".join(self.build.patterns)),
+            sl.primitives.presets.Field(
+                t(self.locale, _("Build size")),
+                _format_dimensions(self.build.dimensions) or "—",
+            ),
+            sl.primitives.presets.Field(t(self.locale, _("Versions")), self.build.version_spec or "—"),
+            sl.primitives.presets.Field(t(self.locale, _("Creators")), ", ".join(self.build.creators_ign) or "—"),
+        )
+        return (
+            sl.primitives.card(
+                t(self.locale, _("Submit a build")),
+                guidance,
+                accent=DISCORD_BLUE if self.is_ready else DISCORD_YELLOW,
+                fields=fields,
+                footer=t(self.locale, _("Only the door type and opening size are required.")),
+            ),
+            sl.Choices(
+                key="door_type",
+                choices=tuple(sl.Choice(value, t(self.locale, _(value))) for value in DOOR_ORIENTATION_NAMES),
+                selected=(self.build.door_orientation,) if self.build.door_orientation is not None else (),
+                on_change=self._door_changed,
+            ),
+            sl.Choices(
+                key="location",
+                choices=(
+                    sl.Choice(
+                        "Directional",
+                        t(self.locale, _("Directional")),
+                        t(self.locale, _("May depend on the direction it faces")),
+                    ),
+                    sl.Choice(
+                        "Locational",
+                        t(self.locale, _("Locational")),
+                        t(self.locale, _("May depend on its position in the world")),
+                    ),
+                ),
+                selected=tuple(
+                    value for value in ("Directional", "Locational") if value in self.build.miscellaneous_restrictions
+                ),
+                on_change=self._location_changed,
+                minimum=0,
+                maximum=2,
+            ),
+            sl.primitives.Row(
+                (
+                    sl.primitives.Button(
+                        t(self.locale, _("Edit basics")),
+                        self._edit_basics,
+                        "edit_basics",
+                        style=sl.primitives.ActionStyle.PRIMARY,
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Add links & details")),
+                        self._edit_details,
+                        "edit_details",
+                    ),
+                    sl.primitives.Button(
+                        t(self.locale, _("Submit for review")),
+                        self._submit,
+                        "submit",
+                        style=sl.primitives.ActionStyle.SUCCESS,
+                        disabled=self.submitting,
+                    ),
+                    sl.primitives.Button(t(self.locale, _("Cancel")), self._cancel, "cancel"),
+                )
+            ),
+        )
+
+    async def _door_changed(self, event: sl.ChoiceEvent) -> None:
+        self.build.door_orientation = cast(Literal["Door", "Skydoor", "Trapdoor"], event.selected[0])
+        self.validation_error = None
+        self.invalidate()
+
+    async def _location_changed(self, event: sl.ChoiceEvent) -> None:
+        self.build.miscellaneous_restrictions = list(event.selected)
+        self.invalidate()
+
+    async def _edit_basics(self, event: sl.PressEvent) -> None:
+        modal = SubmissionModal(self.build, self.builds, self, locale=self.locale)
+        await sl.discord.responder(event).send_modal(modal)
+
+    async def _edit_details(self, event: sl.PressEvent) -> None:
+        await sl.discord.responder(event).send_modal(SubmissionDetailsModal(self))
+
+    async def _submit(self, event: sl.PressEvent) -> None:
+        if not self.is_ready:
+            self.validation_error = t(
+                self.locale,
+                _("Choose a door type and add an opening size such as \x602x2\x60 before submitting."),
+            )
+            self.invalidate()
+            return
+        if self.submitting:
+            await event.notice(t(self.locale, _("This build is still being submitted. Give it a moment.")))
+            return
+        self.submitting = True
+        await event.acknowledge()
+        try:
+            if self.on_submit is not None:
+                await self.on_submit()
+        except Exception:
+            self.submitting = False
+            self.validation_error = t(
+                self.locale,
+                _("Submitting failed and nothing was saved. Press “Submit for review” to try again."),
+            )
+            self.invalidate()
+            raise
+        self.submitting = False
+        self.value = True
+        self.closed = True
+        self._done.set()
+        await event.finish()
+
+    async def _cancel(self, event: sl.PressEvent) -> None:
+        self.value = False
+        self.closed = True
+        self._done.set()
+        await event.finish()
+
+    async def refresh(self, interaction: discord.Interaction[Any]) -> None:
+        self.validation_error = None
+        self.invalidate()
+        if self._mount is None:
+            return
+        rendered = self._mount.build_view()
+        await edit_interaction_layout(interaction, rendered)
+        # bind is the commit point, so it runs whether or not this mount holds a message.
+        self._mount.bind(self._mount.message, rendered)
+
+    async def wait(self) -> bool | None:
+        with anyio.move_on_after(self._timeout) as scope:
+            await self._done.wait()
+        return None if scope.cancel_called else self.value
+
+    def mount(self) -> sl.discord.Mount:
+        self._mount = create_mount(
+            self,
+            locale=self.locale,
+            timeout=self._timeout,
+            lock_to=self.author_id,
+        )
+        return self._mount
+
+
 class ConfirmationView(ErrorHandledLayoutView):
     """Ask the invoking user to confirm or cancel an action."""
 
@@ -526,6 +742,26 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         self.page = 1
         self._max_pages = max(1, (len(self.items) + 4) // 5)
         self.expiry_time = Instant.now().add(seconds=timeout)
+
+    def stage(self, attribute: str, text: str) -> bool:
+        """Fill one field as though it had been typed into the modal.
+
+        This is how `/build edit`'s typed options reach the workspace: an option arrives as
+        text, and the field that owns the attribute parses and remembers it, so the review
+        prompt shows the change alongside anything edited by hand afterwards.
+
+        Returns:
+            Whether a field owning `attribute` exists on this build. Door facts do not exist
+            on an extender, so the caller can report the mismatch rather than drop it.
+        """
+        for item in self.items:
+            if item.attribute == attribute:
+                item.stage(text)
+                self.validation_error = (
+                    "\n".join(error for error in (self.validation_error, item.validation_error) if error) or None
+                )
+                return True
+        return False
 
     async def can_edit(self, interaction: Interaction[BotT]) -> bool:
         """Allow pending-build owners, and anyone holding the build-edit node.
@@ -655,8 +891,12 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
                 fields=(CardField(t(self.locale, _("Fields in this section")), self.summary_text()),),
             )
         )
-        self.add_item(await self.get_handler(interaction).render_container())
+        # The header card is already in the view, so the build card gets what is left of the
+        # display budget; conform is the gate this hand-assembled view would otherwise skip.
+        reserved = display_text_length(self)
+        self.add_item(await self.get_handler(interaction).render_container(reserved_text=reserved))
         self.add_item(controls)
+        sl.discord.conform(self)
 
     @actions.button(label="Open", style=discord.ButtonStyle.primary)
     async def open(self, interaction: discord.Interaction[BotT], button: discord.ui.Button):
@@ -717,13 +957,291 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
                 self.build = await edit.commit()
             await interaction.client.refresh_posts("build", str(self.build.id))
         self.stop()
-        success = StaticLayout(
-            discord.ui.TextDisplay(t(self.locale, _("## Changes saved"))),
-            await self.get_handler(interaction).render_container(),
-        )
+        heading = t(self.locale, _("## Changes saved"))
+        handler = self.get_handler(interaction)
+        render_node = getattr(handler, "render_node", None)
+        if render_node is not None:
+            build_node = await render_node()
+        else:
+            build_container = await handler.render_container(reserved_text=len(heading))
+            build_node = sl.primitives.RawItem(lambda: build_container, kind="discord.item", version=1)
+        success = sl.discord.render_static([sl.primitives.Text(heading), build_node])
         # The workspace is ephemeral, and an ephemeral message only exists inside the interaction:
         # editing it through the channel endpoint (`Message.edit`) is a 404, so go via the webhook.
         await interaction.edit_original_response(view=success, allowed_mentions=no_mentions())
+
+
+class BuildEditComponent(sl.Component):
+    """A mounted build editor with semantic pagination and review confirmation."""
+
+    page: int = sl.state(1)
+    confirming: bool = sl.state(default=False)
+    saved: bool = sl.state(default=False)
+    validation_error: str | None = sl.state(None)
+
+    def __init__(
+        self,
+        build: Build,
+        builds: BuildService,
+        items: Sequence[BuildField[Any]] | DefaultType = DEFAULT,
+        *,
+        locale: str | None = None,
+        timeout: float = 300,
+        node: sl.LayoutNode | None = None,
+    ) -> None:
+        self.build = build
+        self.builds = builds
+        self.locale = locale
+        self._timeout = timeout
+        self._node = node
+        self.expiry_time = Instant.now().add(seconds=timeout)
+        if items is DEFAULT:
+            items = [
+                get_text_input(build, field.attribute, placeholder=field.placeholder, required=field.required)
+                for field in EDIT_FIELDS
+                if field.applies_to(build)
+            ]
+        self.items = tuple(items)
+        self._mount: sl.discord.Mount | None = None
+
+    @property
+    def max_pages(self) -> int:
+        return max(1, (len(self.items) + 4) // 5)
+
+    def stage(self, attribute: str, text: str) -> bool:
+        for item in self.items:
+            if item.attribute == attribute:
+                item.stage(text)
+                self.validation_error = (
+                    "\n".join(error for error in (self.validation_error, item.validation_error) if error) or None
+                )
+                return True
+        return False
+
+    async def can_edit(self, interaction: discord.Interaction[Any]) -> bool:
+        actor_account_id = await interaction.client.account_ids.resolve(
+            interaction.client.services.accounts,
+            interaction.user.id,
+        )
+        if (
+            self.build.submission_status is Status.PENDING
+            and actor_account_id is not None
+            and self.build.submitter_account_id == actor_account_id
+        ):
+            return True
+        return await allows(interaction, BUILD_SUBMISSION_EDIT)
+
+    def render(self) -> tuple[sl.LayoutNode, ...]:
+        if self.saved:
+            return (
+                sl.primitives.card(
+                    t(self.locale, _("Changes saved")),
+                    t(self.locale, _("The build card has been refreshed.")),
+                    accent=DISCORD_BLUE,
+                ),
+            )
+        summary = self.summary_text()
+        description = (
+            t(
+                self.locale,
+                _("Section {page} of {pages}. Filled dots have unsaved changes."),
+                page=self.page,
+                pages=self.max_pages,
+            )
+            if not self.validation_error
+            else t(self.locale, _("Fix these values before review:\n{errors}"), errors=self.validation_error)
+        )
+        controls: list[sl.primitives.Button] = [
+            sl.primitives.Button(
+                t(self.locale, _("Edit this section")),
+                self._open,
+                "open",
+                style=sl.primitives.ActionStyle.PRIMARY,
+            ),
+            sl.primitives.Button(
+                t(self.locale, _("Previous")),
+                self._previous,
+                "previous",
+                disabled=self.page == 1,
+            ),
+            sl.primitives.Button(
+                t(self.locale, _("Next")),
+                self._next,
+                "next",
+                disabled=self.page == self.max_pages,
+            ),
+        ]
+        if self.confirming:
+            controls.extend(
+                (
+                    sl.primitives.Button(
+                        t(self.locale, _("Apply changes")),
+                        self._apply,
+                        "apply",
+                        style=sl.primitives.ActionStyle.SUCCESS,
+                    ),
+                    sl.primitives.Button(t(self.locale, _("Back")), self._unconfirm, "unconfirm"),
+                )
+            )
+        else:
+            controls.append(
+                sl.primitives.Button(
+                    t(self.locale, _("Review changes")),
+                    self._review,
+                    "review",
+                    style=sl.primitives.ActionStyle.SUCCESS,
+                )
+            )
+        controls.append(sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"))
+        nodes: list[sl.LayoutNode] = [
+            sl.primitives.card(
+                t(self.locale, _("Edit build")),
+                description,
+                accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE,
+                fields=(
+                    sl.primitives.presets.Field(
+                        t(self.locale, _("Fields in this section")),
+                        summary,
+                    ),
+                ),
+            )
+        ]
+        if self._node is not None:
+            nodes.append(self._node)
+        nodes.append(sl.primitives.ActionGroup(tuple(controls)))
+        return tuple(nodes)
+
+    def summary_text(self) -> str:
+        page_items = self.items[5 * (self.page - 1) : 5 * self.page]
+        return "\n".join(f"{'●' if item.modified else '○'} {item.summary}" for item in page_items)
+
+    async def _open(self, event: sl.PressEvent) -> None:
+        if await self._may_event(event):
+            await sl.discord.responder(event).send_modal(self.get_modal())
+
+    async def _previous(self, event: sl.PressEvent) -> None:
+        if self.page > 1:
+            self.page -= 1
+
+    async def _next(self, event: sl.PressEvent) -> None:
+        if self.page < self.max_pages:
+            self.page += 1
+
+    async def _review(self, event: sl.PressEvent) -> None:
+        if not await self._may_event(event):
+            return
+        if self.validation_error:
+            return
+        if not any(item.modified for item in self.items):
+            self.validation_error = t(self.locale, _("No changes to review yet."))
+            return
+        self.confirming = True
+
+    async def _unconfirm(self, event: sl.PressEvent) -> None:
+        self.confirming = False
+
+    async def _apply(self, event: sl.PressEvent) -> None:
+        if not await self._may_event(event):
+            return
+        interaction = sl.discord.native(event)
+        changed = [item for item in self.items if item.modified]
+        await event.acknowledge()
+        patch = BuildEditPatch.from_attributes({item.attribute: item.actual_value for item in changed})
+        if self.build.id is None:
+            patch.apply(self.build)
+            await self.builds.save(self.build)
+        else:
+            async with self.builds.edit(self.build.id, patch) as edit:
+                self.build = await edit.commit()
+            await interaction.client.refresh_posts("build", str(self.build.id))
+        self.saved = True
+        self.confirming = False
+        self._node = await interaction.client.for_build(self.build).render_node()
+        await event.finish()
+
+    async def _close(self, event: sl.PressEvent) -> None:
+        await event.finish()
+
+    async def _may_event(self, event: sl.ActionEvent) -> bool:
+        interaction = sl.discord.native(event)
+        if Instant.now() > self.expiry_time:
+            await event.notice(t(self.locale, _("This edit session expired. Reopen the build to start again.")))
+            return False
+        if not await self.can_edit(interaction):
+            await event.notice(
+                t(
+                    self.locale,
+                    _("Only the pending build's submitter or a trusted staff member can edit it."),
+                )
+            )
+            return False
+        return True
+
+    def get_modal(self) -> EditModal:
+        modal = EditModal(
+            parent=self,
+            title=f"Edit Build (Page {self.page})",
+            timeout=max(0.0, (self.expiry_time - Instant.now()).total("seconds")),
+        )
+        for item in self.items[5 * (self.page - 1) : 5 * self.page]:
+            modal.add_item(item.to_label())
+        return modal
+
+    async def update(self, interaction: discord.Interaction[Any]) -> None:
+        self.validation_error = None
+        self._node = await interaction.client.for_build(self.build).render_node()
+        self.invalidate()
+        if self._mount is None:
+            return
+        rendered = self._mount.build_view()
+        await edit_interaction_layout(interaction, rendered)
+        # bind is the commit point, so it runs whether or not this mount holds a message.
+        self._mount.bind(self._mount.message, rendered)
+
+    async def send(self, interaction: discord.Interaction[Any], ephemeral: bool = True) -> None:
+        self.locale = await resolve_locale(interaction, interaction.client.services.settings)
+        if not await self.can_edit(interaction):
+            message = t(
+                self.locale,
+                _("Only the pending build's submitter or a trusted staff member can edit it."),
+            )
+            if interaction.response.is_done():
+                await interaction.followup.send(
+                    view=error_layout(t(self.locale, _("Cannot edit this build")), message),
+                    ephemeral=True,
+                    allowed_mentions=no_mentions(),
+                )
+            else:
+                await interaction.response.send_message(
+                    view=error_layout(t(self.locale, _("Cannot edit this build")), message),
+                    ephemeral=True,
+                    allowed_mentions=no_mentions(),
+                )
+            return
+        if self._node is None:
+            handler = interaction.client.for_build(self.build)
+            render_node = getattr(handler, "render_node", None)
+            self._node = (
+                await render_node()
+                if render_node is not None
+                else sl.primitives.banner(t(self.locale, _("Build preview unavailable.")))
+            )
+        mount = self.mount()
+        rendered = mount.build_view()
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=ephemeral)
+        message = await interaction.followup.send(
+            view=rendered,
+            files=mount.attachment_files(),
+            ephemeral=ephemeral,
+            allowed_mentions=no_mentions(),
+            wait=True,
+        )
+        mount.bind(message, rendered)
+
+    def mount(self) -> sl.discord.Mount:
+        self._mount = create_mount(self, locale=self.locale, timeout=self._timeout)
+        return self._mount
 
 
 class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]):
@@ -750,6 +1268,7 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
         self.add_item(await interaction.client.for_build(self.build).render_container())
         self.add_item(self._edit_row)
         self.add_item(self._navigation_row)
+        sl.discord.conform(self)
 
     @override
     async def send(self, interaction: discord.Interaction[BotT]) -> None:

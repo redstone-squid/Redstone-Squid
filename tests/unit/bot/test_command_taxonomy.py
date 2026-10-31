@@ -10,6 +10,7 @@ from discord.ext.commands import Command, HybridCommand, HybridGroup
 from squid.bot.admin import Admin
 from squid.bot.diagnostics import Diagnostics
 from squid.bot.give_redstoner import GiveRedstoner
+from squid.bot.layout_showcase import LayoutShowcaseCog
 from squid.bot.misc_commands import Miscellaneous
 from squid.bot.permissions import PermissionCog
 from squid.bot.settings import SettingsCog
@@ -28,18 +29,13 @@ UNGATED_COMMANDS = frozenset(
         "account",
         "account claim",
         "account consent",
-        "account identities",
         "account link",
         "account merge",
         "account merge-code",
-        "account profile",
-        "account profile-edit",
         # Refreshing your own Minecraft name is default-allow, so the command declares no
         # node. Its `user:` form checks `account.identity.refresh_any` inline instead, which
         # a decorator could not express without gating the self case too.
         "account refresh",
-        "account unlink",
-        "account visibility",
         "build",
         "build queue",
         "build schematic",
@@ -53,24 +49,14 @@ UNGATED_COMMANDS = frozenset(
         "info form",
         "info invite",
         "info source",
-        # Anyone in a guild may open a poll, so `poll create` needs no node. Closing and
-        # refreshing one are authorized against the session rather than the caller: both
-        # run `VoteSessionSnapshot.can_close`, which admits the poll's author as well as
-        # holders of `vote.poll.close_any`. A node on the command could not express "or
-        # you opened this one", and would lock authors out of their own polls.
-        "poll",
-        "poll close",
-        "poll create",
-        "poll refresh",
+        "layout",
+        "layout demo",
         "search",
         "tag",
         "tag apply",
         "tag propose",
         "version",
         "version list",
-        "vote",
-        "vote poll",
-        "vote delete",
     }
 )
 """Commands that legitimately declare no permission node: the public ones.
@@ -89,6 +75,7 @@ PUBLIC_COGS = (
     VersionTracker,
     SettingsCog,
     Miscellaneous,
+    LayoutShowcaseCog,
     GiveRedstoner,
     StarboardCog,
     PermissionCog,
@@ -102,64 +89,56 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     # takes a documented entry point away with no failing test, and a command added
     # without a plan ships to every guild. Neither shows up in a behavioural test,
     # because the behaviour of a command nobody calls is nothing.
+    # Approving and rejecting a claim are buttons on `account claims`, not commands
+    # (docs/plans/command-redesign/05-condensation.md). `account` is a hybrid group with a
+    # `show` fallback, so bare `account` opens the panel that `identities`, `visibility`,
+    # `unlink`, `profile` and `profile-edit` used to answer a piece at a time
+    # (docs/plans/command-redesign/07-account.md).
     "account": (
-        "approve-claim",
         "claim",
         "claims",
         "consent",
-        "identities",
         "link",
         "merge",
         "merge-code",
-        "profile",
-        "profile-edit",
         "refresh",
-        "reject-claim",
-        "unlink",
-        "visibility",
-    ),
-    "admin": (
-        "records-gaps",
-        "records-lookup",
-        "records-rebuild",
-        "records-title-issues",
     ),
     "archive": (),
     # `error` is a hybrid group with a `show` fallback, so bare `error <reference>` works.
     "error": ("clear", "recent"),
+    # The schematic tools all sit under `build schematic`, which is what their
+    # permission nodes always said (docs/plans/command-redesign/06-build.md).
     "build": (
         "approve",
         "debug",
-        "detect-lattice",
-        "edit",
-        "measure-timing",
         "queue",
-        "recalc",
         "reject",
         "schematic",
         "schematic convert",
+        "schematic detect-lattice",
         "schematic download",
         "schematic info",
+        "schematic measure-timing",
         "schematic render",
         "view",
     ),
     "info": ("docs", "form", "invite", "source"),
+    "layout": ("demo",),
+    # `whoami`, `test` and `explain` were three spellings of "what may this person do";
+    # `can` is the one (docs/plans/command-redesign/05-condensation.md).
     "perm": (
         "audit",
+        "can",
         "deny",
-        "explain",
         "forbid",
         "grant",
         "list",
         "nodes",
         "revoke",
-        "test",
-        "whoami",
     ),
-    # Polls got their own top-level group in `509406c2`, because a poll is not a vote on
-    # a build: it stands alone, has no submission behind it, and is closed by whoever
-    # opened it. `vote poll` survives only as a deprecated alias for `poll create`.
-    "poll": ("close", "create", "refresh"),
+    # `admin` held nothing but record tooling, so every member repeated the group name it
+    # actually wanted (docs/plans/command-redesign/05-condensation.md).
+    "records": ("gaps", "lookup", "rebuild", "title-issues"),
     "redstoner": ("panel", "resync"),
     "restrictions": ("add-alias",),
     "role": (
@@ -206,7 +185,6 @@ EXPECTED_PREFIX_COMMAND_TREE: dict[str, tuple[str, ...]] = {
     ),
     "tag": ("apply", "approve", "archive", "pending", "propose", "reject"),
     "version": ("add", "list"),
-    "vote": ("delete", "poll"),
 }
 
 
@@ -220,10 +198,10 @@ PICKER_VISIBILITY: dict[str, frozenset[str]] = {
     # These are visibility hints, never gates. `requires(...)` decides, and a guild
     # admin can override any of these per command in Server Settings; the bits below
     # are chosen to match the operation, so the override is rarely needed.
-    "admin": frozenset({"manage_guild"}),
     "archive": frozenset({"manage_messages"}),
     "error": frozenset({"manage_guild"}),
     "perm": frozenset({"manage_guild"}),
+    "records": frozenset({"manage_guild"}),
     "redstoner": frozenset({"manage_roles"}),
     "restrictions": frozenset({"manage_guild"}),
     "role": frozenset({"manage_guild"}),
@@ -282,10 +260,12 @@ def test_public_prefix_command_tree_matches_taxonomy() -> None:
     assert _public_command_names() == _qualified_names(EXPECTED_PREFIX_COMMAND_TREE)
 
 
-def test_build_slash_group_includes_app_only_guided_submit() -> None:
+def test_build_slash_group_includes_the_app_only_workspaces() -> None:
     cog = SearchCog.__new__(SearchCog)
     build_group = cast(HybridGroup, _command(cog.__cog_commands__, "build"))
-    expected_commands = {f"build {command}" for command in (*EXPECTED_PREFIX_COMMAND_TREE["build"], "submit")}
+    # `submit` and `edit` are app-only: both open a workspace, which needs an interaction
+    # (docs/plans/command-redesign/01-build-submit.md, 06-build.md).
+    expected_commands = {f"build {command}" for command in (*EXPECTED_PREFIX_COMMAND_TREE["build"], "submit", "edit")}
 
     assert {command.qualified_name for command in build_group.app_command.walk_commands()} == expected_commands
 
@@ -329,10 +309,8 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(search.__cog_commands__, "build approve") == {"build.submission.approve"}
     assert _nodes(search.__cog_commands__, "build reject") == {"build.submission.reject"}
     assert _nodes(search.__cog_commands__, "build debug") == {"build.submission.debug"}
-    assert _nodes(search.__cog_commands__, "build edit") == {"build.submission.edit"}
-    assert _nodes(search.__cog_commands__, "build recalc") == {"build.submission.recalc"}
-    assert _nodes(search.__cog_commands__, "build measure-timing") == {"build.schematic.measure_timing"}
-    assert _nodes(search.__cog_commands__, "build detect-lattice") == {"build.schematic.detect_lattice"}
+    assert _nodes(search.__cog_commands__, "build schematic measure-timing") == {"build.schematic.measure_timing"}
+    assert _nodes(search.__cog_commands__, "build schematic detect-lattice") == {"build.schematic.detect_lattice"}
     assert _nodes(search.__cog_commands__, "restrictions") == {"restriction.alias.create"}
     assert _nodes(search.__cog_commands__, "restrictions add-alias") == {"restriction.alias.create"}
 
@@ -355,8 +333,8 @@ def test_sensitive_commands_declare_the_intended_permission_nodes() -> None:
     assert _nodes(admin.__cog_commands__, "archive") == {"message.archive.create"}
 
     records = RecordCog.__new__(RecordCog)
-    assert _nodes(records.__cog_commands__, "admin records-rebuild") == {"record.entry.rebuild"}
-    assert _nodes(records.__cog_commands__, "admin records-lookup") == {"record.entry.inspect"}
+    assert _nodes(records.__cog_commands__, "records rebuild") == {"record.entry.rebuild"}
+    assert _nodes(records.__cog_commands__, "records lookup") == {"record.entry.inspect"}
 
     verify = VerifyCog.__new__(VerifyCog)
     assert _nodes(verify.__cog_commands__, "account claims") == {"account.claim.list"}
@@ -377,7 +355,7 @@ def test_group_gates_admit_anyone_holding_one_of_their_commands_nodes() -> None:
         (SettingsCog, "settings", "settings voting"),
         (SettingsCog, "settings voting", "settings voting reset"),
         (StarboardCog, "starboard", "starboard recount"),
-        (RecordCog, "admin", "admin records-rebuild"),
+        (RecordCog, "records", "records rebuild"),
         (SearchCog, "restrictions", "restrictions add-alias"),
     ):
         commands = _commands_of(cog)
@@ -448,6 +426,20 @@ def test_the_error_group_binds_a_reference_from_the_prefix_form() -> None:
     assert error.invoke_without_command is True
     assert error.fallback == "show"
     assert "reference" in error.clean_params
+
+
+def test_polls_are_one_app_only_command() -> None:
+    """A poll opens a modal, which a prefix invocation cannot do (audit C7).
+
+    `poll` was a hybrid group whose members answered "use the slash command `/poll
+    create`", so the prefix tree advertised three entry points and honoured none.
+    Declaring it app-only is the audit's other option, and the group had nothing left to
+    hold once `close` and `refresh` moved onto the poll card itself.
+    """
+    cog = VoteCog.__new__(VoteCog)
+
+    assert [command.qualified_name for command in cog.__cog_app_commands__] == ["poll"]
+    assert not [command.qualified_name for command in cog.__cog_commands__]
 
 
 def test_the_settings_group_opens_the_panel_from_its_fallback() -> None:
