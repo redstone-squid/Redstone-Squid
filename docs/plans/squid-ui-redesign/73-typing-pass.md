@@ -12,7 +12,7 @@ where `Renderable[M]` is wanted exactly when `M <: X`. The primitives declare th
 It only ever worked for a node written at the root. One level down the mode died:
 
 ```python
-plan(sl.stack(Panel((Text("v2"),))), target=classic())   # silently accepted
+plan(sl.stack(Panel((Text("v2"),))), target=classic())  # silently accepted
 ```
 
 Three breaks, one seam:
