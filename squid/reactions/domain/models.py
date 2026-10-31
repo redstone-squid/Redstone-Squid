@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from math import isfinite
 
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,5 +37,5 @@ class RoleMultiplier:
 
     def __post_init__(self) -> None:
         if not isfinite(self.multiplier) or self.multiplier <= 0:
-            msg = _("Role multiplier must be finite and greater than zero.")
+            msg = tr(t"Role multiplier must be finite and greater than zero.")
             raise ValidationError(msg)

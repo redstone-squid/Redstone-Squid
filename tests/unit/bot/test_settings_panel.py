@@ -1,8 +1,8 @@
 """Tests for the server settings panel."""
 
-from types import SimpleNamespace
-from typing import Any, cast
-from unittest.mock import AsyncMock
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -11,55 +11,143 @@ import squid.bot.settings_view as settings_view
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
-from squid.voting.domain import VoteKind
+from squid.settings.application import SettingsService
+from squid.settings.domain import ScalarChannelSetting, Setting, SettingOptions
+from squid.voting.application import VoteService
+from squid.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
 from squid_ui.runtime.reactivity import readonly_transaction
 from squid_ui_discord.testing import commit_render
-from tests.helpers.discord import make_layout_bot
+from tests.support.discord import make_layout_bot
 
 GUILD_ID = 7
 EVERYTHING = SettingsCapabilities(view_server=True, edit_server=True, edit_voting=True)
+
+
+@dataclass(slots=True)
+class FakeChannel:
+    id: int
+    name: str
+    type: discord.ChannelType = discord.ChannelType.text
+
+
+@dataclass(slots=True)
+class FakeRole:
+    id: int
+    name: str
+
+
+class FakeGuild:
+    def __init__(self, channels: dict[int, str], roles: dict[int, str]) -> None:
+        self.id = GUILD_ID
+        self.channels = [FakeChannel(channel_id, name) for channel_id, name in channels.items()]
+        self._channels = channels
+        self._roles = roles
+
+    def get_channel_or_thread(self, channel_id: int) -> FakeChannel | None:
+        name = self._channels.get(channel_id)
+        return None if name is None else FakeChannel(channel_id, name)
+
+    def get_role(self, role_id: int) -> FakeRole | None:
+        name = self._roles.get(role_id)
+        return None if name is None else FakeRole(role_id, name)
+
+
+class FakeSettingsService(SettingsService):
+    def __init__(self, stored: dict[str, int | None] | None = None) -> None:
+        self.stored = dict(stored or {})
+        self.locale: str | None = None
+        self.channel_writes: list[tuple[int, ScalarChannelSetting, int]] = []
+        self.clears: list[tuple[int, Setting]] = []
+
+    @override
+    async def get_all(self, server_id: int) -> SettingOptions:
+        del server_id
+        return cast(SettingOptions, dict(self.stored))
+
+    @override
+    async def set_channel(self, server_id: int, setting: ScalarChannelSetting, channel_id: int) -> None:
+        self.channel_writes.append((server_id, setting, channel_id))
+        self.stored[setting] = channel_id
+
+    @override
+    async def clear(self, server_id: int, setting: Setting) -> None:
+        self.clears.append((server_id, setting))
+        self.stored.pop(setting, None)
+
+    @override
+    async def get_locale(self, server_id: int) -> str | None:
+        del server_id
+        return self.locale
+
+    @override
+    async def set_locale(self, server_id: int, locale: str | None) -> None:
+        del server_id
+        self.locale = locale
+
+
+class FakeVoteService(VoteService):
+    def __init__(self) -> None:
+        self.role_weights: tuple[RoleWeight, ...] = ()
+        self.role_weight_error: RuntimeError | None = None
+
+    @override
+    async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset:
+        return EmojiPreset(guild_id, kind, ())
+
+    @override
+    async def get_role_weights(self, guild_id: int, kind: VoteKind) -> tuple[RoleWeight, ...]:
+        del guild_id, kind
+        if self.role_weight_error is not None:
+            raise self.role_weight_error
+        return self.role_weights
+
+    @override
+    async def set_emoji_preset(self, guild_id: int, kind: VoteKind, options: Sequence[VoteOption]) -> None:
+        del guild_id, kind, options
+
+    @override
+    async def set_role_weight(self, weight: RoleWeight) -> None:
+        self.role_weights = (*self.role_weights, weight)
+
+    @override
+    async def remove_role_weight(self, guild_id: int, kind: VoteKind, role_id: int) -> None:
+        self.role_weights = tuple(
+            weight
+            for weight in self.role_weights
+            if (weight.guild_id, weight.kind, weight.role_id) != (guild_id, kind, role_id)
+        )
+
+    @override
+    async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None:
+        del guild_id, kind
+        self.role_weights = ()
 
 
 def make_guild(*, channels: dict[int, str] | None = None, roles: dict[int, str] | None = None) -> Any:
     """A guild stub exposing only the lookups the panel performs."""
     channels = channels or {}
     roles = roles or {}
-    return SimpleNamespace(
-        id=GUILD_ID,
-        channels=[
-            SimpleNamespace(id=channel_id, name=name, type=discord.ChannelType.text)
-            for channel_id, name in channels.items()
-        ],
-        get_channel_or_thread=lambda channel_id: (
-            SimpleNamespace(id=channel_id, name=channels[channel_id]) if channel_id in channels else None
-        ),
-        get_role=lambda role_id: SimpleNamespace(id=role_id, name=roles[role_id]) if role_id in roles else None,
-    )
+    return FakeGuild(channels, roles)
 
 
 def make_component_panel(
     *,
     stored: dict[str, int | None] | None = None,
     channels: dict[int, str] | None = None,
-) -> tuple[SettingsPanel, Any, sd.MessageRoot]:
+) -> tuple[SettingsPanel, FakeSettingsService, sd.MessageRoot]:
     """The mounted panel and the settings service behind it."""
-    settings = SimpleNamespace(
-        get_all=AsyncMock(return_value=stored or {}),
-        get_locale=AsyncMock(return_value=None),
-        set_channel=AsyncMock(),
-        clear=AsyncMock(),
-        set_locale=AsyncMock(),
-    )
-    votes = SimpleNamespace(
-        emoji_preset=AsyncMock(return_value=None),
-        get_role_weights=AsyncMock(return_value=()),
-    )
+    settings = FakeSettingsService(stored)
+    votes = FakeVoteService()
+
+    async def authorize(_node: object) -> bool:
+        return True
+
     panel = SettingsPanel(
-        settings=cast(Any, settings),
-        votes=cast(Any, votes),
+        settings=settings,
+        votes=votes,
         guild=make_guild(channels=channels if channels is not None else {12: "general"}),
         capabilities=EVERYTHING,
-        authorize=AsyncMock(return_value=True),
+        authorize=authorize,
     )
     bot = make_layout_bot()
     message_root = sd.ClientRuntime.of(bot).defaults.mount(panel, access=sd.Owner(1), timeout=300)
@@ -96,7 +184,8 @@ async def test_a_half_loaded_voting_page_is_not_left_applied() -> None:
     panel, _, _ = make_component_panel()
     await panel.open_voting(VoteKind.BUILD)
     loaded_preset = panel._preset
-    panel._votes.get_role_weights = AsyncMock(side_effect=RuntimeError("database is down"))
+    votes = cast(FakeVoteService, panel._votes)
+    votes.role_weight_error = RuntimeError("database is down")
 
     with pytest.raises(RuntimeError, match="database is down"), sl.runtime.transaction():
         await panel.open_voting(VoteKind.GENERIC)
@@ -153,7 +242,7 @@ async def test_a_channel_change_can_be_undone() -> None:
 
     assert panel.channel_id("Vote") == 3
     # The world half went back too: the framework only ever restores the panel's own dict.
-    assert settings.set_channel.await_args_list[-1].args == (GUILD_ID, "Vote", 3)
+    assert settings.channel_writes[-1] == (GUILD_ID, "Vote", 3)
 
 
 async def test_an_effectful_undone_channel_change_is_not_falsely_redoable() -> None:
@@ -169,7 +258,7 @@ async def test_an_effectful_undone_channel_change_is_not_falsely_redoable() -> N
 
     assert result.status is sl.runtime.HistoryResultStatus.EMPTY
     assert panel.channel_id("Vote") == 3
-    assert settings.clear.await_count == 1
+    assert len(settings.clears) == 1
 
 
 async def test_a_failed_action_records_no_history() -> None:
@@ -201,22 +290,26 @@ async def test_undo_is_refused_when_the_permission_was_revoked() -> None:
     await panel.open_server()
     with sl.runtime.transaction():
         await panel.set_channel("Vote", 12)
-    writes = settings.set_channel.await_count
+    writes = len(settings.channel_writes)
 
-    panel._authorize = AsyncMock(return_value=False)
+    async def deny(_node: object) -> bool:
+        return False
+
+    panel._authorize = deny
     notices: list[Any] = []
-    event = cast(
-        Any,
-        SimpleNamespace(
-            responder=SimpleNamespace(),
-            notice=AsyncMock(side_effect=lambda text, **kwargs: notices.append(text)),
-            context={"frontend": "discord"},
-        ),
-    )
+
+    class Event:
+        responder = object()
+        context = {"frontend": "discord"}
+
+        async def notice(self, text: object, **_kwargs: object) -> None:
+            notices.append(text)
+
+    event = cast(Any, Event())
     with sl.runtime.transaction():
         await panel._undo(event)
 
-    assert settings.set_channel.await_count == writes
+    assert len(settings.channel_writes) == writes
     assert panel.channel_id("Vote") == 12
     assert notices
 
@@ -236,21 +329,16 @@ async def test_each_channel_picker_writes_its_own_setting() -> None:
     panel, settings, _ = make_component_panel(stored={"Vote": 3}, channels={3: "vote", 12: "general"})
     await panel.open_server()
 
+    class Selection:
+        selected = (sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, 12),)
+        context: dict[str, object] = {}
+
     with sl.runtime.transaction():
-        await panel._channel_changed(
-            cast(
-                Any,
-                SimpleNamespace(
-                    selected=(sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, 12),),
-                    context={},
-                ),
-            ),
-            "Builds",
-        )
+        await panel._channel_changed(cast(Any, Selection()), "Builds")
 
     assert panel.channel_id("Builds") == 12
     assert panel.channel_id("Vote") == 3
-    assert settings.set_channel.await_args_list[-1].args == (GUILD_ID, "Builds", 12)
+    assert settings.channel_writes[-1] == (GUILD_ID, "Builds", 12)
 
 
 def _button_labels(view: Any) -> list[str | None]:

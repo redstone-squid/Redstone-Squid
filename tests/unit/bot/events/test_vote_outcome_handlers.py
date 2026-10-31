@@ -19,7 +19,7 @@ from squid.voting.domain import (
     VoteTarget,
 )
 from squid.worker.events import ApplyBuildVoteOutcomeHandler
-from tests.helpers.voting import build_snapshot
+from tests.support.voting import build_snapshot
 
 DELETE_TARGET = DeleteLogVoteTarget(message_id=7, channel_id=8, server_id=9)
 

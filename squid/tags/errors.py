@@ -1,14 +1,14 @@
 """Tag context errors."""
 
 from squid.core.errors import ErrorCode, NotFoundError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 
 class TagNotFoundError(NotFoundError):
     """No published tag definition exists for the requested identifier."""
 
-    default_message = _("Tag not found.")
-    default_title = _("Tag not found")
+    default_message = tr(t"Tag not found.")
+    default_title = tr(t"Tag not found")
     default_code = ErrorCode.TAG_NOT_FOUND
     default_resource = "tag"
 

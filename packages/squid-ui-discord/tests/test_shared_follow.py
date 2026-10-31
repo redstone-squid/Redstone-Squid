@@ -17,7 +17,7 @@ from squid_ui.profiling import PresentationStatus
 from squid_ui.runtime import CellAddress, LocalTopicBus, SharedState, transaction
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui_discord import testing as sd
-from squid_ui_discord.testing import delivered_to, fake_interaction, fake_message
+from squid_ui_discord.testing import delivered_to, interaction_harness, message_harness
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,7 +127,7 @@ async def test_two_mounts_react_once_each_to_one_commit() -> None:
     message_roots = [MessageRoot(Panel(workspace), access=Everyone(), scheduler=scheduler) for _ in range(2)]
     refreshes: dict[str, int] = {}
     for message_root in message_roots:
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         assert message_root.followed == (address(workspace, "selected"),)
 
         def counted(message_root: MessageRoot = message_root):
@@ -165,7 +165,7 @@ async def test_backdated_scheduled_refresh_skips_render_planning_and_drawing(mon
 
     component = Parity()
     message_root = MessageRoot(component, access=Everyone(), scheduler=scheduler, timeout=None)
-    message: Any = fake_message()
+    message: Any = message_harness()
     await message_root.send(delivered_to(message))
     issued = message_root._issued
 
@@ -210,7 +210,7 @@ async def test_equal_computed_value_switches_the_mounts_followed_branch() -> Non
 
     component = Panel()
     message_root = MessageRoot(component, access=Everyone(), scheduler=scheduler, timeout=None)
-    message: Any = fake_message()
+    message: Any = message_harness()
     await message_root.send(delivered_to(message))
     use_b = CellAddress(values, "use_b")
     a = CellAddress(values, "a")
@@ -250,7 +250,7 @@ async def test_explicit_scheduler_request_resamples_opaque_component_inputs() ->
 
     component = Opaque()
     message_root = MessageRoot(component, access=Everyone(), scheduler=scheduler, timeout=None)
-    message: Any = fake_message()
+    message: Any = message_harness()
     await message_root.send(delivered_to(message))
     component.value = "second"
 
@@ -268,7 +268,7 @@ async def test_a_dropped_conditional_read_stops_refreshing() -> None:
     panel = Panel(workspace)
     panel.show_detail = True
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
     assert set(message_root.followed) == {address(workspace, "selected"), address(workspace, "detail")}
 
     panel.show_detail = False
@@ -284,7 +284,7 @@ async def test_a_discarded_staged_render_leaves_no_permanent_follow() -> None:
     workspace = Workspace(bus, Member(1))
     panel = Panel(workspace)
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
     panel.show_detail = True
     candidate = message_root._stage()
@@ -308,7 +308,7 @@ async def test_a_discarded_staged_render_keeps_the_visible_generations_follow() 
     workspace = Workspace(bus, Member(1))
     panel = Swapper(workspace)
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
     assert message_root.followed == (address(workspace, "selected"),)
 
     panel.other = True
@@ -336,7 +336,7 @@ async def test_a_delivered_render_retires_what_the_old_one_needed() -> None:
     workspace = Workspace(bus, Member(1))
     panel = Swapper(workspace)
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
 
     panel.other = True
     await message_root.refresh()
@@ -349,7 +349,7 @@ async def test_no_follow_outlives_its_root() -> None:
     scheduler = MessageRootScheduler(bus)
     workspace = Workspace(bus, Member(1))
     message_root = MessageRoot(Panel(workspace), access=Everyone(), scheduler=scheduler)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
     assert bus.snapshot().topics != ()
 
     await message_root.finish(disable=False)
@@ -363,7 +363,7 @@ async def test_a_namespace_dropped_by_its_last_message_root_is_collected() -> No
     workspace = Workspace(bus, Member(1))
     gone = weakref.ref(workspace)
     message_root = MessageRoot(Panel(workspace), access=Everyone(), scheduler=scheduler)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
     await message_root.finish(disable=False)
 
     del workspace, message_root
@@ -376,7 +376,7 @@ async def test_a_scheduler_that_cannot_follow_says_so_once(caplog: pytest.LogCap
     workspace = Workspace(bus, Member(1))
     message_root = MessageRoot(Panel(workspace), access=Everyone())
     with caplog.at_level("WARNING"):
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         await message_root.refresh()
     assert sum("scheduler has no topic bus" in record.message for record in caplog.records) == 1
 
@@ -392,8 +392,8 @@ class TestSelfWrites:
 
     async def test_the_writing_message_root_repaints_in_its_own_interaction(self) -> None:
         workspace, _, message_root = self.panel()
-        await message_root.send(delivered_to(fake_message()))
-        interaction = fake_interaction()
+        await message_root.send(delivered_to(message_harness()))
+        interaction = interaction_harness()
 
         await message_root.dispatch("pick", interaction)
 
@@ -407,9 +407,9 @@ class TestSelfWrites:
         scheduler = MessageRootScheduler(bus)
         workspace = Workspace(bus, Member(1))
         message_root = MessageRoot(Writer(workspace), access=Everyone(), scheduler=scheduler, timeout=None)
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(delivered_to(message))
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("pick", interaction)
         await sd.drain(scheduler)
@@ -421,11 +421,11 @@ class TestSelfWrites:
 
     async def test_a_suppressed_refresh_keeps_the_live_generation_dispatchable(self) -> None:
         workspace, _, message_root = self.panel()
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         generation = message_root.generation
 
         status = await message_root.refresh()
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("aside", interaction, generation=generation)
 
         assert status is PresentationStatus.UNCHANGED
@@ -435,18 +435,18 @@ class TestSelfWrites:
     async def test_it_works_without_a_reactor_to_deliver_the_topic(self) -> None:
         """The observed set is what the render read; subscribing is a separate, optional thing."""
         _, _, message_root = self.panel()
-        await message_root.send(delivered_to(fake_message()))
+        await message_root.send(delivered_to(message_harness()))
         assert message_root.followed == (), "no scheduler, so nothing is subscribed"
         assert message_root.observed != ()
 
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await message_root.dispatch("pick", interaction)
         assert interaction.response.edit_message.await_count == 1
 
     async def test_a_write_to_a_cell_it_does_not_render_changes_nothing(self) -> None:
         _, panel, message_root = self.panel()
-        await message_root.send(delivered_to(fake_message()))
-        interaction = fake_interaction()
+        await message_root.send(delivered_to(message_harness()))
+        interaction = interaction_harness()
 
         await message_root.dispatch("aside", interaction)
 
@@ -458,8 +458,8 @@ class TestSelfWrites:
         release = asyncio.Event()
         workspace, _, message_root = self.panel(busy=sl.interactions.BusySpec(pending="Working…"), run=release.wait)
         message_root.pending_after = 0
-        await message_root.send(delivered_to(fake_message()))
-        interaction = fake_interaction()
+        await message_root.send(delivered_to(message_harness()))
+        interaction = interaction_harness()
 
         async def press() -> None:
             await message_root.dispatch("pick", interaction)
@@ -476,8 +476,8 @@ class TestSelfWrites:
 
     async def test_a_rolled_back_action_leaves_the_message_root_clean(self) -> None:
         _, _, message_root = self.panel()
-        await message_root.send(delivered_to(fake_message()))
-        interaction = fake_interaction()
+        await message_root.send(delivered_to(message_harness()))
+        interaction = interaction_harness()
 
         await message_root.dispatch("boom", interaction)
 
@@ -485,7 +485,7 @@ class TestSelfWrites:
 
     async def test_a_write_racing_a_candidate_survives_its_commit(self) -> None:
         workspace, _, message_root = self.panel()
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(delivered_to(message))
         started = asyncio.Event()
         release = asyncio.Event()
@@ -497,7 +497,7 @@ class TestSelfWrites:
 
         message.edit = edit
         workspace.selected = 3
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         async def dispatch() -> None:
             await message_root.dispatch("pick", interaction)
@@ -519,7 +519,7 @@ class TestSelfWrites:
         workspace = Workspace(bus, Member(1))
         panel = Swapper(workspace)
         message_root = MessageRoot(panel, access=Everyone(), timeout=None, pending_after=30)
-        message: Any = fake_message()
+        message: Any = message_harness()
         await message_root.send(delivered_to(message))
         assert message_root.observed == (address(workspace, "selected"),)
 
@@ -533,7 +533,7 @@ class TestSelfWrites:
 
         message.edit = edit
         panel.other = True
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         async def dispatch() -> None:
             await message_root.dispatch("detail", interaction)

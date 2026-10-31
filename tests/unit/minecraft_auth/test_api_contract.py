@@ -1,7 +1,6 @@
 """Isolated tests for the strict Minecraft authorization HTTP contract."""
 
-from dataclasses import replace
-from types import SimpleNamespace
+from dataclasses import dataclass, replace
 from uuid import UUID, uuid4
 
 import pytest
@@ -27,7 +26,8 @@ from squid.api.v1.schemas.minecraft_auth import (
     PaperChallengeCreateRequest,
 )
 from squid.core.errors import AuthenticationError
-from squid.idempotency import PendingRequest
+from squid.idempotency import IdempotencyService, PendingRequest
+from squid.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     IssuedInstallationCredential,
@@ -40,6 +40,7 @@ from squid.minecraft_auth.domain import (
     PublicServerProfile,
 )
 from squid.minecraft_auth.errors import AuthorizationPendingError
+from tests.unit.api.fakes import TEST_CONFIG
 
 pytestmark = pytest.mark.asyncio
 
@@ -96,7 +97,7 @@ def grant(*, origin: MinecraftClientOrigin, installation_id: UUID | None = None)
     return IssuedPlayerGrant(grant=stored, token=f"sqpt_{GRANT_ID.hex}_{'p' * 43}")
 
 
-class FakeInstallations:
+class FakeInstallations(InstallationCredentialService):
     def __init__(self) -> None:
         self.current = installation()
         self.authenticated_token: str | None = None
@@ -153,7 +154,7 @@ class FakeInstallations:
         )
 
 
-class FakePlayers:
+class FakePlayers(PlayerAuthorizationService):
     def __init__(self) -> None:
         self.paper_installation: AuthenticatedPaperInstallation | None = None
         self.fabric_proof: tuple[UUID, str] | None = None
@@ -233,10 +234,18 @@ def app_with_fakes(
     signed_in: bool = True,
     idempotency: RecordingIdempotency | None = None,
 ) -> FastAPI:
+    @dataclass(frozen=True, slots=True)
+    class Services:
+        idempotency: IdempotencyService | RecordingIdempotency | None
+
+    @dataclass(frozen=True, slots=True)
+    class Runtime:
+        services: Services
+
     app = FastAPI()
-    app.state.runtime = SimpleNamespace(services=SimpleNamespace(idempotency=idempotency))
-    app.state.config = SimpleNamespace(
-        minecraft_auth=SimpleNamespace(verification_uri=VERIFICATION_URI),
+    app.state.runtime = Runtime(Services(idempotency))
+    app.state.config = TEST_CONFIG.model_copy(
+        update={"minecraft_auth": TEST_CONFIG.minecraft_auth.model_copy(update={"verification_uri": VERIFICATION_URI})}
     )
     register_exception_handlers(app)
     app.include_router(router)

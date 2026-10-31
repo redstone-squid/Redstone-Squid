@@ -1,7 +1,7 @@
 """Isolated tests for the strict CLI authorization HTTP contract."""
 
 import base64
-from types import SimpleNamespace
+from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 import pytest
@@ -20,6 +20,7 @@ from squid.api.v1.cli_auth import (
     router,
 )
 from squid.api.v1.schemas.cli_auth import CliEnrollmentCreateRequest
+from squid.cli_auth.application import CliAuthorizationService
 from squid.cli_auth.domain import (
     CliDevice,
     CliDeviceEnrollment,
@@ -31,7 +32,8 @@ from squid.cli_auth.domain import (
     IssuedCliSessionChallenge,
 )
 from squid.cli_auth.errors import CliAuthorizationPendingError
-from squid.idempotency import PendingRequest
+from squid.idempotency import IdempotencyService, PendingRequest
+from tests.unit.api.fakes import TEST_CONFIG
 
 pytestmark = pytest.mark.asyncio
 
@@ -94,7 +96,7 @@ def issued_session() -> IssuedCliSession:
     )
 
 
-class FakeCliAuthorization:
+class FakeCliAuthorization(CliAuthorizationService):
     """Record HTTP-to-application translations and return stable domain values."""
 
     def __init__(self) -> None:
@@ -183,9 +185,19 @@ def app_with_fake(
     *,
     idempotency: RecordingIdempotency | None = None,
 ) -> FastAPI:
+    @dataclass(frozen=True, slots=True)
+    class Services:
+        idempotency: IdempotencyService | RecordingIdempotency | None
+
+    @dataclass(frozen=True, slots=True)
+    class Runtime:
+        services: Services
+
     app = FastAPI()
-    app.state.runtime = SimpleNamespace(services=SimpleNamespace(idempotency=idempotency))
-    app.state.config = SimpleNamespace(cli_auth=SimpleNamespace(verification_uri=VERIFICATION_URI))
+    app.state.runtime = Runtime(Services(idempotency))
+    app.state.config = TEST_CONFIG.model_copy(
+        update={"cli_auth": TEST_CONFIG.cli_auth.model_copy(update={"verification_uri": VERIFICATION_URI})}
+    )
     register_exception_handlers(app)
     app.include_router(router)
 

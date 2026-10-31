@@ -8,7 +8,7 @@ from difflib import get_close_matches
 from enum import StrEnum
 
 from squid.core.errors import InvalidStateError, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.search.domain.query import ScalarValue
 
 
@@ -44,8 +44,7 @@ class FieldRegistry:
             for name in (field.name, *field.aliases):
                 key = name.casefold()
                 if key in self._fields:
-                    msg = _("duplicate search field or alias: {name}")
-                    raise InvalidStateError(msg, message_params={"name": name})
+                    raise InvalidStateError(tr(t"duplicate search field or alias: {name}"))
                 self._fields[key] = field
 
     def resolve(self, name: str) -> FieldDefinition | None:
@@ -66,22 +65,22 @@ class FieldRegistry:
             try:
                 number = _coerce_decimal(raw, field)
             except (InvalidOperation, ValueError) as error:
-                msg = _("{field_name} expects a number")
-                raise ValidationError(msg, message_params={"field_name": field.name}) from error
+                field_name = field.name
+                raise ValidationError(tr(t"{field_name} expects a number")) from error
             return number
         if field.value_type is FieldType.TIMESTAMP:
             try:
                 return datetime.fromisoformat(raw).isoformat()
             except ValueError as error:
-                msg = _("{field_name} expects an ISO-8601 date or timestamp")
-                raise ValidationError(msg, message_params={"field_name": field.name}) from error
+                field_name = field.name
+                raise ValidationError(tr(t"{field_name} expects an ISO-8601 date or timestamp")) from error
         lowered = raw.casefold()
         if lowered in {"true", "yes", "1"}:
             return True
         if lowered in {"false", "no", "0"}:
             return False
-        msg = _("{field_name} expects a boolean")
-        raise ValidationError(msg, message_params={"field_name": field.name})
+        field_name = field.name
+        raise ValidationError(tr(t"{field_name} expects a boolean"))
 
     @property
     def names(self) -> tuple[str, ...]:
@@ -146,9 +145,10 @@ def _coerce_decimal(raw: str, field: FieldDefinition) -> Decimal:
         else:
             value = Decimal(normalized)
     if not value.is_finite():
-        msg = _("Search numbers must be finite")
+        msg = tr(t"Search numbers must be finite")
         raise ValidationError(msg)
     if field.numeric_step is not None and value % field.numeric_step != 0:
-        msg = _("{field_name} must align to increments of {step}")
-        raise ValidationError(msg, message_params={"field_name": field.name, "step": str(field.numeric_step)})
+        field_name = field.name
+        step = str(field.numeric_step)
+        raise ValidationError(tr(t"{field_name} must align to increments of {step}"))
     return value

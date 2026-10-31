@@ -6,7 +6,7 @@ from uuid import UUID
 
 from squid.accounts.errors import ConsentRequiredError
 from squid.core.errors import InvalidStateError, ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.events import DomainEvent
 from squid.notifications.domain import (
@@ -77,7 +77,7 @@ class NotificationService:
 
     def __init__(self, repository: NotificationRepository, *, retention_days: int = 90) -> None:
         if retention_days < 1:
-            msg = _("retention_days must be positive")
+            msg = tr(t"retention_days must be positive")
             raise InvalidStateError(msg)
         self._repository = repository
         self._retention_days = retention_days
@@ -111,10 +111,10 @@ class NotificationService:
             raise ConsentRequiredError(account_id=account_id)
         if kind is SubscriptionKind.RECORD_FILTER:
             if subject_id is not None or record_filter is None:
-                msg = _("record_filter subscriptions require only a structured filter")
+                msg = tr(t"record_filter subscriptions require only a structured filter")
                 raise ValidationError(msg)
         elif subject_id is None or record_filter is not None:
-            msg = _("creator and record subscriptions require only a subject_id")
+            msg = tr(t"creator and record subscriptions require only a subject_id")
             raise ValidationError(msg)
         elif not await self._repository.subscription_target_exists(kind, subject_id):
             raise NotificationSubscriptionNotFoundError(public_context={"subject_id": str(subject_id)})
@@ -144,7 +144,7 @@ class NotificationService:
     ) -> Page[InboxNotification]:
         """Return one page of web-visible inbox items in newest-first display order."""
         if not 1 <= page_size <= 100:
-            msg = _("page_size must be between 1 and 100")
+            msg = tr(t"page_size must be between 1 and 100")
             raise InvalidStateError(msg)
         rows = await self._repository.list_inbox(
             account_id,
@@ -182,7 +182,7 @@ class NotificationService:
     async def claim_deliveries(self, *, limit: int = 20) -> Sequence[PendingNotificationDelivery]:
         """Claim ready Discord DMs with database-clock UUID fencing tokens."""
         if not 1 <= limit <= 100:
-            msg = _("delivery claim limit must be between 1 and 100")
+            msg = tr(t"delivery claim limit must be between 1 and 100")
             raise InvalidStateError(msg)
         return await self._repository.claim_deliveries(limit=limit)
 

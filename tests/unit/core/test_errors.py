@@ -2,11 +2,11 @@
 
 from uuid import UUID
 
-import pytest
-
 from squid.accounts.errors import AccountAlreadyLinkedError
 from squid.builds.errors import BuildNotFoundError, InvalidBuildError
 from squid.core.errors import ErrorCode, InvalidStateError
+from squid.core.i18n import localization_for, tr
+from squid_ui.text import localization_scope
 
 MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -50,51 +50,23 @@ def test_with_context_can_restate_the_message() -> None:
     assigning `message` by hand, which skips the `args` refresh and leaves `str(error)` stale.
     """
     error = BuildNotFoundError(42)
+    build_id = 42
 
-    updated = error.with_context(
-        message="Build {build_id} was deleted while you were editing it.",
-        message_params={"build_id": 42},
-    )
+    updated = error.with_context(message=tr(t"Build {build_id} was deleted while you were editing it."))
 
     assert "Build 42 was deleted" in updated.public_detail()
     assert "Build 42 was deleted" in str(updated)
     assert updated.args == (updated.backend_detail(),)
 
 
-def test_with_context_merges_message_params() -> None:
-    """So a later layer can add one placeholder without repeating the earlier ones."""
-    error = BuildNotFoundError(42).with_context(
-        message="Build {build_id} is held by {holder}.",
-        message_params={"build_id": 42, "holder": "nobody"},
-    )
+def test_with_context_replaces_the_complete_deferred_message() -> None:
+    build_id = 42
+    holder = "someone else"
+    error = BuildNotFoundError(build_id)
 
-    updated = error.with_context(message_params={"holder": "someone else"})
+    updated = error.with_context(message=tr(t"Build {build_id} is held by {holder}."))
 
     assert "Build 42 is held by someone else." in updated.public_detail()
-
-
-def test_a_message_with_no_params_at_all_is_left_unformatted() -> None:
-    """Pinning a sharp edge that predates `with_context` accepting a message.
-
-    `_rendered_message` only calls `format` when `message_params` is non-empty, so a placeholder with
-    no params anywhere reaches the user as literal braces rather than raising. Pass every placeholder
-    you introduce; this asserts the failure mode so it is a known one.
-    """
-    error = BuildNotFoundError(42).with_context(message="Held by {holder}.")
-
-    assert error.public_detail().startswith("Held by {holder}.")
-
-
-def test_a_partially_filled_message_fails_loudly() -> None:
-    """Once any param is present, formatting runs, so a missing one raises at enrichment time.
-
-    Better here than from whichever transport formats the error first.
-    """
-    with pytest.raises(KeyError):
-        BuildNotFoundError(42).with_context(
-            message="Build {build_id} held by {holder}.",
-            message_params={"build_id": 42},
-        )
 
 
 def test_context_and_public_context_are_separate() -> None:
@@ -111,21 +83,23 @@ def test_semantic_errors_retain_builtin_compatibility() -> None:
     assert isinstance(BuildNotFoundError(1), LookupError)
 
 
-def test_message_params_render_in_backend_and_public_detail() -> None:
+def test_deferred_message_params_render_in_backend_and_public_detail() -> None:
     from squid.builds.errors import RestrictionNotFoundError
 
     error = RestrictionNotFoundError("no-pistons")
 
     assert error.backend_detail() == "Restriction 'no-pistons' does not exist."
-    assert error.public_detail() == "Restriction 'no-pistons' does not exist."
+    assert error.public_detail() == "Restriction 'no\\-pistons' does not exist."
 
 
-def test_localized_title_and_public_detail_fall_back_to_english() -> None:
+def test_ambient_title_and_public_detail_fall_back_to_english() -> None:
     from squid.builds.errors import BuildNotFoundError as _BuildNotFoundError
 
     error = _BuildNotFoundError(42)
 
-    assert error.localized_title("en") == "Resource not found"
-    assert error.localized_public_detail("en") == "Build not found. Check the build ID and try again."
-    # Unsupported locale falls back to the English source text rather than erroring.
-    assert error.localized_public_detail("fr") == "Build not found. Check the build ID and try again."
+    with localization_scope(localization_for("en")):
+        assert tr(error.title) == "Resource not found"
+        assert error.public_detail() == "Build not found. Check the build ID and try again."
+    # Unsupported locales bind the English catalog rather than erroring.
+    with localization_scope(localization_for("fr")):
+        assert error.public_detail() == "Build not found. Check the build ID and try again."

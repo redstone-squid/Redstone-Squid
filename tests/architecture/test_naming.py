@@ -31,6 +31,7 @@ import squid_ui
 import squid_ui_discord
 import squid_ui_slack
 import squid_ui_widgets
+from tests.support.source_tree import source_tree
 
 PACKAGE_SOURCE_ROOTS = (
     Path("packages/squid-ui/src"),
@@ -313,7 +314,7 @@ def _classes_in_source() -> list[tuple[Path, ast.ClassDef]]:
         (path, node)
         for root in PACKAGE_SOURCE_ROOTS
         for path in root.rglob("*.py")
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        for node in ast.walk(source_tree(path))
         if isinstance(node, ast.ClassDef)
     ]
 
@@ -323,7 +324,7 @@ def _functions_in_source() -> list[tuple[Path, ast.FunctionDef | ast.AsyncFuncti
         (path, node)
         for root in PACKAGE_SOURCE_ROOTS
         for path in root.rglob("*.py")
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        for node in ast.walk(source_tree(path))
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
     ]
 
@@ -398,7 +399,7 @@ def test_replaced_package_and_module_names_stay_retired() -> None:
     imported: list[str] = []
     for root in PACKAGE_SOURCE_ROOTS:
         for path in root.rglob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = source_tree(path)
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     imported.extend(alias.name.split(".", maxsplit=1)[0] for alias in node.names)
@@ -441,7 +442,7 @@ def test_retired_identifier_words_stay_retired() -> None:
     seen: set[tuple[Path, str]] = set()
     for root in PACKAGE_SOURCE_ROOTS:
         for path in root.rglob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = source_tree(path)
             for node in ast.walk(tree):
                 name = None
                 if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
@@ -468,7 +469,7 @@ def test_annotated_identifiers_follow_their_type_vocabulary() -> None:
     offenders: list[str] = []
     for root in PACKAGE_SOURCE_ROOTS:
         for path in root.rglob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = source_tree(path)
             for node in ast.walk(tree):
                 pairs: list[tuple[str, ast.expr | None]] = []
                 if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -498,7 +499,7 @@ def test_constructor_assigned_identifiers_follow_their_type_vocabulary() -> None
     offenders: list[str] = []
     for root in PACKAGE_SOURCE_ROOTS:
         for path in root.rglob("*.py"):
-            tree = ast.parse(path.read_text(encoding="utf-8"))
+            tree = source_tree(path)
             for node in ast.walk(tree):
                 if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
                     continue

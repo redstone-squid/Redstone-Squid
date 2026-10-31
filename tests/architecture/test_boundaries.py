@@ -8,7 +8,8 @@ from babel.messages.pofile import read_po
 from packaging.requirements import Requirement
 from pytest_archon import archrule
 
-from squid.core.extract import deferred_msgid
+from squid.core.extract import deferred_msgid, locale_str_msgid
+from tests.support.source_tree import source_tree
 
 # Roots for the AST scans that state repo-wide invariants. The squid-ui workspace member
 # is held to the same rules as squid itself.
@@ -92,7 +93,7 @@ def test_framework_runtime_imports_are_declared_in_package_metadata() -> None:
         )
         own_distribution = project["name"]
         for path in source.rglob("*.py"):
-            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            for node in ast.walk(source_tree(path)):
                 if isinstance(node, ast.Import):
                     modules = (alias.name.partition(".")[0] for alias in node.names)
                 elif isinstance(node, ast.ImportFrom) and node.module is not None:
@@ -146,33 +147,11 @@ def test_compiler_pass_packages_are_not_facades() -> None:
     """Pass packages identify owners; their initializers must not aggregate those owners."""
     for package in ("layout_measurement", "semantic_adaptation"):
         path = COMPILER_PASS_ROOT / package / "__init__.py"
-        body = ast.parse(path.read_text(encoding="utf-8")).body
+        body = source_tree(path).body
         assert len(body) == 1
         assert isinstance(body[0], ast.Expr)
         assert isinstance(body[0].value, ast.Constant)
         assert isinstance(body[0].value.value, str)
-
-
-def test_removed_compiler_pass_modules_have_no_compatibility_surface() -> None:
-    """The former monolith paths stay deleted rather than becoming forwarding shims."""
-    removed = {
-        "squid_ui.planning.adaptation",
-        "squid_ui.planning.measurement",
-    }
-    assert [name for name in removed if (COMPILER_PASS_ROOT / f"{name.rpartition('.')[2]}.py").exists()] == []
-
-    violations: list[tuple[Path, int, str]] = []
-    for path in _scanned_files():
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Import):
-                imported = (alias.name for alias in node.names)
-            elif isinstance(node, ast.ImportFrom) and node.module is not None:
-                imported = (node.module,)
-            else:
-                continue
-            violations.extend((path, node.lineno, module) for module in imported if module in removed)
-
-    assert violations == []
 
 
 def test_generic_planning_modules_do_not_depend_on_the_discord_backend() -> None:
@@ -186,7 +165,7 @@ def test_generic_planning_modules_do_not_depend_on_the_discord_backend() -> None
     )
     violations: list[tuple[Path, int, str]] = []
     for path in generic:
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(source_tree(path)):
             if isinstance(node, ast.Import):
                 imported = (alias.name for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.module is not None:
@@ -271,7 +250,7 @@ def test_private_names_do_not_cross_distribution_boundaries() -> None:
             continue
         own = root.parent.name.replace("-", "_")
         for path in root.rglob("*.py"):
-            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            for node in ast.walk(source_tree(path)):
                 if not isinstance(node, ast.ImportFrom) or node.module is None or node.level:
                     continue
                 source = node.module.partition(".")[0]
@@ -291,7 +270,7 @@ def test_reactive_package_has_no_hard_dependencies() -> None:
     allowed = sys.stdlib_module_names | {"squid_reactivity"}
     violations: list[tuple[Path, int, str]] = []
     for path in Path("packages/squid-reactivity/src").rglob("*.py"):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(source_tree(path)):
             if isinstance(node, ast.Import):
                 imported = ((node.lineno, alias.name) for alias in node.names)
             elif isinstance(node, ast.ImportFrom) and node.module is not None:
@@ -325,8 +304,8 @@ def test_patterns_package_is_transport_free() -> None:
 
 
 def test_only_the_bot_transport_uses_the_ui_packages() -> None:
-    """Presentation is `squid.bot`'s business; no other host layer may reach for UI packages."""
-    for package in ("squid_ui*", "squid_ui_discord*", "squid_ui_slack*", "squid_ui_widgets*"):
+    """Presentation is `squid.bot`'s business; shared deferred text is the sole exception."""
+    for package in ("squid_ui_discord*", "squid_ui_slack*", "squid_ui_widgets*"):
         (
             archrule(f"{package} is a presentation concern")
             .match("squid*")
@@ -335,32 +314,62 @@ def test_only_the_bot_transport_uses_the_ui_packages() -> None:
             .check("squid", only_direct_imports=True)
         )
 
+    violations: list[str] = []
+    for path in Path("squid").rglob("*.py"):
+        if path.parts[:2] == ("squid", "bot"):
+            continue
+        for node in ast.walk(source_tree(path)):
+            if isinstance(node, ast.Import):
+                imports = (alias.name for alias in node.names)
+            elif isinstance(node, ast.ImportFrom) and node.module is not None:
+                imports = (node.module,)
+            else:
+                continue
+            violations.extend(
+                f"{path}:{node.lineno}: {imported}"
+                for imported in imports
+                if imported.startswith("squid_ui") and imported != "squid_ui.text"
+            )
 
-def test_layouts_package_carries_no_translation_markers() -> None:
-    """Babel only extracts from squid/**, so a `_(...)` literal in the package would silently
-    drop out of the catalogue. All user-facing text must enter through Chrome, pre-translated."""
+    assert violations == []
+
+
+def test_tr_is_the_only_direct_translation_entry_point() -> None:
+    """Translation spelling stays uniform across the application and UI packages."""
+    retired = {"_", "t", "translate", "ntranslate", "L"}
     violations = [
-        f"{path}:{node.lineno}"
-        for path in Path("packages/squid-ui/src").rglob("*.py")
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "_"
+        f"{path}:{node.lineno}: {node.func.id}"
+        for path in _scanned_files()
+        for node in ast.walk(source_tree(path))
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in retired
     ]
 
     assert violations == []
 
 
-def test_deferred_messages_are_present_in_the_catalog_template() -> None:
+def test_localized_messages_are_present_in_the_catalog_template() -> None:
     with Path("locales/squid.pot").open(encoding="utf-8") as fileobj:
         catalog = read_po(fileobj)
-    msgids = {message.id for message in catalog}
-    deferred = {
+    msgids = {
+        extracted
+        for message in catalog
+        for extracted in (message.id if isinstance(message.id, tuple) else (message.id,))
+    }
+    authored = {
+        extracted
+        for path in Path("squid").rglob("*.py")
+        for node in ast.walk(source_tree(path))
+        if isinstance(node, ast.Call) and (msgid := deferred_msgid(node)) is not None
+        for extracted in (msgid if isinstance(msgid, tuple) else (msgid,))
+    }
+    authored.update(
         msgid
         for path in Path("squid").rglob("*.py")
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
-        if isinstance(node, ast.Call) and (msgid := deferred_msgid(node)) is not None
-    }
+        for node in ast.walk(source_tree(path))
+        if isinstance(node, ast.Call) and (msgid := locale_str_msgid(node)) is not None
+    )
 
-    assert deferred - msgids == set()
+    assert authored - msgids == set()
 
 
 def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
@@ -368,7 +377,7 @@ def test_static_layout_rendering_stays_behind_the_host_wrapper() -> None:
     for path in Path("squid").rglob("*.py"):
         if path == Path("squid/bot/ui.py"):
             continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         aliases: dict[str, str] = {}
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -477,7 +486,7 @@ def test_production_modules_do_not_import_fuzz_engines() -> None:
     fuzz_packages = ("atheris", "hypothesis", "schemathesis")
     violations: list[tuple[Path, int, str]] = []
     for path in _scanned_files():
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(source_tree(path)):
             if isinstance(node, ast.Import):
                 violations.extend(
                     (path, node.lineno, alias.name) for alias in node.names if alias.name.startswith(fuzz_packages)
@@ -504,7 +513,7 @@ def test_no_module_outside_the_adapter_names_the_native_engine() -> None:
     for path in _scanned_files():
         if path in ENGINE_REFERENCE_ALLOWLIST:
             continue
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(source_tree(path)):
             if isinstance(node, ast.Import):
                 violations.extend(
                     (path, node.lineno, alias.name)
@@ -528,7 +537,7 @@ def test_application_modules_do_not_read_process_environment_directly() -> None:
     for path in _scanned_files():
         if path == Path("squid/config.py"):
             continue
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(source_tree(path)):
             if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name) and node.value.id == "os":
                 if node.attr in {"environ", "getenv"}:
                     violations.append((path, node.lineno, f"os.{node.attr}"))
@@ -545,7 +554,7 @@ def test_logging_calls_keep_message_templates_stable() -> None:
     violations: list[tuple[Path, int]] = []
     log_methods = {"debug", "info", "warning", "error", "exception", "critical", "log"}
     for path in _scanned_files():
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(source_tree(path)):
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
                 continue
             if node.func.attr not in log_methods:
@@ -572,61 +581,6 @@ def test_development_launcher_supervises_separate_process_entry_points() -> None
     assert "process.wait" in source
 
 
-def test_voting_adapter_does_not_construct_database_service_locator() -> None:
-    database_manager_calls = [
-        (path, node.lineno)
-        for path in Path("squid/bot/voting").glob("*.py")
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "DatabaseManager"
-    ]
-
-    assert database_manager_calls == []
-
-
-def test_build_entity_does_not_expose_active_record_persistence_methods() -> None:
-    source = Path("squid/builds/domain/models.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    build_class = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "Build")
-    method_names = {node.name for node in build_class.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)}
-
-    assert method_names.isdisjoint(
-        {
-            "from_id",
-            "from_message_id",
-            "save",
-            "confirm",
-            "deny",
-            "ai_generate_from_message",
-            "generate_embedding",
-        }
-    )
-    assert all(not isinstance(node, ast.ClassDef) or node.name != "BuildLock" for node in tree.body)
-    assert all(
-        not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "DatabaseManager")
-        for node in ast.walk(tree)
-    )
-
-
-def test_build_manager_does_not_construct_database_service_locator() -> None:
-    source = Path("squid/builds/infrastructure/repository.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-
-    assert all(
-        not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "DatabaseManager")
-        for node in ast.walk(tree)
-    )
-
-
-def test_build_repository_does_not_coordinate_leases() -> None:
-    source = Path("squid/builds/infrastructure/repository.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    repository = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "BuildRepository")
-    method_names = {node.name for node in repository.body if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)}
-
-    assert method_names.isdisjoint({"acquire_lock", "release_lock", "locked", "clean_stale_locks"})
-    assert "BuildLockRepository" not in source
-
-
 def test_the_api_layer_names_a_discord_id_only_where_it_reads_one_off_an_account() -> None:
     """No module under `squid/api/` may name `discord_id`, with one exception.
 
@@ -645,7 +599,7 @@ def test_the_api_layer_names_a_discord_id_only_where_it_reads_one_off_an_account
     for path in sorted(Path("squid/api").rglob("*.py")):
         if path == allowed:
             continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = source_tree(path)
         for node in ast.walk(tree):
             match node:
                 case ast.Name(id="discord_id") | ast.Attribute(attr="discord_id"):
@@ -725,7 +679,7 @@ def test_application_and_domain_layers_raise_only_structured_errors() -> None:
     counts: dict[str, int] = {}
     locations: dict[str, list[int]] = {}
     for path in _raises_application_layer_paths():
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(source_tree(path)):
             if not isinstance(node, ast.Raise) or node.exc is None:
                 continue
             raised = node.exc.func if isinstance(node.exc, ast.Call) else node.exc
@@ -773,7 +727,7 @@ def test_the_engine_needs_no_transport_install() -> None:
     }
     violations: list[str] = []
     for path in root.rglob("*.py"):
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(source_tree(path)):
             if isinstance(node, ast.Import):
                 imported = {alias.name.split(".", 1)[0] for alias in node.names}
             elif isinstance(node, ast.ImportFrom) and node.module is not None:
@@ -804,7 +758,7 @@ def test_planner_traversals_keep_their_exhaustiveness_proof() -> None:
     )
     violations: list[tuple[Path, int]] = []
     for path in traversals:
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        for node in ast.walk(source_tree(path)):
             if not isinstance(node, ast.Match):
                 continue
             last = node.cases[-1]

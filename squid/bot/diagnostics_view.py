@@ -15,7 +15,7 @@ import discord
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.ui import CHROME, L
+from squid.bot.ui import CHROME, tr
 from squid.diagnostics.domain import ErrorReport
 
 SESSION_SECONDS = 300
@@ -33,15 +33,15 @@ class ErrorReportOperations(Protocol):
 
 
 def _traceback_footer(page: int, pages: int) -> sl.TextLike:
-    section = L(t"Traceback")
-    return L(t"{section} — page {page} of {pages} · the attachment has the whole report")
+    section = tr(t"Traceback")
+    return tr(t"{section} — page {page} of {pages} · the attachment has the whole report")
 
 
 ERROR_CHROME = dataclasses.replace(
     CHROME,
-    not_yours=L(t"These error controls belong to someone else."),
-    previous=L(t"Earlier"),
-    next=L(t"Later"),
+    not_yours=tr(t"These error controls belong to someone else."),
+    previous=tr(t"Earlier"),
+    next=tr(t"Later"),
     page_footer=_traceback_footer,
 )
 
@@ -51,7 +51,7 @@ class ErrorReportScreen(sd.Screen):
 
     session_name = "errors"
     timeout = SESSION_SECONDS
-    visibility = sd.Private(L(t"An error report names internal paths, so it is never posted in a channel."))
+    visibility = sd.Private(tr(t"An error report names internal paths, so it is never posted in a channel."))
     root_options = {"chrome": ERROR_CHROME}
 
     work_lost_only: bool = sl.state(default=False)
@@ -76,13 +76,13 @@ class ErrorReportScreen(sd.Screen):
         self._browser: sp.Browser[ErrorReport, sl.ComponentsV2Target] | None = None
         self._clear_decision = sp.confirm(
             sl.section(
-                sl.heading(L(t"Clear every error report?")),
-                sl.paragraph(L(t"This permanently deletes reports that have not expired yet.")),
+                sl.heading(tr(t"Clear every error report?")),
+                sl.paragraph(tr(t"This permanently deletes reports that have not expired yet.")),
             ),
             key="clear-errors",
             on_confirm=self._clear,
             on_cancel=self._cancel_clear,
-            confirm_label=L(t"Delete reports"),
+            confirm_label=tr(t"Delete reports"),
         )
 
     async def on_load(self) -> None:
@@ -102,8 +102,8 @@ class ErrorReportScreen(sd.Screen):
             summary=_list_line,
             detail=lambda report: self._render_report(report, 1),
             page_size=10,
-            title=L(t"Recent errors"),
-            empty=L(t"Nothing has failed within the retention window."),
+            title=tr(t"Recent errors"),
+            empty=tr(t"Nothing has failed within the retention window."),
         )
 
     @property
@@ -121,8 +121,8 @@ class ErrorReportScreen(sd.Screen):
             return sl.Document(
                 (
                     sl.section(
-                        sl.heading(L(t"Errors cleared")),
-                        sl.paragraph(L(t"Deleted {count} stored error reports.")),
+                        sl.heading(tr(t"Errors cleared")),
+                        sl.paragraph(tr(t"Deleted {count} stored error reports.")),
                     ),
                 )
             )
@@ -131,18 +131,18 @@ class ErrorReportScreen(sd.Screen):
         if self._detail is not None:
             return sl.Document((self._render_report(self._detail, self._matches), self._detail_actions()))
         if self._browser is None:
-            return sl.Document((sl.status(L(t"Loading error reports.")),))
+            return sl.Document((sl.status(tr(t"Loading error reports.")),))
         return sl.Document(
             (
                 self.boundary(self._browser, key="browser"),
                 sl.action_controls(
                     sl.action_control(
-                        L(t"Show all") if self.work_lost_only else L(t"Show work lost only"),
+                        tr(t"Show all") if self.work_lost_only else tr(t"Show work lost only"),
                         self._toggle_filter,
                         key="filter",
                     ),
                     sl.action_control(
-                        L(t"Clear all"),
+                        tr(t"Clear all"),
                         self._confirm_clear,
                         key="clear",
                         tone=sl.Tone.DANGER,
@@ -157,16 +157,16 @@ class ErrorReportScreen(sd.Screen):
 
     def _render_report(self, report: ErrorReport, matches: int) -> sl.LayoutNode[sl.ComponentsV2Target]:
         reference = report.reference
-        traceback_text: sl.TextLike = report.traceback.strip() or L(t"No traceback was recorded.")
+        traceback_text: sl.TextLike = report.traceback.strip() or tr(t"No traceback was recorded.")
         children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
-            sl.primitives.Heading(L(t"Error {reference}")),
+            sl.primitives.Heading(tr(t"Error {reference}")),
             # Opens at the end because the failing frame is the last one.
             sl.primitives.Code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", initial="end")),
         ]
         if report.log_tail:
             # The run-up to the failure: its last lines matter most, so it trims from the
             # front; the attachment carries all of it.
-            children.append(sl.primitives.Heading(L(t"Log tail"), level=3, priority=2))
+            children.append(sl.primitives.Heading(tr(t"Log tail"), level=3, priority=2))
             children.append(
                 sl.primitives.Code(
                     "\n".join(report.log_tail), overflow=sl.primitives.Truncate(keep="tail"), priority=-8
@@ -175,7 +175,7 @@ class ErrorReportScreen(sd.Screen):
         children.append(sl.fields(*_summary_fields(report, matches)))
         children.append(
             sl.download(
-                L(t"Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG
+                tr(t"Full report"), report_asset(report), key="full-report", emphasis=sl.semantic.Emphasis.STRONG
             )
         )
         return sl.stack(*children)
@@ -185,7 +185,7 @@ class ErrorReportScreen(sd.Screen):
 
     def _close_action(self) -> sl.semantic.ActionControl:
         return sl.action_control(
-            L(t"Close"),
+            tr(t"Close"),
             self._close,
             key="close",
         )
@@ -201,7 +201,7 @@ class ErrorReportScreen(sd.Screen):
     async def _clear(self, event: sp.TransitionEvent[sp.DecisionState]) -> None:
         if self._authorize_clear is None or not await self._authorize_clear():
             self.confirming_clear = False
-            await event.source.notice(L(t"You are no longer allowed to clear error reports."))
+            await event.source.notice(tr(t"You are no longer allowed to clear error reports."))
             return
         self.cleared_count = await self._operations.clear_all()
         self.confirming_clear = False
@@ -253,23 +253,23 @@ def _summary_fields(report: ErrorReport, matches: int) -> list[sl.semantic.Field
     identifier = sl.raw_md(f"`{report.correlation_id}`")
     entries = [
         sl.field(
-            L(t"When"),
+            tr(t"When"),
             sl.md(t"{report.occurred_at.to_stdlib()}"),
         ),
-        sl.field(L(t"Where"), sl.md(t"{report.surface} — {report.origin or '—'}")),
-        sl.field(L(t"Exception"), sl.md(t"{report.exception_type}")),
-        sl.field(L(t"Full ID"), sl.md(t"{identifier}")),
+        sl.field(tr(t"Where"), sl.md(t"{report.surface} — {report.origin or '—'}")),
+        sl.field(tr(t"Exception"), sl.md(t"{report.exception_type}")),
+        sl.field(tr(t"Full ID"), sl.md(t"{identifier}")),
     ]
     if report.work_lost:
-        entries.append(sl.field(L(t"Work lost"), L(t"This job was abandoned; nothing will retry it.")))
+        entries.append(sl.field(tr(t"Work lost"), tr(t"This job was abandoned; nothing will retry it.")))
     if matches > 1:
         # The reference is a 48-bit prefix, not a key. Silently showing the newest of several
         # would have a moderator confidently reading the wrong incident.
         count = matches
         entries.append(
             sl.field(
-                L(t"Ambiguous"),
-                L(t"{count} reports share this reference; this is the newest."),
+                tr(t"Ambiguous"),
+                tr(t"{count} reports share this reference; this is the newest."),
             )
         )
     return entries

@@ -20,8 +20,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.i18n import localization_for, resolve_locale
-from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, L
-from squid.core.i18n import _
+from squid.bot.ui import DISCORD_BLUE, DISCORD_GREEN, DISCORD_YELLOW, tr
 from squid_replication import ReferenceBackend, Replica, ReplicatedDocument
 from squid_ui_discord import SessionKey
 from squid_ui_discord.session_specs import OpenContext
@@ -61,10 +60,10 @@ _DOOR_KINDS = ("piston door", "trapdoor", "hipster door", "bridge door", "vault 
 _DOOR_SIZES = ("2x2", "3x3", "4x4", "5x5", "3x2", "4x3", "6x6")
 
 _SAMPLE_BUILDS = (
-    (L(t"Flush piston door"), "4x4", "1.6s"),
-    (L(t"Hipster trapdoor"), "3x3", "0.9s"),
-    (L(t"Bridge door"), "2x2", "0.7s"),
-    (L(t"Vault door"), "5x5", "2.4s"),
+    (tr(t"Flush piston door"), "4x4", "1.6s"),
+    (tr(t"Hipster trapdoor"), "3x3", "0.9s"),
+    (tr(t"Bridge door"), "2x2", "0.7s"),
+    (tr(t"Vault door"), "5x5", "2.4s"),
 )
 
 _LONG_DESCRIPTION = (
@@ -114,7 +113,7 @@ _SOURCE_EXAMPLES = {
 return sl.section(sl.heading("A long list"), lines)""",
     "adaptation": """choices = tuple(
     sl.action_control(
-        L(t"Option {number}"),
+        tr(t"Option {number}"),
         on_choice,
         key=f"action.{number}",
     )
@@ -201,8 +200,8 @@ return sl.form("Open the feedback form", FeedbackForm(**prefill), key="feedback"
     "localization": """def render(self):
     build_title = self.build.title
     return sl.paragraph(
-        # L keeps the catalogue key and the value until the mount plans a locale.
-        L(t"Build: {build_title}")
+        # tr keeps the catalogue key and the value until the mount plans a locale.
+        tr(t"Build: {build_title}")
     )
 
 async def switch_language(self, event: sl.PressEvent) -> None:
@@ -304,11 +303,11 @@ class DemoCounter(sl.Component[sl.ComponentsV2Target]):
         return sl.primitives.Panel(
             (
                 sl.primitives.Heading(self.label, level=3),
-                sl.primitives.Text(L(t"Pressed {count} times")),
+                sl.primitives.Text(tr(t"Pressed {count} times")),
                 sl.primitives.Row(
                     (
                         sl.primitives.Button(
-                            L(t"Add one"),
+                            tr(t"Add one"),
                             self._increment,
                             "increment",
                             style=sl.primitives.ActionStyle.SUCCESS,
@@ -324,27 +323,27 @@ class DemoCounter(sl.Component[sl.ComponentsV2Target]):
 
 
 _FEEDBACK_EXHIBITS = (
-    sl.forms.ChoiceOption("pagination", L(t"Long lists"), "pagination"),
-    sl.forms.ChoiceOption("adaptation", L(t"Too many choices"), "adaptation"),
-    sl.forms.ChoiceOption("degradation", L(t"Running out of room"), "degradation"),
-    sl.forms.ChoiceOption("data", L(t"Numbers and clocks"), "data"),
-    sl.forms.ChoiceOption("ownership", L(t"Who remembers a switch"), "ownership"),
+    sl.forms.ChoiceOption("pagination", tr(t"Long lists"), "pagination"),
+    sl.forms.ChoiceOption("adaptation", tr(t"Too many choices"), "adaptation"),
+    sl.forms.ChoiceOption("degradation", tr(t"Running out of room"), "degradation"),
+    sl.forms.ChoiceOption("data", tr(t"Numbers and clocks"), "data"),
+    sl.forms.ChoiceOption("ownership", tr(t"Who remembers a switch"), "ownership"),
 )
 
 
 class FeedbackForm(sl.forms.Form):
     """A typed schema, presented however the dispatching frontend can present it."""
 
-    title = L(t"Tell us about an exhibit")
+    title = tr(t"Tell us about an exhibit")
 
-    exhibit = sl.forms.ChoiceField(label=L(t"Which exhibit"), options=_FEEDBACK_EXHIBITS)
-    headline = sl.forms.TextField(label=L(t"In one line, what did it show you"), minimum=4, maximum=80)
-    detail = sl.forms.TextAreaField(label=L(t"Anything else"), required=False, maximum=400)
+    exhibit = sl.forms.ChoiceField(label=tr(t"Which exhibit"), options=_FEEDBACK_EXHIBITS)
+    headline = sl.forms.TextField(label=tr(t"In one line, what did it show you"), minimum=4, maximum=80)
+    detail = sl.forms.TextAreaField(label=tr(t"Anything else"), required=False, maximum=400)
     score = sl.forms.ScaleField(
-        label=L(t"How clear was it"),
+        label=tr(t"How clear was it"),
         minimum=1,
         maximum=5,
-        labels={1: L(t"Confusing"), 5: L(t"Clear")},
+        labels={1: tr(t"Confusing"), 5: tr(t"Clear")},
     )
 
     def __init__(self, on_recorded: Callable[[FeedbackForm, sl.SubmitEvent], Awaitable[None]], /, **prefill: object):
@@ -355,7 +354,7 @@ class FeedbackForm(sl.forms.Form):
         # Cross-field validation runs only once every field has parsed, so these are the typed
         # values rather than the strings the reader typed.
         if self.score is not None and self.score <= 2 and not self.detail:
-            return (sl.forms.FieldError("detail", L(t"A low score needs a sentence saying why.")),)
+            return (sl.forms.FieldError("detail", tr(t"A low score needs a sentence saying why.")),)
         return ()
 
     async def on_submit(self, event: sl.SubmitEvent) -> None:
@@ -395,8 +394,8 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         self.entries = tuple(self._entry(index) for index in range(1, entries + 1))
         self.display_locale = locale or "en"
         self.opened_at = datetime.now(UTC)
-        self.left = DemoCounter(L(t"Left counter"))
-        self.right = DemoCounter(L(t"Right counter"))
+        self.left = DemoCounter(tr(t"Left counter"))
+        self.right = DemoCounter(tr(t"Right counter"))
         self.channel_service = DemoChannelService()
         self.local_replication_scope = Replica("showcase-local", backend=ReferenceBackend())
         self.peer_replication_scope = Replica("showcase-peer", backend=ReferenceBackend())
@@ -413,7 +412,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
     @sl.computed
     def status(self) -> sl.text.Message:
         clicks = self.clicks
-        return L(t"Redrawn {clicks} times, and each press rebuilt this whole message.")
+        return tr(t"Redrawn {clicks} times, and each press rebuilt this whole message.")
 
     def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         controls = (
@@ -424,27 +423,27 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
                 ),
                 self._select_section,
                 "section",
-                placeholder=L(t"Pick something to look at"),
+                placeholder=tr(t"Pick something to look at"),
             ),
             sl.primitives.ControlGroup(
                 (
                     sl.primitives.Button(
-                        L(t"Change colour"),
+                        tr(t"Change colour"),
                         self._cycle_accent,
                         "accent",
                         style=sl.primitives.ActionStyle.PRIMARY,
                     ),
-                    sl.primitives.Button(L(t"Redraw"), self._click, "click"),
+                    sl.primitives.Button(tr(t"Redraw"), self._click, "click"),
                 )
             ),
         )
         header = sl.primitives.Panel(
             (
-                sl.primitives.Heading(L(t"How this bot draws its messages")),
+                sl.primitives.Heading(tr(t"How this bot draws its messages")),
                 # Never: the exhibit below is what may be squeezed, and the "Running out of
                 # room" one squeezes hard enough to eat this framing if it is allowed to.
                 sl.primitives.Text(
-                    L(t"Each entry below is one problem a Discord message runs into. They are all live."),
+                    tr(t"Each entry below is one problem a Discord message runs into. They are all live."),
                     overflow=sl.primitives.Never(),
                 ),
                 sl.primitives.Text(self.status, overflow=sl.primitives.Never()),
@@ -516,8 +515,8 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         per = _PAGE_SIZE
         return (
             self._exhibit(
-                L(t"A list too long for one message"),
-                L(
+                tr(t"A list too long for one message"),
+                tr(
                     t"{total} sample builds, {per} to a page. The footer and the two buttons below are "
                     t"measured as part of each page, so if {per} entries were ever too long to fit you "
                     t"would be given fewer -- never a page Discord refuses to send.",
@@ -526,24 +525,24 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
                     self.entries,
                     overflow=sl.primitives.Paginate(key="samples", per=_PAGE_SIZE, footer=self._page_footer),
                 ),
-                steps=(L(t"Press Next."),),
+                steps=(tr(t"Press Next."),),
             ),
         )
 
     def _adaptation(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         choices = tuple(
-            sl.semantic.ActionControl(f"action.{index}", L(t"Option {index}"), self._action_notice)
+            sl.semantic.ActionControl(f"action.{index}", tr(t"Option {index}"), self._action_notice)
             for index in range(1, 37)
         )
         return (
             self._exhibit(
-                L(t"More choices than Discord has room for"),
-                L(
+                tr(t"More choices than Discord has room for"),
+                tr(
                     t"This exhibit offers 36 things you can pick, and Discord allows 25 options in one "
                     t"dropdown. No code here splits them up: it says *36 choices*, and what arrived on "
                     t"your screen is a dropdown of 25 and a dropdown of 11."
                 ),
-                steps=(L(t"Pick anything from either dropdown -- both halves run the same handler."),),
+                steps=(tr(t"Pick anything from either dropdown -- both halves run the same handler."),),
                 accent=DISCORD_YELLOW,
             ),
             sl.semantic.ActionControls(choices, key="showcase-actions"),
@@ -556,25 +555,25 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         )
         return (
             self._exhibit(
-                L(t"What gets cut when the room runs out"),
-                L(
+                tr(t"What gets cut when the room runs out"),
+                tr(
                     t"Sometimes there is more to say than a message can hold. Every block below was told "
                     t"in advance how it wants to be treated when that happens, and this exhibit is "
                     t"squeezed on purpose so you can watch all three at once."
                 ),
                 sl.bullets(
                     sl.bullet(
-                        L(t"The description may lose words. It is shortened, and the cut is marked."), key="trim"
+                        tr(t"The description may lose words. It is shortened, and the cut is marked."), key="trim"
                     ),
                     sl.bullet(
-                        L(t"The log entries are all or nothing. Whole lines go, and it says how many."), key="cut"
+                        tr(t"The log entries are all or nothing. Whole lines go, and it says how many."), key="cut"
                     ),
-                    sl.bullet(L(t"The last line is never the thing that gets cut, whatever that costs."), key="keep"),
+                    sl.bullet(tr(t"The last line is never the thing that gets cut, whatever that costs."), key="keep"),
                     key="degradation-policies",
                 ),
                 sl.budget(sl.truncate(sl.paragraph(_LONG_DESCRIPTION)), min=140, prefer=340),
                 sl.budget(sl.spill(log), min=140, prefer=300),
-                sl.note(L(t"Nothing here was shortened without telling you.")),
+                sl.note(tr(t"Nothing here was shortened without telling you.")),
                 accent=DISCORD_YELLOW,
             ),
         )
@@ -582,57 +581,57 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
     def _data(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             self._exhibit(
-                L(t"Numbers, bars and clocks"),
-                L(
+                tr(t"Numbers, bars and clocks"),
+                tr(
                     t"None of these three were written out as text. The count is a number, the bar is a "
                     t"value out of ten, and the time is an instant -- Discord draws it in *your* "
                     t"timezone, which is why that one line says something different to every reader."
                 ),
-                sl.metric(len(self.entries), L(t"Sample builds")),
-                sl.progress(self.clicks, label=L(t"Redraws toward ten"), maximum=10),
-                sl.timestamp(self.opened_at, style=sl.semantic.TimeStyle.RELATIVE, label=L(t"You opened this")),
+                sl.metric(len(self.entries), tr(t"Sample builds")),
+                sl.progress(self.clicks, label=tr(t"Redraws toward ten"), maximum=10),
+                sl.timestamp(self.opened_at, style=sl.semantic.TimeStyle.RELATIVE, label=tr(t"You opened this")),
                 sl.table(
-                    sl.columns(sl.column(L(t"Door")), sl.column(L(t"Size")), sl.column(L(t"Fastest"))),
+                    sl.columns(sl.column(tr(t"Door")), sl.column(tr(t"Size")), sl.column(tr(t"Fastest"))),
                     *(
                         sl.table_row(name, size, record, key=f"row.{index}")
                         for index, (name, size, record) in enumerate(_SAMPLE_BUILDS)
                     ),
                     key="builds-table",
                 ),
-                steps=(L(t"Press Redraw at the top and watch the bar move."),),
+                steps=(tr(t"Press Redraw at the top and watch the bar move."),),
             ),
         )
 
     def _ownership(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             self._exhibit(
-                L(t"Two switches that remember in different places"),
-                L(
+                tr(t"Two switches that remember in different places"),
+                tr(
                     t"The first switch is remembered by the message itself, and this exhibit's code "
                     t"never so much as looks at it. The second is remembered by the exhibit, which gets "
                     t"the last word every time the message is redrawn -- that is what would let it "
                     t"refuse to flip. The stars work the same way as the second switch."
                 ),
                 sl.fields(
-                    sl.field(L(t"Stars"), self._rating_text()),
-                    sl.field(L(t"Second switch"), L(t"Following") if self.subscribed else L(t"Not following")),
-                    sl.field(L(t"First switch"), L(t"The message is holding this one; the exhibit cannot see it.")),
+                    sl.field(tr(t"Stars"), self._rating_text()),
+                    sl.field(tr(t"Second switch"), tr(t"Following") if self.subscribed else tr(t"Not following")),
+                    sl.field(tr(t"First switch"), tr(t"The message is holding this one; the exhibit cannot see it.")),
                 ),
-                steps=(L(t"Flip both, move to another entry above, then come back."),),
+                steps=(tr(t"Flip both, move to another entry above, then come back."),),
                 accent=DISCORD_GREEN,
             ),
             sl.toggle(
-                L(t"First switch"),
+                tr(t"First switch"),
                 key="ownership.managed",
-                on_label=L(t"on"),
-                off_label=L(t"off"),
+                on_label=tr(t"on"),
+                off_label=tr(t"off"),
             ),
             sl.toggle(
-                L(t"Second switch"),
+                tr(t"Second switch"),
                 key="ownership.controlled",
                 on=sl.controlled(self.subscribed, self._set_subscribed),
-                on_label=L(t"on"),
-                off_label=L(t"off"),
+                on_label=tr(t"on"),
+                off_label=tr(t"off"),
                 tone=sl.Tone.SUCCESS,
             ),
             sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate)),
@@ -651,14 +650,14 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         )
         return (
             self._exhibit(
-                L(t"A board you can click"),
-                L(
+                tr(t"A board you can click"),
+                tr(
                     t"Twelve squares, four across, two of them already taken. At this size they fit as "
                     t"buttons. A bigger board becomes a pair of row-and-column dropdowns instead, and "
                     t"your pick still arrives at exactly the same place in the code."
                 ),
                 sl.status(self.grid_pick),
-                steps=(L(t"Press a square."),),
+                steps=(tr(t"Press a square."),),
             ),
             sl.grid(*cells, key="showcase-grid", columns=4, on_pick=self._pick_grid),
         )
@@ -673,26 +672,28 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             prefill["score"] = self.feedback_score
         return (
             self._exhibit(
-                L(t"A form that checks its own answers"),
-                L(
+                tr(t"A form that checks its own answers"),
+                tr(
                     t"The button opens a pop-up. It was written once as a list of questions and the kind "
                     t"of answer each one takes; Discord shows that as a modal. Answer it wrong and it "
                     t"comes back with the complaint on the offending question and everything you had "
                     t"already typed still in place."
                 ),
                 sl.fields(
-                    sl.field(L(t"You last said"), self.feedback_headline or L(t"nothing yet")),
-                    sl.field(L(t"About"), self.feedback_exhibit or "--"),
-                    sl.field(L(t"Out of five"), str(self.feedback_score) if self.feedback_score else "--"),
+                    sl.field(tr(t"You last said"), self.feedback_headline or tr(t"nothing yet")),
+                    sl.field(tr(t"About"), self.feedback_exhibit or "--"),
+                    sl.field(tr(t"Out of five"), str(self.feedback_score) if self.feedback_score else "--"),
                 ),
                 steps=(
-                    L(t"Score it 1 and leave Anything else empty. It comes back complaining, with your typing intact."),
-                    L(t"Send it properly, then open it again -- it is already filled in from what you sent."),
+                    tr(
+                        t"Score it 1 and leave Anything else empty. It comes back complaining, with your typing intact."
+                    ),
+                    tr(t"Send it properly, then open it again -- it is already filled in from what you sent."),
                 ),
                 accent=DISCORD_GREEN,
             ),
             sl.form(
-                L(t"Open the feedback form"),
+                tr(t"Open the feedback form"),
                 FeedbackForm(self._record_feedback, **prefill),
                 key="feedback",
                 tone=sl.Tone.SUCCESS,
@@ -702,13 +703,13 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
     def _composition(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             self._exhibit(
-                L(t"Two copies that cannot get crossed"),
-                L(
+                tr(t"Two copies that cannot get crossed"),
+                tr(
                     t"Both counters below are the same handful of lines, used twice. Each keeps its own "
                     t"number and each button reaches only its own half, without anybody having to hand "
                     t"out unique names to keep them apart."
                 ),
-                steps=(L(t"Press one Add one a few times."),),
+                steps=(tr(t"Press one Add one a few times."),),
             ),
             self.boundary(self.left, key="left"),
             self.boundary(self.right, key="right"),
@@ -718,27 +719,27 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         unsafe = "*shouty title* @everyone [not a link](https://example.com)"
         return (
             self._exhibit(
-                L(t"Switching language without redoing the message"),
-                L(
+                tr(t"Switching language without redoing the message"),
+                tr(
                     t"None of this was translated when it was written down. Each line keeps its "
                     t"dictionary entry and its values until the moment the message is drawn, so pressing "
                     t"the button redraws this same message in Chinese rather than replacing it."
                 ),
                 sl.fields(
-                    sl.field(L(t"Language"), self.display_locale),
-                    sl.field(L(t"A title someone typed"), L(t"Shown safely: {unsafe}")),
+                    sl.field(tr(t"Language"), self.display_locale),
+                    sl.field(tr(t"A title someone typed"), tr(t"Shown safely: {unsafe}")),
                 ),
                 sl.paragraph(
-                    L(
+                    tr(
                         t"That title is somebody else's text. Asterisks, @everyone and fake links are "
                         t"escaped on the way in, so a build title cannot reformat the message or ping "
                         t"the server."
                     )
                 ),
-                steps=(L(t"Press Switch language, twice."),),
+                steps=(tr(t"Press Switch language, twice."),),
             ),
             sl.action_controls(
-                sl.action_control(L(t"Switch language"), self._switch_language, key="switch-language"),
+                sl.action_control(tr(t"Switch language"), self._switch_language, key="switch-language"),
                 key="localization-actions",
             ),
         )
@@ -746,44 +747,44 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
     def _history(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             self._exhibit(
-                L(t"Undo that knows when it is too late"),
-                L(
+                tr(t"Undo that knows when it is too late"),
+                tr(
                     t"Renaming the project writes down what changed. Undo is not a rewind: it is a new "
                     t"action that first checks the name is still the one it recorded. If something else "
                     t"changed it in the meantime, undo refuses rather than trampling the newer value."
                 ),
                 sl.fields(
-                    sl.field(L(t"Project name"), self.project_name),
-                    sl.field(L(t"Last undo"), self.history_result),
-                    sl.field(L(t"Last outcome"), self.outcome_result),
+                    sl.field(tr(t"Project name"), self.project_name),
+                    sl.field(tr(t"Last undo"), self.history_result),
+                    sl.field(tr(t"Last outcome"), self.outcome_result),
                 ),
                 steps=(
-                    L(t"Rename it, then Undo. The name goes back."),
-                    L(
+                    tr(t"Rename it, then Undo. The name goes back."),
+                    tr(
                         t"Rename it, then Someone else edits it, then Undo. This time undo refuses and the newer name stands."
                     ),
-                    L(t"Forget the refusal clears the stuck entry without changing anything."),
-                    L(t"Make it fail sets a new name and then throws. You never see the half-written name."),
+                    tr(t"Forget the refusal clears the stuck entry without changing anything."),
+                    tr(t"Make it fail sets a new name and then throws. You never see the half-written name."),
                 ),
                 accent=DISCORD_GREEN,
             ),
             sl.action_controls(
                 sl.action_control(
-                    L(t"Rename it"),
+                    tr(t"Rename it"),
                     self._rename_project,
                     key="history.rename",
                     tone=sl.Tone.SUCCESS,
                     record=self.action_history,
                 ),
-                sl.action_control(L(t"Someone else edits it"), self._sibling_edit, key="history.sibling"),
+                sl.action_control(tr(t"Someone else edits it"), self._sibling_edit, key="history.sibling"),
                 key="history-write-actions",
             ),
             sl.action_controls(
-                sl.action_control(L(t"Undo"), self._undo_rename, key="history.undo"),
-                sl.action_control(L(t"Redo"), self._redo_rename, key="history.redo"),
-                sl.action_control(L(t"Forget the refusal"), self._drop_history_conflict, key="history.drop"),
+                sl.action_control(tr(t"Undo"), self._undo_rename, key="history.undo"),
+                sl.action_control(tr(t"Redo"), self._redo_rename, key="history.redo"),
+                sl.action_control(tr(t"Forget the refusal"), self._drop_history_conflict, key="history.drop"),
                 sl.action_control(
-                    L(t"Make it fail"), self._cause_rollback, key="history.rollback", tone=sl.Tone.DANGER
+                    tr(t"Make it fail"), self._cause_rollback, key="history.rollback", tone=sl.Tone.DANGER
                 ),
                 key="history-outcome-actions",
             ),
@@ -792,34 +793,34 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
     def _replication(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             self._exhibit(
-                L(t"Your edit and somebody else's at the same time"),
-                L(
+                tr(t"Your edit and somebody else's at the same time"),
+                tr(
                     t"Two copies of one document, yours and a friend's. You add two votes; they receive "
                     t"that, add three of their own, and send it back, so both copies say five. Then undo "
                     t"yours -- and their three survive, because undo takes back *your* contribution "
                     t"rather than whatever happened last."
                 ),
                 sl.fields(
-                    sl.field(L(t"Your copy"), self._replica_summary(self.local_document)),
-                    sl.field(L(t"Their copy"), self._replica_summary(self.peer_document)),
-                    sl.field(L(t"Last undo"), self.replication_result),
+                    sl.field(tr(t"Your copy"), self._replica_summary(self.local_document)),
+                    sl.field(tr(t"Their copy"), self._replica_summary(self.peer_document)),
+                    sl.field(tr(t"Last undo"), self.replication_result),
                 ),
                 steps=(
-                    L(t"Add my two votes."),
-                    L(t"Let them add three -- both copies now say five."),
-                    L(t"Undo my votes. The total drops to three, not to zero."),
+                    tr(t"Add my two votes."),
+                    tr(t"Let them add three -- both copies now say five."),
+                    tr(t"Undo my votes. The total drops to three, not to zero."),
                 ),
             ),
             sl.action_controls(
                 sl.action_control(
-                    L(t"Add my two votes"),
+                    tr(t"Add my two votes"),
                     self._add_local_review,
                     key="replication.local",
                     record=self.replication_history,
                     tone=sl.Tone.SUCCESS,
                 ),
-                sl.action_control(L(t"Let them add three"), self._merge_peer_review, key="replication.peer"),
-                sl.action_control(L(t"Undo my votes"), self._undo_local_review, key="replication.undo"),
+                sl.action_control(tr(t"Let them add three"), self._merge_peer_review, key="replication.peer"),
+                sl.action_control(tr(t"Undo my votes"), self._undo_local_review, key="replication.undo"),
                 key="replication-actions",
             ),
         )
@@ -827,51 +828,53 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
     def _effects(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
         return (
             self._exhibit(
-                L(t"Undo that has to go and ask somebody else"),
-                L(
+                tr(t"Undo that has to go and ask somebody else"),
+                tr(
                     t"Creating that channel happens outside the bot, so undo cannot simply forget it: it "
                     t"has to go and delete the thing, and that call can fail. When it does, undo says so "
                     t"and leaves everything as it was, instead of pretending."
                 ),
                 sl.fields(
-                    sl.field(L(t"The channel out there"), L(t"exists") if self.channel_service.exists else L(t"gone")),
-                    sl.field(L(t"What this message thinks"), L(t"exists") if self.channel_present else L(t"gone")),
-                    sl.field(L(t"Last undo"), self.compensation_result),
+                    sl.field(
+                        tr(t"The channel out there"), tr(t"exists") if self.channel_service.exists else tr(t"gone")
+                    ),
+                    sl.field(tr(t"What this message thinks"), tr(t"exists") if self.channel_present else tr(t"gone")),
+                    sl.field(tr(t"Last undo"), self.compensation_result),
                 ),
                 steps=(
-                    L(t"Create the channel."),
-                    L(t"Make the next undo fail, then Undo the channel. It reports the failure and changes nothing."),
-                    L(t"Undo the channel again. The retry carries the same request id, so it can never delete twice."),
+                    tr(t"Create the channel."),
+                    tr(t"Make the next undo fail, then Undo the channel. It reports the failure and changes nothing."),
+                    tr(t"Undo the channel again. The retry carries the same request id, so it can never delete twice."),
                 ),
                 accent=DISCORD_YELLOW,
             ),
             sl.action_controls(
                 sl.action_control(
-                    L(t"Create the channel"), self._create_channel, key="effects.create", tone=sl.Tone.SUCCESS
+                    tr(t"Create the channel"), self._create_channel, key="effects.create", tone=sl.Tone.SUCCESS
                 ),
-                sl.action_control(L(t"Make the next undo fail"), self._fail_next_compensation, key="effects.fail"),
-                sl.action_control(L(t"Undo the channel"), self._undo_channel, key="effects.undo", tone=sl.Tone.DANGER),
+                sl.action_control(tr(t"Make the next undo fail"), self._fail_next_compensation, key="effects.fail"),
+                sl.action_control(tr(t"Undo the channel"), self._undo_channel, key="effects.undo", tone=sl.Tone.DANGER),
                 key="effects-channel-actions",
             ),
             self._exhibit(
-                L(t"A job that runs, and a result you choose to keep"),
-                L(
+                tr(t"A job that runs, and a result you choose to keep"),
+                tr(
                     t"Publishing is a job rather than a button press. Every start is its own attempt with "
                     t"its own id, and the number it produces only reaches this message once you keep it."
                 ),
                 sl.fields(
-                    sl.field(L(t"Attempt"), self._publication_status()),
+                    sl.field(tr(t"Attempt"), self._publication_status()),
                     sl.field(
-                        L(t"Revision you kept"),
+                        tr(t"Revision you kept"),
                         "--" if self.published_revision is None else str(self.published_revision),
                     ),
                 ),
-                steps=(L(t"Press Start publishing, then Keep the result."),),
+                steps=(tr(t"Press Start publishing, then Keep the result."),),
                 accent=DISCORD_YELLOW,
             ),
             sl.action_controls(
-                sl.action_control(L(t"Start publishing"), self._start_publication, key="effects.publish"),
-                sl.action_control(L(t"Keep the result"), self._accept_publication, key="effects.accept"),
+                sl.action_control(tr(t"Start publishing"), self._start_publication, key="effects.publish"),
+                sl.action_control(tr(t"Keep the result"), self._accept_publication, key="effects.accept"),
                 key="effects-publish-actions",
             ),
         )
@@ -883,26 +886,26 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         reader's choice is what keeps every exhibit above short enough to read.
         """
         return sl.details(
-            sl.summary(L(t"Show the code behind this exhibit")),
-            sl.paragraph(L(t"This is what the author wrote. Everything above is what planning made of it.")),
+            sl.summary(tr(t"Show the code behind this exhibit")),
+            sl.paragraph(tr(t"This is what the author wrote. Everything above is what planning made of it.")),
             sl.code(_SOURCE_EXAMPLES.get(self.section, _SOURCE_EXAMPLES["pagination"]), language="python"),
             key="source",
         )
 
     def _sections(self) -> tuple[tuple[str, sl.TextLike, sl.TextLike], ...]:
         return (
-            ("pagination", L(t"Long lists"), L(t"More entries than one message can hold")),
-            ("adaptation", L(t"Too many choices"), L(t"36 options, and Discord allows 25")),
-            ("degradation", L(t"Running out of room"), L(t"What gets cut, and what never does")),
-            ("data", L(t"Numbers and clocks"), L(t"A count, a bar, and your own timezone")),
-            ("grid", L(t"A board you can click"), L(t"Twelve squares that stay clickable")),
-            ("ownership", L(t"Who remembers a switch"), L(t"The message, or the code behind it")),
-            ("forms", L(t"Forms"), L(t"A pop-up that checks its own answers")),
-            ("composition", L(t"Two of the same thing"), L(t"Two counters that cannot get crossed")),
-            ("localization", L(t"Other languages"), L(t"Switch this message to Chinese, in place")),
-            ("history", L(t"Undo"), L(t"Undo that refuses when it is too late")),
-            ("replication", L(t"Two people at once"), L(t"Your edit and theirs, neither one lost")),
-            ("effects", L(t"Undoing something real"), L(t"When undo has to call the outside world")),
+            ("pagination", tr(t"Long lists"), tr(t"More entries than one message can hold")),
+            ("adaptation", tr(t"Too many choices"), tr(t"36 options, and Discord allows 25")),
+            ("degradation", tr(t"Running out of room"), tr(t"What gets cut, and what never does")),
+            ("data", tr(t"Numbers and clocks"), tr(t"A count, a bar, and your own timezone")),
+            ("grid", tr(t"A board you can click"), tr(t"Twelve squares that stay clickable")),
+            ("ownership", tr(t"Who remembers a switch"), tr(t"The message, or the code behind it")),
+            ("forms", tr(t"Forms"), tr(t"A pop-up that checks its own answers")),
+            ("composition", tr(t"Two of the same thing"), tr(t"Two counters that cannot get crossed")),
+            ("localization", tr(t"Other languages"), tr(t"Switch this message to Chinese, in place")),
+            ("history", tr(t"Undo"), tr(t"Undo that refuses when it is too late")),
+            ("replication", tr(t"Two people at once"), tr(t"Your edit and theirs, neither one lost")),
+            ("effects", tr(t"Undoing something real"), tr(t"When undo has to call the outside world")),
         )
 
     def _entry(self, index: int) -> str:
@@ -912,11 +915,11 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         return f"**#{index:03d}** \N{MIDDLE DOT} {size} {kind} \N{MIDDLE DOT} {seconds:.1f}s"
 
     def _rating_text(self) -> sl.TextLike:
-        return L(t"none yet") if self.rating is None else "\N{BLACK STAR}" * self.rating
+        return tr(t"none yet") if self.rating is None else "\N{BLACK STAR}" * self.rating
 
     def _page_footer(self, page: int, pages: int) -> sl.text.Message:
         total = len(self.entries)
-        return L(t"Page {page} of {pages} \N{MIDDLE DOT} {total} builds in total")
+        return tr(t"Page {page} of {pages} \N{MIDDLE DOT} {total} builds in total")
 
     async def _select_section(self, event: sl.SelectionEvent) -> None:
         self.section = event.values[0]
@@ -941,14 +944,14 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         self.feedback_exhibit = form.exhibit or ""
         self.feedback_headline = form.headline or ""
         self.feedback_score = form.score or 0
-        await event.notice(L(t"Got it -- the panel behind the form is already showing it."))
+        await event.notice(tr(t"Got it -- the panel behind the form is already showing it."))
 
     async def _switch_language(self, event: sl.ActionEvent) -> None:
         self.display_locale = "en" if event.locale == "zh-CN" else "zh-CN"
         sd.responder(event).message_root.localize(localization_for(self.display_locale))
 
     async def _action_notice(self, event: sl.ActionEvent) -> None:
-        await event.notice(L(t"That option kept its own handler, whichever dropdown it ended up in."))
+        await event.notice(tr(t"That option kept its own handler, whichever dropdown it ended up in."))
 
     async def _rename_project(self, event: sl.ActionEvent) -> None:
         del event
@@ -1052,7 +1055,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         await self.channel_service.create()
         self.channel_present = True
         self.effect_history.record(
-            L(t"Create demo channel"),
+            tr(t"Create demo channel"),
             compensate=sl.runtime.CompensationSpec(
                 operation=self.channel_service.delete,
                 idempotency_key=lambda commit: f"layout-demo:undo:{commit.context.action_id}",
@@ -1154,18 +1157,18 @@ class AppearanceControls(sl.Component[sl.ComponentsV2Target]):
         return sl.primitives.ControlGroup(
             (
                 sl.primitives.Button(
-                    L(t"Change colour"),
+                    tr(t"Change colour"),
                     partial(self._cycle, appearance=appearance),
                     "accent",
                     record=self.history,
                 ),
                 sl.primitives.Button(
-                    L(t"Density: {density}"),
+                    tr(t"Density: {density}"),
                     partial(self._toggle_density, appearance=appearance),
                     "density",
                 ),
                 sl.primitives.Button(
-                    L(t"Undo that"),
+                    tr(t"Undo that"),
                     self._undo,
                     "undo",
                     style=sl.primitives.ActionStyle.SECONDARY,
@@ -1184,7 +1187,7 @@ class AppearanceControls(sl.Component[sl.ComponentsV2Target]):
         # Records by hand, unlike the accent button: this control's label names the density
         # it is showing, which would make a confusing name for the entry that changes it.
         appearance.density = _DENSITIES[(_DENSITIES.index(appearance.density) + 1) % len(_DENSITIES)]
-        self.history.record(L(t"Change density"))
+        self.history.record(tr(t"Change density"))
 
     async def _undo(self, event: sl.PressEvent) -> None:
         await self.history.undo()
@@ -1203,11 +1206,11 @@ class AppearancePanel(sl.Component[sl.ComponentsV2Target]):
         focus = self.session.focus
         return sl.primitives.Panel(
             (
-                sl.primitives.Heading(L(t"Appearance")),
-                sl.primitives.Text(L(t"Looking at: {focus}")),
+                sl.primitives.Heading(tr(t"Appearance")),
+                sl.primitives.Text(tr(t"Looking at: {focus}")),
                 self.boundary(self.controls, key="controls"),
                 sl.primitives.Row(
-                    (sl.primitives.Button(L(t"Look at details"), self._focus_details, "focus"),),
+                    (sl.primitives.Button(tr(t"Look at details"), self._focus_details, "focus"),),
                 ),
             ),
             accent=self.appearance.accent,
@@ -1229,9 +1232,9 @@ class PreviewPanel(sl.Component[sl.ComponentsV2Target]):
         focus = self.session.focus
         return sl.primitives.Panel(
             (
-                sl.primitives.Heading(L(t"Preview")),
+                sl.primitives.Heading(tr(t"Preview")),
                 sl.primitives.Text(
-                    L(
+                    tr(
                         t"This panel redrew itself because it read the values the other one wrote. Nothing joins them but that. Density: {density}, looking at: {focus}."
                     )
                 ),
@@ -1268,22 +1271,22 @@ class Lobby(sd.Screen):
         capacity = self.capacity if session is None else session.capacity
         placement = sp.place_roster(
             tuple(sp.RosterEntry(str(user_id), f"<@{user_id}>", "players") for user_id in sorted(members)),
-            (sp.RosterSlot("players", L(t"Players"), capacity),),
+            (sp.RosterSlot("players", tr(t"Players"), capacity),),
         )
         count = self.started_with
         remaining = max(0, capacity - len(members)) if capacity is not None else "∞"
         status = (
-            L(t"Started with {count} players.")
+            tr(t"Started with {count} players.")
             if self.started_with is not None
-            else L(t"{remaining} seats still open.")
+            else tr(t"{remaining} seats still open.")
         )
         return sl.section(
-            sl.heading(L(t"Lobby")),
+            sl.heading(tr(t"Lobby")),
             sl.roster(placement, key="lobby-roster", on_join=self._join),
             sl.paragraph(status),
             sl.action_controls(
-                sl.action_control(L(t"Leave"), self._leave, key="leave"),
-                sl.action_control(L(t"Start"), self._start, key="start"),
+                sl.action_control(tr(t"Leave"), self._leave, key="leave"),
+                sl.action_control(tr(t"Start"), self._start, key="start"),
                 key="lobby",
             ),
         )
@@ -1312,7 +1315,7 @@ class Lobby(sd.Screen):
         # only members may use consult the roster themselves.
         session = self._session()
         if session is None or not session.has_member(int(event.actor.id)):
-            await event.notice(L(t"Join the lobby first."))
+            await event.notice(tr(t"Join the lobby first."))
             return
         self.started_with = len(session.members)
 
@@ -1325,20 +1328,20 @@ class Lobby(sd.Screen):
 
 
 _JOIN_NOTICES = {
-    sd.sessions.MembershipStatus.JOINED: L(t"You are in."),
-    sd.sessions.MembershipStatus.ALREADY_MEMBER: L(t"You had already joined."),
-    sd.sessions.MembershipStatus.AT_CAPACITY: L(t"This lobby is full."),
-    sd.sessions.MembershipStatus.QUOTA_REACHED: L(t"You are already in a lobby on another server."),
-    sd.sessions.MembershipStatus.REFUSED: L(t"The host has left, so the lobby is closed to newcomers."),
-    sd.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
-    sd.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
+    sd.sessions.MembershipStatus.JOINED: tr(t"You are in."),
+    sd.sessions.MembershipStatus.ALREADY_MEMBER: tr(t"You had already joined."),
+    sd.sessions.MembershipStatus.AT_CAPACITY: tr(t"This lobby is full."),
+    sd.sessions.MembershipStatus.QUOTA_REACHED: tr(t"You are already in a lobby on another server."),
+    sd.sessions.MembershipStatus.REFUSED: tr(t"The host has left, so the lobby is closed to newcomers."),
+    sd.sessions.MembershipStatus.CONFLICT: tr(t"Somebody else moved first -- try again."),
+    sd.sessions.MembershipStatus.SESSION_FINISHED: tr(t"This lobby has closed."),
 }
 
 _LEAVE_NOTICES = {
-    sd.sessions.MembershipStatus.LEFT: L(t"You have left."),
-    sd.sessions.MembershipStatus.NOT_MEMBER: L(t"You were not in this lobby."),
-    sd.sessions.MembershipStatus.CONFLICT: L(t"Somebody else moved first -- try again."),
-    sd.sessions.MembershipStatus.SESSION_FINISHED: L(t"This lobby has closed."),
+    sd.sessions.MembershipStatus.LEFT: tr(t"You have left."),
+    sd.sessions.MembershipStatus.NOT_MEMBER: tr(t"You were not in this lobby."),
+    sd.sessions.MembershipStatus.CONFLICT: tr(t"Somebody else moved first -- try again."),
+    sd.sessions.MembershipStatus.SESSION_FINISHED: tr(t"This lobby has closed."),
 }
 
 
@@ -1359,8 +1362,8 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     @layout_group.command(name="demo")
     @app_commands.describe(
-        section=app_commands.locale_str(_("Which one to open first.")),
-        entries=app_commands.locale_str(_("How many sample builds the long-list demo should hold.")),
+        section=app_commands.locale_str("Which one to open first."),
+        entries=app_commands.locale_str("How many sample builds the long-list demo should hold."),
     )
     async def demo(
         self,

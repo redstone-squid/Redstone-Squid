@@ -18,7 +18,7 @@ from squid_ui_discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Everyone, Messa
 from squid_ui_discord.classic_renderer import ClassicRenderer
 from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import StaticView, V2Renderer
-from squid_ui_discord.testing import delivered_to, fake_message
+from squid_ui_discord.testing import delivered_to, message_harness
 
 
 def _text_plan(value: str):
@@ -161,7 +161,7 @@ async def test_message_root_reuses_a_revisited_scene_program() -> None:
 
     component = Switching()
     message_root = MessageRoot(component, access=Everyone(), timeout=None)
-    await message_root.send(delivered_to(fake_message()))
+    await message_root.send(delivered_to(message_harness()))
     component.value = "second"
     await message_root.refresh()
     component.value = "first"
@@ -183,8 +183,8 @@ async def test_explicit_render_cache_shares_programs_without_sharing_frontend_ob
     first = MessageRoot(Static(), access=Everyone(), timeout=None, render_cache=cache)
     second = MessageRoot(Static(), access=Everyone(), timeout=None, render_cache=cache)
 
-    await first.send(delivered_to(fake_message()))
-    await second.send(delivered_to(fake_message()))
+    await first.send(delivered_to(message_harness()))
+    await second.send(delivered_to(message_harness()))
 
     assert first._view is not second._view
     assert cache.snapshot().hits == 1

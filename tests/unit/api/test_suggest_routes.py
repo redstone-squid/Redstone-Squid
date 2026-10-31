@@ -1,14 +1,17 @@
 """Typeahead route tests."""
 
-from types import SimpleNamespace
-from typing import Any
+from dataclasses import dataclass
+from typing import cast
 
 import pytest
-from fastapi import Response
+from fastapi import FastAPI, Request, Response
+from starlette.types import Scope
 
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.suggest import list_sources, suggest
 from squid.core.errors import NotFoundError
+from squid.permissions.application import PermissionService
+from squid.permissions.domain import PermissionNode, Subject
 from squid.suggestions.application import (
     Candidate,
     SuggestionRegistry,
@@ -56,19 +59,31 @@ def gated_source() -> SuggestionSource:
     )
 
 
-def request_for(*, allowed: bool = False) -> Any:
-    async def allows(subject: object, node: object) -> bool:
-        del subject
-        return allowed and str(getattr(node, "name", node)) == VIEW_PENDING
+class PermissionAnswer(PermissionService):
+    def __init__(self, allowed: bool) -> None:
+        self.allowed = allowed
 
-    return SimpleNamespace(
-        headers={},
-        app=SimpleNamespace(
-            state=SimpleNamespace(
-                runtime=SimpleNamespace(services=SimpleNamespace(permissions=SimpleNamespace(allows=allows)))
-            )
-        ),
-    )
+    async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
+        del subject
+        return self.allowed and str(getattr(node, "name", node)) == VIEW_PENDING
+
+
+@dataclass(frozen=True, slots=True)
+class Services:
+    permissions: PermissionService
+
+
+@dataclass(frozen=True, slots=True)
+class Runtime:
+    services: Services
+
+
+def request_for(*, allowed: bool = False) -> Request:
+    app = FastAPI()
+    app.state.runtime = Runtime(Services(PermissionAnswer(allowed)))
+    scope = cast(Scope, {"type": "http", "app": app, "headers": []})
+
+    return Request(scope)
 
 
 def caller(*, anonymous: bool = True) -> Caller:

@@ -13,7 +13,7 @@ from whenever import Instant
 
 from squid.accounts.domain.consent import AccountConsent, consent_refresh_required
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 
 _POSITIVE_DECIMAL = re.compile(r"[1-9][0-9]*")
 """ASCII decimal without a leading zero. Deliberately not `str.isdigit`, which accepts
@@ -92,13 +92,13 @@ class AccountIdentity:
         match provider:
             case IdentityProvider.DISCORD:
                 if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**63:
-                    msg = _("Discord identity subjects must be positive signed 64-bit integers, got {subject!r}.")
-                    raise ValidationError(msg, message_params={"subject": subject})
+                    raise ValidationError(
+                        tr(t"Discord identity subjects must be positive signed 64-bit integers, got {subject!r}.")
+                    )
                 return cls(provider, subject, display_name, verified_at)
             case IdentityProvider.BEDROCK:
                 if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**64:
-                    msg = _("Bedrock XUIDs must be unsigned 64-bit integers, got {subject!r}.")
-                    raise ValidationError(msg, message_params={"subject": subject})
+                    raise ValidationError(tr(t"Bedrock XUIDs must be unsigned 64-bit integers, got {subject!r}."))
                 return cls(provider, subject, display_name, verified_at)
             case IdentityProvider.JAVA:
                 # `UUID` also lowercases and hyphenates, so an uppercase or bare-hex
@@ -106,8 +106,7 @@ class AccountIdentity:
                 try:
                     canonical = str(UUID(subject))
                 except ValueError as error:
-                    msg = _("Java identity subjects must be UUIDs, got {subject!r}.")
-                    raise ValidationError(msg, message_params={"subject": subject}) from error
+                    raise ValidationError(tr(t"Java identity subjects must be UUIDs, got {subject!r}.")) from error
                 return cls(provider, canonical, display_name, verified_at)
 
     @classmethod

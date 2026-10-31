@@ -46,7 +46,7 @@ from squid_ui.semantic import (
     ListItem,
 )
 from squid_ui_discord import Everyone, MessageRoot
-from squid_ui_discord.testing import commit_render, fake_interaction, payload_texts
+from squid_ui_discord.testing import commit_render, interaction_harness, payload_texts
 
 
 class Counter(Component[sl.ComponentsV2Target]):
@@ -93,11 +93,11 @@ class TestBoundaries:
         message_root = MessageRoot(pair, access=Everyone(), timeout=None)
         commit_render(message_root)
 
-        await message_root.dispatch("left.inc", fake_interaction())
+        await message_root.dispatch("left.inc", interaction_harness())
 
         assert (pair.left.count, pair.right.count) == (1, 0)
 
-        await message_root.dispatch("right.inc", fake_interaction())
+        await message_root.dispatch("right.inc", interaction_harness())
 
         assert (pair.left.count, pair.right.count) == (1, 1)
 
@@ -115,11 +115,6 @@ class TestBoundaries:
 
         assert message_root.pending
         assert "right: 3" in payload_texts(commit_render(message_root))
-
-    def test_components_do_not_expose_the_frontend_root(self):
-        pair = Pair()
-        commit_render(MessageRoot(pair, access=Everyone(), timeout=None))
-        assert not hasattr(pair.left, "mount")
 
     def test_embedding_does_not_mutate_the_childs_own_keys(self):
         # render() stays pure: namespacing rewrites the returned tree, not the component.

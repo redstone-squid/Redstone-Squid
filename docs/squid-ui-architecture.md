@@ -23,6 +23,117 @@ The two rules that decide which bucket something lands in are in
 [Ownership and lifetime](#ownership-and-lifetime): identity is never authority, and anything
 owning background work ends through one named method.
 
+### Framework relationship map
+
+Solid arrows show the live render and interaction cycle. Dashed arrows show optional integration
+or ownership rather than data flowing through every render.
+
+```mermaid
+flowchart TB
+    subgraph authoring[Application and portable authoring]
+        host[Host application<br/>domain facts and services]
+        widgets[Reusable components<br/><code>squid-ui-widgets</code>]
+        component["Component or Screen<br/>declared state and synchronous <code>render()</code>"]
+        reactive[Reactive model<br/><code>state · computed · resource · operation</code>]
+        shared[Cross-root view state<br/><code>SharedState · SharedStatePool · TopicBus</code>]
+        actions[Portable actions and form handlers<br/>events · guards · history]
+
+        host -->|constructs and injects| component
+        widgets -->|supplies| component
+        component -->|declares| actions
+        reactive -->|drives| component
+        shared -->|is read by| component
+        actions -->|transactional writes| reactive
+        actions -->|publishes changes| shared
+    end
+
+    subgraph engine[Frontend-neutral engine — <code>squid-ui</code>]
+        runtime[ComponentRuntime<br/>identity · lifecycle · context · invalidation]
+        document[Semantic Document<br/>meaning · stable keys · target-neutral controls]
+        planner[Planner plus selected Target<br/>adapt · search · measure · paginate]
+        result[PlanResult]
+        scene[Immutable Scene<br/>frontend body · no callbacks]
+        sidetables[Ephemeral side tables<br/>action and form bindings · resources · report]
+        codec[Scene Codec<br/>canonical JSON · schema · fingerprints]
+
+        runtime -->|expands and renders| document
+        document --> planner --> result
+        result --> scene
+        result --> sidetables
+        scene --> codec
+    end
+
+    component -->|is mounted in| runtime
+    reactive -.->|dependency tracking and transactions<br/><code>squid-reactivity</code>| runtime
+
+    subgraph frontends[Frontend targets and outputs]
+        discord[Discord target and renderer<br/><code>squid-ui-discord</code>]
+        slack[Slack target and renderer<br/><code>squid-ui-slack</code>]
+        html[Native HTML target and renderer<br/><code>squid-ui.html</code>]
+        payload[MessagePayload<br/>content · embeds · view · assets]
+        sdk[Slack SDK blocks and views]
+        markup[Accessible HTML]
+
+        discord --> payload
+        slack --> sdk
+        html --> markup
+    end
+
+    discord -->|target rules| planner
+    slack -->|target rules| planner
+    html -->|target rules| planner
+    scene -->|mechanical draw| discord
+    scene -->|mechanical draw| slack
+    scene -->|mechanical draw| html
+
+    subgraph discord_runtime[Discord live runtime]
+        invocation[Invocation or Screen.show<br/>source · audience · localization · destination]
+        root[MessageRoot<br/>owns one message and one ComponentRuntime]
+        session[SessionManager and Session<br/>own a graph of roots]
+        router[Router and RouteGroup<br/>stateless durable route identity]
+        dispatch[Dispatch boundary<br/>access · concurrency · stale checks · middleware · responder]
+        handle[MessageDestination and EditHandle<br/>delivery and expiring write authority]
+        discord_api[discord.py and Discord]
+
+        invocation -->|reply · mount · open| root
+        session -->|owns| root
+        root -->|delivers through| handle --> discord_api
+        discord_api -->|component interaction| dispatch
+        router -->|routed interaction| dispatch
+        dispatch -->|bound portable event| actions
+        dispatch -->|fresh authority| handle
+    end
+
+    root -->|owns| runtime
+    sidetables -->|installs current callbacks| root
+    payload --> root
+    actions -->|commit schedules a new render| root
+    shared -->|cross-root invalidation| root
+
+    subgraph optional[Optional state infrastructure]
+        storage[Versioned scoped storage<br/><code>squid-storage</code>]
+        durable[DurableSessionRuntime<br/>records · recovery · claims · checkpoints]
+        replication[Replicated state<br/><code>squid-replication</code>]
+        bridge[PostgresTopicBridge<br/>cross-process invalidation hints]
+
+        storage --> durable
+        storage -->|hydrates| shared
+        replication -->|enlists transaction participants| actions
+        bridge -->|publishes addresses| shared
+    end
+
+    durable -.->|recovers and checkpoints| session
+    durable -.->|reconnects roots and handles| root
+    host -.->|provides the backing store| storage
+    host -.->|owns transport and authentication| replication
+    host -.->|supervises| durable
+    host -.->|supervises| bridge
+```
+
+The semantic `Document` is the portability seam. Everything above it expresses application intent;
+the selected target and everything below it solve, draw, deliver, and route one frontend. The
+`Scene` is the process boundary, while ephemeral bindings remain with the live runtime.
+
 ## End-to-end flow
 
     Component state
@@ -91,8 +202,8 @@ output object, so unknown pre-existing controls cannot undermine measurement.
 installed runtime and host localization hook once inside the ambient dispatch scope; callers then
 reuse its audience policy for static replies, plain mounts, and session opens. Router dispatch and
 message-root action/submit dispatch establish that scope themselves, so a handler does not install
-one. `inv.t(...)` is only for strings leaving the layout system, such as autocomplete or a native
-modal API; layout nodes retain `TextLike` values and resolve them when their message root renders.
+one. `tr(...)` resolves strings leaving the layout system, such as autocomplete or a native modal
+API; layout nodes retain deferred `TextLike` values and resolve them when their message root renders.
 
 `Screen` is the declarative application layer over `Invocation`. A subclass places stable policy in
 class variables. Root policy — `access`, `visibility`, `timeout`, `expiry`, `follow_topics`, and

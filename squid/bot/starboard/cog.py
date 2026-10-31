@@ -14,7 +14,7 @@ from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
 from squid.bot.utils.permissions import allows, enforce, hide_unless
 from squid.core.errors import ValidationError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     STARBOARD_BOARD_CREATE,
@@ -164,10 +164,10 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         async def create_board(channel_id: int, name: str, required: float) -> StarboardConfig:
             channel = guild.get_channel(channel_id)
             if not isinstance(channel, discord.TextChannel):
-                raise ValidationError(_("That destination is not a text channel in this server."))
+                raise ValidationError(tr(t"That destination is not a text channel in this server."))
             permissions = channel.permissions_for(guild.me)
             if not (permissions.view_channel and permissions.send_messages and permissions.read_message_history):
-                raise ValidationError(_("I need View Channel, Send Messages, and Read Message History there."))
+                raise ValidationError(tr(t"I need View Channel, Send Messages, and Read Message History there."))
             return await self.service.create_starboard(guild.id, channel.id, name, required=required)
 
         await StarboardScreen(

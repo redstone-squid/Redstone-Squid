@@ -1,8 +1,6 @@
 """Declarative Screen policy over Invocation's opening primitives."""
 
-from types import SimpleNamespace
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
 import anyio
 import discord
@@ -13,7 +11,7 @@ import squid_ui_discord as sd
 from squid_reactivity import LocalTopicBus
 from squid_ui.text import Message
 from squid_ui_discord.sessions import AdmissionSpec, Opened, Reject
-from squid_ui_discord.testing import fake_interaction, fake_message
+from squid_ui_discord.testing import ContextHarness, interaction_harness, message_harness
 
 
 class FakeClient:
@@ -21,13 +19,9 @@ class FakeClient:
 
 
 def _context(client: FakeClient) -> Any:
-    return SimpleNamespace(
-        bot=client,
-        author=SimpleNamespace(id=7),
-        guild=SimpleNamespace(id=42),
-        interaction=None,
-        send=AsyncMock(return_value=fake_message()),
-    )
+    context = ContextHarness(message=message_harness(guild_id=42), bot=client, user_id=7)
+    context.guild = context.message.guild
+    return cast(Any, context)
 
 
 class BasicScreen(sd.Screen):
@@ -196,9 +190,9 @@ async def test_follow_topics_selects_the_installed_scheduler() -> None:
 async def test_sessionless_show_uses_a_plain_owner_mount() -> None:
     client = FakeClient()
     runtime = sd.install(cast(discord.Client, client))
-    interaction = fake_interaction(user_id=7)
+    interaction = interaction_harness(user_id=7)
     interaction.client = client
-    interaction.guild = SimpleNamespace(id=42)
+    interaction.guild = message_harness(guild_id=42).guild
 
     class Plain(sd.Screen):
         visibility = "personal"
@@ -218,7 +212,7 @@ async def test_sessionless_show_uses_a_plain_owner_mount() -> None:
 async def test_sessionless_show_forwards_wait_to_interaction_delivery() -> None:
     client = FakeClient()
     sd.install(cast(discord.Client, client))
-    interaction = fake_interaction(user_id=7)
+    interaction = interaction_harness(user_id=7)
     interaction.client = client
 
     class Plain(sd.Screen):

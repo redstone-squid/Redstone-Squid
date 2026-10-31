@@ -15,6 +15,8 @@ it says.
 import ast
 from pathlib import Path
 
+from tests.support.source_tree import source_tree
+
 BOT_ROOT = Path(__file__).parents[2] / "squid" / "bot"
 
 CONTEXT_REPLY_METHODS = {"send", "reply", "defer"}
@@ -22,7 +24,7 @@ CONTEXT_REPLY_METHODS = {"send", "reply", "defer"}
 
 def _violations(path: Path) -> list[str]:
     found: list[str] = []
-    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+    for node in ast.walk(source_tree(path)):
         if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
             continue
         target = node.func.value

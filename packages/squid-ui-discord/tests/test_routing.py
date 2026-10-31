@@ -16,7 +16,7 @@ from squid_ui.profiling.profiler import _MAX_NAME_LENGTH
 from squid_ui_discord import render_static
 from squid_ui_discord import testing as sd
 from squid_ui_discord.routing import Router, _dispatch_item
-from squid_ui_discord.testing import fake_interaction
+from squid_ui_discord.testing import interaction_harness
 
 EDIT_BUILD = sl.routing.Route("edit:build:{build_id:int}")
 POLL_CLOSE = sl.routing.Route("poll:close")
@@ -107,7 +107,7 @@ class TestRouter:
 
         client = FakeClient()
         runtime = squid_ui_discord.install(cast(discord.Client, client))
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         interaction.client = client
         seen: list[squid_ui_discord.Invocation] = []
         router = Router()
@@ -132,7 +132,7 @@ class TestRouter:
         async def edit(_interaction, build_id: int) -> None:
             seen.append(build_id)
 
-        await router.dispatch(fake_interaction(), "edit:build:42")
+        await router.dispatch(interaction_harness(), "edit:build:42")
         assert seen == [42]
 
     async def test_a_handler_may_ignore_parameters_it_does_not_need(self) -> None:
@@ -143,7 +143,7 @@ class TestRouter:
         async def edit(_interaction) -> None:
             seen.append("called")
 
-        await router.dispatch(fake_interaction(), "edit:build:42")
+        await router.dispatch(interaction_harness(), "edit:build:42")
         assert seen == ["called"]
 
     async def test_a_handler_taking_kwargs_receives_every_parameter(self) -> None:
@@ -154,7 +154,7 @@ class TestRouter:
         async def edit(_interaction, **params) -> None:
             seen.append(params)
 
-        await router.dispatch(fake_interaction(), "edit:build:42")
+        await router.dispatch(interaction_harness(), "edit:build:42")
         assert seen == [{"build_id": 42}]
 
     async def test_a_select_handler_receives_values_then_route_parameters(self) -> None:
@@ -166,7 +166,7 @@ class TestRouter:
             seen.append((values, build_id))
 
         await router.dispatch(
-            fake_interaction(),
+            interaction_harness(),
             "edit:build:42",
             component=squid_ui_discord.routing.RouteComponent.SELECT,
             values=("one", "two"),
@@ -193,9 +193,9 @@ class TestRouter:
         async def close_select(_interaction, _values: tuple[str, ...]) -> None:
             seen.append("select")
 
-        await router.dispatch(fake_interaction(), "poll:close")
+        await router.dispatch(interaction_harness(), "poll:close")
         await router.dispatch(
-            fake_interaction(),
+            interaction_harness(),
             "poll:close",
             component=squid_ui_discord.routing.RouteComponent.SELECT,
             values=("now",),
@@ -238,7 +238,7 @@ class TestRouter:
         async def edit(_interaction, build_id: int) -> None:
             seen.append(build_id)
 
-        await router.dispatch(fake_interaction(), "edit:build:7")
+        await router.dispatch(interaction_harness(), "edit:build:7")
         assert seen == [7]
 
     def test_a_handler_taking_no_arguments_at_all_is_refused(self) -> None:
@@ -247,7 +247,7 @@ class TestRouter:
 
     async def test_a_retired_route_is_logged_rather_than_raised(self) -> None:
         # Buttons outlive the code that answered them; an unknown id must not crash dispatch.
-        await Router().dispatch(fake_interaction(), "gone:forever")
+        await Router().dispatch(interaction_harness(), "gone:forever")
 
     async def test_a_retired_namespaced_route_gets_a_friendly_response(self) -> None:
         seen: list[object] = []
@@ -256,9 +256,9 @@ class TestRouter:
             seen.append(interaction)
 
         router = Router(namespace="r", on_gone=gone)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await router.dispatch(interaction, "r:retired:control")
-        await router.dispatch(fake_interaction(), "other:control")
+        await router.dispatch(interaction_harness(), "other:control")
 
         assert seen == [interaction]
 
@@ -298,7 +298,7 @@ class TestRouter:
         async def close(_interaction) -> None:
             raise RuntimeError("boom")
 
-        await router.dispatch(fake_interaction(), "poll:close")
+        await router.dispatch(interaction_harness(), "poll:close")
         assert seen == ["route:poll:close"]
 
     def test_one_template_covers_every_route_so_a_click_dispatches_once(self) -> None:
@@ -402,7 +402,7 @@ class TestRouter:
             seen.append("replacement")
 
         router.add(sl.routing.Route("poll:close"), replacement)
-        await router.dispatch(fake_interaction(), "poll:close")
+        await router.dispatch(interaction_harness(), "poll:close")
 
         assert seen == ["replacement"]
         assert router.template().pattern == "(?:poll:close)"
@@ -449,7 +449,7 @@ class TestRouter:
         )
         select._values = ["now"]
         item = _dispatch_item(router)(select)
-        await item.callback(fake_interaction())
+        await item.callback(interaction_harness())
 
         assert seen == [("now",)]
 
@@ -466,8 +466,8 @@ class TestRouteGroups:
             seen.append("close")
 
         router = Router(namespace=root, on_gone=_noop)
-        await router.dispatch(fake_interaction(), close.id())
-        await router.dispatch(fake_interaction(), "poll:close")
+        await router.dispatch(interaction_harness(), close.id())
+        await router.dispatch(interaction_harness(), "poll:close")
 
         assert close.id() == "r:polls:close"
         assert seen == ["close", "close"]
@@ -547,7 +547,7 @@ class TestRouteGroups:
             seen.append("replacement")
 
         polls.add(route, replacement)
-        await router.dispatch(fake_interaction(), route.id())
+        await router.dispatch(interaction_harness(), route.id())
 
         assert seen == ["replacement"]
 
@@ -581,7 +581,7 @@ class TestMiddleware:
         async def handle(_interaction) -> None:
             seen.append("handler")
 
-        await router.dispatch(fake_interaction(), close.id())
+        await router.dispatch(interaction_harness(), close.id())
 
         assert seen == [
             "router:before",
@@ -600,7 +600,7 @@ class TestMiddleware:
             async def dispatch(self, request, proceed) -> None:
                 seen.append("stopped")
 
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         router = Router()
         router.add_middleware(Stop())
 
@@ -633,7 +633,7 @@ class TestMiddleware:
         async def fail(_interaction) -> None:
             raise RuntimeError("boom")
 
-        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+        await router.dispatch(interaction_harness(), POLL_CLOSE.id())
 
         assert seen == ["caught"]
 
@@ -658,7 +658,7 @@ class TestMiddleware:
         async def fail(_interaction) -> None:
             raise RuntimeError("boom")
 
-        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+        await router.dispatch(interaction_harness(), POLL_CLOSE.id())
 
         assert seen == ["before", "after", "router-error"]
 
@@ -677,7 +677,7 @@ class TestMiddleware:
         router.add_middleware(Twice())
         router.add(POLL_CLOSE, _noop)
 
-        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+        await router.dispatch(interaction_harness(), POLL_CLOSE.id())
 
         assert len(errors) == 1
         assert "only be called once" in str(errors[0])
@@ -692,7 +692,7 @@ class TestMiddleware:
         router = Router()
         router.add_middleware(Save())
         router.add(POLL_CLOSE, _noop)
-        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+        await router.dispatch(interaction_harness(), POLL_CLOSE.id())
 
         with pytest.raises(RuntimeError, match="only valid during"):
             await saved[0]()
@@ -712,7 +712,7 @@ class TestMiddleware:
         router.add_middleware(Record())
         router.add(POLL_CLOSE, _noop)
 
-        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+        await router.dispatch(interaction_harness(), POLL_CLOSE.id())
 
         assert seen == ["middleware", "middleware"]
 
@@ -731,8 +731,8 @@ class TestMiddleware:
         router = Router(namespace=root, on_gone=_noop)
         router.add_middleware(Capture())
 
-        await router.dispatch(fake_interaction(), "edit:build:7")
-        await router.dispatch(fake_interaction(), "r:retired")
+        await router.dispatch(interaction_harness(), "edit:build:7")
+        await router.dispatch(interaction_harness(), "r:retired")
 
         matched, gone = requests
         assert matched.route is edit
@@ -788,7 +788,7 @@ class TestMiddleware:
 
 class TestAcknowledgement:
     async def test_a_handler_that_returns_without_responding_is_acknowledged(self) -> None:
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         router = Router()
         router.add(POLL_CLOSE, _noop)
 
@@ -798,7 +798,7 @@ class TestAcknowledgement:
         assert interaction.response.is_done()
 
     async def test_a_slow_handler_is_acknowledged_while_it_keeps_running(self) -> None:
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         finished = False
         router = Router(acknowledgement_timeout=0.01)
 
@@ -814,7 +814,7 @@ class TestAcknowledgement:
         interaction.response.defer.assert_awaited_once_with()
 
     async def test_an_initial_handler_response_is_not_overwritten(self) -> None:
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         router = Router()
 
         @router.route(POLL_CLOSE)
@@ -827,7 +827,7 @@ class TestAcknowledgement:
         interaction.response.defer.assert_not_awaited()
 
     async def test_a_modal_response_is_not_overwritten(self) -> None:
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         router = Router()
 
         @router.route(POLL_CLOSE)
@@ -840,7 +840,7 @@ class TestAcknowledgement:
         interaction.response.defer.assert_not_awaited()
 
     async def test_an_error_hook_may_spend_the_response_slot(self) -> None:
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         async def hook(interaction, error, source: str) -> None:
             await interaction.response.send_message()
@@ -864,7 +864,7 @@ class TestProfiling:
                 await proceed()
 
         profiler = MemoryProfiler()
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         router = Router(profiler=profiler)
         router.add_middleware(Continue())
 
@@ -901,7 +901,7 @@ class TestProfiling:
         router.add_middleware(Stop())
         router.add(POLL_CLOSE, _noop)
 
-        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+        await router.dispatch(interaction_harness(), POLL_CLOSE.id())
 
         trace = profiler.snapshot().recent[0]
         assert trace.result.status is TraceStatus.COMPLETED
@@ -916,7 +916,7 @@ class TestProfiling:
         async def slow(_interaction) -> None:
             await anyio.sleep(0.03)
 
-        await router.dispatch(fake_interaction(), POLL_CLOSE.id())
+        await router.dispatch(interaction_harness(), POLL_CLOSE.id())
 
         trace = profiler.snapshot().deadline_misses[0]
         acknowledgement = next(span for span in trace.spans if span.name == "acknowledgement")
@@ -1103,7 +1103,7 @@ class TestHandlerKinds:
 
         router = Router()
         router.add(POLL_CLOSE, catch_all)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
         await router.dispatch(interaction, "poll:close")
         assert seen == [(interaction,)]
 

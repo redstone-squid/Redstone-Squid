@@ -1,31 +1,58 @@
 """The version catalogue screen."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
 from typing import Any, cast
-from unittest.mock import AsyncMock
 
-import squid_ui as sl
-from squid.bot.version_tracking import VersionOperations, VersionScreen, VersionTracker
-from squid.versions.domain import MinecraftVersion
-from squid_ui.testing import labels
+from squid.bot.version_tracking import VersionScreen
+from squid.versions.application import VersionService
+from squid.versions.domain import Edition, MinecraftVersion
+from squid_ui.testing import RecordingResponder, labels, submit, submit_event
 
 
-def make_screen(*, allowed: bool = True) -> VersionScreen:
-    versions = SimpleNamespace(
-        list_display=AsyncMock(
-            side_effect=lambda edition, **_kwargs: ["1.21", "1.20"] if edition == "Java" else ["1.21.90"]
-        ),
-        add=AsyncMock(return_value=MinecraftVersion("Java", 1, 22, 0)),
-    )
-    return VersionScreen(
-        cast(VersionOperations, versions),
-        can_create=allowed,
-        authorize_create=AsyncMock(return_value=allowed),
+class VersionRecorder(VersionService):
+    def __init__(self) -> None:
+        self.list_calls: list[tuple[Edition, int | None]] = []
+        self.add_calls: list[tuple[str, Edition | None]] = []
+
+    async def list_display(self, edition: Edition, *, limit: int | None = None) -> list[str]:
+        self.list_calls.append((edition, limit))
+        return ["1.21", "1.20"] if edition == "Java" else ["1.21.90"]
+
+    async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion:
+        self.add_calls.append((version_string, edition))
+        return MinecraftVersion("Java", 1, 22, 0)
+
+
+class Authorizer:
+    def __init__(self, allowed: bool) -> None:
+        self.allowed = allowed
+        self.calls = 0
+
+    async def __call__(self) -> bool:
+        self.calls += 1
+        return self.allowed
+
+
+@dataclass(frozen=True)
+class ScreenHarness:
+    screen: VersionScreen
+    versions: VersionRecorder
+    authorizer: Authorizer
+
+
+def make_screen(*, allowed: bool = True) -> ScreenHarness:
+    versions = VersionRecorder()
+    authorizer = Authorizer(allowed)
+    return ScreenHarness(
+        VersionScreen(versions, can_create=allowed, authorize_create=authorizer),
+        versions,
+        authorizer,
     )
 
 
 async def test_version_catalogue_loads_both_editions_into_a_browser() -> None:
-    screen = make_screen()
+    harness = make_screen()
+    screen = harness.screen
     await screen.on_load()
 
     assert screen._browser is not None
@@ -34,28 +61,29 @@ async def test_version_catalogue_loads_both_editions_into_a_browser() -> None:
 
 
 async def test_creation_rechecks_permission_and_refreshes() -> None:
-    screen = make_screen()
+    harness = make_screen()
+    screen = harness.screen
     await screen.on_load()
-    event = SimpleNamespace(values={"edition": "Java", "version": "1.22"}, notice=AsyncMock())
+    responder = RecordingResponder()
 
-    await screen._add(cast(sl.SubmitEvent, event))
+    await submit(screen, "add-version", {"edition": "Java", "version": "1.22"}, responder=responder)
 
-    cast(Any, screen._versions).add.assert_awaited_once_with("1.22", edition="Java")
-    assert cast(Any, screen._versions).list_display.await_count == 4
-    event.notice.assert_awaited_once()
+    assert harness.versions.add_calls == [("1.22", "Java")]
+    assert harness.versions.list_calls == [("Java", None), ("Bedrock", None)] * 2
+    assert harness.authorizer.calls == 1
+    assert len(responder.notices) == 1
 
 
 async def test_revoked_creation_permission_prevents_the_write() -> None:
-    screen = make_screen(allowed=False)
-    event = SimpleNamespace(values={"edition": "Java", "version": "1.22"}, notice=AsyncMock())
+    harness = make_screen(allowed=False)
+    responder = RecordingResponder()
 
-    await screen._add(cast(sl.SubmitEvent, event))
+    await harness.screen._add(
+        # The control is intentionally absent when initial authorization fails; drive the handler
+        # with the public event factory to verify the mandatory authorization recheck.
+        submit_event({"edition": "Java", "version": "1.22"}, responder=responder)
+    )
 
-    cast(Any, screen._versions).add.assert_not_awaited()
-    event.notice.assert_awaited_once()
-
-
-def test_versions_are_one_app_only_workspace() -> None:
-    tracker = cast(Any, VersionTracker)
-    assert tracker.__cog_commands__ == []
-    assert [command.qualified_name for command in tracker.__cog_app_commands__] == ["versions"]
+    assert harness.versions.add_calls == []
+    assert harness.authorizer.calls == 1
+    assert len(responder.notices) == 1

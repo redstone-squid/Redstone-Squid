@@ -1,8 +1,6 @@
 """Notification REST orchestration contracts."""
 
-from types import SimpleNamespace
-from typing import Any, cast
-from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
@@ -11,41 +9,88 @@ from whenever import Instant
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.notifications import create_subscription, list_inbox, update_preferences
 from squid.api.v1.schemas.notifications import NotificationPreferenceUpdate, NotificationSubscriptionCreate
-from squid.core.pagination import Page, PageSelector
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.notifications import (
     InboxNotification,
     NotificationPreferences,
+    NotificationService,
     NotificationSubscription,
     RecordSubscriptionFilter,
     SubscriptionKind,
     TagPredicate,
 )
 from squid.notifications.domain import NotificationKind
+from squid.permissions.application import PermissionService
+from squid.permissions.domain import PermissionNode, Subject
 
 ACCOUNT = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
 
 
+class NotificationRecorder(NotificationService):
+    def __init__(self) -> None:
+        self.preferences_result = NotificationPreferences(account_id=7, consent_pending=False)
+        self.subscription_result: NotificationSubscription | None = None
+        self.inbox_result: Page[InboxNotification] = Page(items=(), total=0, next=None, prev=None)
+        self.preference_updates: list[tuple[int, bool, bool]] = []
+        self.subscription_calls: list[tuple[int, SubscriptionKind, UUID | None, RecordSubscriptionFilter | None]] = []
+        self.inbox_reads: list[tuple[int, PageSelector, int, bool]] = []
+
+    async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
+        self.preference_updates.append((account_id, web_enabled, dm_enabled))
+        return self.preferences_result
+
+    async def subscribe(
+        self,
+        account_id: int,
+        *,
+        kind: SubscriptionKind,
+        subject_id: UUID | None = None,
+        record_filter: RecordSubscriptionFilter | None = None,
+    ) -> NotificationSubscription:
+        self.subscription_calls.append((account_id, kind, subject_id, record_filter))
+        assert self.subscription_result is not None
+        return self.subscription_result
+
+    async def inbox(
+        self,
+        account_id: int,
+        *,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 20,
+        include_staff: bool = False,
+    ) -> Page[InboxNotification]:
+        self.inbox_reads.append((account_id, selector, page_size, include_staff))
+        return self.inbox_result
+
+
+class PermissionAnswer(PermissionService):
+    def __init__(self, allowed: bool) -> None:
+        self.allowed = allowed
+
+    async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
+        return self.allowed
+
+
 async def test_channels_stay_off_until_they_are_explicitly_turned_on() -> None:
     """Accepting the privacy notice permits notifications; it does not enable any channel."""
-    notifications = AsyncMock()
-    notifications.set_preferences.return_value = NotificationPreferences(account_id=7, consent_pending=False)
+    notifications = NotificationRecorder()
 
     response = await update_preferences(
         NotificationPreferenceUpdate(),
-        cast(Any, notifications),
+        notifications,
         ACCOUNT,
     )
 
     assert response.consent_pending is False
     assert response.web_enabled is False
     assert response.dm_enabled is False
-    notifications.set_preferences.assert_awaited_once_with(7, web_enabled=False, dm_enabled=False)
+    assert notifications.preference_updates == [(7, False, False)]
 
 
 async def test_record_filter_subscription_preserves_presence_and_exact_predicates() -> None:
-    notifications = AsyncMock()
+    notifications = NotificationRecorder()
     record_filter = RecordSubscriptionFilter(tags=(TagPredicate(4), TagPredicate(7, "exact", "slim")))
-    notifications.subscribe.return_value = NotificationSubscription(
+    notifications.subscription_result = NotificationSubscription(
         id=9,
         account_id=7,
         kind=SubscriptionKind.RECORD_FILTER,
@@ -65,15 +110,10 @@ async def test_record_filter_subscription_preserves_presence_and_exact_predicate
         }
     )
 
-    response = await create_subscription(request, cast(Any, notifications), ACCOUNT)
+    response = await create_subscription(request, notifications, ACCOUNT)
 
     assert response.filter == record_filter.as_dict()
-    notifications.subscribe.assert_awaited_once_with(
-        7,
-        kind=SubscriptionKind.RECORD_FILTER,
-        subject_id=None,
-        record_filter=record_filter,
-    )
+    assert notifications.subscription_calls == [(7, SubscriptionKind.RECORD_FILTER, None, record_filter)]
 
 
 def test_empty_record_filter_is_rejected_at_the_api_boundary() -> None:
@@ -89,17 +129,17 @@ async def test_staff_inbox_access_follows_the_pending_submission_node(holds_node
     answer, so a credential that does not carry the node cannot reach staff items at
     all -- which the retired config allowlist, keyed on a snowflake, could not express.
     """
-    notifications = AsyncMock()
+    notifications = NotificationRecorder()
     item = InboxNotification(
         id=3,
         kind=NotificationKind.STAFF_BUILD_SUBMITTED,
         payload={"build_id": 42},
         created_at=Instant.now(),
     )
-    notifications.inbox.return_value = Page(items=(item,), total=1, next=None, prev=None)
-    permissions = cast(Any, SimpleNamespace(allows=AsyncMock(return_value=holds_node)))
+    notifications.inbox_result = Page(items=(item,), total=1, next=None, prev=None)
+    permissions = PermissionAnswer(holds_node)
 
-    page = await list_inbox(cast(Any, notifications), permissions, ACCOUNT)
+    page = await list_inbox(notifications, permissions, ACCOUNT)
 
     assert page.items[0].kind == "staff_build_submitted"
-    notifications.inbox.assert_awaited_once_with(7, selector=PageSelector(), page_size=20, include_staff=holds_node)
+    assert notifications.inbox_reads == [(7, PageSelector(), 20, holds_node)]

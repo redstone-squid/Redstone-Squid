@@ -6,7 +6,7 @@ from typing import cast, override
 import discord
 
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionRouter, ReactionSubscriber
-from tests.helpers.discord import make_reaction_bot, make_reaction_payload
+from tests.support.discord import make_reaction_bot, make_reaction_payload
 
 
 class RecordingSubscriber(ReactionSubscriber):

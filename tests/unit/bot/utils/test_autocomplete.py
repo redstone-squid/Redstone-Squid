@@ -17,7 +17,7 @@ from squid.suggestions.application import (
 )
 from squid.suggestions.domain import Suggestion, SuggestionRequest, ValueType, Visibility
 from squid.suggestions.infrastructure.providers import StaticProvider
-from tests.helpers.discord import make_autocomplete_interaction
+from tests.support.discord import make_autocomplete_interaction
 
 VIEW_PENDING = "build.submission.view_pending"
 

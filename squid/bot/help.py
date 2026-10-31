@@ -12,10 +12,8 @@ from discord.ext.commands import Cog, Command, Group
 import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
-from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import CardField, CardSection, L, card_node, error_node, render_payload
+from squid.bot.ui import CardField, CardSection, card_node, error_node, render_payload, tr
 from squid.config import BuildConfig
-from squid.core.i18n import _
 from squid.suggestions.application import candidate, rank
 from squid.suggestions.domain import MAX_SUGGESTIONS
 from squid_ui_discord import send_to
@@ -23,18 +21,18 @@ from squid_ui_discord import send_to
 if TYPE_CHECKING:
     import squid.bot.app
 
-MORE_INFORMATION = _("Use `/help <command>` to get more information.")
+MORE_INFORMATION = tr(t"Use `/help <command>` to get more information.")
 
 DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
-    (_("Build"), frozenset({"build"})),
-    (_("Discover"), frozenset({"search", "tags"})),
-    (_("Account"), frozenset({"account", "notifications"})),
-    (_("Community"), frozenset({"poll"})),
+    (tr(t"Build"), frozenset({"build"})),
+    (tr(t"Discover"), frozenset({"search", "tags"})),
+    (tr(t"Account"), frozenset({"account", "notifications"})),
+    (tr(t"Community"), frozenset({"poll"})),
     (
-        _("Administration & setup"),
+        tr(t"Administration & setup"),
         frozenset({"access", "errors", "records", "redstoner", "settings", "starboard", "versions"}),
     ),
-    (_("Information"), frozenset({"help"})),
+    (tr(t"Information"), frozenset({"help"})),
 )
 """How the directory groups top-level commands, by command name.
 
@@ -81,8 +79,8 @@ class HelpScreen(sd.Screen):
             summary=lambda item: getattr(item, "short_doc", None) or getattr(item, "description", ""),
             detail=self._detail,
             page_size=10,
-            title=L(t"Redstone Squid help"),
-            empty=L(t"No commands are available."),
+            title=tr(t"Redstone Squid help"),
+            empty=tr(t"No commands are available."),
         )
 
     def _find(self, needle: str | None) -> AnyCommand | None:
@@ -96,7 +94,7 @@ class HelpScreen(sd.Screen):
         qualified_name = command.qualified_name
         heading = f"/{qualified_name}{f' {signature}' if signature else ''}"
         description = (
-            getattr(command, "help", None) or getattr(command, "description", None) or L(t"No details provided")
+            getattr(command, "help", None) or getattr(command, "description", None) or tr(t"No details provided")
         )
         children = tuple(getattr(command, "commands", ()))
         return sl.section(
@@ -114,8 +112,8 @@ class HelpScreen(sd.Screen):
         if self._needle is not None and self._focused is None:
             needle = self._needle
             body: sl.LayoutNode[sl.ComponentsV2Target] = sl.section(
-                sl.heading(L(t"Command not found")),
-                sl.paragraph(L(t"No command named `{needle}` is available.")),
+                sl.heading(tr(t"Command not found")),
+                sl.paragraph(tr(t"No command named `{needle}` is available.")),
             )
         elif self._focused is not None:
             body = self._detail(self._focused)
@@ -123,16 +121,16 @@ class HelpScreen(sd.Screen):
             body = self.boundary(self._browser, key="browser")
         project_url = self._bot.source_code_url or PROJECT_URL
         links: list[sl.semantic.Link] = [
-            sl.link(L(t"Source"), project_url, key="source"),
-            sl.link(L(t"Submission form"), SUBMISSION_FORM_URL, key="form"),
-            sl.link(L(t"Documentation"), f"{project_url}/tree/master/docs", key="docs"),
-            sl.link(L(t"Regulations"), REGULATIONS_URL, key="regulations"),
+            sl.link(tr(t"Source"), project_url, key="source"),
+            sl.link(tr(t"Submission form"), SUBMISSION_FORM_URL, key="form"),
+            sl.link(tr(t"Documentation"), f"{project_url}/tree/master/docs", key="docs"),
+            sl.link(tr(t"Regulations"), REGULATIONS_URL, key="regulations"),
         ]
         if self._bot.user is not None:
             links.insert(
                 0,
                 sl.link(
-                    L(t"Invite"),
+                    tr(t"Invite"),
                     f"https://discordapp.com/oauth2/authorize?client_id={self._bot.user.id}&scope=bot&permissions=8",
                     key="invite",
                 ),
@@ -140,14 +138,14 @@ class HelpScreen(sd.Screen):
         return (
             body,
             sl.action_controls(*links, key="help-links"),
-            sl.action_controls(sl.action_control(L(t"Close"), self._close, key="close"), key="help-actions"),
+            sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="help-actions"),
         )
 
     async def _close(self, event: sl.PressEvent) -> None:
         await event.finish()
 
 
-def _summary(command: AnyCommand, locale: str | None) -> str:
+def _summary(command: AnyCommand) -> str:
     """One line about a command, from wherever that surface keeps it.
 
     A prefix command carries `short_doc`, an app command a `description`. The directory
@@ -155,18 +153,17 @@ def _summary(command: AnyCommand, locale: str | None) -> str:
     any other way.
     """
     text = getattr(command, "short_doc", None) or getattr(command, "description", "")
-    return text or t(locale, _("No details provided"))
+    return text or tr("No details provided")
 
 
 def _command_section(
     title: str,
     commands_: Sequence[AnyCommand],
-    locale: str | None,
 ) -> CardSection:
     """Render a compact command category for the slash-help directory."""
     return CardSection(
         title,
-        tuple(CardField(f"/{command.qualified_name}", _summary(command, locale)) for command in commands_),
+        tuple(CardField(f"/{command.qualified_name}", _summary(command)) for command in commands_),
     )
 
 
@@ -179,7 +176,7 @@ class HelpCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
     # /help [command]
     @app_commands.command()
-    @app_commands.describe(command=app_commands.locale_str(_("The command to get help for.")))
+    @app_commands.describe(command=app_commands.locale_str("The command to get help for."))
     async def help(self, interaction: discord.Interaction[BotT], command: str | None):
         """Show a grouped command directory or focused command details."""
         await HelpScreen(self.bot, self._all_commands(), command).show(interaction)
@@ -249,19 +246,17 @@ class Help(commands.MinimalHelpCommand):
     # !help
     @override
     async def send_bot_help(self, mapping: Mapping[Cog | None, list[Command[Any, ..., Any]]], /) -> None:
-        locale = await resolve_locale(self.context, self._bot.services.settings)
         commands_ = list(self.context.bot.commands)
 
         # We do not filter commands here, because it is too slow.
         # Every command needs to run its own checks even if the same check is used.
         # filtered_commands = await self.filter_commands(commands_, sort=True)
         desc = dedent(
-            t(
-                locale,
-                _("{description}\n\nCommands:{commands}\n\n{more_information}\n"),
+            tr(
+                "{description}\n\nCommands:{commands}\n\n{more_information}\n",
                 description=self.context.bot.description,
-                commands=self.get_commands_brief_details(commands_, locale=locale),
-                more_information=t(locale, MORE_INFORMATION),
+                commands=self.get_commands_brief_details(commands_),
+                more_information=tr(MORE_INFORMATION),
             )
         )
         footer: str | None = None
@@ -272,18 +267,17 @@ class Help(commands.MinimalHelpCommand):
             and build_config.commit_message is not None
         ):
             footer = f"commit: {build_config.commit_hash[:7]}, message: {build_config.commit_message.strip()}"
-        await send_to(self.get_destination())(render_payload([card_node(t(locale, _("Help")), desc, footer=footer)]))
+        await send_to(self.get_destination())(render_payload([card_node(tr("Help"), desc, footer=footer)]))
 
     # !help <command>
     @override
     async def send_command_help(self, command: Command[Any, ..., Any], /) -> None:
-        locale = await resolve_locale(self.context, self._bot.services.settings)
         await send_to(self.get_destination())(
             render_payload(
                 [
                     card_node(
-                        t(locale, _("Command Help - `{name}`"), name=command.qualified_name),
-                        command.help or t(locale, _("No details provided")),
+                        tr("Command Help - `{name}`", name=command.qualified_name),
+                        command.help or tr("No details provided"),
                     )
                 ]
             )
@@ -291,14 +285,14 @@ class Help(commands.MinimalHelpCommand):
 
     @staticmethod
     def get_commands_brief_details(
-        commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False, locale: str | None = None
+        commands_: Sequence[Command[Any, Any, Any]], return_as_list: bool = False
     ) -> list[str] | str:
         """
         Formats the prefix, command name and signature, and short doc for an iterable of commands.
 
         return_as_list is helpful for passing these command details into the paginator as a list of command details.
         """
-        no_details = t(locale, _("No details provided"))
+        no_details = tr("No details provided")
         details: list[str] = []
         for command in commands_:
             signature = f" {command.signature}" if command.signature else ""
@@ -308,10 +302,8 @@ class Help(commands.MinimalHelpCommand):
         return "".join(details)
 
     @staticmethod
-    def get_cog_brief_details(
-        cogs: Sequence[Cog], return_as_list: bool = False, locale: str | None = None
-    ) -> list[str] | str:
-        no_details = t(locale, _("No details provided"))
+    def get_cog_brief_details(cogs: Sequence[Cog], return_as_list: bool = False) -> list[str] | str:
+        no_details = tr("No details provided")
         details: list[str] = [f"\n`{cog.qualified_name}` - {cog.description or no_details}" for cog in cogs]
         if return_as_list:
             return details
@@ -330,48 +322,41 @@ class Help(commands.MinimalHelpCommand):
             # noinspection PyTypeChecker
             return await self.send_command_help(group)
 
-        locale = await resolve_locale(self.context, self._bot.services.settings)
-        command_details = self.get_commands_brief_details(list(commands_), locale=locale)
-        desc = t(
-            locale,
-            _("{description}\n\nUsable Subcommands: {commands}\n\n{more_information}"),
+        command_details = self.get_commands_brief_details(list(commands_))
+        desc = tr(
+            "{description}\n\nUsable Subcommands: {commands}\n\n{more_information}",
             description=group.cog.description,
-            commands=command_details or t(locale, _("None")),
-            more_information=t(locale, MORE_INFORMATION),
+            commands=command_details or tr("None"),
+            more_information=tr(MORE_INFORMATION),
         )
-        await send_to(self.get_destination())(render_payload([card_node(t(locale, _("Command Help")), desc)]))
+        await send_to(self.get_destination())(render_payload([card_node(tr("Command Help"), desc)]))
         return None
 
     # !help <cog>
     @override
     async def send_cog_help(self, cog: Cog, /) -> None:
         """Sends help for a cog."""
-        locale = await resolve_locale(self.context, self._bot.services.settings)
         commands_ = cog.walk_commands()
-        command_details = self.get_commands_brief_details(list(commands_), locale=locale)
-        desc = t(
-            locale,
-            _("{description}\n\nUsable Subcommands:{commands}\n\n{more_information}"),
+        command_details = self.get_commands_brief_details(list(commands_))
+        desc = tr(
+            "{description}\n\nUsable Subcommands:{commands}\n\n{more_information}",
             description=cog.description,
-            commands=command_details or t(locale, _("None")),
-            more_information=t(locale, MORE_INFORMATION),
+            commands=command_details or tr("None"),
+            more_information=tr(MORE_INFORMATION),
         )
-        await send_to(self.get_destination())(render_payload([card_node(t(locale, _("Command Help")), desc)]))
+        await send_to(self.get_destination())(render_payload([card_node(tr("Command Help"), desc)]))
 
     @override
     async def command_not_found(self, string: str, /) -> str:  # type: ignore  # overriding a sync method
-        locale = await resolve_locale(self.context, self._bot.services.settings)
-        return t(
-            locale,
-            _("Unable to find command `{name}`. Use /help to get a list of available commands."),
+        return tr(
+            "Unable to find command `{name}`. Use /help to get a list of available commands.",
             name=string,
         )
 
     @override
     async def send_error_message(self, error: str, /) -> None:  # type: ignore  # overriding a sync method
         # TODO: error can be a custom Error too
-        locale = await resolve_locale(self.context, self._bot.services.settings)
-        await send_to(self.get_destination())(render_payload([error_node(t(locale, _("Error.")), error)]))
+        await send_to(self.get_destination())(render_payload([error_node(tr("Error."), error)]))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):

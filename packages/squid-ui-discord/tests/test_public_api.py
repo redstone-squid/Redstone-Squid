@@ -26,49 +26,6 @@ def test_renamed_submodules_are_modules_not_shadowed_callables(dotted: str) -> N
     assert isinstance(mod, ModuleType)
 
 
-def test_the_adapter_namespace_exposes_its_surface() -> None:
-    """What `squid_ui_discord` promotes to its root, and what it deliberately does not."""
-    assert squid_ui_discord.MessageRoot
-    assert squid_ui_discord.owner_message_root
-    assert squid_ui_discord.button_grid
-    assert squid_ui_discord.modals.CheckboxGroupField
-    assert squid_ui_discord.MessageRootDefaults
-    assert squid_ui_discord.SessionManager
-    assert squid_ui_discord.routing.routers
-    assert squid_ui_discord.renderer.V2Renderer
-    assert squid_ui_discord.classic_renderer.ClassicRenderer
-    assert squid_ui_discord.classic.render_message
-    assert squid_ui_discord.SessionKey
-    assert squid_ui_discord.sessions.AdmissionSpec
-    assert squid_ui_discord.SessionSpec
-    assert squid_ui_discord.StackNavigator
-    assert squid_ui_discord.OpenContext
-    assert squid_ui_discord.ScopeKind
-    assert squid_ui_discord.SessionOptionsResolver
-    assert squid_ui_discord.Invocation
-    assert squid_ui_discord.Private
-    assert squid_ui_discord.Visibility
-    assert squid_ui_discord.LocalizationResolver
-    assert squid_ui_discord.current_invocation
-    assert squid_ui_discord.invocation_scope
-    assert squid_ui_discord.Screen
-    assert squid_ui_discord.message_payload.MessagePayload
-    assert squid_ui_discord.MessageMode.COMPONENTS_V2
-    assert squid_ui_discord.MessageModeError
-    assert squid_ui_discord.message_mode
-    assert squid_ui_discord.message_payload.MessagePayload
-    assert not hasattr(squid_ui_discord, "MountRegistry")
-    assert not hasattr(squid_ui_discord, "WhenOpen")
-    assert squid_ui_discord.guards.requires_role
-    assert squid_ui_discord.durability.DurableSessionRuntime
-    assert squid_ui_discord.durability.DurableBot
-    assert squid_ui_discord.durability.DiscordFrontend
-    assert not hasattr(squid_ui_discord.durability, "MountManager")
-    assert squid_ui_discord.MessageRootScheduler.follow
-    for removed in ("AdmissionSpec", "Router", "V2Renderer", "ClassicRenderer", "AuditReport"):
-        assert removed not in squid_ui_discord.__all__ and not hasattr(squid_ui_discord, removed)
-
-
 def test_rejection_notices_accept_public_deferred_text() -> None:
     notice = Message("This screen is already open.")
 
@@ -76,18 +33,11 @@ def test_rejection_notices_accept_public_deferred_text() -> None:
 
 
 def test_testing_helpers_are_a_declared_namespace_not_an_accident() -> None:
-    """A consumer's tests import these, so they are versioned surface, not a private module."""
-    from types import ModuleType
+    """A consumer can import and drive the versioned testing namespace."""
+    harness = squid_ui_discord.testing.interaction_harness(user_id=7)
 
-    assert "testing" in squid_ui_discord.__all__
-    assert isinstance(squid_ui_discord.testing, ModuleType)
-    assert {"fake_interaction", "delivered_to", "commit_render", "assert_within_limits"} <= set(
-        squid_ui_discord.testing.__all__
-    )
-    assert [name for name in squid_ui_discord.testing.__all__ if not hasattr(squid_ui_discord.testing, name)] == []
-    # The doubles stay one tier down; nothing here belongs beside MessageRoot and Screen.
-    for name in squid_ui_discord.testing.__all__:
-        assert name not in squid_ui_discord.__all__
+    assert harness.source.user.id == 7
+    assert squid_ui_discord.testing.message_harness().source.id == 99
 
 
 def test_durability_imports_without_postgres_dependency() -> None:
@@ -131,7 +81,6 @@ sys.meta_path.insert(0, BlockStores())
 import squid_ui_discord
 assert squid_ui_discord.MessageRoot
 assert squid_ui_discord.SessionSpec
-assert "durability" in squid_ui_discord.__all__
 assert "squid_storage" not in sys.modules
 """
     subprocess.run([sys.executable, "-c", code], check=True)

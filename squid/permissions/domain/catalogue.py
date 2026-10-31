@@ -13,7 +13,7 @@ from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.permissions.domain.matching import MAX_SEGMENTS, Pattern
 from squid.permissions.domain.models import (
     CatalogueError,
@@ -23,6 +23,7 @@ from squid.permissions.domain.models import (
     Tag,
     UnknownPermissionNodeError,
 )
+from squid_ui.text import Message
 
 MIN_SEGMENTS = 2
 """`<domain>.<verb>` is the shallowest a node may be. A single bare segment would
@@ -90,7 +91,7 @@ class CatalogueBuilder:
         self,
         name: str,
         scope: NodeScope,
-        description: str,
+        description: Message,
         *,
         default: Default = Default.DENY,
         tags: Sequence[Tag] = (),
@@ -142,190 +143,190 @@ _b = CatalogueBuilder()
 BUILD_SUBMISSION_READ = _b.node(
     "build.submission.read",
     NodeScope.GLOBAL,
-    _("View published builds."),
+    tr(t"View published builds."),
     default=Default.ALLOW,
     tags=(Tag.READONLY,),
 )
 BUILD_SUBMISSION_CREATE = _b.node(
     "build.submission.create",
     NodeScope.GLOBAL,
-    _("Submit a build for review."),
+    tr(t"Submit a build for review."),
     default=Default.ALLOW,
 )
 BUILD_SUBMISSION_EDIT = _b.node(
     "build.submission.edit",
     NodeScope.GLOBAL,
-    _("Edit builds you did not submit."),
+    tr(t"Edit builds you did not submit."),
 )
 BUILD_SUBMISSION_APPROVE = _b.node(
     "build.submission.approve",
     NodeScope.GLOBAL,
-    _("Approve pending build submissions."),
+    tr(t"Approve pending build submissions."),
     tags=(Tag.MODERATION,),
 )
 BUILD_SUBMISSION_REJECT = _b.node(
     "build.submission.reject",
     NodeScope.GLOBAL,
-    _("Reject pending build submissions."),
+    tr(t"Reject pending build submissions."),
     tags=(Tag.MODERATION,),
 )
 BUILD_SUBMISSION_VIEW_PENDING = _b.node(
     "build.submission.view_pending",
     NodeScope.GLOBAL,
-    _("View builds that have not been reviewed yet."),
+    tr(t"View builds that have not been reviewed yet."),
     tags=(Tag.MODERATION, Tag.READONLY),
 )
 BUILD_SUBMISSION_RECALC = _b.node(
     "build.submission.recalc",
     NodeScope.GLOBAL,
-    _("Recompute a build's derived attributes."),
+    tr(t"Recompute a build's derived attributes."),
 )
 BUILD_SUBMISSION_DEBUG = _b.node(
     "build.submission.debug",
     NodeScope.GLOBAL,
-    _("Inspect a build's raw stored representation."),
+    tr(t"Inspect a build's raw stored representation."),
     tags=(Tag.DIAGNOSTIC,),
 )
 BUILD_SCHEMATIC_MEASURE_TIMING = _b.node(
     "build.schematic.measure_timing",
     NodeScope.GLOBAL,
-    _("Measure a schematic's timing."),
+    tr(t"Measure a schematic's timing."),
     tags=(Tag.DIAGNOSTIC,),
 )
 BUILD_SCHEMATIC_DETECT_LATTICE = _b.node(
     "build.schematic.detect_lattice",
     NodeScope.GLOBAL,
-    _("Detect a schematic's lattice structure."),
+    tr(t"Detect a schematic's lattice structure."),
     tags=(Tag.DIAGNOSTIC,),
 )
 
 RECORD_ENTRY_INSPECT = _b.node(
     "record.entry.inspect",
     NodeScope.GLOBAL,
-    _("Inspect record gaps, lookups and title issues."),
+    tr(t"Inspect record gaps, lookups and title issues."),
     tags=(Tag.MODERATION, Tag.READONLY),
 )
 RECORD_ENTRY_REBUILD = _b.node(
     "record.entry.rebuild",
     NodeScope.GLOBAL,
-    _("Rebuild the record table from scratch."),
+    tr(t"Rebuild the record table from scratch."),
     tags=(Tag.DESTRUCTIVE,),
 )
 
 TAG_PROPOSAL_LIST = _b.node(
     "tag.proposal.list",
     NodeScope.GLOBAL,
-    _("List pending tag proposals."),
+    tr(t"List pending tag proposals."),
     tags=(Tag.MODERATION, Tag.READONLY),
 )
 TAG_PROPOSAL_APPROVE = _b.node(
     "tag.proposal.approve",
     NodeScope.GLOBAL,
-    _("Approve a tag proposal."),
+    tr(t"Approve a tag proposal."),
     tags=(Tag.MODERATION,),
 )
 TAG_PROPOSAL_REJECT = _b.node(
     "tag.proposal.reject",
     NodeScope.GLOBAL,
-    _("Reject a tag proposal."),
+    tr(t"Reject a tag proposal."),
     tags=(Tag.MODERATION,),
 )
 TAG_PROPOSAL_ARCHIVE = _b.node(
     "tag.proposal.archive",
     NodeScope.GLOBAL,
-    _("Archive a tag."),
+    tr(t"Archive a tag."),
     tags=(Tag.MODERATION,),
 )
 
 RESTRICTION_ALIAS_CREATE = _b.node(
     "restriction.alias.create",
     NodeScope.GLOBAL,
-    _("Add an alias for a restriction."),
+    tr(t"Add an alias for a restriction."),
     tags=(Tag.MODERATION,),
 )
 
 VERSION_ENTRY_CREATE = _b.node(
     "version.entry.create",
     NodeScope.GLOBAL,
-    _("Register a new Minecraft version."),
+    tr(t"Register a new Minecraft version."),
 )
 
 ACCOUNT_CLAIM_LIST = _b.node(
     "account.claim.list",
     NodeScope.GLOBAL,
-    _("List pending creator alias claims."),
+    tr(t"List pending creator alias claims."),
     tags=(Tag.MODERATION, Tag.READONLY),
 )
 ACCOUNT_CLAIM_APPROVE = _b.node(
     "account.claim.approve",
     NodeScope.GLOBAL,
-    _("Approve a creator alias claim."),
+    tr(t"Approve a creator alias claim."),
     tags=(Tag.MODERATION,),
 )
 ACCOUNT_CLAIM_REJECT = _b.node(
     "account.claim.reject",
     NodeScope.GLOBAL,
-    _("Reject a creator alias claim."),
+    tr(t"Reject a creator alias claim."),
     tags=(Tag.MODERATION,),
 )
 ACCOUNT_VERIFY_RELAY = _b.node(
     "account.verify.relay",
     NodeScope.GLOBAL,
-    _("Relay account verification on another user's behalf."),
+    tr(t"Relay account verification on another user's behalf."),
 )
 ACCOUNT_SELF_READ = _b.node(
     "account.self.read",
     NodeScope.GLOBAL,
-    _("Read your own account and notifications."),
+    tr(t"Read your own account and notifications."),
     default=Default.ALLOW,
     tags=(Tag.READONLY,),
 )
 ACCOUNT_IDENTITY_REFRESH = _b.node(
     "account.identity.refresh",
     NodeScope.GLOBAL,
-    _("Re-read your linked Minecraft name after a rename."),
+    tr(t"Re-read your linked Minecraft name after a rename."),
     default=Default.ALLOW,
 )
 ACCOUNT_IDENTITY_REFRESH_ANY = _b.node(
     "account.identity.refresh_any",
     NodeScope.GLOBAL,
-    _("Re-read another user's linked Minecraft name."),
+    tr(t"Re-read another user's linked Minecraft name."),
     tags=(Tag.MODERATION,),
 )
 ACCOUNT_SELF_MANAGE = _b.node(
     "account.self.manage",
     NodeScope.GLOBAL,
-    _("Edit your own profile, visibility, linked identities, and merges."),
+    tr(t"Edit your own profile, visibility, linked identities, and merges."),
     default=Default.ALLOW,
 )
 ACCOUNT_PROFILE_MODERATE = _b.node(
     "account.profile.moderate",
     NodeScope.GLOBAL,
-    _("Clear another user's public profile."),
+    tr(t"Clear another user's public profile."),
     tags=(Tag.MODERATION,),
 )
 
 PERM_GRANT_GLOBAL = _b.node(
     "perm.grant.global",
     NodeScope.GLOBAL,
-    _("Grant or revoke permissions anywhere, including global ones."),
+    tr(t"Grant or revoke permissions anywhere, including global ones."),
 )
 ROLE_DEFINITION_MANAGE = _b.node(
     "role.definition.manage",
     NodeScope.GLOBAL,
-    _("Create and edit global permission roles."),
+    tr(t"Create and edit global permission roles."),
 )
 
 DIAGNOSTICS_ERROR_READ = _b.node(
     "diagnostics.error.read",
     NodeScope.GLOBAL,
-    _("Read a stored error report by the reference its user was shown."),
+    tr(t"Read a stored error report by the reference its user was shown."),
     tags=(Tag.DIAGNOSTIC, Tag.READONLY),
 )
 DIAGNOSTICS_ERROR_CLEAR = _b.node(
     "diagnostics.error.clear",
     NodeScope.GLOBAL,
-    _("Delete every stored error report."),
+    tr(t"Delete every stored error report."),
     # `@destructive` is excluded from both admin roles (see GLOBAL_ADMIN, GUILD_ADMIN below), so
     # this node's default DENY leaves it reachable only through the owner's unconditional `**`
     # or an explicit grant, without a bespoke "owner only" mechanism.
@@ -335,12 +336,12 @@ DIAGNOSTICS_ERROR_CLEAR = _b.node(
 BOT_TREE_SYNC = _b.node(
     "bot.tree.sync",
     NodeScope.GLOBAL,
-    _("Synchronise the application command tree with Discord."),
+    tr(t"Synchronise the application command tree with Discord."),
 )
 BOT_RUNTIME_DEBUG = _b.node(
     "bot.runtime.debug",
     NodeScope.GLOBAL,
-    _("Run raw database and error-handling diagnostics against the live bot."),
+    tr(t"Run raw database and error-handling diagnostics against the live bot."),
     tags=(Tag.DESTRUCTIVE, Tag.DIAGNOSTIC),
 )
 
@@ -354,40 +355,40 @@ BOT_RUNTIME_DEBUG = _b.node(
 SETTINGS_SERVER_VIEW = _b.node(
     "settings.server.view",
     NodeScope.GUILD,
-    _("View this server's bot settings."),
+    tr(t"View this server's bot settings."),
     tags=(Tag.READONLY,),
 )
 SETTINGS_SERVER_EDIT = _b.node(
     "settings.server.edit",
     NodeScope.GUILD,
-    _("Change this server's bot settings."),
+    tr(t"Change this server's bot settings."),
 )
 SETTINGS_VOTING_EDIT = _b.node(
     "settings.voting.edit",
     NodeScope.GUILD,
-    _("Change this server's voting emojis and role weights."),
+    tr(t"Change this server's voting emojis and role weights."),
 )
 
 STARBOARD_BOARD_VIEW = _b.node(
     "starboard.board.view",
     NodeScope.GUILD,
-    _("View this server's starboards."),
+    tr(t"View this server's starboards."),
     tags=(Tag.READONLY,),
 )
 STARBOARD_BOARD_CREATE = _b.node(
     "starboard.board.create",
     NodeScope.GUILD,
-    _("Create a starboard."),
+    tr(t"Create a starboard."),
 )
 STARBOARD_BOARD_EDIT = _b.node(
     "starboard.board.edit",
     NodeScope.GUILD,
-    _("Change a starboard's configuration."),
+    tr(t"Change a starboard's configuration."),
 )
 STARBOARD_BOARD_DELETE = _b.node(
     "starboard.board.delete",
     NodeScope.GUILD,
-    _("Delete a starboard and its recorded stars."),
+    tr(t"Delete a starboard and its recorded stars."),
     # Not @destructive despite deleting rows: that tag is subtracted by both
     # built-in admin roles, and deleting a starboard you created is routine guild
     # administration. @destructive is reserved for irreversible damage to state
@@ -396,96 +397,96 @@ STARBOARD_BOARD_DELETE = _b.node(
 STARBOARD_BOARD_RECOUNT = _b.node(
     "starboard.board.recount",
     NodeScope.GUILD,
-    _("Recount a starboard's reactions."),
+    tr(t"Recount a starboard's reactions."),
 )
 STARBOARD_EMOJI_EDIT = _b.node(
     "starboard.emoji.edit",
     NodeScope.GUILD,
-    _("Change which emojis count towards a starboard."),
+    tr(t"Change which emojis count towards a starboard."),
 )
 STARBOARD_WEIGHT_EDIT = _b.node(
     "starboard.weight.edit",
     NodeScope.GUILD,
-    _("Change a starboard's per-role vote weights."),
+    tr(t"Change a starboard's per-role vote weights."),
 )
 
 MESSAGE_ARCHIVE_CREATE = _b.node(
     "message.archive.create",
     NodeScope.GUILD,
-    _("Archive a channel's messages."),
+    tr(t"Archive a channel's messages."),
 )
 
 REDSTONER_PANEL_MANAGE = _b.node(
     "redstoner.panel.manage",
     NodeScope.GUILD,
-    _("Post and manage the Redstoner self-assign panel."),
+    tr(t"Post and manage the Redstoner self-assign panel."),
 )
 REDSTONER_ROLE_RESYNC = _b.node(
     "redstoner.role.resync",
     NodeScope.GUILD,
-    _("Resynchronise Redstoner role membership."),
+    tr(t"Resynchronise Redstoner role membership."),
 )
 
 VOTE_POLL_CAST = _b.node(
     "vote.poll.cast",
     NodeScope.GUILD,
-    _("Vote in polls."),
+    tr(t"Vote in polls."),
     default=Default.ALLOW,
 )
 VOTE_POLL_CREATE = _b.node(
     "vote.poll.create",
     NodeScope.GUILD,
-    _("Create a poll."),
+    tr(t"Create a poll."),
 )
 VOTE_POLL_NETWORK_CREATE = _b.node(
     "vote.poll.network_create",
     NodeScope.GUILD,
-    _("Create a poll carded in every server's vote channel."),
+    tr(t"Create a poll carded in every server's vote channel."),
 )
 VOTE_POLL_CLOSE_ANY = _b.node(
     "vote.poll.close_any",
     NodeScope.GUILD,
-    _("Close or refresh a poll you did not create."),
+    tr(t"Close or refresh a poll you did not create."),
 )
 VOTE_LOG_DELETE_CAST = _b.node(
     "vote.log_delete.cast",
     NodeScope.GUILD,
-    _("Vote in build log deletion votes."),
+    tr(t"Vote in build log deletion votes."),
 )
 VOTE_WEIGHT_STAFF = _b.node(
     "vote.weight.staff",
     NodeScope.GUILD,
-    _("Have your votes counted at the staff weight."),
+    tr(t"Have your votes counted at the staff weight."),
 )
 
 PERM_NODE_VIEW = _b.node(
     "perm.node.view",
     NodeScope.GUILD,
-    _("Browse the permission catalogue and your own permissions."),
+    tr(t"Browse the permission catalogue and your own permissions."),
     default=Default.ALLOW,
     tags=(Tag.READONLY,),
 )
 PERM_SUBJECT_INSPECT = _b.node(
     "perm.subject.inspect",
     NodeScope.GUILD,
-    _("Inspect and explain another user's permissions."),
+    tr(t"Inspect and explain another user's permissions."),
     tags=(Tag.READONLY,),
 )
 PERM_AUDIT_VIEW = _b.node(
     "perm.audit.view",
     NodeScope.GUILD,
-    _("Read the permission audit log."),
+    tr(t"Read the permission audit log."),
     tags=(Tag.READONLY,),
 )
 PERM_GRANT_GUILD = _b.node(
     "perm.grant.guild",
     NodeScope.GUILD,
-    _("Grant or revoke this server's permissions."),
+    tr(t"Grant or revoke this server's permissions."),
 )
 ROLE_DEFINITION_MANAGE_GUILD = _b.node(
     "role.definition.manage_guild",
     NodeScope.GUILD,
-    _("Create and edit this server's permission roles."),
+    tr(t"Create and edit this server's permission roles."),
 )
 
 CATALOGUE = _b.build()

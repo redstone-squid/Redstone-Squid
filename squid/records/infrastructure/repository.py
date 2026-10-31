@@ -19,7 +19,7 @@ from whenever import Instant
 from squid.builds.domain import Status
 from squid.builds.infrastructure.models import Door, Extender
 from squid.core.errors import DataIntegrityError
-from squid.core.i18n import _
+from squid.core.i18n import tr
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.records.application.models import (
     CandidateFacet,
@@ -471,8 +471,9 @@ class PostgresRecordRepository:
             return None
         identity = parse_category_key(key)
         if identity is None:
-            msg = _("Record definition {definition_id} stores a category key that does not parse.")
-            raise DataIntegrityError(msg, message_params={"definition_id": definition_id})
+            raise DataIntegrityError(
+                tr(t"Record definition {definition_id} stores a category key that does not parse.")
+            )
         return identity
 
     async def save_requested_category(

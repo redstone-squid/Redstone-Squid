@@ -1,24 +1,27 @@
 """CLI bearer authentication at the shared API security boundary."""
 
-from types import SimpleNamespace
+from dataclasses import dataclass
+from typing import cast
 from uuid import UUID
 
 import pytest
 from fastapi import FastAPI
-from pydantic import SecretStr
 from starlette.requests import Request
+from starlette.types import Scope
 
 from squid.api.security import current_caller
+from squid.cli_auth.application import CliAuthorizationService
 from squid.cli_auth.domain import CliIdentity
 from squid.cli_auth.errors import InvalidCliSessionError
 from squid.core.errors import AuthenticationError
+from tests.unit.api.fakes import TEST_CONFIG
 
 DEVICE_ID = UUID("ea252a1c-0bcd-47f7-84d8-36e6801eb374")
 SESSION_ID = UUID("f5f51999-37c1-4a85-9d7e-f53875428f99")
 TOKEN = f"squid_cli_v1_{SESSION_ID.hex}_{'t' * 43}"
 
 
-class FakeCliAuthorization:
+class FakeCliAuthorization(CliAuthorizationService):
     def __init__(self, *, valid: bool = True) -> None:
         self.valid = valid
         self.token: str | None = None
@@ -36,24 +39,31 @@ class FakeCliAuthorization:
 
 
 def request_with_service(cli: FakeCliAuthorization) -> Request:
+    @dataclass(frozen=True, slots=True)
+    class Services:
+        cli_authorization: CliAuthorizationService
+        minecraft_player_authorization: None = None
+        minecraft_installations: None = None
+        api_keys: None = None
+
+    @dataclass(frozen=True, slots=True)
+    class Runtime:
+        services: Services
+
     app = FastAPI()
-    app.state.config = SimpleNamespace(api=SimpleNamespace(secret=SecretStr("bootstrap-secret")))
-    app.state.runtime = SimpleNamespace(
-        services=SimpleNamespace(
-            cli_authorization=cli,
-            minecraft_player_authorization=None,
-            minecraft_installations=None,
-            api_keys=None,
-        )
-    )
+    app.state.config = TEST_CONFIG
+    app.state.runtime = Runtime(Services(cli))
     return Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/v1/submissions/drafts",
-            "headers": [],
-            "app": app,
-        }
+        cast(
+            Scope,
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/v1/submissions/drafts",
+                "headers": [],
+                "app": app,
+            },
+        )
     )
 
 

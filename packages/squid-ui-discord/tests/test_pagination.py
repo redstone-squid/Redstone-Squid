@@ -1,8 +1,5 @@
 """Engine pagination and ModalSpec tests."""
 
-from types import SimpleNamespace
-from typing import cast
-
 import discord
 import pytest
 from discord.state import ConnectionState
@@ -37,7 +34,7 @@ from squid_ui.text import NEUTRAL
 from squid_ui_discord import V2_LIMITS as LIMITS
 from squid_ui_discord import Everyone, MessageRoot, conform
 from squid_ui_discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
-from squid_ui_discord.testing import assert_within_limits, commit_render, fake_interaction
+from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness
 
 
 class TestSplitPages:
@@ -218,7 +215,7 @@ class TestMountPagination:
     async def test_next_advances_and_edges_disable(self):
         message_root = MessageRoot(Browser(), access=Everyone(), timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("__cursor_next.entries", interaction)
 
@@ -250,7 +247,7 @@ class TestMountPagination:
         catalog = Catalog()
         message_root = MessageRoot(catalog, access=Everyone(), timeout=None)
         commit_render(message_root)
-        await message_root.dispatch("__cursor_next.catalog.items", fake_interaction())
+        await message_root.dispatch("__cursor_next.catalog.items", interaction_harness())
         assert message_root.presentation.cursor("catalog.items").position.offset == 1
 
         catalog.lead = ("new",)
@@ -271,7 +268,7 @@ class TestMountPagination:
         first = commit_render(message_root)
         second = commit_render(message_root)
         message_id = 42
-        store = ViewStore(cast(ConnectionState, SimpleNamespace()))
+        store = ViewStore(object.__new__(ConnectionState))
 
         store.add_view(first, message_id)
         store.add_view(second, message_id)
@@ -291,7 +288,7 @@ class TestMountPagination:
             f"1/{message_root.presentation.cursor('entries').extent}"
         ]
 
-        await message_root.dispatch("jump", fake_interaction())
+        await message_root.dispatch("jump", interaction_harness())
 
         assert message_root.presentation.cursor("entries").position.offset == 1
 
@@ -301,7 +298,7 @@ class TestMountPagination:
         jump = next(item for item in view.walk_children() if isinstance(item, discord.ui.Select))
         assert jump.custom_id is not None and jump.custom_id.endswith("__cursor_seek.entries")
 
-        await message_root.dispatch("__cursor_seek.entries", fake_interaction(), ["3"])
+        await message_root.dispatch("__cursor_seek.entries", interaction_harness(), ["3"])
 
         assert message_root.presentation.cursor("entries").position.offset == 3
 
@@ -310,14 +307,14 @@ class TestMountPagination:
         commit_render(message_root)
         extent = message_root.presentation.cursor("entries").extent
 
-        await message_root.dispatch("__cursor_seek.entries", fake_interaction(), ["9999"])
+        await message_root.dispatch("__cursor_seek.entries", interaction_harness(), ["9999"])
 
         assert message_root.presentation.cursor("entries").position.offset == extent - 1
 
     async def test_seeking_to_the_visible_page_is_a_clean_noop(self):
         message_root = MessageRoot(Browser(), access=Everyone(), timeout=None, nav=page_select_nav)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("__cursor_seek.entries", interaction, ["0"])
 
@@ -332,7 +329,7 @@ class TestMountPagination:
     async def test_prev_at_first_page_is_a_clean_noop(self):
         message_root = MessageRoot(Browser(), access=Everyone(), timeout=None)
         commit_render(message_root)
-        interaction = fake_interaction()
+        interaction = interaction_harness()
 
         await message_root.dispatch("__cursor_previous.entries", interaction)
 
@@ -342,7 +339,7 @@ class TestMountPagination:
         message_root = MessageRoot(TwoBrowsers(), access=Everyone(), timeout=None)
         commit_render(message_root)
 
-        await message_root.dispatch("__cursor_next.left", fake_interaction())
+        await message_root.dispatch("__cursor_next.left", interaction_harness())
 
         assert {key: cursor.position.offset for key, cursor in message_root.presentation.cursors.items()} == {
             "left": 1,
@@ -353,8 +350,8 @@ class TestMountPagination:
         component = TwoBrowsers()
         message_root = MessageRoot(component, access=Everyone(), timeout=None)
         commit_render(message_root)
-        await message_root.dispatch("__cursor_next.left", fake_interaction())
-        await message_root.dispatch("__cursor_next.right", fake_interaction())
+        await message_root.dispatch("__cursor_next.left", interaction_harness())
+        await message_root.dispatch("__cursor_next.right", interaction_harness())
 
         component.left_version = "new"
         message_root.invalidate()
@@ -515,7 +512,7 @@ class TestBuildModal:
         modal = build_modal(spec, on_submit=on_submit)
         next(iter(modal._inputs.values()))._value = "steve"  # pyrefly: ignore
 
-        await modal.on_submit(fake_interaction())
+        await modal.on_submit(interaction_harness())
 
         assert received == {"name": "steve"}
 

@@ -2,6 +2,7 @@
 
 import pytest
 
+from squid.core.i18n import tr
 from squid.permissions.domain import (
     BUILTIN_ROLES,
     BUILTIN_ROLES_BY_KEY,
@@ -35,7 +36,13 @@ def test_node_names_follow_the_convention() -> None:
 
 def test_every_node_is_described() -> None:
     """Descriptions are user-facing: they are what `/perm nodes` shows."""
-    assert all(node.description.strip() for node in CATALOGUE)
+    assert all(tr(node.description).strip() for node in CATALOGUE)
+
+
+def test_nodes_can_form_capability_sets_after_description_localization() -> None:
+    capabilities = frozenset(CATALOGUE)
+
+    assert all(node in capabilities for node in CATALOGUE)
 
 
 def test_unknown_nodes_raise_rather_than_deny() -> None:
@@ -46,23 +53,23 @@ def test_unknown_nodes_raise_rather_than_deny() -> None:
 class TestBuilder:
     def test_rejects_duplicate_names(self) -> None:
         builder = CatalogueBuilder()
-        builder.node("a.b.c", NodeScope.GUILD, "first")
+        builder.node("a.b.c", NodeScope.GUILD, tr(t"first"))
 
         with pytest.raises(CatalogueError, match="Duplicate"):
-            builder.node("a.b.c", NodeScope.GUILD, "second")
+            builder.node("a.b.c", NodeScope.GUILD, tr(t"second"))
 
     @pytest.mark.parametrize("name", ["a.**", "a.*.c", "@destructive"])
     def test_rejects_patterns_as_node_names(self, name: str) -> None:
         builder = CatalogueBuilder()
 
         with pytest.raises(CatalogueError, match="concrete name"):
-            builder.node(name, NodeScope.GUILD, "nope")
+            builder.node(name, NodeScope.GUILD, tr(t"nope"))
 
     def test_rejects_a_node_that_is_also_a_namespace(self) -> None:
         """`a.b` alongside `a.b.c` would make `a.b.**` ambiguous."""
         builder = CatalogueBuilder()
-        builder.node("a.b", NodeScope.GUILD, "interior")
-        builder.node("a.b.c", NodeScope.GUILD, "leaf")
+        builder.node("a.b", NodeScope.GUILD, tr(t"interior"))
+        builder.node("a.b.c", NodeScope.GUILD, tr(t"leaf"))
 
         with pytest.raises(CatalogueError, match="also a namespace"):
             builder.build()
