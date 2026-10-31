@@ -11,6 +11,7 @@ Before, commit hooks received a value-only delta and could restore it blindly:
 def committed(delta: StateDelta) -> None:
     audit(delta)
 
+
 on_action_commit(committed)
 ```
 
@@ -19,6 +20,7 @@ After, hooks receive the immutable terminal commit and aftermath authority. Reco
 ```python
 def committed(commit: ActionCommit, aftermath: Aftermath) -> None:
     audit(commit.context.action_id, commit.patches)
+
 
 on_action_commit(committed)
 on_action_rollback(lambda rollback, aftermath: report(rollback.reason))
