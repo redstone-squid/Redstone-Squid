@@ -74,7 +74,11 @@ async def open_devtools(
     session_id: str | None = None,
     timeout: float | None = SESSION_SECONDS,
 ) -> MessageRoot:
-    """Open the operational dashboard from a host-owned command."""
+    """Open a caller-owned dashboard until it closes, times out, or its host stops.
+
+    The host command authorizes the caller before opening; the runtime policy
+    controls which operations the dashboard may execute.
+    """
     actor = getattr(source, "author", getattr(source, "user", None))
     actor_id = getattr(actor, "id", None)
     if not isinstance(actor_id, int):
@@ -139,7 +143,6 @@ class DevTools[BotT: commands.Bot](commands.Cog):
     @commands.hybrid_group(
         name="dev",
         hidden=True,
-        invoke_without_command=True,  # pyrefly: ignore[unexpected-keyword]  # accepted by discord.py
     )
     @discord.app_commands.default_permissions(administrator=True)
     async def dev_group(self, ctx: Context[BotT]) -> None:
@@ -148,7 +151,6 @@ class DevTools[BotT: commands.Bot](commands.Cog):
 
     @dev_group.group(
         name="ui",
-        invoke_without_command=True,  # pyrefly: ignore[unexpected-keyword]  # accepted by discord.py
     )
     async def ui_group(self, ctx: Context[BotT]) -> None:
         """Open the unified operational dashboard."""
