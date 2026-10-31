@@ -188,7 +188,7 @@ from squid_ui_discord.runtime import (
     DiscordUIRuntimeMissing,
     install,
 )
-from squid_ui_discord.screen import Screen
+from squid_ui_discord.screen import Screen, SharedGuildSessionScreen, UserGuildSessionScreen, UserSessionScreen
 from squid_ui_discord.session_specs import OpenContext, ScopeKind, SessionOptions, SessionOptionsResolver, SessionSpec
 from squid_ui_discord.sessions import (
     SessionKey,
@@ -317,8 +317,11 @@ __all__ = [
     "SessionOptions",
     "SessionOptionsResolver",
     "SessionSpec",
+    "SharedGuildSessionScreen",
     "StackNavigator",
     "SuccessRenderer",
+    "UserGuildSessionScreen",
+    "UserSessionScreen",
     "Users",
     "Visibility",
     "Work",
