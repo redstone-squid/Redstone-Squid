@@ -383,12 +383,13 @@ zoned value makes the distinction explicit:
 @dataclass(frozen=True, slots=True)
 class ZonedDateTime:
     instant: datetime  # aware and normalized to UTC
-    timezone: str      # validated IANA key
+    timezone: str  # validated IANA key
 
     @property
     def local(self) -> datetime: ...
 
     def isoformat(self) -> str: ...
+
 
 @dataclass(frozen=True, slots=True)
 class ZonedDateTimeField(FormField[ZonedDateTime]):

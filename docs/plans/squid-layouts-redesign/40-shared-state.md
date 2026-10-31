@@ -61,17 +61,21 @@ class Member:
     user_id: int
     guild_id: int
 
+
 class Preferences(sl.Shared[Member]):
     theme: Theme = sl.cell(Theme.SYSTEM)
     locale: Locale = sl.cell(Locale.EN)
+
 
 class Workspace(sl.Shared[Member]):
     selected: int | None = sl.cell(None)
     filters: tuple[str, ...] = sl.cell(())
 
+
 here = Member(user.id, guild.id)
-preferences = Preferences(bus, here)              # the host's TopicBus, per §7
+preferences = Preferences(bus, here)  # the host's TopicBus, per §7
 workspace = Workspace(bus, here)
+
 
 class Toolbar(sl.Component):
     def __init__(self, preferences: Preferences, workspace: Workspace) -> None:
@@ -302,8 +306,8 @@ namespaces has three participants and gets prepare-all-then-apply-all across the
 
 ```python
 async def toggle(self, event: sl.ActionEvent) -> None:
-    self.preferences.theme = flip(self.preferences.theme)   # read + write -> guarded
-    self.preferences.locale = Locale.EN                     # write only   -> blind
+    self.preferences.theme = flip(self.preferences.theme)  # read + write -> guarded
+    self.preferences.locale = Locale.EN  # write only   -> blind
 ```
 
 That is compare-and-set, `update()` and `expect()` all three, derived from what the code
@@ -485,6 +489,7 @@ because something handed them the same object.
 
 ```python
 PREFERENCES = sl.ContextKey[Preferences]("preferences")
+
 
 class Dashboard(sl.Component):
     def render(self) -> sl.Node:
