@@ -1,7 +1,7 @@
 """Interactive Components V2 rendering for server settings."""
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast, override
 
 import discord
@@ -323,18 +323,11 @@ class SettingsPanel(sd.Screen):
             return
         role_name = role.name
         await event.present_form(
-            sl.forms.FormSpec(
-                tr(t"Vote weight for {role_name}"),
-                (
-                    sl.forms.TextField(
-                        key="multiplier",
-                        label=tr(t"Multiplier; leave empty to remove this role's weight"),
-                        placeholder="1.5",
-                        default=(f"{current:g}" if (current := self.weight_for(role.id)) is not None else ""),
-                        required=False,
-                        maximum=16,
-                    ),
-                ),
+            replace(
+                _VoteWeightForm(
+                    multiplier=f"{current:g}" if (current := self.weight_for(role.id)) is not None else "",
+                ).spec(),
+                title=tr(t"Vote weight for {role_name}"),
             ),
             key="role-weight",
             on_submit=lambda form_event: self._role_weight_submitted(form_event, role.id),
@@ -344,32 +337,26 @@ class SettingsPanel(sd.Screen):
         if await self._may_event(event, SETTINGS_VOTING_EDIT):
             kind = self.kind.value
             await event.present_form(
-                sl.forms.FormSpec(
-                    tr(t"{kind} vote emojis"),
-                    (
-                        sl.forms.TextAreaField(
-                            key="aliases",
-                            label=tr(t"One `choice | emoji` per line"),
-                            placeholder="approve | ✅\ndeny | ❌",
-                            default=self.emoji_preset_text(),
-                            minimum=1,
-                            maximum=1000,
-                        ),
-                    ),
+                replace(
+                    _VoteEmojisForm(aliases=self.emoji_preset_text()).spec(),
+                    title=tr(t"{kind} vote emojis"),
                 ),
                 key="vote-emojis",
                 on_submit=self._emoji_form_submitted,
             )
 
     async def _role_weight_submitted(self, event: sl.SubmitEvent, role_id: int) -> None:
-        text = cast(str, event.values["multiplier"]).strip()
+        form = _VoteWeightForm(**event.values)
+        text = (form.multiplier or "").strip()
         try:
             await self.set_weight(role_id, float(text) if text else None)
         except InvalidVoteConfigurationError, ValueError:
             await event.notice(tr(t"A vote multiplier must be a positive number, such as 1.5."))
 
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
-        text = cast(str, event.values["aliases"])
+        form = _VoteEmojisForm(**event.values)
+        text = form.aliases
+        assert text is not None
         options: list[VoteOption] = []
         for position, line in enumerate(filter(None, (line.strip() for line in text.splitlines()))):
             parts = [part.strip() for part in line.split("|", 1)]
@@ -558,3 +545,21 @@ class SettingsPanel(sd.Screen):
         if self.kind is not VoteKind.BUILD or self._owner_guild_id in (None, self._guild.id):
             return None
         return tr(t"Build reviews are weighted by the network's own server, so these multipliers do not apply here.")
+
+
+class _VoteWeightForm(sl.forms.Form):
+    multiplier = sl.forms.TextField(
+        label=tr(t"Multiplier; leave empty to remove this role's weight"),
+        placeholder="1.5",
+        required=False,
+        maximum=16,
+    )
+
+
+class _VoteEmojisForm(sl.forms.Form):
+    aliases = sl.forms.TextAreaField(
+        label=tr(t"One `choice | emoji` per line"),
+        placeholder="approve | ✅\ndeny | ❌",
+        minimum=1,
+        maximum=1000,
+    )

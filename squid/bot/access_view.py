@@ -1,7 +1,7 @@
 """Canonical permission and internal-role administration workspace."""
 
 from collections.abc import Awaitable, Callable
-from typing import Any, cast, override
+from typing import Any, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -152,43 +152,11 @@ class AccessScreen(sd.Screen):
 
     @staticmethod
     def _rule_form() -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"Change direct permission rule"),
-            (
-                sl.forms.ChoiceField(
-                    key="operation",
-                    label=tr(t"Operation"),
-                    options=(
-                        sl.forms.ChoiceOption("allow", tr(t"Allow"), "allow"),
-                        sl.forms.ChoiceOption("deny", tr(t"Deny"), "deny"),
-                        sl.forms.ChoiceOption("forbid", tr(t"Forbid"), "forbid"),
-                        sl.forms.ChoiceOption("revoke", tr(t"Revoke"), "revoke"),
-                    ),
-                ),
-                sl.forms.TextField(key="pattern", label=tr(t"Permission pattern"), maximum=200),
-                _scope_field(),
-                sl.forms.TextField(key="reason", label=tr(t"Reason"), required=False, maximum=500),
-            ),
-        )
+        return _RuleForm().spec()
 
     @staticmethod
     def _assignment_form() -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"Change internal role assignment"),
-            (
-                sl.forms.ChoiceField(
-                    key="operation",
-                    label=tr(t"Operation"),
-                    options=(
-                        sl.forms.ChoiceOption("assign", tr(t"Assign"), "assign"),
-                        sl.forms.ChoiceOption("unassign", tr(t"Unassign"), "unassign"),
-                    ),
-                ),
-                sl.forms.TextField(key="slug", label=tr(t"Internal role slug"), maximum=100),
-                _scope_field(),
-                sl.forms.TextField(key="reason", label=tr(t"Reason"), required=False, maximum=500),
-            ),
-        )
+        return _AssignmentForm().spec()
 
     @staticmethod
     def _role_browser(roles: tuple[RoleRecord, ...]) -> sp.Browser[RoleRecord, sl.ComponentsV2Target]:
@@ -214,41 +182,11 @@ class AccessScreen(sd.Screen):
 
     @staticmethod
     def _create_role_form() -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"Create internal role"),
-            (
-                sl.forms.TextField(key="slug", label=tr(t"Slug"), maximum=100),
-                sl.forms.TextField(key="name", label=tr(t"Display name"), maximum=100),
-                sl.forms.IntField(key="rank", label=tr(t"Management rank"), default=0, minimum=0, maximum=999),
-                _scope_field(),
-            ),
-        )
+        return _CreateRoleForm().spec()
 
     @staticmethod
     def _edit_role_form() -> sl.forms.FormSpec:
-        actions = (
-            ("include", tr(t"Include pattern")),
-            ("exclude", tr(t"Exclude pattern")),
-            ("remove-pattern", tr(t"Remove pattern")),
-            ("compose", tr(t"Include role")),
-            ("decompose", tr(t"Remove included role")),
-            ("rank", tr(t"Set rank")),
-            ("delete", tr(t"Delete role")),
-        )
-        return sl.forms.FormSpec(
-            tr(t"Edit internal role"),
-            (
-                sl.forms.ChoiceField(
-                    key="operation",
-                    label=tr(t"Operation"),
-                    options=tuple(sl.forms.ChoiceOption(key, label, key) for key, label in actions),
-                ),
-                sl.forms.TextField(key="slug", label=tr(t"Role slug"), maximum=100),
-                sl.forms.TextField(
-                    key="value", label=tr(t"Pattern, included role, or rank"), required=False, maximum=200
-                ),
-            ),
-        )
+        return _EditRoleForm().spec()
 
     @staticmethod
     def _catalogue() -> sp.Browser[Any, sl.ComponentsV2Target]:
@@ -286,9 +224,11 @@ class AccessScreen(sd.Screen):
     async def _change_rule(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_mutation(event, PERM_GRANT_GUILD, PERM_GRANT_GLOBAL):
             return
-        operation = cast(str, event.values["operation"])
-        pattern = cast(str, event.values["pattern"])
-        scope = _scope(cast(str, event.values["scope"]), self._guild_id)
+        form = _RuleForm(**event.values)
+        assert form.operation is not None and form.pattern is not None and form.scope is not None
+        operation = form.operation
+        pattern = form.pattern
+        scope = _scope(form.scope, self._guild_id)
         actor = await self._actor()
         if operation == "revoke":
             await self._admin.revoke(
@@ -308,7 +248,7 @@ class AccessScreen(sd.Screen):
                 discord_role_id=self._discord_role_id,
                 guild_id=self._guild_id,
                 scope_guild_id=scope,
-                reason=cast(str | None, event.values.get("reason")) or None,
+                reason=form.reason or None,
             )
         await self._refresh()
         await event.notice(tr(t"Direct permission rule updated."))
@@ -316,9 +256,11 @@ class AccessScreen(sd.Screen):
     async def _change_assignment(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
-        operation = cast(str, event.values["operation"])
-        slug = cast(str, event.values["slug"])
-        scope = _scope(cast(str, event.values["scope"]), self._guild_id)
+        form = _AssignmentForm(**event.values)
+        assert form.operation is not None and form.slug is not None and form.scope is not None
+        operation = form.operation
+        slug = form.slug
+        scope = _scope(form.scope, self._guild_id)
         actor = await self._actor()
         role = await self._admin.role(slug, guild_id=self._guild_id)
         if operation == "assign":
@@ -329,7 +271,7 @@ class AccessScreen(sd.Screen):
                 discord_role_id=self._discord_role_id,
                 guild_id=self._guild_id,
                 scope_guild_id=scope,
-                reason=cast(str | None, event.values.get("reason")) or None,
+                reason=form.reason or None,
             )
         else:
             await self._admin.unassign(
@@ -345,13 +287,15 @@ class AccessScreen(sd.Screen):
     async def _create_role(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
-        slug = cast(str, event.values["slug"])
+        form = _CreateRoleForm(**event.values)
+        assert form.slug is not None and form.name is not None and form.rank is not None and form.scope is not None
+        slug = form.slug
         await self._admin.create_role(
             await self._actor(),
             slug=slug,
-            name=cast(str, event.values["name"]),
-            rank=cast(int, event.values["rank"]),
-            guild_id=_scope(cast(str, event.values["scope"]), self._guild_id),
+            name=form.name,
+            rank=form.rank,
+            guild_id=_scope(form.scope, self._guild_id),
         )
         await self._refresh()
         await event.notice(tr(t"Created internal role **{slug}**."))
@@ -359,9 +303,11 @@ class AccessScreen(sd.Screen):
     async def _edit_role(self, event: sl.SubmitEvent) -> None:
         if not await self._authorize_mutation(event, ROLE_DEFINITION_MANAGE_GUILD, ROLE_DEFINITION_MANAGE):
             return
-        operation = cast(str, event.values["operation"])
-        slug = cast(str, event.values["slug"])
-        value = cast(str | None, event.values.get("value")) or ""
+        form = _EditRoleForm(**event.values)
+        assert form.operation is not None and form.slug is not None
+        operation = form.operation
+        slug = form.slug
+        value = form.value or ""
         actor = await self._actor()
         role = await self._admin.role(slug, guild_id=self._guild_id)
         if operation == "delete":
@@ -485,3 +431,65 @@ def _audit_detail(row: AuditRow) -> sl.semantic.Fields:
         sl.field(tr(t"Reason"), row.reason or "—"),
         sl.field(tr(t"Actor account"), str(row.actor_account_id or "—")),
     )
+
+
+_ROLE_ACTIONS = (
+    ("include", tr(t"Include pattern")),
+    ("exclude", tr(t"Exclude pattern")),
+    ("remove-pattern", tr(t"Remove pattern")),
+    ("compose", tr(t"Include role")),
+    ("decompose", tr(t"Remove included role")),
+    ("rank", tr(t"Set rank")),
+    ("delete", tr(t"Delete role")),
+)
+
+
+class _RuleForm(sl.forms.Form):
+    title = tr(t"Change direct permission rule")
+
+    operation = sl.forms.ChoiceField(
+        label=tr(t"Operation"),
+        options=(
+            sl.forms.ChoiceOption("allow", tr(t"Allow"), "allow"),
+            sl.forms.ChoiceOption("deny", tr(t"Deny"), "deny"),
+            sl.forms.ChoiceOption("forbid", tr(t"Forbid"), "forbid"),
+            sl.forms.ChoiceOption("revoke", tr(t"Revoke"), "revoke"),
+        ),
+    )
+    pattern = sl.forms.TextField(label=tr(t"Permission pattern"), maximum=200)
+    scope = _scope_field()
+    reason = sl.forms.TextField(label=tr(t"Reason"), required=False, maximum=500)
+
+
+class _AssignmentForm(sl.forms.Form):
+    title = tr(t"Change internal role assignment")
+
+    operation = sl.forms.ChoiceField(
+        label=tr(t"Operation"),
+        options=(
+            sl.forms.ChoiceOption("assign", tr(t"Assign"), "assign"),
+            sl.forms.ChoiceOption("unassign", tr(t"Unassign"), "unassign"),
+        ),
+    )
+    slug = sl.forms.TextField(label=tr(t"Internal role slug"), maximum=100)
+    scope = _scope_field()
+    reason = sl.forms.TextField(label=tr(t"Reason"), required=False, maximum=500)
+
+
+class _CreateRoleForm(sl.forms.Form):
+    title = tr(t"Create internal role")
+
+    slug = sl.forms.TextField(label=tr(t"Slug"), maximum=100)
+    name = sl.forms.TextField(label=tr(t"Display name"), maximum=100)
+    rank = sl.forms.IntField(label=tr(t"Management rank"), default=0, minimum=0, maximum=999)
+    scope = _scope_field()
+
+
+class _EditRoleForm(sl.forms.Form):
+    title = tr(t"Edit internal role")
+
+    operation = sl.forms.ChoiceField(
+        label=tr(t"Operation"), options=tuple((sl.forms.ChoiceOption(key, label, key) for key, label in _ROLE_ACTIONS))
+    )
+    slug = sl.forms.TextField(label=tr(t"Role slug"), maximum=100)
+    value = sl.forms.TextField(label=tr(t"Pattern, included role, or rank"), required=False, maximum=200)

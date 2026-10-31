@@ -1,7 +1,8 @@
 """Canonical tag catalogue, contribution, and moderation workspace."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Any, Protocol, cast, override
+from dataclasses import replace
+from typing import Protocol, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -203,21 +204,21 @@ class TagsScreen(sd.Screen):
     def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         if self._actor_account_id is None:
             return (sl.note(tr(t"Link and consent an account in `/account` before proposing or applying tags.")),)
-        build_field: tuple[sl.forms.FormField[Any] | sl.forms.FormText, ...] = (
-            () if self._build_id is not None else (sl.forms.IntField(key="build_id", label=tr(t"Build ID"), minimum=1),)
-        )
+        assignment = _ApplyForm().spec()
+        if self._build_id is not None:
+            assignment = replace(
+                assignment,
+                items=tuple(
+                    field
+                    for field in assignment.items
+                    if not isinstance(field, sl.forms.FormField) or field.key != "build_id"
+                ),
+            )
         return (
             sl.form(tr(t"Propose tag"), self._proposal_form(), key="propose", on_submit=self._propose),
             sl.form(
                 tr(t"Apply tag to build"),
-                sl.forms.FormSpec(
-                    tr(t"Apply showcase tag"),
-                    (
-                        *build_field,
-                        sl.forms.IntField(key="tag_id", label=tr(t"Tag ID"), minimum=1),
-                        sl.forms.TextField(key="value", label=tr(t"Value"), required=False, maximum=300),
-                    ),
-                ),
+                assignment,
                 key="apply",
                 on_submit=self._apply,
             ),
@@ -225,31 +226,13 @@ class TagsScreen(sd.Screen):
 
     @staticmethod
     def _proposal_form() -> sl.forms.FormSpec:
-        return sl.forms.FormSpec(
-            tr(t"Propose showcase tag"),
-            (
-                sl.forms.TextField(key="name", label=tr(t"Display name"), maximum=80),
-                sl.forms.ChoiceField(
-                    key="value_type",
-                    label=tr(t"Value type"),
-                    default=TagValueType.NONE,
-                    options=tuple(sl.forms.ChoiceOption(kind.value, kind.value.title(), kind) for kind in TagValueType),
-                ),
-                sl.forms.TextField(key="query_name", label=tr(t"Query field"), required=False, maximum=64),
-            ),
-        )
+        return _ProposalForm().spec()
 
     def _alias_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
         return (
             sl.form(
                 tr(t"Add restriction alias"),
-                sl.forms.FormSpec(
-                    tr(t"Add restriction alias"),
-                    (
-                        sl.forms.TextField(key="restriction", label=tr(t"Canonical restriction"), maximum=100),
-                        sl.forms.TextField(key="alias", label=tr(t"New alias"), maximum=100),
-                    ),
-                ),
+                _AliasForm().spec(),
                 key="restriction-alias",
                 on_submit=self._add_alias,
             ),
@@ -260,9 +243,11 @@ class TagsScreen(sd.Screen):
         if account_id is None:
             await event.notice(tr(t"A linked, consented account is required."))
             return
-        name = cast(str, event.values["name"])
-        value_type = cast(TagValueType, event.values["value_type"])
-        query_name = cast(str | None, event.values.get("query_name"))
+        form = _ProposalForm(**event.values)
+        assert form.name is not None and form.value_type is not None
+        name = form.name
+        value_type = form.value_type
+        query_name = form.query_name
         tag = await self._tags.propose_showcase(
             name,
             value_type=value_type,
@@ -278,9 +263,11 @@ class TagsScreen(sd.Screen):
         if account_id is None:
             await event.notice(tr(t"A linked, consented account is required."))
             return
-        build_id = self._build_id or cast(int, event.values["build_id"])
-        tag_id = cast(int, event.values["tag_id"])
-        value = cast(str | None, event.values.get("value"))
+        form = _ApplyForm(**event.values)
+        build_id = self._build_id or form.build_id
+        tag_id = form.tag_id
+        assert build_id is not None and tag_id is not None
+        value = form.value
         tag = await self._tags.assign_showcase(build_id, tag_id, value, actor_account_id=account_id)
         tag_name = tag.display_name
         await event.notice(tr(t"Attached **{tag_name}** to build #{build_id}."))
@@ -288,8 +275,10 @@ class TagsScreen(sd.Screen):
     async def _add_alias(self, event: sl.SubmitEvent) -> None:
         if not await self._may(event, RESTRICTION_ALIAS_CREATE):
             return
-        restriction = cast(str, event.values["restriction"])
-        alias = cast(str, event.values["alias"])
+        form = _AliasForm(**event.values)
+        assert form.restriction is not None and form.alias is not None
+        restriction = form.restriction
+        alias = form.alias
         try:
             await self._restrictions.add_alias(restriction, alias)
         except AliasAlreadyAddedError:
@@ -363,3 +352,30 @@ def _tag_fields(tag: TagDefinition) -> sl.semantic.Fields:
 
 def _action_label(action: str) -> sl.TextLike:
     return {"approve": tr(t"Approve"), "reject": tr(t"Reject"), "archive": tr(t"Archive")}[action]
+
+
+class _ProposalForm(sl.forms.Form):
+    title = tr(t"Propose showcase tag")
+
+    name = sl.forms.TextField(label=tr(t"Display name"), maximum=80)
+    value_type = sl.forms.ChoiceField(
+        label=tr(t"Value type"),
+        default=TagValueType.NONE,
+        options=tuple(sl.forms.ChoiceOption(kind.value, kind.value.title(), kind) for kind in TagValueType),
+    )
+    query_name = sl.forms.TextField(label=tr(t"Query field"), required=False, maximum=64)
+
+
+class _AliasForm(sl.forms.Form):
+    title = tr(t"Add restriction alias")
+
+    restriction = sl.forms.TextField(label=tr(t"Canonical restriction"), maximum=100)
+    alias = sl.forms.TextField(label=tr(t"New alias"), maximum=100)
+
+
+class _ApplyForm(sl.forms.Form):
+    title = tr(t"Apply showcase tag")
+
+    build_id = sl.forms.IntField(label=tr(t"Build ID"), minimum=1)
+    tag_id = sl.forms.IntField(label=tr(t"Tag ID"), minimum=1)
+    value = sl.forms.TextField(label=tr(t"Value"), required=False, maximum=300)
