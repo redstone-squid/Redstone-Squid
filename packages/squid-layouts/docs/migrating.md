@@ -107,9 +107,11 @@ close_poll = polls.define("close", aliases=("poll:close",))
 
 router = sl.discord.Router(namespace=routes, on_gone=control_gone)
 
+
 @polls.route(close_poll)
 async def close(interaction: discord.Interaction[Bot]) -> None:
     await polls_service.close(interaction.message.id)
+
 
 router.add_middleware(RequirePollModerator())
 router.register(bot)
@@ -142,7 +144,7 @@ class Paginator(discord.ui.View):
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         self.page += 1
         self.next.disabled = self.page == LAST
-        await interaction.response.edit_message(view=self)   # no HTTP; the mount flushes
+        await interaction.response.edit_message(view=self)  # no HTTP; the mount flushes
 
 
 mount = defaults.mount(sl.discord.adopt(Paginator()), access=sl.discord.Owner(user.id))

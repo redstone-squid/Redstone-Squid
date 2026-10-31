@@ -51,8 +51,8 @@ no longer carries the "an identity-bearing address cannot be encoded" case, beca
 
 ```python
 bridge = PostgresTopicBridge(pool, bus, codec, channel="squid_topics")
-bridge.publish(*topics)        # local bus.publish now; pg_notify for the encodable ones
-await bridge.run()             # LISTEN on one dedicated pooled connection
+bridge.publish(*topics)  # local bus.publish now; pg_notify for the encodable ones
+await bridge.run()  # LISTEN on one dedicated pooled connection
 ```
 
 - A per-process `origin` (uuid) travels in the payload; the listener drops its own.

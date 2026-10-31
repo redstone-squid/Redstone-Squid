@@ -10,6 +10,7 @@ namespace:
 ```python
 self._preferences: dict[int, Preferences] = {}
 
+
 def preferences_for(self, user_id: int) -> Preferences:
     if user_id not in self._preferences:
         self._preferences[user_id] = Preferences(self.bus, user_id)
@@ -56,6 +57,7 @@ from `squid_layouts.runtime` and the root authoring vocabulary:
 
 ```python
 type SharedFactory[ScopeT, SharedT] = Callable[[TopicBus, ScopeT], SharedT]
+
 
 class SharedPool[ScopeT: Hashable, SharedT: Shared[ScopeT]]:
     def __init__(
