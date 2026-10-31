@@ -143,7 +143,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         # A nested section per group: each field steps its own Condense ladder independently
         # rather than a whole group stepping in lockstep — finer granularity, not a
         # regression. Groups with no matching fields render as nothing.
-        def group(title: str, names: set[str]) -> sl.LayoutNode[sl.ComponentsV2Target] | None:
+        def group(title: str, names: set[str]) -> sl.LayoutNode | None:
             entries = tuple(
                 sl.field(
                     name,
