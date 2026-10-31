@@ -195,7 +195,9 @@ async def test_forms_exhibit_validates_then_binds_typed_values_and_prefills() ->
     binding = message_root.plan.form_bindings["feedback"]
 
     rejected = await binding.spec.evaluate({"exhibit": "data", "headline": "Readable", "score": "1"})
-    caught = [issue.key for issue in rejected.errors if isinstance(issue, sl.forms.FieldError)]
+    caught = [
+        field.key for issue in rejected.errors if isinstance(issue, sl.forms.FieldError) for field in issue.fields
+    ]
     assert caught == ["detail"], "cross-field validation sees typed values"
 
     await message_root.dispatch_submit(

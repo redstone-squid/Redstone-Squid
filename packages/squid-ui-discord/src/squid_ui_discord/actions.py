@@ -127,9 +127,13 @@ class ActionResponder:
         labels = {field.key: field.label or field.key for field in spec.items if isinstance(field, FormField)}
         for error in errors:
             if isinstance(error, FieldError):
-                label = resolve_text(labels.get(error.key, error.key), self.message_root.localization).content
+                field_labels = [
+                    resolve_text(labels.get(field.key, field.key), self.message_root.localization).content
+                    for field in error.fields
+                ]
+                field_label = ", ".join(field_labels)
                 message = resolve_text(error.message, self.message_root.localization).content
-                lines.append(f"**{label}:** {message}")
+                lines.append(f"**{field_label}:** {message}")
             else:
                 lines.append(resolve_text(error.message, self.message_root.localization).content)
         retry = _RetryButton(

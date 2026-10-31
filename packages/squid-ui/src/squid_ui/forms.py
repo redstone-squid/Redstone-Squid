@@ -34,12 +34,20 @@ if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, init=False)
 class FieldError:
-    """A validation error attached to one field key."""
+    """One validation message associated with one or more field declarations."""
 
-    key: str
+    fields: tuple[FormField[Any], ...]
     message: TextLike
+
+    def __init__(self, *fields: FormField[Any], message: TextLike) -> None:
+        if not fields or any(not isinstance(field, FormField) for field in fields):
+            error = "FieldError requires one or more form fields"
+            raise TypeError(error)
+        unique = tuple({id(field): field for field in fields}.values())
+        object.__setattr__(self, "fields", unique)
+        object.__setattr__(self, "message", message)
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +127,7 @@ class FormField[ValueT](ABC):
     required: bool = True
     default: ValueT | None = None
     _name: str = dataclass_field(default="", init=False, repr=False, compare=False)
+    _declaration: FormField[Any] | None = dataclass_field(default=None, repr=False, compare=False)
 
     def __set_name__(self, owner: type[Form], name: str) -> None:
         del owner
@@ -142,7 +151,7 @@ class FormField[ValueT](ABC):
     def bind(self, name: str) -> Self:
         """Fill descriptor-derived schema metadata without mutating the declaration."""
         label = self.label if self.label is not None else name.replace("_", " ").capitalize()
-        return replace(self, key=self.key or name, label=label)
+        return replace(self, key=self.key or name, label=label, _declaration=self._declaration or self)
 
     @abstractmethod
     def parse(self, raw: object) -> ValueT | None:
@@ -707,11 +716,28 @@ class FormSpec:
             try:
                 values[field.key] = field.parse(raw.get(field.key))
             except FormValueError as error:
-                errors.append(FieldError(field.key, str(error)))
+                errors.append(FieldError(field, message=str(error)))
         if not errors and self.validator is not None:
             validated = self.validator(MappingProxyType(values))
             issues = await validated if inspect.isawaitable(validated) else validated
-            errors.extend(issues)
+            for issue in issues:
+                if isinstance(issue, FieldError):
+                    resolved: list[FormField[Any]] = []
+                    for reference in issue.fields:
+                        matched = next(
+                            (
+                                item
+                                for item in self.items
+                                if isinstance(item, FormField) and (reference is item or reference is item._declaration)
+                            ),
+                            None,
+                        )
+                        if matched is None:
+                            message = "FieldError references a field outside this form"
+                            raise ValueError(message)
+                        resolved.append(matched)
+                    issue = FieldError(*resolved, message=issue.message)
+                errors.append(issue)
         return FormResult(MappingProxyType(values), raw, tuple(errors))
 
     def prefill_for(self, field: FormField[Any]) -> PrefillValue:
@@ -750,6 +776,7 @@ class FormSpec:
                     key=field.key,
                     label=fallback.label if fallback.label is not None else field.label,
                     description=fallback.description if fallback.description is not None else field.description,
+                    _declaration=field._declaration or field,
                 )
             )
         return replace(self, items=tuple(adapted))

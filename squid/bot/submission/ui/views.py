@@ -223,11 +223,11 @@ def _edit_form(items: Sequence[BoundBuildField[Any]], page: int) -> sl.forms.For
 
     def validate(values: Mapping[str, object]) -> tuple[sl.forms.FormIssue, ...]:
         errors: list[sl.forms.FormIssue] = []
-        for item in page_items:
+        for item, field in zip(page_items, fields, strict=True):
             try:
                 item.spec.parser(_submitted_text(values, item.key))
             except ValueError as error:
-                errors.append(sl.forms.FieldError(item.key, str(error) or tr(t"Invalid value")))
+                errors.append(sl.forms.FieldError(field, message=str(error) or tr(t"Invalid value")))
         return tuple(errors)
 
     return sl.forms.FormSpec(tr(t"Edit build, section {page}"), tuple(fields), validator=validate)
