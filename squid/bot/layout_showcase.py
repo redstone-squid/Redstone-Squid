@@ -175,11 +175,12 @@ sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate))"
     exhibit = sl.forms.ChoiceField(label="Which exhibit", options=EXHIBITS)
     headline = sl.forms.TextField(label="Headline", minimum=4, maximum=80)
     score = sl.forms.ScaleField(label="Score", minimum=1, maximum=5)
+    detail = sl.forms.TextAreaField(label="Details", required=False)
 
     def validate(self):
         # Runs only once every field has parsed, so these are typed values.
         if self.score <= 2 and not self.detail:
-            return (sl.forms.FieldError("detail", "A low score needs a reason."),)
+            return (sl.forms.FieldError(FeedbackForm.detail, message="A low score needs a reason."),)
         return ()
 
 # A schema, not a Discord modal. A rejection re-presents it with the complaints
@@ -356,7 +357,7 @@ class FeedbackForm(sl.forms.Form):
         # Cross-field validation runs only once every field has parsed, so these are the typed
         # values rather than the strings the reader typed.
         if self.score is not None and self.score <= 2 and not self.detail:
-            return (sl.forms.FieldError("detail", tr(t"A low score needs a sentence saying why.")),)
+            return (sl.forms.FieldError(FeedbackForm.detail, message=tr(t"A low score needs a sentence saying why.")),)
         return ()
 
     @override

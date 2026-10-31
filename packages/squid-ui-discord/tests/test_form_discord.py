@@ -286,6 +286,33 @@ async def test_invalid_submission_preserves_input_for_framework_retry() -> None:
     assert _text_input(retried).default == "eventually"
 
 
+async def test_shared_error_displays_both_labels_and_message_once() -> None:
+    start = sl.forms.TextField(key="start", label="Start")
+    end = sl.forms.TextField(key="end", label="End")
+    panel = DurationPanel()
+    panel.spec = sl.forms.FormSpec(
+        "Range",
+        (start, end),
+        validator=lambda values: (sl.forms.FieldError(start, end, message="Invalid range"),),
+    )
+    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+    commit_render(message_root)
+    modal = await _open_form(panel, message_root)
+    for item in modal.walk_children():
+        if isinstance(item, discord.ui.TextInput):
+            item._value = "value"  # pyrefly: ignore[missing-attribute]
+
+    submission = interaction_harness()
+    await modal.on_submit(submission)
+
+    retry_view = submission.response.send_message.await_args.kwargs["view"]
+    text = "\n".join(item.content for item in retry_view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+    assert text.count("Invalid range") == 1
+    assert "Start, End" in text
+    retry = next(item for item in retry_view.walk_children() if isinstance(item, discord.ui.Button))
+    assert retry.label == "Try again"
+
+
 async def test_valid_submission_dispatches_typed_event_and_commits_the_runtime() -> None:
     """A submission commits even when it changes nothing the reader can see.
 
@@ -344,7 +371,10 @@ async def test_accept_and_mark_delivers_parse_errors_to_the_handler() -> None:
     await modal.on_submit(interaction_harness())
 
     assert len(panel.events) == 1
-    assert panel.events[0].errors == (sl.forms.FieldError("duration", "Enter a duration such as 30m, 12h, or 7d."),)
+    (error,) = panel.events[0].errors
+    assert isinstance(error, sl.forms.FieldError)
+    assert tuple(field.key for field in error.fields) == ("duration",)
+    assert error.message == "Enter a duration such as 30m, 12h, or 7d."
 
 
 def test_scale_field_renders_a_radio_group_within_the_radio_span() -> None:

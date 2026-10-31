@@ -93,9 +93,11 @@ async def test_parse_errors_are_field_errors_and_gate_cross_field_validation() -
 
     failed = await spec.evaluate({"name": "A", "age": "young", "public": False})
 
+    assert isinstance(spec.items[0], sl.forms.FormField)
+    assert isinstance(spec.items[1], sl.forms.FormField)
     assert failed.errors == (
-        sl.forms.FieldError("name", "Enter at least 2 characters."),
-        sl.forms.FieldError("age", "Enter a whole number."),
+        sl.forms.FieldError(spec.items[0], message="Enter at least 2 characters."),
+        sl.forms.FieldError(spec.items[1], message="Enter a whole number."),
     )
     assert form.validations == 0
 
@@ -485,7 +487,8 @@ async def test_form_value_error_is_still_reported_to_the_reader() -> None:
 
     evaluated = await spec.evaluate({"pick": "bad"})
 
-    assert evaluated.errors == (sl.forms.FieldError("pick", "Type 'good'."),)
+    assert isinstance(spec.items[0], sl.forms.FormField)
+    assert evaluated.errors == (sl.forms.FieldError(spec.items[0], message="Type 'good'."),)
 
 
 async def test_a_custom_duration_parser_reports_bad_input_as_a_field_error() -> None:
@@ -497,7 +500,8 @@ async def test_a_custom_duration_parser_reports_bad_input_as_a_field_error() -> 
 
     evaluated = await spec.evaluate({"for": "banana"})
 
-    assert evaluated.errors == (sl.forms.FieldError("for", "Durations look like 30m."),)
+    assert isinstance(spec.items[0], sl.forms.FormField)
+    assert evaluated.errors == (sl.forms.FieldError(spec.items[0], message="Durations look like 30m."),)
 
 
 def test_scale_field_parses_a_picked_point_and_a_typed_one() -> None:
@@ -537,3 +541,40 @@ def test_scale_field_prefill_is_the_option_key() -> None:
 def test_scale_field_needs_a_span_to_pick_from() -> None:
     with pytest.raises(ValueError, match="maximum greater than minimum"):
         sl.forms.ScaleField(key="score", minimum=3, maximum=3)
+
+
+async def test_shared_field_error_resolves_inherited_declarations_and_deduplicates() -> None:
+    class Thresholds(sl.forms.Form):
+        post = sl.forms.FloatField()
+        remove = sl.forms.FloatField()
+
+        @override
+        def validate(self) -> tuple[sl.forms.FormIssue, ...]:
+            return (sl.forms.FieldError(Thresholds.post, Thresholds.remove, Thresholds.post, message="Bad order"),)
+
+    class Inherited(Thresholds):
+        pass
+
+    spec = Inherited().spec().with_prefill({"post": 1})
+    result = await spec.evaluate({"post": "1", "remove": "2"})
+    (error,) = result.errors
+    assert isinstance(error, sl.forms.FieldError)
+    assert error.fields == spec.items
+    assert error.message == "Bad order"
+
+
+async def test_field_error_rejects_a_foreign_field_even_with_the_same_key() -> None:
+    own = sl.forms.TextField(key="name", label="Name")
+    foreign = sl.forms.TextField(key="name", label="Name")
+    spec = sl.forms.FormSpec(
+        "Names", (own,), validator=lambda values: (sl.forms.FieldError(foreign, message="Wrong field"),)
+    )
+    with pytest.raises(ValueError, match="outside this form"):
+        await spec.evaluate({"name": "Ada"})
+
+
+def test_field_error_requires_field_objects() -> None:
+    with pytest.raises(TypeError, match="one or more"):
+        sl.forms.FieldError(message="No field")
+    with pytest.raises(TypeError, match="one or more"):
+        sl.forms.FieldError("name", message="Not a field")  # type: ignore
