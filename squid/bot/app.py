@@ -17,7 +17,7 @@ from squid.bootstrap import create_bot_runtime
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
-from squid.bot.errors import COMMAND_ERRORS, SquidCommandTree
+from squid.bot.errors import UI_ERRORS, SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
@@ -55,7 +55,7 @@ from squid_reactivity import LocalTopicBus
 from squid_storage import PostgresTopicBridge
 from squid_ui.profiling import MemoryProfiler
 from squid_ui.text import localization_scope
-from squid_ui_discord import DiscordUIConfig, DiscordUIRuntime, SessionManager, install
+from squid_ui_discord import Config, DiscordUIRuntime, SessionManager, install
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -178,19 +178,14 @@ class RedstoneSquid(Bot):
         # a guard's dialog resumes an approved press through.
         self.ui: DiscordUIRuntime[Self] = install(
             self,
-            DiscordUIConfig(
+            Config(
                 defaults=HOST_DEFAULTS,
                 bus=self.topic_bus,
                 profiler=self.layout_profiler,
                 localization=localization_resolver,
-                errors=COMMAND_ERRORS,
+                errors=UI_ERRORS,
             ),
         )
-
-    @property
-    def app_ui(self) -> sd.Scope[Self]:
-        """The cached owner scope for bot-level and routed application work."""
-        return self.ui.scope(self)
 
     @property
     def sessions(self) -> SessionManager:

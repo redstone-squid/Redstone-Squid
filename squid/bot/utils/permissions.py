@@ -126,30 +126,24 @@ async def subject_for(ctx: Context[squid.bot.app.RedstoneSquid]) -> Subject:
     return subject
 
 
-type Caller = discord.Interaction[squid.bot.app.RedstoneSquid] | sd.Request[Any]
-"""Whoever is asking: a request, or the bare interaction a surface not yet ported still holds."""
+async def subject_for_interaction(caller: sd.Request[Any]) -> Subject:
+    """Build the permission subject for a command, component, or modal request."""
+    guild_id = None if caller.guild is None else caller.guild.id
+    return await build_subject(cast("squid.bot.app.RedstoneSquid", caller.client), caller.user, guild_id)
 
 
-async def subject_for_interaction(caller: Caller) -> Subject:
-    """The subject behind a request, component, or modal interaction."""
-    if isinstance(caller, sd.Request):
-        guild_id = None if caller.guild is None else caller.guild.id
-        return await build_subject(cast("squid.bot.app.RedstoneSquid", caller.client), caller.user, guild_id)
-    return await build_subject(caller.client, caller.user, caller.guild_id)
-
-
-def _permissions_of(caller: Caller) -> PermissionService:
+def _permissions_of(caller: sd.Request[Any]) -> PermissionService:
     return cast("squid.bot.app.RedstoneSquid", caller.client).services.permissions
 
 
-async def allows(caller: Caller, node: PermissionNode | str) -> bool:
+async def allows(caller: sd.Request[Any], node: PermissionNode | str) -> bool:
     """Whether the user behind `caller` holds `node`."""
     subject = await subject_for_interaction(caller)
     return await _permissions_of(caller).allows(subject, node)
 
 
 async def enforce(
-    caller: Caller,
+    caller: sd.Request[Any],
     *nodes: PermissionNode | str,
     mode: CheckMode = "all",
 ) -> None:

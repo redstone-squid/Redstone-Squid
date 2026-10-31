@@ -341,14 +341,14 @@ def _error_responder(request: sd.Request[Any]) -> ErrorResponder:
 
 
 def render_request_error(request: sd.Request[Any], error: Exception) -> sl.LayoutNode[sl.ComponentsV2Target]:
-    """Render a failed `pending=` command's notice in the request's locale."""
+    """Render a failed command or component's notice in the request's locale."""
     return build_error_notice(error, request.localization.locale).to_node()
 
 
 async def observe_request_error(
     request: sd.Request[Any], error: Exception, delivery: sd.delivery.DeliveryResult | None
 ) -> None:
-    """Record a failed `pending=` command once its notice has replaced the card."""
+    """Record a failed command or component after attempting to present its notice."""
     await record_operation_error(
         error,
         locale=request.localization.locale,
@@ -358,7 +358,7 @@ async def observe_request_error(
     )
 
 
-COMMAND_ERRORS = sd.ErrorPolicy(render=render_request_error, observe=observe_request_error)
+UI_ERRORS = sd.ErrorPolicy(render=render_request_error, observe=observe_request_error)
 
 
 async def handle_context_error[BotT: commands.Bot](

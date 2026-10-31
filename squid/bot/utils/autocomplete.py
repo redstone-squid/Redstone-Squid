@@ -20,6 +20,7 @@ import anyio
 import discord
 from discord import app_commands
 
+import squid_ui_discord as sd
 from squid.bot.utils.permissions import allows
 from squid.observability import trace_span
 from squid.suggestions.application import SuggestionSource
@@ -121,7 +122,7 @@ class _InteractionAuthorizer:
         self._interaction = interaction
 
     async def allows(self, node: str) -> bool:
-        return await allows(self._interaction, node)
+        return await allows(await sd.request(self._interaction), node)
 
 
 async def _choices(

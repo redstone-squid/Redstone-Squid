@@ -104,6 +104,7 @@ class Request[OwnerT = Any]:
     _responses: int = 0
     _deferred: Deferral | None = None
     _form_opened: bool = False
+    _audience: Visibility | None = None
 
     @property
     def owner(self) -> OwnerT:
@@ -174,6 +175,13 @@ class Request[OwnerT = Any]:
         """How this request was acknowledged, which fixes the audience of what follows."""
         return self._deferred
 
+    @property
+    def audience(self) -> Visibility | None:
+        """The audience fixed by deferral or the first delivered response, if any."""
+        if self._deferred is not None:
+            return "personal" if self._deferred == "private" else "public"
+        return self._audience
+
     def destination(
         self,
         audience: Visibility,
@@ -202,6 +210,8 @@ class Request[OwnerT = Any]:
 
         async def deliver(payload: MessagePayload) -> DeliveryResult:
             result = await inner(payload)
+            if self._responses == 0:
+                self._audience = audience
             self._responses += 1
             return result
 
@@ -328,7 +338,7 @@ class Request[OwnerT = Any]:
             raise RuntimeError(message)
         resolved: FacadeContent
         if isinstance(content, Response):
-            overrides = {**content.overrides, **overrides}
+            overrides = {**content._options, **overrides}
             resolved = content.content
         else:
             resolved = content
@@ -435,6 +445,11 @@ async def request(source: RequestOrigin, *, owner: object | None = None) -> Requ
         localization = root.localization
     found = _memo_get(native)
     if found is not None:
+        if root is not None and found.root is None:
+            found.root = root
+            found.localization = root.localization
+            if found.scope is found.runtime.app and not found.responded:
+                found.scope = found.runtime.scope_of_root(root)
         if owner is not None and found.scope is found.runtime.app and not found.responded:
             found.scope = found.runtime.scope_for(owner)
         return found

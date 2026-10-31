@@ -50,7 +50,7 @@ from squid_ui.primitives.nodes import (
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui_discord.actions import ActionResponder, responder, selected_entities
+from squid_ui_discord.actions import ActionResponder, _responder, _selected_entities
 from squid_ui_discord.message_root_wiring import _CONVERSATION_TYPES
 
 type Item = discord.ui.Item[Any]
@@ -570,7 +570,7 @@ class _AdoptedView(Component[Any]):
 
     def _entity_selection(self, key: str) -> Callable[[EntitySelectionEvent], Awaitable[None]]:
         async def on_select(event: EntitySelectionEvent) -> None:
-            await self._invoke(key, event, list(selected_entities(event)))
+            await self._invoke(key, event, list(_selected_entities(event)))
 
         return on_select
 
@@ -587,7 +587,7 @@ class _AdoptedView(Component[Any]):
             message = f"no adopted control is named {key!r} any more; a render that is not a function of the view"
             raise AdoptionError(message)
 
-        answers = responder(event)
+        answers = _responder(event)
         proxy = _InteractionProxy(self, answers, view)
         try:
             try:
@@ -745,7 +745,7 @@ class _ProxyResponse:
             shown = "None" if view is None else type(view).__name__
             message = (
                 f"edit_message(view={shown}) would replace the adopted view with a different screen; "
-                "push one with squid_ui_discord.StackNavigator, or end this one with responder(event).finish_on_success()"
+                "push one with squid_ui_discord.StackNavigator, or end this one with event.finish_on_success()"
             )
             raise AdoptionError(message)
         self._proxy.flush_requested = True
@@ -761,7 +761,7 @@ class _ProxyResponse:
             named = ", ".join(carried)
             message = (
                 f"send_message({named}=...) is not available to an adopted view; a plain notice goes "
-                "through responder(event).notice(), and a richer message through followup.send()"
+                "through event.notice(), and a richer message through followup.send()"
             )
             raise AdoptionError(message)
         visibility = Visibility.PRIVATE if ephemeral else Visibility.PUBLIC
@@ -823,7 +823,7 @@ class _ProxyMessage:
         raise AdoptionError(message)
 
     async def delete(self, *_args: Any, **_kwargs: Any) -> Any:
-        message = "interaction.message.delete() is the mount's to do; use responder(event).finish_on_success()"
+        message = "interaction.message.delete() is the mount's to do; use event.finish_on_success()"
         raise AdoptionError(message)
 
     def __getattr__(self, name: str) -> Any:
@@ -870,7 +870,7 @@ class _InteractionProxy:
         raise AdoptionError(message)
 
     async def delete_original_response(self, *_args: Any, **_kwargs: Any) -> Any:
-        message = "delete_original_response() is the mount's to do; use responder(event).finish_on_success()"
+        message = "delete_original_response() is the mount's to do; use event.finish_on_success()"
         raise AdoptionError(message)
 
     def __getattr__(self, name: str) -> Any:

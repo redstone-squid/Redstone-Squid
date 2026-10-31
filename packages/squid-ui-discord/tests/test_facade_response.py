@@ -42,12 +42,12 @@ async def test_static_response_returns_sent_and_resolves_localization_once() -> 
         return sl.text.Localization(locale="en-GB")
 
     client = FakeClient()
-    runtime = sd.install(cast(discord.Client, client), localization=localize)
+    runtime = sd.install(cast(discord.Client, client), sd.Config(localization=localize))
     ui = runtime.scope(Owner())
     interaction = InteractionHarness(user_id=7)
     cast(Any, interaction).client = client
 
-    request = await ui.request(interaction.source)
+    request = await sd.request(interaction.source, owner=ui.owner)
     outcome = await request.respond("Hello", audience="personal")
 
     assert isinstance(outcome, sd.Sent)
@@ -60,7 +60,7 @@ async def test_live_response_returns_typed_presentation_and_tracks_owner() -> No
     ui, interaction = installed()
     panel = Panel()
 
-    request = await ui.request(interaction.source)
+    request = await sd.request(interaction.source, owner=ui.owner)
     outcome = await request.respond(panel)
 
     assert isinstance(outcome, sd.Presented)
@@ -81,9 +81,9 @@ def test_response_policy_overlays_in_documented_order() -> None:
     client = FakeClient()
     runtime = sd.install(
         cast(discord.Client, client),
-        sd.DiscordUIConfig(responses=sd.ResponseSpec(timeout=10, audience="public")),
+        sd.Config(responses=sd.ResponseSpec(timeout=10, audience="public")),
     )
-    ui = runtime.scope(Owner(), defaults=sd.ResponseSpec(timeout=20))
+    ui = runtime.scope(Owner())
 
     class Timed(sd.Screen[Any]):
         timeout = 30
@@ -93,7 +93,7 @@ def test_response_policy_overlays_in_documented_order() -> None:
             return sl.heading("Timed")
 
     plain = ui._policy(Panel(), {})
-    assert plain.timeout == 20
+    assert plain.timeout == 10
     assert plain.audience == "public"
 
     assert ui._policy(Timed(), {}).timeout == 30
@@ -103,7 +103,7 @@ def test_response_policy_overlays_in_documented_order() -> None:
 async def test_private_interaction_is_ephemeral() -> None:
     ui, interaction = installed()
 
-    request = await ui.request(interaction.source)
+    request = await sd.request(interaction.source, owner=ui.owner)
     await request.respond("Secret", audience=sd.Private("sensitive"))
 
     assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True

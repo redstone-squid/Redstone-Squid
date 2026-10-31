@@ -45,7 +45,7 @@ async def open_screen(
     interaction.locale = "en-US"
     if message is not None:
         interaction.original_response.return_value = message
-    request = await bot.app_ui.request(interaction)
+    request = await sd.request(interaction)
     outcome = await request.respond(screen)
     assert isinstance(outcome, sd.Presented)
     sessions = bot.sessions.get(sd.SessionKey.user_guild("poll-wizard", OWNER_ID, 7))

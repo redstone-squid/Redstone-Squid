@@ -18,7 +18,7 @@ class RequiredArguments(Screen):
 
 
 async def construction_and_presentation(ui: Scope[object], source: Any) -> None:
-    request = await ui.request(source)
+    request = await sd.request(source, owner=ui.owner)
     await request.respond(RequiredArguments("ready", count=2))
     await request.respond(RequiredArguments(2, count="wrong"))  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
     await request.respond(RequiredArguments("missing"))  # pyright: ignore[reportCallIssue]  # pyrefly: ignore[missing-argument]

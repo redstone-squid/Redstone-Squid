@@ -6,6 +6,7 @@ from typing import Any, Self, override
 import discord
 from discord import app_commands
 
+import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.consent import ensure_consented_account
 from squid.bot.notifications_view import NotificationScreen
@@ -59,11 +60,14 @@ class NotificationCog(sd.Cog[Any]):
             account_id=account_id,
             author_id=request.user.id,
             visibility=await self._inbox_visibility(request),
-            visibility_resolver=lambda event: self._inbox_visibility(sd.native(event)),
+            visibility_resolver=self._event_visibility,
         )
 
+    async def _event_visibility(self, event: sl.ActionEvent) -> InboxVisibility:
+        return await self._inbox_visibility(await sd.request(event))
+
     @staticmethod
-    async def _inbox_visibility(caller: sd.Request[Any] | discord.Interaction[Any]) -> InboxVisibility:
+    async def _inbox_visibility(caller: sd.Request[Any]) -> InboxVisibility:
         return InboxVisibility(include_staff=await allows(caller, BUILD_SUBMISSION_VIEW_PENDING))
 
     async def process_deliveries(self) -> None:

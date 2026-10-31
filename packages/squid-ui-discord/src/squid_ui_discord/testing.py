@@ -34,7 +34,7 @@ from squid_ui.planning.target import Target
 from squid_ui.runtime.component import Component
 from squid_ui.target_types import ComponentsV2Target, DiscordAdapter
 from squid_ui_discord.commands import bind_context_menu, context_menu_declaration
-from squid_ui_discord.config import DiscordUIConfig
+from squid_ui_discord.config import Config
 from squid_ui_discord.delivery import DeliveryResult, EditHandle, MessageDestination, handle_for
 from squid_ui_discord.facade import Scope
 from squid_ui_discord.message_payload import MessagePayload
@@ -42,7 +42,8 @@ from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.message_root_wiring import AnyMountedView, ClassicMountedView, MountedView
 from squid_ui_discord.rendering import render_static
-from squid_ui_discord.response import Presented, ResponseOverrides, ResponseSpec
+from squid_ui_discord.request import request
+from squid_ui_discord.response import Presented, ResponseOverrides
 from squid_ui_discord.runtime import DiscordUIRuntime, install
 
 type ComponentPayload = dict[str, Any]
@@ -789,7 +790,7 @@ def _custom_id(root: MessageRoot, key: str) -> str:
     return f"{prefix}#{hashlib.blake2s(key.encode()).hexdigest()[:12]}"
 
 
-def _owner_config(owner: object, configured: DiscordUIConfig | None) -> DiscordUIConfig:
+def _owner_config(owner: object, configured: Config | None) -> Config:
     if configured is not None:
         return configured
     ui = getattr(owner, "ui", None)
@@ -797,10 +798,7 @@ def _owner_config(owner: object, configured: DiscordUIConfig | None) -> DiscordU
         return ui.runtime.config
     if isinstance(ui, DiscordUIRuntime):
         return ui.config
-    app_ui = getattr(owner, "app_ui", None)
-    if isinstance(app_ui, Scope):
-        return app_ui.runtime.config
-    return DiscordUIConfig()
+    return Config()
 
 
 def _interaction(client: discord.Client, user_id: int) -> InteractionHarness:
@@ -813,21 +811,20 @@ async def stage[OwnerT, ComponentT: Component[ComponentsV2Target]](
     *,
     owner: OwnerT,
     user_id: int = 1,
-    config: DiscordUIConfig | None = None,
-    defaults: ResponseSpec | None = None,
+    config: Config | None = None,
     **overrides: Unpack[ResponseOverrides],
 ) -> AsyncIterator[StagedUI[ComponentT]]:
     """Present a component through an isolated owner-scoped facade and run its runtime."""
     client = commands.Bot(command_prefix="!", intents=discord.Intents.none())
     runtime = install(client, _owner_config(owner, config))
     client.ui = runtime  # type: ignore[attr-defined]
-    scope = runtime.scope(owner, defaults=defaults)
+    runtime.scope(owner)
     interaction = _interaction(client, user_id)
     try:
         async with anyio.create_task_group() as tasks:
             await tasks.start(runtime.run)
             try:
-                result = await (await scope.request(interaction.source)).respond(content, **overrides)
+                result = await (await request(interaction.source, owner=owner)).respond(content, **overrides)
                 if not isinstance(result, Presented):
                     message = f"staging live content produced {type(result).__name__}"
                     raise TypeError(message)
@@ -872,7 +869,7 @@ async def invoke(
 
 
 def _client_for(owner: object | None) -> discord.Client:
-    for candidate in (getattr(owner, "ui", None), getattr(owner, "app_ui", None)):
+    for candidate in (getattr(owner, "ui", None),):
         if isinstance(candidate, Scope):
             return candidate.runtime.client
         if isinstance(candidate, DiscordUIRuntime):

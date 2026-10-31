@@ -1,5 +1,7 @@
 """Public dogfood surface for the squid-ui engine."""
 
+import gc
+import weakref
 from dataclasses import dataclass
 from typing import Any, cast, override
 
@@ -101,7 +103,7 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
         ("ownership", "on=sl.controlled(self.subscribed, self._set_subscribed)"),
         ("forms", "class FeedbackForm(sl.forms.Form)"),
         ("composition", 'self.boundary(self.left, key="left")'),
-        ("localization", 'mount.localize(localization_for("zh-CN"))'),
+        ("localization", 'request.root.localize(localization_for("zh-CN"))'),
         ("history", "case sl.runtime.HistoryResultStatus.CONFLICT:"),
         ("replication", 'document.set("reviewers").add("you")'),
         ("effects", '@sl.operation(initial="queued")'),
@@ -228,6 +230,7 @@ async def test_localization_exhibit_escapes_values_and_relocalizes_the_same_root
     assert "@\u200beveryone" in _texts(first)
 
     interaction = interaction_harness()
+    interaction.client = make_layout_bot()
     await message_root.dispatch("switch-language", interaction)
 
     assert component.display_locale == "zh-CN"
@@ -409,9 +412,6 @@ class TestSharedAppearance:
         assert appearance.accent == before
 
     async def test_the_session_dies_with_its_panels_and_appearance_does_not(self) -> None:
-        import gc
-        import weakref
-
         _, _, appearance, session, writer, reader = self.panels()
         await writer.send(delivered_to(message_harness(message_id=1)))
         await reader.send(delivered_to(message_harness(message_id=2)))
@@ -456,7 +456,7 @@ class TestLobby:
         )
         context.guild = Guild(id=guild_id)
         panel = Lobby(host_id)
-        request = await host.app_ui.request(cast(Any, context))
+        request = await sd.request(cast(Any, context))
         outcome = await request.respond(panel)
         assert isinstance(outcome, sd.Presented)
         return host, panel
@@ -467,7 +467,7 @@ class TestLobby:
         context = ContextHarness(message=MessageHarness(message_id=5), bot=bot, user_id=8)
         context.guild = Guild(id=5)
 
-        request = await bot.app_ui.request(cast(Any, context))
+        request = await sd.request(cast(Any, context))
         result = await request.respond(Lobby(8))
 
         assert isinstance(result, sd.Rejected)

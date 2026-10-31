@@ -1,20 +1,34 @@
-"""`squid_ui_discord.responder`/`native` — the sanctioned escape hatches to Discord's own surfaces."""
+"""Discord component requests expose native facts without leaking the responder."""
 
 from collections.abc import Awaitable, Callable
-from typing import override
+from typing import Any, cast, override
 
+import discord
 import pytest
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid_ui import Component, PressEvent, TextLike
 from squid_ui.forms import FormLike, SubmitHandler
 from squid_ui.interactions import ActionMode, Actor, Visibility
 from squid_ui.interactions import ActionResponder as ActionResponderProtocol
 from squid_ui.primitives import Button, Row
 from squid_ui.testing import text_component
-from squid_ui_discord import Everyone, MessageRoot, native, responder
+from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.actions import ActionResponder
 from squid_ui_discord.testing import commit_render, interaction_harness
+
+
+class Client:
+    pass
+
+
+def installed_interaction(*, user_id: int = 1) -> Any:
+    client = Client()
+    sd.install(cast(discord.Client, client))
+    interaction = interaction_harness(user_id=user_id)
+    interaction.client = client
+    return interaction
 
 
 class Portable:
@@ -47,27 +61,13 @@ class Portable:
     def invalidate(self) -> None: ...
 
 
-def test_native_returns_the_interaction_behind_a_discord_event() -> None:
-    interaction = interaction_harness(user_id=7)
+async def test_request_returns_the_interaction_behind_a_discord_event() -> None:
+    interaction = installed_interaction(user_id=7)
     event = PressEvent(
         Actor("7"), ActionResponder(interaction, MessageRoot(text_component(), access=Everyone(), timeout=None))
     )
 
-    assert native(event) is interaction
-
-
-def test_responder_returns_the_adapter_holding_the_native_surfaces() -> None:
-    adapter = ActionResponder(interaction_harness(), MessageRoot(text_component(), access=Everyone(), timeout=None))
-    event = PressEvent(Actor("7"), adapter)
-
-    assert responder(event) is adapter
-
-
-def test_responder_rejects_a_portable_responder() -> None:
-    event = PressEvent(Actor("7"), Portable(), None, {"frontend": "html"})
-
-    with pytest.raises(LookupError, match="html"):
-        responder(event)
+    assert (await sd.request(event)).interaction is interaction
 
 
 def test_a_portable_responder_satisfies_the_protocol_it_claims() -> None:
@@ -81,19 +81,19 @@ def test_a_portable_responder_satisfies_the_protocol_it_claims() -> None:
     assert PressEvent(Actor("7"), accepted).responder is accepted
 
 
-def test_native_rejects_a_portable_responder_by_name() -> None:
+async def test_request_rejects_a_portable_responder_by_name() -> None:
     event = PressEvent(Actor("7"), Portable(), None, {"frontend": "html"})
 
     with pytest.raises(LookupError, match="html"):
-        native(event)
+        await sd.request(event)
 
 
-def test_native_names_the_responder_type_when_context_omits_the_frontend() -> None:
+async def test_request_names_the_responder_type_when_context_omits_the_frontend() -> None:
     with pytest.raises(LookupError, match="Portable"):
-        native(PressEvent(Actor("7"), Portable()))
+        await sd.request(PressEvent(Actor("7"), Portable()))
 
 
-async def test_handlers_reach_the_dispatching_interaction_through_native() -> None:
+async def test_handlers_reach_the_dispatching_interaction_through_request() -> None:
     seen: list[object] = []
 
     class Inspect(Component[sl.ComponentsV2Target]):
@@ -102,11 +102,11 @@ async def test_handlers_reach_the_dispatching_interaction_through_native() -> No
             return Row((Button(label="inspect", on_click=self.inspect, key="inspect"),))
 
         async def inspect(self, event) -> None:
-            seen.append(native(event))
+            seen.append((await sd.request(event)).interaction)
 
     message_root = MessageRoot(Inspect(), access=Everyone(), timeout=None)
     commit_render(message_root)
-    interaction = interaction_harness()
+    interaction = installed_interaction()
 
     await message_root.dispatch("inspect", interaction)
 

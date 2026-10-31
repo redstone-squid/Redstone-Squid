@@ -36,15 +36,11 @@ def test_scope_reuses_exact_owner_identity() -> None:
     assert installed.scope(Owner()) is not installed.scope(owner)
 
 
-def test_scope_rejects_none_and_conflicting_defaults() -> None:
+def test_scope_rejects_none() -> None:
     installed = runtime()
-    owner = Owner()
-    installed.scope(owner, defaults=sd.ResponseSpec(timeout=10))
 
     with pytest.raises(TypeError, match="None cannot own"):
         installed.scope(None)
-    with pytest.raises(ValueError, match="different response defaults"):
-        installed.scope(owner, defaults=sd.ResponseSpec(timeout=20))
 
 
 async def test_scope_close_finishes_tracked_roots_and_allows_a_new_scope() -> None:

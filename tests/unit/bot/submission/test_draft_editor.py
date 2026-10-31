@@ -7,12 +7,20 @@ from uuid import uuid4
 
 from whenever import Instant
 
+import squid_ui_discord as sd
 from squid.bot.submission.ui.drafts import DraftEditorScreen, draft_editor
 from squid.runtime import BotServices
 from squid.submissions.application import StoredDraft, build_submission_manifest
 from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
-from squid.submissions.domain import DraftChange, DraftRevisionConflictError, DraftSnapshot, SubmissionOrigin
+from squid.submissions.domain import (
+    DraftChange,
+    DraftRevisionConflictError,
+    DraftSnapshot,
+    DraftStatus,
+    SubmissionOrigin,
+)
 from squid_ui.testing import labels
+from squid_ui_discord.testing import commit_render
 
 
 class Drafts:
@@ -110,9 +118,6 @@ def test_every_visible_field_comes_from_the_manifest() -> None:
 
 
 async def test_manifest_pages_fit_discord_component_limits() -> None:
-    import squid_ui_discord as sd
-    from squid_ui_discord.testing import commit_render
-
     services, drafts = setup()
     editor = await draft_editor(services, 7, drafts.current.snapshot.id)
     root = sd.MessageRoot(editor, access=sd.Owner(7), timeout=None)
@@ -122,8 +127,6 @@ async def test_manifest_pages_fit_discord_component_limits() -> None:
 
 
 async def test_live_projection_refreshes_saved_state() -> None:
-    from squid.submissions.domain import DraftStatus
-
     services, drafts = setup()
     editor = await draft_editor(services, 7, drafts.current.snapshot.id)
     await editor.projection.reload()

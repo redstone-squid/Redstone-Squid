@@ -215,7 +215,7 @@ class SearchCog[BotT: "squid.bot.app.RedstoneSquid"](
             logger.warning("A CommandNotFound is being raised despite a subcommand being invoked.")
             return
         assert trimmed_content != "", "Trimmed content should not be empty."
-        request = await self.ui.request(ctx)
+        request = await sd.request(ctx, owner=self)
         await request.defer("public")
         await request.respond(await self._search_screen(scope=SearchTarget.builds, query=trimmed_content))
 

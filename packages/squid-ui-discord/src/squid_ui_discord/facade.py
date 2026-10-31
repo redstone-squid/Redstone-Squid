@@ -47,10 +47,9 @@ class Scope[OwnerT = Any]:
     edit of a message nobody just clicked.
     """
 
-    def __init__(self, runtime: DiscordUIRuntime[discord.Client], owner: OwnerT, defaults: ResponseSpec) -> None:
+    def __init__(self, runtime: DiscordUIRuntime[discord.Client], owner: OwnerT) -> None:
         self._runtime = runtime
         self._owner = owner
-        self._defaults = defaults
         self._closed = False
 
     @property
@@ -64,11 +63,6 @@ class Scope[OwnerT = Any]:
         return self._owner
 
     @property
-    def defaults(self) -> ResponseSpec:
-        """The response policy applied after installation defaults."""
-        return self._defaults
-
-    @property
     def closed(self) -> bool:
         """Whether this scope has ended."""
         return self._closed
@@ -79,18 +73,11 @@ class Scope[OwnerT = Any]:
             raise RuntimeError(message)
 
     def _policy(self, content: FacadeContent, overrides: ResponseOverrides) -> ResponseSpec:
-        policy = self._runtime.response_defaults.overlay(self._defaults)
+        policy = self._runtime.response_defaults
         screen_spec = getattr(type(content), "__response_spec__", None)
         if isinstance(screen_spec, ResponseSpec):
             policy = policy.overlay(screen_spec)
         return policy.overlay(None, **overrides)
-
-    async def request(self, source: ResponseSource) -> Request[OwnerT]:
-        """The request for `source`, created under this scope if no request has seen it yet."""
-        self._require_live()
-        from squid_ui_discord.request import request
-
-        return await request(source, owner=self._owner)
 
     def render(self, content: FacadeContent, *, localization: Localization | None = None) -> MessagePayload:
         """Render supported static content through installed rendering defaults."""
@@ -279,6 +266,7 @@ class Scope[OwnerT = Any]:
         chrome = self._setting(policy.chrome, default=None)
         if chrome is not None:
             options["chrome"] = chrome
+        options["retain_routed_on_timeout"] = self._setting(policy.retain_routed_on_timeout, default=False)
         options["timeout"] = self._setting(policy.timeout, default=180)
         options["localization"] = localization
         scheduler = self._runtime.scheduler if self._setting(policy.follow_topics, default=False) else None

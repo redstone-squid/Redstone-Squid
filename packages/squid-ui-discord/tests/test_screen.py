@@ -32,7 +32,7 @@ def _context(client: FakeClient) -> Any:
 
 def _ui(*, bus: LocalTopicBus | None = None) -> tuple[sd.Scope[Owner], FakeClient]:
     client = FakeClient()
-    runtime = sd.install(cast(discord.Client, client), bus=bus)
+    runtime = sd.install(cast(discord.Client, client), sd.Config(bus=bus))
     return runtime.scope(Owner()), client
 
 
@@ -104,7 +104,7 @@ async def test_facade_sets_opening_and_loads_before_first_render() -> None:
             order.append("render")
             return sl.heading(self.label)
 
-    request = await ui.request(context)
+    request = await sd.request(context, owner=ui.owner)
     outcome = await request.respond(Loaded("ready"))
 
     assert isinstance(outcome, sd.Presented)
@@ -132,7 +132,7 @@ async def test_rejected_session_delivers_notice_without_loading_component() -> N
         def render(self):
             return sl.heading("Exclusive")
 
-    request = await ui.request(context)
+    request = await sd.request(context, owner=ui.owner)
     first = await request.respond(Exclusive())
     second = await request.respond(Exclusive())
 
@@ -145,7 +145,7 @@ async def test_rejected_session_delivers_notice_without_loading_component() -> N
 async def test_facade_attaches_below_parent_session() -> None:
     ui, client = _ui()
     context = _context(client)
-    request = await ui.request(context)
+    request = await sd.request(context, owner=ui.owner)
     parent = await request.respond(BasicScreen())
     assert isinstance(parent, sd.Presented)
 
@@ -161,7 +161,7 @@ async def test_facade_passes_a_custom_session_key() -> None:
     ui, client = _ui()
     key = sd.SessionKey.custom("build-edit", (7, 99))
 
-    request = await ui.request(_context(client))
+    request = await sd.request(_context(client), owner=ui.owner)
     outcome = await request.respond(BasicScreen(), session_key=key)
 
     assert isinstance(outcome, sd.Presented)
@@ -179,7 +179,7 @@ async def test_renew_ephemeral_degrades_without_scheduler() -> None:
         def render(self):
             return sl.heading("Renewable")
 
-    request = await ui.request(_context(client))
+    request = await sd.request(_context(client), owner=ui.owner)
     outcome = await request.respond(Renewable())
 
     assert isinstance(outcome, sd.Presented)
@@ -197,7 +197,7 @@ async def test_follow_topics_selects_installed_scheduler() -> None:
         def render(self):
             return sl.heading("Following")
 
-    request = await ui.request(_context(client))
+    request = await sd.request(_context(client), owner=ui.owner)
     outcome = await request.respond(Following())
 
     assert isinstance(outcome, sd.Presented)
@@ -217,7 +217,7 @@ async def test_sessionless_screen_uses_personal_invoker_mount() -> None:
         def render(self):
             return sl.heading("Plain")
 
-    request = await ui.request(interaction)
+    request = await sd.request(interaction, owner=ui.owner)
     outcome = await request.respond(Plain())
 
     assert isinstance(outcome, sd.Presented)
@@ -229,7 +229,7 @@ async def test_sessionless_screen_uses_personal_invoker_mount() -> None:
 async def test_call_policy_overrides_screen_policy() -> None:
     ui, client = _ui()
 
-    request = await ui.request(_context(client))
+    request = await sd.request(_context(client), owner=ui.owner)
     outcome = await request.respond(
         sd.Response(BasicScreen(), timeout=40),
         timeout=20,
@@ -243,10 +243,10 @@ async def test_one_screen_instance_cannot_be_presented_twice() -> None:
     ui, client = _ui()
     screen = BasicScreen()
 
-    request = await ui.request(_context(client))
+    request = await sd.request(_context(client), owner=ui.owner)
     await request.respond(screen)
 
-    request = await ui.request(_context(client))
+    request = await sd.request(_context(client), owner=ui.owner)
     with pytest.raises(RuntimeError, match="already been presented"):
         await request.respond(screen)
 
@@ -254,7 +254,7 @@ async def test_one_screen_instance_cannot_be_presented_twice() -> None:
 async def test_parent_and_key_are_mutually_exclusive() -> None:
     ui, client = _ui()
     context = _context(client)
-    request = await ui.request(context)
+    request = await sd.request(context, owner=ui.owner)
     parent = await request.respond(BasicScreen())
     assert isinstance(parent, sd.Presented)
 
@@ -295,7 +295,7 @@ async def test_session_presets_apply_policy_through_the_facade(
     interaction = interaction_harness(user_id=7)
     interaction.client = client
     interaction.guild = message_harness(guild_id=42).guild
-    request = await ui.request(interaction)
+    request = await sd.request(interaction, owner=ui.owner)
     first = await request.respond(preset())
 
     assert isinstance(first, sd.Presented)
