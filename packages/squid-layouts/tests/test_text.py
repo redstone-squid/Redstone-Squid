@@ -1,6 +1,8 @@
 """Resolved text dialect and interpolation safety."""
 
-from squid_layouts.text import TextDialect, discord_text, md, plain, raw_md
+import pytest
+
+from squid_layouts.text import Localization, Message, TextDialect, discord_text, md, plain, raw_md, resolve_text
 
 
 def test_bare_markdown_is_trusted() -> None:
@@ -34,3 +36,36 @@ def test_plain_text_is_escaped_only_when_drawn_for_discord() -> None:
 
     assert text.content == "**literal**"
     assert discord_text(text) == "\\*\\*literal\\*\\*"
+
+
+def test_message_translates_at_resolution_and_escapes_params() -> None:
+    localization = Localization("xx", gettext=lambda message: {"Build {title}": "Obra {title}"}[message])
+
+    text = resolve_text(Message("Build {title}", {"title": "[x](bad) @here"}), localization)
+
+    assert text.content == "Obra \\[x\\]\\(bad\\) @\u200bhere"
+
+
+def test_plural_message_uses_catalog_plural_lookup() -> None:
+    localization = Localization(
+        "xx",
+        ngettext=lambda singular, plural, count: singular if count == 1 else f"translated {plural}",
+    )
+
+    text = resolve_text(Message("{count} item", {"count": 2}, plural="{count} items"), localization)
+
+    assert text.content == "translated 2 items"
+
+
+def test_plural_message_requires_integer_count() -> None:
+    with pytest.raises(ValueError, match="integer 'count'"):
+        resolve_text(Message("one", {"count": "many"}, plural="many"), Localization())
+
+
+def test_message_can_interpolate_another_deferred_message() -> None:
+    translations = {"Section": "Sektion", "{section} page": "{section} Seite"}
+    localization = Localization("de", gettext=lambda message: translations[message])
+
+    text = resolve_text(Message("{section} page", {"section": Message("Section")}), localization)
+
+    assert text.content == "Sektion Seite"

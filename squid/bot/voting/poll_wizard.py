@@ -3,7 +3,7 @@
 import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, cast, override
+from typing import TYPE_CHECKING, Any, cast, override
 
 import discord
 
@@ -12,6 +12,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.errors import ErrorHandledModal, ExpiringLayoutView
 from squid.bot.ui import create_mount
 from squid.bot.utils.components import edit_interaction_layout, no_mentions, text_layout
+from squid.bot.utils.mount_registry import SessionKey
 from squid.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
@@ -178,7 +179,7 @@ class PollModal(ErrorHandledModal):
         self.add_item(discord.ui.Label(text="Options (one per line)", component=self.options))
 
     @override
-    async def on_submit(self, interaction: discord.Interaction) -> None:
+    async def on_submit(self, interaction: discord.Interaction[Any]) -> None:
         if interaction.guild is None:
             await interaction.response.send_message("Polls can only be created in a server.", ephemeral=True)
             return
@@ -201,15 +202,14 @@ class PollModal(ErrorHandledModal):
             options,
             allow_network=self.allow_network,
         )
-        mount = component.mount()
-        rendered = mount.build_view()
-        await interaction.response.send_message(
-            view=rendered,
-            files=mount.attachment_files(),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
+        # REPLACE rather than REJECT: the wizard's own Edit button re-opens this modal, so
+        # turning a second wizard away would turn away the edit. One live wizard per user per
+        # guild, and it is always the one they last submitted.
+        await interaction.client.mounts.open(
+            component.mount(),
+            sl.discord.respond_to(interaction, ephemeral=True, wait=True),
+            key=SessionKey("poll-wizard", interaction.user.id, interaction.guild.id),
         )
-        mount.bind(await interaction.original_response(), rendered)
 
 
 class CustomDurationModal(ErrorHandledModal):
@@ -443,6 +443,8 @@ class PollConfirmationComponent(sl.Component):
     """A semantic poll preview and publication workspace."""
 
     published: bool = sl.state(default=False)
+    # Supplied by the caller on every open, so a snapshot would only restore it stale.
+    draft: PollDraft = sl.state(persist=False)
 
     def __init__(
         self,
@@ -466,7 +468,7 @@ class PollConfirmationComponent(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.published:
-            return (sl.primitives.banner("Poll published."),)
+            return (sl.status("Poll published."),)
         preview = "\n".join(
             [
                 f"## {self.draft.question}",
@@ -474,20 +476,21 @@ class PollConfirmationComponent(sl.Component):
             ]
         )
         fields = [
-            sl.primitives.presets.Field("Visibility", self._visibility_label()),
-            sl.primitives.presets.Field("Closes after", format_duration(self.draft.duration_seconds)),
+            sl.field("Visibility", self._visibility_label()),
+            sl.field("Closes after", format_duration(self.draft.duration_seconds)),
         ]
         if self.allow_network:
-            fields.append(sl.primitives.presets.Field("Reaches", self._scope_label()))
+            fields.append(sl.field("Reaches", self._scope_label()))
         nodes: list[sl.LayoutNode] = [
-            sl.primitives.card(preview, fields=tuple(fields)),
+            # `preview` already opens with its own "## question" line, so this renders a
+            # double "##". Pre-existing, and fixing rendering is out of scope here.
+            sl.section(sl.fields(*fields), heading=preview),
             sl.Choices(
                 key="visibility",
                 choices=tuple(
                     sl.Choice(value.value, label, description) for value, label, description in VISIBILITY_CHOICES
                 ),
-                selected=(self.draft.visibility.value,),
-                on_change=self._visibility_changed,
+                selection=sl.controlled((self.draft.visibility.value,), self._visibility_changed),
             ),
             sl.Choices(
                 key="duration",
@@ -495,8 +498,7 @@ class PollConfirmationComponent(sl.Component):
                     sl.Choice(str(seconds), label)
                     for label, seconds in (*DURATION_PRESETS, ("Custom…", CUSTOM_DURATION))
                 ),
-                selected=(str(self.draft.duration_seconds),),
-                on_change=self._duration_changed,
+                selection=sl.controlled((str(self.draft.duration_seconds),), self._duration_changed),
             ),
         ]
         if self.allow_network:
@@ -506,8 +508,7 @@ class PollConfirmationComponent(sl.Component):
                     choices=tuple(
                         sl.Choice(value.value, label, description) for value, label, description in SCOPE_CHOICES
                     ),
-                    selected=(self.draft.scope.value,),
-                    on_change=self._scope_changed,
+                    selection=sl.controlled((self.draft.scope.value,), self._scope_changed),
                 )
             )
         nodes.append(
@@ -533,7 +534,6 @@ class PollConfirmationComponent(sl.Component):
 
     async def _visibility_changed(self, event: sl.ChoiceEvent) -> None:
         self.draft = replace(self.draft, visibility=VoteVisibility(event.selected[0]))
-        self.invalidate()
 
     async def _duration_changed(self, event: sl.ChoiceEvent) -> None:
         chosen = event.selected[0]
@@ -541,21 +541,15 @@ class PollConfirmationComponent(sl.Component):
             await sl.discord.responder(event).send_modal(CustomDurationModal(self))
             return
         self.draft = replace(self.draft, duration_seconds=int(chosen))
-        self.invalidate()
 
     async def _scope_changed(self, event: sl.ChoiceEvent) -> None:
         self.draft = replace(self.draft, scope=PollScope(event.selected[0]))
-        self.invalidate()
 
     async def set_duration(self, interaction: discord.Interaction, seconds: int) -> None:
         self.draft = replace(self.draft, duration_seconds=seconds)
-        self.invalidate()
         if self._mount is None:
             return
-        rendered = self._mount.build_view()
-        await edit_interaction_layout(interaction, rendered)
-        # bind is the commit point, so it runs whether or not this mount holds a message.
-        self._mount.bind(self._mount.message, rendered)
+        await self._mount.flush(interaction)
 
     async def _publish(self, event: sl.PressEvent) -> None:
         interaction = sl.discord.native(event)

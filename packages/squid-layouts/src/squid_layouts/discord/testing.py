@@ -6,12 +6,14 @@ serialization.
 """
 
 from collections.abc import Iterator
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 
 import discord
 
+from squid_layouts.discord.delivery import Destination
 from squid_layouts.discord.mount import Mount, MountedView
 from squid_layouts.planning.limits import LIMITS, V2Limits
 
@@ -101,36 +103,90 @@ def modal_problems(payload: dict[str, Any], *, limits: V2Limits = LIMITS) -> lis
     return problems
 
 
-def fake_interaction(user_id: int = 1) -> Any:
+def _fake_message_shape(message_id: int, *, ephemeral: bool, channel_id: int, guild_id: int | None) -> Any:
+    """The read-only half of a message: what it is and where it lives."""
+    return SimpleNamespace(
+        id=message_id,
+        flags=SimpleNamespace(components_v2=True, ephemeral=ephemeral),
+        channel=SimpleNamespace(id=channel_id),
+        guild=None if guild_id is None else SimpleNamespace(id=guild_id),
+        jump_url=f"https://discord.com/channels/{guild_id or '@me'}/{channel_id}/{message_id}",
+    )
+
+
+def fake_interaction(user_id: int = 1, *, message_id: int = 99, expired: bool = False) -> Any:
     """A minimal interaction double for exercising mounts without Discord.
 
     `response.is_done()` starts false; flip `interaction.response._done` to simulate a
-    consumed response. All send/edit surfaces are AsyncMocks.
+    consumed response, and set `interaction.response.type` to say what consumed it — a
+    non-update type is what makes `delivery.handle_from` refuse the interaction. All
+    send/edit surfaces are AsyncMocks.
     """
-    response = SimpleNamespace(
-        _done=False,
-        is_done=lambda: response._done,
-        edit_message=AsyncMock(),
-        send_message=AsyncMock(),
-        defer=AsyncMock(),
-    )
+    response = SimpleNamespace(_done=False, is_done=lambda: response._done, type=None)
+
+    def _responds(kind: discord.InteractionResponseType) -> AsyncMock:
+        """A response surface that consumes the response the way discord.py's does."""
+
+        async def record(*args: Any, **kwargs: Any) -> None:
+            response._done = True
+            response.type = kind
+
+        return AsyncMock(side_effect=record)
+
+    response.edit_message = _responds(discord.InteractionResponseType.message_update)
+    response.defer = _responds(discord.InteractionResponseType.deferred_message_update)
+    response.send_message = _responds(discord.InteractionResponseType.channel_message)
+    response.send_modal = _responds(discord.InteractionResponseType.modal)
     return SimpleNamespace(
         user=SimpleNamespace(id=user_id),
-        message=SimpleNamespace(flags=SimpleNamespace(components_v2=True)),
+        message=_fake_message_shape(message_id, ephemeral=False, channel_id=5, guild_id=7),
         response=response,
-        followup=SimpleNamespace(send=AsyncMock()),
+        followup=SimpleNamespace(send=AsyncMock(), edit_message=AsyncMock()),
         edit_original_response=AsyncMock(),
+        expires_at=datetime.now(UTC) + timedelta(minutes=15),
+        is_expired=lambda: expired,
     )
+
+
+def fake_message(
+    *, message_id: int = 99, ephemeral: bool = False, channel_id: int = 5, guild_id: int | None = 7
+) -> Any:
+    """A minimal message double whose `edit` returns itself, as Discord's does."""
+    message = _fake_message_shape(message_id, ephemeral=ephemeral, channel_id=channel_id, guild_id=guild_id)
+    message.edit = AsyncMock()
+    message.edit.return_value = message
+    return message
+
+
+def delivered_to(message: Any) -> Destination:
+    """A destination that hands `message` straight back — a send with no Discord in it.
+
+    The mount ends up holding exactly the handle a real send would have given it, so tests
+    about editing, refreshing and finishing can start from a delivered mount.
+    """
+
+    async def send(view: discord.ui.LayoutView, files: list[discord.File]) -> Any:
+        return message
+
+    return send
 
 
 def commit_render(mount: Mount, *, disabled: bool = False) -> MountedView:
-    """Stage a render and commit it with no Discord delivery — the test-side `bind`.
+    """Stage a render and commit it with no Discord delivery — `Mount.send` to nowhere.
 
-    `Mount.build_view` only stages; handlers and the live generation move when the host
-    reports a successful delivery. Tests that never touch Discord say so with this.
+    `Mount.build_view` only stages; handlers and the live generation move when a delivery
+    lands. Tests that never touch Discord say where that point is with this, rather than
+    driving a destination that would only ever hand back `None`.
+
+    Reaches past `send` on purpose: the alternative is making every one of these call sites
+    await, for no coverage of anything the real send path does. For the same reason it runs no
+    `on_load` -- a test that wants a loaded render wants the real seam,
+    `await mount.send(delivered_to(fake_message()))`.
     """
     view = mount.build_view(disabled=disabled)
-    mount.bind(None, view)
+    candidate = mount._pending
+    assert candidate is not None and candidate.view is view
+    mount._commit(candidate)
     return view
 
 

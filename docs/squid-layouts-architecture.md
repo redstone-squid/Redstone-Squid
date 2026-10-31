@@ -64,6 +64,21 @@ identity and configuration are keyword-only, `None`/`False` children are skipped
 `Paragraph`. Collections are unpacked by the caller. The dataclasses remain the IR and remain
 public; the factories only normalize what authors write.
 
+`Choices`, `Items`, `Details`, and `Navigation` each hold a value, and one rule says who
+owns it. Every one of them takes an `Ownership`: `sl.controlled(value, on_change)` means the
+author owns it — their value wins on every render and the engine never touches the session —
+and `sl.managed(initial)` means the engine owns it in the presentation session under the
+node's key. `Managed.initial` is a seed, not a value: it applies on a session miss and is
+ignored from then on, so an author who needs their value to keep winning wants `controlled`.
+Ownership is a value rather than an inference from which fields were passed, so a node
+cannot be half-controlled and the mode is readable at the call site.
+
+The two paths persist differently, which matters when a snapshot is restored. Managed values
+travel in the presentation vocabulary and are gated by the framework's protocol and adapter
+versions; controlled values travel in the owning component's declared state and are gated by
+the host's `component_version`. Both survive a restore; they fail incompatible restores
+under different version gates.
+
 Adapters choose among finite lossless strategies. Actions may be individual controls,
 grouped pickers, or a paged picker. Thirty-six ungrouped actions become 25 and 11 options;
 author-declared groups never merge. Choices, Items, and Navigation use keyed 25-option
@@ -81,7 +96,9 @@ Target-shaped nodes live under `squid_layouts.primitives`. Their policies are ex
 - `Truncate` and `Spill` shorten content only when the author wraps or configures it.
 - `Alt`/`Alts` supply text ladders and per-entry drop priority.
 - `Paginate` has an explicit key and measured footer/navigation chrome.
-- `Fold` supplies a complete structural alternate for component pressure.
+- `Variants` supplies an ordered ladder of complete structural alternates for component
+  pressure; rungs may be capability-gated, and the planner filters them before the solver
+  steps the survivors.
 - `Drop` and `Never` make omission or non-degradation explicit.
 
 Semantic helpers `truncate`, `spill`, `optional`, `fallback`, and `best_effort` grant the
@@ -100,22 +117,72 @@ renderer can choose an appropriate Markdown implementation.
 ## Components and Vue-inspired reactivity
 
 Components render synchronously from state. state observes assignment and nested list, dict,
-and set mutation. `state(factory=...)` avoids shared mutable defaults:
+and set mutation. A default is deep-copied per instance, so `sl.state([])` is safe; reach for
+`state(factory=...)` when the initial value must be *computed* per instance rather than copied
+from a template, since the declaration itself runs once, at class-body time:
 
     class Search(sl.Component):
         query: str = sl.state("")
-        results: list[str] = sl.state(factory=list)
+        results: list[str] = sl.state([])
+        opened_at: Instant = sl.state(factory=Instant.now)
 
         @sl.computed
         def title(self) -> str:
             return f"{len(self.results)} results for {self.query}"
 
 computed caches until the component tree invalidates. batch coalesces related writes.
-transaction also restores every touched field if an exception escapes. `sl.discord.Mount` dispatch wraps
-mutating actions in a transaction, so a failed callback cannot leave state half-applied.
+transaction restores every touched field if an exception escapes, and `sl.discord.Mount`
+dispatch wraps mutating actions in one.
+
+That guarantee reaches declared state, and only declared state:
+
+| Attribute | Re-renders on write | Rolled back on failure |
+|---|---|---|
+| `sl.state(...)` | yes, including nested list, dict, and set mutation | yes |
+| `sl.state(copy="ref")` | on assignment | to the previous reference |
+| a plain attribute | no | no |
+| anything written by `on_load` | it is what the first render reads | n/a -- no transaction is open |
+
+A plain attribute assigned during a transaction is therefore uncovered, so the framework says
+so: a read-only action raises `ReactiveWriteError`, and a mutating one logs a warning naming
+the attribute. `sl.strict_state()` turns that warning into `UndeclaredStateError`; the test
+suite runs with it on. Declare the field to make it stop.
+
+A component *created* during an action is exempt, because a transaction restores the view the
+action started from and such a component had no state then. Handlers are free to build one.
+The rule is birth, not mounting: a component built earlier and not currently in the tree is
+still covered, since it may be about to go back in.
+
+Neither rollback nor invalidation reaches a change made *through* a field — setting an
+attribute on the object a `copy="ref"` field holds, for instance. Nothing can observe that, so
+say it explicitly:
+
+    async def _door_changed(self, event: sl.ChoiceEvent) -> None:
+        self.build.door_orientation = event.selected[0]
+        self.mutated("build")
+
+`mutated` only schedules the draw; the change is still outside the transaction. Naming the
+field is the point — the call fails if that field stops being declared state, so the manual
+signal cannot drift away from the declaration it depends on.
 
 state(persist=False) marks runtime-only data that durable snapshots omit. Persistent state
-must be JSON-safe.
+must be JSON-safe. `sl.state(copy="ref")` covers the opposite case, a collaborator that is
+real state but must never be copied — a service, a guild, a session. It is never persisted,
+and it snapshots the reference rather than a deep copy:
+
+    class Panel(sl.Component):
+        page: str = sl.state("server")
+        guild: discord.Guild = sl.state(copy="ref")
+
+        def __init__(self, guild: discord.Guild) -> None:
+            self.guild = guild
+
+`sl.state()` with neither a default nor a factory declares a field that `__init__` must
+assign, the way a dataclass field with no default is required. Leaving one unassigned raises
+TypeError at construction, not later at first read. Only the outermost `__init__` is checked,
+so a subclass may assign after calling `super().__init__()`, and a class that has not
+implemented `render` yet is exempt — it is a base to build on, and its subclasses do the
+assigning.
 
 Children appear through explicit keyed boundaries:
 
@@ -130,6 +197,16 @@ invalidation, injected context, presentation state, and the bounded plan cache. 
 scopes action keys and pager keys, detects cycles and duplicate instances, and gives the
 runtime deterministic `on_mount`/`on_unmount` ownership. Components have no mount reference;
 the Discord mount is one frontend consumer of the runtime.
+
+`async def on_load(self)` is where a component fetches what it cannot render without. The
+frontend awaits it before the first delivery that would show the component, once per instance,
+and **before `render()` is ever called on it**: expansion stops at an embedded component that
+still owes a load, so the tier is loaded and then re-rendered rather than rendered empty. The
+delivered view is therefore the loaded one -- one delivery, no loading paint, and no `load()`
+for a call site to forget. Siblings in a tier load concurrently; a raise delivers nothing and
+leaves the load eligible to retry. `Mount.send`, `flush` and `refresh_now` load; `finish`,
+`finish_via` and `build_view` deliberately do not. Data the component can degrade without
+belongs in declared state with a render branch, refreshed by a handler.
 
 Presentation state is deliberately a closed vocabulary: `CursorState`, `SelectionState`,
 `DisclosureState`, and `StrategyState`. It is per mounted message/viewer session and separate
@@ -147,6 +224,14 @@ Components receive PressEvent or SelectionEvent, not discord.Interaction. Events
 portable actor facts and response intents: notice, present_form, download, redirect, and
 finish. Each frontend implements ActionResponder; Discord details live in
 sl.discord.ActionResponder.
+
+A mount writes back through an `EditHandle` rather than a stored message: a way to reach one
+already-sent message, and how long it is good for. The bot's own credentials never expire;
+an interaction's do, and every click carries a fresh one, so `Mount` keeps the longest-lived
+handle it has seen. A handle that no longer addresses its message raises `StaleHandleError`,
+which is the one place webhook tokens and response shapes are understood. When no handle is
+live the render waits in `Mount.pending` for the next interaction — `refresh()` has always
+promised the next opportunity rather than the current instant.
 
 | Policy | Concurrency | Stale control | State writes |
 |---|---|---|---|
@@ -219,6 +304,9 @@ two workers from dispatching the same visible controls after a restart.
 - Exact `primitives.SelectMenu` overflow is intentionally a planning error; semantic
   interactions own legal paging. Cross-page multi-select needs an explicit grouping or commit
   model and is rejected rather than approximated.
+- An ephemeral message that nobody has interacted with for over 15 minutes cannot be
+  edited out of band at all; Discord expires the only credentials that reach it. Interactive
+  use is unaffected, and `Mount.pending` reports a render held back for this reason.
 - HTML action transport is not prescribed. Markup exposes action IDs; HTTP or WebSocket
   routing and authentication belong to the host.
 - The base distribution is dependency-free; `squid-layouts[discord]` installs discord.py and anyio for the adapter.

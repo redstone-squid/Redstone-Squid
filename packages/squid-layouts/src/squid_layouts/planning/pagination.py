@@ -6,14 +6,16 @@ solver realizes and counts them, and a view that wants page jumps or a "Newest" 
 supplies its own factory instead of patching the mount.
 
 Factories must return component-bearing nodes only — buttons and selects cost no display
-text, which is what lets the solver add them after it has allocated the text budget.
+text, which is what lets the solver add them after it has allocated the text budget. They
+must also return the same *shape* on every page: disable a control at the ends rather than
+hiding it, so the component count a page turn produces is the one the solver budgeted for.
 """
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
 from squid_layouts.chrome import Chrome
-from squid_layouts.primitives.nodes import Button, Node, Row
+from squid_layouts.primitives.nodes import Button, Gallery, RawItem, RoutedSelect, Row, SelectMenu, Sep, Thumbnail
 
 PREV_KEY = "__page_prev"
 NEXT_KEY = "__page_next"
@@ -39,7 +41,15 @@ class PageContext:
         return self.page >= self.pages - 1
 
 
-type NavFactory = Callable[[PageContext], Sequence[Node]]
+type NavNode = Row | SelectMenu | RoutedSelect | Sep | Thumbnail | Gallery | RawItem
+"""What a nav factory may return: components, never display text."""
+
+type NavFactory = Callable[[PageContext], Sequence[NavNode]]
+"""The authoring form, closed over the handlers that move the page."""
+
+type PageNav = Callable[[str, int, int], Sequence[NavNode]]
+"""The planning form. Planning has no handlers to offer, so a mount adapts its
+`NavFactory` down to this and keeps the callbacks on its own side."""
 
 
 def page_controls(chrome: Chrome, context: PageContext) -> Row:
@@ -62,7 +72,7 @@ def page_controls(chrome: Chrome, context: PageContext) -> Row:
 def default_nav(chrome: Chrome) -> NavFactory:
     """The stock factory: one Previous/Next row, labelled from `chrome`."""
 
-    def factory(context: PageContext) -> Sequence[Node]:
+    def factory(context: PageContext) -> Sequence[NavNode]:
         return (page_controls(chrome, context),)
 
     return factory

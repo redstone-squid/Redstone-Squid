@@ -43,6 +43,11 @@ def _catalog(locale: str, localedir: Path | None = None) -> gettext.NullTranslat
     )
 
 
+def catalog_for(locale: str | None) -> gettext.NullTranslations:
+    """Return the catalog for a negotiated application locale."""
+    return _catalog(negotiate_locale(locale))
+
+
 def _parse(tag: str) -> Locale | None:
     try:
         return Locale.parse(tag, sep="-")

@@ -1,14 +1,17 @@
 """Submit-button behaviour of the guided `/build submit` workspace."""
 
 import asyncio
+from types import SimpleNamespace
 from typing import Any, cast
 
 import discord
 import pytest
 
-from squid.bot.submission.ui.views import BuildSubmissionForm
+import squid_layouts as sl
+from squid.bot.submission.ui.views import BuildSubmissionForm, SubmissionFormComponent
 from squid.builds.application import BuildService
 from squid.builds.domain import BuildDraft
+from squid_layouts.discord.testing import commit_render
 
 
 class _FakeResponse:
@@ -127,3 +130,16 @@ async def test_form_without_a_callback_defers_to_its_caller() -> None:
 
     assert form.value is True
     assert form.is_finished() is True
+
+
+async def test_changing_the_door_type_redraws_even_though_nothing_observes_the_draft() -> None:
+    """The draft is mutated through, which no snapshot or proxy sees; mutated() is the signal."""
+    component = SubmissionFormComponent(BuildDraft(), cast(BuildService, object()))
+    mount = component.mount()
+    commit_render(mount)
+    assert mount.pending is False
+
+    await component._door_changed(cast(sl.ChoiceEvent, SimpleNamespace(selected=("Door",))))
+
+    assert mount.pending is True
+    assert component.build.door_orientation == "Door"

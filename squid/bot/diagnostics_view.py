@@ -12,9 +12,7 @@ from collections.abc import Sequence
 import discord
 
 import squid_layouts as sl
-from squid.bot.i18n import t
-from squid.bot.ui import chrome_for
-from squid.core.i18n import _
+from squid.bot.ui import CHROME, L
 from squid.diagnostics.domain import ErrorReport
 
 SESSION_SECONDS = 300
@@ -34,12 +32,10 @@ class ErrorReportBrowser(sl.Component):
         self,
         reports: Sequence[ErrorReport] = (),
         *,
-        locale: str | None = None,
         report: ErrorReport | None = None,
         matches: int = 1,
     ) -> None:
         self._reports = tuple(reports)
-        self.locale = locale
         if report is not None:
             self.detail = report
             self.matches = matches
@@ -52,14 +48,13 @@ class ErrorReportBrowser(sl.Component):
     def chrome(self) -> sl.Chrome:
         """This browser's chrome: temporal paging labels and a footer that names the attachment."""
         return dataclasses.replace(
-            chrome_for(self.locale),
-            not_yours=t(self.locale, _("These error controls belong to someone else.")),
-            previous=t(self.locale, _("Earlier")),
-            next=t(self.locale, _("Later")),
-            page_footer=lambda page, pages: t(
-                self.locale,
-                _("{section} — page {page} of {pages} · the attachment has the whole report"),
-                section=t(self.locale, _("Traceback")),
+            CHROME,
+            not_yours=L(t"These error controls belong to someone else."),
+            previous=L(t"Earlier"),
+            next=L(t"Later"),
+            page_footer=lambda page, pages: L(
+                "{section} — page {page} of {pages} · the attachment has the whole report",
+                section=L("Traceback"),
                 page=page,
                 pages=pages,
             ),
@@ -70,10 +65,10 @@ class ErrorReportBrowser(sl.Component):
         assets = (report_asset(self.detail),) if self.detail is not None else ()
         return sl.Document(tuple(nodes), assets)
 
-    def _render_list(self) -> Sequence[sl.primitives.Node]:
+    def _render_list(self) -> Sequence[sl.LayoutNode]:
         entries = tuple(_list_line(report) for report in self._reports)
-        body = "\n".join(entries) or t(self.locale, _("Nothing has failed within the retention window."))
-        nodes: list[sl.primitives.Node] = [sl.primitives.card(t(self.locale, _("Recent errors")), body)]
+        body: sl.TextLike = "\n".join(entries) or L(t"Nothing has failed within the retention window.")
+        nodes: list[sl.LayoutNode] = [sl.section(sl.truncate(sl.paragraph(body)), heading=L(t"Recent errors"))]
         if self._reports:
             nodes.append(
                 sl.primitives.SelectMenu(
@@ -87,40 +82,41 @@ class ErrorReportBrowser(sl.Component):
                     ),
                     on_select=self._open,
                     key="open",
-                    placeholder=t(self.locale, _("Choose an error to open")),
+                    placeholder=L(t"Choose an error to open"),
                 )
             )
         nodes.append(sl.primitives.Row((self._close_button(),)))
         return nodes
 
-    def _render_detail(self) -> Sequence[sl.primitives.Node]:
+    def _render_detail(self) -> Sequence[sl.LayoutNode]:
         report = self.detail
         assert report is not None
-        traceback_text = report.traceback.strip() or t(self.locale, _("No traceback was recorded."))
-        children: list[sl.primitives.Node] = [
-            sl.primitives.Heading(t(self.locale, _("Error {reference}"), reference=report.reference)),
+        reference = report.reference
+        traceback_text: sl.TextLike = report.traceback.strip() or L(t"No traceback was recorded.")
+        children: list[sl.LayoutNode] = [
+            sl.primitives.Heading(L(t"Error {reference}")),
             # Opens at the end because the failing frame is the last one.
             sl.primitives.Code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", initial="end")),
         ]
         if report.log_tail:
             # The run-up to the failure: its last lines matter most, so it trims from the
             # front; the attachment carries all of it.
-            children.append(sl.primitives.Lines((f"**{t(self.locale, _('Log tail'))}**",), priority=2))
+            children.append(sl.primitives.Heading(L(t"Log tail"), level=3, priority=2))
             children.append(
                 sl.primitives.Code(
                     "\n".join(report.log_tail), overflow=sl.primitives.Truncate(keep="tail"), priority=-8
                 )
             )
-        children.append(sl.primitives.Lines(tuple(_summary_entries(report, self.matches, self.locale)), priority=5))
+        children.append(sl.fields(*_summary_fields(report, self.matches)))
         controls: list[sl.primitives.Button] = []
         if self._reports:
-            controls.append(sl.primitives.Button(label=t(self.locale, _("Back")), on_click=self._back, key="back"))
+            controls.append(sl.primitives.Button(label=L(t"Back"), on_click=self._back, key="back"))
         controls.append(self._close_button())
-        return [sl.primitives.Panel(children=tuple(children)), sl.primitives.Row(tuple(controls))]
+        return [sl.section(*children), sl.primitives.Row(tuple(controls))]
 
     def _close_button(self) -> sl.primitives.Button:
         return sl.primitives.Button(
-            label=t(self.locale, _("Close")),
+            label=L(t"Close"),
             on_click=self._close,
             key="close",
             style=sl.primitives.ActionStyle.SECONDARY,
@@ -173,23 +169,26 @@ def report_asset(report: ErrorReport) -> sl.Asset:
     )
 
 
-def _summary_entries(report: ErrorReport, matches: int, locale: str | None) -> list[str]:
+def _summary_fields(report: ErrorReport, matches: int) -> list[sl.Field]:
     entries = [
-        f"**{t(locale, _('When'))}**\n<t:{report.occurred_at.timestamp()}:f>",
-        f"**{t(locale, _('Where'))}**\n{report.surface} — {report.origin or '—'}",
-        f"**{t(locale, _('Exception'))}**\n{report.exception_type}",
-        f"**{t(locale, _('Full ID'))}**\n`{report.correlation_id}`",
+        sl.field(
+            L(t"When"),
+            sl.md("{timestamp}", timestamp=sl.raw_md(f"<t:{report.occurred_at.timestamp()}:f>")),
+        ),
+        sl.field(L(t"Where"), sl.md(t"{report.surface} — {report.origin or '—'}")),
+        sl.field(L(t"Exception"), sl.md(t"{report.exception_type}")),
+        sl.field(L(t"Full ID"), sl.md("{identifier}", identifier=sl.raw_md(f"`{report.correlation_id}`"))),
     ]
     if report.work_lost:
-        entries.append(
-            f"**{t(locale, _('Work lost'))}**\n{t(locale, _('This job was abandoned; nothing will retry it.'))}"
-        )
+        entries.append(sl.field(L(t"Work lost"), L(t"This job was abandoned; nothing will retry it.")))
     if matches > 1:
         # The reference is a 48-bit prefix, not a key. Silently showing the newest of several
         # would have a moderator confidently reading the wrong incident.
         entries.append(
-            f"**{t(locale, _('Ambiguous'))}**\n"
-            + t(locale, _("{count} reports share this reference; this is the newest."), count=matches)
+            sl.field(
+                L(t"Ambiguous"),
+                L("{count} reports share this reference; this is the newest.", count=matches),
+            )
         )
     return entries
 

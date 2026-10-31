@@ -61,7 +61,9 @@ SCENE_SCHEMA: dict[str, Any] = {
                     "separator",
                     "link",
                     "button",
+                    "routed_button",
                     "select",
+                    "routed_select",
                     "row",
                     "thumbnail",
                     "gallery",
@@ -106,6 +108,21 @@ SCENE_SCHEMA: dict[str, Any] = {
             "disabled",
             "policy",
         ),
+        "routed_button": _node(
+            "routed_button",
+            {
+                "label": {"type": "string"},
+                "route_id": {"type": "string", "maxLength": 100},
+                "style": {"enum": ["primary", "secondary", "success", "danger"]},
+                "emoji": {"type": ["string", "null"]},
+                "disabled": {"type": "boolean"},
+            },
+            "label",
+            "route_id",
+            "style",
+            "emoji",
+            "disabled",
+        ),
         "select": _node(
             "select",
             {
@@ -124,6 +141,23 @@ SCENE_SCHEMA: dict[str, Any] = {
             "max_values",
             "disabled",
             "policy",
+        ),
+        "routed_select": _node(
+            "routed_select",
+            {
+                "options": {"type": "array", "items": {"$ref": "#/$defs/option"}, "maxItems": 25},
+                "route_id": {"type": "string", "maxLength": 100},
+                "placeholder": {"type": ["string", "null"]},
+                "min_values": {"type": "integer", "minimum": 0},
+                "max_values": {"type": "integer", "minimum": 0},
+                "disabled": {"type": "boolean"},
+            },
+            "options",
+            "route_id",
+            "placeholder",
+            "min_values",
+            "max_values",
+            "disabled",
         ),
         "option": {
             "type": "object",
@@ -145,6 +179,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                         "oneOf": [
                             {"$ref": "#/$defs/link"},
                             {"$ref": "#/$defs/button"},
+                            {"$ref": "#/$defs/routed_button"},
                             {"$ref": "#/$defs/extension"},
                         ]
                     },
@@ -181,6 +216,7 @@ SCENE_SCHEMA: dict[str, Any] = {
                         {"$ref": "#/$defs/thumbnail"},
                         {"$ref": "#/$defs/link"},
                         {"$ref": "#/$defs/button"},
+                        {"$ref": "#/$defs/routed_button"},
                         {"$ref": "#/$defs/extension"},
                     ]
                 },

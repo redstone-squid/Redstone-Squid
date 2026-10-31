@@ -1,12 +1,15 @@
 """Discord adapter for portable component action events."""
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 import discord
 
-from squid_layouts.actions import ActionEvent, Visibility
+from squid_layouts.actions import ActionEvent, ActionPolicy, Visibility
 from squid_layouts.discord import delivery as deliver
-from squid_layouts.discord.modal import ModalSpec, build_modal
+from squid_layouts.discord.modal import ModalSpec, build_form_modal, build_modal
+from squid_layouts.forms import FieldError, FormIssue, FormLike, FormSpec, SubmitHandler, bind_form
+from squid_layouts.text import TextLike, resolve_text
 
 if TYPE_CHECKING:
     from squid_layouts.discord.mount import Mount
@@ -23,8 +26,9 @@ class ActionResponder:
         if not self.interaction.response.is_done():
             await self.interaction.response.defer()
 
-    async def notice(self, text: str, *, visibility: Visibility = Visibility.PRIVATE) -> None:
-        await deliver.respond_text(self.interaction, text, ephemeral=visibility is Visibility.PRIVATE)
+    async def notice(self, text: TextLike, *, visibility: Visibility = Visibility.PRIVATE) -> None:
+        resolved = resolve_text(text, self.mount.localization).content
+        await deliver.respond_text(self.interaction, resolved, ephemeral=visibility is Visibility.PRIVATE)
 
     async def send_modal(self, form: ModalSpec | discord.ui.Modal) -> None:
         """Present a form, stated in Discord's own types.
@@ -37,6 +41,89 @@ class ActionResponder:
             message = "Discord modals must be the interaction's initial response"
             raise RuntimeError(message)
         await self.interaction.response.send_modal(modal)
+
+    async def present_form(
+        self,
+        form: FormLike,
+        *,
+        key: str,
+        on_submit: SubmitHandler | None = None,
+        policy: ActionPolicy | None = None,
+    ) -> None:
+        """Present a portable form and route its submission back through this mount."""
+        spec, handler, default_policy = bind_form(form, on_submit)
+        selected_policy = policy or default_policy
+        modal = self._form_modal(spec, key, handler, selected_policy, self.mount.generation)
+        if self.interaction.response.is_done():
+            message = "Discord modals must be the interaction's initial response"
+            raise RuntimeError(message)
+        await self.interaction.response.send_modal(modal)
+
+    def _form_modal(
+        self,
+        spec: FormSpec,
+        key: str,
+        handler: SubmitHandler,
+        policy: ActionPolicy,
+        generation: int,
+    ) -> discord.ui.Modal:
+        async def submit(interaction: discord.Interaction, values: dict[str, object]) -> None:
+            await self.mount.dispatch_submit(
+                key,
+                interaction,
+                spec,
+                values,
+                handler,
+                policy=policy,
+                generation=generation,
+            )
+
+        return build_form_modal(
+            spec,
+            on_submit=submit,
+            timeout=self.mount.timeout,
+            localization=self.mount.localization,
+            limits=self.mount.limits,
+        )
+
+    async def retry_form(
+        self,
+        spec: FormSpec,
+        errors: tuple[FormIssue, ...],
+        *,
+        key: str,
+        handler: SubmitHandler,
+        policy: ActionPolicy,
+        generation: int,
+        actor_id: int,
+    ) -> None:
+        """Render validation errors with a button that reopens the attempted form."""
+        lines: list[str] = []
+        labels = {field.key: field.label or field.key for field in spec.fields}
+        for error in errors:
+            if isinstance(error, FieldError):
+                label = resolve_text(labels.get(error.key, error.key), self.mount.localization).content
+                message = resolve_text(error.message, self.mount.localization).content
+                lines.append(f"**{label}:** {message}")
+            else:
+                lines.append(resolve_text(error.message, self.mount.localization).content)
+        retry = _RetryButton(
+            owner_id=actor_id,
+            modal=lambda interaction: ActionResponder(interaction, self.mount)._form_modal(
+                spec,
+                key,
+                handler,
+                policy,
+                generation,
+            ),
+        )
+        view = discord.ui.LayoutView(timeout=300)
+        view.add_item(discord.ui.TextDisplay("\n".join(lines)))
+        view.add_item(discord.ui.ActionRow(retry))
+        if self.interaction.response.is_done():
+            await self.interaction.followup.send(view=view, ephemeral=True)
+        else:
+            await self.interaction.response.send_message(view=view, ephemeral=True)
 
     async def redirect(self, url: str) -> None:
         await self.notice(url)
@@ -83,3 +170,16 @@ def native(event: ActionEvent) -> discord.Interaction[Any]:
         LookupError: The event came from a frontend other than Discord.
     """
     return responder(event).interaction
+
+
+class _RetryButton(discord.ui.Button[discord.ui.LayoutView]):
+    def __init__(self, *, owner_id: int, modal: Callable[[discord.Interaction], discord.ui.Modal]) -> None:
+        super().__init__(label="Try again")
+        self.owner_id = owner_id
+        self.modal = modal
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.owner_id:
+            await deliver.respond_text(interaction, "This form attempt belongs to another member.", ephemeral=True)
+            return
+        await interaction.response.send_modal(self.modal(interaction))

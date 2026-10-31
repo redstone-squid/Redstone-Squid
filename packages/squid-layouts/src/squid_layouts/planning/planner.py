@@ -7,11 +7,12 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from enum import Enum
 
 from squid_layouts.actions import ActionBinding
-from squid_layouts.chrome import DEFAULT_CHROME, Chrome
+from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
 from squid_layouts.document import DocumentLike, as_document
 from squid_layouts.errors import LayoutDegradedError, LayoutInvariantError, UnsolvableLayoutError
 from squid_layouts.planning.adaptation import lower_semantics
 from squid_layouts.planning.cache import CachedPlan, PlanCache
+from squid_layouts.planning.cursors import PageBroker, PageRequest, content_fingerprint
 from squid_layouts.planning.limits import LIMITS, V2Limits
 from squid_layouts.planning.search import DEFAULT_SEARCH_BUDGET
 from squid_layouts.planning.solve import (
@@ -29,10 +30,8 @@ from squid_layouts.primitives.constraints import Never, Paginate
 from squid_layouts.primitives.nodes import (
     ActionGroup,
     Button,
-    Choice,
     Embed,
     Extension,
-    Fold,
     Footer,
     Gallery,
     LinkButton,
@@ -40,11 +39,15 @@ from squid_layouts.primitives.nodes import (
     Node,
     Panel,
     RawItem,
+    RoutedButton,
+    RoutedSelect,
     Row,
     Section,
     SelectMenu,
     Sep,
     Thumbnail,
+    Variant,
+    Variants,
 )
 from squid_layouts.runtime.presentation import PresentationSession
 from squid_layouts.scene.codec import SceneCodec
@@ -63,8 +66,9 @@ from squid_layouts.scene.model import (
     SceneLink,
     SceneNode,
     SceneOption,
-    ScenePager,
     ScenePanel,
+    SceneRoutedButton,
+    SceneRoutedSelect,
     SceneRow,
     SceneSection,
     SceneSelect,
@@ -72,6 +76,7 @@ from squid_layouts.scene.model import (
     SceneText,
     SceneThumbnail,
 )
+from squid_layouts.text import NEUTRAL, Localization
 
 EMPTY_RESERVATION = ResourceCost()
 
@@ -96,12 +101,21 @@ class _Converter:
         self.bindings[key] = ActionBinding(key=key, handler=handler, policy=node.policy, routes=routes)
         return key
 
-    def accessory(self, node: Thumbnail | LinkButton | Button | RawItem, path: str) -> SceneNode:
+    def accessory(self, node: Thumbnail | LinkButton | Button | RoutedButton | RawItem, path: str) -> SceneNode:
         match node:
             case Thumbnail(url=url, description=description):
                 return SceneThumbnail(url, description)
             case LinkButton(label=label, url=url):
                 return SceneLink(label, url)
+            case RoutedButton(label=label, route_id=route_id):
+                # No binding: the router owns dispatch, so the scene is complete without one.
+                return SceneRoutedButton(
+                    label=label,
+                    route_id=route_id,
+                    style=node.style,
+                    emoji=node.emoji,
+                    disabled=node.disabled,
+                )
             case Button():
                 return SceneButton(
                     label=node.label,
@@ -133,7 +147,9 @@ class _Converter:
                 return SceneSeparator(large, visible)
             case Row(items=items):
                 converted = tuple(self.accessory(item, f"{path}.{index}") for index, item in enumerate(items))
-                if not all(isinstance(item, SceneLink | SceneButton | SceneExtension) for item in converted):
+                if not all(
+                    isinstance(item, SceneLink | SceneButton | SceneRoutedButton | SceneExtension) for item in converted
+                ):
                     message = f"row {path} contains an unsupported item"
                     raise LayoutInvariantError(message)
                 return SceneRow(converted)
@@ -150,13 +166,25 @@ class _Converter:
                     disabled=node.disabled,
                     policy=node.policy,
                 )
+            case RoutedSelect(options=options):
+                return SceneRoutedSelect(
+                    options=tuple(
+                        SceneOption(option.label, option.value, option.description, option.default)
+                        for option in options
+                    ),
+                    route_id=node.route_id,
+                    placeholder=node.placeholder,
+                    min_values=node.min_values,
+                    max_values=node.max_values,
+                    disabled=node.disabled,
+                )
             case Thumbnail(url=url, description=description):
                 return SceneThumbnail(url, description)
             case Gallery(urls=urls):
                 return SceneGallery(tuple(SceneGalleryItem(url) for url in urls))
             case RawItem():
                 return self.accessory(node, path)
-            case LinkButton():
+            case LinkButton() | RoutedButton():
                 return self.accessory(node, path)
 
     def children(self, children: Sequence[Realized]) -> tuple[SceneNode, ...]:
@@ -183,14 +211,6 @@ def _lower_children(
                 )
             case Panel(children=children, accent=accent):
                 lowered.append(Panel(_lower_children(children, target, limits), accent))
-            case Fold(primary=primary, fallback=fallback, priority=priority):
-                lowered.append(
-                    Fold(
-                        _lower_single(primary, target, limits),
-                        _lower_single(fallback, target, limits),
-                        priority,
-                    )
-                )
             case Extension(kind=kind, version=version, payload=payload, fallback=fallback):
                 adapter = target.extensions.get(kind)
                 if adapter is None:
@@ -213,26 +233,22 @@ def _lower_children(
                         payload=prepared.scene_payload,
                     )
                 )
-            case Choice(variants=variants, priority=priority):
+            case Variants(variants=variants, priority=priority):
                 supported = [variant for variant in variants if variant.requires <= target.capabilities]
                 if not supported:
-                    message = "Choice has no variant supported by the selected target"
+                    message = "Variants has no variant supported by the selected target"
                     raise LayoutInvariantError(message)
-                branch = _lower_single(supported[-1].node, target, limits)
-                for variant in reversed(supported[:-1]):
-                    branch = Fold(_lower_single(variant.node, target, limits), branch, priority)
-                lowered.append(branch)
+                # `requires` is cleared rather than carried: capability selection happens here
+                # and exactly once, leaving the solver a pure budget ladder.
+                lowered.append(
+                    Variants(
+                        tuple(Variant(_lower_children(variant.nodes, target, limits)) for variant in supported),
+                        priority,
+                    )
+                )
             case _:
                 lowered.append(node)
     return tuple(lowered)
-
-
-def _lower_single(node: Node, target: TargetProfile, limits: V2Limits) -> Node:
-    lowered = _lower_children((node,), target, limits)
-    if len(lowered) != 1:
-        message = "a structural choice variant must lower to one node"
-        raise LayoutInvariantError(message)
-    return lowered[0]
 
 
 def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
@@ -262,9 +278,18 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
                 for index, item in enumerate(items):
                     if isinstance(item, Button):
                         walk(item, f"{path}.{index}")
-            case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum):
+            case SelectMenu(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum) | (
+                RoutedSelect(options=options, placeholder=placeholder, min_values=minimum, max_values=maximum)
+            ):
+                if not options:
+                    fail(path, "select needs at least one option")
                 if len(options) > limits.select_options:
-                    fail(path, f"select has {len(options)} options; use an option-paging semantic node")
+                    remedy = (
+                        "split the routed picker into separate routes"
+                        if isinstance(node, RoutedSelect)
+                        else "use an option-paging semantic node"
+                    )
+                    fail(path, f"select has {len(options)} options; {remedy}")
                 if placeholder is not None and len(placeholder) > limits.select_placeholder:
                     fail(path, f"select placeholder exceeds {limits.select_placeholder}")
                 if minimum < 0 or maximum < minimum or maximum > max(1, len(options)):
@@ -292,9 +317,14 @@ def _validate(nodes: Sequence[Node], limits: V2Limits) -> None:
             case Panel(children=children):
                 for index, child in enumerate(children):
                     walk(child, f"{path}.{index}")
-            case Fold(primary=primary, fallback=fallback):
-                walk(primary, f"{path}.primary")
-                walk(fallback, f"{path}.fallback")
+            case Variants(variants=variants):
+                # Every rung is checked, not just the one the solver will open on, so a
+                # document is rejected for a bad rung it might never reach. That also means
+                # two rungs cannot share a Paginate key — as under the previous Fold, whose
+                # primary and fallback were both walked.
+                for index, variant in enumerate(variants):
+                    for child_index, child in enumerate(variant.nodes):
+                        walk(child, f"{path}.variant.{index}.{child_index}")
             case _:
                 return
 
@@ -307,6 +337,7 @@ def plan(
     *,
     target: TargetProfile,
     chrome: Chrome = DEFAULT_CHROME,
+    localization: Localization = NEUTRAL,
     strict: bool = False,
     reservation: ResourceCost = EMPTY_RESERVATION,
     page: PageState = None,
@@ -326,13 +357,17 @@ def plan(
     document = as_document(rendered)
     limits = target.limits if isinstance(target.limits, V2Limits) else LIMITS
     presentation = session if session is not None else PresentationSession()
+    chrome = localize_chrome(chrome, localization)
+    # One broker owns every page position in this plan, whichever layer does the slicing.
+    broker = PageBroker(presentation, chrome, nav, page if isinstance(page, Mapping) else None)
     semantic = lower_semantics(
         document.children,
         limits=limits,
         chrome=chrome,
+        localization=localization,
         session=presentation,
-        page=page,
-        nav=nav,
+        pages=broker,
+        capabilities=target.capabilities,
         search_budget=search_budget,
     )
     lowered = _lower_children(semantic.nodes, target, limits)
@@ -342,6 +377,7 @@ def plan(
         target=target,
         limits=limits,
         chrome=chrome,
+        localization=localization,
         presentation=presentation,
         reservation=reservation,
         strict=strict,
@@ -362,20 +398,20 @@ def plan(
                 cache_hit=True,
                 search_fallback=semantic.search_fallback,
             ),
+            session_updates=cached.session_updates,
         )
+    # No `page=`: which page shows is settled below, once the page count exists.
     solved = solve(
         lowered,
         limits=limits,
         chrome=chrome,
         strict=False,
         reserved_text=reservation.get("display_text"),
-        page=page,
         nav=nav,
     )
-    root_pagers: tuple[ScenePager, ...] = ()
     root_events: tuple[PlanEvent, ...] = ()
     if solved.components > limits.total_components:
-        local_pagers = semantic.pagers + _pagers(solved)
+        local_pagers = [*broker.pagers, *solved.pagers]
         if local_pagers:
             keys = ", ".join(repr(pager.key) for pager in local_pagers)
             message = (
@@ -392,26 +428,25 @@ def plan(
             )
             message = f"{solved.components} components exceed target maximum {limits.total_components}; {remedy}"
             raise UnsolvableLayoutError(message)
-        solved, root_pager = _root_paginate(
+        solved, root_pages = _root_paginate(
             lowered,
             key=document.key,
             target_limits=limits,
             chrome=chrome,
             reserved_text=reservation.get("display_text"),
-            page=page,
             nav=nav,
-            session=presentation,
+            broker=broker,
         )
-        root_pagers = (root_pager,)
         root_events = (
             PlanEvent(
                 code="pagination.root",
                 path="$",
-                message=f"Document {document.key!r} uses {root_pager.pages} lossless root pages",
+                message=f"Document {document.key!r} uses {root_pages} lossless root pages",
                 severity=PlanSeverity.ADAPTATION,
-                after={"pages": root_pager.pages},
+                after={"pages": root_pages},
             ),
         )
+    _reconcile_pagers(solved, broker)
     if strict and solved.notes:
         raise LayoutDegradedError("; ".join(solved.notes))
     if any(note.startswith("Never nodes need") for note in solved.notes):
@@ -424,7 +459,7 @@ def plan(
         target_version=target.version,
         children=converter.children(solved.children),
         assets=tuple(SceneAsset(asset.key, asset.name, asset.media_type) for asset in document.assets),
-        pagers=semantic.pagers + root_pagers + _pagers(solved),
+        pagers=broker.pagers,
     )
     fingerprint = SceneCodec.fingerprint(scene)
     report = PlanReport(
@@ -444,6 +479,7 @@ def plan(
     )
     resources = dict(converter.resources)
     resources.update({f"asset:{asset.key}": asset for asset in document.assets})
+    updates = semantic.updates + broker.updates
     result = PlanResult(
         scene=scene,
         bindings=converter.bindings,
@@ -453,22 +489,34 @@ def plan(
             states_explored=semantic.states_explored,
             search_fallback=semantic.search_fallback,
         ),
+        session_updates=updates,
     )
     if cache is not None and _cacheable(lowered):
-        cache.put(cache_key, CachedPlan(scene, report))
+        cache.put(cache_key, CachedPlan(scene, report, updates))
     return result
 
 
-def _pagers(solved: SolvedLayout) -> tuple[ScenePager, ...]:
-    return tuple(
-        ScenePager(
-            pager.key,
-            pager.page,
-            pager.pages,
-            hashlib.blake2s("\\0".join(pager.fragments).encode(), digest_size=16).hexdigest(),
+def _reconcile_pagers(solved: SolvedLayout, broker: PageBroker) -> None:
+    """Move each solved pager to the page its reader belongs on.
+
+    The solver has to render *some* page to measure one, and it picks before anyone knows
+    how many there are — the count is an output of fitting. This is the first moment a
+    stored cursor can be reconciled against it, and because the page is a projection it
+    costs a slot rewrite rather than a second solve. The mount used to do this by drawing
+    twice.
+    """
+    indices: dict[str, int] = {}
+    for pager in solved.pagers:
+        request = PageRequest(
+            key=pager.key,
+            pages=pager.pages,
+            fingerprint=content_fingerprint(pager.fragments),
+            initial="end" if pager.initial else "start",
         )
-        for pager in solved.pagers
-    )
+        grant = broker.grant(request)
+        broker.record(request, grant.index)
+        indices[pager.key] = grant.index
+    solved.repage(indices)
 
 
 def _root_paginate(
@@ -478,10 +526,9 @@ def _root_paginate(
     target_limits: V2Limits,
     chrome: Chrome,
     reserved_text: int,
-    page: PageState,
     nav: PageNav,
-    session: PresentationSession,
-) -> tuple[SolvedLayout, ScenePager]:
+    broker: PageBroker,
+) -> tuple[SolvedLayout, int]:
     maximum_pages = max(1, len(nodes))
 
     def solve_page(children: Sequence[Node], index: int, pages: int) -> SolvedLayout:
@@ -495,16 +542,18 @@ def _root_paginate(
             chrome=chrome,
             strict=False,
             reserved_text=reserved_text,
-            page=page,
             nav=nav,
         )
 
+    # Greedy: grow a page until it stops fitting, then cut. Every probe measures a
+    # different prefix, so there is nothing to memoize — the cost is one solve per node,
+    # paid only by a document that already blew the component budget.
     pages: list[tuple[Node, ...]] = []
     current: tuple[Node, ...] = ()
     for node in nodes:
         candidate = (*current, node)
         probe = solve_page(candidate, 0, maximum_pages)
-        if current and (probe.components > target_limits.total_components or probe.notes):
+        if current and (probe.components > target_limits.total_components or probe.overflowed):
             pages.append(current)
             current = (node,)
             probe = solve_page(current, 0, maximum_pages)
@@ -519,22 +568,10 @@ def _root_paginate(
     if current:
         pages.append(current)
 
-    requested = session.cursor(key).index
-    if isinstance(page, Mapping):
-        requested = page.get(key, requested)
-    elif isinstance(page, int):
-        requested = page
-    selected = max(0, min(requested, len(pages) - 1))
-    solved = solve_page(pages[selected], selected, len(pages))
-    fingerprint = _logical_fingerprint(nodes)
-    session.anchor_cursor(
-        key,
-        selected,
-        None,
-        extent=len(pages),
-        content_fingerprint=fingerprint,
-    )
-    return solved, ScenePager(key, selected, len(pages), fingerprint)
+    request = PageRequest(key=key, pages=len(pages), fingerprint=_logical_fingerprint(nodes))
+    grant = broker.grant(request)
+    broker.record(request, grant.index)
+    return solve_page(pages[grant.index], grant.index, grant.pages), grant.pages
 
 
 def _logical_fingerprint(nodes: Sequence[object]) -> str:
@@ -570,6 +607,7 @@ def _plan_cache_key(
     target: TargetProfile,
     limits: V2Limits,
     chrome: Chrome,
+    localization: Localization,
     presentation: PresentationSession,
     reservation: ResourceCost,
     strict: bool,
@@ -591,6 +629,7 @@ def _plan_cache_key(
             chrome.page_footer(1, 2),
             chrome.and_n_more(2),
         ),
+        "locale": localization.locale,
         "reservation": _stable_value(reservation),
         "strict": strict,
         "page": _stable_value(page),
@@ -611,7 +650,7 @@ def _plan_cache_key(
 
 def _cacheable(nodes: Sequence[Node]) -> bool:
     def check(node: Node) -> bool:
-        if isinstance(node, Extension | RawItem | Fold | Choice):
+        if isinstance(node, Extension | RawItem | Variants):
             return False
         if isinstance(node, Panel):
             return all(check(child) for child in node.children)

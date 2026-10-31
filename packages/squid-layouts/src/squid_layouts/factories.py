@@ -21,8 +21,13 @@ from types import UnionType
 from typing import Literal, NoReturn, TypeAliasType, get_args
 
 from squid_layouts.actions import ActionEvent, ActionPolicy
+from squid_layouts.forms import FormLike, SubmitHandler, bind_form
 from squid_layouts.primitives.styles import Color
 from squid_layouts.semantic import (
+    CLOSED,
+    FIRST_DESTINATION,
+    UNOPENED,
+    UNSELECTED,
     Action,
     ActionDisplay,
     ActionGroup,
@@ -30,39 +35,46 @@ from squid_layouts.semantic import (
     Article,
     Aside,
     Choice,
-    ChoiceEvent,
+    ChoiceOwnership,
     Choices,
     Cluster,
     Code,
     Column,
+    Controlled,
     Destination,
     Details,
+    DisclosureOwnership,
     Emphasis,
     Field,
     Fields,
     Figure,
     Flexibility,
+    FormTrigger,
     Group,
     Heading,
     Importance,
     Item,
     ItemDisplay,
+    ItemOwnership,
     Items,
     LayoutNode,
     Link,
     List,
     ListItem,
+    Managed,
     Measure,
     Media,
     MediaDisplay,
     MediaItem,
-    NavigateEvent,
     Navigation,
     NavigationDisplay,
+    NavOwnership,
     Note,
     Paragraph,
     Progress,
     Quote,
+    RoutedAction,
+    RoutedChoices,
     Section,
     Stack,
     Status,
@@ -212,9 +224,42 @@ def aside(*children: ChildLike, tone: Tone = Tone.NEUTRAL) -> Aside:
     return Aside(_children(children, "sl.aside()"), tone)
 
 
-def details(*children: ChildLike, key: str, summary: TextValue, open: bool = False) -> Details:
+def controlled[ValueT, EventT](
+    value: ValueT,
+    on_change: Callable[[EventT], Awaitable[None]],
+) -> Controlled[ValueT, EventT]:
+    """Own this node's value yourself: it wins every render and ``on_change`` gets the writes."""
+    return Controlled(value, on_change)
+
+
+def managed[ValueT](initial: ValueT) -> Managed[ValueT]:
+    """Let the engine own this node's value, seeded once with ``initial``."""
+    return Managed(initial)
+
+
+def details(
+    *children: ChildLike,
+    key: str,
+    summary: TextValue,
+    open: DisclosureOwnership = CLOSED,
+) -> Details:
     """Content the reader expands; ``key`` carries its disclosure state."""
     return Details(key, _text(summary), _children(children, "sl.details()"), open)
+
+
+def form(
+    spec: FormLike,
+    *,
+    key: str,
+    label: TextValue = "Open form",
+    on_submit: SubmitHandler | None = None,
+    policy: ActionPolicy | None = None,
+    tone: Tone = Tone.NEUTRAL,
+    emphasis: Emphasis = Emphasis.NORMAL,
+) -> FormTrigger:
+    """A content control that presents a portable form."""
+    resolved, handler, default_policy = bind_form(spec, on_submit)
+    return FormTrigger(key, _text(label), resolved, handler, policy or default_policy, tone, emphasis)
 
 
 def item(*children: ChildLike, key: str, label: TextValue, summary: TextValue | None = None) -> Item:
@@ -225,12 +270,12 @@ def item(*children: ChildLike, key: str, label: TextValue, summary: TextValue | 
 def items(
     *entries: Conditional[Item],
     key: str,
-    focused: str | None = None,
+    opened: ItemOwnership = UNOPENED,
     display: ItemDisplay = ItemDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Items:
-    """A set of entries the reader browses; ``key`` carries the focused entry."""
-    return Items(key, _collect(entries, (Item,), "sl.items()"), focused, display, flexibility)
+    """A set of entries the reader browses; ``key`` carries the opened entry."""
+    return Items(key, _collect(entries, (Item,), "sl.items()"), opened, display, flexibility)
 
 
 # --- text and figures ---------------------------------------------------------------------
@@ -394,19 +439,40 @@ def link(label: TextValue, url: str, *, key: str, emphasis: Emphasis = Emphasis.
     return Link(key, _text(label), url, emphasis)
 
 
-def action_group(*entries: Conditional[Action | Link], key: str, label: TextValue | None = None) -> ActionGroup:
+def routed_action(
+    label: TextValue,
+    route_id: str,
+    *,
+    key: str,
+    tone: Tone = Tone.NEUTRAL,
+    emphasis: Emphasis = Emphasis.NORMAL,
+    available: bool = True,
+) -> RoutedAction:
+    """A control the router dispatches, surviving the process that drew it.
+
+    Build ``route_id`` with a `squid_layouts.routing.Route` rather than by hand, so an id
+    over Discord's budget fails here and not at send time.
+    """
+    return RoutedAction(key, _text(label), route_id, tone, emphasis, available)
+
+
+def action_group(
+    *entries: Conditional[Action | Link | RoutedAction], key: str, label: TextValue | None = None
+) -> ActionGroup:
     """Controls that belong together and degrade together."""
-    return ActionGroup(key, _collect(entries, (Action, Link), "sl.action_group()"), _opt_text(label))
+    return ActionGroup(key, _collect(entries, (Action, Link, RoutedAction), "sl.action_group()"), _opt_text(label))
 
 
 def actions(
-    *entries: Conditional[Action | Link | ActionGroup],
+    *entries: Conditional[Action | Link | RoutedAction | ActionGroup],
     key: str,
     display: ActionDisplay = ActionDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Actions:
     """The controls offered by a view; ``key`` carries the chosen presentation."""
-    return Actions(_collect(entries, (Action, Link, ActionGroup), "sl.actions()"), key, display, flexibility)
+    return Actions(
+        _collect(entries, (Action, Link, RoutedAction, ActionGroup), "sl.actions()"), key, display, flexibility
+    )
 
 
 def choice(label: TextValue, *, key: str, description: TextValue | None = None, available: bool = True) -> Choice:
@@ -417,8 +483,7 @@ def choice(label: TextValue, *, key: str, description: TextValue | None = None, 
 def choices(
     *entries: Conditional[Choice],
     key: str,
-    selected: Iterable[str],
-    on_change: Callable[[ChoiceEvent], Awaitable[None]],
+    selection: ChoiceOwnership = UNSELECTED,
     minimum: int = 1,
     maximum: int = 1,
     flexibility: Flexibility = Flexibility.NORMAL,
@@ -427,11 +492,31 @@ def choices(
     return Choices(
         key,
         _collect(entries, (Choice,), "sl.choices()"),
-        tuple(selected),
-        on_change,
+        selection,
         minimum,
         maximum,
         flexibility,
+    )
+
+
+def routed_choices(
+    *entries: Conditional[Choice],
+    route_id: str,
+    key: str,
+    placeholder: TextValue | None = None,
+    minimum: int = 1,
+    maximum: int = 1,
+    available: bool = True,
+) -> RoutedChoices:
+    """A stateless string picker dispatched by ``route_id`` with selected choice keys."""
+    return RoutedChoices(
+        key,
+        _collect(entries, (Choice,), "sl.routed_choices()"),
+        route_id,
+        _opt_text(placeholder),
+        minimum,
+        maximum,
+        available,
     )
 
 
@@ -443,8 +528,7 @@ def destination(label: TextValue, *, key: str, available: bool = True) -> Destin
 def navigation(
     *entries: Conditional[Destination],
     key: str,
-    current: str,
-    on_navigate: Callable[[NavigateEvent], Awaitable[None]],
+    current: NavOwnership = FIRST_DESTINATION,
     display: NavigationDisplay = NavigationDisplay.AUTO,
     flexibility: Flexibility = Flexibility.STABLE,
 ) -> Navigation:
@@ -453,7 +537,6 @@ def navigation(
         key,
         _collect(entries, (Destination,), "sl.navigation()"),
         current,
-        on_navigate,
         display,
         flexibility,
     )

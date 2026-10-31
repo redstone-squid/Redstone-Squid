@@ -8,7 +8,7 @@ from discord.ext.commands import Context
 
 from squid.bot.diagnostics_view import SESSION_SECONDS, ErrorReportBrowser, report_attachment
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import create_mount
+from squid.bot.ui import Private, create_mount, destination
 from squid.bot.utils.components import info_layout
 from squid.bot.utils.permissions import hide_unless, requires
 from squid.bot.utils.visibility import deliver_privately
@@ -35,7 +35,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """Show the stored error behind a reference someone reported."""
         report, matches = await self.error_reports.lookup(reference)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        browser = ErrorReportBrowser(locale=locale, report=report, matches=matches)
+        browser = ErrorReportBrowser(report=report, matches=matches)
         await self._deliver_browser(ctx, browser, locale, file=report_attachment(report))
 
     @error_group.command(name="recent")
@@ -48,7 +48,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """
         reports = await self.error_reports.recent(limit=RECENT_LIMIT, work_lost_only=work_lost)
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        await self._deliver_browser(ctx, ErrorReportBrowser(reports, locale=locale), locale)
+        await self._deliver_browser(ctx, ErrorReportBrowser(reports), locale)
 
     @error_group.command(name="clear")
     @requires(DIAGNOSTICS_ERROR_CLEAR)
@@ -79,17 +79,25 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         other surface withholds, which is the payload class `deliver_privately` exists for:
         ephemeral on the slash side, direct messages on the prefix side, never the channel.
         """
-        mount = create_mount(browser, chrome=browser.chrome(), timeout=SESSION_SECONDS, lock_to=ctx.author.id)
-        view = mount.build_view()
-        message = await deliver_privately(
-            ctx,
-            view,
-            reason=t(locale, _("An error report names internal paths, so it is never posted in a channel.")),
+        mount = create_mount(
+            browser,
             locale=locale,
-            file=file,
+            chrome=browser.chrome(),
+            timeout=SESSION_SECONDS,
+            lock_to=ctx.author.id,
         )
-        if message is not None:
-            mount.bind(message, view)
+        # A closed DM raises DeliveryAbandoned, which discards the render: there is nothing to
+        # bind and, deliberately, no channel fallback.
+        await mount.send(
+            destination(
+                ctx,
+                visibility=Private(
+                    t(locale, _("An error report names internal paths, so it is never posted in a channel."))
+                ),
+                locale=locale,
+                files=[] if file is None else [file],
+            )
+        )
 
     async def _deliver(
         self,

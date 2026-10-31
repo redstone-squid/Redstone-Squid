@@ -22,8 +22,7 @@ from squid.bot.submission.groups import BuildCommandGroup
 from squid.bot.submission.schematics import BuildSchematicCommands
 from squid.bot.submission.search_view import SearchResultsView
 from squid.bot.submission.submit import BuildSubmitCommands
-from squid.bot.submission.ui.components import DynamicBuildEditButton
-from squid.bot.ui import PagedList, create_mount
+from squid.bot.ui import PagedList, create_mount, destination
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.components import (
     edit_layout,
@@ -216,13 +215,7 @@ class SearchCog[
             render_build=lambda build: self.bot.for_build(build).render_node(),
         )
         mount = view.mount()
-        rendered = mount.build_view()
-        message = await ctx.send(
-            view=rendered,
-            files=mount.attachment_files(),
-            allowed_mentions=no_mentions(),
-        )
-        mount.bind(message, rendered)
+        await mount.send(destination(ctx, locale=locale))
 
     @commands.hybrid_group(name="restrictions")
     @requires(RESTRICTION_ALIAS_CREATE)
@@ -294,14 +287,7 @@ class SearchCog[
             node = await self.bot.for_build(build).render_node()
             navigator = sl.discord.Navigator(BuildInfoComponent(build, node, locale=locale))
             mount = create_mount(navigator, locale=locale, timeout=300)
-            rendered = mount.build_view()
-            message = await interaction.followup.send(
-                view=rendered,
-                files=mount.attachment_files(),
-                allowed_mentions=no_mentions(),
-                wait=True,
-            )
-            mount.bind(message, rendered)
+            await mount.send(sl.discord.respond_to(interaction, ephemeral=False, wait=True))
             return None
         async with self.bot.get_running_message(ctx, locale=locale) as sent_message:
             build = await self.queries.get(build_id)
@@ -427,5 +413,4 @@ class SearchCog[
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
     """Called by discord.py when the cog is added to the bot via bot.load_extension."""
-    bot.add_dynamic_items(DynamicBuildEditButton)
     await bot.add_cog(SearchCog(bot))

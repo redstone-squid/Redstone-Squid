@@ -6,6 +6,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, Self, override
 
+import anyio
 import discord
 from discord import Webhook
 from discord.abc import Messageable
@@ -21,8 +22,10 @@ from squid.bot.errors import SquidCommandTree, set_error_reporter
 from squid.bot.i18n import SquidAppCommandTranslator
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
 from squid.bot.reactions import ReactionRouter
+from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
 from squid.bot.utils.embeds import RunningMessage
+from squid.bot.utils.mount_registry import MountRegistry
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
@@ -86,6 +89,13 @@ between two cogs is only raised when they are registered onto the same bot, whic
 does -- it used to surface as the process failing to start.
 """
 
+DEVELOPMENT_EXTENSIONS = ("jishaku", "squid.bot.devtools")
+"""Loaded on top of `EXTENSIONS`, in development mode only.
+
+Owner-gated either way. Keeping them off a production process is the second lock: a mount id
+in a log line is then not one command away from a dump of that session's state.
+"""
+
 
 class RedstoneSquid(Bot):
     def __init__(
@@ -142,6 +152,9 @@ class RedstoneSquid(Bot):
         # Permission checks resolve a Discord id to an account on every command,
         # and must never create one, so the lookup is cached rather than avoided.
         self.account_ids = AccountIdCache()
+        # How many of each panel a user may have open, and which mounts die with their
+        # parent. Reached from a handler as `interaction.client.mounts`.
+        self.mounts = MountRegistry()
 
     def is_operational(self) -> bool:
         """Return whether Discord and every critical bot-owned job are healthy."""
@@ -163,6 +176,11 @@ class RedstoneSquid(Bot):
     async def close(self) -> None:
         """Stop gateway-triggered and background work before application resources close."""
         await self.reactions.close()
+        # Panels are left showing disabled controls rather than silently going dead. Bounded
+        # because each one is a gateway round trip: a slow Discord must not stall shutdown,
+        # and an undisabled panel times out on its own anyway.
+        with anyio.move_on_after(3.0):
+            await self.mounts.close_all()
         await self.background_tasks.close()
         await self.catbox.aclose()
         await self.media_previews.aclose()
@@ -184,7 +202,7 @@ class RedstoneSquid(Bot):
 
         extensions = [*EXTENSIONS]
         if self.development_mode:
-            extensions.append("jishaku")
+            extensions.extend(DEVELOPMENT_EXTENSIONS)
 
         loaded: list[str] = []
         try:
@@ -196,6 +214,10 @@ class RedstoneSquid(Bot):
                 with contextlib.suppress(commands.ExtensionError):
                     await self.unload_extension(extension)
             raise
+
+        # After every extension, because loading is what imports the handler modules that
+        # register routes, and installing the router freezes the table.
+        control_router.register(self)
 
     async def get_or_fetch_messageable_channel(self, channel_id: int) -> MessageableChannel | None:
         """Resolve a messageable channel from cache or Discord, if it is accessible."""

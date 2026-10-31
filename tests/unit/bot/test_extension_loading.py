@@ -14,9 +14,17 @@ import discord
 import pytest
 from discord.ext import commands
 
-from squid.bot.app import EXTENSIONS
+from squid.bot.app import DEVELOPMENT_EXTENSIONS, EXTENSIONS
 from squid.bot.errors import SquidCommandTree
 from squid.bot.help import DIRECTORY_CATEGORIES
+
+LOADABLE = (*EXTENSIONS, *(name for name in DEVELOPMENT_EXTENSIONS if name.startswith("squid.")))
+"""Every extension this repo owns, development-only ones included.
+
+A cog that only loads in development mode can still collide with a production one, and would
+do so on the developer's machine rather than in CI. `jishaku` is left out because it is third
+party and need not be installed for these tests to mean anything.
+"""
 
 
 class StubBot(commands.Bot):
@@ -67,7 +75,7 @@ async def loaded_bot() -> AsyncIterator[commands.Bot]:
     before = dict(sys.modules)
     bot = StubBot()
     try:
-        for extension in EXTENSIONS:
+        for extension in LOADABLE:
             await bot.load_extension(extension)
         yield bot
     finally:
@@ -77,7 +85,7 @@ async def loaded_bot() -> AsyncIterator[commands.Bot]:
 
 
 async def test_every_extension_loads_onto_one_bot(loaded_bot: commands.Bot) -> None:
-    assert set(loaded_bot.extensions) == set(EXTENSIONS)
+    assert set(loaded_bot.extensions) == set(LOADABLE)
 
 
 async def test_no_two_cogs_claim_the_same_command_name(loaded_bot: commands.Bot) -> None:

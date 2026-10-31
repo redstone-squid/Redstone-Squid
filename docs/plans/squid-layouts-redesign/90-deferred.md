@@ -30,16 +30,76 @@ are not re-derived or accidentally adopted later.
   escape hatch instead. If a second frontend ever dispatches events, design the portable
   capability surface against its actual requirements.
 - **Ephemeral session handoff** (Cascade-style: arm a refresh control before token
-  expiry, rebuild the session from the fresh interaction). Plan 07's cap + graceful
-  degradation covers today's views; the handoff is only worth it for an ephemeral view
-  needing >14 minutes of life.
-- **Participant tracking / shared sessions** — plan 12 v1 ships instance policies and
-  `allowed_users`; participant lifecycle waits for a feature that needs it.
+  expiry, rebuild the session from the fresh interaction). Mostly retired: plan 07's
+  `EditHandle` renews on every click, so an ephemeral panel in use stays writable
+  indefinitely. What remains is an ephemeral view that needs a *background* refresh after
+  more than 15 minutes with nobody touching it — the render simply waits in `Mount.pending`
+  until someone does. Only worth building for a view that must update itself unattended,
+  which none does.
+- **Participant tracking / shared sessions** — plan 12 shipped instance policies and
+  widened `lock_to` to accept a set of ids; participant *lifecycle* (join/leave, per-actor
+  state) waits for a feature that needs it. No consumer needs even the set form today: the
+  one multi-actor site, `BuildEditComponent._may_event`, needs an async permission check with
+  its own wording, which a static set cannot express.
 - **`squid_layouts.patterns` library** (Form, Wizard, richer table/list browser à la
   CascadeUI's pattern modules). Likely valuable — the poll wizard and submission form
   are hand-rolled wizards today — but premature before plans 03/04 settle the authoring
-  surface they would be built on. Revisit after the presets migration lands.
+  surface they would be built on. Revisit after the presets migration lands. **Revisited 2026-08-21**: 03/04 landed;
+  plans [18](18-forms.md)/[19](19-patterns.md) now cover Form, Wizard and
+  MultiChoicePanel; Tabs/Menu/RankedList proceed separately under 19's two-shell rule.
+- **Grid / matrix interaction** (added 2026-08-21) — content grids are a `Table`
+  display strategy (`MATRIX`), not a new node; interactive grids start as an
+  `sl.button_grid` factory desugaring to `Row`s, whose exact-structure contract makes
+  non-degradability free. The degradation ladder (button grid → text grid +
+  coordinate select → paged select) is the semantic-node promotion, and it waits for
+  a real consumer.
+- **`sl.resource` descriptor** (declared `pending | ready | failed` state with
+  `.reload()`), cut from plan 09. Under awaited `on_load` the pending state is never
+  observable at first paint, and without a dependency model it worsens its motivating
+  consumer: `SettingsPanel` fetches `_preset`/`_weights` as a function of `self._kind`,
+  which needs declared deps and an optimistic set before `.reload()` beats the explicit
+  `open_voting` method. Revisit only with a dependency design (declared deps or tracked
+  reads during the fetch), plus a staleness guard for out-of-order reloads. Plan
+  [21](21-cursor-sources.md) extracts the position policy without touching this; its
+  §5 commits cursor fetching and the load-phase/dependency design to be designed
+  together.
 - **Portable form protocol** (replacing the Discord-native modal boundary) — long-noted
-  in the architecture doc's gaps; unchanged priority.
-- **Cross-page multi-select** — still rejected pending an explicit grouping/commit
-  model, per the documented boundary.
+  in the architecture doc's gaps; superseded by plan [18](18-forms.md) (2026-08-21).
+- **Multi-message rendering** (one logical UI spanning several messages). Two features
+  hiding in one thought, with opposite verdicts. *Branching* — a click spawns an
+  additional message — is not deferred: it ships today as the consent pattern
+  (`account_view.py` mounts `prompt_for_consent` as its own ephemeral message), and its
+  missing piece was lifecycle, which plan 12's registry shipped as `open(..., parent=)`. The
+  spawn-child-from-`ActionEvent` helper it also proposed resolves to none needed:
+  `sl.discord.responder(event).mount` already hands a handler its own mount, which is all
+  `parent=` takes. *Spanning* — one root component rendered
+  across N messages — is deferred until a consumer exists (the audit found none; search
+  and leaderboards fit one message with plan 06). When it comes, the shape is decided:
+  Discord's message sequence is append-only, so content cannot reflow between slots —
+  growth in slot 1 means rewriting every later slot with no batch edit, no cross-message
+  atomicity, and controls migrating between messages. Build *fixed author-declared
+  partitions*, each independently budgeted, as a coordinator over per-message mounts
+  (sharing services/session, routing invalidation) — never a multi-handle `Mount`, which
+  would smear message identity through planner, generations, dispatch, and durability.
+  `EditHandle`/`Destination` being per-message is what makes the coordinator cheap; keep
+  `on_load`, context, and session policy free of any root-component-equals-session
+  assumption so it stays that way.
+- **Cross-page multi-select** — resolved 2026-08-21: the grouping/commit model the
+  rejection demanded turned out to be Form's submission model, and plan
+  [19](19-patterns.md)'s `MultiChoicePanel` supplies it (staged vs committed sets,
+  per-window merge, gated Apply). The rejection of engine-side `Managed` merging
+  stands.
+- **Statically checking a route handler's parameters against its route** (plan 16 stage 2)
+  — unavailable, and the spike is done, so do not repeat it. `Router.route` uses
+  `ParamSpec`, which preserves the decorated signature but cannot constrain it: `P` is
+  inferred from whatever was written, so `biuld_id: int` typechecks fine. The only
+  construction that would check it is a `Route[ParamsTypedDict]` plus PEP 692
+  `**params: Unpack[TD]` in a `Protocol.__call__`. **Pyrefly 1.2 rejects `Unpack` on a
+  TypeVar** — "`Unpack` in \*\*kwargs annotation must be used only with a `TypedDict`" —
+  including when the TypeVar is bound to a TypedDict base, so the protocol cannot even be
+  spelled. The concrete-TypedDict form (`squid/settings/application/ports.py`) is the
+  supported case and is not what this needs. It would also reintroduce the drift `Route`
+  exists to eliminate, with parameter names and types living in two places, and three of
+  five routes carry no parameters at all. Registration-time `inspect.signature` checking
+  is the substitute, and it is stricter than Flask's, which waits for the first request.
+  Revisit only if pyrefly gains generic `Unpack` support.

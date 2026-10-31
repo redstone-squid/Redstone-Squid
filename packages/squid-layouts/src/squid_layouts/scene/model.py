@@ -6,6 +6,7 @@ from enum import StrEnum
 
 from squid_layouts.actions import ActionBinding, ActionPolicy
 from squid_layouts.primitives.styles import ActionStyle, Color
+from squid_layouts.runtime.presentation import SessionUpdate
 from squid_layouts.text import TextDialect
 
 
@@ -38,6 +39,22 @@ class SceneButton:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneRoutedButton:
+    """A button carrying its own route id, with no binding for a frontend to wire.
+
+    That absence is the point: a renderer can draw one without a live session, which is
+    what lets a sessionless document hold a control, and a codec can round-trip one,
+    which a process-local handler could never be.
+    """
+
+    label: str
+    route_id: str
+    style: ActionStyle = ActionStyle.SECONDARY
+    emoji: str | None = None
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class SceneOption:
     label: str
     value: str
@@ -57,8 +74,18 @@ class SceneSelect:
 
 
 @dataclass(frozen=True, slots=True)
+class SceneRoutedSelect:
+    options: tuple[SceneOption, ...]
+    route_id: str
+    placeholder: str | None = None
+    min_values: int = 1
+    max_values: int = 1
+    disabled: bool = False
+
+
+@dataclass(frozen=True, slots=True)
 class SceneRow:
-    items: tuple[SceneLink | SceneButton | SceneExtension, ...]
+    items: tuple[SceneLink | SceneButton | SceneRoutedButton | SceneExtension, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +108,7 @@ class SceneGallery:
 @dataclass(frozen=True, slots=True)
 class SceneSection:
     texts: tuple[SceneText, ...]
-    accessory: SceneThumbnail | SceneLink | SceneButton | SceneExtension
+    accessory: SceneThumbnail | SceneLink | SceneButton | SceneRoutedButton | SceneExtension
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,6 +131,8 @@ type SceneNode = (
     | SceneSeparator
     | SceneRow
     | SceneSelect
+    | SceneRoutedSelect
+    | SceneRoutedButton
     | SceneThumbnail
     | SceneGallery
     | SceneSection
@@ -178,3 +207,9 @@ class PlanResult:
     report: PlanReport
     resources: Mapping[str, object] = field(default_factory=dict)
     metrics: PlanMetrics = field(default_factory=PlanMetrics)
+    session_updates: tuple[SessionUpdate, ...] = ()
+    """Presentation writes this plan earned but did not make.
+
+    Planning only reads the session. A frontend applies these once the render has
+    actually reached the reader, so a failed delivery leaves them where the message
+    still shows them."""

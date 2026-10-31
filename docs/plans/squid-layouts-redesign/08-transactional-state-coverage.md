@@ -1,56 +1,110 @@
 # 08 — Honest transactional coverage for component state
 
+Shipped. `layouts: report undeclared component writes instead of hiding them` and
+`bot: declare the mutable state the panels were keeping plain`.
+
 ## Problem
 
-`sl.state` gives reactivity, transactional rollback, and durability — but only for
-values that survive `deepcopy`/JSON. Real components therefore keep most state in plain
-attributes with manual `invalidate()`. `SettingsPanel` is the tell
-(`squid/bot/settings_view.py:352-380`): three `sl.state` fields (`page`, `kind`,
-`confirming_reset`) versus ~eight plain ones (`_channels`, `_weights`, `_preset`,
-`_locale_override`, even `locale`), and `set_channel` ends in a hand-written
-`self.invalidate()` (settings_view.py:623).
+`sl.state` gave reactivity, transactional rollback, and durability — but only for values
+that survive `deepcopy`/JSON. Real components therefore kept most state in plain attributes
+with manual `invalidate()`. `SettingsPanel` was the tell: three `sl.state` fields (`page`,
+`kind`, `confirming_reset`) versus ~eight plain ones, and `set_channel` ended in a
+hand-written `self.invalidate()`.
 
-The architecture doc claims "a failed callback cannot leave state half-applied"
-(docs/squid-layouts-architecture.md, Components section). That is only true for the
-declared minority: a handler that mutates `self._channels` and then raises leaves it
-mutated; `readonly_transaction` (PARALLEL_READ) does not reject plain-attribute writes
-either. Nothing warns at the boundary — the framework's central guarantee applies to
-whichever fields happened to be copyable, and the author must remember which tier each
-field is in.
+The architecture doc claimed "a failed callback cannot leave state half-applied". That was
+only true for the declared minority: a handler that mutated `self._channels` and then raised
+left it mutated, and `readonly_transaction` (PARALLEL_READ) did not reject plain-attribute
+writes either. Nothing warned at the boundary — the framework's central guarantee applied to
+whichever fields happened to be copyable, and the author had to remember which tier each
+field was in.
+
+## What the first design got wrong
+
+The original plan here proposed a `Component.__setattr__` that snapshotted plain-attribute
+writes *by reference* during a transaction and rolled them back on failure. Reading the nine
+consumers before implementing killed it:
+
+- **It did not fix its own flagship example.** `set_channel` does
+  `self._channels[setting] = channel_id` — in-place container mutation, which reference-level
+  rollback leaves untracked. The hand-written `invalidate()` would have survived the plan
+  that cited it.
+- **Plain *assignment* was the minority case.** Across the manual `invalidate()` sites in
+  `settings_view`, `notifications_view`, `account_view`, `poll_wizard` and
+  `submission/ui/views`, the dominant patterns were in-place mutation and
+  `await self.load()`-then-refresh. Only `self.draft = replace(...)` had the tracked shape.
+- **It conflated two categories.** Mutable view state kept plain out of friction
+  (`_channels`, `_weights`, `_preset`, `draft`) is all deep-copyable and should simply be
+  declared. Collaborator handles set once in `__init__` (`_settings`, `_guild`,
+  `_capabilities`) never need rollback at all, and are only ever written during construction,
+  which no transaction covers. The mechanism spent its complexity on the second group while
+  giving the first the weakest possible guarantee.
+
+Adding a third, weaker tier would have made the boundary harder to predict, not easier.
 
 ## Design
 
-Two layers: widen the mechanism where cheap, and make the remaining boundary loud.
+Inverted: make the boundary loud, and remove the reasons to sit outside it.
 
-1. **Track all instance-attribute writes during a transaction.** Add
-   `Component.__setattr__`: when a transaction is active and the attribute is not a
-   `_State` slot, record a snapshot (best-effort: keep the old *reference*, not a
-   deepcopy — reference-level restore is what plain attributes can honestly support)
-   and roll it back on failure. This closes the common case (`self._locale_override =
-   x` then a later await raises) without pretending to deep-copy service objects.
-   In-place mutation of plain containers (`self._channels[k] = v`) remains untracked —
-   that is the honest limit, documented.
-2. **Reject plain writes in read-only transactions.** The same `__setattr__` hook makes
-   PARALLEL_READ raise `ReactiveWriteError` for plain attributes too, closing the
-   loophole where a "read-only" action mutates undeclared state silently.
-3. **Fix the docs claim.** Architecture doc and README state the actual guarantee:
-   assignment-level rollback for all attributes, deep rollback for declared state,
-   nothing for in-place mutation of undeclared containers. One table, three rows.
-4. **Nudge toward declared state.** `state()` currently types as `Any`; add overloads so
-   `count: int = sl.state(0)` and `results: list[str] = sl.state(factory=list)` infer
-   without the annotation being load-bearing. Cheap, reduces one reason authors avoid it.
+1. **Report undeclared writes; do not half-cover them.** `Component.__setattr__` checks one
+   contextvar, and when a transaction is in flight and the attribute is not a `_State` slot,
+   calls `report_undeclared_write`. Read-only actions raise `ReactiveWriteError`; mutating
+   ones log a warning naming `Type.attr`; `sl.strict_state()` promotes that warning to
+   `UndeclaredStateError`. Both test suites run strict.
+2. **Exempt components born during the action.** `Component.__new__` registers the instance
+   with the active transaction, and `_Transaction.protects()` answers "did this exist when the
+   action began". Without an exemption a read-only handler could not construct a component at
+   all — every `self._x = ...` in `__init__` reached `mark_changed` and raised.
 
-Deliberately rejected: forcing all state through `sl.state` (real components hold
-services, guilds, capabilities — non-copyable by nature), and deep-copying plain
-attributes on first touch (surprising cost, and identity-sensitive objects break).
+   The first attempt used "is it attached to the tree" as the test, which is a proxy, and a
+   leaky one in both directions: it let a component that existed before the action but was not
+   currently mounted be mutated by a read-only handler with no complaint. Birth is the property
+   the rule actually cares about, because a transaction restores the view the action started
+   from. `_runtime` and `_parent` stay exempt by name, since the tree walker writes them.
+3. **Make declaring a field the easy answer.** `sl.state()` now accepts neither a default nor
+   a factory, for fields `__init__` assigns; `sl.state(copy="ref")` snapshots the reference
+   instead of a deep copy, so services, guilds and sessions can be declared (never persisted,
+   and their containers are not proxied, since both would reintroduce the copy); and `state()`
+   gained typed overloads, so `count = sl.state(0)` infers `int`.
+4. **Migrate the consumers.** The panels' service caches became `sl.state(persist=False)`.
+   Declaring `_channels` is what actually fixed `set_channel`: it is a dict, so it is wrapped
+   as a `ReactiveDict` and its in-place writes roll back for free — the case the rejected
+   design would have missed. `BuildEditComponent.build`/`._node` are `copy="ref"`.
+5. **Fix the docs claim.** `docs/squid-layouts-architecture.md` now carries a three-row table
+   instead of the false sentence.
+
+## Known limits, deliberately
+
+- Attribute mutation on a nested domain object (`self.build.door_orientation = ...`) is not
+  tracked: `_observe` wraps containers, not arbitrary objects, and proxying arbitrary objects
+  would break identity and `isinstance`. `__setattr__` never fires for it either, so it cannot
+  even be reported.
+
+  `Component.mutated(name)` is the signal for it. It is `invalidate()` that names the field,
+  and it raises if that field is not declared state — so the manual call cannot drift away
+  from the declaration it depends on. It caught exactly that drift while landing this work:
+  `SubmissionFormComponent.build` had been left plain while `BuildEditComponent.build` was
+  declared, which `mutated("build")` turned into an immediate error.
+
+  Dropping the identity check in `_State.__set__` would have made a redundant assignment
+  invalidate instead, which is a second way to signal the same thing. It was rejected:
+  `Mount.flush` gates on `_dirty` alone and does not compare rendered output, so every no-op
+  assignment would become a real Discord edit.
+- `copy="ref"` rolls back the reference, not the object. `_apply` mutates the `Build` in
+  place before saving it; a failure there leaves those mutations applied.
+- The submission workspace renders straight off a mutable `Build`, which is why it needs
+  `mutated()` at all. Holding the edits as declared state and building the `Build` at save
+  time would remove the limit rather than document it, but that is a refactor of the modals
+  and the submit flow, not of this framework.
 
 ## Verification
 
-- `test_composition.py`/new `test_transactions.py`: plain-attribute assignment rolls
-  back on handler failure; PARALLEL_READ rejects plain writes; in-place plain-container
-  mutation documented-as-untracked (test asserts current behavior so a future change is
-  deliberate).
-- Perf sanity: `__setattr__` overhead outside transactions must be one contextvar read;
-  assert no measurable regression in the render benchmark under
-  `tests/test_planner.py`'s latency budgets.
-- `just typecheck` — the `state()` overloads must not break existing annotations.
+- `packages/squid-layouts/tests/test_transactions.py` covers the reporting rules, the birth
+  exemption in both directions, `mutated()`, and `copy="ref"` (asserted with a class whose
+  `__deepcopy__` raises).
+- `tests/unit/bot/submission/test_submission_form.py` pins the in-place case: changing the
+  door type must still redraw. It fails without `mutated("build")`, which nothing covered
+  before.
+- `tests/unit/bot/test_settings_panel.py` covers the guarantee on the panel that motivated
+  the plan: a channel written before a later failure, a half-loaded voting page, and a
+  read-only action. Each fails without its declaration.
+- `tests/unit/conftest.py` and the package conftest enable `sl.strict_state()` autouse.

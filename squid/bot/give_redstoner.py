@@ -2,17 +2,17 @@
 """Magical stuff, don't worry about it."""
 
 import asyncio
-import re
-from typing import TYPE_CHECKING, Any, Self, override
+from typing import TYPE_CHECKING
 
 import discord
 from discord import Interaction
 from discord.ext.commands import Cog, Context, hybrid_group
-from discord.ui import Item
 
 import squid_layouts as sl
 from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.routes import remove_redstoner_role, router
+from squid.bot.ui import render_static
 from squid.bot.utils.components import no_mentions, text_layout
 from squid.bot.utils.permissions import check_is_home_server, hide_unless, requires
 from squid.community.domain import RedstonerDecisionKind
@@ -23,73 +23,50 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-class DynamicRemoveOwnRedstonerRoleButton[
-    BotT: "squid.bot.app.RedstoneSquid",
-    V: discord.ui.LayoutView,
-](discord.ui.DynamicItem[discord.ui.Button[V]], template=r"remove:role:redstoner"):
-    """A button that allows users to remove their own redstoner role."""
+@router.route(remove_redstoner_role)
+async def remove_own_redstoner_role(interaction: Interaction[squid.bot.app.RedstoneSquid]) -> None:
+    """Let a member drop the redstoner role the bot gave them."""
+    await interaction.response.defer(ephemeral=True)
 
-    def __init__(self):
-        # Not translated: this is a persistent button on a shared, public message (not
-        # rendered per-viewer), so there is no single "locale" to translate it into.
-        super().__init__(
-            discord.ui.Button(
-                label="I'm not a redstoner",
-                style=discord.ButtonStyle.red,
-                custom_id="remove:role:redstoner",
+    if interaction.guild is None or interaction.guild.id != interaction.client.owner_server_id:
+        return
+
+    member = interaction.user
+    community = interaction.client.community_config
+    redstoner_role = interaction.guild.get_role(community.redstoner_role_id)
+    if redstoner_role is None or redstoner_role not in member.roles:
+        return
+
+    locale = await resolve_locale(interaction, interaction.client.services.settings)
+    await member.remove_roles(redstoner_role)
+    owner = interaction.client.get_user(interaction.client.owner_id)
+    assert owner is not None
+    redstoner_channel = interaction.client.get_channel(community.redstoner_corner_channel_id)
+    assert isinstance(redstoner_channel, GuildMessageable)
+    await redstoner_channel.send(
+        view=text_layout(
+            t(
+                locale,
+                _("{owner}, {member} has removed their own redstoner role."),
+                owner=owner.mention,
+                member=member.mention,
             )
-        )
+        ),
+        allowed_mentions=discord.AllowedMentions(
+            everyone=False,
+            users=(owner, member),
+            roles=False,
+            replied_user=False,
+        ),
+    )
+    await asyncio.sleep(10)
 
-    @classmethod
-    @override
-    async def from_custom_id(  # pyright: ignore [reportIncompatibleMethodOverride]
-        cls: type[Self], interaction: Interaction[BotT], item: Item[Any], match: re.Match[str], /
-    ) -> Self:
-        return cls()
-
-    @override
-    async def callback(self, interaction: Interaction[BotT]) -> Any:  # pyright: ignore [reportIncompatibleMethodOverride]
-        await interaction.response.defer(ephemeral=True)
-
-        if interaction.guild is None or interaction.guild.id != interaction.client.owner_server_id:
-            return
-
-        member = interaction.user
-        community = interaction.client.community_config
-        redstoner_role = interaction.guild.get_role(community.redstoner_role_id)
-        if redstoner_role is None or redstoner_role not in member.roles:
-            return
-
-        locale = await resolve_locale(interaction, interaction.client.services.settings)
-        await member.remove_roles(redstoner_role)
-        owner = interaction.client.get_user(interaction.client.owner_id)
-        assert owner is not None
-        redstoner_channel = interaction.client.get_channel(community.redstoner_corner_channel_id)
-        assert isinstance(redstoner_channel, GuildMessageable)
-        await redstoner_channel.send(
-            view=text_layout(
-                t(
-                    locale,
-                    _("{owner}, {member} has removed their own redstoner role."),
-                    owner=owner.mention,
-                    member=member.mention,
-                )
-            ),
-            allowed_mentions=discord.AllowedMentions(
-                everyone=False,
-                users=(owner, member),
-                roles=False,
-                replied_user=False,
-            ),
-        )
-        await asyncio.sleep(10)
-
-        await member.add_roles(redstoner_role)
-        await interaction.followup.send(
-            view=text_layout(t(locale, _("{member} — just kidding, here is your role back."), member=member.mention)),
-            ephemeral=True,
-            allowed_mentions=no_mentions(),
-        )
+    await member.add_roles(redstoner_role)
+    await interaction.followup.send(
+        view=text_layout(t(locale, _("{member} — just kidding, here is your role back."), member=member.mention)),
+        ephemeral=True,
+        allowed_mentions=no_mentions(),
+    )
 
 
 class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
@@ -115,7 +92,23 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
     async def abc(self, ctx: Context[BotT]):
         """Post the Redstoner role controls."""
         locale = await resolve_locale(ctx, self.bot.services.settings)
-        view = sl.discord.render_static([sl.primitives.Text(t(locale, _("Redstoner role controls")))])
+        view = render_static(
+            [
+                sl.primitives.Text(t(locale, _("Redstoner role controls"))),
+                # Not translated: one panel is read by everyone in the channel, so the
+                # guild's locale would still be the wrong language for most of them.
+                sl.primitives.Row(
+                    (
+                        sl.primitives.RoutedButton(
+                            "I'm not a redstoner",
+                            remove_redstoner_role.id(),
+                            style=sl.primitives.ActionStyle.DANGER,
+                        ),
+                    )
+                ),
+            ],
+            locale=locale,
+        )
         await ctx.send(view=view, allowed_mentions=no_mentions())
 
     @redstoner_group.command(name="resync")
@@ -161,7 +154,7 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
             allowed_mentions=no_mentions(),
         )
 
-        view = sl.discord.render_static(
+        view = render_static(
             [
                 sl.primitives.Text(
                     t(
@@ -172,7 +165,8 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
                         url=decision.source_message_url,
                     )
                 )
-            ]
+            ],
+            locale=locale,
         )
         await self.bot.get_channel(self.bot.community_config.redstoner_announcement_channel_id).send(
             allowed_mentions=discord.AllowedMentions(roles=False, users=(member,), everyone=False),
@@ -181,5 +175,4 @@ class GiveRedstoner[BotT: "squid.bot.app.RedstoneSquid"](Cog):
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid):
-    bot.add_dynamic_items(DynamicRemoveOwnRedstonerRoleButton)
     await bot.add_cog(GiveRedstoner(bot))

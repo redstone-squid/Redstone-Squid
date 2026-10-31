@@ -10,14 +10,15 @@ dropped footnote genuinely returns its characters to the body.
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
-from squid_layouts.chrome import DEFAULT_CHROME, Chrome
+from squid_layouts.chrome import DEFAULT_CHROME, Chrome, localize_chrome
+from squid_layouts.errors import LayoutInvariantError
 from squid_layouts.planning.limits import ELLIPSIS, LIMITS, V2Limits
+from squid_layouts.planning.pagination import NavNode, PageNav
 from squid_layouts.primitives.constraints import Alts, Condense, Drop, Never, Overflow, Paginate, Spill, Truncate
 from squid_layouts.primitives.nodes import (
     Button,
     Code,
     Embed,
-    Fold,
     Footer,
     Gallery,
     Heading,
@@ -27,14 +28,18 @@ from squid_layouts.primitives.nodes import (
     Option,
     Panel,
     RawItem,
+    RoutedButton,
+    RoutedSelect,
     Row,
     Section,
     SelectMenu,
     Sep,
     Text,
     Thumbnail,
+    Variants,
 )
 from squid_layouts.primitives.styles import Color
+from squid_layouts.text import NEUTRAL, Localization
 
 type TextBearing = Text | Heading | Footer | Code | Lines
 
@@ -68,7 +73,7 @@ class RPanel:
     accent: Color | None
 
 
-type Realized = RText | RSection | RPanel | Sep | Row | SelectMenu | Thumbnail | Gallery | RawItem
+type Realized = RText | RSection | RPanel | Sep | Row | SelectMenu | RoutedSelect | Thumbnail | Gallery | RawItem
 
 
 PAGE_FOOTER_PREFIX = "-# "
@@ -88,6 +93,10 @@ class Pager:
     initial: int = 0
     """The page to open on; a mount adopts this before its first render."""
     page: int = 0
+    nav_host: list[Realized] | None = None
+    """The realized list holding this pager's nav, so `repage` can replace it in place."""
+    nav_at: int = 0
+    nav_count: int = 0
 
     @property
     def pages(self) -> int:
@@ -109,6 +118,46 @@ class SolvedLayout:
     pagers: tuple[Pager, ...] = ()
     components: int = 0
     """Components the built view will hold, including every pager's controls."""
+    overflowed: bool = False
+    """Whether anything had to give to fit, as opposed to being clamped on the way in.
+
+    Not every note is a defeat. Trimming a select's options to 25 or a section's texts to
+    3 is Discord's shape being enforced and happens whatever the budget; degrading,
+    spilling, dropping or stepping a ladder means the content did not fit. A caller
+    deciding whether more will fit — the root packer — needs to tell those apart.
+    """
+    nav: PageNav | None = None
+    limits: V2Limits = LIMITS
+
+    def repage(self, indices: Mapping[str, int]) -> None:
+        """Show a different page of each named pager without re-fitting the document.
+
+        Which page is showing is a display decision, not a layout one: every fragment
+        already fits the grant its pager was allocated, the footer reservation was
+        measured at its widest, and a nav factory may not vary its shape by page. So a
+        caller that only learns where the reader belongs *after* fitting — which is
+        anyone reconciling against a stored cursor, since the page count is an output —
+        can move the page here instead of solving again.
+        """
+        for pager in self.pagers:
+            index = indices.get(pager.key)
+            if index is None:
+                continue
+            shown = pager.select(index)
+            if self.nav is None or pager.nav_host is None:
+                continue
+            window = slice(pager.nav_at, pager.nav_at + pager.nav_count)
+            previous = pager.nav_host[window]
+            realized = _Builder(limits=self.limits).realize_children(
+                _validated_nav(self.nav(pager.key, shown, pager.pages))
+            )
+            if len(realized) != pager.nav_count or _component_count(realized) != _component_count(previous):
+                message = (
+                    f"nav factory changed shape between pages of {pager.key!r}; "
+                    "disable controls at the ends instead of hiding them"
+                )
+                raise LayoutInvariantError(message)
+            pager.nav_host[window] = realized
 
     @property
     def pager(self) -> Pager | None:
@@ -262,24 +311,14 @@ class _Builder:
     units: list[_Unit] = field(default_factory=list)
     raw_text_cost: int = 0
 
-    def _clamp_button(self, button: Button | LinkButton) -> Button | LinkButton:
+    def _clamp_button[ButtonT: Button | LinkButton | RoutedButton](self, button: ButtonT) -> ButtonT:
         if len(button.label) <= self.limits.button_label:
             return button
         self.notes.append(f"button label clamped from {len(button.label)}")
         trimmed = _trim_keep(button.label, self.limits.button_label, "head")
-        if isinstance(button, LinkButton):
-            return LinkButton(label=trimmed, url=button.url)
-        return Button(
-            label=trimmed,
-            on_click=button.on_click,
-            key=button.key,
-            style=button.style,
-            emoji=button.emoji,
-            disabled=button.disabled,
-            policy=button.policy,
-        )
+        return replace(button, label=trimmed)
 
-    def _clamp_select(self, select: SelectMenu) -> SelectMenu:
+    def _clamp_select[SelectT: SelectMenu | RoutedSelect](self, select: SelectT) -> SelectT:
         limits = self.limits
         options = select.options
         if len(options) > limits.select_options:
@@ -300,16 +339,11 @@ class _Builder:
         if placeholder is not None and len(placeholder) > limits.select_placeholder:
             self.notes.append(f"select placeholder clamped from {len(placeholder)}")
             placeholder = _trim_keep(placeholder, limits.select_placeholder, "head")
-        return SelectMenu(
+        return replace(
+            select,
             options=tuple(clamped_options),
-            on_select=select.on_select,
-            key=select.key,
             placeholder=placeholder,
-            min_values=select.min_values,
             max_values=min(select.max_values, len(clamped_options) or 1),
-            disabled=select.disabled,
-            policy=select.policy,
-            routes=select.routes,
         )
 
     def realize_children(self, nodes: Sequence[Node]) -> list[Realized]:
@@ -347,10 +381,11 @@ class _Builder:
             case Row(items=items):
                 self.raw_text_cost += sum(item.text_cost for item in items if isinstance(item, RawItem))
                 clamped = tuple(
-                    self._clamp_button(item) if isinstance(item, Button | LinkButton) else item for item in items
+                    self._clamp_button(item) if isinstance(item, Button | LinkButton | RoutedButton) else item
+                    for item in items
                 )
                 return Row(items=clamped)
-            case SelectMenu():
+            case SelectMenu() | RoutedSelect():
                 return self._clamp_select(node)
             case RawItem(text_cost=text_cost):
                 self.raw_text_cost += text_cost
@@ -358,9 +393,9 @@ class _Builder:
             case Embed():
                 message = "Embed must be expanded before solving"
                 raise ValueError(message)
-            case Fold(primary=primary):
-                # Folds are resolved to a branch before realization; this is belt and braces.
-                return self.realize(primary)
+            case Variants():
+                message = "Variants must be resolved before solving"
+                raise ValueError(message)
             case _:
                 return node
 
@@ -585,17 +620,18 @@ def _footer_cost(footer: Callable[[int, int], str], content_len: int) -> int:
     return len(PAGE_FOOTER_PREFIX) + len(footer(widest, widest))
 
 
-def _validated_nav(nodes: Sequence[Node]) -> list[Node]:
-    """Check a nav factory's output against the contract that makes late realization exact.
+def _validated_nav(nodes: Sequence[NavNode]) -> list[Node]:
+    """Check the one part of the nav contract a type cannot state.
 
-    Nav lands after the display budget is allocated, so it may only carry nodes that cost no
-    display text: rows, selects, separators, media, and zero-cost raw items.
+    `NavNode` already excludes text-bearing nodes, which is what lets nav land after the
+    display budget is allocated. A raw item smuggles its own text cost past that, so it is
+    still worth a look at runtime.
     """
     for node in nodes:
         match node:
             case Row(items=items) if not any(isinstance(item, RawItem) and item.text_cost for item in items):
                 continue
-            case SelectMenu() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0):
+            case SelectMenu() | RoutedSelect() | Sep() | Thumbnail() | Gallery() | RawItem(text_cost=0):
                 continue
             case _:
                 message = f"nav factories may only return component-bearing nodes, got {type(node).__name__}"
@@ -617,7 +653,7 @@ def _component_count(children: list[Realized]) -> int:
                 count += 1 + len(texts) + _item_component_cost(accessory)
             case Row(items=items):
                 count += 1 + sum(_item_component_cost(item) for item in items)
-            case SelectMenu():
+            case SelectMenu() | RoutedSelect():
                 count += 2  # the implicit ActionRow plus the select itself
             case RawItem(component_cost=component_cost):
                 count += component_cost
@@ -626,21 +662,33 @@ def _component_count(children: list[Realized]) -> int:
     return count
 
 
-type _FoldPath = tuple[int | str, ...]
+type _VariantPath = tuple[int | str, ...]
+type _Positions = Mapping[_VariantPath, int]
+"""Which rung each ladder occurrence currently sits on; absent means rung 0."""
 
 
-def _folds(nodes: Sequence[Node], collapsed: set[_FoldPath]) -> list[tuple[_FoldPath, Fold]]:
-    """Every available Fold occurrence on the selected branches, in document order."""
-    found: list[tuple[_FoldPath, Fold]] = []
+def _format_path(path: _VariantPath) -> str:
+    """Render a ladder's path for a note. A reader's landmark, not an addressing scheme."""
+    return "$." + ".".join(str(part) for part in path if part != "panel")
 
-    def walk(node: Node, path: _FoldPath) -> None:
+
+def _walk_ladders(nodes: Sequence[Node], positions: _Positions, visit) -> None:
+    """Visit every node reachable through the currently selected rungs, in document order.
+
+    Ladders only occur at the top level, inside a Panel, or inside another ladder's rung:
+    `Section.texts`, `Row.items` and `ActionGroup.items` are typed to exclude them, so these
+    two recursive arms are exhaustive.
+    """
+
+    def walk(node: Node, path: _VariantPath) -> None:
         match node:
-            case Fold(primary=primary, fallback=fallback):
-                if path in collapsed:
-                    walk(fallback, (*path, "fallback"))
-                else:
-                    found.append((path, node))
-                    walk(primary, (*path, "primary"))
+            case Variants(variants=variants):
+                rung = min(positions.get(path, 0), len(variants) - 1)
+                visit(path, node, rung)
+                # The rung is part of the descendants' path, so stepping this ladder abandons
+                # their positions rather than reinterpreting them against a different subtree.
+                for index, child in enumerate(variants[rung].nodes):
+                    walk(child, (*path, rung, index))
             case Panel(children=children):
                 for index, child in enumerate(children):
                     walk(child, (*path, "panel", index))
@@ -649,29 +697,46 @@ def _folds(nodes: Sequence[Node], collapsed: set[_FoldPath]) -> list[tuple[_Fold
 
     for index, node in enumerate(nodes):
         walk(node, (index,))
+
+
+def _steppable(nodes: Sequence[Node], positions: _Positions) -> list[tuple[_VariantPath, Variants, int]]:
+    """Every reachable ladder that still has a rung left, in document order."""
+    found: list[tuple[_VariantPath, Variants, int]] = []
+
+    def visit(path: _VariantPath, node: Variants, rung: int) -> None:
+        if rung + 1 < len(node.variants):
+            found.append((path, node, rung))
+
+    _walk_ladders(nodes, positions, visit)
     return found
 
 
-def _resolve_folds(nodes: Sequence[Node], collapsed: set[_FoldPath]) -> list[Node]:
-    """Resolve Fold wrappers to the branches selected for this measuring pass."""
+def _resolve_variants(nodes: Sequence[Node], positions: _Positions) -> list[Node]:
+    """Splice each ladder's selected rung into its parent for this measuring pass."""
 
-    def rewrite(node: Node, path: _FoldPath) -> Node:
+    def rewrite(node: Node, path: _VariantPath) -> list[Node]:
         match node:
-            case Fold(primary=primary, fallback=fallback):
-                if path in collapsed:
-                    return rewrite(fallback, (*path, "fallback"))
-                return rewrite(primary, (*path, "primary"))
+            case Variants(variants=variants):
+                rung = min(positions.get(path, 0), len(variants) - 1)
+                resolved: list[Node] = []
+                for index, child in enumerate(variants[rung].nodes):
+                    resolved.extend(rewrite(child, (*path, rung, index)))
+                return resolved
             case Panel(children=children, accent=accent):
-                rewritten = tuple(rewrite(child, (*path, "panel", index)) for index, child in enumerate(children))
-                return Panel(children=rewritten, accent=accent)
+                inner: list[Node] = []
+                for index, child in enumerate(children):
+                    inner.extend(rewrite(child, (*path, "panel", index)))
+                return [Panel(children=tuple(inner), accent=accent)]
             case _:
-                return node
+                return [node]
 
-    return [rewrite(node, (index,)) for index, node in enumerate(nodes)]
+    resolved: list[Node] = []
+    for index, node in enumerate(nodes):
+        resolved.extend(rewrite(node, (index,)))
+    return resolved
 
 
 type PageState = Mapping[str, int] | int | None
-type PageNav = Callable[[str, int, int], Sequence[Node]]
 
 
 def solve(
@@ -679,18 +744,25 @@ def solve(
     *,
     limits: V2Limits = LIMITS,
     chrome: Chrome = DEFAULT_CHROME,
+    localization: Localization = NEUTRAL,
     strict: bool = False,
     reserved_text: int = 0,
     page: PageState = None,
     nav: PageNav | None = None,
 ) -> SolvedLayout:
-    """Fit nodes into target budgets with independently keyed pagination."""
+    """Fit nodes into target budgets with independently keyed pagination.
+
+    `Variant.requires` is not consulted here: capability filtering belongs to the planner,
+    which is the only layer that knows the target. A ladder reaching the solver is a pure
+    budget ladder whose rungs are all available.
+    """
+    chrome = localize_chrome(chrome, localization)
     tree = list(nodes)
-    collapsed: set[_FoldPath] = set()
-    fold_notes: list[str] = []
+    positions: dict[_VariantPath, int] = {}
+    step_notes: list[str] = []
     solved = _solve_once(
         tree,
-        collapsed=collapsed,
+        positions=positions,
         limits=limits,
         chrome=chrome,
         reserved_text=reserved_text,
@@ -699,21 +771,28 @@ def solve(
         notes=[],
     )
     while solved.components > limits.total_components:
-        remaining = _folds(tree, collapsed)
+        remaining = _steppable(tree, positions)
         if not remaining:
             break
-        target_path, target = min(remaining, key=lambda candidate: candidate[1].priority)
-        fold_notes.append(f"folded a priority {target.priority} alternate under component pressure")
-        collapsed.add(target_path)
+        # Priority decides which ladder gives way; the rung it already sits on decides which
+        # of several equals gives way next, so equal-priority ladders step breadth-first
+        # rather than one collapsing to nothing while its twin stays whole. `min` is stable,
+        # so a full tie still falls to document order.
+        path, ladder, rung = min(remaining, key=lambda candidate: (candidate[1].priority, candidate[2]))
+        step_notes.append(
+            f"{_format_path(path)} stepped to variant {rung + 2} of {len(ladder.variants)} "
+            f"(priority {ladder.priority}) under component pressure"
+        )
+        positions[path] = rung + 1
         solved = _solve_once(
             tree,
-            collapsed=collapsed,
+            positions=positions,
             limits=limits,
             chrome=chrome,
             reserved_text=reserved_text,
             page=page,
             nav=nav,
-            notes=list(fold_notes),
+            notes=list(step_notes),
         )
 
     if strict and solved.notes:
@@ -748,14 +827,17 @@ def _configure_paginators(
     return units, keys, footers
 
 
-def _insert_after(children: list[Realized], target: RText, additions: list[Realized]) -> bool:
+def _insert_after(
+    children: list[Realized], target: RText, additions: list[Realized]
+) -> tuple[list[Realized], int] | None:
+    """Splice `additions` in after `target`, reporting the list and offset they landed at."""
     for index, child in enumerate(children):
         if child is target:
             children[index + 1 : index + 1] = additions
-            return True
-        if isinstance(child, RPanel) and _insert_after(child.children, target, additions):
-            return True
-    return False
+            return children, index + 1
+        if isinstance(child, RPanel) and (found := _insert_after(child.children, target, additions)) is not None:
+            return found
+    return None
 
 
 def _requested_page(state: PageState, key: str, *, first: bool) -> int | None:
@@ -769,7 +851,7 @@ def _requested_page(state: PageState, key: str, *, first: bool) -> int | None:
 def _solve_once(
     nodes: Sequence[Node],
     *,
-    collapsed: set[_FoldPath],
+    positions: _Positions,
     limits: V2Limits,
     chrome: Chrome,
     reserved_text: int,
@@ -778,7 +860,7 @@ def _solve_once(
     notes: list[str],
 ) -> SolvedLayout:
     """One measuring pass, including a fixed point for all measured pager footers."""
-    resolved = _resolve_folds(nodes, collapsed)
+    resolved = _resolve_variants(nodes, positions)
     active: set[int] = set()
     final: (
         tuple[
@@ -787,6 +869,7 @@ def _solve_once(
             list[_Unit],
             dict[int, str],
             dict[int, Callable[[int, int], str]],
+            int,
         ]
         | None
     ) = None
@@ -798,6 +881,8 @@ def _solve_once(
         builder = _Builder(limits=limits, notes=pass_notes)
         children = builder.realize_children(resolved)
         paginate_units, keys, footers = _configure_paginators(builder, chrome)
+        # Everything noted so far is a clamp to Discord's own shape; fitting starts here.
+        clamps = len(pass_notes)
         footer_reservation = sum(
             _footer_cost(footers[unit.index], len(unit.content)) for unit in paginate_units if unit.index in active
         )
@@ -805,14 +890,14 @@ def _solve_once(
         _allocate(builder.units, budget, pass_notes, chrome)
         children = _prune(children)
         detected = {unit.index for unit in paginate_units if unit.fragments is not None and len(unit.fragments) > 1}
-        final = (builder, children, paginate_units, keys, footers)
+        final = (builder, children, paginate_units, keys, footers, clamps)
         expanded = active | detected
         if expanded == active:
             break
         active = expanded
 
     assert final is not None
-    builder, children, paginate_units, keys, footers = final
+    builder, children, paginate_units, keys, footers, clamps = final
     pagers: list[Pager] = []
     for unit in paginate_units:
         if unit.fragments is None or len(unit.fragments) <= 1:
@@ -837,11 +922,25 @@ def _solve_once(
         additions: list[Realized] = [footer_slot]
         if nav is not None:
             additions.extend(builder.realize_children(_validated_nav(nav(key, shown, pager.pages))))
-        if not _insert_after(children, unit.slot, additions):
+        placement = _insert_after(children, unit.slot, additions)
+        if placement is None:
+            placement = (children, len(children))
             children.extend(additions)
+        # The nav follows the footer slot, and `repage` replaces exactly that span.
+        pager.nav_host, pager.nav_at, pager.nav_count = placement[0], placement[1] + 1, len(additions) - 1
         pagers.append(pager)
 
     count = _component_count(children)
     if count > limits.total_components:
         builder.notes.append(f"{count} components exceed {limits.total_components}; the document needs restructuring")
-    return SolvedLayout(children=children, notes=builder.notes, pagers=tuple(pagers), components=count)
+    return SolvedLayout(
+        children=children,
+        notes=builder.notes,
+        pagers=tuple(pagers),
+        components=count,
+        # Incoming notes are the ladder steps this pass was asked to measure, which are
+        # themselves a response to overflow.
+        overflowed=bool(notes) or len(builder.notes) > clamps,
+        nav=nav,
+        limits=limits,
+    )

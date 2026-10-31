@@ -15,6 +15,7 @@ from whenever import Instant
 import squid_layouts as sl
 from squid.bot.errors import ErrorHandledLayoutView, ErrorHandledModal, ExpiringLayoutView
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.routes import build_edit
 from squid.bot.submission.navigation_view import (
     BaseNavigableView,
     MaybeAwaitableBaseNavigableViewFunc,
@@ -25,11 +26,10 @@ from squid.bot.submission.ui.components import (
     BuildField,
     DirectonalityLocationalitySelect,
     DoorTypeSelect,
-    DynamicBuildEditButton,
     EphemeralBuildEditButton,
     get_text_input,
 )
-from squid.bot.ui import create_mount, display_text_length
+from squid.bot.ui import create_mount, display_text_length, render_static
 from squid.bot.utils.components import (
     DISCORD_BLUE,
     DISCORD_YELLOW,
@@ -41,6 +41,7 @@ from squid.bot.utils.components import (
     no_mentions,
     text_layout,
 )
+from squid.bot.utils.mount_registry import SessionKey
 from squid.bot.utils.permissions import allows
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
@@ -480,6 +481,9 @@ class SubmissionFormComponent(sl.Component):
     validation_error: str | None = sl.state(None)
     submitting: bool = sl.state(default=False)
     closed: bool = sl.state(default=False)
+    # The draft this workspace edits. Held by reference: the modals mutate it through their
+    # own reference, so the handlers report that with mutated("build").
+    build: BuildDraft = sl.state(copy="ref")
 
     def __init__(
         self,
@@ -510,7 +514,9 @@ class SubmissionFormComponent(sl.Component):
 
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.closed:
-            return (sl.primitives.banner(t(self.locale, _("Submission closed")), accent=DISCORD_BLUE),)
+            # DISCORD_BLUE is house chrome, not a Tone, so this needs sl.section's accent
+            # rather than sl.status's fixed tone palette.
+            return (sl.section(sl.paragraph(t(self.locale, _("Submission closed"))), accent=DISCORD_BLUE),)
         missing = []
         if self.build.door_orientation is None:
             missing.append(t(self.locale, _("door type")))
@@ -522,35 +528,39 @@ class SubmissionFormComponent(sl.Component):
         if guidance is None:
             guidance = t(self.locale, _("Ready to submit. Optional details can be added later."))
         fields = (
-            sl.primitives.presets.Field(
+            sl.field(
                 t(self.locale, _("Door type")),
                 self.build.door_orientation or "—",
             ),
-            sl.primitives.presets.Field(
+            sl.field(
                 t(self.locale, _("Opening size")),
                 _format_dimensions(self.build.door_dimensions) or "—",
             ),
-            sl.primitives.presets.Field(t(self.locale, _("Pattern")), ", ".join(self.build.patterns)),
-            sl.primitives.presets.Field(
+            sl.field(t(self.locale, _("Pattern")), ", ".join(self.build.patterns)),
+            sl.field(
                 t(self.locale, _("Build size")),
                 _format_dimensions(self.build.dimensions) or "—",
             ),
-            sl.primitives.presets.Field(t(self.locale, _("Versions")), self.build.version_spec or "—"),
-            sl.primitives.presets.Field(t(self.locale, _("Creators")), ", ".join(self.build.creators_ign) or "—"),
+            sl.field(t(self.locale, _("Versions")), self.build.version_spec or "—"),
+            sl.field(t(self.locale, _("Creators")), ", ".join(self.build.creators_ign) or "—"),
         )
         return (
-            sl.primitives.card(
-                t(self.locale, _("Submit a build")),
-                guidance,
+            sl.section(
+                # The guidance text is the card's shock absorber: truncate lets it give up
+                # characters under pressure before a field or the footer loses any.
+                sl.truncate(sl.paragraph(guidance)),
+                sl.fields(*fields),
+                sl.note(t(self.locale, _("Only the door type and opening size are required."))),
+                heading=t(self.locale, _("Submit a build")),
                 accent=DISCORD_BLUE if self.is_ready else DISCORD_YELLOW,
-                fields=fields,
-                footer=t(self.locale, _("Only the door type and opening size are required.")),
             ),
             sl.Choices(
                 key="door_type",
                 choices=tuple(sl.Choice(value, t(self.locale, _(value))) for value in DOOR_ORIENTATION_NAMES),
-                selected=(self.build.door_orientation,) if self.build.door_orientation is not None else (),
-                on_change=self._door_changed,
+                selection=sl.controlled(
+                    (self.build.door_orientation,) if self.build.door_orientation is not None else (),
+                    self._door_changed,
+                ),
             ),
             sl.Choices(
                 key="location",
@@ -566,10 +576,14 @@ class SubmissionFormComponent(sl.Component):
                         t(self.locale, _("May depend on its position in the world")),
                     ),
                 ),
-                selected=tuple(
-                    value for value in ("Directional", "Locational") if value in self.build.miscellaneous_restrictions
+                selection=sl.controlled(
+                    tuple(
+                        value
+                        for value in ("Directional", "Locational")
+                        if value in self.build.miscellaneous_restrictions
+                    ),
+                    self._location_changed,
                 ),
-                on_change=self._location_changed,
                 minimum=0,
                 maximum=2,
             ),
@@ -601,11 +615,11 @@ class SubmissionFormComponent(sl.Component):
     async def _door_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.door_orientation = cast(Literal["Door", "Skydoor", "Trapdoor"], event.selected[0])
         self.validation_error = None
-        self.invalidate()
+        self.mutated("build")
 
     async def _location_changed(self, event: sl.ChoiceEvent) -> None:
         self.build.miscellaneous_restrictions = list(event.selected)
-        self.invalidate()
+        self.mutated("build")
 
     async def _edit_basics(self, event: sl.PressEvent) -> None:
         modal = SubmissionModal(self.build, self.builds, self, locale=self.locale)
@@ -651,14 +665,12 @@ class SubmissionFormComponent(sl.Component):
         await event.finish()
 
     async def refresh(self, interaction: discord.Interaction[Any]) -> None:
+        # The modal that calls this mutated the Build through its own reference.
         self.validation_error = None
-        self.invalidate()
+        self.mutated("build")
         if self._mount is None:
             return
-        rendered = self._mount.build_view()
-        await edit_interaction_layout(interaction, rendered)
-        # bind is the commit point, so it runs whether or not this mount holds a message.
-        self._mount.bind(self._mount.message, rendered)
+        await self._mount.flush(interaction)
 
     async def wait(self) -> bool | None:
         with anyio.move_on_after(self._timeout) as scope:
@@ -965,7 +977,7 @@ class BuildEditView[BotT: "squid.bot.app.RedstoneSquid"](ExpiringLayoutView):
         else:
             build_container = await handler.render_container(reserved_text=len(heading))
             build_node = sl.primitives.RawItem(lambda: build_container, kind="discord.item", version=1)
-        success = sl.discord.render_static([sl.primitives.Text(heading), build_node])
+        success = render_static([sl.primitives.Text(heading), build_node], locale=self.locale)
         # The workspace is ephemeral, and an ephemeral message only exists inside the interaction:
         # editing it through the channel endpoint (`Message.edit`) is a 404, so go via the webhook.
         await interaction.edit_original_response(view=success, allowed_mentions=no_mentions())
@@ -978,6 +990,11 @@ class BuildEditComponent(sl.Component):
     confirming: bool = sl.state(default=False)
     saved: bool = sl.state(default=False)
     validation_error: str | None = sl.state(None)
+    locale: str | None = sl.state(None, persist=False)
+    # Both are large object graphs the editor replaces wholesale, so they snapshot by reference:
+    # assignment rolls back, in-place mutation of the Build does not.
+    build: Build = sl.state(copy="ref")
+    _node: sl.LayoutNode | None = sl.state(None, copy="ref")
 
     def __init__(
         self,
@@ -1034,9 +1051,9 @@ class BuildEditComponent(sl.Component):
     def render(self) -> tuple[sl.LayoutNode, ...]:
         if self.saved:
             return (
-                sl.primitives.card(
-                    t(self.locale, _("Changes saved")),
-                    t(self.locale, _("The build card has been refreshed.")),
+                sl.section(
+                    sl.paragraph(t(self.locale, _("The build card has been refreshed."))),
+                    heading=t(self.locale, _("Changes saved")),
                     accent=DISCORD_BLUE,
                 ),
             )
@@ -1094,16 +1111,13 @@ class BuildEditComponent(sl.Component):
             )
         controls.append(sl.primitives.Button(t(self.locale, _("Close")), self._close, "close"))
         nodes: list[sl.LayoutNode] = [
-            sl.primitives.card(
-                t(self.locale, _("Edit build")),
-                description,
+            sl.section(
+                # The description is the card's shock absorber: truncate lets it give up
+                # characters under pressure before the summary field loses any.
+                sl.truncate(sl.paragraph(description)),
+                sl.fields(sl.field(t(self.locale, _("Fields in this section")), summary)),
+                heading=t(self.locale, _("Edit build")),
                 accent=DISCORD_YELLOW if self.validation_error else DISCORD_BLUE,
-                fields=(
-                    sl.primitives.presets.Field(
-                        t(self.locale, _("Fields in this section")),
-                        summary,
-                    ),
-                ),
             )
         ]
         if self._node is not None:
@@ -1193,12 +1207,21 @@ class BuildEditComponent(sl.Component):
         self.invalidate()
         if self._mount is None:
             return
-        rendered = self._mount.build_view()
-        await edit_interaction_layout(interaction, rendered)
-        # bind is the commit point, so it runs whether or not this mount holds a message.
-        self._mount.bind(self._mount.message, rendered)
+        await self._mount.flush(interaction)
 
-    async def send(self, interaction: discord.Interaction[Any], ephemeral: bool = True) -> None:
+    async def send(
+        self,
+        interaction: discord.Interaction[Any],
+        ephemeral: bool = True,
+        *,
+        parent: sl.discord.Mount | None = None,
+    ) -> None:
+        """Open an editor for this build, replacing this user's previous one.
+
+        `parent` is the mount this editor was opened from, when it was opened from one: the
+        editor lives on its own message, so without it a closed parent leaves a clickable
+        orphan behind until the editor's own 300 s timer runs out.
+        """
         self.locale = await resolve_locale(interaction, interaction.client.services.settings)
         if not await self.can_edit(interaction):
             message = t(
@@ -1224,20 +1247,16 @@ class BuildEditComponent(sl.Component):
             self._node = (
                 await render_node()
                 if render_node is not None
-                else sl.primitives.banner(t(self.locale, _("Build preview unavailable.")))
+                else sl.status(t(self.locale, _("Build preview unavailable.")))
             )
-        mount = self.mount()
-        rendered = mount.build_view()
-        if not interaction.response.is_done():
-            await interaction.response.defer(ephemeral=ephemeral)
-        message = await interaction.followup.send(
-            view=rendered,
-            files=mount.attachment_files(),
-            ephemeral=ephemeral,
-            allowed_mentions=no_mentions(),
-            wait=True,
+        # Keyed per user per build: a second editor for the same build replaces the first
+        # rather than leaving two of them staging edits to one row.
+        await interaction.client.mounts.open(
+            self.mount(),
+            sl.discord.respond_to(interaction, ephemeral=ephemeral, wait=True),
+            key=SessionKey("build-edit", interaction.user.id, self.build.id),
+            parent=parent,
         )
-        mount.bind(message, rendered)
 
     def mount(self) -> sl.discord.Mount:
         self._mount = create_mount(self, locale=self.locale, timeout=self._timeout)
@@ -1254,13 +1273,18 @@ class BuildInfoView[BotT: "squid.bot.app.RedstoneSquid"](BaseNavigableView[BotT]
         super().__init__(parent=parent, timeout=BUILD_INFO_TIMEOUT_SECONDS)
         self.build = build
         self._message: discord.Message | None = None
-        if build.id is None:
-            edit_button = EphemeralBuildEditButton(build)
-        else:
-            edit_button = DynamicBuildEditButton(build)
-        self._edit_row = discord.ui.ActionRow(
-            cast(discord.ui.Item[discord.ui.LayoutView], edit_button),
+        # A stored build's edit button is routed, so it keeps working on a card this
+        # process did not draw; an unsaved one has nothing to point at and stays in-session.
+        edit_button: discord.ui.Button[discord.ui.LayoutView] = (
+            EphemeralBuildEditButton(build)
+            if build.id is None
+            else sl.discord.RoutedItem(
+                label="Edit",
+                style=discord.ButtonStyle.secondary,
+                custom_id=build_edit.id(build_id=build.id),
+            )
         )
+        self._edit_row = discord.ui.ActionRow(edit_button)
         self.add_item(self._edit_row)
 
     async def _render(self, interaction: discord.Interaction[BotT]) -> None:

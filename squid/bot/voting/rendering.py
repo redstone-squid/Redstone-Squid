@@ -5,13 +5,14 @@ Rendering used to be a method that also fetched and edited its own messages, whi
 why every session had to track the messages it had sent.
 """
 
+import dataclasses
 from collections.abc import Mapping
 from textwrap import dedent
 
 import discord
 
 import squid_layouts as sl
-from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout
+from squid.bot.ui import DISCORD_GREEN, DISCORD_RED, DISCORD_YELLOW, CardField, card_layout, render_static
 from squid.bot.voting.controls import poll_controls
 from squid.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 
@@ -23,7 +24,7 @@ def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: i
 
 
 def render_build_review(
-    card: sl.primitives.Node,
+    card: sl.LayoutNode,
     snapshot: VoteSessionSnapshot,
     guild_id: int | None,
 ) -> discord.ui.LayoutView:
@@ -57,11 +58,18 @@ def render_build_review(
     # The vote state is Never: a review whose tallies were trimmed away is worse than a
     # review whose build description was.
     state = (sl.primitives.Sep(), sl.primitives.Text(vote_text, overflow=sl.primitives.Never()))
-    if isinstance(card, sl.primitives.Panel):
+    # The build card is now sl.section()'s semantic Section rather than a bare primitive
+    # Panel, so splice into its own children instead of nesting a second container — one
+    # accent-coloured box, and the vote text is solved in the same pass as the card's fields.
+    if isinstance(card, sl.Section):
+        post: sl.LayoutNode = dataclasses.replace(card, children=(*card.children, *state))
+    elif isinstance(card, sl.primitives.Panel):
         post = sl.primitives.Panel(children=(*card.children, *state), accent=card.accent)
     else:
-        post = sl.primitives.Panel(children=(card, *state))
-    return sl.discord.render_static([post])
+        # Not currently reachable — render_node() always returns a Section — kept as a safe
+        # fallback for any future card producer that returns something else entirely.
+        post = sl.group(card, *state)
+    return render_static([post])
 
 
 def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> discord.ui.LayoutView:
@@ -119,8 +127,8 @@ def render_generic_poll(
     """
     nodes: list[sl.LayoutNode] = [sl.primitives.Text(generic_poll_text(snapshot, voter_discord_ids))]
     if snapshot.status is not VoteStatus.CLOSED:
-        nodes.append(sl.primitives.RawItem(poll_controls, kind="discord.item", version=1))
-    return sl.discord.render_static(nodes)
+        nodes.append(poll_controls())
+    return render_static(nodes)
 
 
 def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:

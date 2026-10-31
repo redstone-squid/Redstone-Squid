@@ -2,9 +2,9 @@
 
 Closing and refreshing a poll used to be `/poll close` and `/poll refresh`, each taking a
 `discord.Message` — which in slash form means pasting a link to the card you are already
-looking at (audit C4). Both gestures belong on the card, so they live here as dynamic items,
-and the poll a click refers to is the message the button sits on: nothing is encoded in the
-custom id, because nothing has to be.
+looking at (audit C4). Both gestures belong on the card, so they live here as routed
+controls, and the poll a click refers to is the message the button sits on: nothing is
+encoded in the custom id, because nothing has to be.
 
 Neither action stores anything about whoever clicked, so neither asks for consent. The
 account id below is read, never minted; someone without one cannot be the poll's author,
@@ -15,12 +15,13 @@ the guild's locale would still be the wrong language for most of them; what a cl
 *replies* is translated, because that reply has exactly one reader.
 """
 
-import re
-from typing import TYPE_CHECKING, Any, Self, cast, override
+from typing import TYPE_CHECKING, Any
 
 import discord
 
+import squid_layouts as sl
 from squid.bot.i18n import resolve_locale, t
+from squid.bot.routes import poll_close, poll_refresh, router
 from squid.bot.utils.components import reply_layout, text_layout
 from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.i18n import _
@@ -30,91 +31,53 @@ if TYPE_CHECKING:
     import squid.bot.app
 
 
-def poll_controls() -> discord.ui.ActionRow[discord.ui.LayoutView]:
-    """The control row an open poll's card ends with.
-
-    Cast because `DynamicItem` is declared upstream as an `Item[View]`, which no layout row
-    can hold by its type; `BuildInfoView` casts its edit button for the same reason.
-    """
-    return discord.ui.ActionRow(
-        cast(discord.ui.Item[discord.ui.LayoutView], ClosePollButton()),
-        cast(discord.ui.Item[discord.ui.LayoutView], RefreshPollButton()),
+def poll_controls() -> sl.Actions:
+    """The control row an open poll's card ends with."""
+    return sl.actions(
+        sl.routed_action("Close poll", poll_close.id(), key="close", tone=sl.Tone.DANGER),
+        sl.routed_action("Refresh weights", poll_refresh.id(), key="refresh"),
+        key="poll.controls",
     )
 
 
-def register(bot: squid.bot.app.RedstoneSquid) -> None:
-    """Route clicks on poll cards published by any past run of the bot."""
-    bot.add_dynamic_items(ClosePollButton, RefreshPollButton)
-
-
-class ClosePollButton[V: discord.ui.LayoutView](discord.ui.DynamicItem[discord.ui.Button[V]], template=r"poll:close"):
+@router.route(poll_close)
+async def close_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """End a poll early, tallying it where it stands."""
-
-    def __init__(self) -> None:
-        super().__init__(
-            discord.ui.Button(label="Close poll", style=discord.ButtonStyle.danger, custom_id="poll:close")
-        )
-
-    @classmethod
-    @override
-    async def from_custom_id(  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
-        cls: type[Self], interaction: discord.Interaction[Any], item: discord.ui.Item[Any], match: re.Match[str], /
-    ) -> Self:
-        return cls()
-
-    @override
-    async def callback(self, interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
-        authorized = await _authorize(interaction)
-        if authorized is None:
-            return
-        locale, _snapshot, actor = authorized
-        bot = interaction.client
-        assert interaction.message is not None
-        result = await bot.services.votes.close(interaction.message.id, actor)
-        if result.rejection is not None or result.session is None:
-            await _refuse(interaction, locale, result.rejection or VoteRejection.NOT_FOUND)
-            return
-        await bot.refresh_posts("vote_session", str(result.session.id))
-        await reply_layout(interaction, text_layout(t(locale, _("Poll closed."))))
+    authorized = await _authorize(interaction)
+    if authorized is None:
+        return
+    locale, _snapshot, actor = authorized
+    bot = interaction.client
+    assert interaction.message is not None
+    result = await bot.services.votes.close(interaction.message.id, actor)
+    if result.rejection is not None or result.session is None:
+        await _refuse(interaction, locale, result.rejection or VoteRejection.NOT_FOUND)
+        return
+    await bot.refresh_posts("vote_session", str(result.session.id))
+    await reply_layout(interaction, text_layout(t(locale, _("Poll closed."))))
 
 
-class RefreshPollButton[V: discord.ui.LayoutView](
-    discord.ui.DynamicItem[discord.ui.Button[V]], template=r"poll:refresh"
-):
+@router.route(poll_refresh)
+async def refresh_poll(interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:
     """Recompute cached role weights, for a poll whose voters gained or lost roles."""
-
-    def __init__(self) -> None:
-        super().__init__(
-            discord.ui.Button(label="Refresh weights", style=discord.ButtonStyle.secondary, custom_id="poll:refresh")
+    authorized = await _authorize(interaction)
+    if authorized is None:
+        return
+    locale, _snapshot, _actor = authorized
+    bot = interaction.client
+    assert interaction.message is not None
+    result = await bot.services.votes.refresh(interaction.message.id)
+    if result.session is not None:
+        await bot.refresh_posts("vote_session", str(result.session.id))
+    text = t(locale, _("Poll weights refreshed."))
+    if not result.complete:
+        # A count, not the raw account ids the command used to print (audit C5).
+        text += " " + t(
+            locale,
+            _("{count} voter(s) could not be resolved, so their cached weight was kept."),
+            count=len(result.unresolved_account_ids),
         )
-
-    @classmethod
-    @override
-    async def from_custom_id(  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
-        cls: type[Self], interaction: discord.Interaction[Any], item: discord.ui.Item[Any], match: re.Match[str], /
-    ) -> Self:
-        return cls()
-
-    @override
-    async def callback(self, interaction: discord.Interaction[squid.bot.app.RedstoneSquid]) -> None:  # pyright: ignore [reportIncompatibleMethodOverride]  # pyrefly: ignore[bad-override]
-        authorized = await _authorize(interaction)
-        if authorized is None:
-            return
-        locale, _snapshot, _actor = authorized
-        bot = interaction.client
-        assert interaction.message is not None
-        result = await bot.services.votes.refresh(interaction.message.id)
-        if result.session is not None:
-            await bot.refresh_posts("vote_session", str(result.session.id))
-        text = t(locale, _("Poll weights refreshed."))
-        if not result.complete:
-            # A count, not the raw account ids the command used to print (audit C5).
-            text += " " + t(
-                locale,
-                _("{count} voter(s) could not be resolved, so their cached weight was kept."),
-                count=len(result.unresolved_account_ids),
-            )
-        await reply_layout(interaction, text_layout(text))
+    await reply_layout(interaction, text_layout(text))
 
 
 async def _authorize(

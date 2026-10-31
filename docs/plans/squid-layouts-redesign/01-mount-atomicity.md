@@ -38,17 +38,15 @@ it too early. Restructure `Mount` around an explicit candidate:
    and the assets tuple. The `wire` callback collects bindings into the candidate's dict,
    never into `self._handlers`.
 2. Presentation cursors: snapshot `dict(self.presentation.cursors)` before drawing and
-   restore it if delivery fails. (Plan 06 later moves cursor reconciliation into the
-   planner, which retires this snapshot/restore workaround — note the cross-reference in
-   both directions but do not block on it.) Known gap as landed: planning also writes
-   strategy hysteresis (`remember_strategy`), which the snapshot does not restore, so a
-   discarded candidate leaves its adapter choices behind. Benign — it is a per-node
-   stickiness cache the next render re-derives from — and 06a closes it by staging the
-   whole session, which that plan now states as a requirement.
+   restore it if delivery fails. **Superseded by [plan 06](06-pagination.md).** Planning
+   no longer writes to the session at all; it returns `PlanResult.session_updates` and
+   the mount applies them in `_commit`, so the snapshot is gone and the guarantee now
+   also covers the strategy hysteresis this workaround could never restore.
 3. `_commit(candidate)` runs only after `deliver.apply*` returns: swap handlers, advance
    `_generation`, `runtime.commit(tree)`, store assets, clear `_dirty`, `_swap_view`.
 4. On delivery failure: discard the candidate, `candidate.view.stop()`, restore the
    cursor snapshot, leave `_dirty` True, re-raise (the existing error funnel reports it).
+   Post-06 there is nothing to restore — dropping the candidate drops its writes.
 5. Apply the same stage→deliver→commit shape to `flush`, `refresh_now`, `finish_via`,
    and `finish(disable=True)`. `finish` may still mark `_finished` before delivery — a
    failed disable-edit should not resurrect the mount — but must not commit the disabled
@@ -56,15 +54,23 @@ it too early. Restructure `Mount` around an explicit candidate:
 6. The initial send path (`build_view()` used by hosts before `bind()`) keeps working:
    expose `build_view()` as stage-without-commit plus an explicit `bind(message, view)`
    that performs the commit, since the host owns that delivery. Document that `bind` is
-   the commit point.
+   the commit point. **Superseded by [plan 15](15-send-ownership.md):** the host no
+   longer owns the initial delivery. `Mount.send(destination)` runs this same
+   stage→deliver→commit sequence framework-side, and `bind` is deleted — every remaining
+   caller turned out to be a hand-rolled `flush`. The commit point is now `send` for an
+   initial delivery and `flush` for an interaction-driven one; `build_view()` survives
+   only as the stage-only escape hatch for hosts that want the components and nothing
+   else.
 
-Keep the double-draw fingerprint dance (mount.py:214-228) inside `_stage()` unchanged;
-it is presentation-only and covered by the cursor snapshot.
+Keep the double-draw fingerprint dance inside `_stage()` unchanged; it is
+presentation-only and covered by the cursor snapshot. (Also superseded by plan 06:
+reconciliation moved into `plan()`, so the mount draws once.)
 
 ## Verification
 
-- `packages/squid-layouts/tests/test_mount.py`: monkeypatch `deliver.apply_interaction`
-  to raise `discord.HTTPException`; assert generation unchanged, old handlers still
+- `packages/squid-layouts/tests/test_mount.py`: monkeypatch `deliver.handle_from` to return
+  a handle whose `write` raises `discord.HTTPException` (this was `deliver.apply_interaction`
+  until plan 07 replaced it); assert generation unchanged, old handlers still
   dispatch, `_dirty` still True, `on_mount` not fired for the candidate tree, cursors
   restored; then let a second flush succeed and assert full recovery.
 - Existing mount/navigation/durability suites unchanged:

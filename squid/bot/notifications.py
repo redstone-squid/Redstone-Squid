@@ -12,7 +12,7 @@ from squid.bot.consent import ensure_consented_account
 from squid.bot.i18n import resolve_locale, t
 from squid.bot.notifications_view import NotificationPanel
 from squid.bot.utils.autocomplete import autocompletes
-from squid.bot.utils.components import error_layout, info_layout, no_mentions, reply_layout
+from squid.bot.utils.components import error_layout, info_layout, reply_layout
 from squid.core.i18n import _
 from squid.notifications import (
     PendingNotificationDelivery,
@@ -21,6 +21,7 @@ from squid.notifications import (
     TagPredicate,
 )
 from squid.runtime import JobHandle
+from squid_layouts.discord import respond_to
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -61,24 +62,8 @@ class NotificationCog(commands.GroupCog, group_name="notifications", group_descr
             author_id=interaction.user.id,
             locale=locale,
         )
-        await component.load()
         mount = component.mount()
-        rendered = mount.build_view()
-        if interaction.response.is_done():
-            message = await interaction.followup.send(
-                view=rendered,
-                ephemeral=True,
-                wait=True,
-                allowed_mentions=no_mentions(),
-            )
-        else:
-            await interaction.response.send_message(
-                view=rendered,
-                ephemeral=True,
-                allowed_mentions=no_mentions(),
-            )
-            message = await interaction.original_response()
-        mount.bind(message, rendered)
+        await mount.send(respond_to(interaction, ephemeral=True, wait=True))
 
     @autocompletes(
         creator="creator_profiles",

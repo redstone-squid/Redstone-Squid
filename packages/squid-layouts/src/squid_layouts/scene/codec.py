@@ -20,6 +20,8 @@ from squid_layouts.scene.model import (
     SceneOption,
     ScenePager,
     ScenePanel,
+    SceneRoutedButton,
+    SceneRoutedSelect,
     SceneRow,
     SceneSection,
     SceneSelect,
@@ -130,7 +132,7 @@ class SceneCodec:
         )
 
 
-def _node_to_dict(node: SceneNode | SceneLink | SceneButton) -> dict[str, Any]:
+def _node_to_dict(node: SceneNode | SceneLink | SceneButton | SceneRoutedButton) -> dict[str, Any]:
     match node:
         case SceneText(content=content, dialect=dialect):
             return {"kind": "text", "content": content, "dialect": dialect.value}
@@ -147,6 +149,15 @@ def _node_to_dict(node: SceneNode | SceneLink | SceneButton) -> dict[str, Any]:
                 "emoji": emoji,
                 "disabled": disabled,
                 "policy": policy.value,
+            }
+        case SceneRoutedButton(label=label, route_id=route_id, style=style, emoji=emoji, disabled=disabled):
+            return {
+                "kind": "routed_button",
+                "label": label,
+                "route_id": route_id,
+                "style": style.value,
+                "emoji": emoji,
+                "disabled": disabled,
             }
         case SceneSelect(
             options=options,
@@ -175,6 +186,31 @@ def _node_to_dict(node: SceneNode | SceneLink | SceneButton) -> dict[str, Any]:
                 "disabled": disabled,
                 "policy": policy.value,
             }
+        case SceneRoutedSelect(
+            options=options,
+            route_id=route_id,
+            placeholder=placeholder,
+            min_values=min_values,
+            max_values=max_values,
+            disabled=disabled,
+        ):
+            return {
+                "kind": "routed_select",
+                "options": [
+                    {
+                        "label": option.label,
+                        "value": option.value,
+                        "description": option.description,
+                        "default": option.default,
+                    }
+                    for option in options
+                ],
+                "route_id": route_id,
+                "placeholder": placeholder,
+                "min_values": min_values,
+                "max_values": max_values,
+                "disabled": disabled,
+            }
         case SceneRow(items=items):
             return {"kind": "row", "items": [_node_to_dict(item) for item in items]}
         case SceneThumbnail(url=url, description=description):
@@ -202,7 +238,7 @@ def _node_to_dict(node: SceneNode | SceneLink | SceneButton) -> dict[str, Any]:
             return {"kind": "extension", "extension": kind, "version": version, "payload": normalized}
 
 
-def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButton:
+def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButton | SceneRoutedButton:
     kind = _string(raw, "kind")
     match kind:
         case "text":
@@ -219,6 +255,14 @@ def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButt
                 emoji=_optional_string(raw, "emoji"),
                 disabled=_boolean(raw, "disabled"),
                 policy=ActionPolicy(_string(raw, "policy")),
+            )
+        case "routed_button":
+            return SceneRoutedButton(
+                label=_string(raw, "label"),
+                route_id=_string(raw, "route_id"),
+                style=ActionStyle(_string(raw, "style")),
+                emoji=_optional_string(raw, "emoji"),
+                disabled=_boolean(raw, "disabled"),
             )
         case "select":
             options = raw.get("options")
@@ -242,13 +286,36 @@ def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButt
                 disabled=_boolean(raw, "disabled"),
                 policy=ActionPolicy(_string(raw, "policy")),
             )
+        case "routed_select":
+            options = raw.get("options")
+            if not isinstance(options, list):
+                msg = "routed select options must be an array"
+                raise SceneCodecError(msg)
+            return SceneRoutedSelect(
+                options=tuple(
+                    SceneOption(
+                        label=_string(_object(option), "label"),
+                        value=_string(_object(option), "value"),
+                        description=_optional_string(_object(option), "description"),
+                        default=_boolean(_object(option), "default"),
+                    )
+                    for option in options
+                ),
+                route_id=_string(raw, "route_id"),
+                placeholder=_optional_string(raw, "placeholder"),
+                min_values=_integer(raw, "min_values"),
+                max_values=_integer(raw, "max_values"),
+                disabled=_boolean(raw, "disabled"),
+            )
         case "row":
             items = raw.get("items")
             if not isinstance(items, list):
                 msg = "row items must be an array"
                 raise SceneCodecError(msg)
             decoded = tuple(_node_from_dict(_object(item)) for item in items)
-            if not all(isinstance(item, SceneLink | SceneButton | SceneExtension) for item in decoded):
+            if not all(
+                isinstance(item, SceneLink | SceneButton | SceneRoutedButton | SceneExtension) for item in decoded
+            ):
                 msg = "row contains an unsupported child"
                 raise SceneCodecError(msg)
             return SceneRow(decoded)
@@ -278,7 +345,7 @@ def _node_from_dict(raw: Mapping[str, Any]) -> SceneNode | SceneLink | SceneButt
             if not all(isinstance(text, SceneText) for text in decoded_texts):
                 msg = "section contains a non-text slot"
                 raise SceneCodecError(msg)
-            if not isinstance(accessory, SceneThumbnail | SceneLink | SceneButton | SceneExtension):
+            if not isinstance(accessory, SceneThumbnail | SceneLink | SceneButton | SceneRoutedButton | SceneExtension):
                 msg = "section has an unsupported accessory"
                 raise SceneCodecError(msg)
             return SceneSection(decoded_texts, accessory)
