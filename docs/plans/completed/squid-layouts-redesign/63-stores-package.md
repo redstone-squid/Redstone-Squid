@@ -89,7 +89,7 @@ A store keyed by an application scope, holding declared values that expire.
 ```python
 theme = Slot("theme", codec=json_codec(Theme), ttl=timedelta(days=30))
 
-await store.get(theme, GuildScope(guild_id))     # -> Theme | None
+await store.get(theme, GuildScope(guild_id))  # -> Theme | None
 await store.put(theme, GuildScope(guild_id), value)
 ```
 
@@ -106,13 +106,17 @@ class Slot[ScopeT: Hashable, ValueT]:
     ttl: timedelta | None = None
     version: int = 1
 
+
 class SlotCodec[ValueT](Protocol):
     def encode(self, value: ValueT) -> str: ...
     def decode(self, payload: str, version: int) -> ValueT: ...
 
+
 class ScopedStore(Protocol):
     async def get[S: Hashable, V](self, slot: Slot[S, V], scope: S, *, touch: bool = False) -> V | None: ...
-    async def put[S: Hashable, V](self, slot: Slot[S, V], scope: S, value: V, *, ttl: timedelta | None = None) -> None: ...
+    async def put[S: Hashable, V](
+        self, slot: Slot[S, V], scope: S, value: V, *, ttl: timedelta | None = None
+    ) -> None: ...
     async def drop[S: Hashable, V](self, slot: Slot[S, V], scope: S) -> bool: ...
     async def purge_expired(self) -> int: ...
 ```
@@ -174,7 +178,7 @@ rather than taking it as an extra:
 
 ```python
 pool = PersistedPool(Preferences, bus, store=store, slot=preferences_slot)
-prefs = await pool.load(GuildScope(guild_id))     # async: it does I/O, and says so
+prefs = await pool.load(GuildScope(guild_id))  # async: it does I/O, and says so
 ```
 
 - **`load` is async; `SharedPool.get` stays synchronous.** [59](../../squid-layouts-redesign/59-shared-pool.md) fixed

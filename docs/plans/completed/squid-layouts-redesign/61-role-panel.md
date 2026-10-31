@@ -62,10 +62,12 @@ class Cardinality:
     minimum: int = 0
     maximum: int | None = None
 
+
 ANY = Cardinality()
 AT_MOST_ONE = Cardinality(maximum=1)
 AT_LEAST_ONE = Cardinality(minimum=1)
 EXACTLY_ONE = Cardinality(minimum=1, maximum=1)
+
 
 @dataclass(frozen=True, slots=True)
 class RoleOption:
@@ -74,6 +76,7 @@ class RoleOption:
     emoji: EmojiLike | None = None
     description: TextLike | None = None
 
+
 @dataclass(frozen=True, slots=True)
 class RoleCategory:
     key: str
@@ -81,6 +84,7 @@ class RoleCategory:
     roles: tuple[RoleOption, ...]
     cardinality: Cardinality = ANY
     description: TextLike | None = None
+
 
 class RolePanel(Component):
     def __init__(

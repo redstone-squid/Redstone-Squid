@@ -69,6 +69,7 @@ def adopt(
     discard_timeout: bool = False,
 ) -> Component: ...
 
+
 @overload
 def adopt(
     view: discord.ui.LayoutView,
