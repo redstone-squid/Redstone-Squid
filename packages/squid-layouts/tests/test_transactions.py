@@ -10,7 +10,7 @@ from squid_layouts import Component, computed, state
 from squid_layouts.primitives import Text
 from squid_layouts.runtime import ComponentRuntime, ReactiveWriteError, UndeclaredStateError, join_action, transaction
 from squid_layouts.runtime.reactivity import (
-    StateDelta,
+    ActionCommit,
     block_writes,
     export_state,
     on_action_commit,
@@ -181,14 +181,14 @@ class TestStaging:
     def test_the_delta_reports_the_first_value_and_the_last(self):
         panel = attached(Panel(Uncopyable()))
         panel.declared = 1
-        seen: list[StateDelta] = []
+        seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(seen.append)
+            on_action_commit(lambda commit, aftermath: seen.append(commit))
             panel.declared = 2
             panel.declared = 3
-        (delta,) = seen
-        (change,) = delta.changes
-        assert (change.before, change.after) == (1, 3)
+        (commit,) = seen
+        (patch,) = commit.patches.patches
+        assert (patch.before.value, patch.after.value) == (1, 3)
 
     def test_a_computed_sees_the_staged_value(self):
         """Read-your-writes has to reach derived values, or an action renders its own past."""
@@ -343,6 +343,32 @@ class TestMutatedInPlace:
         with pytest.raises(TypeError, match="no opaque state on Panel holds"):
             panel.mutated(Uncopyable())
 
+    def test_it_stages_the_signal_with_the_action_that_made_it(self):
+        """The object changed for good; announcing it is still the action's to take back."""
+        panel = Panel(Uncopyable())
+        runtime = ComponentRuntime(panel)
+        runtime.commit(runtime.render())
+        assert runtime.dirty is False
+
+        with pytest.raises(RuntimeError, match="abort"), transaction():
+            panel.mutated(panel.service)
+            assert runtime.dirty is False, "nothing is announced while the action can still fail"
+            message = "abort"
+            raise RuntimeError(message)
+
+        assert runtime.dirty is False
+
+    def test_it_announces_a_committed_signal_once(self):
+        panel = Panel(Uncopyable())
+        runtime = ComponentRuntime(panel)
+        runtime.commit(runtime.render())
+
+        with transaction():
+            panel.mutated(panel.service)
+            panel.mutated(panel.service)
+
+        assert runtime.dirty is True
+
 
 class TestAbstractBases:
     def test_an_unimplemented_component_may_leave_state_to_its_subclasses(self):
@@ -408,32 +434,30 @@ class TestActionCommitHooks:
     def test_the_delta_carries_both_directions(self):
         panel = attached(Panel(Uncopyable()))
         assert panel.declared == 0
-        seen: list[StateDelta] = []
+        seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(seen.append)
+            on_action_commit(lambda commit, aftermath: seen.append(commit))
             panel.declared = 7
-        (delta,) = seen
-        (change,) = delta.changes
-        assert (change.before, change.after) == (0, 7)
+        (commit,) = seen
+        (patch,) = commit.patches.patches
+        assert (patch.before.value, patch.after.value) == (0, 7)
 
     def test_a_field_still_on_its_default_is_recorded_as_unset(self):
         """Its slot is materialized lazily, so restoring it means popping it again."""
         panel = attached(Panel(Uncopyable()))
-        seen: list[StateDelta] = []
+        seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(seen.append)
+            on_action_commit(lambda commit, aftermath: seen.append(commit))
             panel.declared = 7
-        (delta,) = seen
-        (change,) = delta.changes
-        assert not change.existed_before
-        delta.restore_before()
-        assert panel.declared == 0
+        (commit,) = seen
+        (patch,) = commit.patches.patches
+        assert not patch.before.present
 
     def test_a_rollback_runs_no_hooks(self):
         panel = attached(Panel(Uncopyable()))
-        seen: list[StateDelta] = []
+        seen: list[ActionCommit] = []
         with pytest.raises(RuntimeError), transaction():
-            on_action_commit(seen.append)
+            on_action_commit(lambda commit, aftermath: seen.append(commit))
             panel.declared = 7
             message = "the action failed"
             raise RuntimeError(message)
@@ -442,20 +466,20 @@ class TestActionCommitHooks:
     def test_reference_copied_state_is_not_copied_on_the_way_out(self):
         service = Uncopyable()
         panel = attached(Panel(service))
-        seen: list[StateDelta] = []
+        seen: list[ActionCommit] = []
         with transaction():
-            on_action_commit(seen.append)
+            on_action_commit(lambda commit, aftermath: seen.append(commit))
             panel.service = Uncopyable()
-        (delta,) = seen
-        (change,) = delta.changes
-        assert change.before is service
+        (commit,) = seen
+        (patch,) = commit.patches.patches
+        assert patch.before.value is service
 
     def test_one_key_registers_once(self):
         key = object()
         with transaction():
-            on_action_commit(lambda delta: None, key=key)
+            on_action_commit(lambda commit, aftermath: None, key=key)
             with pytest.raises(RuntimeError, match="already registered"):
-                on_action_commit(lambda delta: None, key=key)
+                on_action_commit(lambda commit, aftermath: None, key=key)
 
     def test_blocked_writes_name_their_reason(self):
         panel = attached(Panel(Uncopyable()))
@@ -504,9 +528,12 @@ class Recorder:
             message = f"{self.name} rejected the action"
             raise RuntimeError(message)
 
-    def prepare(self) -> str:
+    def prepare(self, view) -> str:
         self._step("prepare")
         return f"{self.name}.prepared"
+
+    def describe_change(self, prepared: str) -> None:
+        return None
 
     def apply(self, prepared: str) -> None:
         # Recorded, so the ordering tests also prove each participant is handed back its
@@ -514,10 +541,10 @@ class Recorder:
         self.applied = prepared
         self._step("apply")
 
-    def abort(self) -> None:
+    def abort(self, prepared: str | None, cause: BaseException) -> None:
         self._step("abort")
 
-    def finalize(self) -> None:
+    def finalize(self, prepared: str) -> None:
         self._step("finalize")
 
 
@@ -560,16 +587,19 @@ class TestActionParticipants:
         log: list[str] = []
 
         class Silent:
-            def prepare(self) -> None:
+            def prepare(self, view) -> None:
                 log.append("prepare")
+
+            def describe_change(self, prepared: None) -> None:
+                return None
 
             def apply(self, prepared: None) -> None:
                 assert prepared is None
                 log.append("apply")
 
-            def abort(self) -> None: ...
+            def abort(self, prepared: None, cause: BaseException) -> None: ...
 
-            def finalize(self) -> None: ...
+            def finalize(self, prepared: None) -> None: ...
 
         with transaction():
             join_action(object(), Silent)
@@ -592,7 +622,7 @@ class TestActionParticipants:
         with pytest.raises(RuntimeError, match="b rejected"), transaction():
             join_action(object(), lambda: Recorder(log, "a"))
             join_action(object(), lambda: Recorder(log, "b", fail="prepare"))
-        assert log == ["a.prepare", "b.prepare", "a.abort", "b.abort"]
+        assert log == ["a.prepare", "b.prepare", "b.abort", "a.abort"]
 
     def test_a_failed_action_aborts_without_preparing(self):
         log: list[str] = []
@@ -614,7 +644,7 @@ class TestActionParticipants:
             message = "the action failed"
             raise RuntimeError(message)
         # The siblings still get their abort, and the swallowed failure is still visible.
-        assert log == ["a.abort", "b.abort"]
+        assert log == ["b.abort", "a.abort"]
         assert "failed to abort" in caplog.text
 
     def test_finalizing_sees_a_fully_published_action(self):
@@ -622,7 +652,7 @@ class TestActionParticipants:
         log: list[str] = []
         panel = watched()
 
-        def check() -> None:
+        def check(prepared: str) -> None:
             log.append(f"declared={panel.declared}")
 
         with transaction():
@@ -654,11 +684,11 @@ class TestCommitFailures:
         """The recorder is what failed, not the action; silently un-rendering it is worse."""
         panel = watched()
 
-        def explode(delta: StateDelta) -> None:
+        def explode(commit: ActionCommit, aftermath) -> None:
             message = "the recorder failed"
             raise RuntimeError(message)
 
-        with pytest.raises(RuntimeError, match="the recorder failed"), transaction():
+        with transaction():
             on_action_commit(explode)
             panel.declared = 7
         assert panel.declared == 7
@@ -669,7 +699,7 @@ class TestCommitFailures:
         log: list[str] = []
         panel = watched()
         with transaction():
-            on_action_commit(lambda delta: log.append("hook"))
+            on_action_commit(lambda commit, aftermath: log.append("hook"))
             join_action(object(), lambda: Recorder(log, "a"))
             panel.declared = 7
         assert log == ["a.prepare", "a.apply", "a.finalize", "hook"]
@@ -697,15 +727,18 @@ class TestPrePublicationRollback:
         """A participant rejecting after publication is the one path that writes cells back."""
 
         class Rejects:
-            def prepare(self) -> None:
+            def prepare(self, view) -> None:
                 message = "rejected"
                 raise RuntimeError(message)
 
+            def describe_change(self, prepared: None) -> None:
+                return None
+
             def apply(self, prepared: None) -> None: ...
 
-            def abort(self) -> None: ...
+            def abort(self, prepared: None, cause: BaseException) -> None: ...
 
-            def finalize(self) -> None: ...
+            def finalize(self, prepared: None) -> None: ...
 
         component = attached(Panel(Uncopyable()))
         with pytest.raises(RuntimeError, match="rejected"), transaction():

@@ -4,6 +4,7 @@ import dataclasses
 import io
 import json
 from collections.abc import Awaitable, Callable, Sequence
+from datetime import datetime, timedelta
 
 import discord
 from discord.ext import commands
@@ -12,6 +13,7 @@ from discord.ext.commands import Context
 import squid_layouts as sl
 from squid_layouts.discord import delivery
 from squid_layouts.discord.devtools_view import OperationalInspector, metrics_text, plan_text, scene_attachment
+from squid_layouts.discord.durability import RecoveryReport
 from squid_layouts.discord.live import find
 from squid_layouts.discord.mount import MountSnapshot, owned_mount
 from squid_layouts.discord.operations import (
@@ -21,14 +23,24 @@ from squid_layouts.discord.operations import (
     RuntimeUnavailable,
     TargetNotFound,
 )
-from squid_layouts.discord.reactor import Reactor
+from squid_layouts.discord.reactor import Reactor, ReactorSnapshot
 from squid_layouts.discord.routing import routers
 from squid_layouts.discord.sessions import SessionRegistry
 from squid_layouts.document import InlineAsset
 from squid_layouts.factories import code, paragraph, section
-from squid_layouts.profiling import OperationKind, Profiler, RuntimeTrace
-from squid_layouts.runtime.topics import TopicBus
+from squid_layouts.profiling import AttributeValue, OperationAggregate, OperationKind, Profiler, RuntimeTrace
+from squid_layouts.runtime.histories import HistorySnapshot
+from squid_layouts.runtime.topics import BusSnapshot, TopicBus
 from squid_layouts.semantic import LayoutNode
+from squid_reactive.actions import (
+    ActionLedger,
+    ActionOutcomeSnapshot,
+    AftermathFailureSnapshot,
+    CausalEventSnapshot,
+    OperationEventSnapshot,
+    ResourceEventSnapshot,
+    add_action_outcome_sink,
+)
 
 type DevToolsCheck[BotT: commands.Bot] = Callable[[Context[BotT]], Awaitable[bool]]
 
@@ -52,6 +64,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         reactor: Reactor | None = None,
         bus: TopicBus | None = None,
         runtime: DevToolsRuntime | None = None,
+        action_ledger: ActionLedger | None = None,
     ) -> None:
         self._check = check
         self._runtime = runtime or DevToolsRuntime(
@@ -64,6 +77,15 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         self._reactor = self._runtime.reactor
         self._bus = self._runtime.bus
         self._profiler = self._runtime.profiler
+        self._action_ledger = action_ledger or ActionLedger(limit=200)
+        self._owns_action_ledger = action_ledger is None
+        if self._owns_action_ledger:
+            add_action_outcome_sink(self._action_ledger)
+
+    def cog_unload(self) -> None:
+        """Close the DevTools-owned action ledger when Discord unloads this cog."""
+        if self._owns_action_ledger:
+            self._action_ledger.close()
 
     # pyrefly: ignore[bad-override]  # MaybeCoro[bool] covers a coroutine; pyrefly drops the parameter
     async def cog_check(self, ctx: Context[BotT]) -> bool:
@@ -129,7 +151,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         ]
         if snapshot.topics is not None:
             lines.extend(
-                f"  {topic.topic} subscribers={topic.subscribers} labels={','.join(topic.labels) or '-'} "
+                f"  {topic.topic} subscribers={topic.subscribers} "
                 f"queued={topic.queued} in_flight={topic.in_flight} delivered={topic.delivered} failed={topic.failed}"
                 for topic in snapshot.topics.topics
             )
@@ -177,6 +199,42 @@ class DevTools[BotT: commands.Bot](commands.Cog):
             await self._send(ctx, [section(sl.heading("Profiler"), code(body))])
             return
         await self._profile_mount(ctx, mount_id)
+
+    @ui_group.command(name="timeline")
+    async def inspect_timeline(self, ctx: Context[BotT], limit: int = 20, target: str | None = None) -> None:
+        """Show retained dispatches across every mount in the order they happened.
+
+        `ui profile` answers how slow one mount is; this answers what people just did.
+        `target` narrows to one origin: `mount:<id>` or `actor:<user_id>`.
+        """
+        try:
+            attribute, wanted = _timeline_filter(target)
+        except ValueError as error:
+            await self._refuse(ctx, str(error))
+            return
+        snapshot = self._profiler.snapshot()
+        retained = (*snapshot.recent, *snapshot.slow, *snapshot.failed, *snapshot.deadline_misses)
+        traces = {
+            trace.trace_id: trace
+            for trace in retained
+            if trace.operation in {OperationKind.DISPATCH, OperationKind.ROUTE_DISPATCH}
+            and (attribute is None or str(_root_attribute(trace, attribute)) == wanted)
+        }
+        # Oldest first, so the tail of the retained ring reads as a transcript.
+        ordered = sorted(traces.values(), key=lambda trace: trace.started)[-max(1, limit) :]
+        body = (
+            "No retained dispatches."
+            if not ordered
+            else "\n".join(_timeline_text(trace, snapshot.started_at) for trace in ordered)
+        )
+        await self._send(ctx, [section(sl.heading("Dispatch timeline"), code(body))])
+
+    @ui_group.command(name="actions")
+    async def inspect_actions(self, ctx: Context[BotT], limit: int = 20) -> None:
+        """Show causal action outcomes independently of profiler retention."""
+        events = self._action_ledger.events[-max(1, limit) :]
+        body = "No retained causal events." if not events else "\n".join(_causal_event_text(item) for item in events)
+        await self._send(ctx, [section(sl.heading("Action outcomes"), code(body))])
 
     @ui_group.command(name="persistence")
     async def inspect_persistence(self, ctx: Context[BotT]) -> None:
@@ -296,16 +354,7 @@ class DevTools[BotT: commands.Bot](commands.Cog):
     async def _profile_mount(self, ctx: Context[BotT], mount_id: str) -> None:
         snapshot = self._profiler.snapshot()
         retained = (*snapshot.recent, *snapshot.slow, *snapshot.failed, *snapshot.deadline_misses)
-        traces = {
-            trace.trace_id: trace
-            for trace in retained
-            if any(
-                attribute.key == "mount_id" and attribute.value == mount_id
-                for span in trace.spans
-                if span.parent_span_id is None
-                for attribute in span.attributes
-            )
-        }
+        traces = {trace.trace_id: trace for trace in retained if _root_attribute(trace, "mount_id") == mount_id}
         ordered = sorted(traces.values(), key=lambda trace: trace.started, reverse=True)[:12]
         body = (
             f"No retained profiles for mount {mount_id}."
@@ -381,27 +430,61 @@ def _json_default(value: object) -> object:
     return repr(value)
 
 
-def _history_text(history: object) -> str:
+def _history_text(history: HistorySnapshot) -> str:
     name = getattr(history, "name", "history")
     undo = getattr(history, "undo", ())
     redo = getattr(history, "redo", ())
-    entries = [f"{entry.label} ({'undo' if entry.has_undo else 'state-only'})" for entry in (*undo, *redo)]
+    entries = [f"{entry.label} [{entry.state}] action={entry.action_id}" for entry in (*undo, *redo)]
     return f"{name}: undo={len(undo)} redo={len(redo)}\n" + "\n".join(entries or ["(empty)"])
 
 
-def _reactor_text(snapshot: object) -> str:
+def _action_text(outcome: ActionOutcomeSnapshot) -> str:
+    cause = "root" if outcome.cause is None else f"{outcome.cause.kind}:{outcome.cause.identity}"
+    detail = outcome.terminal if outcome.reason is None else f"{outcome.terminal}:{outcome.reason}"
+    relation = ""
+    if outcome.reverses_action_id is not None:
+        relation = f" reverses={outcome.reverses_action_id}"
+    elif outcome.reapplies_action_id is not None:
+        relation = f" reapplies={outcome.reapplies_action_id}"
+    elif outcome.compensates_action_id is not None:
+        relation = f" compensates={outcome.compensates_action_id}"
+    conflict = "" if outcome.conflict is None else f" conflict={outcome.conflict.target_id}"
+    return (
+        f"{outcome.action_id} {outcome.kind} {outcome.name} {detail} cause={cause} "
+        f"cells={outcome.changes.cells} participants={outcome.changes.participants}{relation}{conflict}"
+    )
+
+
+def _causal_event_text(event: CausalEventSnapshot) -> str:
+    match event:
+        case ActionOutcomeSnapshot():
+            return _action_text(event)
+        case OperationEventSnapshot():
+            cause = "root" if event.cause is None else f"{event.cause.kind}:{event.cause.identity}"
+            return f"operation:{event.execution_id} {event.name} {event.status} cause={cause}"
+        case ResourceEventSnapshot():
+            cause = "root" if event.cause is None else f"{event.cause.kind}:{event.cause.identity}"
+            return f"resource:{event.generation_id} {event.name} {event.status} cause={cause}"
+        case AftermathFailureSnapshot():
+            return (
+                f"aftermath:{event.failure_id} failed {event.stage} {event.callback} "
+                f"cause={event.cause.kind}:{event.cause.identity}"
+            )
+
+
+def _reactor_text(snapshot: ReactorSnapshot | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"queued={snapshot.queued} in_flight={snapshot.in_flight} failed={snapshot.failed}"
 
 
-def _topics_text(snapshot: object) -> str:
+def _topics_text(snapshot: BusSnapshot | None) -> str:
     if snapshot is None:
         return "unconfigured"
     return f"known={len(snapshot.topics)} queued={snapshot.queued} failed={snapshot.failed}"
 
 
-def _recovery_text(report: object) -> str:
+def _recovery_text(report: RecoveryReport | None) -> str:
     if report is None:
         return "never"
     return f"restored={len(report.restored)} failed={len(report.failed)}"
@@ -421,11 +504,50 @@ def _trace_text(trace: RuntimeTrace) -> str:
     return "\n".join(lines)
 
 
+def _root_attribute(trace: RuntimeTrace, key: str) -> AttributeValue:
+    """The value ``key`` carries on the trace's root span; `None` if it carries none."""
+    return next(
+        (
+            attribute.value
+            for span in trace.spans
+            if span.parent_span_id is None
+            for attribute in span.attributes
+            if attribute.key == key
+        ),
+        None,
+    )
+
+
+def _timeline_filter(target: str | None) -> tuple[str | None, str]:
+    """Split a ``mount:``/``actor:`` filter into the root-span attribute it selects on."""
+    if target is None:
+        return None, ""
+    prefix, separator, wanted = target.partition(":")
+    attribute = {"mount": "mount_id", "actor": "actor"}.get(prefix)
+    if not separator or attribute is None or not wanted:
+        message = f"Filter `{target}` is neither `mount:<id>` nor `actor:<user_id>`."
+        raise ValueError(message)
+    return attribute, wanted
+
+
+def _timeline_text(trace: RuntimeTrace, origin: datetime) -> str:
+    # `RuntimeTrace.started` is seconds since the profiler started, and `started_at` is the wall
+    # clock it started at, so the two together are the only way back to a readable time.
+    at = (origin + timedelta(seconds=trace.started)).strftime("%H:%M:%S")
+    mount_id = _root_attribute(trace, "mount_id")
+    where = "route" if mount_id is None else f"mount={mount_id}"
+    status = trace.result.outcome if trace.result.dispatch is None else trace.result.dispatch.disposition
+    return (
+        f"{at} {trace.name:<28.28} actor={_root_attribute(trace, 'actor')} "
+        f"{where} {status} {_milliseconds(trace.duration)}"
+    )
+
+
 def _milliseconds(seconds: float | None) -> str:
     return "??" if seconds is None else f"{seconds * 1000:.1f}ms"
 
 
-def _histogram_count(aggregate: object) -> int:
+def _histogram_count(aggregate: OperationAggregate) -> int:
     histogram = aggregate.window if aggregate.window.observations else aggregate.lifetime
     return histogram.observations
 

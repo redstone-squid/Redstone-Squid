@@ -78,6 +78,7 @@ class Diagnostics[BotT: "squid.bot.app.RedstoneSquid"](commands.Cog):
         """
         mount = create_mount(
             browser,
+            source=ctx,
             access=sl.discord.Owner(ctx.author.id),
             locale=locale,
             chrome=browser.chrome(),

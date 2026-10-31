@@ -19,6 +19,7 @@ from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor
 from squid_layouts.discord.testing import commit_render, delivered_to, fake_message
+from tests.helpers.discord import make_layout_bot
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -118,7 +119,7 @@ def test_search_results_use_named_selection_and_direct_build_action() -> None:
     )
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
 
-    mount = view.mount()
+    mount = view.mount(source=make_layout_bot())
     rendered = commit_render(mount)
     result_buttons = [
         child
@@ -141,7 +142,7 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
     )
     view = SearchResultsView(cast(SearchService, service), SearchRequest("door"), page, author_id=123)
 
-    payload = commit_render(view.mount()).to_components()
+    payload = commit_render(view.mount(source=make_layout_bot())).to_components()
 
     service.search.assert_not_awaited()
     assert "Semantic fallback used" in str(payload)
@@ -151,7 +152,7 @@ def test_search_results_preserve_page_warnings_without_refetching_the_initial_pa
 async def test_search_timeout_disables_bound_controls() -> None:
     page = SearchPage((BuildSearchHit("8", "Fast door", "confirmed"),), total=1, next=None, prev=None)
     view = SearchResultsView(cast(SearchService, object()), SearchRequest("door"), page, author_id=123)
-    mount = view.mount()
+    mount = view.mount(source=make_layout_bot())
     message = fake_message()
     await mount.send(delivered_to(message))
 

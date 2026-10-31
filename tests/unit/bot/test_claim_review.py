@@ -9,6 +9,7 @@ from whenever import Instant
 from squid.accounts.domain import Account, AccountIdentity, AliasClaim, ClaimStatus
 from squid.bot.claims_view import ClaimReviewComponent
 from squid_layouts.discord.testing import commit_render
+from tests.helpers.discord import make_layout_bot
 
 AUTHOR_ID = 11
 NOW = Instant.from_utc(2026, 8, 19)
@@ -37,7 +38,7 @@ def make_component(claims: tuple[AliasClaim, ...]) -> ClaimReviewComponent:
 def test_the_queue_names_claimants_in_a_semantic_render() -> None:
     component = make_component((make_claim(7),))
 
-    payload = commit_render(component.mount()).to_components()
+    payload = commit_render(component.mount(source=make_layout_bot())).to_components()
 
     assert "Claim #7" in str(payload)
     assert "Notch" in str(payload)

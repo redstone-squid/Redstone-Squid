@@ -3,6 +3,7 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 
+from squid_layouts._grid import GridCell
 from squid_layouts.assets import Asset
 from squid_layouts.capabilities import Capability
 from squid_layouts.chrome import Chrome
@@ -108,6 +109,7 @@ from squid_layouts.semantic import (
     Figure,
     Flexibility,
     FormTrigger,
+    Grid,
     Group,
     Heading,
     ItemDisplay,
@@ -129,6 +131,7 @@ from squid_layouts.semantic import (
     Paragraph,
     Progress,
     Quote,
+    Roster,
     RoutedAction,
     RoutedChoices,
     Section,
@@ -159,7 +162,9 @@ MEDIA_ADAPTER_VERSION = 1
 NAVIGATION_ADAPTER_ID = "discord.navigation"
 NAVIGATION_ADAPTER_VERSION = 1
 TABLE_ADAPTER_ID = "discord.table"
-TABLE_ADAPTER_VERSION = 1
+TABLE_ADAPTER_VERSION = 2
+GRID_ADAPTER_ID = "discord.grid"
+GRID_ADAPTER_VERSION = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,6 +263,8 @@ def nominate_decisions(
                 axes.append(_action_axis(node, path, limits, session))
             case Table():
                 axes.append(_table_axis(node, path, session))
+            case Grid():
+                axes.append(_grid_axis(node, path, limits, session))
             case Media():
                 axes.append(_media_axis(node, path, session))
             case Navigation():
@@ -595,6 +602,10 @@ def _node(node: LayoutNode, path: str, context: _Context) -> list[Node]:
             return _navigation(node, path, context)
         case Table():
             return _table(node, path, context)
+        case Grid():
+            return _grid(node, path, context)
+        case Roster():
+            return _roster(node, context)
         case Panel(children=children, accent=accent):
             # The exact primitive, not a semantic region: it stays a Container and the classic
             # dialect refuses it by name. Quietly turning an author's `Panel` into an embed
@@ -1113,7 +1124,14 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
     spec = node.spec.adapt(context.capabilities, maximum_fields=context.limits.modal_components)
 
     async def present(event: PressEvent) -> None:
-        await event.present_form(spec, key=node.key, on_submit=node.on_submit, policy=node.policy)
+        await event.present_form(
+            spec,
+            key=node.key,
+            on_submit=node.on_submit,
+            policy=node.policy,
+            label=node.label,
+            record=node.record,
+        )
 
     return [
         PrimitiveActionGroup(
@@ -1129,7 +1147,7 @@ def _form(node: FormTrigger, context: _Context) -> list[Node]:
                     guard=node.guard,
                     # The adapted spec, not `node.spec`: it is what the reader will actually
                     # be shown, and so what a late submission must be parsed against.
-                    form=FormBinding(node.key, spec, node.on_submit, node.policy),
+                    form=FormBinding(node.key, spec, node.on_submit, node.policy, node.label, node.record),
                 ),
             )
         )
@@ -1592,7 +1610,12 @@ def _toggle(node: Toggle, context: _Context) -> list[Node]:
 
 
 def _table_axis(node: Table, path: str, session: PresentationSession) -> StrategyAxis:
-    preferred = "tabular" if node.display is not TableDisplay.RECORDS and len(node.columns.columns) <= 4 else "records"
+    if node.display is TableDisplay.AUTO:
+        preferred = "tabular" if len(node.columns.columns) <= 4 else "records"
+        available = ("tabular", "records")
+    else:
+        preferred = node.display.value
+        available = (preferred,)
     return _strategy_axis(
         path=path,
         key=node.key,
@@ -1600,8 +1623,8 @@ def _table_axis(node: Table, path: str, session: PresentationSession) -> Strateg
         adapter_version=TABLE_ADAPTER_VERSION,
         flexibility=node.flexibility,
         preferred=preferred,
-        available=("tabular", "records"),
-        order=("tabular", "records"),
+        available=available,
+        order=("matrix", "tabular", "records"),
         session=session,
     )
 
@@ -1609,16 +1632,18 @@ def _table_axis(node: Table, path: str, session: PresentationSession) -> Strateg
 def _table(node: Table, path: str, context: _Context) -> list[Node]:
     columns = node.columns.columns
     strategy = _select_strategy(_table_axis(node, path, context.session), context)
-    if strategy == "tabular":
+    if strategy in {"matrix", "tabular"}:
         headings = [_resolve(column.heading, context) for column in columns]
         widths = [
             max([len(heading), *(len(_resolve(row.cells[index], context)) for row in node.rows)])
             for index, heading in enumerate(headings)
         ]
-        lines = [" | ".join(heading.ljust(widths[index]) for index, heading in enumerate(headings))]
-        lines.append("-+-".join("-" * width for width in widths))
+        separator = "  " if strategy == "matrix" else " | "
+        lines = [separator.join(heading.ljust(widths[index]) for index, heading in enumerate(headings))]
+        if strategy == "tabular":
+            lines.append("-+-".join("-" * width for width in widths))
         lines.extend(
-            " | ".join(_resolve(cell, context).ljust(widths[index]) for index, cell in enumerate(row.cells))
+            separator.join(_resolve(cell, context).ljust(widths[index]) for index, cell in enumerate(row.cells))
             for row in node.rows
         )
         return [PrimitiveCode("\n".join(lines), overflow=Never())]
@@ -1630,6 +1655,179 @@ def _table(node: Table, path: str, context: _Context) -> list[Node]:
         for row in node.rows
     )
     return [Lines(records, join="\n\n", overflow=Paginate(key=node.key))]
+
+
+def _grid_axis(node: Grid, path: str, limits: V2Limits, session: PresentationSession) -> StrategyAxis:
+    rows = (len(node.cells) + node.columns - 1) // node.columns
+    strategies: list[str] = []
+    if node.columns <= limits.row_buttons and limits.fits_controls(len(node.cells), rows):
+        strategies.append("buttons")
+    available_cells = sum(cell.available for cell in node.cells)
+    strategies.append("coordinate" if available_cells <= limits.select_options else "paged_select")
+    available = tuple(strategies)
+    return _strategy_axis(
+        path=path,
+        key=node.key,
+        adapter_id=GRID_ADAPTER_ID,
+        adapter_version=GRID_ADAPTER_VERSION,
+        flexibility=node.flexibility,
+        preferred=available[0],
+        available=available,
+        order=("buttons", "coordinate", "paged_select"),
+        session=session,
+        active_pagers=frozenset({"paged_select"}),
+    )
+
+
+def _column_name(index: int) -> str:
+    """Return a zero-based spreadsheet column name."""
+    name = ""
+    cursor = index + 1
+    while cursor:
+        cursor, remainder = divmod(cursor - 1, 26)
+        name = chr(ord("A") + remainder) + name
+    return name
+
+
+def _coordinate(index: int, columns: int) -> str:
+    return f"{_column_name(index % columns)}{index // columns + 1}"
+
+
+def _grid_matrix(node: Grid, context: _Context) -> PrimitiveCode:
+    labels = [f"{'[ ]' if cell.available else '[x]'} {_resolve(cell.label, context)}" for cell in node.cells]
+    column_names = [_column_name(index) for index in range(node.columns)]
+    widths = [
+        max(
+            [
+                len(column_names[column]),
+                *(len(labels[index]) for index in range(column, len(labels), node.columns)),
+            ]
+        )
+        for column in range(node.columns)
+    ]
+    row_label_width = len(str((len(node.cells) + node.columns - 1) // node.columns))
+    lines = [
+        " " * (row_label_width + 2) + "  ".join(name.ljust(widths[index]) for index, name in enumerate(column_names))
+    ]
+    for start in range(0, len(labels), node.columns):
+        row = labels[start : start + node.columns]
+        lines.append(
+            f"{start // node.columns + 1:>{row_label_width}}  "
+            + "  ".join(value.ljust(widths[index]) for index, value in enumerate(row))
+        )
+    return PrimitiveCode("\n".join(lines), overflow=Never())
+
+
+def _grid_option(index: int, cell: GridCell, node: Grid, context: _Context) -> Option:
+    return Option(f"{_coordinate(index, node.columns)} ??{_resolve(cell.label, context)}", cell.key)
+
+
+def _grid_select(cells: Sequence[tuple[int, GridCell]], node: Grid, key: str, context: _Context) -> SelectMenu:
+    return SelectMenu(
+        tuple(_grid_option(index, cell, node, context) for index, cell in cells),
+        node.on_pick,
+        key,
+        placeholder="Choose a position",
+    )
+
+
+def _grid(node: Grid, path: str, context: _Context) -> list[Node]:
+    strategy = _select_strategy(_grid_axis(node, path, context.limits, context.session), context)
+    if strategy == "buttons":
+        rows: list[Node] = []
+        for start in range(0, len(node.cells), node.columns):
+            buttons: list[Button] = []
+            for cell in node.cells[start : start + node.columns]:
+
+                async def pick(event: PressEvent, cell_key: str = cell.key) -> None:
+                    await node.on_pick(
+                        SelectionEvent(event.actor, event.responder, event.locale, event.context, (cell_key,))
+                    )
+
+                buttons.append(
+                    Button(
+                        _resolve(cell.label, context),
+                        pick,
+                        f"{node.key}.{cell.key}",
+                        style=_button_style(cell.tone, Emphasis.NORMAL),
+                        disabled=not cell.available,
+                    )
+                )
+            rows.append(Row(tuple(buttons)))
+        return rows
+
+    available = tuple((index, cell) for index, cell in enumerate(node.cells) if cell.available)
+    if strategy == "coordinate":
+        result: list[Node] = [_grid_matrix(node, context)]
+        if available:
+            result.append(_grid_select(available, node, f"{node.key}.coordinate", context))
+        return result
+
+    visible, index, pages = _page_items(available, f"{node.key}.cells", context, identity=lambda item: item[1].key)
+    return [
+        _grid_select(visible, node, f"{node.key}.page", context),
+        *context.pages.controls(f"{node.key}.cells", Position(offset=index), pages),
+    ]
+
+
+def _roster(node: Roster, context: _Context) -> list[Node]:
+    lowered: list[Node] = []
+    for group in node.placement.groups:
+        slot = group.slot
+        count = _resolve(context.chrome.slot_count(len(group.members), slot.capacity), context)
+        lowered.append(PrimitiveHeading(f"{_resolve(slot.label, context)} — {count}", level=3, overflow=Never()))
+        if group.members:
+            lowered.append(
+                Lines(tuple(f"- {_resolve(member.display, context)}" for member in group.members), overflow=Spill())
+            )
+        full = slot.capacity is not None and len(group.members) >= slot.capacity
+        available = not node.locked and not (full and node.placement.rejects_overflow)
+        if full and node.placement.rejects_overflow:
+            lowered.append(Text(_resolve(context.chrome.full, context), overflow=Never()))
+        if node.on_join is not None:
+
+            async def join(event: PressEvent, slot_key: str = slot.key) -> None:
+                await node.on_join(
+                    SelectionEvent(event.actor, event.responder, event.locale, event.context, (slot_key,))
+                )
+
+            lowered.append(
+                Row(
+                    (
+                        Button(
+                            _resolve(slot.label, context),
+                            join,
+                            f"{node.key}.{slot.key}",
+                            style=_button_style(slot.tone, Emphasis.NORMAL),
+                            disabled=not available,
+                        ),
+                    )
+                )
+            )
+        elif node.routes is not None:
+            lowered.append(
+                Row(
+                    (
+                        RoutedButton(
+                            _resolve(slot.label, context),
+                            node.routes[slot.key],
+                            style=_button_style(slot.tone, Emphasis.NORMAL),
+                            disabled=not available,
+                        ),
+                    )
+                )
+            )
+    if node.show_waitlist and node.placement.waitlist:
+        lowered.extend(
+            (
+                PrimitiveHeading(_resolve(context.chrome.waitlist, context), level=3, overflow=Never()),
+                Lines(
+                    tuple(f"- {_resolve(entry.display, context)}" for entry in node.placement.waitlist),
+                    overflow=Spill(),
+                ),
+            )
+        )
+    return lowered
 
 
 def _media_axis(node: Media, path: str, session: PresentationSession) -> StrategyAxis:

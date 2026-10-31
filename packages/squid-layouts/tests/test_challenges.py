@@ -5,6 +5,7 @@ from typing import Any, cast
 
 import anyio
 import discord
+import pytest
 
 import squid_layouts as sl
 from squid_layouts import ActionEvent, Component, state
@@ -499,6 +500,66 @@ class TestRunner:
             tasks.cancel_scope.cancel()
 
         assert ran == ["broken", "fine"]
+
+    async def test_concurrency_bounds_how_many_approved_presses_run_at_once(self):
+        runner = ChallengeRunner(concurrency=2)
+        release = anyio.Event()
+        started = anyio.Event()
+        peak = 0
+        finished: list[int] = []
+
+        async def press(index: int) -> None:
+            nonlocal peak
+            peak = max(peak, runner.active_count)
+            if runner.active_count == 2:
+                started.set()
+            await release.wait()
+            finished.append(index)
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(runner.run)
+            await anyio.sleep(0)
+            for index in range(4):
+                runner.resume(lambda index=index: press(index))
+            with anyio.fail_after(2):
+                await started.wait()
+            await anyio.sleep(0)
+
+            assert peak == 2, "the runner started more presses than its concurrency bound"
+
+            release.set()
+            with anyio.fail_after(2):
+                while len(finished) < 4:
+                    await anyio.sleep(0)
+            tasks.cancel_scope.cancel()
+
+        assert sorted(finished) == [0, 1, 2, 3]
+        assert runner.active_count == 0
+
+    async def test_an_approval_past_capacity_is_dropped_rather_than_awaited(self):
+        runner = ChallengeRunner(capacity=1, concurrency=1)
+        ran: list[int] = []
+
+        async def press(index: int) -> None:
+            ran.append(index)
+
+        for index in range(3):
+            runner.resume(lambda index=index: press(index))
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(runner.run)
+            with anyio.fail_after(2):
+                while not ran:
+                    await anyio.sleep(0)
+            await anyio.sleep(0)
+            tasks.cancel_scope.cancel()
+
+        assert ran == [0], "a dropped approval must not run later"
+
+    async def test_a_non_positive_bound_is_refused(self):
+        for kwargs in ({"capacity": 0}, {"concurrency": 0}):
+            with pytest.raises(ValueError, match="must be positive"):
+                ChallengeRunner(**kwargs)
 
 
 class TestDialog:

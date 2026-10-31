@@ -5,7 +5,10 @@
 -e ./packages/squid-reactive
     # via
     #   squid-layouts
+    #   squid-replicated
     #   squid-stores
+-e ./packages/squid-replicated
+    # via redstone-squid
 -e ./packages/squid-stores
     # via squid-layouts
 advanced-alchemy==1.12.0 \

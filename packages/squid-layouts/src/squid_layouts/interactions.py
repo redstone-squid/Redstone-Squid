@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_layouts.entity import EntityRef
 from squid_layouts.text import TextLike
+from squid_reactive.actions import ActionContext
 
 if TYPE_CHECKING:
     from squid_layouts.forms import FormIssue, FormLike, SubmitHandler
@@ -85,6 +86,8 @@ class ActionResponder(Protocol):
         key: str = "form",
         on_submit: SubmitHandler | None = None,
         policy: ActionPolicy | None = None,
+        label: TextLike = "",
+        record: History | None = None,
     ) -> None: ...
 
     def invalidate(self) -> None: ...
@@ -124,9 +127,18 @@ class ActionEvent:
         key: str = "form",
         on_submit: SubmitHandler | None = None,
         policy: ActionPolicy | None = None,
+        label: TextLike = "",
+        record: History | None = None,
     ) -> None:
         """Present a portable form through the dispatching frontend."""
-        await self.responder.present_form(form, key=key, on_submit=on_submit, policy=policy)
+        await self.responder.present_form(
+            form,
+            key=key,
+            on_submit=on_submit,
+            policy=policy,
+            label=label,
+            record=record,
+        )
 
     def invalidate(self) -> None:
         """Request a redraw after presentation-only state changes."""
@@ -176,6 +188,7 @@ class ActionRequest:
     policy: ActionPolicy
     submitted_generation: int | None
     active_generation: int
+    context: ActionContext
     rebased: bool = False
 
 

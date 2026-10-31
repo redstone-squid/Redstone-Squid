@@ -1,17 +1,31 @@
 """Reactive async values observed by synchronous component renders."""
 
+import asyncio
+import uuid
 from collections.abc import Awaitable, Callable, Generator, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from enum import StrEnum
+from types import TracebackType
 from typing import Any, Literal, Protocol, overload
 
+from squid_reactive.actions import (
+    DEFAULT_REDACTION,
+    ActionId,
+    CausalRef,
+    ExceptionSummary,
+    ResourceEventSnapshot,
+    current_causality,
+    emit_causal_event,
+)
 from squid_reactive.completion import Completion
 from squid_reactive.core import (
     _CONSUMER,
     ReactiveCycleError,
     ReactiveOwner,
+    TransactionView,
     _bump_epoch,
     action_participant,
     cycle_path,
@@ -54,6 +68,78 @@ class AddressedOwner(Protocol):
     def _resource_binding(self, name: str) -> tuple[Any, Callable[[Any], None]]:
         """The address this resource publishes under, and what to publish it with."""
         ...
+
+
+class LoadScope(Protocol):
+    """A cancellable region around one generation's loader, entered in the loading task.
+
+    Ends when the loader returns or raises, or when `cancel` is called because the generation
+    was superseded; exiting swallows only the cancellation this scope itself delivered.
+    `anyio.CancelScope` satisfies this as it stands, which is what `sl.discord` installs --
+    this package has no dependencies, so it supplies the seam rather than the cancellation.
+    """
+
+    def __enter__(self) -> object: ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None: ...
+
+    def cancel(self) -> None: ...
+
+
+class _NoAbandonment:
+    """The region a load gets when nothing is installed: it runs to completion regardless.
+
+    Stateless and shared, because it ends nothing and holds nothing to end.
+    """
+
+    __slots__ = ()
+
+    def __enter__(self) -> _NoAbandonment:
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool:
+        return False
+
+    def cancel(self) -> None:
+        """Nothing to stop: the loader keeps its own completion and only its result is dropped."""
+
+
+_NO_ABANDONMENT = _NoAbandonment()
+
+_ABANDONMENT: ContextVar[Callable[[], LoadScope] | None] = ContextVar("squid_reactive_load_abandonment", default=None)
+
+
+@contextmanager
+def abandon_superseded_loads(scope: Callable[[], LoadScope]) -> Iterator[None]:
+    """Cancel a resource load whose generation is superseded, for loads started in this context.
+
+    Read when a load starts rather than when a resource is constructed: a resource is built
+    lazily on first access, during a render that may be nowhere near the task that later loads
+    it. Context variables copy into child tasks, so one installation covers a whole settle group.
+
+    Without it a superseded loader runs to completion and only its result is discarded, which is
+    correct -- the contract makes a loader safe to run zero, one or many times -- just wasteful.
+    """
+    token = _ABANDONMENT.set(scope)
+    try:
+        yield
+    finally:
+        _ABANDONMENT.reset(token)
+
+
+def _load_scope() -> LoadScope:
+    factory = _ABANDONMENT.get()
+    return _NO_ABANDONMENT if factory is None else factory()
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +214,7 @@ class _Replacement:
         self._resource = resource
         self.value: Any = _MISSING
 
-    def prepare(self) -> dict[Any, int] | None:
+    def prepare(self, view: TransactionView) -> dict[Any, int] | None:
         """Settle every source while the action can still roll back.
 
         `None` means this participant staged no replacement, which is why `apply` can be
@@ -142,11 +228,35 @@ class _Replacement:
         if prepared is not None:
             self._resource._replace_now(self.value, baseline=prepared)
 
-    def abort(self) -> None:
+    def describe_change(self, prepared: dict[Any, int] | None) -> None:
+        return None
+
+    def abort(self, prepared: dict[Any, int] | None, cause: BaseException) -> None:
         self.value = _MISSING
 
-    def finalize(self) -> None:
+    def finalize(self, prepared: dict[Any, int] | None) -> None:
         """Installing already invalidated the owner, which is the only watcher there is."""
+
+
+class _Load:
+    """One generation's private notebook: what it read, how to stop it, and how to wake joiners.
+
+    The reads are held here rather than on the resource because a superseded loader does not
+    stop at the bump. It resumes inside its own task with its own `_CONSUMER` still pointing
+    here -- until its next checkpoint where `abandon_superseded_loads` is installed, and to
+    completion where it is not -- and goes on recording, so a single dict on the resource would
+    collect the reads of every generation that ever started, and the live value would end up
+    subscribed to state it never looked at. Only the generation that still holds the token
+    publishes what it read.
+    """
+
+    __slots__ = ("completion", "scope", "sources", "token")
+
+    def __init__(self, token: int, completion: Completion[Any], scope: LoadScope) -> None:
+        self.token = token
+        self.completion = completion
+        self.scope = scope
+        self.sources: dict[Any, int] = {}
 
 
 def _previous[ValueT](status: ResourceStatus[ValueT]) -> Ready[ValueT] | None:
@@ -183,8 +293,12 @@ class Resource[ValueT](AsyncBinding):
         """
         self._publish = publish
         self._status: ResourceStatus[ValueT] = Pending()
-        self._loading: tuple[int, Completion[ResourceStatus[ValueT]]] | None = None
+        self._loading: _Load | None = None
         self._request_token = 0
+        self._generation_id = uuid.uuid7()
+        causality = current_causality()
+        self._generation_cause = None if causality is None else causality[0]
+        self._generation_root = None if causality is None else causality[1]
         self._rechecking = False
         self.version = 0
         """Dates this resource's state, so a reader can tell whether it has moved.
@@ -311,7 +425,7 @@ class Resource[ValueT](AsyncBinding):
         self._invalidate(notify=True)
 
     def _invalidate(self, *, notify: bool) -> None:
-        self._request_token += 1
+        self._new_generation()
         self._status = Pending(_previous(self._status))
         self._moved()
         if notify:
@@ -334,7 +448,7 @@ class Resource[ValueT](AsyncBinding):
     def _replace_now(self, value: ValueT, *, baseline: dict[Any, int] | None = None) -> None:
         if baseline is None:
             baseline = {source: source.settle() for source in self.sources}
-        self._request_token += 1
+        self._new_generation()
         self._status = Ready(value)
         self._landed()
         # Re-baselined rather than dropped: an authoritative value is current for the inputs
@@ -401,36 +515,98 @@ class Resource[ValueT](AsyncBinding):
 
     async def _loaded(self) -> ResourceStatus[ValueT]:
         token = self._request_token
-        if self._loading is not None and self._loading[0] == token:
-            await self._loading[1].wait()
+        if self._loading is not None and self._loading.token == token:
+            await self._loading.completion.wait()
             if isinstance(self._status, Pending):
                 return await self._loaded()
             return self._status
 
         settled: Completion[ResourceStatus[ValueT]] = Completion()
-        self._loading = (token, settled)
+        load = _Load(token, settled, _load_scope())
+        self._loading = load
+        generation = (self._generation_id, self._generation_cause, self._generation_root)
+        self._emit_generation("started", generation)
+        # Emptied here as well as tracked into `load`, because `_recheck` reads this one and
+        # must stay inert while a load is in flight: re-pending mid-load would supersede the
+        # very generation that is about to answer.
         self.sources = {}
-        consumer = _CONSUMER.set(self)
+        consumer = _CONSUMER.set(load)
         try:
             try:
-                value = await self._loader()
+                # A sentinel rather than a flag, so the abandoned branch below is the one place
+                # `value` is known not to exist: `load.scope` swallows the cancellation it
+                # delivered, and the loader never got to return anything.
+                value: ValueT | _Missing = _MISSING
+                with load.scope:
+                    value = await self._loader()
+            except asyncio.CancelledError as error:
+                # A cancellation from outside this generation's scope, which is the caller's to
+                # answer for. Install nothing and let it through.
+                self._emit_generation("cancelled", generation, error)
+                raise
             except Exception as error:
                 if token == self._request_token:
+                    self.sources = load.sources
                     self._status = Failed(error, _previous(self._status))
                     self._landed()
                     self._notify()
+                    self._emit_generation("failed", generation, error)
+                else:
+                    self._emit_generation("superseded", generation)
             else:
-                if token == self._request_token:
+                if isinstance(value, _Missing):
+                    # Abandoned rather than superseded: `_new_generation` stopped this loader
+                    # instead of letting it finish. The generation that replaced it is already
+                    # `Pending`, so there is nothing to install and nothing to say about state.
+                    self._emit_generation("abandoned", generation)
+                elif token == self._request_token:
+                    self.sources = load.sources
                     self._status = Ready(value)
                     self._landed()
                     self._notify()
+                    self._emit_generation("ready", generation)
+                else:
+                    self._emit_generation("superseded", generation)
         finally:
             _CONSUMER.reset(consumer)
-            if self._loading is not None and self._loading[0] == token:
+            if self._loading is load:
                 self._loading = None
             if not settled.done:
                 settled.resolve(self._status)
         return self._status
+
+    def _new_generation(self) -> None:
+        self._request_token += 1
+        if self._loading is not None:
+            # The bump just superseded whatever is in flight, so ask it to stop. The single
+            # place that needs to: `_invalidate` and `_replace_now` are the only two callers,
+            # which is both ways a generation can be superseded. Without an installed scope
+            # this is inert and the loader runs to completion as before.
+            self._loading.scope.cancel()
+        self._generation_id = uuid.uuid7()
+        causality = current_causality()
+        self._generation_cause = None if causality is None else causality[0]
+        self._generation_root = None if causality is None else causality[1]
+
+    def _emit_generation(
+        self,
+        status: str,
+        generation: tuple[uuid.UUID, CausalRef | None, ActionId | None],
+        error: BaseException | None = None,
+    ) -> None:
+        generation_id, cause, root_action_id = generation
+        exception = None if error is None else DEFAULT_REDACTION.exception(ExceptionSummary.capture(error))
+        emit_causal_event(
+            ResourceEventSnapshot(
+                str(generation_id),
+                None if root_action_id is None else str(root_action_id),
+                cause,
+                self._label,
+                status,
+                datetime.now(UTC),
+                exception,
+            )
+        )
 
 
 class AtomicResource[ValueT](Resource[ValueT]):

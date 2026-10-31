@@ -27,6 +27,7 @@ from squid_layouts.discord.testing import (
     fake_interaction,
     fake_message,
 )
+from tests.helpers.discord import make_layout_bot
 
 
 def _buttons(view: discord.ui.LayoutView) -> list[discord.ui.Button[Any]]:
@@ -70,10 +71,14 @@ def test_structural_exhibit_folds_the_oversized_action_surface() -> None:
         ("adaptation", 'return sl.actions(*actions, key="showcase-actions")'),
         ("degradation", "overflow=sl.primitives.Spill()"),
         ("data", 'sl.table(columns, *rows, key="capability-table")'),
+        ("grid", 'return sl.grid(*cells, key="showcase-grid", columns=4, on_pick=self._pick_grid)'),
         ("ownership", "on=sl.controlled(self.subscribed, self._set_subscribed)"),
         ("forms", "class FeedbackForm(sl.forms.Form)"),
         ("composition", 'self.boundary(self.left, key="left")'),
         ("localization", 'mount.localize(localization_for("zh-CN"))'),
+        ("history", "case sl.runtime.HistoryResultStatus.CONFLICT:"),
+        ("replication", 'document.counter("votes").increment(2)'),
+        ("effects", '@sl.operation(initial="queued")'),
     ],
 )
 def test_each_exhibit_shows_its_author_facing_declaration(section: str, source_marker: str) -> None:
@@ -114,6 +119,21 @@ def test_data_exhibit_formats_typed_nodes_rather_than_strings() -> None:
     assert "Adapts by" in content, "the table kept its tabular shape"
     assert "Pickers of 25 and 11" in content, "with every declared row"
     assert_within_limits(view)
+
+
+async def test_grid_exhibit_keeps_spatial_rows_and_stable_selection_keys() -> None:
+    component = LayoutShowcase(section="grid", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    view = commit_render(mount)
+    numbered = [button for button in _buttons(view) if button.label and button.label.isdecimal()]
+
+    assert [button.label for button in numbered] == [str(index) for index in range(1, 13)]
+    assert numbered[5].disabled
+    assert numbered[10].disabled
+
+    await mount.dispatch("showcase-grid.cell-0", fake_interaction())
+
+    assert component.grid_pick == "Selected cell-0."
 
 
 async def test_ownership_exhibit_separates_session_owned_and_component_owned_values() -> None:
@@ -199,16 +219,96 @@ async def test_composed_children_keep_independent_state_and_keys() -> None:
     assert component.right.count == 0
 
 
+async def test_history_exhibit_preserves_a_sibling_write_and_presents_rollback_aftermath() -> None:
+    component = LayoutShowcase(section="history", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    commit_render(mount)
+
+    await mount.dispatch("history.rename", fake_interaction())
+    assert component.project_name == "Action Ledger"
+    assert component.outcome_result.startswith("COMMITTED · local sequence")
+
+    await mount.dispatch("history.sibling", fake_interaction())
+    await mount.dispatch("history.undo", fake_interaction())
+
+    assert component.project_name == "Squid after a sibling edit"
+    assert component.history_result.startswith("Undo: CONFLICT; no state changed")
+    assert component.action_history.entries[0].state is sl.runtime.HistoryEntryState.CONFLICTED
+
+    await mount.dispatch("history.rollback", fake_interaction())
+
+    assert component.project_name == "Squid after a sibling edit", "the staged rollback value never published"
+    assert component.outcome_result.startswith("ROLLED BACK · handler_exception")
+    assert component.outcome_result.endswith("recovery is a fresh action")
+
+    await mount.dispatch("history.drop", fake_interaction())
+    assert component.action_history.entries == ()
+    assert component.project_name == "Squid after a sibling edit", "dropping history is not a forced restore"
+
+
+async def test_replication_exhibit_selectively_undoes_only_the_local_contribution() -> None:
+    component = LayoutShowcase(section="replication", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    commit_render(mount)
+
+    await mount.dispatch("replication.local", fake_interaction())
+    assert component.local_document.counter("votes").value == 2
+    assert component.local_document.set("reviewers").value == frozenset({"mine"})
+
+    await mount.dispatch("replication.peer", fake_interaction())
+    assert component.local_document.counter("votes").value == 5
+    assert component.local_document.set("reviewers").value == frozenset({"mine", "peer"})
+    assert component.peer_document.snapshot() == component.local_document.snapshot()
+
+    await mount.dispatch("replication.undo", fake_interaction())
+
+    assert component.local_document.counter("votes").value == 3
+    assert component.local_document.set("reviewers").value == frozenset({"peer"})
+    assert component.replication_result.startswith("Selective undo: APPLIED as action")
+
+
+async def test_effects_exhibit_retries_compensation_and_accepts_an_operation_result() -> None:
+    component = LayoutShowcase(section="effects", entries=20, locale="en")
+    mount = Mount(component, access=Everyone(), timeout=None)
+    commit_render(mount)
+
+    await mount.dispatch("effects.publish", fake_interaction())
+    first_execution = component.publication
+    assert first_execution is not None
+    assert isinstance(first_execution.status, sl.operations.Succeeded)
+
+    await mount.dispatch("effects.accept", fake_interaction())
+    assert component.published_revision == 41
+
+    await mount.dispatch("effects.publish", fake_interaction())
+    assert component.publication is not None
+    assert component.publication.context.execution_id != first_execution.context.execution_id
+
+    await mount.dispatch("effects.create", fake_interaction())
+    await mount.dispatch("effects.fail", fake_interaction())
+    await mount.dispatch("effects.undo", fake_interaction())
+
+    assert component.channel_service.exists is True
+    assert component.channel_present is True
+    assert component.compensation_result.startswith("Compensation: FAILED")
+
+    await mount.dispatch("effects.undo", fake_interaction())
+
+    assert component.channel_service.exists is False
+    assert component.channel_present is False
+    assert component.compensation_result.startswith("Compensation: APPLIED as action")
+
+
 async def test_demo_command_and_controls_are_public() -> None:
     settings = SimpleNamespace(get_locale=AsyncMock(return_value=None))
-    cog = LayoutShowcaseCog(
-        cast(Any, SimpleNamespace(services=SimpleNamespace(settings=settings), topic_bus=sl.runtime.LocalTopicBus()))
-    )
+    bot = make_layout_bot(services=SimpleNamespace(settings=settings), topic_bus=sl.runtime.LocalTopicBus())
+    cog = LayoutShowcaseCog(cast(Any, bot))
     ctx = cast(
         commands.Context[Any],
         cast(
             Any,
             SimpleNamespace(
+                bot=bot,
                 interaction=None,
                 guild=None,
                 author=SimpleNamespace(id=7),
@@ -301,15 +401,24 @@ class TestSharedAppearance:
 class TestLobby:
     """The roster is session membership, so the panel holds none of it."""
 
-    async def opened(self, *, capacity: int = 4) -> tuple[SessionRegistry, Lobby]:
-        registry = SessionRegistry()
-        panel = Lobby(registry, host_id=7)
+    async def opened(
+        self,
+        *,
+        capacity: int = 4,
+        registry: SessionRegistry | None = None,
+        guild_id: int = 5,
+        host_id: int = 7,
+    ) -> tuple[SessionRegistry, Lobby]:
+        bot = make_layout_bot()
+        registry = bot.mounts if registry is None else registry
+        panel = Lobby(registry, host_id=host_id)
         result = await registry.open(
-            panel.mount(),
+            panel.mount(source=bot),
             delivered_to(fake_message(message_id=1)),
-            key=SessionKey.guild("showcase-lobby", 5),
-            actor_id=7,
+            key=SessionKey.guild("showcase-lobby", guild_id),
+            actor_id=host_id,
             capacity=capacity,
+            quota=1,
         )
         assert isinstance(result, sl.discord.sessions.Opened)
         return registry, panel
@@ -318,21 +427,21 @@ class TestLobby:
         registry, panel = await self.opened()
 
         assert next(iter(registry.active())).members == frozenset({7})
-        assert "Lobby (1/4)" in _texts(commit_render(panel._mount))
+        assert "### Players — 1/4" in _texts(commit_render(panel._mount))
 
     async def test_a_press_from_anyone_joins_and_the_roster_redraws(self) -> None:
         registry, panel = await self.opened()
 
-        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
 
         assert next(iter(registry.active())).members == frozenset({7, 8})
-        assert "Lobby (2/4)" in _texts(commit_render(panel._mount))
+        assert "### Players — 2/4" in _texts(commit_render(panel._mount))
 
     async def test_the_lobby_fills_and_then_refuses(self) -> None:
         registry, panel = await self.opened(capacity=2)
 
-        await panel._mount.dispatch("join", fake_interaction(user_id=8))
-        await panel._mount.dispatch("join", fake_interaction(user_id=9))
+        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=9))
 
         assert next(iter(registry.active())).members == frozenset({7, 8})
 
@@ -341,7 +450,7 @@ class TestLobby:
         session = next(iter(registry.active()))
 
         await panel._mount.dispatch("leave", fake_interaction(user_id=7))
-        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
 
         assert session.members == frozenset()
         assert not session.root.finished
@@ -353,8 +462,20 @@ class TestLobby:
         await panel._mount.dispatch("start", fake_interaction(user_id=8))
         assert panel.started_with is None
 
-        await panel._mount.dispatch("join", fake_interaction(user_id=8))
+        await panel._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
         await panel._mount.dispatch("start", fake_interaction(user_id=8))
 
         assert panel.started_with == 2
         assert "Started with 2 players." in _texts(commit_render(panel._mount))
+
+    async def test_a_reader_cannot_hold_a_seat_in_two_servers(self) -> None:
+        """Two lobbies, two hosts, one reader: the quota is what stops the second seat."""
+        registry, here = await self.opened()
+        _, elsewhere = await self.opened(registry=registry, guild_id=6, host_id=9)
+
+        await elsewhere._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
+        await here._mount.dispatch("lobby-roster.players", fake_interaction(user_id=8))
+
+        assert registry.sessions_for_member(8) == (registry.sessions_for_member(8)[0],)
+        assert 8 in elsewhere._session().members
+        assert 8 not in here._session().members

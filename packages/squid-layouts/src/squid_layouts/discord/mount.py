@@ -91,10 +91,17 @@ from squid_layouts.profiling import (
 
 # (deliver is imported as a module so tests can monkeypatch its functions.)
 from squid_layouts.runtime.component import Component, ComponentTree
+from squid_layouts.runtime.histories import History
 from squid_layouts.runtime.owner import ComponentRuntime
 from squid_layouts.runtime.presentation import PresentationSession, SessionUpdate, apply_updates
-from squid_layouts.runtime.reactivity import StateDelta, on_action_commit, readonly_transaction, transaction
-from squid_layouts.runtime.resources import AsyncBinding, PendingPolicy
+from squid_layouts.runtime.reactivity import (
+    ActionCommit,
+    Aftermath,
+    on_action_commit,
+    readonly_transaction,
+    transaction,
+)
+from squid_layouts.runtime.resources import AsyncBinding, PendingPolicy, abandon_superseded_loads
 from squid_layouts.runtime.topics import Address, SubscriptionReconciler, TopicBus
 from squid_layouts.scene.model import (
     PlanMetrics,
@@ -109,6 +116,7 @@ from squid_layouts.semantic import Status
 from squid_layouts.sources import Position
 from squid_layouts.target_types import DiscordPyAdapter
 from squid_layouts.text import NEUTRAL, Localization, TextLike, resolve_text
+from squid_reactive.actions import ActionContext, ActorRef
 
 logger = logging.getLogger(__name__)
 _NOOP_PROFILER = NoOpProfiler()
@@ -1331,7 +1339,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         return _LifecycleCandidate(view, composition, handlers, generation)
 
     @contextmanager
-    def _action_transaction(self, policy: ActionPolicy) -> Iterator[None]:
+    def _action_transaction(self, policy: ActionPolicy, context: ActionContext) -> Iterator[None]:
         """Run one handler in its transaction, watching for writes this mount renders.
 
         A shared cell publishes on the bus rather than invalidating a component, so without
@@ -1344,11 +1352,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             with readonly_transaction():
                 yield
             return
-        with transaction():
+        with transaction(action_context=context):
             on_action_commit(self._note_shared_writes, key=self)
             yield
 
-    def _note_shared_writes(self, delta: StateDelta) -> None:
+    def _note_shared_writes(self, commit: ActionCommit, aftermath: Aftermath) -> None:
         """Move the render-input revision if the action wrote a shared cell this mount reads.
 
         Through `invalidate` rather than `_dirty` directly, because a candidate delivered
@@ -1360,7 +1368,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         watched = self._subscriptions.watched
         if not watched:
             return
-        if any(address in watched for address in delta.addresses()):
+        if any(address in watched for address in commit.patches.addresses()):
             self.runtime.invalidate()
 
     def _composer(self) -> Callable[..., Composition[Any]]:
@@ -1688,13 +1696,21 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         )
 
     async def _settle_resources(self, resources: Sequence[AsyncBinding]) -> None:
-        """Settle one observed resource tier concurrently under this render operation."""
-        if len(resources) == 1:
-            await resources[0]._load()
-            return
-        async with anyio.create_task_group() as tasks:
-            for resource in resources:
-                tasks.start_soon(resource._load)
+        """Settle one observed resource tier concurrently under this render operation.
+
+        Both discovery paths funnel through here -- `_stage_loaded`'s atomic tier and
+        `_settle_visible`'s progress passes -- so one installation covers both policies.
+        `squid_reactive` owns the supersession, this owns the cancellation, and only
+        resources take it: an operation execution shares `AsyncBinding` but is never
+        implicitly restarted, and the scope lives inside `Resource._loaded`.
+        """
+        with abandon_superseded_loads(anyio.CancelScope):
+            if len(resources) == 1:
+                await resources[0]._load()
+                return
+            async with anyio.create_task_group() as tasks:
+                for resource in resources:
+                    tasks.start_soon(resource._load)
 
     async def _settle_visible(
         self,
@@ -1987,7 +2003,12 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         with self.profiler.operation(
             OperationKind.DISPATCH,
             name=key,
-            attributes={"kind": kind.value, "mount_id": self.id, "resumed": resumed},
+            attributes={
+                "kind": kind.value,
+                "mount_id": self.id,
+                "resumed": resumed,
+                "actor": interaction.user.id,
+            },
         ) as operation:
             profile = _DispatchProfile(
                 operation,
@@ -2123,6 +2144,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         *,
         policy: ActionPolicy = ActionPolicy.EXCLUSIVE,
         generation: int | None = None,
+        label: TextLike = "",
+        record: History | None = None,
     ) -> None:
         """Route a modal submission through the same stale, action-policy, access, and flush funnel.
 
@@ -2136,7 +2159,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         with self.profiler.operation(
             OperationKind.DISPATCH,
             name=key,
-            attributes={"kind": ActionKind.SUBMIT.value, "mount_id": self.id},
+            attributes={
+                "kind": ActionKind.SUBMIT.value,
+                "mount_id": self.id,
+                "actor": interaction.user.id,
+            },
         ) as operation:
             profile = _DispatchProfile(
                 operation,
@@ -2147,13 +2174,20 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             try:
                 if not await self._begin_dispatch(interaction, profile):
                     return
-                binding = _SubmitBinding(key, handler, policy, spec=spec)
+                binding = _SubmitBinding(key, handler, policy, label=label, record=record, spec=spec)
 
                 def rebase() -> ActionBinding | None:
                     newest = self._form_bindings.get(key)
                     if newest is None or newest.spec.field_keys != spec.field_keys:
                         return binding
-                    return _SubmitBinding(key, newest.on_submit, policy, spec=newest.spec)
+                    return _SubmitBinding(
+                        key,
+                        newest.on_submit,
+                        policy,
+                        label=newest.label,
+                        record=newest.record,
+                        spec=newest.spec,
+                    )
 
                 async def invoke(current: ActionBinding, rebased: bool, active_generation: int) -> None:
                     resolved = (
@@ -2383,7 +2417,12 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         with self.profiler.operation(
             OperationKind.DISPATCH,
             name=key,
-            attributes={"kind": ActionKind.PRESS.value, "mount_id": self.id, "resumed": True},
+            attributes={
+                "kind": ActionKind.PRESS.value,
+                "mount_id": self.id,
+                "resumed": True,
+                "actor": interaction.user.id,
+            },
         ) as operation:
             if challenge.on_decline is not None:
                 await deliver.respond_text(interaction, self._chrome_text(challenge.on_decline), ephemeral=True)
@@ -2495,7 +2534,9 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             await anyio.sleep(min(self.pending_after, self.acknowledgement_timeout))
             await busy.show(profile)  # type: ignore[union-attr]
 
-        with _unwrapped():
+        # A handler is the other place loads start -- `Resource.reload`, or a pattern's
+        # `refresh` -- and two fast presses supersede each other the same way a settle pass does.
+        with abandon_superseded_loads(anyio.CancelScope), _unwrapped():
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(acknowledge_by_deadline)
                 if busy is not None:
@@ -2526,6 +2567,11 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         busy: _BusyPaint | None = None,
     ) -> None:
         event = self._event(interaction, values)
+        action_context = ActionContext.create(
+            f"{type(self.component).__name__}.{key}",
+            actor=ActorRef("discord_user", str(interaction.user.id)),
+            metadata={"mount_id": self.id, "generation": str(active_generation)},
+        )
         request = ActionRequest(
             event,
             key,
@@ -2533,11 +2579,12 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             binding.policy,
             submitted_generation,
             active_generation,
+            action_context,
             rebased,
         )
 
         async def handle() -> None:
-            with self._action_transaction(binding.policy):
+            with self._action_transaction(binding.policy, action_context):
                 # Before the handler: the entry is the transaction's whole delta either
                 # way, and reserving the history here is what makes a handler's own
                 # `record` the error it is.
@@ -2592,7 +2639,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             if deferred:
                 profile.operation.mark_deadline_missed()
 
-        with _unwrapped():
+        with abandon_superseded_loads(anyio.CancelScope), _unwrapped():
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(watchdog)
                 await self._invoke_submit_and_flush(
@@ -2643,6 +2690,8 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                     policy=binding.policy,
                     generation=self._generation if generation is None else generation,
                     actor_id=interaction.user.id,
+                    label=binding.label,
+                    record=binding.record,
                 )
                 profile.presentation = PresentationOutcome.WRITTEN
                 profile.acknowledge("validation_retry")
@@ -2655,11 +2704,18 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
                 binding.policy,
                 generation,
                 active_generation,
+                action_context := ActionContext.create(
+                    f"{type(self.component).__name__}.{key}",
+                    actor=ActorRef("discord_user", str(interaction.user.id)),
+                    metadata={"mount_id": self.id, "generation": str(active_generation)},
+                ),
                 rebased,
             )
 
             async def handle() -> None:
-                with self._action_transaction(binding.policy):
+                with self._action_transaction(binding.policy, action_context):
+                    if binding.record is not None:
+                        binding.record.record(binding.label)
                     await binding.handler(event)
 
             handled = await self._run_middleware(request, handle, profile.operation)
@@ -2689,12 +2745,13 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
         """Compose the frozen mount middleware in first-listed, outermost order."""
 
         handled = False
+        action_attributes = {"action_id": str(request.context.action_id)}
 
         async def invoke(index: int) -> None:
             nonlocal handled
             if index == len(self._middleware):
                 handled = True
-                with operation.span("handler"):
+                with operation.span("handler", attributes=action_attributes):
                     await endpoint()
                 return
 
@@ -2715,7 +2772,7 @@ class Mount[ModeT = Any, AdapterT: DiscordPyAdapter = Any]:
             try:
                 middleware = self._middleware[index]
                 provenance = f"{type(middleware).__module__}.{type(middleware).__qualname__}"
-                with operation.span(f"middleware:{provenance}"):
+                with operation.span(f"middleware:{provenance}", attributes=action_attributes):
                     await middleware.dispatch(request, proceed)
             finally:
                 active = False

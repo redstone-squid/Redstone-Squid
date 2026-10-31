@@ -30,6 +30,8 @@ class Portable:
         key: str = "form",
         on_submit: SubmitHandler | None = None,
         policy: ActionPolicy | None = None,
+        label: TextLike = "",
+        record=None,
     ) -> None: ...
 
     def invalidate(self) -> None: ...

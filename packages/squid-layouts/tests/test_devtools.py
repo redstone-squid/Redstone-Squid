@@ -1,6 +1,7 @@
 """The generic, injected devtools cog over public runtime contracts."""
 
 import json
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -11,15 +12,27 @@ import pytest
 import squid_layouts as sl
 from squid_layouts.discord import Everyone, Mount, Owner, live
 from squid_layouts.discord.devtools import DevTools
+from squid_layouts.discord.operations import DevToolsRuntime
 from squid_layouts.discord.routing import Router
-from squid_layouts.discord.testing import delivered_to, fake_message
-from squid_layouts.primitives import Heading
+from squid_layouts.discord.testing import commit_render, delivered_to, fake_interaction, fake_message
+from squid_layouts.primitives import Button, Heading, Row
 from squid_layouts.profiling import MemoryProfiler, OperationKind
+from squid_reactive import ActionLedger, OperationEventSnapshot, add_action_outcome_sink, transaction
 
 
 class Subject(sl.Component):
     def render(self):
         return [Heading("Subject")]
+
+
+class Clicker(sl.Component):
+    count: int = sl.state(0)
+
+    def render(self):
+        return [Heading("Clicker"), Row((Button(label="Bump", on_click=self.bump, key="bump"),))]
+
+    async def bump(self, event) -> None:
+        self.count += 1
 
 
 class FakeBot:
@@ -111,6 +124,35 @@ class TestMountCommands:
 
         assert "missing" in str(ctx.send.await_args.kwargs["view"].to_components())
 
+    async def test_actions_uses_ledger_when_profiler_has_no_trace(self) -> None:
+        ledger = ActionLedger()
+        add_action_outcome_sink(ledger)
+        try:
+            with transaction():
+                pass
+            ctx = make_context()
+            cog = DevTools(action_ledger=ledger)
+
+            await run(cog.inspect_actions, cog, ctx)
+
+            rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+            assert "Action outcomes" in rendered
+            assert ledger.outcomes[0].action_id in rendered
+        finally:
+            ledger.close()
+
+    async def test_actions_renders_operation_nodes_with_profiler_disabled(self) -> None:
+        ledger = ActionLedger()
+        ledger.accept(OperationEventSnapshot("execution-1", None, None, "publish", "succeeded", datetime.now(UTC)))
+        ctx = make_context()
+        cog = DevTools(action_ledger=ledger)
+
+        await run(cog.inspect_actions, cog, ctx)
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "operation:execution-1" in rendered
+        assert "publish succeeded" in rendered
+
 
 class TestRoutes:
     async def test_every_router_on_the_context_client_is_rendered(self) -> None:
@@ -173,6 +215,51 @@ class TestProfiles:
         assert "send" in rendered
         assert "planner" in rendered
 
+    async def test_timeline_reads_as_a_transcript_across_mounts(self) -> None:
+        profiler = MemoryProfiler()
+        first = Mount(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
+        second = Mount(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(first)
+        commit_render(second)
+        await first.dispatch("bump", fake_interaction(user_id=11))
+        await second.dispatch("bump", fake_interaction(user_id=22))
+        ctx = make_context()
+        cog = DevTools(profiler=profiler)
+
+        await run(cog.inspect_timeline, cog, ctx)
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "Dispatch timeline" in rendered
+        assert "actor=11" in rendered
+        assert "actor=22" in rendered
+        # Oldest first: the second press must not be reported before the first.
+        assert rendered.index("actor=11") < rendered.index("actor=22")
+        assert "completed" in rendered
+
+    async def test_timeline_filters_to_one_actor(self) -> None:
+        profiler = MemoryProfiler()
+        mount = Mount(Clicker(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(mount)
+        await mount.dispatch("bump", fake_interaction(user_id=11))
+        await mount.dispatch("bump", fake_interaction(user_id=22))
+        ctx = make_context()
+        cog = DevTools(profiler=profiler)
+
+        await run(cog.inspect_timeline, cog, ctx, 20, "actor:11")
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "actor=11" in rendered
+        assert "actor=22" not in rendered
+
+    async def test_timeline_refuses_an_unreadable_filter(self) -> None:
+        ctx = make_context()
+        cog = DevTools(profiler=MemoryProfiler())
+
+        await run(cog.inspect_timeline, cog, ctx, 20, "user=11")
+
+        rendered = str(ctx.send.await_args.kwargs["view"].to_components())
+        assert "refused" in rendered
+
     async def test_queue_command_infers_bus_and_profiler_from_reactor(self) -> None:
         profiler = MemoryProfiler()
         bus = sl.runtime.LocalTopicBus()
@@ -191,8 +278,12 @@ class TestProfiles:
         rendered = str(ctx.send.await_args.kwargs["view"].to_components())
         assert "reactor" in rendered
         assert "topics" in rendered
-        assert "queued=1" in rendered
-        assert "build:devtools" in rendered
+        # Neither was passed, so "unconfigured" anywhere means an inference did not happen.
+        assert "unconfigured" not in rendered
+        assert "build:devtools subscribers=1" in rendered
+        # A local bus publishes synchronously, so the press is delivered rather than queued.
+        assert "delivered=1" in rendered
+        assert DevToolsRuntime(reactor=reactor).profiler is profiler
 
     async def test_profile_export_attaches_round_trippable_snapshot(self) -> None:
         profiler = MemoryProfiler()

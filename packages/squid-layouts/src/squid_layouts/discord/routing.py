@@ -702,6 +702,7 @@ class Router[BotT: discord.Client]:
                 "component": component.value,
                 "matched_alias": request.matched_alias,
                 "middleware": len(middleware),
+                "actor": interaction.user.id,
             },
         ) as profile:
             acknowledgement = profile.start_span("acknowledgement")

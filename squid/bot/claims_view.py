@@ -207,9 +207,10 @@ class ClaimReviewComponent(sl.Component):
         self.closed = True
         await event.finish()
 
-    def mount(self) -> sl.discord.Mount:
+    def mount(self, *, source: sl.discord.host.HostSource) -> sl.discord.Mount:
         return create_mount(
             self,
+            source=source,
             access=sl.discord.Owner(self._author_id),
             locale=self.locale,
             timeout=self._timeout,

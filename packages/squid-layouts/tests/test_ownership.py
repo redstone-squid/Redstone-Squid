@@ -43,6 +43,8 @@ class _Responder:
         key: str = "form",
         on_submit: SubmitHandler | None = None,
         policy: ActionPolicy | None = None,
+        label: TextLike = "",
+        record=None,
     ) -> None: ...
 
     def invalidate(self) -> None: ...

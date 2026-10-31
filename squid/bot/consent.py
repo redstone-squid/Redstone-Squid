@@ -22,7 +22,7 @@ from squid.bot.i18n import t
 from squid.bot.ui import CardField, localization_for, text_layout
 from squid.bot.utils.sentinel import Sentinel
 from squid.core.i18n import _, ntranslate
-from squid_layouts.discord import Screen, SessionRegistry
+from squid_layouts.discord import Screen
 from squid_layouts.discord.screens import Opener
 from squid_layouts.discord.sessions import Opened, Reject, Rejected, SessionPolicy
 
@@ -156,16 +156,21 @@ class ConsentPrompt(sl.Component):
 
 
 def _is_context(target: ConsentTarget) -> bool:
-    """Whether this is a command context rather than a bare interaction."""
-    return hasattr(target, "author")
+    """Whether this arrived as a command rather than as a bare interaction.
+
+    By shape, the way `sl.discord.deliver_to` dispatches: only a command context can `send`.
+    """
+    return callable(getattr(target, "send", None))
 
 
 def _destination(target: ConsentTarget) -> sl.discord.Destination:
-    """Choose the reply transport for a consent prompt."""
-    ephemeral = _default_ephemeral(target)
-    if _is_context(target):
-        return sl.discord.reply_to(cast(commands.Context[Any], target), ephemeral=ephemeral)
-    return sl.discord.respond_to(cast(discord.Interaction[Any], target), ephemeral=ephemeral, wait=True)
+    """Choose the reply transport for a consent prompt.
+
+    Ephemeral wherever the surface allows it: a consent notice names what the bot would store
+    about one reader, and a channel is not the audience for that.
+    """
+    ephemeral = not _is_context(target) or cast(commands.Context[Any], target).interaction is not None
+    return sl.discord.deliver_to(target, ephemeral=ephemeral, wait=True)
 
 
 async def _send(target: ConsentTarget, presentation: sl.discord.presentation.DiscordPresentation) -> None:
@@ -173,23 +178,10 @@ async def _send(target: ConsentTarget, presentation: sl.discord.presentation.Dis
     await _destination(target)(presentation)
 
 
-def _default_ephemeral(target: ConsentTarget) -> bool:
-    """Keep a consent prompt out of the channel wherever the surface allows it."""
-    if not _is_context(target):
-        return True
-    return cast(commands.Context[Any], target).interaction is not None
-
-
 def _user_of(target: ConsentTarget) -> discord.User | discord.Member:
     if _is_context(target):
         return cast(commands.Context[Any], target).author
     return cast(discord.Interaction[Any], target).user
-
-
-def _registry_of(target: ConsentTarget) -> SessionRegistry:
-    if _is_context(target):
-        return cast(Any, cast(commands.Context[Any], target).bot).mounts
-    return cast(Any, cast(discord.Interaction[Any], target).client).mounts
 
 
 def _link_credit_value(preview: LinkPreview, locale: str | None) -> str:
@@ -303,9 +295,9 @@ async def _open_prompt(
 ) -> bool:
     """Put the prompt on screen, telling the reader why not when it could not be opened."""
     opened = await CONSENT_SCREEN.open(
-        _registry_of(target),
         component,
         _destination(target),
+        sessions=target,
         opener=Opener(user_id),
         parent=parent,
         localization=localization_for(locale),

@@ -76,6 +76,7 @@ from squid_layouts.runtime import (
 from squid_layouts.runtime.reactivity import _CURRENT
 from squid_layouts.semantic import Paragraph
 from squid_layouts.text import Localization, Message
+from squid_reactive import ActionLedger, add_action_outcome_sink
 
 
 class Counter(Component):
@@ -433,6 +434,32 @@ def _operation_trace(profiler: MemoryProfiler, operation: OperationKind) -> Runt
 
 
 class TestDispatchProfiling:
+    async def test_dispatch_names_the_actor_on_the_root_span(self) -> None:
+        profiler = MemoryProfiler()
+        mount = Mount(Counter(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(mount)
+
+        await mount.dispatch("inc", fake_interaction(user_id=77))
+
+        root = next(span for span in _profile_trace(profiler).spans if span.parent_span_id is None)
+        assert ("actor", 77) in {(attribute.key, attribute.value) for attribute in root.attributes}
+
+    async def test_handler_span_links_to_the_semantic_action_identity(self) -> None:
+        profiler = MemoryProfiler()
+        ledger = ActionLedger()
+        add_action_outcome_sink(ledger)
+        mount = Mount(Counter(), access=Everyone(), profiler=profiler, timeout=None)
+        commit_render(mount)
+
+        try:
+            await mount.dispatch("inc", fake_interaction())
+        finally:
+            ledger.close()
+
+        handler = next(span for span in _profile_trace(profiler).spans if span.name == "handler")
+        action_id = dict((attribute.key, attribute.value) for attribute in handler.attributes)["action_id"]
+        assert any(outcome.action_id == action_id for outcome in ledger.outcomes)
+
     async def test_success_records_action_presentation_generation_and_stages(self) -> None:
         profiler = MemoryProfiler()
         component = Counter()
@@ -1220,6 +1247,45 @@ class TestActionPolicy:
 
         assert calls == ["new"]
 
+    async def test_submit_declaratively_records_the_whole_action(self):
+        spec = FormSpec("Rename", (TextField(key="name", label="Name"),))
+
+        class Editor(Component):
+            history: sl.runtime.History = sl.runtime.history()
+            name: str = state("old")
+
+            def render(self):
+                return sl_form(
+                    "Rename",
+                    spec,
+                    key="rename",
+                    on_submit=self.rename,
+                    record=self.history,
+                )
+
+            async def rename(self, event) -> None:
+                self.name = event.values["name"]
+
+        editor = Editor()
+        mount = Mount(editor, access=Everyone(), timeout=None)
+        commit_render(mount)
+        binding = mount._form_bindings["rename"]
+
+        await mount.dispatch_submit(
+            "rename",
+            fake_interaction(),
+            spec,
+            {"name": "new"},
+            binding.on_submit,
+            policy=binding.policy,
+            label=binding.label,
+            record=binding.record,
+        )
+        result = await editor.history.undo()
+
+        assert result.applied
+        assert editor.name == "old"
+
     async def test_rebase_submit_never_resolves_the_button_that_opens_the_form(self):
         """`_handlers` holds the presenting button under the very same key."""
         submitted: list[str] = []
@@ -1505,6 +1571,7 @@ class TestActionMiddleware:
                 ActionPolicy.REBASE,
                 submitted,
                 active,
+                requests[0].context,
                 rebased=True,
             )
         ]
@@ -2838,9 +2905,39 @@ class AtomicResourcePanel(Component):
                 return Text(f"ready:{value}")
 
 
+class CheckpointedResourcePanel(Component):
+    """A panel whose first load parks at a checkpoint, so it can be superseded mid-settle."""
+
+    def __init__(self) -> None:
+        self.attempts = 0
+        self.finished: list[int] = []
+        self.entered = asyncio.Event()
+        self.released = asyncio.Event()
+
+    @resource(pending=PendingPolicy.ATOMIC)
+    async def value(self) -> str:
+        self.attempts += 1
+        attempt = self.attempts
+        if attempt == 1:
+            self.entered.set()
+            await self.released.wait()
+        self.finished.append(attempt)
+        return f"attempt-{attempt}"
+
+    def render(self):
+        match self.value.status:
+            case Failed(error=error):
+                return Text(f"failed:{error}")
+            case Ready(value=value):
+                return Text(f"ready:{value}")
+
+
 class OperationPanel(Component):
+    def __init__(self) -> None:
+        self.publication = self._publication.start()
+
     @sl.operation(initial="starting")
-    async def publication(self, progress: sl.operations.Progress[str]) -> int:
+    async def _publication(self, progress: sl.operations.Progress[str]) -> int:
         progress.set("publishing")
         return 42
 
@@ -2860,9 +2957,10 @@ class ProgressiveOperationPanel(OperationPanel):
     def __init__(self, progressed: asyncio.Event, resume: asyncio.Event) -> None:
         self.progressed = progressed
         self.resume = resume
+        super().__init__()
 
     @sl.operation(initial="starting")
-    async def publication(self, progress: sl.operations.Progress[str]) -> int:
+    async def _publication(self, progress: sl.operations.Progress[str]) -> int:
         progress.set("publishing")
         self.progressed.set()
         await self.resume.wait()
@@ -3137,6 +3235,25 @@ class TestResourceLoading:
         assert not mount.pending
         assert mount._view is not None
         assert "ready:loaded" in str(mount._view.to_components())
+
+    async def test_a_load_superseded_mid_settle_is_abandoned(self) -> None:
+        """The mount supplies the cancellation `abandon_superseded_loads` asks for."""
+        panel = CheckpointedResourcePanel()
+        message: Any = fake_message()
+        destination = _Destination(message)
+        mount = Mount(panel, access=Everyone(), timeout=None)
+
+        # Deadlined because the regression is a hang, not a wrong answer: without the mount
+        # installing a scope, nothing releases the first loader and `send` never returns.
+        with anyio.fail_after(5):
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(mount.send, destination)
+                await panel.entered.wait()
+                panel.value.invalidate()
+
+        assert "ready:attempt-2" in str(destination.calls[0][0].to_components())
+        assert panel.finished == [2], "the superseded loader stopped instead of running on"
+        assert not panel.released.is_set(), "nothing had to release it, which is the point"
 
 
 class Leaf(Component):

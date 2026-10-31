@@ -4,7 +4,7 @@ Adversarial by design. The proxy is the part that rots, so most of this file is 
 legacy callback makes that would put a second writer on the mount's message.
 """
 
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock
 
 import discord
@@ -24,6 +24,7 @@ from squid_layouts.primitives import (
     EntitySelect,
     Gallery,
     LinkButton,
+    Node,
     Panel,
     Row,
     Section,
@@ -267,7 +268,7 @@ async def test_rows_reproduce_discord_packing() -> None:
     view.add_item(discord.ui.Select(placeholder="pick", options=[discord.SelectOption(label="a")]))
     view.add_item(discord.ui.Button(label="auto too"))
 
-    nodes = adopt(view).render()
+    nodes = cast(list[Node], adopt(view).render())
 
     # Row 0 takes both auto buttons, in `view.children` order; the select cannot share a row
     # with anything, and the explicitly-pinned button keeps row 2.
@@ -283,7 +284,7 @@ async def test_a_link_button_becomes_a_link_button() -> None:
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(label="docs", url="https://example.invalid"))
 
-    row = adopt(view).render()[0]
+    row = cast(list[Node], adopt(view).render())[0]
 
     assert isinstance(row, Row)
     assert row.items == (LinkButton(label="docs", url="https://example.invalid"),)
@@ -300,7 +301,7 @@ async def test_a_channel_select_round_trips_types_and_defaults() -> None:
         )
     )
 
-    node = adopt(view).render()[0]
+    node = cast(list[Node], adopt(view).render())[0]
 
     assert isinstance(node, EntitySelect)
     assert node.entity_type is EntityType.CHANNEL
@@ -337,7 +338,7 @@ async def test_author_custom_ids_are_keys_and_generated_ones_are_positional() ->
     view.add_item(discord.ui.Button(label="named", custom_id="chosen"))
     view.add_item(discord.ui.Button(label="anonymous"))
 
-    row = adopt(view).render()[0]
+    row = cast(list[Node], adopt(view).render())[0]
 
     assert isinstance(row, Row)
     assert [button.key for button in row.items] == ["chosen", "adopted-1"]
@@ -356,7 +357,7 @@ async def test_keys_override_both_defaults() -> None:
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(label="one", custom_id="ignored"))
 
-    row = adopt(view, keys=lambda item: f"by-label-{item.label}").render()[0]
+    row = cast(list[Node], adopt(view, keys=lambda item: f"by-label-{item.label}").render())[0]
 
     assert isinstance(row, Row)
     assert row.items[0].key == "by-label-one"
@@ -784,7 +785,7 @@ def test_button_translation_keeps_style_and_emoji() -> None:
     view = discord.ui.View(timeout=None)
     view.add_item(discord.ui.Button(label="danger", style=discord.ButtonStyle.danger, emoji="\N{FIRE}"))
 
-    row = adopt(view).render()[0]
+    row = cast(list[Node], adopt(view).render())[0]
 
     assert isinstance(row, Row)
     button = row.items[0]

@@ -8,11 +8,12 @@ from discord.ext.commands import Cog, Context, hybrid_group
 from discord.ext.commands.bot import app_commands
 
 from squid.bot.i18n import resolve_locale, t
-from squid.bot.ui import PagedList, reply_presentation, send_to, text_layout
+from squid.bot.ui import PagedList, reply_presentation, text_layout
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import requires
 from squid.core.i18n import _
 from squid.permissions.domain.catalogue import VERSION_ENTRY_CREATE
+from squid_layouts.discord import send_to
 
 if TYPE_CHECKING:
     import squid.bot.app

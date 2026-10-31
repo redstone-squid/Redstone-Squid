@@ -42,6 +42,8 @@ class DurableSessionRecord:
     mounts: tuple[SessionMountRecord, ...]
     members: frozenset[int] = frozenset()
     capacity: int | None = None
+    quota: int | None = None
+    domain: str | None = None
 
 
 class DurableSessionCodec:
@@ -66,6 +68,8 @@ class DurableSessionCodec:
             "expires_at": record.expires_at,
             "members": sorted(record.members),
             "capacity": record.capacity,
+            "quota": record.quota,
+            "domain": record.domain,
             "mounts": [
                 {
                     "id": mount.id,
@@ -148,6 +152,8 @@ class DurableSessionCodec:
             mounts=tuple(mounts),
             members=_member_ids(item.get("members", legacy_members)),
             capacity=_capacity(item.get("capacity")),
+            quota=_capacity(item.get("quota")),
+            domain=_domain(item.get("domain")),
         )
         cls._validate(record)
         return record
@@ -159,6 +165,8 @@ class DurableSessionCodec:
             raise MountStateError(message)
         _member_ids(sorted(record.members))
         _capacity(record.capacity)
+        _capacity(record.quota)
+        _domain(record.domain)
         if not record.id or not record.mounts:
             message = "durable sessions require a non-empty id and at least one mount"
             raise MountStateError(message)
@@ -298,6 +306,15 @@ def _capacity(value: object) -> int | None:
         return None
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
         message = "durable session capacity must be a positive integer or null"
+        raise MountStateError(message)
+    return value
+
+
+def _domain(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        message = "durable session domain must be a non-empty string or null"
         raise MountStateError(message)
     return value
 

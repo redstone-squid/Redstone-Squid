@@ -13,6 +13,7 @@ from squid.bot.settings_view import SettingsCapabilities, SettingsPanel
 from squid.voting.domain import VoteKind
 from squid_layouts.discord.testing import commit_render
 from squid_layouts.runtime.reactivity import readonly_transaction
+from tests.helpers.discord import make_layout_bot
 
 GUILD_ID = 7
 EVERYTHING = SettingsCapabilities(view_server=True, edit_server=True, edit_voting=True)
@@ -59,7 +60,7 @@ def make_component_panel(
         author_id=1,
         capabilities=EVERYTHING,
     )
-    panel.mount()
+    panel.mount(source=make_layout_bot())
     return panel, settings
 
 
@@ -148,7 +149,7 @@ async def test_a_channel_change_can_be_undone() -> None:
     assert settings.set_channel.await_args_list[-1].args == (GUILD_ID, "Vote", 3)
 
 
-async def test_an_undone_channel_change_can_be_redone() -> None:
+async def test_an_effectful_undone_channel_change_is_not_falsely_redoable() -> None:
     panel, settings = make_component_panel(stored={"Vote": 3})
     await panel.open_server()
 
@@ -157,10 +158,11 @@ async def test_an_undone_channel_change_can_be_redone() -> None:
     with sl.runtime.transaction():
         await panel.history.undo()
     with sl.runtime.transaction():
-        await panel.history.redo()
+        result = await panel.history.redo()
 
-    assert panel.channel_id("Vote") is None
-    assert settings.clear.await_count == 2
+    assert result.status is sl.runtime.HistoryResultStatus.EMPTY
+    assert panel.channel_id("Vote") == 3
+    assert settings.clear.await_count == 1
 
 
 async def test_a_failed_action_records_no_history() -> None:

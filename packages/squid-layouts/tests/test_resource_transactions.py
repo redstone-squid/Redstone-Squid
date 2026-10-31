@@ -142,3 +142,34 @@ async def test_a_replacement_settles_sources_before_the_commit_becomes_irreversi
 
     assert panel.x == 0
     assert panel.value.value == "0"
+
+
+async def test_a_replacement_survives_the_action_that_wrote_its_sources() -> None:
+    """Replacing and moving an input in one action is one decision, not a race.
+
+    The replacement is re-baselined against the sources as the action leaves them, so the
+    value the application called authoritative is still there afterwards. Baselining against
+    the committed versions instead re-pends the resource the moment anything reads it, and
+    the loader silently overwrites what the author just installed.
+    """
+
+    class Sourced(sl.Component):
+        x = sl.state(0)
+
+        @sl.resource
+        async def value(self) -> str:
+            return f"loaded-{self.x}"
+
+        def render(self):
+            return sl.paragraph("x")
+
+    panel = Sourced()
+    await panel.value.reload()
+    assert panel.value.value == "loaded-0"
+
+    with sl.runtime.transaction():
+        panel.x = 1
+        panel.value.replace("authoritative")
+
+    assert panel.value.value == "authoritative"
+    assert not panel.value.pending, "a settled replacement is not waiting on its loader"
