@@ -43,7 +43,7 @@ its declared state while `rendering()` is true:
 ```python
 class Parent(sl.Component):
     def render(self):
-        return Child("hi")          # Child.__init__ assigns declared state
+        return Child("hi")  # Child.__init__ assigns declared state
 ```
 
 ```

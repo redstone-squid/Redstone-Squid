@@ -53,15 +53,18 @@ results rather than being disguised as capacity decisions.
 class ParticipantPolicy:
     limit: int | None = None
 
+
 @dataclass(frozen=True, slots=True)
 class Joined:
     user_id: int
     participants: frozenset[int]
 
+
 @dataclass(frozen=True, slots=True)
 class AlreadyJoined:
     user_id: int
     participants: frozenset[int]
+
 
 @dataclass(frozen=True, slots=True)
 class ParticipantLimitReached:
@@ -69,21 +72,26 @@ class ParticipantLimitReached:
     limit: int
     participants: frozenset[int]
 
+
 @dataclass(frozen=True, slots=True)
 class ParticipantSessionFinished:
     user_id: int
 
+
 type JoinResult = Joined | AlreadyJoined | ParticipantLimitReached | ParticipantSessionFinished
+
 
 @dataclass(frozen=True, slots=True)
 class Left:
     user_id: int
     participants: frozenset[int]
 
+
 @dataclass(frozen=True, slots=True)
 class NotParticipant:
     user_id: int
     participants: frozenset[int]
+
 
 type LeaveResult = Left | NotParticipant | ParticipantSessionFinished
 ```
@@ -110,16 +118,21 @@ different policy call `SessionRegistry.open` directly.
 @property
 def participant_policy(self) -> ParticipantPolicy: ...
 
+
 @property
 def participants(self) -> frozenset[int]: ...
+
 
 @property
 def participant_limit(self) -> int | None: ...
 
+
 @property
 def remaining_capacity(self) -> int | None: ...
 
+
 def has_participant(self, user_id: int) -> bool: ...
+
 
 async def join(self, user_id: int) -> JoinResult: ...
 async def leave(self, user_id: int) -> LeaveResult: ...
