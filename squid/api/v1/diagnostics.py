@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Path, Query, Response, status
 from squid.api.contract import ANONYMOUS, cli_command, contract
 from squid.api.dependencies import ErrorReports
 from squid.api.errors import responses
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.pagination import Page, PageSizeParam, render_page
 from squid.api.security import requires
 from squid.api.v1.schemas.diagnostics import ErrorReportDetail, ErrorReportSummary
@@ -93,7 +93,7 @@ async def get_error_report(reference: ReferenceParam, error_reports: ErrorReport
     "",
     status_code=status.HTTP_204_NO_CONTENT,
     responses=responses(401, 403, 422),
-    dependencies=[Depends(requires(DIAGNOSTICS_ERROR_CLEAR)), Depends(enforce_request_idempotency)],
+    dependencies=[Depends(requires(DIAGNOSTICS_ERROR_CLEAR)), Depends(reserve_idempotent_request)],
     operation_id="diagnostics_errors_clear",
     openapi_extra=contract(
         security=[ANONYMOUS],

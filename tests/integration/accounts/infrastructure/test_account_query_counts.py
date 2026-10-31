@@ -219,7 +219,7 @@ async def test_claim_timestamps_survive_a_reload_unchanged(
 ) -> None:
     """Same invariant as above, for every timestamp this repository writes.
 
-    `_now()` floors to microseconds because `timestamptz` does; without it a claim returned
+    `now()` floors to microseconds because `timestamptz` does; without it a claim returned
     from the write path carries nanoseconds the row does not have.
     """
     async with async_session_factory.begin() as session:

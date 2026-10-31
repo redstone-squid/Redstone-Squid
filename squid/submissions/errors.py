@@ -82,7 +82,3 @@ class DraftValidationError(ValidationError):
 
     def __init__(self, errors: dict[str, str]) -> None:
         super().__init__(public_context={"field_errors": errors})
-
-
-# Compatibility name for callers matching the former Python exception symbol.
-DraftIncompleteError = DraftValidationError

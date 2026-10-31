@@ -10,7 +10,7 @@ from squid.accounts.errors import AccountNotFoundError, StaleConsentNoticeError
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
 from squid.api.dependencies import Accounts, BuildQueries
 from squid.api.errors import responses
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
@@ -84,7 +84,7 @@ async def _render_me(accounts: AccountService, account_id: int, *, consent_pendi
     "/consent",
     response_model=UserMe,
     responses=responses(401, 403, 404, 409, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="account_consent_grant",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -110,7 +110,7 @@ async def grant_consent(
     "/profile",
     response_model=ProfileDetail,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="account_profile_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -152,7 +152,7 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Identi
     "/identities/{identity_id}/visibility",
     response_model=IdentityDetail,
     responses=responses(401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="account_identity_visibility_set",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -173,7 +173,7 @@ async def set_identity_visibility(
     "/identities/{identity_id}",
     response_model=IdentityDetail,
     responses=responses(401, 403, 404, 409, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="account_identity_unlink",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE],
@@ -196,7 +196,7 @@ async def unlink_identity(identity_id: int, accounts: Accounts, caller: ManageCa
     "/merge-code",
     response_model=MergeCodeDetail,
     responses=responses(401, 403, 404, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="account_merge_code_create",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE],
@@ -220,7 +220,7 @@ async def create_merge_code(accounts: Accounts, caller: ManageCaller) -> MergeCo
     "/merge/preview",
     response_model=MergePreviewDetail,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="account_merge_preview",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE],
@@ -241,7 +241,7 @@ async def preview_merge(body: MergeRequest, accounts: Accounts, caller: ManageCa
     "/merge",
     response_model=AccountMergeDetail,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="account_merge_complete",
     openapi_extra=contract(
         security=[WEB_WRITE, DEVICE],
@@ -262,7 +262,7 @@ async def complete_merge(body: MergeRequest, accounts: Accounts, caller: ManageC
     "/minecraft/refresh",
     response_model=MinecraftIdentityRefresh,
     responses=responses(401, 403, 404, 409, 503),
-    dependencies=[Depends(enforce_route_rate_limits), Depends(enforce_request_idempotency)],
+    dependencies=[Depends(enforce_route_rate_limits), Depends(reserve_idempotent_request)],
     operation_id="account_minecraft_refresh",
     openapi_extra=contract(security=[ANONYMOUS], cli=cli_command("account.refresh", interaction="direct")),
 )
@@ -283,7 +283,7 @@ async def refresh_minecraft_identity(accounts: Accounts, caller: RefreshCaller) 
     dependencies=[
         Depends(requires(ACCOUNT_IDENTITY_REFRESH_ANY)),
         Depends(enforce_route_rate_limits),
-        Depends(enforce_request_idempotency),
+        Depends(reserve_idempotent_request),
     ],
     operation_id="account_minecraft_refresh_for",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
@@ -299,7 +299,7 @@ async def refresh_minecraft_identity_for(account_id: int, accounts: Accounts) ->
     responses=responses(401, 403, 404, 422, 503),
     dependencies=[
         Depends(requires(ACCOUNT_PROFILE_MODERATE)),
-        Depends(enforce_request_idempotency),
+        Depends(reserve_idempotent_request),
     ],
     operation_id="account_profile_clear",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),

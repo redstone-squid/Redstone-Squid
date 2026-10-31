@@ -496,11 +496,6 @@ class RateLimitConfig(_FrozenModel):
             )
         return value
 
-    @property
-    def principal_requests(self) -> int:
-        """Return the caller quota under its one-release compatibility name."""
-        return self.caller_requests
-
     @field_validator("redis_url")
     @classmethod
     def _validate_redis_url(cls, value: SecretStr | None) -> SecretStr | None:

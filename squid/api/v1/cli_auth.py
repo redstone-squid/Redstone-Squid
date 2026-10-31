@@ -9,7 +9,7 @@ from pydantic import AnyHttpUrl
 
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract, transport_only
 from squid.api.errors import responses
-from squid.api.idempotency import IdempotencyKey, enforce_request_idempotency, enforce_request_idempotency_for
+from squid.api.idempotency import IdempotencyKey, reserve_idempotent_request, reserve_idempotent_request_for
 from squid.api.security import BrowserAccountId, Caller, current_caller, prevent_credential_storage
 from squid.api.v1.schemas.cli_auth import (
     CliDeviceListResponse,
@@ -129,7 +129,7 @@ async def enforce_anonymous_cli_idempotency(
     """Partition one-time anonymous responses by a digest of the observed peer."""
     peer = request.client.host if request.client is not None else "unknown"
     peer_digest = hashlib.sha256(peer.encode()).hexdigest()
-    await enforce_request_idempotency_for(request, f"cli-anonymous:{peer_digest}", idempotency_key)
+    await reserve_idempotent_request_for(request, f"cli-anonymous:{peer_digest}", idempotency_key)
 
 
 CliAuthorization = Annotated[CliAuthorizationHttpService, Depends(get_cli_authorization_service)]
@@ -203,7 +203,7 @@ async def preview_enrollment(
     "/enrollments/approval",
     response_model=CliEnrollmentApprovalResponse,
     responses=responses(400, 401, 403, 409, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="cli_enrollment_approve",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -283,7 +283,7 @@ async def list_devices(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
     responses=responses(400, 401, 403, 404, 422, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="cli_device_revoke",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )
@@ -302,7 +302,7 @@ async def revoke_device(
     status_code=status.HTTP_204_NO_CONTENT,
     response_class=Response,
     responses=responses(400, 401, 403, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="cli_session_revoke",
     openapi_extra=contract(
         security=[DEVICE],

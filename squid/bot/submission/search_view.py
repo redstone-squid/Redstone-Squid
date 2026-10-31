@@ -186,24 +186,6 @@ class SearchScreen(sd.UserSessionScreen, session_name="search"):
         """Return whether a later page exists."""
         return self._visible_window().window.has_next
 
-    @property
-    def detail_index(self) -> int | None:
-        """Return the opened page index for compatibility with the historical view."""
-        if self._browser.opened is None:
-            return None
-        identity = _hit_identity(self._browser.opened)
-        return next((index for index, hit in enumerate(self.hits) if _hit_identity(hit) == identity), None)
-
-    @detail_index.setter
-    def detail_index(self, index: int | None) -> None:
-        if index is None:
-            self._browser.opened = None
-            self._browser._detail_value = None
-            return
-        hit = self.hits[index]
-        self._browser.opened = hit
-        self._browser._detail_value = self._detail(hit)
-
     def _visible_window(self) -> sl.sources.LoadedWindow[SearchHit]:
         state = self._browser.window.status
         if isinstance(state, sl.resources.Ready):

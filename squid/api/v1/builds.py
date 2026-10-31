@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Header, Query, Response
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import BuildCommands, BuildQueries, CurrentCaller, Permissions, Search
 from squid.api.errors import responses
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
@@ -49,7 +49,7 @@ _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9]
     "/{build_id}",
     response_model=BuildDetail,
     responses=responses(400, 401, 403, 404, 409, 412, 422, 428, 503),
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
     operation_id="builds_update",
     openapi_extra=contract(security=[WEB_WRITE], cli=browser_only()),
 )

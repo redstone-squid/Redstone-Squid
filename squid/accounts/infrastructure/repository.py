@@ -69,14 +69,6 @@ here is a count.
 """
 
 
-_now = now
-"""This module's long-standing local name for the shared storage-precision clock.
-
-It was the first place the nanosecond/microsecond mismatch was found; the definition now lives
-in `squid.persistence.types` so every persisted default gets the same treatment.
-"""
-
-
 def _to_identity(model: AccountIdentityModel) -> AccountIdentity:
     return AccountIdentity(
         id=model.id,
@@ -267,7 +259,7 @@ class AccountRepository:
                     account_id=candidate.id,
                     provider=identity.provider,
                     subject=identity.subject,
-                    verified_at=_now(),
+                    verified_at=now(),
                 )
                 .on_conflict_do_nothing(index_elements=[AccountIdentityModel.provider, AccountIdentityModel.subject])
                 .returning(AccountIdentityModel.id)
@@ -396,7 +388,7 @@ class AccountRepository:
             model.links = [{"label": link.label, "url": link.url} for link in updated.links]
             model.hidden = updated.hidden
             model.avatar_identity_id = updated.avatar_identity_id
-            model.updated_at = _now()
+            model.updated_at = now()
             await session.flush()
             return _to_profile(model)
 
@@ -417,8 +409,8 @@ class AccountRepository:
         Replace rather than insert: one live ticket per account is what keeps a short code safe,
         and minting a second would double a guesser's target surface for no user-visible gain.
         """
-        now = _now()
-        expires_at = now.add(seconds=ttl_seconds)
+        timestamp = now()
+        expires_at = timestamp.add(seconds=ttl_seconds)
         digest = self.hash_verification_code(code)
         async with self._session_factory.begin() as session:
             account = await session.get(AccountModel, account_id)
@@ -426,13 +418,13 @@ class AccountRepository:
                 raise AccountNotFoundError(account_id)
             await session.execute(
                 insert(AccountMergeTicketModel)
-                .values(account_id=account_id, code_digest=digest, created_at=now, expires_at=expires_at)
+                .values(account_id=account_id, code_digest=digest, created_at=timestamp, expires_at=expires_at)
                 .on_conflict_do_update(
                     index_elements=[AccountMergeTicketModel.account_id],
-                    set_={"code_digest": digest, "created_at": now, "expires_at": expires_at},
+                    set_={"code_digest": digest, "created_at": timestamp, "expires_at": expires_at},
                 )
             )
-            return MergeTicket(account_id=account_id, created_at=now, expires_at=expires_at)
+            return MergeTicket(account_id=account_id, created_at=timestamp, expires_at=expires_at)
 
     async def peek_merge_ticket(self, code: str) -> MergeTicket | None:
         """Return a live ticket without spending it, for a confirmation screen."""
@@ -440,7 +432,7 @@ class AccountRepository:
             row = await session.scalar(
                 select(AccountMergeTicketModel).where(
                     AccountMergeTicketModel.code_digest == self.hash_verification_code(code),
-                    AccountMergeTicketModel.expires_at > _now(),
+                    AccountMergeTicketModel.expires_at > now(),
                 )
             )
             return None if row is None else _to_merge_ticket(row)
@@ -456,7 +448,7 @@ class AccountRepository:
                 delete(AccountMergeTicketModel)
                 .where(
                     AccountMergeTicketModel.code_digest == self.hash_verification_code(code),
-                    AccountMergeTicketModel.expires_at > _now(),
+                    AccountMergeTicketModel.expires_at > now(),
                 )
                 .returning(AccountMergeTicketModel)
             )
@@ -564,7 +556,7 @@ class AccountRepository:
                     CreatorAliasModel.normalized_name == fold_creator_name(name),
                     CreatorAliasModel.account_id.is_(None),
                 )
-                .values(account_id=account_id, claimed_at=_now(), claim_method=method)
+                .values(account_id=account_id, claimed_at=now(), claim_method=method)
                 .returning(CreatorAliasModel)
             )
             public_id = await session.scalar(
@@ -673,10 +665,10 @@ class AccountRepository:
                         end_user_action=tr(t"Approve with `reassign: True` to move the name to the claimant."),
                     )
                 alias.account_id = claim.account_id
-                alias.claimed_at = _now()
+                alias.claimed_at = now()
                 alias.claim_method = ClaimMethod.STAFF_APPROVED
             claim.status = status
-            claim.resolved_at = _now()
+            claim.resolved_at = now()
             claim.resolved_by_account_id = resolved_by_account_id
             await session.flush()
             # The claimant comes back with the claim so a resolution can name who was credited
@@ -723,17 +715,17 @@ class AccountRepository:
         on a row that already existed, so a prompt that is cancelled leaves no trace of whoever saw
         it.
         """
-        now = _now()
+        timestamp = now()
         async with self._session_factory.begin() as session:
             row = await session.scalar(
                 select(VerificationCodeModel)
                 .where(
-                    VerificationCodeModel.expires > now,
+                    VerificationCodeModel.expires > timestamp,
                     VerificationCodeModel.code == self.hash_verification_code(code),
                     VerificationCodeModel.valid.is_(True),
                     or_(
                         VerificationCodeModel.reserved_until.is_(None),
-                        VerificationCodeModel.reserved_until <= now,
+                        VerificationCodeModel.reserved_until <= timestamp,
                     ),
                 )
                 .with_for_update()
@@ -742,7 +734,7 @@ class AccountRepository:
                 return None
 
             token = secrets.token_urlsafe(32)
-            expires_at = now.add(seconds=ttl_seconds)
+            expires_at = timestamp.add(seconds=ttl_seconds)
             row.reserved_token = self.hash_verification_code(token)
             row.reserved_until = expires_at
             preview = await self._preview_link(session, row)
@@ -822,8 +814,8 @@ class AccountRepository:
         cannot each read the same count and overwrite one another — which would have made the cap
         trivially evadable by sending attempts in parallel.
         """
-        now = _now()
-        locked_until = now.add(seconds=lockout_seconds)
+        timestamp = now()
+        locked_until = timestamp.add(seconds=lockout_seconds)
         # Reaching the cap resets the count as it starts the cooling-off period, so the window after
         # a lockout is a fresh budget rather than an instant re-lock on the next single failure.
         reached_cap = VerificationAttemptModel.consecutive_failures + 1 >= max_failures
@@ -838,7 +830,7 @@ class AccountRepository:
                 subject=subject,
                 consecutive_failures=0 if first_failure_caps else 1,
                 locked_until=lockout_bind if first_failure_caps else None,
-                updated_at=now,
+                updated_at=timestamp,
             )
             .on_conflict_do_update(
                 index_elements=[VerificationAttemptModel.provider, VerificationAttemptModel.subject],
@@ -847,7 +839,7 @@ class AccountRepository:
                         (reached_cap, 0), else_=VerificationAttemptModel.consecutive_failures + 1
                     ),
                     "locked_until": case((reached_cap, lockout_bind), else_=VerificationAttemptModel.locked_until),
-                    "updated_at": now,
+                    "updated_at": timestamp,
                 },
             )
             .returning(VerificationAttemptModel.locked_until)
@@ -858,7 +850,7 @@ class AccountRepository:
         # the future distinguishes "I caused this" from "one was already running", which matters both
         # for the caller's log line and for a race: two attempts crossing the cap together compute
         # instants a microsecond apart, so exactly one sees its own value survive. Exact comparison is
-        # sound because `_now()` floors to the precision `timestamptz` keeps.
+        # sound because `now()` floors to the precision `timestamptz` keeps.
         return locked_until if stored_lockout == locked_until else None
 
     async def clear_verification_failures(self, provider: IdentityProvider, subject: str) -> None:
@@ -937,14 +929,14 @@ class AccountRepository:
                         AccountIdentity.java(
                             verification_code.minecraft_uuid,
                             username=verification_code.username,
-                            verified_at=_now(),
+                            verified_at=now(),
                         ),
                     )
                 )
             else:
                 previous_name = existing_java.display_name
                 existing_java.display_name = verification_code.username
-                existing_java.verified_at = _now()
+                existing_java.verified_at = now()
             account.consent_version = consent.version
             account.consented_at = consent.granted_at
             verification_code.valid = False
@@ -992,7 +984,7 @@ class AccountRepository:
                 raise MinecraftAccountNotFoundError(java_uuid)
             previous_name = identity.display_name
             identity.display_name = username
-            identity.verified_at = _now()
+            identity.verified_at = now()
             return await self._reconcile_java_name(
                 session,
                 account=account,
@@ -1035,7 +1027,7 @@ class AccountRepository:
                 .values(
                     name=username,
                     account_id=account.id,
-                    claimed_at=_now(),
+                    claimed_at=now(),
                     claim_method=ClaimMethod.VERIFIED_IGN,
                 )
                 .on_conflict_do_nothing(index_elements=[CreatorAliasModel.normalized_name])
@@ -1047,7 +1039,7 @@ class AccountRepository:
             assert alias is not None
         if alias.account_id is None:
             alias.account_id = account.id
-            alias.claimed_at = _now()
+            alias.claimed_at = now()
             alias.claim_method = ClaimMethod.VERIFIED_IGN
             claimed = _to_alias(alias, account.public_creator_id)
         elif alias.account_id == account.id:
@@ -1127,7 +1119,7 @@ class AccountRepository:
             provider=identity.provider,
             subject=identity.subject,
             display_name=identity.display_name,
-            verified_at=identity.verified_at or _now(),
+            verified_at=identity.verified_at or now(),
         )
 
     @staticmethod

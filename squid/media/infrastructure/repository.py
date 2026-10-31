@@ -42,15 +42,12 @@ from squid.media.infrastructure.models import (
 )
 from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
 from squid.persistence.advisory_locks import (
-    SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE,
     AdvisoryLockNamespace,
     lock_uuid,
 )
 from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.submissions.domain import DraftStatus
 from squid.submissions.infrastructure.models import SubmissionDraft
-
-_MEDIA_UPLOAD_LOCK_NAMESPACE = AdvisoryLockNamespace.MEDIA_UPLOAD_REGISTRATION
 
 
 class PostgresMediaJobRepository(MediaJobRepository):
@@ -70,7 +67,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
     ) -> MediaEnqueueOutcome:
         """Reserve aggregate draft capacity, or accept an identical retry."""
         async with self._session_factory.begin() as session:
-            await lock_uuid(session, upload.id, namespace=_MEDIA_UPLOAD_LOCK_NAMESPACE)
+            await lock_uuid(session, upload.id, namespace=AdvisoryLockNamespace.MEDIA_UPLOAD_REGISTRATION)
             draft_status = await _lock_mutable_submission_draft(
                 session,
                 upload.draft_id,
@@ -388,7 +385,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             await lock_uuid(
                 session,
                 job.upload.draft_id,
-                namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE,
+                namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_LIFECYCLE,
             )
             existing_output_bytes = await session.scalar(
                 select(func.coalesce(func.sum(MediaArtifactRecord.byte_size), 0))
@@ -582,7 +579,7 @@ async def _lock_mutable_submission_draft(
     authorization: MediaDraftUploadAuthorization | None = None,
     require_editable: bool = True,
 ) -> DraftStatus:
-    await lock_uuid(session, draft_id, namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE)
+    await lock_uuid(session, draft_id, namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_LIFECYCLE)
     row = (
         await session.execute(
             select(SubmissionDraft.status, SubmissionDraft.owner_account_id, SubmissionDraft.revision)

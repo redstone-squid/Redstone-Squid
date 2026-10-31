@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId
 from squid.core.errors import ValidationError
@@ -100,7 +100,7 @@ async def _receive(request: Request, path: Path) -> None:
     "/{source_id}",
     operation_id="submission_supplied_file_discard",
     openapi_extra=_WRITE,
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
 )
 async def discard_file(
     draft_id: UUID, source_id: UUID, account_id: AccountId, intake: Intake

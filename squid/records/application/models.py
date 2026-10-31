@@ -11,9 +11,9 @@ from uuid import UUID
 from squid.builds.application.queries import PublicBuildSummary
 from squid.records.domain import (
     BuildKind,
-    CategoryText,
     DoorCategory,
     ExtenderCategory,
+    FormattedTitle,
     RecordCandidate,
     RecordClass,
     RecordResolution,
@@ -87,7 +87,7 @@ class CategoryCompetition:
 
     identity: CategoryIdentity
     facets: tuple[CandidateFacet, ...]
-    category_text: CategoryText
+    category_text: FormattedTitle
     candidates: tuple[RecordCandidate, ...]
     candidate_version_ids: tuple[tuple[int, frozenset[int]], ...]
     source: MaterializationSource = "eager"
@@ -101,7 +101,7 @@ class ComputedRecord:
     scope: VersionScope
     version_id: int | None
     competition: CategoryCompetition
-    title: CategoryText
+    title: FormattedTitle
     resolution: RecordResolution
     broken_holder_ids: tuple[int, ...] = ()
     history: tuple[HolderHistoryEntry, ...] = ()

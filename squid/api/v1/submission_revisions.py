@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from squid.api.contract import DEVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Services
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.security import require_consented_account, subject_for
 from squid.core.errors import JSONValue
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal
@@ -58,7 +58,7 @@ def revisions(services: Services) -> RevisionProposalService:
 
 Proposals = Annotated[RevisionProposalService, Depends(revisions)]
 router = APIRouter(
-    prefix="/submissions/revisions", tags=["submissions"], dependencies=[Depends(enforce_request_idempotency)]
+    prefix="/submissions/revisions", tags=["submissions"], dependencies=[Depends(reserve_idempotent_request)]
 )
 _READ = contract(security=[WEB, DEVICE], cli=transport_only())
 _WRITE = contract(security=[WEB_WRITE, DEVICE], cli=transport_only())

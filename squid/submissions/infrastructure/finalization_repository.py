@@ -12,7 +12,7 @@ from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationE
 from squid.media.application.jobs import MediaJobStatus
 from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.media.infrastructure.references import media_for_draft
-from squid.persistence.advisory_locks import SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE, lock_uuid
+from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
 from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.application.finalization import (
     MAX_FINALIZATION_JOB_CLAIM,
@@ -379,7 +379,7 @@ def _attempts_for_draft(
 
 
 async def _locked_draft(session: AsyncSession, draft_id: UUID) -> SubmissionDraft:
-    await lock_uuid(session, draft_id, namespace=SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE)
+    await lock_uuid(session, draft_id, namespace=AdvisoryLockNamespace.SUBMISSION_DRAFT_LIFECYCLE)
     model = await session.scalar(select(SubmissionDraft).where(SubmissionDraft.id == draft_id).with_for_update())
     if model is None:
         raise DraftNotFoundError(draft_id)

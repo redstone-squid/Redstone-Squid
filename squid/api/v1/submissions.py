@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request, Response, status
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract, transport_only
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
-from squid.api.idempotency import enforce_request_idempotency
+from squid.api.idempotency import reserve_idempotent_request
 from squid.api.security import Caller, current_caller, require_consented_account
 from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
@@ -241,7 +241,7 @@ SchemaId = Annotated[str, Path(pattern=r"^[a-z][a-z0-9_.-]{0,95}$")]
 router = APIRouter(
     prefix="/submissions",
     tags=["submissions"],
-    dependencies=[Depends(enforce_request_idempotency)],
+    dependencies=[Depends(reserve_idempotent_request)],
 )
 
 _DRAFT_CREATE_LINKS = {

@@ -80,11 +80,6 @@ async def reserve_idempotent_request_for(
     setattr(request.state, _STATE_KEY, IdempotencyReservationState(service, reservation))
 
 
-# Route declarations keep these compatibility names during the terminology transition.
-enforce_request_idempotency = reserve_idempotent_request
-enforce_request_idempotency_for = reserve_idempotent_request_for
-
-
 async def replay_response(_request: Request, error: Exception) -> Response:
     """Render a response stored by a completed equivalent request."""
     if not isinstance(error, IdempotencyReplay):
@@ -137,9 +132,6 @@ class CompleteIdempotentResponseMiddleware:
             await pending.service.complete(pending.request, response)
         for message in buffered:
             await send(message)
-
-
-IdempotencyResponseMiddleware = CompleteIdempotentResponseMiddleware
 
 
 def assert_idempotency_completion_installed(app: FastAPI) -> None:

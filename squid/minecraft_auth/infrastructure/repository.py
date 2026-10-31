@@ -34,8 +34,6 @@ from squid.minecraft_auth.infrastructure.models import (
 )
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
 
-_ACTIVE_CHALLENGE_LOCK_NAMESPACE = AdvisoryLockNamespace.MINECRAFT_ACTIVE_CHALLENGE
-
 
 def _profile(record: PaperInstallationRecord) -> PublicServerProfile:
     return PublicServerProfile(
@@ -246,7 +244,9 @@ class PostgresMinecraftAuthorizationRepository:
         async with self._session_factory.begin() as session:
             # Counting and inserting are one invariant: without this lock, two
             # requests can both observe room and exceed the per-client bound.
-            await lock_key(session, _challenge_lock_key(challenge), namespace=_ACTIVE_CHALLENGE_LOCK_NAMESPACE)
+            await lock_key(
+                session, _challenge_lock_key(challenge), namespace=AdvisoryLockNamespace.MINECRAFT_ACTIVE_CHALLENGE
+            )
             if challenge.origin is MinecraftClientOrigin.PAPER:
                 if challenge.installation_id is None or challenge.installation_credential_version is None:
                     raise InvalidInstallationCredentialError

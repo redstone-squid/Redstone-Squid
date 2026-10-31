@@ -19,9 +19,6 @@ class AdvisoryLockNamespace(StrEnum):
     MINECRAFT_ACTIVE_CHALLENGE = "minecraft-active-challenge-v1"
 
 
-SUBMISSION_DRAFT_LIFECYCLE_LOCK_NAMESPACE = AdvisoryLockNamespace.SUBMISSION_DRAFT_LIFECYCLE
-
-
 async def lock_uuid(
     session: AsyncSession,
     identifier: UUID,
