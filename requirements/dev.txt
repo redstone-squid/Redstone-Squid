@@ -2,6 +2,12 @@
 #    uv export --locked --only-dev -o requirements/dev.txt
 -e ./packages/squid-layouts
     # via redstone-squid
+-e ./packages/squid-reactive
+    # via
+    #   squid-layouts
+    #   squid-stores
+-e ./packages/squid-stores
+    # via squid-layouts
 advanced-alchemy==1.12.0 \
     --hash=sha256:65d9349f91dc01327da93ece64a578c8942ce51425113116c0e28a94e6f34d4d \
     --hash=sha256:c7835c1c01cc65f3711a579e604b7d7207a1c34fe24160194376b7f0f039e128
@@ -132,6 +138,7 @@ anyio==4.15.1 \
     #   openai
     #   redstone-squid
     #   squid-layouts
+    #   squid-stores
     #   starlette
 asgiref==3.13.0 \
     --hash=sha256:034cc8cbf72d00553b4be256703ac545120b4e50af13b49dec99da899aeeecb4 \
