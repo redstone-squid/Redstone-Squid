@@ -380,9 +380,6 @@ async def test_publication_round_trips_and_reanalysis_does_not_reset_it(
         license=SchematicLicense.CC_BY_4_0,
         rights_attested_at=now,
         rights_attested_by_account_id=account_id,
-        sanitized_at=now,
-        sanitizer_version="nucleation-test",
-        sanitization_report={"removed": 0},
         published_at=now,
     )
     schematic_id = await repository.record_analysis(

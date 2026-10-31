@@ -191,7 +191,7 @@ class SchematicService:
         return await self._store.list_for_build(build_id)
 
     async def list_public_for_build(self, build_id: int) -> list[StoredSchematic]:
-        """Return only explicitly published, sanitized, non-withdrawn attachments."""
+        """Return only explicitly published, non-withdrawn attachments."""
         return [
             schematic
             for schematic in await self._store.list_for_build(build_id)
@@ -199,7 +199,7 @@ class SchematicService:
         ]
 
     async def public_content(self, build_id: int, schematic_id: int) -> tuple[bytes, StoredSchematic]:
-        """Return canonical bytes only through an attachment's explicit publication policy."""
+        """Return original bytes only through an attachment's explicit publication policy."""
         stored = await self._store.get_for_build(build_id, schematic_id)
         if stored is None or not stored.publication.is_public_downloadable:
             raise SchematicNotFoundError
@@ -349,8 +349,6 @@ class SchematicService:
 
         stored = await self._store.get_primary(build_id)
         if stored is None:
-            return None
-        if not stored.publication.is_sanitized:
             return None
         if stored.file_sha256 in self._poisoned:
             return None

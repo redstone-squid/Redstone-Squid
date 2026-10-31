@@ -5008,7 +5008,7 @@
           "schematics"
         ],
         "summary": "Get Schematic Content",
-        "description": "Download explicitly published sanitized bytes from a confirmed build.",
+        "description": "Download explicitly published original bytes from a confirmed build.",
         "operationId": "get_schematic_content_v1_builds__build_id__schematics__schematic_id__content_get",
         "security": [
           {

@@ -5,7 +5,6 @@ from typing import Literal
 
 from whenever import Instant
 
-from squid.core.errors import JSONValue
 from squid.schematics.domain.models import (
     SchematicAnalysis,
     SchematicLicense,
@@ -18,15 +17,12 @@ type DuplicateTier = Literal["identical", "structural-match", "near"]
 
 @dataclass(frozen=True, slots=True)
 class SchematicPublication:
-    """Rights, sanitization, and withdrawal facts governing an attachment."""
+    """Rights and withdrawal facts governing an attachment."""
 
     visibility: SchematicVisibility = SchematicVisibility.LEGACY_UNVERIFIED
     license: SchematicLicense | None = None
     rights_attested_at: Instant | None = None
     rights_attested_by_account_id: int | None = None
-    sanitized_at: Instant | None = None
-    sanitizer_version: str | None = None
-    sanitization_report: dict[str, JSONValue] | None = None
     published_at: Instant | None = None
     withdrawn_at: Instant | None = None
 
@@ -39,23 +35,10 @@ class SchematicPublication:
         if self.visibility is SchematicVisibility.PUBLIC_DOWNLOAD and not rights_complete:
             msg = "public schematic downloads require a license and rights attestation"
             raise ValueError(msg)
-        sanitization_parts = (self.sanitized_at, self.sanitizer_version, self.sanitization_report)
-        if any(part is not None for part in sanitization_parts) and any(part is None for part in sanitization_parts):
-            msg = "sanitization requires a timestamp, sanitizer version, and audit report"
-            raise ValueError(msg)
-
-    @property
-    def is_sanitized(self) -> bool:
-        """Whether a format-aware sanitizer completed successfully."""
-        return (
-            self.sanitized_at is not None
-            and self.sanitizer_version is not None
-            and self.sanitization_report is not None
-        )
 
     @property
     def is_public_downloadable(self) -> bool:
-        """Whether public callers may receive the stored canonical bytes."""
+        """Whether public callers may receive the stored original bytes."""
         return (
             self.visibility is SchematicVisibility.PUBLIC_DOWNLOAD
             and self.license is not None
@@ -63,7 +46,6 @@ class SchematicPublication:
             and self.rights_attested_by_account_id is not None
             and self.published_at is not None
             and self.withdrawn_at is None
-            and self.is_sanitized
         )
 
 

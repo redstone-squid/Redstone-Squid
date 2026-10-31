@@ -218,9 +218,6 @@ class SchematicRepository:
                 license_code=publication.license.value if publication.license is not None else None,
                 rights_attested_at=publication.rights_attested_at,
                 rights_attested_by_account_id=publication.rights_attested_by_account_id,
-                sanitized_at=publication.sanitized_at,
-                sanitizer_version=publication.sanitizer_version,
-                sanitization_report=publication.sanitization_report,
                 published_at=publication.published_at,
                 withdrawn_at=publication.withdrawn_at,
             )

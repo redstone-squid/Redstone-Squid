@@ -59,19 +59,20 @@ async def get_schematic_content(
     build_queries: BuildQueries,
     schematics: Schematics,
 ) -> Response:
-    """Download explicitly published sanitized bytes from a confirmed build."""
+    """Download explicitly published original bytes from a confirmed build."""
     build = await build_queries.get(build_id)
     if build is None or build.submission_status is not Status.CONFIRMED:
         raise BuildNotFoundError(build_id)
     content, stored = await schematics.public_content(build_id, schematic_id)
     publication = stored.publication
     assert publication.license is not None
+    extension = stored.analysis.metrics.source_format.value
     return Response(
         content=content,
         media_type="application/octet-stream",
         headers={
             "Cache-Control": "public, max-age=300, must-revalidate",
-            "Content-Disposition": f'attachment; filename="build-{build_id}-schematic-{schematic_id}.schem"',
+            "Content-Disposition": f'attachment; filename="build-{build_id}-schematic-{schematic_id}.{extension}"',
             "Link": f'<{publication.license.uri}>; rel="license"',
             "X-Content-Type-Options": "nosniff",
             "X-Schematic-License": publication.license.value,

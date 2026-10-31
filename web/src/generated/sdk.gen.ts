@@ -475,7 +475,7 @@ export const listBuildSchematicsV1BuildsBuildIdSchematicsGet = <ThrowOnError ext
 /**
  * Get Schematic Content
  *
- * Download explicitly published sanitized bytes from a confirmed build.
+ * Download explicitly published original bytes from a confirmed build.
  */
 export const getSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGet = <ThrowOnError extends boolean = false>(options: Options<GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetData, ThrowOnError>): RequestResult<GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors, ThrowOnError> => (options.client ?? client).get<GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetResponses, GetSchematicContentV1BuildsBuildIdSchematicsSchematicIdContentGetErrors, ThrowOnError>({
     security: [{ name: 'Authorization', type: 'apiKey' }],

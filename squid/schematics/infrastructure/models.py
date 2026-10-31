@@ -110,18 +110,11 @@ class BuildSchematic(Base, kw_only=True):
             "'cc_by_nc_4_0', 'cc_by_nc_sa_4_0', 'cc_by_nc_nd_4_0')",
             name="build_schematics_license_check",
         ),
-        CheckConstraint(
-            "(sanitized_at IS NULL) = (sanitizer_version IS NULL) AND "
-            "(sanitized_at IS NULL) = (sanitization_report IS NULL)",
-            name="build_schematics_sanitization_complete",
-        ),
         Index(
             "build_schematics_public_download_idx",
             "build_id",
             "id",
-            postgresql_where=text(
-                "visibility = 'public_download' AND withdrawn_at IS NULL AND sanitized_at IS NOT NULL"
-            ),
+            postgresql_where=text("visibility = 'public_download' AND withdrawn_at IS NULL"),
         ),
     )
 
@@ -204,9 +197,6 @@ class BuildSchematic(Base, kw_only=True):
         ),
         default=None,
     )
-    sanitized_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    sanitizer_version: Mapped[str | None] = mapped_column(Text, default=None)
-    sanitization_report: Mapped[dict[str, object] | None] = mapped_column(JSONB, default=None)
     published_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     withdrawn_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 

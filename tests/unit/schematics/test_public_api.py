@@ -1,8 +1,10 @@
 """Public schematic routes are attachment-scoped and publication-safe."""
 
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import cast
 
+import pytest
 from whenever import Instant
 
 from squid.api.v1.schematics import get_schematic_content, list_build_schematics, router
@@ -10,7 +12,7 @@ from squid.builds.application import BuildQueryService
 from squid.builds.domain import Status
 from squid.core.pagination import SignedCursor
 from squid.schematics.application import SchematicPublication, SchematicService, StoredSchematic
-from squid.schematics.domain import SchematicLicense, SchematicVisibility
+from squid.schematics.domain import SchematicFormat, SchematicLicense, SchematicVisibility
 from tests.unit.schematics.fakes import make_analysis
 
 
@@ -21,9 +23,6 @@ def _public_publication() -> SchematicPublication:
         license=SchematicLicense.CC_BY_4_0,
         rights_attested_at=now,
         rights_attested_by_account_id=7,
-        sanitized_at=now,
-        sanitizer_version="nucleation-test",
-        sanitization_report={"removed": 0},
         published_at=now,
     )
 
@@ -50,7 +49,7 @@ class PublicSchematics:
 
     async def public_content(self, build_id: int, schematic_id: int) -> tuple[bytes, StoredSchematic]:
         assert (build_id, schematic_id) == (7, 3)
-        return b"sanitized-sponge-v3", self.stored
+        return b"original-schematic", self.stored
 
 
 async def test_public_metadata_omits_digest_and_original_filename() -> None:
@@ -70,15 +69,23 @@ async def test_public_metadata_omits_digest_and_original_filename() -> None:
     assert item["download_url"] == "/v1/builds/7/schematics/3/content"
 
 
-async def test_download_uses_scoped_locator_and_short_revalidation_cache() -> None:
+@pytest.mark.parametrize("source_format", list(SchematicFormat))
+async def test_download_preserves_source_format_and_short_revalidation_cache(source_format: SchematicFormat) -> None:
+    schematics = PublicSchematics()
+    analysis = schematics.stored.analysis
+    schematics.stored = replace(
+        schematics.stored,
+        analysis=replace(analysis, metrics=replace(analysis.metrics, source_format=source_format)),
+    )
     response = await get_schematic_content(
         7,
         3,
         cast(BuildQueryService, ConfirmedBuilds()),
-        cast(SchematicService, PublicSchematics()),
+        cast(SchematicService, schematics),
     )
 
-    assert response.body == b"sanitized-sponge-v3"
+    assert response.body == b"original-schematic"
+    assert response.headers["content-disposition"].endswith(f'.{source_format.value}"')
     assert response.headers["x-schematic-license"] == "cc_by_4_0"
     assert response.headers["cache-control"] == "public, max-age=300, must-revalidate"
     assert "creativecommons.org/licenses/by/4.0/" in response.headers["link"]
@@ -86,7 +93,7 @@ async def test_download_uses_scoped_locator_and_short_revalidation_cache() -> No
     assert "/schematics/{sha256}/content" not in paths
 
 
-def test_publication_value_is_not_forgeable_from_an_unsanitized_record() -> None:
+def test_legacy_record_is_not_public_without_a_distribution_grant() -> None:
     legacy = SchematicPublication()
 
     assert legacy.is_public_downloadable is False

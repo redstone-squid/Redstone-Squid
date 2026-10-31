@@ -3,7 +3,6 @@
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal, cast
 
-from squid.core.errors import JSONValue
 from squid.schematics.application.queries import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
     AutostackLattice,
@@ -69,11 +68,6 @@ def to_stored_schematic(row: BuildSchematic, *, source_format: SchematicFormat, 
             license=SchematicLicense(row.license_code) if row.license_code is not None else None,
             rights_attested_at=row.rights_attested_at,
             rights_attested_by_account_id=row.rights_attested_by_account_id,
-            sanitized_at=row.sanitized_at,
-            sanitizer_version=row.sanitizer_version,
-            sanitization_report=cast(dict[str, JSONValue], row.sanitization_report)
-            if row.sanitization_report is not None
-            else None,
             published_at=row.published_at,
             withdrawn_at=row.withdrawn_at,
         ),
