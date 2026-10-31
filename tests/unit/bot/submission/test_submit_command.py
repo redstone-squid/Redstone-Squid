@@ -12,6 +12,7 @@ from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.builds.application import BuildService
 from squid.settings.application import SettingsService
 from squid.submissions.application import FormOptionSet, StoredDraft, build_submission_manifest
+from squid.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
 from squid.submissions.domain import DraftSnapshot
 from squid_ui_discord.testing import InteractionHarness
 from tests.support.discord import make_layout_bot
@@ -68,7 +69,11 @@ class Drafts:
         now = Instant.now()
         self.current = StoredDraft(
             snapshot=DraftSnapshot(
-                values["draft_id"], values["owner_account_id"], "build_submission.v1", 1, values["category"]
+                values["draft_id"],
+                values["owner_account_id"],
+                CURRENT_SUBMISSION_SCHEMA,
+                CURRENT_SUBMISSION_SCHEMA_REVISION,
+                values["category"],
             ),
             origin=values["origin"],
             created_at=now,
