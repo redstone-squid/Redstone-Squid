@@ -1,6 +1,9 @@
 # Integrating Nucleation into Redstone-Squid
 
-> **Status.** Phases 0-4 have landed. Everything below the
+> **Status (2026-10-31).** Phases 0-4 have landed and the engine pin is now 0.12.0, with 168 focused tests passing.
+> Public schematic import remains blocked by the [sanitization release gate](nucleation-sanitization.md), which also
+> records the current compatibility evidence and fingerprint backfill plan. The historical API/version observations
+> below describe their original implementation milestones. Everything below the
 > status block is the plan as approved, amended in place wherever building it proved part of it
 > wrong; those amendments are called out where they occur rather than silently applied.
 
