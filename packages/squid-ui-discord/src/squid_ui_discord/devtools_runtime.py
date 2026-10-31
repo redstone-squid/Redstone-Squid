@@ -41,15 +41,7 @@ class DevToolsAction(StrEnum):
     PURGE_PERSISTENCE = "purge_persistence"
 
 
-_DEFAULT_ACTIONS = frozenset(
-    {
-        DevToolsAction.REFRESH_MOUNT,
-        DevToolsAction.CLOSE_SESSION,
-        DevToolsAction.WAIT_IDLE,
-        DevToolsAction.FLUSH_PERSISTENCE,
-        DevToolsAction.CLEAR_PROFILE,
-    }
-)
+_ALL_ACTIONS = frozenset(DevToolsAction)
 _DEFAULT_CONFIRMATIONS = frozenset(
     {
         DevToolsAction.CLOSE_SESSION,
@@ -63,8 +55,29 @@ _DEFAULT_CONFIRMATIONS = frozenset(
 class DevToolsPolicy:
     """Capabilities and confirmation rules for operational actions."""
 
-    enabled: frozenset[DevToolsAction] = _DEFAULT_ACTIONS
-    confirmations: frozenset[DevToolsAction] = _DEFAULT_CONFIRMATIONS
+    enabled: frozenset[DevToolsAction] = frozenset()
+    confirmations: frozenset[DevToolsAction] = frozenset()
+
+    def __post_init__(self) -> None:
+        unknown_confirmations = self.confirmations - self.enabled
+        if unknown_confirmations:
+            names = ", ".join(sorted(action.value for action in unknown_confirmations))
+            message = f"confirmation rules require disabled devtools actions: {names}"
+            raise ValueError(message)
+
+    @classmethod
+    def full_access(cls) -> DevToolsPolicy:
+        """Enable every operation, retaining confirmation for destructive actions."""
+        return cls(enabled=_ALL_ACTIONS, confirmations=_DEFAULT_CONFIRMATIONS)
+
+    @classmethod
+    def allow(
+        cls,
+        *actions: DevToolsAction,
+        confirmations: frozenset[DevToolsAction] = frozenset(),
+    ) -> DevToolsPolicy:
+        """Enable an explicit set of operations and confirmation requirements."""
+        return cls(enabled=frozenset(actions), confirmations=confirmations)
 
     def permits(self, action: DevToolsAction) -> bool:
         """Whether ``action`` is enabled for this runtime."""
