@@ -37,7 +37,7 @@ QUEUE_SPECS: tuple[QueueSpec[Any], ...] = (
 """Every durable work queue in the application, in label order."""
 
 
-def _queue_health_select(spec: QueueSpec[Any]) -> Select[Any]:
+def _queue_health_select(spec: QueueSpec[Any]) -> Select[str, int, int, int, int]:
     """Count one queue's ready, in-flight and dead rows, and its oldest ready age."""
     queue = ClaimedRowQueue(spec)
     ready = queue.ready()

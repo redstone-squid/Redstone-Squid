@@ -368,7 +368,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
 
 def _attempts_for_draft(
     draft_id: UUID,
-) -> Select[tuple[SubmissionFinalizationJob, SubmissionFinalizationInput, SubmissionFinalizationResult]]:
+) -> Select[SubmissionFinalizationJob, SubmissionFinalizationInput, SubmissionFinalizationResult]:
     """Read each attempt with its retained input and optional result, scoped to its draft."""
     return (
         select(SubmissionFinalizationJob, SubmissionFinalizationInput, SubmissionFinalizationResult)

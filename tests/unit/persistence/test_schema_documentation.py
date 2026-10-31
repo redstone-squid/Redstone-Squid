@@ -1,6 +1,6 @@
 """Model docstrings reach the database as table and column comments."""
 
-from typing import ClassVar
+from typing import ClassVar, cast
 
 from sqlalchemy import BigInteger, ForeignKey, Integer, MetaData, Table, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -25,7 +25,7 @@ def table_of(model: type[Base]) -> Table:
     """The model's own table, narrowed from the `FromClause` the declarative API promises."""
     table = model.__table__
     assert isinstance(table, Table)
-    return table
+    return cast(Table, table)
 
 
 def test_attribute_docstrings_become_column_comments() -> None:

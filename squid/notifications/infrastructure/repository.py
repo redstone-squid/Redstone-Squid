@@ -712,7 +712,7 @@ class PostgresNotificationRepository:
             return recipients
         creator_rows = (
             await session.execute(
-                select(BuildCreator.build_id, CreatorAlias.account_id, Account.public_creator_id)
+                select(BuildCreator.build_id, Account.id, Account.public_creator_id)
                 .join(CreatorAlias, BuildCreator.alias_id == CreatorAlias.id)
                 .join(Account, Account.id == CreatorAlias.account_id)
                 .where(BuildCreator.build_id.in_(build_ids))
