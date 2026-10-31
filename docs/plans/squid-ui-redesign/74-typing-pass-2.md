@@ -128,7 +128,8 @@ not implemented here.
 > Postscript, 2026-08-28: Candidate B's goal was reached by "planning: enforce the resolved
 > primitive boundary" (`2ccdbbb5`), which drove package sources to zero errors; the last 48
 > test-file errors were then fixed directly and `pyrefly-baseline.json` retired entirely.
-> Nothing below remains open.
+> This closes Candidate B and the baseline cleanup. The remaining items are accounted for
+> in the follow-up below.
 
 - **Candidate B** — sixteen lowered counterpart classes and a conversion for each, since
   `dataclasses.replace` returns whatever type it was handed and cannot narrow. Retires the 48
@@ -146,6 +147,34 @@ not implemented here.
   the Python wrapper, which `test_pycrdt_stack_item_groups_multiple_container_types` already
   demonstrates. The one suppression added this round names that test, so it can be dropped when
   the stub is fixed.
+
+## Follow-up, 2026-10-31
+
+The in-tree typing work is complete:
+
+- Widget content and machine drivers carry their render target. `CachedPlan`, `inject()` and
+  the tree helpers retain their value parameters; the obsolete owner `TypeGuard` is gone.
+- `_stage_loaded()` now distinguishes drawn candidates from optional preflight results through
+  overloads, including the disabled-render case. Its callers no longer cast the result.
+- `Boundary[RenderTargetT]` carries a typed child, and `Component.boundary()` returns that same
+  specialization. Nested layout factories preserve it. This also exposed and fixed
+  `StackNavigator.render()` dropping its own target parameter.
+- The bot's fixed form schemas use typed `Form` declarations for both presentation and submitted
+  values. Dynamic build-editor fields check their text values explicitly. No casts of
+  `event.values` remain. The migration caught two real empty-field defects: clearing a role weight
+  called `strip()` on `None`, and optional build fields passed `None` to string parsers. Both now
+  normalize blank input and have regression tests.
+
+Two external limitations remain; zero type-checker errors does not close them:
+
+- Plan 73's mixed-target inference hole reproduces in both the pinned Pyrefly 1.2.0 and an
+  isolated 1.4.0 run. It also reproduces with a small contravariant generic and no Squid imports.
+  Boundaries now preserve their target, but that does not change the checker's inference for
+  incompatible siblings. The planner still rejects such trees.
+- pycrdt 0.14.2 still annotates `StackItem` with its internal `Doc`. The existing suppression
+  remains at the call that correctly passes the public wrapper. The upstream
+  [`_pycrdt.pyi`](https://github.com/y-crdt/pycrdt/blob/main/python/pycrdt/_pycrdt.pyi)
+  also still has that annotation when checked on this date.
 
 ## Verification
 

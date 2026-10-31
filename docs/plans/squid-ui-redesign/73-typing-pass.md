@@ -74,6 +74,12 @@ And two design conflations that the suppressions had been standing in for:
 
 ## Known gaps, recorded rather than papered over
 
+Current status (2026-10-31): widget target propagation, the resolved primitive boundary, and
+application form casts have since been addressed; see [74's follow-up](74-typing-pass-2.md#follow-up-2026-10-31).
+`Component.boundary()` and the `Boundary` node now retain the child's target too. The mixed-target
+Pyrefly inference limitation below still reproduces, including with Pyrefly 1.4.0. The original
+findings are retained here as the record of this pass.
+
 - **A container mixing two dialects** works in neither, but contravariance makes the union the
   solver's natural answer, so `Stack[Classic | ComponentsV2]` reads as "accepts either" and
   pyrefly allows it against both targets. Basedpyright rejects it at the call, so CI covers
