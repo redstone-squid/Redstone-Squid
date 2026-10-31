@@ -222,7 +222,7 @@ payload is an encoded *address*, never state.
 
 ```python
 bridge = sl.discord.durability.PostgresTopicBridge(pool, bus)
-tasks.start_soon(bridge.run)   # LISTEN, plus the outbound sender
+tasks.start_soon(bridge.run)  # LISTEN, plus the outbound sender
 bridge.publish(sl.runtime.Topic("build", "123"))  # local subscribers now, other processes shortly after
 ```
 
@@ -440,6 +440,7 @@ class Workspace(sl.runtime.Shared[GuildId]):
     selected: int | None = sl.state(None)
     filters: tuple[str, ...] = sl.state(())
 
+
 workspace = Workspace(bus, guild.id)
 ```
 
@@ -535,6 +536,7 @@ class BuildSource:
     async def fetch(self, position: sl.sources.Position, extent: int) -> sl.sources.Window[Build]:
         resolved, rows, has_previous, has_more = await builds.window(position, extent)
         return sl.sources.Window(resolved, tuple(rows), has_previous, has_more)
+
 
 ranking = sl.patterns.SourceRankedList(
     BuildSource(),

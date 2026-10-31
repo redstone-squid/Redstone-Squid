@@ -22,7 +22,7 @@ with pytest.raises(RuntimeError):
         panel.value.replace("edited")
         raise RuntimeError("handler failed")
 
-assert panel.value.value == "loaded"   # failed: 'edited'
+assert panel.value.value == "loaded"  # failed: 'edited'
 ```
 
 This blocked [47](47-topic-values.md) phase 3. `BuildEditComponent`'s `build` and `_node` are

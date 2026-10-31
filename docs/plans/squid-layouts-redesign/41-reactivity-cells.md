@@ -85,16 +85,17 @@ does not already give, and costs debuggability and type-checker support.
 
 ```python
 class Panel(sl.Component):
-    filters: Filters = sl.state(Filters())                 # frozen dataclass
-    rows: Sequence[str] = sl.state([])                     # a list in, a Sequence out
+    filters: Filters = sl.state(Filters())  # frozen dataclass
+    rows: Sequence[str] = sl.state([])  # a list in, a Sequence out
     channels: Mapping[str, int | None] = sl.state({})
 
-panel.rows = (*panel.rows, "a")                            # replacement
+
+panel.rows = (*panel.rows, "a")  # replacement
 panel.channels = {**panel.channels, "log": 1}
 panel.filters = replace(panel.filters, limit=25)
 
-panel.rows.append("a")                                     # pyrefly: Sequence has no append
-bad: list[str] = sl.state([])                              # pyrefly: Sequence is not a list
+panel.rows.append("a")  # pyrefly: Sequence has no append
+bad: list[str] = sl.state([])  # pyrefly: Sequence is not a list
 ```
 
 Nothing in the cell machinery needs a value to be immutable. A write bumps a version,
@@ -152,7 +153,7 @@ how an opaque field settles anyway, so the call is typed and there is no string 
 
 ```python
 self.build.door_orientation = event.selected[0]
-self.mutated(self.build)          # version moves, computeds over `build` recompute, draw
+self.mutated(self.build)  # version moves, computeds over `build` recompute, draw
 ```
 
 It refuses a non-opaque value, because a replaced value is never mutated, and an object two
