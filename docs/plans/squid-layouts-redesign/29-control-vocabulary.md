@@ -20,8 +20,10 @@ gives authors `ChoiceEvent.selected: tuple[str, ...]` where they mean `bool`.
 class ToggleEvent(ActionEvent):
     value: bool = False
 
+
 type ToggleOwnership = Ownership[bool, ToggleEvent]
 OFF: ToggleOwnership = Managed(initial=False)
+
 
 @dataclass(frozen=True, slots=True)
 class Toggle:
@@ -32,6 +34,7 @@ class Toggle:
     off_label: TextLike | None = None
     tone: Tone = Tone.NEUTRAL
     available: bool = True
+
 
 def toggle(
     label: TextValue,
@@ -147,6 +150,7 @@ class Download:
     description: TextLike | None = None
     emphasis: Emphasis = Emphasis.NORMAL
 
+
 def download(
     label: TextValue | None,
     asset: Asset,
@@ -196,13 +200,14 @@ class DecisionOption:
     tone: Tone = Tone.NEUTRAL
     emphasis: Emphasis = Emphasis.NORMAL
 
+
 @dataclass(frozen=True, slots=True)
 class DecisionState:
     decided: str | None = None
 
-type DecisionHandler = Callable[
-    [PatternEvent[DecisionState], str], Awaitable[None]
-]
+
+type DecisionHandler = Callable[[PatternEvent[DecisionState], str], Awaitable[None]]
+
 
 class Decision:
     def __init__(
@@ -221,6 +226,7 @@ class Decision:
     ) -> ComponentShell[DecisionState]: ...
 
     def finish_actions(self) -> frozenset[str]: ...
+
 
 def confirm(
     prompt: ContentLike,
@@ -257,11 +263,13 @@ class CollectionEntry:
     key: str
     values: tuple[tuple[str, object], ...]
 
+
 @dataclass(frozen=True, slots=True)
 class CollectionState:
     entries: tuple[CollectionEntry, ...] = ()
     selected: str | None = None
     page: int = 0
+
 
 type CollectionChangeHandler = Callable[
     [PatternEvent[CollectionState], tuple[Mapping[str, object], ...]], Awaitable[None]
@@ -308,6 +316,7 @@ class TimeStyle(StrEnum):
     FULL = "F"
     RELATIVE = "R"
 
+
 @dataclass(frozen=True, slots=True)
 class Timestamp:
     instant: datetime
@@ -334,6 +343,7 @@ class TimeField(FormField[time]):
     minimum: time | None = None
     maximum: time | None = None
     placeholder: TextLike | None = "HH:MM"
+
 
 @dataclass(frozen=True, slots=True)
 class DateTimeField(FormField[datetime]):

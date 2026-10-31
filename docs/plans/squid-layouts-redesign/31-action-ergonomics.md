@@ -32,15 +32,18 @@ Admission is a portable vocabulary in a new `guards.py`, attached per control:
 @dataclass(frozen=True, slots=True)
 class GuardVerdict:
     allowed: bool
-    reason: TextLike | None = None          # None → chrome default
-    retry_after: float | None = None        # seconds, feeds chrome.try_again_in
+    reason: TextLike | None = None  # None → chrome default
+    retry_after: float | None = None  # seconds, feeds chrome.try_again_in
+
 
 class Guard(Protocol):
     async def admit(self, event: ActionEvent, ledger: GuardLedger) -> GuardVerdict: ...
 
+
 class GuardScope(StrEnum):
     ACTOR = "actor"
     MOUNT = "mount"
+
 
 # sl.guards
 def cooldown(seconds: float, *, per: GuardScope = GuardScope.ACTOR, key: str | None = None) -> Guard: ...
@@ -49,8 +52,8 @@ def permission(check: Callable[[ActionEvent], Awaitable[bool]], *, reason: TextL
 def once(*, per: GuardScope = GuardScope.ACTOR) -> Guard: ...
 def rate_limit(count: int, per_seconds: float, *, per: GuardScope = GuardScope.ACTOR) -> Guard: ...
 def until(deadline: datetime, *, reason: TextLike | None = None) -> Guard: ...
-def all_of(*guards: Guard) -> Guard: ...    # first denial wins
-def any_of(*guards: Guard) -> Guard: ...    # first admission wins; the last denial is reported
+def all_of(*guards: Guard) -> Guard: ...  # first denial wins
+def any_of(*guards: Guard) -> Guard: ...  # first admission wins; the last denial is reported
 ```
 
 `semantic.Action` and `FormTrigger` gain `guard: Guard | None = None`, threaded through
@@ -96,8 +99,9 @@ in `squid/bot/voting/`, and `give_redstoner.py` panel actions.
 ```python
 @dataclass(frozen=True, slots=True)
 class Feedback:
-    pending: TextLike | None = None         # None → chrome.working
+    pending: TextLike | None = None  # None → chrome.working
     restore_on_error: bool = True
+
 
 sl.action("Generate", generate, key="generate", feedback=sl.Feedback())
 ```
@@ -140,8 +144,9 @@ siblings), poll publish (`squid/bot/voting/poll_wizard.py`), and "Refresh weight
 ```python
 @dataclass(frozen=True, slots=True)
 class WizardReview:
-    label: TextLike | None = None                                     # default chrome.review
-    summarize: Callable[[WizardAnswers], ContentLike] | None = None   # default: per-step rows
+    label: TextLike | None = None  # default chrome.review
+    summarize: Callable[[WizardAnswers], ContentLike] | None = None  # default: per-step rows
+
 
 class Wizard:
     def __init__(self, title, steps, *, key="wizard", review: WizardReview | bool = False) -> None: ...
@@ -181,7 +186,8 @@ the typed form field and the message-surface sugar.
 class ScaleField(FormField[int]):
     minimum: int = 1
     maximum: int = 5
-    labels: Mapping[int, TextLike] | None = None    # e.g. {1: "Poor", 5: "Excellent"}
+    labels: Mapping[int, TextLike] | None = None  # e.g. {1: "Poor", 5: "Excellent"}
+
 
 def rating(
     *,

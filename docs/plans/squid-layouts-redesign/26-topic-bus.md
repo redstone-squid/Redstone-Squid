@@ -29,6 +29,7 @@ one dishonest behaviour left in the delivery layer.
 type Topic = Hashable
 type Subscriber = Callable[[Topic], Awaitable[None]]
 
+
 class TopicBus:
     def __init__(self, *, concurrency: int = 4) -> None: ...
     def subscribe(self, topic: Topic, callback: Subscriber, *, label: str = "") -> Callable[[], None]: ...

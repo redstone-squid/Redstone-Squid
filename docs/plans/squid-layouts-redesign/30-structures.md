@@ -72,13 +72,16 @@ class EditSection:
 
     def __init__(self, key: str, label: TextLike, body: FormLike | ContentLike) -> None: ...
 
+
 @dataclass(frozen=True, slots=True)
 class EditorState:
     values: tuple[WizardAnswer, ...] = ()
     committed: tuple[WizardAnswer, ...] = ()
 
+
 type EditorValues = Mapping[str, Mapping[str, object]]
 type EditorCommitHandler = Callable[[PatternEvent[EditorState], EditorValues], Awaitable[None]]
+
 
 class Editor:
     def __init__(
@@ -161,7 +164,7 @@ class Browser[ItemT](Component):
         on_open: Callable[[SelectionEvent], Awaitable[None]] | None = None,
     ) -> None: ...
 
-    async def refresh(self) -> None: ...   # window.invalidate() around the visible anchor
+    async def refresh(self) -> None: ...  # window.invalidate() around the visible anchor
 ```
 
 Navigation writes `position`; the dependency turns the window `Pending(previous=...)`, so
