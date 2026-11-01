@@ -243,11 +243,16 @@ class DatabaseController:
             ("00000000-0000-0000-0000-000000002003", ids.consent_pending_web_session, CONSENT_PENDING_ACCOUNT_ID),
             ("00000000-0000-0000-0000-000000002004", ids.administrator_web_session, ADMINISTRATOR_ACCOUNT_ID),
         )
-        with self._connect_role(
-            self.identity.migrator_role,
-            self.credentials.migrator_password,
-            self.identity.database_name,
-        ) as connection:
+        with (
+            closing(
+                self._connect_role(
+                    self.identity.migrator_role,
+                    self.credentials.migrator_password,
+                    self.identity.database_name,
+                )
+            ) as connection,
+            connection,
+        ):
             with connection.cursor() as cursor:
                 cursor.executemany(
                     "INSERT INTO accounts (id, public_creator_id, created_at, consent_version, consented_at) "
@@ -380,11 +385,14 @@ class DatabaseController:
         )
         query_results: list[list[object]] = []
         with (
-            self._connect_role(
-                self.identity.observer_role,
-                self.credentials.observer_password,
-                self.identity.database_name,
+            closing(
+                self._connect_role(
+                    self.identity.observer_role,
+                    self.credentials.observer_password,
+                    self.identity.database_name,
+                )
             ) as connection,
+            connection,
             connection.cursor() as cursor,
         ):
             for statement in statements:
@@ -397,11 +405,14 @@ class DatabaseController:
     def verify(self) -> tuple[str, str]:
         """Read back the control sentinel and application role setting."""
         with (
-            self._connect_role(
-                self.identity.observer_role,
-                self.credentials.observer_password,
-                self.identity.database_name,
+            closing(
+                self._connect_role(
+                    self.identity.observer_role,
+                    self.credentials.observer_password,
+                    self.identity.database_name,
+                )
             ) as connection,
+            connection,
             connection.cursor() as cursor,
         ):
             cursor.execute(
@@ -420,11 +431,14 @@ class DatabaseController:
             msg = "Disposable PostgreSQL sentinel attestation failed."
             raise UnsafeEnvironmentError(msg)
         with (
-            self._connect_role(
-                self.identity.application_role,
-                self.credentials.application_password,
-                self.identity.database_name,
+            closing(
+                self._connect_role(
+                    self.identity.application_role,
+                    self.credentials.application_password,
+                    self.identity.database_name,
+                )
             ) as connection,
+            connection,
             connection.cursor() as cursor,
         ):
             cursor.execute("SELECT current_database(), current_user, current_setting('application_name')")
@@ -445,23 +459,28 @@ class DatabaseController:
             connection.cursor() as cursor,
         ):
             cursor.execute(
-                "SELECT usename, application_name, client_addr::text FROM pg_stat_activity "
+                "SELECT usename, application_name, host(client_addr) FROM pg_stat_activity "
                 "WHERE datname = %s AND backend_type = 'client backend' AND pid <> pg_backend_pid()",
                 (self.identity.database_name,),
             )
             sessions = cursor.fetchall()
         expected = (self.identity.application_role, self.identity.application_name, expected_client_address)
         if not sessions or any(session != expected for session in sessions):
-            msg = "Disposable PostgreSQL live application-session attestation failed."
+            msg = f"Disposable PostgreSQL live application-session attestation failed: expected {expected!r}, got {sessions!r}."
             raise UnsafeEnvironmentError(msg)
 
     def observer_cannot_write(self) -> bool:
         """Return whether the observer role is denied application-table mutation."""
-        with self._connect_role(
-            self.identity.observer_role,
-            self.credentials.observer_password,
-            self.identity.database_name,
-        ) as connection:
+        with (
+            closing(
+                self._connect_role(
+                    self.identity.observer_role,
+                    self.credentials.observer_password,
+                    self.identity.database_name,
+                )
+            ) as connection,
+            connection,
+        ):
             try:
                 with connection.cursor() as cursor:
                     cursor.execute("INSERT INTO accounts DEFAULT VALUES")
@@ -474,11 +493,14 @@ class DatabaseController:
     def verification_code_count(self) -> int:
         """Return the one mutable count used by the lifecycle integration check."""
         with (
-            self._connect_role(
-                self.identity.observer_role,
-                self.credentials.observer_password,
-                self.identity.database_name,
+            closing(
+                self._connect_role(
+                    self.identity.observer_role,
+                    self.credentials.observer_password,
+                    self.identity.database_name,
+                )
             ) as connection,
+            connection,
             connection.cursor() as cursor,
         ):
             cursor.execute("SELECT count(*) FROM verification_codes")
@@ -538,11 +560,16 @@ class DatabaseController:
             raise RuntimeError(msg)
 
     def _install_control_sentinel(self) -> None:
-        with self._connect_role(
-            self.identity.migrator_role,
-            self.credentials.migrator_password,
-            self.identity.template_database_name,
-        ) as connection:
+        with (
+            closing(
+                self._connect_role(
+                    self.identity.migrator_role,
+                    self.credentials.migrator_password,
+                    self.identity.template_database_name,
+                )
+            ) as connection,
+            connection,
+        ):
             with connection.cursor() as cursor:
                 cursor.execute("CREATE SCHEMA fuzz_control")
                 cursor.execute(
@@ -608,7 +635,7 @@ class DatabaseController:
                     sql.Literal(self.identity.application_name),
                 )
             )
-        with self._connect_admin(self.identity.database_name, autocommit=False) as connection:
+        with closing(self._connect_admin(self.identity.database_name, autocommit=False)) as connection, connection:
             with connection.cursor() as cursor:
                 cursor.execute("REVOKE CREATE ON SCHEMA public FROM PUBLIC")
                 cursor.execute("REVOKE ALL ON ALL TABLES IN SCHEMA public FROM PUBLIC")

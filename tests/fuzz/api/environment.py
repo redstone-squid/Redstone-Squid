@@ -189,7 +189,7 @@ class SyntheticSecrets:
             bob_web_session=derive("web-session-bob"),
             consent_pending_web_session=derive("web-session-consent-pending"),
             administrator_web_session=derive("web-session-administrator"),
-            service_api_key_id="fuzzservice",
+            service_api_key_id=derive("service-api-key-id", size=12),
             service_api_key_secret=derive("service-api-key"),
         )
 

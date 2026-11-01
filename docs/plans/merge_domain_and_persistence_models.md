@@ -99,7 +99,7 @@ in one reversible migration: four table comments and seventeen column comments. 
 - Project Pyrefly check: no errors. Formatting, linting, and `git diff --check` pass.
 - Clean migration upgrade, schema drift, downgrade, and re-upgrade checks pass.
 
-The five existing integration failures are:
+The initial run found five existing integration failures:
 
 - The disposable API stack uses a Docker build path without BuildKit support for `RUN --mount`.
 - The scoped storage query leaves PostgreSQL parameter `$5` without a type.
@@ -108,3 +108,9 @@ The five existing integration failures are:
 - The historical nullable-vote-threshold fixture runs a queue trigger before `available_at` exists.
 
 The four integration skips require ffmpeg/ffprobe; the unit skip covers PostgreSQL arrays on SQLite.
+
+Follow-up fixes resolve all five failures. The final focused run passed 83 storage, tracing, migration, and unit
+tests; the Docker lifecycle test and 23 environment unit tests also passed. The Docker harness now uses BuildKit,
+closes controller connections, compares host addresses without network masks, and authenticates with a valid seeded
+service key. Historical schema tests isolate unrelated delivery triggers; applied migration files remain unchanged.
+Pyrefly, formatting, linting, and `git diff --check` pass.

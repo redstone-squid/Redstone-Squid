@@ -36,12 +36,12 @@ async def test_disposable_api_stack_resets_every_mutable_store_and_cleans_up() -
                 response = await client.post(
                     "/v1/verify",
                     headers={
-                        "Authorization": running.secrets.api_secret,
+                        "Authorization": f"Bearer {running.secrets.service_api_token}",
                         "Idempotency-Key": "api-fuzz-lifecycle-1",
                     },
                     json={"uuid": MINECRAFT_ALICE},
                 )
-                assert response.status_code == 201
+                assert response.status_code == 201, response.text
 
             assert running.verification_code_count() == 1
             assert len(running.redis_keys()) > 1

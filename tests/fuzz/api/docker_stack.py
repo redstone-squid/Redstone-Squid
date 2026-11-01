@@ -2,6 +2,7 @@
 
 import asyncio
 import secrets
+import subprocess
 import time
 import urllib.error
 import urllib.request
@@ -594,32 +595,51 @@ def _run_api(
 
 def _build_production_image(client: docker.DockerClient, identity: RunIdentity) -> Image:
     tag = f"redstone-squid-api-fuzz-base:{identity.run_id}"
-    image, _logs = client.images.build(
-        path=str(_ROOT),
-        dockerfile="Dockerfile",
-        tag=tag,
-        rm=True,
-        forcerm=True,
-        buildargs={
-            "GIT_COMMIT_HASH": "api-fuzz",
-            "GIT_COMMIT_MESSAGE": "disposable api fuzz environment",
-            "WITH_OBSERVABILITY": "0",
-        },
+    # The production Dockerfile uses BuildKit mounts; the SDK build endpoint uses the legacy builder.
+    subprocess.run(
+        [
+            "docker",
+            "buildx",
+            "build",
+            "--load",
+            "--tag",
+            tag,
+            "--file",
+            "Dockerfile",
+            "--build-arg",
+            "GIT_COMMIT_HASH=api-fuzz",
+            "--build-arg",
+            "GIT_COMMIT_MESSAGE=disposable api fuzz environment",
+            "--build-arg",
+            "WITH_OBSERVABILITY=0",
+            str(_ROOT),
+        ],
+        cwd=_ROOT,
+        check=True,
     )
-    return image
+    return client.images.get(tag)
 
 
 def _build_fuzz_image(client: docker.DockerClient, identity: RunIdentity, production_image: Image) -> Image:
     tag = f"redstone-squid-api-fuzz:{identity.run_id}"
-    image, _logs = client.images.build(
-        path=str(_ROOT),
-        dockerfile="Dockerfile.api-fuzz",
-        tag=tag,
-        rm=True,
-        forcerm=True,
-        buildargs={"BASE_IMAGE": production_image.id},
+    subprocess.run(
+        [
+            "docker",
+            "buildx",
+            "build",
+            "--load",
+            "--tag",
+            tag,
+            "--file",
+            "Dockerfile.api-fuzz",
+            "--build-arg",
+            f"BASE_IMAGE={production_image.tags[0]}",
+            str(_ROOT),
+        ],
+        cwd=_ROOT,
+        check=True,
     )
-    return image
+    return client.images.get(tag)
 
 
 def _remove_image(client: docker.DockerClient, image_id: str) -> None:
