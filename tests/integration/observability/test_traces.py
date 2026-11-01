@@ -70,7 +70,7 @@ def test_squid_telemetry_composes_with_a_live_sdk() -> None:
     )
     api = FastAPI()
     FastAPIInstrumentor.instrument_app(api, tracer_provider=provider)
-    SQLAlchemyInstrumentor().instrument(engine=engine, tracer_provider=provider)
+    SQLAlchemyInstrumentor().instrument(engine=engine, tracer_provider=provider, skip_dep_check=True)
 
     @api.get("/probe")
     def probe() -> dict[str, int]:

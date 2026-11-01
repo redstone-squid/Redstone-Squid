@@ -540,7 +540,8 @@ def _configure_otel(config: ObservabilityConfig, *, service_name: str) -> Observ
     )
     global _ACTIVE
     _ACTIVE = active
-    SQLAlchemyInstrumentor().instrument()
+    # The instrumentor's version bound excludes 2.1; the live-SDK integration test covers our usage.
+    SQLAlchemyInstrumentor().instrument(skip_dep_check=True)
     AioHttpClientInstrumentor().instrument()
     HTTPXClientInstrumentor().instrument()
     install_trace_context_log_filter()
