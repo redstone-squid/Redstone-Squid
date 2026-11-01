@@ -79,12 +79,12 @@ class VoteSession(Base, kw_only=True):
     )
 
     votes: Mapped[list[Vote]] = relationship(
-        back_populates="vote_session", default_factory=list, lazy="selectin", init=False, repr=False
+        back_populates="vote_session", default_factory=list, lazy="raise_on_sql", init=False, repr=False
     )
     options: Mapped[list[VoteSessionOption]] = relationship(
         back_populates="vote_session",
         default_factory=list,
-        lazy="selectin",
+        lazy="raise_on_sql",
         order_by="VoteSessionOption.position",
         init=False,
         repr=False,

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import selectinload
 
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.models import Account, CreatorAlias
@@ -65,6 +66,7 @@ class PostgresSuggestionRepository:
         """
         statement = (
             select(TagDefinition)
+            .options(selectinload(TagDefinition.aliases))
             .where(
                 TagDefinition.semantic_kind == semantic_kind,
                 TagDefinition.moderation_status == "approved",
@@ -78,8 +80,6 @@ class PostgresSuggestionRepository:
                 TagApplicability.build_kind == build_kind
             )
         async with self._session_factory() as session:
-            # `TagDefinition.aliases` is a selectin relationship, so aliases arrive without a
-            # second round trip and without an N+1 per definition.
             definitions = (await session.scalars(statement)).unique().all()
         return [
             TaxonomyEntry(

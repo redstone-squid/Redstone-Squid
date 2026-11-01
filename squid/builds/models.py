@@ -143,7 +143,7 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None, compare=False)
     lock_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None, compare=False)
     lock_expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None, compare=False)
-    ai_generated: Mapped[bool | None] = mapped_column(Boolean, nullable=False, default=None)
+    ai_generated: Mapped[bool | None] = mapped_column(Boolean, nullable=False, default=False)
     extra_info: Mapped[Info] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )

@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from async_lru import alru_cache
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import selectinload
 
 from squid.builds.application.taxonomy import TaxonomyResolution, normalize_tag_name
 from squid.builds.domain.models import RestrictionTypeLiteral
@@ -28,7 +29,9 @@ class BuildTagsManager:
     async def fetch_all_restrictions(self) -> list[TagDefinition]:
         async with self.session() as session:
             result = await session.execute(
-                select(TagDefinition).where(
+                select(TagDefinition)
+                .options(selectinload(TagDefinition.aliases))
+                .where(
                     TagDefinition.authority == "official",
                     TagDefinition.semantic_kind == "restriction",
                     TagDefinition.moderation_status == "approved",
@@ -175,6 +178,7 @@ async def _resolve_official_tag_rows(
     )
     statement = (
         select(TagDefinition)
+        .options(selectinload(TagDefinition.aliases))
         .outerjoin(TagAlias, TagAlias.tag_id == TagDefinition.id)
         .where(
             TagDefinition.authority == "official",

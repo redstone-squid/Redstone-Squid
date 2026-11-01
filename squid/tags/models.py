@@ -153,9 +153,11 @@ class TagDefinition(Base, kw_only=True):
     )
     archived_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
-    aliases: Mapped[list[TagAlias]] = relationship(back_populates="definition", default_factory=list, lazy="selectin")
+    aliases: Mapped[list[TagAlias]] = relationship(
+        back_populates="definition", default_factory=list, lazy="raise_on_sql"
+    )
     applicabilities: Mapped[list[TagApplicability]] = relationship(
-        back_populates="definition", default_factory=list, lazy="selectin"
+        back_populates="definition", default_factory=list, lazy="raise_on_sql"
     )
     assignments: Mapped[list[TagAssignment]] = relationship(
         back_populates="definition", default_factory=list, lazy="raise_on_sql", repr=False
@@ -186,7 +188,7 @@ class TagAlias(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
-    definition: Mapped[TagDefinition] = relationship(back_populates="aliases", lazy="joined", default=None)
+    definition: Mapped[TagDefinition] = relationship(back_populates="aliases", lazy="raise_on_sql", default=None)
 
 
 class TagApplicability(Base, kw_only=True):
@@ -202,7 +204,9 @@ class TagApplicability(Base, kw_only=True):
     )
     build_kind: Mapped[str] = mapped_column(Text, nullable=False)
 
-    definition: Mapped[TagDefinition] = relationship(back_populates="applicabilities", lazy="joined", default=None)
+    definition: Mapped[TagDefinition] = relationship(
+        back_populates="applicabilities", lazy="raise_on_sql", default=None
+    )
 
 
 class TagAssignment(Base, kw_only=True, init=False):

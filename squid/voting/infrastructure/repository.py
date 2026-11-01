@@ -6,6 +6,7 @@ from sqlalchemy import Text, delete, func, insert, or_, select, update
 from sqlalchemy import cast as cast_sql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import selectinload
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
@@ -279,14 +280,16 @@ class VoteRepository:
 
     async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         async with self._session_factory() as session:
-            row = await _VoteSessionModelRepository(session=session).get_one_or_none(id=vote_session_id)
+            row = await _VoteSessionModelRepository(
+                session=session, load=[selectinload(VoteSession.options)]
+            ).get_one_or_none(id=vote_session_id)
             return None if row is None else await self._to_snapshot(session, row)
 
     async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
         async with self._session_factory() as session:
-            rows = await _VoteSessionModelRepository(session=session).get_many(
-                VoteSession.status == VoteStatus.OPEN, VoteSession.kind == kind
-            )
+            rows = await _VoteSessionModelRepository(
+                session=session, load=[selectinload(VoteSession.options)]
+            ).get_many(VoteSession.status == VoteStatus.OPEN, VoteSession.kind == kind)
             return [await self._to_snapshot(session, row) for row in rows]
 
     async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]:
@@ -294,6 +297,7 @@ class VoteRepository:
             rows = (
                 await session.scalars(
                     select(VoteSession)
+                    .options(selectinload(VoteSession.options))
                     .join(GenericVoteSession, GenericVoteSession.vote_session_id == VoteSession.id)
                     .where(VoteSession.status == VoteStatus.OPEN, GenericVoteSession.deadline <= now)
                 )
@@ -352,7 +356,12 @@ class VoteRepository:
 
     async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
         async with self._session_factory() as session, session.begin():
-            row = await session.scalar(select(VoteSession).where(VoteSession.id == vote_session_id).with_for_update())
+            row = await session.scalar(
+                select(VoteSession)
+                .options(selectinload(VoteSession.options))
+                .where(VoteSession.id == vote_session_id)
+                .with_for_update()
+            )
             if row is None:
                 return None
             await self._apply_refresh(session, row, weights)
@@ -367,7 +376,12 @@ class VoteRepository:
     async def close_by_id(self, vote_session_id: int) -> StoredVoteMutation | None:
         """Close a session by aggregate ID for the deadline scheduler."""
         async with self._session_factory() as session, session.begin():
-            row = await session.scalar(select(VoteSession).where(VoteSession.id == vote_session_id).with_for_update())
+            row = await session.scalar(
+                select(VoteSession)
+                .options(selectinload(VoteSession.options))
+                .where(VoteSession.id == vote_session_id)
+                .with_for_update()
+            )
             return await self._close_row(session, row)
 
     @staticmethod
@@ -536,6 +550,7 @@ class VoteRepository:
     ) -> VoteSession | None:
         statement = (
             select(VoteSession)
+            .options(selectinload(VoteSession.options))
             .join(DiscordPost, DiscordPost.resource_key == cast_sql(VoteSession.id, Text))
             .where(
                 DiscordPost.message_id == message_id,
@@ -546,7 +561,9 @@ class VoteRepository:
         if for_update:
             statement = statement.with_for_update(of=VoteSession)
         # advanced-alchemy 1.12 still annotates Select with SQLAlchemy 2.0's tuple-wrapped row type.
-        return await _VoteSessionModelRepository(session=session).get_one_or_none(statement=statement)  # type: ignore[arg-type]
+        return await _VoteSessionModelRepository(
+            session=session, load=[selectinload(VoteSession.options)]
+        ).get_one_or_none(statement=statement)  # type: ignore[arg-type]
 
     @staticmethod
     async def _to_snapshot(session: AsyncSession, row: VoteSession) -> VoteSessionSnapshot:

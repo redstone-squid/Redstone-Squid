@@ -927,3 +927,20 @@ def test_planner_traversals_keep_their_exhaustiveness_proof() -> None:
                 violations.append((path, node.lineno))
 
     assert violations == []
+
+
+def test_shared_models_do_not_import_services_or_adapters() -> None:
+    (
+        archrule("shared entities depend on values and mapping infrastructure")
+        .match("squid.*.models*")
+        .exclude("squid.*.application.*")
+        .exclude("squid.*.domain.*")
+        .should_not_import("squid.*.application*")
+        .should_not_import("squid.*.infrastructure*")
+        .should_not_import("squid.bot*")
+        .should_not_import("squid.api*")
+        .should_not_import("squid.bootstrap*")
+        .should_not_import("squid.persistence.engine*")
+        .should_not_import("nucleation*")
+        .check("squid", only_direct_imports=True)
+    )
