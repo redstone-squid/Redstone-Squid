@@ -9,7 +9,8 @@ import pytest
 from squid.api.v1.records import get_record
 from squid.api.v1.schemas.builds import BuildDetail, BuildSummary, DoorDetails, ExtenderDetails, GeneralDetails
 from squid.builds.application import PublicBuildSummary
-from squid.builds.domain import Build, DoorBuild, ExtenderBuild, MediaTypeLiteral, Status, UtilityBuild
+from squid.builds.domain import MediaTypeLiteral, Status
+from squid.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
 from squid.records.application.models import PublicRecordDetail, PublishedRecord
 from squid.records.application.services import PublicRecordQueryService
 from squid.records.domain import BuildKind, RecordClass, ResolutionStatus, VersionScope

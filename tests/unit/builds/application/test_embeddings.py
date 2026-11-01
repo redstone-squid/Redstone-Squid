@@ -1,7 +1,7 @@
 """Build embedding application tests."""
 
 from squid.builds.application import BuildEmbeddingService
-from squid.builds.domain import OtherBuild
+from squid.builds.models import OtherBuild
 
 
 class FakeEmbeddingModel:

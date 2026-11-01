@@ -6,8 +6,9 @@ from typing import Final, Literal, Self, cast, override
 
 from squid.builds.application.commands import Dimensions
 from squid.builds.application.ports import BuildLockManager, BuildRepository
-from squid.builds.domain import Build, DoorBuild, DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo
+from squid.builds.domain import DoorOrientationLiteral, Info, MediaTypeLiteral, ServerInfo
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
+from squid.builds.models import Build, DoorBuild
 from squid.core.errors import InvalidStateError
 
 

@@ -1,7 +1,5 @@
 """Persistence and high-level operations for the Build domain object."""
 
-from __future__ import annotations
-
 import logging
 import uuid
 from collections import defaultdict
@@ -15,54 +13,33 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import raiseload, selectinload
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.orm.exc import StaleDataError
 from whenever import Instant
 
 from squid.accounts.domain import fold_creator_name
 from squid.accounts.models import Account, CreatorAlias
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort, PublicBuildSummary, PublicBuildTag
-from squid.builds.domain import (
+from squid.builds.domain import BuildCategory, Info, Status, UnknownRestrictions
+from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
+from squid.builds.infrastructure.loading import BuildLoader
+from squid.builds.models import (
     BUILD_CLASS_BY_CATEGORY,
     Build,
-    BuildCategory,
-    DoorBuild,
-    ExtenderBuild,
-    Info,
-    Status,
-    UnknownRestrictions,
-)
-from squid.builds.domain import (
-    BuildLink as DomainBuildLink,
-)
-from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
-from squid.builds.infrastructure.mapping import SQL_CLASS_BY_CATEGORY, BuildMapper, category_values_from_domain
-from squid.builds.models import (
-    Build as SQLBuild,
-)
-from squid.builds.models import (
     BuildCreator,
+    BuildLink,
     BuildSourceMessage,
     BuildVersion,
-)
-from squid.builds.models import (
-    BuildLink as SQLBuildLink,
-)
-from squid.builds.models import (
-    Door as SQLDoor,
-)
-from squid.builds.models import (
-    Extender as SQLExtender,
+    DoorBuild,
+    ExtenderBuild,
 )
 from squid.core.errors import DataIntegrityError, InvalidStateError, PersistenceError
 from squid.messages.models import MessageRecord
 from squid.persistence.types import now
 from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
-from squid.tags.models import TagAssignment as DomainTagAssignment
 from squid.tags.models import (
-    TagAssignment as SQLTagAssignment,
-)
-from squid.tags.models import (
-    TagDefinition as SQLTagDefinition,
+    TagAssignment,
+    TagDefinition,
 )
 from squid.versions.models import Version
 
@@ -76,14 +53,14 @@ def _page_filter[S: Select[Any]](
     submitter_account_id: int | None,
 ) -> S:
     """Apply the status and submitter visibility policy shared by page and count queries."""
-    statement = statement.where(SQLBuild.submission_status.in_(statuses))
+    statement = statement.where(Build.submission_status.in_(statuses))
     if submitter_account_id is not None:
-        statement = statement.where(SQLBuild.submitter_account_id == submitter_account_id)
+        statement = statement.where(Build.submitter_account_id == submitter_account_id)
     return statement
 
 
 def _mapper_load_options() -> tuple[Any, ...]:
-    """The relationship graph BuildMapper reads off a row.
+    """The relationship graph BuildLoader reads off a row.
 
     Model-level ``lazy="selectin"`` would already load these, but stating the
     contract here keeps every read path loading the same graph rather than
@@ -93,20 +70,20 @@ def _mapper_load_options() -> tuple[Any, ...]:
     reading an empty collection.
     """
     return (
-        selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
-        selectinload(SQLBuild.links),
-        raiseload(SQLBuild.build_creators),
-        raiseload(SQLBuild.build_versions),
+        selectinload(Build.tags).selectinload(TagAssignment.definition),
+        selectinload(Build.links),
+        raiseload(Build.build_creators),
+        raiseload(Build.build_versions),
     )
 
 
 def _write_load_options() -> tuple[Any, ...]:
     """The graph the update path rebuilds, which does traverse every collection."""
     return (
-        selectinload(SQLBuild.tag_assignments).selectinload(SQLTagAssignment.definition),
-        selectinload(SQLBuild.links),
-        selectinload(SQLBuild.build_creators),
-        selectinload(SQLBuild.build_versions),
+        selectinload(Build.tags).selectinload(TagAssignment.definition),
+        selectinload(Build.links),
+        selectinload(Build.build_creators),
+        selectinload(Build.build_versions),
     )
 
 
@@ -115,7 +92,7 @@ def _public_summary_from_selected_row(
     *,
     creators: Sequence[str],
     versions: Sequence[str],
-    links: Sequence[DomainBuildLink],
+    links: Sequence[BuildLink],
     tags: Sequence[PublicBuildTag],
     taxonomy: Mapping[str, Sequence[str]],
 ) -> PublicBuildSummary:
@@ -192,11 +169,11 @@ def _public_summary_from_selected_row(
 class BuildRepository:
     """Persistence and high-level operations on the Build domain object."""
 
-    __slots__ = ("_mapper", "_session_factory")
+    __slots__ = ("_loader", "_session_factory")
 
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
-        self._mapper = BuildMapper()
+        self._loader = BuildLoader()
 
     async def get_by_id(self, build_id: int) -> Build | None:
         """Creates a new Build object from a database ID.
@@ -208,12 +185,12 @@ class BuildRepository:
             The Build object with the specified ID, or None if the build was not found.
         """
         async with self._session_factory() as session:
-            stmt = select(SQLBuild).where(SQLBuild.id == build_id).options(*_mapper_load_options())
+            stmt = select(Build).where(Build.id == build_id).options(*_mapper_load_options())
             result = await session.execute(stmt)
             sql_build = result.unique().scalar_one_or_none()
             if sql_build is None:
                 return None
-            return await self._mapper.to_domain(session, sql_build)
+            return await self._loader.load(session, sql_build)
 
     async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
         """Load several builds with one row query and preserve requested ordering."""
@@ -221,15 +198,11 @@ class BuildRepository:
             return []
         async with self._session_factory() as session:
             rows = (
-                (
-                    await session.scalars(
-                        select(SQLBuild).where(SQLBuild.id.in_(build_ids)).options(*_mapper_load_options())
-                    )
-                )
+                (await session.scalars(select(Build).where(Build.id.in_(build_ids)).options(*_mapper_load_options())))
                 .unique()
                 .all()
             )
-            by_id = {build.id: build for build in await self._mapper.to_domain_many(session, rows)}
+            by_id = {build.id: build for build in await self._loader.load_many(session, rows)}
         return [by_id[build_id] for build_id in build_ids if build_id in by_id]
 
     async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]:
@@ -241,9 +214,9 @@ class BuildRepository:
         """
         if not build_ids:
             return ()
-        builds = SQLBuild.__table__
-        door = SQLDoor.__table__
-        extender = SQLExtender.__table__
+        builds = Build.__table__
+        door = DoorBuild.__table__
+        extender = ExtenderBuild.__table__
         async with self._session_factory() as session:
             rows = (
                 (
@@ -310,17 +283,17 @@ class BuildRepository:
             ):
                 versions[build_id].append(f"{edition} {major}.{minor}.{patch}")
 
-            links: dict[int, list[DomainBuildLink]] = defaultdict(list)
+            links: dict[int, list[BuildLink]] = defaultdict(list)
             for build_id, url, media_type in await session.execute(
-                select(SQLBuildLink.build_id, SQLBuildLink.url, SQLBuildLink.media_type)
+                select(BuildLink.build_id, BuildLink.url, BuildLink.media_type)
                 .where(
-                    SQLBuildLink.build_id.in_(public_ids),
-                    SQLBuildLink.media_type.in_(("render", "image")),
+                    BuildLink.build_id.in_(public_ids),
+                    BuildLink.media_type.in_(("render", "image")),
                 )
-                .order_by(SQLBuildLink.build_id, SQLBuildLink.url)
+                .order_by(BuildLink.build_id, BuildLink.url)
             ):
                 if media_type in {"render", "image"}:
-                    links[build_id].append(DomainBuildLink(url=url, media_type=media_type))
+                    links[build_id].append(BuildLink(url=url, media_type=media_type))
 
             public_tags: dict[int, list[PublicBuildTag]] = defaultdict(list)
             title_taxonomy: dict[int, dict[str, list[str]]] = defaultdict(
@@ -334,23 +307,23 @@ class BuildRepository:
             )
             tag_rows = await session.execute(
                 select(
-                    SQLTagAssignment.build_id,
-                    SQLTagDefinition.stable_key,
-                    SQLTagDefinition.display_name,
-                    SQLTagDefinition.authority,
-                    SQLTagDefinition.semantic_kind,
-                    SQLTagDefinition.restriction_type,
-                    SQLTagAssignment.numeric_value,
-                    SQLTagAssignment.text_value,
-                    SQLTagAssignment.boolean_value,
-                    SQLTagAssignment.display_unit,
+                    TagAssignment.build_id,
+                    TagDefinition.stable_key,
+                    TagDefinition.display_name,
+                    TagDefinition.authority,
+                    TagDefinition.semantic_kind,
+                    TagDefinition.restriction_type,
+                    TagAssignment.numeric_value,
+                    TagAssignment.text_value,
+                    TagAssignment.boolean_value,
+                    TagAssignment.display_unit,
                 )
-                .join(SQLTagDefinition, SQLTagDefinition.id == SQLTagAssignment.tag_id)
-                .where(SQLTagAssignment.build_id.in_(public_ids))
+                .join(TagDefinition, TagDefinition.id == TagAssignment.tag_id)
+                .where(TagAssignment.build_id.in_(public_ids))
                 .order_by(
-                    SQLTagAssignment.build_id,
-                    func.coalesce(SQLTagAssignment.display_order, SQLTagDefinition.default_display_order),
-                    SQLTagAssignment.tag_id,
+                    TagAssignment.build_id,
+                    func.coalesce(TagAssignment.display_order, TagDefinition.default_display_order),
+                    TagAssignment.tag_id,
                 )
             )
             for tag_row in tag_rows:
@@ -397,11 +370,11 @@ class BuildRepository:
     async def source_in_session(self, session: AsyncSession, draft_id: uuid.UUID) -> Build | None:
         """Read a source-draft build within a submission transaction."""
         sql_build = await session.scalar(
-            select(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id).options(*_mapper_load_options())
+            select(Build).where(Build.source_submission_draft_id == draft_id).options(*_mapper_load_options())
         )
         if sql_build is None:
             return None
-        return await self._mapper.to_domain(session, sql_build)
+        return await self._loader.load(session, sql_build)
 
     async def list_page(
         self,
@@ -427,29 +400,29 @@ class BuildRepository:
             raise ValueError(msg)
         async with self._session_factory() as session:
             statement = _page_filter(
-                select(SQLBuild),
+                select(Build),
                 statuses=statuses,
                 submitter_account_id=submitter_account_id,
             )
             reverse = before_id is not None
             if sort.field == "submission_time":
-                time_order = SQLBuild.submission_time.desc() if sort.descending else SQLBuild.submission_time.asc()
-                id_order = SQLBuild.id.desc() if sort.descending else SQLBuild.id.asc()
+                time_order = Build.submission_time.desc() if sort.descending else Build.submission_time.asc()
+                id_order = Build.id.desc() if sort.descending else Build.id.asc()
                 statement = statement.order_by(time_order.nulls_last(), id_order)
             elif before_id is not None:
                 # Walk away from the anchor in reversed display order; the page is flipped back below.
-                statement = statement.where(
-                    SQLBuild.id > before_id if sort.descending else SQLBuild.id < before_id
-                ).order_by(SQLBuild.id.asc() if sort.descending else SQLBuild.id.desc())
+                statement = statement.where(Build.id > before_id if sort.descending else Build.id < before_id).order_by(
+                    Build.id.asc() if sort.descending else Build.id.desc()
+                )
             else:
                 if after_id is not None:
-                    statement = statement.where(SQLBuild.id < after_id if sort.descending else SQLBuild.id > after_id)
-                statement = statement.order_by(SQLBuild.id.desc() if sort.descending else SQLBuild.id.asc())
+                    statement = statement.where(Build.id < after_id if sort.descending else Build.id > after_id)
+                statement = statement.order_by(Build.id.desc() if sort.descending else Build.id.asc())
             if offset:
                 statement = statement.offset(offset)
             rows = (await session.scalars(statement.limit(limit).options(*_mapper_load_options()))).unique().all()
             ordered = list(reversed(rows)) if reverse else list(rows)
-            return await self._mapper.to_domain_many(session, ordered)
+            return await self._loader.load_many(session, ordered)
 
     async def count(
         self,
@@ -463,7 +436,7 @@ class BuildRepository:
         async with self._session_factory() as session:
             statement = _page_filter(
                 # No DISTINCT: the identity join that could multiply rows is gone.
-                select(func.count()).select_from(SQLBuild),
+                select(func.count()).select_from(Build),
                 statuses=statuses,
                 submitter_account_id=submitter_account_id,
             )
@@ -506,7 +479,25 @@ class BuildRepository:
             raise InvalidStateError(message)
         build.edited_time = now()
         submitter_account_id = await self._resolve_submitter_account_id(session, build)
-        sql_build = self._new_model(build, submitter_account_id)
+        build.submitter_account_id = submitter_account_id
+        build.submission_status = build.submission_status or Status.PENDING
+        build.ai_generated = build.ai_generated or False
+        build.display_name = _normalize_display_name(build.display_name)
+        build.submission_time = build.submission_time or now()
+        for name, value in zip(
+            (
+                "sponsor_installation_id",
+                "sponsor_display_name",
+                "sponsor_address",
+                "sponsor_description",
+                "sponsor_website_url",
+            ),
+            _sponsor_values(build),
+            strict=True,
+        ):
+            setattr(build, name, value)
+        sql_build = build
+        build.links = list(build.links)
         session.add(sql_build)
         # Mirror _update_existing: taxonomy and version lookups issue SELECTs, and
         # letting them autoflush while tag assignments are wired to a not-yet-added
@@ -514,9 +505,7 @@ class BuildRepository:
         with session.no_autoflush:
             await self._setup_relationships(build, session, sql_build)
         await session.flush()
-        build.id = sql_build.id
         await self._sync_source_messages(build, session)
-        build.revision = sql_build.revision
 
     async def _update_existing(self, build: Build) -> None:
         """Persist an existing build while its repository lease is held."""
@@ -534,10 +523,7 @@ class BuildRepository:
             raise InvalidStateError(msg, context={"build_id": build.id})
 
         statement = (
-            select(SQLBuild)
-            .where(SQLBuild.id == build.id)
-            .options(*_write_load_options())
-            .with_for_update(of=SQLBuild.id)
+            select(Build).where(Build.id == build.id).options(*_write_load_options()).with_for_update(of=Build.id)
         )
         sql_build = (await session.execute(statement)).scalar_one()
         if sql_build.revision != build.revision:
@@ -547,93 +533,49 @@ class BuildRepository:
                 current_revision=sql_build.revision,
             )
         submitter_account_id = await self._resolve_submitter_account_id(session, build)
+        if sql_build.category != build.category:
+            msg = "A persisted build's category cannot be changed."
+            raise InvalidBuildError(msg, context={"build_id": build.id})
+        if (
+            sql_build.source_submission_draft_id is not None
+            and build.source_submission_draft_id != sql_build.source_submission_draft_id
+        ):
+            msg = "A build's source submission draft cannot be changed."
+            raise InvalidStateError(msg, context={"build_id": build.id})
+        if _sponsor_columns(sql_build) != _sponsor_values(build):
+            msg = "A build's sponsor attribution cannot be changed."
+            raise InvalidStateError(msg, context={"build_id": build.id})
+        build.submitter_account_id = submitter_account_id
+        build.display_name = _normalize_display_name(build.display_name)
+        build.ai_generated = build.ai_generated or False
+        build.edited_time = build.edited_time or now()
+        # A detached edit cannot change the repository lease or the creation timestamp.
+        for name in ("is_locked", "locked_at", "lock_token", "lock_expires_at", "submission_time"):
+            setattr(build, name, getattr(sql_build, name))
+        for name, value in zip(
+            (
+                "sponsor_installation_id",
+                "sponsor_display_name",
+                "sponsor_address",
+                "sponsor_description",
+                "sponsor_website_url",
+            ),
+            _sponsor_values(build),
+            strict=True,
+        ):
+            setattr(build, name, value)
         try:
-            sql_build.submission_status = build.submission_status
-            sql_build.width = build.width
-            sql_build.height = build.height
-            sql_build.depth = build.depth
-            sql_build.completion_time = build.completion_time
-            sql_build.completion_at = build.completion_at
-            sql_build.completion_evidence = build.completion_evidence
-            sql_build.description = build.description
-            sql_build.display_name = _normalize_display_name(build.display_name)
-            if (
-                sql_build.source_submission_draft_id is not None
-                and build.source_submission_draft_id != sql_build.source_submission_draft_id
-            ):
-                msg = "A build's source submission draft cannot be changed."
-                raise InvalidStateError(msg, context={"build_id": build.id})
-            sql_build.source_submission_draft_id = build.source_submission_draft_id
-            if _sponsor_columns(sql_build) != _sponsor_values(build):
-                msg = "A build's sponsor attribution cannot be changed."
-                raise InvalidStateError(msg, context={"build_id": build.id})
-            sql_build.submitter_account_id = submitter_account_id
-            sql_build.version_spec = build.version_spec
-            sql_build.ai_generated = build.ai_generated or False
-            sql_build.embedding = build.embedding
-            # Never None: `save` stamps it before dispatching here, and the column is NOT NULL.
-            sql_build.edited_time = build.edited_time if build.edited_time is not None else now()
-
-            self._update_category_fields(build, sql_build)
-
-            # Taxonomy and version lookups issue SELECTs. Keep them from autoflushing a
-            # half-rebuilt graph, which would both expose an intermediate state to hooks
-            # and consume more than one optimistic revision for this logical edit.
             with session.no_autoflush:
-                sql_build.build_creators.clear()
-                sql_build.build_versions.clear()
-                sql_build.tag_assignments.clear()
-                sql_build.links.clear()
+                sql_build = await session.merge(build)
                 await self._setup_relationships(build, session, sql_build)
-                sql_build.extra_info = build.extra_info
-            await self._sync_source_messages(build, session)
+                # JSON edits are replacement writes, including nested edits made during preparation.
+                sql_build.extra_info = cast(Info, dict(build.extra_info))
+                flag_modified(sql_build, "extra_info")
+                await self._sync_source_messages(build, session)
             await session.flush()
         except StaleDataError as error:
             raise BuildRevisionMismatchError(build.id, expected_revision=build.revision) from error
         build.revision = sql_build.revision
-
-    @staticmethod
-    def _new_model(build: Build, submitter_account_id: int) -> SQLBuild:
-        """Construct the joined row matching the domain category."""
-        common: dict[str, Any] = {
-            "submission_status": build.submission_status or Status.PENDING,
-            "record_category": build.record_category,
-            "width": build.width,
-            "height": build.height,
-            "depth": build.depth,
-            "completion_time": build.completion_time,
-            "completion_at": build.completion_at,
-            "completion_evidence": build.completion_evidence,
-            "description": build.description,
-            "display_name": _normalize_display_name(build.display_name),
-            "source_submission_draft_id": build.source_submission_draft_id,
-            "sponsor_installation_id": None if build.sponsor is None else build.sponsor.installation_id,
-            "sponsor_display_name": None if build.sponsor is None else build.sponsor.display_name,
-            "sponsor_address": None if build.sponsor is None else build.sponsor.address,
-            "sponsor_description": None if build.sponsor is None else build.sponsor.description,
-            "sponsor_website_url": None if build.sponsor is None else build.sponsor.website_url,
-            "category": build.category,
-            "submitter_account_id": submitter_account_id,
-            "version_spec": build.version_spec,
-            "ai_generated": build.ai_generated or False,
-            "embedding": build.embedding,
-            "extra_info": build.extra_info,
-            "edited_time": build.edited_time,
-            "is_locked": False,
-        }
-        return SQL_CLASS_BY_CATEGORY[build.category](**common, **category_values_from_domain(build))
-
-    @staticmethod
-    def _update_category_fields(build: Build, sql_build: SQLBuild) -> None:
-        """Update facts owned by one joined category without allowing a category switch."""
-        if sql_build.category != build.category:
-            msg = "A persisted build's category cannot be changed."
-            raise InvalidBuildError(
-                msg,
-                context={"build_id": build.id, "current_category": sql_build.category, "category": build.category},
-            )
-        for name, value in category_values_from_domain(build).items():
-            setattr(sql_build, name, value)
 
     async def _resolve_submitter_account_id(self, session: AsyncSession, build: Build) -> int:
         """Check that the supplied owning account exists.
@@ -655,9 +597,10 @@ class BuildRepository:
             )
         return build.submitter_account_id
 
-    async def _setup_relationships(self, build: Build, session: AsyncSession, sql_build: SQLBuild) -> None:
+    async def _setup_relationships(self, build: Build, session: AsyncSession, sql_build: Build) -> None:
         """Set up all relationships for the build using SQLAlchemy's relationship handling."""
-        # Handle creators
+        sql_build.build_creators = []
+        sql_build.build_versions = []
         if build.creators_ign:
             alias_ids = await self._get_or_create_aliases(session, build.creators_ign)
             sql_build.build_creators.extend(BuildCreator(alias_id=alias_id) for alias_id in alias_ids)
@@ -668,14 +611,11 @@ class BuildRepository:
         version_objects = await self._get_versions(session, build.versions)
         sql_build.build_versions.extend(BuildVersion(version_id=version.id) for version in version_objects)
 
-        # Handle links
-        sql_build.links.extend(SQLBuildLink(url=link.url, media_type=link.media_type) for link in build.links)
-
     async def _setup_tag_assignments(
         self,
         build: Build,
         session: AsyncSession,
-        sql_build: SQLBuild,
+        sql_build: Build,
     ) -> None:
         """Persist ``build.tags`` verbatim.
 
@@ -683,7 +623,8 @@ class BuildRepository:
         ``squid.builds.application.taxonomy.apply_build_taxonomy``; the
         repository no longer interprets the restriction string fields.
         """
-        assignments = build.tags
+        assignments = list(build.tags)
+        sql_build.tags = []
         if not assignments:
             return
 
@@ -691,8 +632,8 @@ class BuildRepository:
             definition.id: definition
             for definition in (
                 await session.scalars(
-                    select(SQLTagDefinition).where(
-                        SQLTagDefinition.id.in_({assignment.definition.id for assignment in assignments})
+                    select(TagDefinition).where(
+                        TagDefinition.id.in_({assignment.definition.id for assignment in assignments})
                     )
                 )
             ).all()
@@ -707,8 +648,8 @@ class BuildRepository:
             if definition.value_type != assignment.definition.value_type:
                 msg = f"Tag {definition.stable_key} value type changed while the build was being edited."
                 raise InvalidBuildError(msg, context={"tag_id": definition.id})
-            sql_build.tag_assignments.append(
-                SQLTagAssignment(
+            sql_build.tags.append(
+                TagAssignment(
                     definition=definition,
                     value=assignment.value,
                     display_unit=assignment.display_unit,
@@ -855,17 +796,17 @@ class BuildRepository:
         edited_time = now()
         async with self._session_factory() as session:
             statement = (
-                update(SQLBuild)
-                .where(SQLBuild.id == build.id, SQLBuild.revision == build.revision)
+                update(Build)
+                .where(Build.id == build.id, Build.revision == build.revision)
                 .values(
                     submission_status=status,
-                    revision=SQLBuild.revision + 1,
+                    revision=Build.revision + 1,
                     edited_time=edited_time,
                 )
             )
             result = cast(CursorResult[Any], await session.execute(statement))
             if result.rowcount != 1:
-                current_revision = await session.scalar(select(SQLBuild.revision).where(SQLBuild.id == build.id))
+                current_revision = await session.scalar(select(Build.revision).where(Build.id == build.id))
                 await session.rollback()
                 if current_revision is not None:
                     raise BuildRevisionMismatchError(
@@ -883,11 +824,9 @@ class BuildRepository:
     async def get_pending(self) -> list[Build]:
         """Return pending builds with the relationships required by the domain mapper."""
         async with self._session_factory() as session:
-            statement = (
-                select(SQLBuild).where(SQLBuild.submission_status == Status.PENDING).options(*_mapper_load_options())
-            )
+            statement = select(Build).where(Build.submission_status == Status.PENDING).options(*_mapper_load_options())
             result = await session.execute(statement)
-            return await self._mapper.to_domain_many(session, list(result.unique().scalars().all()))
+            return await self._loader.load_many(session, list(result.unique().scalars().all()))
 
     async def get_builds_by_id(self, build_ids: list[int]) -> list[Build | None]:
         """Fetches builds from the database with the given IDs."""
@@ -895,15 +834,15 @@ class BuildRepository:
             return []
 
         async with self._session_factory() as session:
-            stmt = select(SQLBuild).options(*_mapper_load_options()).where(SQLBuild.id.in_(build_ids))
+            stmt = select(Build).options(*_mapper_load_options()).where(Build.id.in_(build_ids))
             result = await session.execute(stmt)
             sql_builds = list(result.unique().scalars().all())
-            by_id = {build.id: build for build in await self._mapper.to_domain_many(session, sql_builds)}
+            by_id = {build.id: build for build in await self._loader.load_many(session, sql_builds)}
             return [by_id.get(build_id) for build_id in build_ids]
 
 
 def _split_tag_value(
-    assignment: DomainTagAssignment,
+    assignment: TagAssignment,
 ) -> tuple[Decimal | None, str | None, bool | None]:
     value_type = assignment.definition.value_type
     value = assignment.value
@@ -931,7 +870,7 @@ def _normalize_display_name(value: str | None) -> str | None:
     return normalized
 
 
-def _sponsor_columns(build: SQLBuild) -> tuple[uuid.UUID | None, str | None, str | None, str | None, str | None]:
+def _sponsor_columns(build: Build) -> tuple[uuid.UUID | None, str | None, str | None, str | None, str | None]:
     return (
         build.sponsor_installation_id,
         build.sponsor_display_name,

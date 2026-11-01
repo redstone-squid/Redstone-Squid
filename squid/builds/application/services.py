@@ -15,14 +15,9 @@ from squid.builds.application.ports import (
 )
 from squid.builds.application.restrictions import RestrictionRepository
 from squid.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy
-from squid.builds.domain import (
-    Build,
-    BuildDraft,
-    RestrictionTypeLiteral,
-    Status,
-    sort_restrictions,
-)
+from squid.builds.domain import BuildDraft, RestrictionTypeLiteral, Status, sort_restrictions
 from squid.builds.errors import BuildNotFoundError
+from squid.builds.models import Build
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain import Subject

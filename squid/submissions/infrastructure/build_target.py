@@ -4,16 +4,9 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Protocol, cast
 from uuid import UUID
 
-from squid.builds.domain import (
-    BUILD_CLASS_BY_CATEGORY,
-    Build,
-    BuildCategory,
-    DoorBuild,
-    DoorOrientationLiteral,
-    ExtenderBuild,
-    Info,
-)
+from squid.builds.domain import BuildCategory, DoorOrientationLiteral, Info
 from squid.builds.errors import InvalidBuildError
+from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.submissions.domain.finalization import (
     BuildSubmissionRejected,

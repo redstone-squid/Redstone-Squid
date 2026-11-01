@@ -7,8 +7,9 @@ from decimal import Decimal
 from typing import Literal, Protocol, get_args
 from urllib.parse import urlsplit
 
-from squid.builds.domain import Build, DoorBuild, Status
+from squid.builds.domain import Status
 from squid.builds.errors import BuildNotFoundError
+from squid.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 

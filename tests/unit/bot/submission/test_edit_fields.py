@@ -10,7 +10,8 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen, _edit_form
 from squid.builds.application import BuildService
-from squid.builds.domain import BuildCategory, DoorBuild, ExtenderBuild, UtilityBuild
+from squid.builds.domain import BuildCategory
+from squid.builds.models import DoorBuild, ExtenderBuild, UtilityBuild
 from squid_ui.testing import submit_event
 from squid_ui_discord.modal import build_form_modal
 from squid_ui_discord.testing import assert_within_limits, commit_render, interaction_harness

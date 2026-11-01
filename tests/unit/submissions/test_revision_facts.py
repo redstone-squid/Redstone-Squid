@@ -2,7 +2,8 @@
 
 import pytest
 
-from squid.builds.domain import BuildCategory, BuildDraft, DoorBuild, Status
+from squid.builds.domain import BuildCategory, BuildDraft, Status
+from squid.builds.models import DoorBuild
 from squid.core.errors import ValidationError
 from squid.submissions.application.revision_values import RevisionFacts, revision_values
 

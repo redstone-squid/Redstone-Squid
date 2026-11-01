@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 from whenever import Instant
 
 from squid.builds.domain import Status
-from squid.builds.models import Door, Extender
+from squid.builds.models import DoorBuild, ExtenderBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import tr
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
@@ -573,11 +573,11 @@ class PostgresRecordRepository:
 
     async def _list_doors(self, session: AsyncSession) -> Sequence[RecordSourceCandidate]:
         statement = (
-            select(Door)
-            .where(Door.submission_status == Status.CONFIRMED)
+            select(DoorBuild)
+            .where(DoorBuild.submission_status == Status.CONFIRMED)
             .options(
-                selectinload(Door.tag_assignments).selectinload(TagAssignment.definition),
-                selectinload(Door.build_versions),
+                selectinload(DoorBuild.tags).selectinload(TagAssignment.definition),
+                selectinload(DoorBuild.build_versions),
             )
         )
         doors = tuple((await session.execute(statement)).unique().scalars())
@@ -586,11 +586,11 @@ class PostgresRecordRepository:
 
     async def _list_extenders(self, session: AsyncSession) -> Sequence[RecordSourceCandidate]:
         statement = (
-            select(Extender)
-            .where(Extender.submission_status == Status.CONFIRMED)
+            select(ExtenderBuild)
+            .where(ExtenderBuild.submission_status == Status.CONFIRMED)
             .options(
-                selectinload(Extender.tag_assignments).selectinload(TagAssignment.definition),
-                selectinload(Extender.build_versions),
+                selectinload(ExtenderBuild.tags).selectinload(TagAssignment.definition),
+                selectinload(ExtenderBuild.build_versions),
             )
         )
         extenders = tuple((await session.execute(statement)).unique().scalars())
@@ -759,7 +759,7 @@ async def _extender_timings(
     return {build_id: tuple(variants) for build_id, variants in grouped.items()}
 
 
-def _door_candidate(door: Door, timing: tuple[TimingVariant, ...]) -> RecordSourceCandidate:
+def _door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...]) -> RecordSourceCandidate:
     fallback_timing = TimingVariant(
         (
             door.normal_opening_time,
@@ -771,8 +771,8 @@ def _door_candidate(door: Door, timing: tuple[TimingVariant, ...]) -> RecordSour
         )
     )
     depth = door.depth or 1
-    restrictions = _restriction_facets(door.tag_assignments)
-    patterns = _pattern_facets(door.tag_assignments)
+    restrictions = _restriction_facets(door.tags)
+    patterns = _pattern_facets(door.tags)
     is_expandable = any(facet.stable_key == "expandable" for facet in restrictions)
     return RecordSourceCandidate(
         kind=BuildKind.DOOR,
@@ -798,14 +798,14 @@ def _door_candidate(door: Door, timing: tuple[TimingVariant, ...]) -> RecordSour
 
 
 def _extender_candidate(
-    extender: Extender,
+    extender: ExtenderBuild,
     timing: tuple[TimingVariant, ...],
 ) -> RecordSourceCandidate | None:
     if extender.orientation is None or extender.extension_length is None:
         return None
     depth = extender.depth or 1
-    restrictions = _restriction_facets(extender.tag_assignments)
-    patterns = _pattern_facets(extender.tag_assignments)
+    restrictions = _restriction_facets(extender.tags)
+    patterns = _pattern_facets(extender.tags)
     is_expandable = any(facet.stable_key == "expandable" for facet in restrictions)
     type_names = tuple(pattern.category_name for pattern in patterns)
     if not type_names and extender.extender_type is not None:
@@ -886,7 +886,7 @@ def _assignment_value(assignment: TagAssignment) -> Decimal | str | bool | None:
     return None
 
 
-def _door_size(door: Door) -> str:
+def _door_size(door: DoorBuild) -> str:
     if door.door_depth is not None and door.door_depth > 1:
         return f"{door.door_width}x{door.door_height}x{door.door_depth}"
     return f"{door.door_width}x{door.door_height}"

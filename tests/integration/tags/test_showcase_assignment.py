@@ -8,7 +8,7 @@ from squid.accounts.models import Account
 from squid.accounts.models import AccountIdentity as AccountIdentityModel
 from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.builds.domain import Status
-from squid.builds.models import Build
+from squid.builds.models import OtherBuild
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
 from squid.tags.models import TagAssignment, TagDefinition
@@ -32,10 +32,9 @@ async def _account(session_factory: async_sessionmaker[AsyncSession], *, bedrock
 
 async def _build(session_factory: async_sessionmaker[AsyncSession], *, submitter_account_id: int) -> int:
     async with session_factory.begin() as session:
-        build = Build(
+        build = OtherBuild(
             submitter_account_id=submitter_account_id,
             submission_status=Status.PENDING,
-            category=None,
             record_category=None,
             width=1,
             height=2,

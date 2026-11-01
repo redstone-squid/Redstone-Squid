@@ -3,7 +3,7 @@
 This is the safety net for the build aggregate redesign. Every test here runs
 against a migrated PostgreSQL database, exercising the real write path
 (`apply_build_taxonomy` + `BuildRepository.save`) and the real read path
-(`BuildMapper.to_domain`), so the one authoritative list of category-specific
+(`BuildLoader.to_domain`), so the one authoritative list of category-specific
 fields is checked in both directions for every category.
 
 Taxonomy names are resolved into tag assignments at edit time by
@@ -27,19 +27,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.application.taxonomy import apply_build_taxonomy
-from squid.builds.domain import (
-    BUILD_CLASS_BY_CATEGORY,
-    Build,
-    BuildCategory,
-    BuildLink,
-    DoorBuild,
-    ExtenderBuild,
-    OtherBuild,
-    SourceMessage,
-    Status,
-)
+from squid.builds.domain import BuildCategory, SourceMessage, Status
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
+from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, BuildLink, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.errors import InvalidStateError
 from squid.settings.models import ServerSetting
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
@@ -236,11 +227,17 @@ def _assert_round_trip(saved: Build, loaded: Build) -> None:
     """Field-for-field comparison over the dataclass, with labelled exceptions."""
     assert type(loaded) is type(saved), "category subclass did not round-trip"
     for field in dataclass_fields(saved):
+        if not field.compare:
+            continue
         name = field.name
         saved_value = getattr(saved, name)
         loaded_value = getattr(loaded, name)
         if name in _DB_GENERATED:
             assert loaded_value is not None, f"{name} should be database-generated"
+        elif name == "links":
+            assert {(link.url, link.media_type) for link in loaded_value} == {
+                (link.url, link.media_type) for link in saved_value
+            }
         elif name in _SET_COMPARED:
             assert set(loaded_value) == set(saved_value), f"{name} did not round-trip"
         elif name in _TAG_FIELDS:
@@ -748,3 +745,65 @@ async def test_repeat_credit_of_a_case_folding_name_resolves_to_one_alias(
     async with migrated_session_factory() as session:
         aliases = list((await session.scalars(select(CreatorAlias.normalized_name))).all())
     assert aliases == ["σσ"], "the three credits must resolve to exactly one creator"
+
+
+async def test_detached_build_preview_changes_only_on_explicit_save(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from tests.support.database import assert_loaded_detached
+
+    account_id = await _seed_catalogue(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+    submitted = _make_build(BuildCategory.DOOR, account_id)
+    await _resolve_and_save(migrated_session_factory, repository, submitted)
+    loaded = await repository.get_by_id(submitted.id)
+    assert loaded is not None
+    assert_loaded_detached(loaded)
+    assert_loaded_detached(loaded, attributes={"links", "tags"})
+    for assignment in loaded.tags:
+        assert_loaded_detached(assignment)
+        assert_loaded_detached(assignment.definition)
+
+    preview = loaded.copy_for_edit()
+    preview.width = (loaded.width or 0) + 1
+    preview.extra_info["user"] = "preview only"
+    preview.add_link("image", "https://example.com/preview.png")
+    preview.tags[0].evidence = "preview evidence"
+    assert loaded.extra_info.get("user") != "preview only"
+    assert "https://example.com/preview.png" not in loaded.image_urls
+    assert loaded.tags[0].evidence != "preview evidence"
+
+    unchanged = await repository.get_by_id(loaded.id)
+    assert unchanged is not None
+    assert unchanged.width == loaded.width
+    assert unchanged.revision == loaded.revision
+
+    await repository.save(preview)
+    saved = await repository.get_by_id(loaded.id)
+    assert saved is not None
+    assert saved.width == preview.width
+    assert saved.extra_info["user"] == "preview only"
+    assert "https://example.com/preview.png" in saved.image_urls
+    assert saved.revision == loaded.revision + 1
+
+
+async def test_source_read_preserves_unclassified_links(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    from uuid import uuid4
+
+    owner = await _seed_catalogue(migrated_session_factory)
+    draft_id = uuid4()
+    build = OtherBuild(submitter_account_id=owner, source_submission_draft_id=draft_id)
+    build.links = [BuildLink(url="https://example.com/unclassified", media_type=None)]
+    repository = BuildRepository(migrated_session_factory)
+    await repository.save(build)
+
+    async with migrated_session_factory.begin() as session:
+        loaded = await repository.source_in_session(session, draft_id)
+        assert loaded is not None
+        assert not session.dirty
+
+    async with migrated_session_factory() as session:
+        links = (await session.scalars(select(BuildLink).where(BuildLink.build_id == build.id))).all()
+        assert [(link.url, link.media_type) for link in links] == [("https://example.com/unclassified", None)]

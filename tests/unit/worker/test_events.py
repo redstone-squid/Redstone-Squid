@@ -4,7 +4,7 @@ from typing import cast, override
 
 from whenever import Instant
 
-from squid.builds.domain import Build
+from squid.builds.models import Build
 from squid.config import WorkerConfig
 from squid.events import DomainEvent, DomainEventDelivery, UnsupportedEventVersionError
 from squid.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot, VoteStatus

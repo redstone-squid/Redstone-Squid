@@ -10,9 +10,10 @@ from whenever import Instant
 
 from squid.accounts.models import Account
 from squid.builds.application import BuildEditor, BuildService
-from squid.builds.domain import Build, BuildCategory
+from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
 from squid.builds.infrastructure.repository import BuildRepository
+from squid.builds.models import Build
 from squid.core.errors import AuthorizationError
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Subject

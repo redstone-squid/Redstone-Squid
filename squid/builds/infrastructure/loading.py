@@ -1,79 +1,26 @@
-"""Map build persistence rows to domain entities.
-
-The domain category subclasses name their fields identically to the joined ORM
-subclasses, so both mapping directions share :data:`CATEGORY_FIELD_NAMES` — the
-single authoritative list of category-specific fields. Adding a column means
-adding it to the ORM model, the domain subclass, and that one tuple.
-"""
+"""Batch loading of creator, version, and source-message facts for builds."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import AccountIdentity, CreatorAlias
-from squid.builds.domain import BUILD_CLASS_BY_CATEGORY, Build, BuildCategory, BuildLink, SourceMessage
+from squid.builds.domain import BuildCategory, SourceMessage
 from squid.builds.models import (
-    Build as SQLBuild,
-)
-from squid.builds.models import (
+    BUILD_CLASS_BY_CATEGORY,
+    Build,
     BuildCreator,
     BuildSourceMessage,
     BuildVersion,
-    Door,
-    Entrance,
-    Extender,
-    Other,
-    Utility,
 )
 from squid.core.errors import DataIntegrityError
 from squid.messages.models import MessageRecord
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import TagAuthority, TagSemanticKind
 from squid.versions.models import Version
-
-CATEGORY_FIELD_NAMES: Mapping[BuildCategory, tuple[str, ...]] = {
-    BuildCategory.DOOR: (
-        "orientation",
-        "door_width",
-        "door_height",
-        "door_depth",
-        "normal_opening_time",
-        "normal_closing_time",
-        "visible_opening_time",
-        "visible_closing_time",
-    ),
-    BuildCategory.EXTENDER: (
-        "orientation",
-        "extension_length",
-        "extender_type",
-    ),
-    BuildCategory.UTILITY: (),
-    BuildCategory.ENTRANCE: (),
-    BuildCategory.OTHER: (),
-}
-"""Category-specific fields, named identically on the ORM and domain subclasses."""
-
-SQL_CLASS_BY_CATEGORY: Mapping[BuildCategory, type[SQLBuild]] = {
-    BuildCategory.DOOR: Door,
-    BuildCategory.EXTENDER: Extender,
-    BuildCategory.UTILITY: Utility,
-    BuildCategory.ENTRANCE: Entrance,
-    BuildCategory.OTHER: Other,
-}
-
-
-def category_values_from_row(sql_build: SQLBuild) -> dict[str, Any]:
-    """Read the category-specific fields off a joined row."""
-    return {name: getattr(sql_build, name) for name in CATEGORY_FIELD_NAMES[BuildCategory(sql_build.category)]}
-
-
-def category_values_from_domain(build: Build) -> dict[str, Any]:
-    """Read the category-specific fields off a domain entity."""
-    return {name: getattr(build, name) for name in CATEGORY_FIELD_NAMES[build.category]}
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,28 +33,22 @@ class _CrossContextValues:
     source_messages: Mapping[int, list[SourceMessage]]
 
 
-class BuildMapper:
-    """Load cross-context values explicitly while mapping a build.
+class BuildLoader:
+    """Enrich loaded builds with facts owned by other contexts."""
 
-    Cross-context relationships were deliberately removed from the ORM models,
-    so the values other contexts own are fetched here instead of traversed.
-    Batch them per page: `to_domain` is the single-row delegate of
-    `to_domain_many`, which issues a fixed four queries regardless of page size.
-    """
-
-    async def to_domain(self, session: AsyncSession, sql_build: SQLBuild) -> Build:
-        mapped = await self.to_domain_many(session, [sql_build])
+    async def load(self, session: AsyncSession, sql_build: Build) -> Build:
+        mapped = await self.load_many(session, [sql_build])
         return mapped[0]
 
-    async def to_domain_many(self, session: AsyncSession, sql_builds: Sequence[SQLBuild]) -> list[Build]:
-        """Map several rows, loading their cross-context values in one batch."""
+    async def load_many(self, session: AsyncSession, sql_builds: Sequence[Build]) -> list[Build]:
+        """Load related facts for a page in four queries, regardless of page size."""
         if not sql_builds:
             return []
         values = await self._load_cross_context(session, sql_builds)
-        return [self._to_domain(sql_build, values) for sql_build in sql_builds]
+        return [self._populate(sql_build, values) for sql_build in sql_builds]
 
     @staticmethod
-    async def _load_cross_context(session: AsyncSession, sql_builds: Sequence[SQLBuild]) -> _CrossContextValues:
+    async def _load_cross_context(session: AsyncSession, sql_builds: Sequence[Build]) -> _CrossContextValues:
         build_ids = [sql_build.id for sql_build in sql_builds]
         account_ids = {
             sql_build.submitter_account_id
@@ -159,9 +100,9 @@ class BuildMapper:
         return _CrossContextValues(creators, submitter_discord_ids, versions, source_messages)
 
     @staticmethod
-    def _to_domain(sql_build: SQLBuild, values: _CrossContextValues) -> Build:
+    def _populate(sql_build: Build, values: _CrossContextValues) -> Build:
         category = BuildCategory(sql_build.category)
-        if not isinstance(sql_build, SQL_CLASS_BY_CATEGORY[category]):
+        if not isinstance(sql_build, BUILD_CLASS_BY_CATEGORY[category]):
             msg = f"Unsupported persisted build category: {sql_build.category}."
             raise TypeError(msg)
 
@@ -173,7 +114,7 @@ class BuildMapper:
         )
         source_messages = tuple(values.source_messages.get(sql_build.id, ()))
 
-        tags = list(sql_build.tag_assignments)
+        tags = list(sql_build.tags)
         official_restrictions = [
             assignment.definition
             for assignment in tags
@@ -186,63 +127,26 @@ class BuildMapper:
             if assignment.definition.authority is TagAuthority.OFFICIAL
             and assignment.definition.semantic_kind is TagSemanticKind.PATTERN
         ]
-        return BUILD_CLASS_BY_CATEGORY[category](
-            id=sql_build.id,
-            revision=sql_build.revision,
-            submission_status=sql_build.submission_status,
-            record_category=sql_build.record_category,
-            versions=list(values.versions.get(sql_build.id, ())),
-            version_spec=sql_build.version_spec,
-            width=sql_build.width,
-            height=sql_build.height,
-            depth=sql_build.depth,
-            patterns=official_patterns,
-            wiring_placement_restrictions=[
-                restriction.display_name
-                for restriction in official_restrictions
-                if restriction.restriction_type == "wiring-placement"
-            ],
-            animated_restrictions=[
-                restriction.display_name
-                for restriction in official_restrictions
-                if restriction.restriction_type == "animated"
-            ],
-            component_restrictions=[
-                restriction.display_name
-                for restriction in official_restrictions
-                if restriction.restriction_type == "component"
-            ],
-            miscellaneous_restrictions=[
-                restriction.display_name
-                for restriction in official_restrictions
-                if restriction.restriction_type == "miscellaneous"
-            ],
-            tags=tags,
-            extra_info=sql_build.extra_info,
-            creators_ign=list(values.creators.get(sql_build.id, ())),
-            # A NULL media_type (the column is legacy-nullable) was invisible to the old
-            # per-type filters as well, so such rows stay unmapped rather than guessed at.
-            links=[
-                BuildLink(url=link.url, media_type=link.media_type)
-                for link in sql_build.links
-                if link.media_type is not None
-            ],
-            display_name=sql_build.display_name,
-            source_submission_draft_id=sql_build.source_submission_draft_id,
-            sponsor=_sponsor(sql_build),
-            submitter_account_id=sql_build.submitter_account_id,
-            submitter_discord_id=submitter_discord_id,
-            completion_time=sql_build.completion_time,
-            completion_at=sql_build.completion_at,
-            completion_evidence=sql_build.completion_evidence,
-            description=sql_build.description,
-            submission_time=sql_build.submission_time,
-            edited_time=sql_build.edited_time,
-            source_messages=source_messages,
-            ai_generated=sql_build.ai_generated,
-            embedding=sql_build.embedding,
-            **category_values_from_row(sql_build),
-        )
+        sql_build.versions = list(values.versions.get(sql_build.id, ()))
+        sql_build.patterns = official_patterns
+        sql_build.wiring_placement_restrictions = [
+            r.display_name for r in official_restrictions if r.restriction_type == "wiring-placement"
+        ]
+        sql_build.animated_restrictions = [
+            r.display_name for r in official_restrictions if r.restriction_type == "animated"
+        ]
+        sql_build.component_restrictions = [
+            r.display_name for r in official_restrictions if r.restriction_type == "component"
+        ]
+        sql_build.miscellaneous_restrictions = [
+            r.display_name for r in official_restrictions if r.restriction_type == "miscellaneous"
+        ]
+        sql_build.creators_ign = list(values.creators.get(sql_build.id, ()))
+        sql_build.submitter_discord_id = submitter_discord_id
+        # These facts are immutable to callers; loading supplies their initial values.
+        object.__setattr__(sql_build, "__frozen_source_messages", source_messages)
+        object.__setattr__(sql_build, "__frozen_sponsor", _sponsor(sql_build))
+        return sql_build
 
 
 def _source_message(message: MessageRecord) -> SourceMessage:
@@ -256,7 +160,7 @@ def _source_message(message: MessageRecord) -> SourceMessage:
     )
 
 
-def _sponsor(build: SQLBuild) -> PublicSponsor | None:
+def _sponsor(build: Build) -> PublicSponsor | None:
     values = (
         build.sponsor_display_name,
         build.sponsor_address,

@@ -17,7 +17,7 @@ from whenever import Instant
 from squid.accounts.models import CreatorAlias
 from squid.builds.domain.titles import format_build_category, format_build_display_title
 from squid.builds.errors import InvalidBuildError
-from squid.builds.infrastructure.mapping import BuildMapper
+from squid.builds.infrastructure.loading import BuildLoader
 from squid.builds.models import (
     Build,
     BuildCreator,
@@ -309,7 +309,7 @@ class SearchProjectionLoader:
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
-        self._build_mapper = BuildMapper()
+        self._build_mapper = BuildLoader()
 
     async def load(self, resource_kind: str, source_key: str) -> SearchProjection | None:
         """Load the requested resource, returning None when its source was deleted."""
@@ -330,7 +330,7 @@ class SearchProjectionLoader:
             select(Build)
             .where(Build.id == build_id)
             .options(
-                selectinload(Build.tag_assignments),
+                selectinload(Build.tags),
                 selectinload(Build.links),
             )
         )
@@ -360,7 +360,7 @@ class SearchProjectionLoader:
         canonical_subtitle: str | None = None
         title_diagnostics: list[dict[str, str | list[str]]] = []
         try:
-            domain_build = await self._build_mapper.to_domain(self._session, build)
+            domain_build = await self._build_mapper.load(self._session, build)
             formatted = format_build_category(domain_build)
             current_java = await self._session.scalar(
                 select(Version)
@@ -384,7 +384,7 @@ class SearchProjectionLoader:
             submitted_description = build.extra_info.get("user")
             description = submitted_description if isinstance(submitted_description, str) else None
         approved_assignments = tuple(
-            assignment for assignment in build.tag_assignments if assignment.definition.moderation_status == "approved"
+            assignment for assignment in build.tags if assignment.definition.moderation_status == "approved"
         )
         assigned_tag_names = tuple(_render_tag_assignment(assignment) for assignment in approved_assignments)
         restriction_names = tuple(
@@ -404,6 +404,8 @@ class SearchProjectionLoader:
             for name, value in (("width", build.width), ("height", build.height), ("depth", build.depth))
             if value is not None
         }
+        assert build.submission_status is not None
+        assert build.submission_time is not None and build.edited_time is not None
         facets = [
             *(ProjectionFacet("restriction", name) for name in restriction_names),
             *(ProjectionFacet("type", name) for name in type_names),

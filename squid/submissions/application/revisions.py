@@ -1,15 +1,15 @@
 """Explicit review and approval of persisted recalculation candidates."""
 
 from collections.abc import Sequence
-from copy import deepcopy
 from typing import Protocol
 from uuid import UUID, uuid4, uuid5
 
 from whenever import Instant
 
 from squid.builds.application import BuildEditor, BuildService
-from squid.builds.domain import Build, BuildDraft
+from squid.builds.domain import BuildDraft
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
+from squid.builds.models import Build
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Subject
@@ -134,7 +134,9 @@ class RevisionProposalService:
                 expected_revision=proposal.expected_revision,
                 current_revision=build.revision,
             )
-        prepared = await self._builds.prepare_edit(BuildEditor(actor), deepcopy(build), proposal.facts.patch(build))
+        prepared = await self._builds.prepare_edit(
+            BuildEditor(actor), build.copy_for_edit(), proposal.facts.patch(build)
+        )
         if revision_values(prepared) != proposal.after:
             message = "Resolved build facts changed since review; renew the proposal before approving. "
             raise ConflictError(message)

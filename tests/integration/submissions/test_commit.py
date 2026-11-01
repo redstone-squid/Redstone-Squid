@@ -9,9 +9,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.builds.domain import Build, BuildCategory
+from squid.builds.domain import BuildCategory
 from squid.builds.infrastructure.repository import BuildRepository
-from squid.builds.models import Build as SQLBuild
+from squid.builds.models import Build
 from squid.events.models import DomainEventRecord
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
@@ -98,7 +98,7 @@ async def test_executor_commits_build_receipt_and_event_once(
         assert receipt is not None
         assert receipt.build_id == result.build_id
         assert await session.scalar(select(func.count()).select_from(SubmissionReceiptMedia)) == int(with_media)
-        assert await session.scalar(select(func.count()).select_from(SQLBuild)) == 1
+        assert await session.scalar(select(func.count()).select_from(Build)) == 1
         assert (
             await session.scalar(
                 select(func.count())
@@ -128,7 +128,7 @@ async def test_receipt_failure_rolls_back_build_and_events(
         with pytest.raises(RuntimeError, match="receipt unavailable"):
             await executor.execute(claim, now=Instant.now())
     async with migrated_session_factory() as session:
-        assert await session.scalar(select(func.count()).select_from(SQLBuild)) == 0
+        assert await session.scalar(select(func.count()).select_from(Build)) == 0
         assert (
             await session.scalar(
                 select(func.count())
@@ -157,7 +157,7 @@ async def test_reclaimed_worker_cannot_create_a_build(
     )
     assert await executor.execute(claim, now=Instant.now()) is None
     async with migrated_session_factory() as session:
-        assert await session.scalar(select(func.count()).select_from(SQLBuild)) == 0
+        assert await session.scalar(select(func.count()).select_from(Build)) == 0
     assert isinstance(await executor.execute(replacement, now=Instant.now()), FinalizedBuild)
 
 
@@ -218,7 +218,7 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
     assert isinstance(result, BuildSubmissionRejected)
     assert result.issues[0].reason is SubmissionAttentionReason.PERMISSION_REVOKED
     async with migrated_session_factory() as session:
-        assert await session.scalar(select(func.count()).select_from(SQLBuild)) == 0
+        assert await session.scalar(select(func.count()).select_from(Build)) == 0
 
 
 async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
@@ -287,3 +287,28 @@ async def test_source_messages_commit_with_build_and_survive_run_retention(
     saved = await builds.get_by_id(result.build_id)
     assert saved is not None
     assert saved.source_messages == (source,)
+
+
+async def test_executor_recovers_a_loaded_source_build(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    claim = await claimed_submission(migrated_session_factory)
+    repository = BuildRepository(migrated_session_factory)
+    existing = await PreparedBuilds().prepare(claim.payload)
+    await repository.save(existing)
+
+    class ExistingBuilds:
+        async def prepare(self, submission: NormalizedSubmission) -> Build:
+            loaded = await repository.get_by_source_submission_draft_id(submission.source_draft_id)
+            assert loaded is not None
+            return loaded
+
+    executor = PostgresSubmissionExecutor(migrated_session_factory, repository, ExistingBuilds())
+    result = await executor.execute(claim, now=Instant.now())
+    assert isinstance(result, FinalizedBuild)
+    assert result.build_id == existing.id
+    async with migrated_session_factory() as session:
+        assert await session.scalar(select(func.count()).select_from(Build)) == 1
+        receipt = await session.get(SubmissionFinalizationResult, claim.job_id)
+        assert receipt is not None
+        assert receipt.build_id == existing.id

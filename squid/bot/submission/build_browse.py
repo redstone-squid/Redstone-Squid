@@ -18,7 +18,8 @@ from squid.bot.submission.schematics import (
 from squid.bot.submission.ui.controls import build_edit
 from squid.bot.ui import tr
 from squid.builds.application import BuildQueryService, BuildService
-from squid.builds.domain import Build, Status
+from squid.builds.domain import Status
+from squid.builds.models import Build
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DETECT_LATTICE,

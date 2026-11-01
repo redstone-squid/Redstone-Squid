@@ -11,7 +11,8 @@ from squid.api.v1.builds import list_builds
 from squid.api.v1.me import list_my_builds
 from squid.api.v1.schemas.builds import BuildStatusFilter
 from squid.builds.application import DEFAULT_BUILD_LIST_SORT, BuildListSort, BuildQueryService
-from squid.builds.domain import Build, DoorBuild, Status
+from squid.builds.domain import Status
+from squid.builds.models import Build, DoorBuild
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.permissions.application import PermissionService

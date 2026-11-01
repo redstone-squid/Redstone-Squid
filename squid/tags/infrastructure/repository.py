@@ -13,7 +13,6 @@ from squid.builds.models import Build
 from squid.tags.application import TagDefinitionRepository
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
-from squid.tags.models import TagDefinition as SQLTagDefinition
 
 
 class PostgresTagDefinitionRepository(TagDefinitionRepository):
@@ -33,7 +32,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         query_name: str | None,
         created_by_account_id: int,
     ) -> TagDefinition:
-        row = SQLTagDefinition(
+        row = TagDefinition(
             stable_key=stable_key,
             display_name=display_name,
             normalized_name=normalized_name,
@@ -62,9 +61,9 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         async with self._session_factory() as session:
             rows = (
                 await session.scalars(
-                    select(SQLTagDefinition)
-                    .where(SQLTagDefinition.moderation_status == TagModerationStatus.PENDING)
-                    .order_by(SQLTagDefinition.created_at, SQLTagDefinition.id)
+                    select(TagDefinition)
+                    .where(TagDefinition.moderation_status == TagModerationStatus.PENDING)
+                    .order_by(TagDefinition.created_at, TagDefinition.id)
                 )
             ).all()
             return tuple(row for row in rows)
@@ -72,7 +71,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
     @override
     async def get(self, tag_id: int) -> TagDefinition | None:
         async with self._session_factory() as session:
-            row = await session.get(SQLTagDefinition, tag_id)
+            row = await session.get(TagDefinition, tag_id)
             return None if row is None else row
 
     @override
@@ -80,11 +79,9 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         async with self._session_factory() as session:
             rows = (
                 await session.scalars(
-                    select(SQLTagDefinition)
-                    .where(SQLTagDefinition.moderation_status == TagModerationStatus.APPROVED)
-                    .order_by(
-                        SQLTagDefinition.default_display_order, SQLTagDefinition.display_name, SQLTagDefinition.id
-                    )
+                    select(TagDefinition)
+                    .where(TagDefinition.moderation_status == TagModerationStatus.APPROVED)
+                    .order_by(TagDefinition.default_display_order, TagDefinition.display_name, TagDefinition.id)
                 )
             ).all()
             return tuple(row for row in rows)
@@ -92,7 +89,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
     @override
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None:
         async with self._session_factory.begin() as session:
-            row = await session.get(SQLTagDefinition, tag_id, with_for_update=True)
+            row = await session.get(TagDefinition, tag_id, with_for_update=True)
             if row is None:
                 return None
             row.moderation_status = status
@@ -136,7 +133,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             )
             if owned_build_id is None:
                 return False
-            definition = await session.get(SQLTagDefinition, tag_id)
+            definition = await session.get(TagDefinition, tag_id)
             if definition is None:
                 return False
             value_type = definition.value_type

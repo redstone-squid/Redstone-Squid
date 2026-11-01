@@ -9,7 +9,6 @@ from whenever import Instant
 from squid.builds.domain import (
     BuildCategory,
     BuildDraft,
-    BuildLink,
     DoorOrientationLiteral,
     Info,
     MediaTypeLiteral,
@@ -17,6 +16,7 @@ from squid.builds.domain import (
     SourceMessage,
     Status,
 )
+from squid.builds.models import BuildLink
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import RecordOperator, TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
 from squid.tags.models import TagAssignment, TagDefinition
@@ -122,7 +122,9 @@ class BuildDraftPayload:
     def from_draft(cls, draft: BuildDraft) -> BuildDraftPayload:
         """Capture inferred values without storing SQLAlchemy state."""
         values = {item.name: getattr(draft, item.name) for item in fields(cls)}
-        values["links"] = [BuildLinkPayload(link.url, link.media_type) for link in draft.links]
+        values["links"] = [
+            BuildLinkPayload(link.url, link.media_type) for link in draft.links if link.media_type is not None
+        ]
         values["tags"] = [
             TagAssignmentPayload(
                 definition=TagDefinitionPayload(

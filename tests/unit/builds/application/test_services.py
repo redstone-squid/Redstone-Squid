@@ -15,8 +15,9 @@ from squid.builds.application.services import (
     BuildService,
 )
 from squid.builds.application.taxonomy import TaxonomyResolution, normalize_tag_name
-from squid.builds.domain import Build, BuildCategory, DoorBuild, OtherBuild, Status, UtilityBuild
+from squid.builds.domain import BuildCategory, Status
 from squid.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError
+from squid.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import SubjectRecords

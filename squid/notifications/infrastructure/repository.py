@@ -483,6 +483,7 @@ class PostgresNotificationRepository:
         kind = (
             NotificationKind.BUILD_CONFIRMED if event.event_type == "build.confirmed" else NotificationKind.BUILD_DENIED
         )
+        assert build.submitter_account_id is not None
         candidates = [
             NotificationCandidate(
                 account_id=build.submitter_account_id,

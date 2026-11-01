@@ -1,6 +1,6 @@
 """Query-count coverage for the build read paths.
 
-`BuildMapper` loads the values other contexts own with its own SELECTs rather
+`BuildLoader` loads the values other contexts own with its own SELECTs rather
 than traversing ORM relationships, which cross-context decoupling deliberately
 removed. That made mapping a page O(rows) queries. These tests pin the fixed
 cost so the batching cannot silently regress into an N+1.
@@ -11,8 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
-from squid.builds.domain import OtherBuild, Status
+from squid.builds.domain import Status
 from squid.builds.infrastructure.repository import BuildRepository
+from squid.builds.models import OtherBuild
 from squid.versions.models import Version
 from tests.support.database import record_queries
 

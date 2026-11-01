@@ -7,7 +7,7 @@ import pytest
 
 from squid.bot.submission.search import SearchCog, SearchTarget
 from squid.builds.application import BuildQueryService
-from squid.builds.domain import Build
+from squid.builds.models import Build
 from squid.core.errors import ValidationError
 from squid.search.application import SearchService
 from squid.search.domain import SearchMode, SearchPage, SearchRequest, SearchScope, SortDirection

@@ -25,9 +25,9 @@ from squid.builds.application import BuildQueryService, BuildService
 from squid.builds.application.editing import BuildEditPatch
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
 from squid.builds.application.services import BuildEditor
-from squid.builds.domain import Build
 from squid.builds.domain.models import Status
 from squid.builds.errors import BuildNotFoundError
+from squid.builds.models import Build
 from squid.cli_auth.application import CliAuthorizationService
 from squid.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.cli_auth.errors import InvalidCliEnrollmentError

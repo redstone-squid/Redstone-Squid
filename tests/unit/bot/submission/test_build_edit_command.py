@@ -14,7 +14,8 @@ from squid.bot.submission.ui.controls import recover_build_editor
 from squid.bot.submission.ui.opening import prepare_build_editor
 from squid.bot.submission.ui.views import BuildEditScreen
 from squid.builds.application import BuildService
-from squid.builds.domain import DoorBuild, OtherBuild, RestrictionTypeLiteral, Status
+from squid.builds.domain import RestrictionTypeLiteral, Status
+from squid.builds.models import DoorBuild, OtherBuild
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import PermissionNode, Subject
 from squid.settings.application import SettingsService

@@ -20,8 +20,9 @@ from squid.bot.submission.ui.fields import (
 from squid.bot.ui import DISCORD_YELLOW, tr
 from squid.bot.utils.sentinel import DEFAULT, DefaultType
 from squid.builds.application import BuildEditPatch, BuildService
-from squid.builds.domain import Build, BuildCategory, DoorBuild
+from squid.builds.domain import BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
+from squid.builds.models import Build, DoorBuild
 from squid.topics import resource_topic
 
 _DOOR_ONLY = frozenset({BuildCategory.DOOR})

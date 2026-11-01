@@ -17,13 +17,13 @@ from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import Account, AccountIdentity
 from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.builds.application import BuildService
-from squid.builds.domain import Build, BuildCategory, BuildLink, Status
+from squid.builds.domain import BuildCategory, Status
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.locks import BuildLockRepository
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
-from squid.builds.models import Build as SQLBuild
+from squid.builds.models import Build, BuildLink
 from squid.core.errors import DataIntegrityError
 from squid.events import DomainEvent
 from squid.events.models import DomainEventRecord
@@ -171,11 +171,11 @@ async def test_repository_round_trips_immutable_public_sponsor_snapshot(
         row = (
             await session.execute(
                 select(
-                    SQLBuild.sponsor_installation_id,
-                    SQLBuild.sponsor_display_name,
-                    SQLBuild.sponsor_address,
-                    SQLBuild.sponsor_website_url,
-                ).where(SQLBuild.id == build.id)
+                    Build.sponsor_installation_id,
+                    Build.sponsor_display_name,
+                    Build.sponsor_address,
+                    Build.sponsor_website_url,
+                ).where(Build.id == build.id)
             )
         ).one()
     assert row == (installation_id, "Example server", "play.example.test", "https://example.test/server")
@@ -286,7 +286,7 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
         await repository.save(invalid_build)
     assert invalid_build.id is None
     async with migrated_session_factory() as session:
-        assert await session.scalar(select(func.count()).select_from(SQLBuild)) == 1
+        assert await session.scalar(select(func.count()).select_from(Build)) == 1
 
 
 async def test_concurrent_source_draft_writes_publish_and_materialize_one_submission_event(
@@ -340,7 +340,7 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
     async with migrated_session_factory() as session:
         assert (
             await session.scalar(
-                select(func.count()).select_from(SQLBuild).where(SQLBuild.source_submission_draft_id == draft_id)
+                select(func.count()).select_from(Build).where(Build.source_submission_draft_id == draft_id)
             )
             == 1
         )
@@ -606,7 +606,7 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
     await accounts.merge(survivor.id, absorbed.id)
 
     async with migrated_session_factory() as session:
-        build_owner = await session.scalar(select(SQLBuild.submitter_account_id).where(SQLBuild.id == build_id))
+        build_owner = await session.scalar(select(Build.submitter_account_id).where(Build.id == build_id))
         draft_owner = (
             await session.execute(
                 select(SubmissionDraft.owner_account_id, SubmissionDraft.source_installation_id).where(
@@ -767,7 +767,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
                 )
             ).all()
         }
-        build_owner = await session.scalar(select(SQLBuild.submitter_account_id).where(SQLBuild.id == build_id))
+        build_owner = await session.scalar(select(Build.submitter_account_id).where(Build.id == build_id))
         pending_status = await session.scalar(
             select(SubmissionDraft.status).where(SubmissionDraft.id == pending_draft_id)
         )

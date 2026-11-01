@@ -7,8 +7,9 @@ from uuid import UUID
 
 import pytest
 
-from squid.builds.domain import Build, BuildCategory, DoorBuild, ExtenderBuild
+from squid.builds.domain import BuildCategory
 from squid.builds.errors import InvalidBuildError
+from squid.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain import (
     BuildSubmissionRejected,

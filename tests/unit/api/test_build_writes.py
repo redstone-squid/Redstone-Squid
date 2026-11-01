@@ -11,8 +11,9 @@ from squid.api.v1.builds import edit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch
 from squid.builds.application import BuildEditor, BuildService
 from squid.builds.application.editing import BuildEditPatch
-from squid.builds.domain import Build, DoorBuild, Status
+from squid.builds.domain import Status
 from squid.builds.errors import BuildRevisionRequiredError
+from squid.builds.models import Build, DoorBuild
 from squid.core.errors import AuthorizationError
 from tests.unit.api.fakes import credential_nodes
 

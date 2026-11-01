@@ -10,7 +10,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import DISCORD_GREEN, tr
-from squid.builds.domain import Build
+from squid.builds.models import Build
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage, SearchRequest
 from squid_ui.sources import window_fingerprint
 

@@ -7,7 +7,8 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.builds.application.editing import BuildEditPatch
-from squid.builds.domain import Build, BuildCategory, BuildDraft, DoorBuild
+from squid.builds.domain import BuildCategory, BuildDraft
+from squid.builds.models import Build, DoorBuild
 from squid.core.errors import JSONValue, ValidationError
 
 

@@ -4,6 +4,7 @@ import re
 from collections.abc import Iterable
 
 from squid.builds.errors import InvalidBuildError
+from squid.builds.models import Build, DoorBuild, EntranceBuild, ExtenderBuild, OtherBuild, UtilityBuild
 from squid.catalogue.domain import (
     DoorCategory,
     ExtenderCategory,
@@ -13,7 +14,7 @@ from squid.catalogue.domain import (
     TitleToken,
 )
 
-from .models import Build, DoorBuild, EntranceBuild, ExtenderBuild, OtherBuild, Status, UtilityBuild
+from .models import Status
 
 _SHOWCASE_QUALIFIER = re.compile(r"(?:\d+\.\d+\s*s|\d+\s*[Bb]locks)")
 

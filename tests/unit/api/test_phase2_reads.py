@@ -15,7 +15,8 @@ from squid.accounts.models import CreatorAlias
 from squid.api.dependencies import get_services
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.builds.application import BuildQueryService
-from squid.builds.domain import Build, DoorBuild, Status
+from squid.builds.domain import Status
+from squid.builds.models import Build, DoorBuild
 from squid.runtime import ApiServices
 from squid.schematics.application import RenderedSchematic, RenderRequest, RenderSkipReason, SchematicService
 from squid.schematics.errors import SchematicNotFoundError, SchematicRenderRefusedError

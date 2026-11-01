@@ -13,7 +13,8 @@ from whenever import Instant
 
 from squid.bot.events.handlers import PostSubmittedBuildHandler
 from squid.builds.application import BuildQueryService
-from squid.builds.domain import Build, OtherBuild, Status
+from squid.builds.domain import Status
+from squid.builds.models import Build, OtherBuild
 from squid.events import DomainEvent, UnsupportedEventVersionError
 
 

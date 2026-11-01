@@ -11,7 +11,8 @@ from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, TypeAdapter, Vali
 
 from squid.api.v1.schemas import FromDomain
 from squid.builds.application.queries import PublicBuildSummary
-from squid.builds.domain import Build, DoorBuild, ExtenderBuild, Status
+from squid.builds.domain import Status
+from squid.builds.models import Build, DoorBuild, ExtenderBuild
 
 type InputDimensions = tuple[int | None, int | None, int | None]
 

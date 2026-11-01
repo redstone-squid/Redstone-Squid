@@ -143,6 +143,7 @@ async def _canonicalize_notifications(session: AsyncSession, *, survivor: int, a
         notification.source_key: notification for notification in notifications if notification.account_id == survivor
     }
 
+    notifications_to_remove: list[InboxNotification] = []
     for absorbed_notification in notifications:
         try:
             source = NotificationSource.parse(
@@ -190,7 +191,12 @@ async def _canonicalize_notifications(session: AsyncSession, *, survivor: int, a
             await session.delete(absorbed_delivery)
         elif survivor_delivery is not None:
             _fence_merged_delivery(survivor_delivery, survivor)
-        await session.delete(absorbed_notification)
+        notifications_to_remove.append(absorbed_notification)
+
+    # Move or delete deliveries before deleting parents whose FK cascade could remove them.
+    await session.flush()
+    for notification in notifications_to_remove:
+        await session.delete(notification)
 
 
 def _earliest_present(left: Instant | None, right: Instant | None) -> Instant | None:

@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from squid.builds.domain import Build
+from squid.builds.models import Build
 
 
 class EmbeddingModel(Protocol):

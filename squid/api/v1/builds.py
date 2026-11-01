@@ -30,11 +30,11 @@ from squid.builds.application import (
     BuildListSort,
     BuildSortField,
 )
-from squid.builds.domain import Build
 from squid.builds.errors import (
     BuildRevisionMismatchError,
     BuildRevisionRequiredError,
 )
+from squid.builds.models import Build
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
 from squid.permissions.application import PermissionService
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING

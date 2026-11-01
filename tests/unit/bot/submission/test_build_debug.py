@@ -3,7 +3,8 @@
 import json
 
 from squid.bot.submission.search import _debug_dump
-from squid.builds.domain import DoorBuild, Status
+from squid.builds.domain import Status
+from squid.builds.models import DoorBuild
 
 
 def test_the_dump_is_json_a_person_can_read() -> None:

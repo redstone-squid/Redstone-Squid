@@ -21,9 +21,10 @@ from squid.bot.ui import (
     truncate_display_text,
 )
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
-from squid.builds.domain import Build, DoorBuild, Status
+from squid.builds.domain import Status
 from squid.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.builds.domain.titles import format_build_display_title
+from squid.builds.models import Build, DoorBuild
 from squid.observability import add_counter
 
 if TYPE_CHECKING:

@@ -28,7 +28,7 @@ from squid.bot.ui import HOST_DEFAULTS
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.utils.uploads import CatboxClient
 from squid.bot.utils.web import MediaPreviewClient
-from squid.builds.domain import Build
+from squid.builds.models import Build
 from squid.config import (
     BotIdentityConfig,
     BotProcessConfig,

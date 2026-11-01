@@ -1,6 +1,12 @@
 """SQLAlchemy build and taxonomy models."""
 
+import typing
 import uuid
+from annotationlib import Format, get_annotations
+from collections.abc import Mapping
+from copy import deepcopy
+from dataclasses import asdict, field, fields
+from typing import Any, Final, cast, get_args
 
 from pgvector.sqlalchemy import VECTOR
 from sqlalchemy import (
@@ -29,13 +35,19 @@ from squid.builds.domain import (
     RecordCategoryLiteral,
     Status,
 )
+from squid.builds.domain.models import SourceMessage, StagedMedia, StagedTaxonomy, freeze_fields, frozen_field
+from squid.builds.errors import InvalidBuildError
 from squid.config import EMBEDDING_DIMENSION
+from squid.core.errors import InvalidStateError
+from squid.core.i18n import tr
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, IntEnumSmallInt, now
+from squid.persistence.types import InstantUTC, IntEnumSmallInt, StrEnumText
+from squid.sponsors import PublicSponsor
 from squid.tags.models import TagAssignment
 
 
-class Build(Base, kw_only=True):
+@freeze_fields
+class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     """A build submitted by a user."""
 
     __tablename__ = "builds"
@@ -96,49 +108,54 @@ class Build(Base, kw_only=True):
         ),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=None)
     revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
-    submission_status: Mapped[Status] = mapped_column(IntEnumSmallInt(Status), nullable=False)
-    record_category: Mapped[RecordCategoryLiteral | None] = mapped_column(Text)
-    width: Mapped[int | None] = mapped_column(Integer)
-    height: Mapped[int | None] = mapped_column(Integer)
-    depth: Mapped[int | None] = mapped_column(Integer)
-    completion_time: Mapped[str | None] = mapped_column(Text)  # Given by user, not parsable as a datetime
+    submission_status: Mapped[Status | None] = mapped_column(IntEnumSmallInt(Status), nullable=False, default=None)
+    record_category: Mapped[RecordCategoryLiteral | None] = mapped_column(Text, default=None)
+    width: Mapped[int | None] = mapped_column(Integer, default=None)
+    height: Mapped[int | None] = mapped_column(Integer, default=None)
+    depth: Mapped[int | None] = mapped_column(Integer, default=None)
+    completion_time: Mapped[str | None] = mapped_column(Text, default=None)  # Given by user, not parsable as a datetime
     completion_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     completion_evidence: Mapped[str | None] = mapped_column(Text, default=None)
     description: Mapped[str | None] = mapped_column(Text, default=None)
     display_name: Mapped[str | None] = mapped_column(Text, default=None)
     source_submission_draft_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """Stable finalization key retained even if the short-lived source draft is later pruned."""
-    sponsor_installation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
+    sponsor_installation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None, compare=False)
     """Opaque Paper installation ID snapshotted without a mutable foreign key."""
-    sponsor_display_name: Mapped[str | None] = mapped_column(Text, default=None)
-    sponsor_address: Mapped[str | None] = mapped_column(Text, default=None)
-    sponsor_description: Mapped[str | None] = mapped_column(Text, default=None)
-    sponsor_website_url: Mapped[str | None] = mapped_column(Text, default=None)
-    category: Mapped[BuildCategory | None] = mapped_column(Text)
-    submitter_account_id: Mapped[int] = mapped_column(
+    sponsor_display_name: Mapped[str | None] = mapped_column(Text, default=None, compare=False)
+    sponsor_address: Mapped[str | None] = mapped_column(Text, default=None, compare=False)
+    sponsor_description: Mapped[str | None] = mapped_column(Text, default=None, compare=False)
+    sponsor_website_url: Mapped[str | None] = mapped_column(Text, default=None, compare=False)
+    category: Mapped[BuildCategory] = mapped_column(
+        StrEnumText(BuildCategory), nullable=True, init=False, compare=False
+    )
+    submitter_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="builds_submitter_account_id_fkey", ondelete="RESTRICT"),
         nullable=False,
+        default=None,
     )
     version_spec: Mapped[str | None] = mapped_column(Text, default=None)
     embedding: Mapped[list[float] | None] = mapped_column(VECTOR(EMBEDDING_DIMENSION), default=None)
     """Application-owned semantic vector stored in the authoritative build row."""
-    locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    lock_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    lock_expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    ai_generated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    locked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None, compare=False)
+    lock_token: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None, compare=False)
+    lock_expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None, compare=False)
+    ai_generated: Mapped[bool | None] = mapped_column(Boolean, nullable=False, default=None)
     extra_info: Mapped[Info] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
-    submission_time: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    submission_time: Mapped[Instant | None] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default=None
     )
-    edited_time: Mapped[Instant] = mapped_column(
-        InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
+    edited_time: Mapped[Instant | None] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default=None
     )
-    is_locked: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    is_locked: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("false"), default=False, compare=False
+    )
 
     # Every one of these four child tables declares `ON DELETE CASCADE`, so
     # `passive_deletes=True` lets PostgreSQL do the cascade in the same statement that
@@ -149,28 +166,31 @@ class Build(Base, kw_only=True):
     build_creators: Mapped[list[BuildCreator]] = relationship(
         back_populates="build",
         default_factory=list,
-        lazy="selectin",
+        lazy="raise_on_sql",
         cascade="all, delete-orphan",
         passive_deletes=True,
+        compare=False,
     )
     build_versions: Mapped[list[BuildVersion]] = relationship(
         back_populates="build",
         default_factory=list,
-        lazy="selectin",
+        lazy="raise_on_sql",
         cascade="all, delete-orphan",
         passive_deletes=True,
+        compare=False,
     )
-    tag_assignments: Mapped[list[TagAssignment]] = relationship(
+    tags: Mapped[list[TagAssignment]] = relationship(
         default_factory=list,
-        lazy="selectin",
+        lazy="raise_on_sql",
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
 
-    links: Mapped[list[BuildLink]] = relationship(
+    links: Mapped[list[BuildLink]] = relationship(  # type: ignore[bad-override]
+        # SQLAlchemy exposes the same list as the media mixin through a descriptor.
         back_populates="build",
         default_factory=list,
-        lazy="selectin",
+        lazy="raise_on_sql",
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
@@ -180,14 +200,148 @@ class Build(Base, kw_only=True):
         "version_id_col": revision,
     }
 
+    versions: list[str] = field(default_factory=list)
+    patterns: list[str] = field(default_factory=list)
+    wiring_placement_restrictions: list[str] = field(default_factory=list)
+    animated_restrictions: list[str] = field(default_factory=list)
+    component_restrictions: list[str] = field(default_factory=list)
+    miscellaneous_restrictions: list[str] = field(default_factory=list)
+    creators_ign: list[str] = field(default_factory=list)
+    sponsor: Final[PublicSponsor | None] = frozen_field(default=None)
+    submitter_discord_id: int | None = None
+    source_messages: Final[tuple[SourceMessage, ...]] = frozen_field(default=())
 
-class Door(Build, kw_only=True):
+    def __post_init__(self) -> None:
+        if type(self) is Build:
+            raise InvalidStateError(
+                tr(t"Build cannot be instantiated directly; construct a category subclass or a BuildDraft.")
+            )
+
+    @property
+    def original_link(self) -> str | None:
+        """The jump link to the message this build was submitted from, if any.
+
+        The first source message is the submission itself; later ones are follow-ups
+        such as images, so linking anything else would point away from the request.
+        """
+        for message in self.source_messages:
+            if (link := message.link) is not None:
+                return link
+        return None
+
+    @property
+    def dimensions(self) -> tuple[int | None, int | None, int | None]:
+        """The dimensions of the build."""
+        return self.width, self.height, self.depth
+
+    @dimensions.setter
+    def dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
+        self.width, self.height, self.depth = dimensions
+
+    @property
+    def title(self) -> str:
+        """The user-facing title, including individual-build UX decoration."""
+        from squid.builds.domain.titles import format_build_display_title
+
+        return format_build_display_title(self, markdown=True)
+
+    def edit_values(self) -> dict[str, Any]:
+        """Return comparable application facts without traversing persistence relationships."""
+        values = {item.name: getattr(self, item.name) for item in fields(self) if item.compare}
+        values["links"] = [{"url": link.url, "media_type": link.media_type} for link in self.links]
+        values["tags"] = [
+            {
+                "tag_id": tag.definition.id,
+                "value": tag.value,
+                "display_unit": tag.display_unit,
+                "display_order": tag.display_order,
+                "evidence": tag.evidence,
+                "provenance": tag.provenance,
+            }
+            for tag in self.tags
+        ]
+        values["source_messages"] = [asdict(message) for message in self.source_messages]
+        values["sponsor"] = None if self.sponsor is None else asdict(self.sponsor)
+        return values
+
+    def copy_for_edit(self, *, source_messages: tuple[SourceMessage, ...] | None = None) -> Build:
+        """Create an isolated edit preview with no session or ORM history."""
+        values = {
+            item.name: deepcopy(getattr(self, item.name))
+            for item in fields(self)
+            if item.init and item.compare and item.name not in {"links", "tags"}
+        }
+        values["links"] = [BuildLink(url=link.url, media_type=link.media_type) for link in self.links]
+        values["tags"] = [
+            TagAssignment(tag.definition, tag.value, tag.display_unit, tag.display_order, tag.evidence, tag.provenance)
+            for tag in self.tags
+        ]
+        if source_messages is not None:
+            values["source_messages"] = source_messages
+        return type(self)(**values)
+
+    def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
+        """
+        Returns the differences between this build and another of the same category.
+
+        Values are rendered as plain data — callers persist the result as JSON —
+        so link collections come back as one entry per media type rather than as
+        :class:`BuildLink` objects.
+
+        Args:
+            other: Another build to compare to.
+            allow_different_id: Whether the ID of the builds can be different.
+
+        Returns:
+            A list of tuples containing the attribute name, the value of this build, and the value of the other build.
+
+        Raises:
+            InvalidBuildError: If the IDs differ and allow_different_id is False, or the categories differ.
+        """
+        if type(self) is not type(other):
+            msg = "Cannot diff builds of different categories."
+            raise InvalidBuildError(msg, context={"left": type(self).__name__, "right": type(other).__name__})
+        if self.id != other.id and not allow_different_id:
+            msg = "The IDs of the builds are different."
+            raise InvalidBuildError(msg, context={"left_id": self.id, "right_id": other.id})
+
+        differences: list[tuple[str, T, T]] = []
+        mine = self.edit_values()
+        theirs = other.edit_values()
+        for name, value in mine.items():
+            if name in {"id", "links"}:
+                continue
+            if value != theirs[name]:
+                differences.append((name, value, theirs[name]))
+        for media_type in get_args(MediaTypeLiteral):
+            mine = list(self.urls_of(media_type))
+            theirs = list(other.urls_of(media_type))
+            if mine != theirs:
+                differences.append((f"{media_type.replace('-', '_')}_urls", cast(T, mine), cast(T, theirs)))
+        return differences
+
+    def get_attr_type(self, attribute: str) -> type:
+        """Gets the declared type of a field or property on this build's class."""
+        cls = type(self)
+        for owner in cls.__mro__:
+            annotations = get_annotations(owner, format=Format.STRING)
+            if attribute in annotations:
+                annotation = get_annotations(owner)[attribute]
+                return get_args(annotation)[0] if typing.get_origin(annotation) is Mapped else annotation
+        cls_attr = getattr(cls, attribute, None)
+        if isinstance(cls_attr, property) and cls_attr.fget is not None:
+            return typing.get_type_hints(cls_attr.fget)["return"]
+        msg = f"Attribute {attribute} is not on {cls.__name__}."
+        raise InvalidBuildError(msg, context={"attribute": attribute})
+
+
+class DoorBuild(Build, kw_only=True):
     """A door build with specific dimensions and timing information."""
 
     __tablename__ = "doors"
     __mapper_args__ = {
         "polymorphic_load": "inline",
-        "polymorphic_identity": "Door",
+        "polymorphic_identity": BuildCategory.DOOR,
     }
 
     build_id: Mapped[int] = mapped_column(
@@ -195,24 +349,30 @@ class Door(Build, kw_only=True):
         ForeignKey("builds.id", name="doors_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
         init=False,
+        compare=False,
     )
-    orientation: Mapped[DoorOrientationLiteral] = mapped_column(Text, nullable=False)
-    door_width: Mapped[int] = mapped_column(Integer, nullable=False)
-    door_height: Mapped[int] = mapped_column(Integer, nullable=False)
-    door_depth: Mapped[int | None] = mapped_column(Integer)
-    normal_opening_time: Mapped[int | None] = mapped_column(BigInteger)
-    normal_closing_time: Mapped[int | None] = mapped_column(BigInteger)
-    visible_opening_time: Mapped[int | None] = mapped_column(BigInteger)
-    visible_closing_time: Mapped[int | None] = mapped_column(BigInteger)
+    orientation: Mapped[DoorOrientationLiteral] = mapped_column(Text, nullable=False, default="Door")
+    door_width: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    door_height: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    door_depth: Mapped[int | None] = mapped_column(Integer, default=None)
+    normal_opening_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    normal_closing_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    visible_opening_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    visible_closing_time: Mapped[int | None] = mapped_column(BigInteger, default=None)
+
+    @property
+    def door_dimensions(self) -> tuple[int, int, int | None]:
+        """The dimensions of the door (hallway)."""
+        return self.door_width, self.door_height, self.door_depth
 
 
-class Extender(Build, kw_only=True):
+class ExtenderBuild(Build, kw_only=True):
     """An extender build."""
 
     __tablename__ = "extenders"
     __mapper_args__ = {
         "polymorphic_load": "inline",
-        "polymorphic_identity": "Extender",
+        "polymorphic_identity": BuildCategory.EXTENDER,
     }
 
     build_id: Mapped[int] = mapped_column(
@@ -220,19 +380,20 @@ class Extender(Build, kw_only=True):
         ForeignKey("builds.id", name="extenders_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
         init=False,
+        compare=False,
     )
     orientation: Mapped[str | None] = mapped_column(Text, default=None)
     extension_length: Mapped[int | None] = mapped_column(Integer, default=None)
     extender_type: Mapped[str | None] = mapped_column(Text, default=None)
 
 
-class Utility(Build, kw_only=True):
+class UtilityBuild(Build, kw_only=True):
     """A utility build."""
 
     __tablename__ = "utilities"
     __mapper_args__ = {
         "polymorphic_load": "inline",
-        "polymorphic_identity": "Utility",
+        "polymorphic_identity": BuildCategory.UTILITY,
     }
 
     build_id: Mapped[int] = mapped_column(
@@ -240,16 +401,17 @@ class Utility(Build, kw_only=True):
         ForeignKey("builds.id", name="utilities_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
         init=False,
+        compare=False,
     )
 
 
-class Entrance(Build, kw_only=True):
+class EntranceBuild(Build, kw_only=True):
     """An entrance build."""
 
     __tablename__ = "entrances"
     __mapper_args__ = {
         "polymorphic_load": "inline",
-        "polymorphic_identity": "Entrance",
+        "polymorphic_identity": BuildCategory.ENTRANCE,
     }
 
     build_id: Mapped[int] = mapped_column(
@@ -257,16 +419,17 @@ class Entrance(Build, kw_only=True):
         ForeignKey("builds.id", name="entrances_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
         init=False,
+        compare=False,
     )
 
 
-class Other(Build, kw_only=True):
+class OtherBuild(Build, kw_only=True):
     """A build which does not fit one of the structured catalogue categories."""
 
     __tablename__ = "other_builds"
     __mapper_args__ = {
         "polymorphic_load": "inline",
-        "polymorphic_identity": "Other",
+        "polymorphic_identity": BuildCategory.OTHER,
     }
 
     build_id: Mapped[int] = mapped_column(
@@ -274,6 +437,7 @@ class Other(Build, kw_only=True):
         ForeignKey("builds.id", name="other_builds_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
         init=False,
+        compare=False,
     )
 
 
@@ -287,6 +451,7 @@ class BuildCreator(Base):
         ForeignKey("builds.id", name="build_creators_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
         init=False,
+        compare=False,
     )
     alias_id: Mapped[int] = mapped_column(
         Integer,
@@ -298,7 +463,7 @@ class BuildCreator(Base):
 
 
 # Deliberately reachable only by explicit query, with no relationship on ``Build``:
-# ``BuildMapper`` batch-loads these joined to ``messages`` in a single statement, so an
+# ``BuildLoader`` batch-loads these joined to ``messages`` in a single statement, so an
 # eager load here would just add a second query to every page.
 class BuildSourceMessage(Base):
     """Association table between builds and the Discord messages they came from.
@@ -314,6 +479,7 @@ class BuildSourceMessage(Base):
         BigInteger,
         ForeignKey("builds.id", name="build_source_messages_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
+        compare=False,
     )
     message_id: Mapped[int] = mapped_column(
         BigInteger,
@@ -334,6 +500,7 @@ class BuildVersion(Base):
         ForeignKey("builds.id", name="build_versions_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
         init=False,
+        compare=False,
     )
     version_id: Mapped[int] = mapped_column(
         SmallInteger,
@@ -353,8 +520,18 @@ class BuildLink(Base):
         ForeignKey("builds.id", name="build_links_build_id_fkey", ondelete="CASCADE"),
         primary_key=True,
         init=False,
+        compare=False,
     )
     url: Mapped[str] = mapped_column(Text, nullable=False, primary_key=True)
-    media_type: Mapped[MediaTypeLiteral | None] = mapped_column(Text)  # TODO: nullable
+    media_type: Mapped[MediaTypeLiteral | None] = mapped_column(Text, default=None)  # TODO: nullable
 
     build: Mapped[Build] = relationship(back_populates="links", lazy="raise_on_sql", init=False, repr=False)
+
+
+BUILD_CLASS_BY_CATEGORY: Mapping[BuildCategory, type[Build]] = {
+    BuildCategory.DOOR: DoorBuild,
+    BuildCategory.EXTENDER: ExtenderBuild,
+    BuildCategory.UTILITY: UtilityBuild,
+    BuildCategory.ENTRANCE: EntranceBuild,
+    BuildCategory.OTHER: OtherBuild,
+}

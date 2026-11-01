@@ -13,7 +13,8 @@ from typing import TYPE_CHECKING, cast
 import discord
 
 from squid.bot._types import GuildMessageable
-from squid.builds.domain import Build, Status
+from squid.builds.domain import Status
+from squid.builds.models import Build
 from squid.voting.domain import VoteKind, VoteOption
 
 if TYPE_CHECKING:

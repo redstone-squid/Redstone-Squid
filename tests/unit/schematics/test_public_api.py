@@ -14,8 +14,9 @@ from squid.api.v1.schematics import (
     router,
 )
 from squid.builds.application import BuildQueryService
-from squid.builds.domain import Build, DoorBuild, Status
+from squid.builds.domain import Status
 from squid.builds.errors import BuildNotFoundError
+from squid.builds.models import Build, DoorBuild
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.schematics.application import (
     RenderedSchematic,

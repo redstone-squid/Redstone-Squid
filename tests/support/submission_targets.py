@@ -6,7 +6,8 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
-from squid.builds.domain import BUILD_CLASS_BY_CATEGORY, Build, BuildCategory, DoorBuild, ExtenderBuild, Status
+from squid.builds.domain import BuildCategory, Status
+from squid.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
 from squid.sponsors import PublicSponsor
 from squid.submissions.domain import (
     GeneralSubmissionDetails,

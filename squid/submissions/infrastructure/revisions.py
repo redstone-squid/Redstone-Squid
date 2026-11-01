@@ -9,10 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.builds.application import BuildEditor, BuildService
-from squid.builds.domain import Build
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.builds.infrastructure.repository import BuildRepository
-from squid.builds.models import Build as SQLBuild
+from squid.builds.models import Build
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal
@@ -82,7 +81,7 @@ class PostgresRevisionProposals:
         async with self._sessions.begin() as session:
             # Account merging takes build rows before submission references; keep that order.
             current = await session.scalar(
-                select(SQLBuild).where(SQLBuild.id == proposal.build_id).with_for_update(of=SQLBuild.id)
+                select(Build).where(Build.id == proposal.build_id).with_for_update(of=Build.id)
             )
             if current is None:
                 raise BuildNotFoundError(proposal.build_id or 0)

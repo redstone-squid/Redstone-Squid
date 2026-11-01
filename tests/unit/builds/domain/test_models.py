@@ -8,23 +8,13 @@ This module tests:
 """
 
 import json
-from dataclasses import fields as dataclass_fields
 
 import pytest
 
-from squid.builds.domain import (
-    Build,
-    BuildCategory,
-    BuildDraft,
-    DoorBuild,
-    EntranceBuild,
-    ExtenderBuild,
-    OtherBuild,
-    Status,
-    UtilityBuild,
-)
+from squid.builds.domain import BuildCategory, BuildDraft, Status
 from squid.builds.domain.titles import format_build_category, format_build_display_title
 from squid.builds.errors import InvalidBuildError
+from squid.builds.models import Build, DoorBuild, EntranceBuild, ExtenderBuild, OtherBuild, UtilityBuild
 from squid.core.errors import InvalidStateError
 
 
@@ -236,8 +226,15 @@ class TestBuildDiff:
 
 def replace_door(build: DoorBuild, **changes: object) -> DoorBuild:
     """A copy of *build* with independent collections."""
-    values = {field.name: getattr(build, field.name) for field in dataclass_fields(build)}
-    values.update(changes)
-    copied = DoorBuild(**values)  # type: ignore[arg-type]
-    copied.links = list(build.links)
+    copied = build.copy_for_edit()
+    assert isinstance(copied, DoorBuild)
+    for name, value in changes.items():
+        setattr(copied, name, value)
     return copied
+
+
+def test_attribute_types_resolve_mapped_fields_and_properties() -> None:
+    build = DoorBuild()
+    assert build.get_attr_type("width") == int | None
+    assert build.get_attr_type("door_width") is int
+    assert build.get_attr_type("dimensions") == tuple[int | None, int | None, int | None]

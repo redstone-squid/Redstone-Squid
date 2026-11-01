@@ -145,7 +145,7 @@ class PostgresInferenceRuns:
 
     async def public_status(self, run_id: UUID) -> InferenceStatus | None:
         from squid.builds.application.inference import BuildInferenceInput
-        from squid.builds.models import Build as SQLBuild
+        from squid.builds.models import Build
         from squid.submissions.models.entities import SubmissionDraft
 
         async with self._sessions() as session:
@@ -162,8 +162,8 @@ class PostgresInferenceRuns:
             saved = {
                 draft_id: build_id
                 for draft_id, build_id in await session.execute(
-                    select(SQLBuild.source_submission_draft_id, SQLBuild.id).where(
-                        SQLBuild.source_submission_draft_id.in_(drafts)
+                    select(Build.source_submission_draft_id, Build.id).where(
+                        Build.source_submission_draft_id.in_(drafts)
                     )
                 )
             }

@@ -7,7 +7,8 @@ from squid.bot.submission.ui.views import BuildEditScreen
 from squid.bot.ui import error_node, tr
 from squid.bot.utils.permissions import allows
 from squid.builds.application import BuildService
-from squid.builds.domain import Build, Status
+from squid.builds.domain import Status
+from squid.builds.models import Build
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 
 if TYPE_CHECKING:

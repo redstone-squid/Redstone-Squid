@@ -1,25 +1,13 @@
-"""Build domain entities and value objects.
-
-The persisted aggregate is a closed hierarchy: :class:`Build` carries the facts
-shared by every category and one subclass per :class:`BuildCategory` carries the
-category-specific ones, mirroring the joined-table persistence model. A build's
-category is a fact of its type and can never change after construction.
-
-Pre-submission flows that accumulate facts before the category is known (the
-guided Discord form, message inference) use :class:`BuildDraft`, which is flat
-and fully optional, and produce an entity with :meth:`BuildDraft.finalize`.
-"""
+"""Build drafts, shared behavior, and value types. Persisted entities live in squid.builds.models."""
 
 import re
-import typing
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, fields
 from enum import IntEnum, StrEnum
 from typing import (
+    TYPE_CHECKING,
     Any,
-    ClassVar,
-    Final,
     Literal,
     NotRequired,
     Self,
@@ -193,19 +181,6 @@ def freeze_fields[T](cls: type[T]) -> type[T]:
 
 
 @dataclass(frozen=True, slots=True)
-class BuildLink:
-    """One media URL attached to a build.
-
-    The database keys links by ``(build_id, url)``, so a URL carries exactly one
-    media type per build; modelling links as one typed collection makes the
-    conflicting state unrepresentable.
-    """
-
-    url: str
-    media_type: MediaTypeLiteral
-
-
-@dataclass(frozen=True, slots=True)
 class SourceMessage:
     """A Discord message a build was submitted or inferred from.
 
@@ -244,12 +219,15 @@ class StagedMedia:
 
     def add_link(self, media_type: MediaTypeLiteral, url: str) -> None:
         """Attach one media URL, ignoring exact duplicates."""
-        candidate = BuildLink(url=url, media_type=media_type)
-        if candidate not in self.links:
-            self.links.append(candidate)
+        from squid.builds.models import BuildLink
+
+        if not any(link.url == url and link.media_type == media_type for link in self.links):
+            self.links.append(BuildLink(url=url, media_type=media_type))
 
     def replace_links(self, media_type: MediaTypeLiteral, urls: Iterable[str]) -> None:
         """Replace every link of one media type, preserving the others."""
+        from squid.builds.models import BuildLink
+
         kept = [link for link in self.links if link.media_type != media_type]
         self.links[:] = [*kept, *(BuildLink(url=url, media_type=media_type) for url in urls)]
 
@@ -353,217 +331,6 @@ class StagedTaxonomy:
         self.miscellaneous_restrictions = sorted_restrictions["miscellaneous"]
 
 
-@freeze_fields
-@dataclass(kw_only=True)
-class Build(StagedMedia, StagedTaxonomy):
-    """The facts shared by every build category.
-
-    Do not instantiate this class directly: every persisted build belongs to
-    exactly one category subclass (:class:`DoorBuild`, :class:`ExtenderBuild`,
-    :class:`UtilityBuild`, :class:`EntranceBuild`, :class:`OtherBuild`), and
-    ``category`` is derived from the type. Use :class:`BuildDraft` while the
-    category is still unknown.
-
-    The four restriction lists and ``patterns`` are *staged taxonomy input*:
-    callers write requested display names into them, and
-    `squid.builds.application.taxonomy.apply_build_taxonomy` canonicalizes them
-    into ``tags`` — the persisted source of truth — before any save.
-    """
-
-    category: ClassVar[BuildCategory]
-
-    id: int | None = None
-    revision: int = 1
-    submission_status: Status | None = None
-    record_category: RecordCategoryLiteral | None = None
-    versions: list[str] = field(default_factory=list)
-    version_spec: str | None = None
-
-    width: int | None = None
-    height: int | None = None
-    depth: int | None = None
-
-    patterns: list[str] = field(default_factory=list)
-    wiring_placement_restrictions: list[str] = field(default_factory=list)
-    animated_restrictions: list[str] = field(default_factory=list)
-    component_restrictions: list[str] = field(default_factory=list)
-    miscellaneous_restrictions: list[str] = field(default_factory=list)
-    tags: list[TagAssignment] = field(default_factory=list)
-
-    extra_info: Info = field(default_factory=Info)
-    creators_ign: list[str] = field(default_factory=list)
-    links: list[BuildLink] = field(default_factory=list)
-
-    display_name: str | None = None
-    source_submission_draft_id: uuid.UUID | None = None
-    sponsor: Final[PublicSponsor | None] = frozen_field(default=None)
-    submitter_account_id: int | None = None
-    submitter_discord_id: int | None = None
-    """Read-only derived state, filled on load for Discord rendering.
-
-    Ownership is `submitter_account_id` and nothing reads this to decide anything.
-    Named for the provider so it stops sitting ambiguously beside the account id -- that
-    ambiguity is what let the edit ownership test compare a snowflake to a snowflake
-    while a perfectly good account id sat one attribute away."""
-    completion_time: str | None = None
-    completion_at: Instant | None = None
-    completion_evidence: str | None = None
-    description: str | None = None
-    submission_time: Instant | None = None
-    edited_time: Instant | None = None
-
-    source_messages: Final[tuple[SourceMessage, ...]] = frozen_field(default=())
-
-    ai_generated: bool | None = None
-    embedding: list[float] | None = field(default=None, repr=False)
-
-    def __post_init__(self) -> None:
-        if type(self) is Build:
-            raise InvalidStateError(
-                tr(t"Build cannot be instantiated directly; construct a category subclass or a BuildDraft.")
-            )
-
-    @property
-    def original_link(self) -> str | None:
-        """The jump link to the message this build was submitted from, if any.
-
-        The first source message is the submission itself; later ones are follow-ups
-        such as images, so linking anything else would point away from the request.
-        """
-        for message in self.source_messages:
-            if (link := message.link) is not None:
-                return link
-        return None
-
-    @property
-    def dimensions(self) -> tuple[int | None, int | None, int | None]:
-        """The dimensions of the build."""
-        return self.width, self.height, self.depth
-
-    @dimensions.setter
-    def dimensions(self, dimensions: tuple[int | None, int | None, int | None]) -> None:
-        self.width, self.height, self.depth = dimensions
-
-    @property
-    def title(self) -> str:
-        """The user-facing title, including individual-build UX decoration."""
-        from squid.builds.domain.titles import format_build_display_title
-
-        return format_build_display_title(self, markdown=True)
-
-    def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
-        """
-        Returns the differences between this build and another of the same category.
-
-        Values are rendered as plain data — callers persist the result as JSON —
-        so link collections come back as one entry per media type rather than as
-        :class:`BuildLink` objects.
-
-        Args:
-            other: Another build to compare to.
-            allow_different_id: Whether the ID of the builds can be different.
-
-        Returns:
-            A list of tuples containing the attribute name, the value of this build, and the value of the other build.
-
-        Raises:
-            InvalidBuildError: If the IDs differ and allow_different_id is False, or the categories differ.
-        """
-        if type(self) is not type(other):
-            msg = "Cannot diff builds of different categories."
-            raise InvalidBuildError(msg, context={"left": type(self).__name__, "right": type(other).__name__})
-        if self.id != other.id and not allow_different_id:
-            msg = "The IDs of the builds are different."
-            raise InvalidBuildError(msg, context={"left_id": self.id, "right_id": other.id})
-
-        differences: list[tuple[str, T, T]] = []
-        for f in fields(self):
-            if f.name in {"id", "links"} or not f.compare:
-                continue
-            if getattr(self, f.name) != getattr(other, f.name):
-                differences.append((f.name, getattr(self, f.name), getattr(other, f.name)))
-        for media_type in get_args(MediaTypeLiteral):
-            mine = list(self.urls_of(media_type))
-            theirs = list(other.urls_of(media_type))
-            if mine != theirs:
-                differences.append((f"{media_type.replace('-', '_')}_urls", cast(T, mine), cast(T, theirs)))
-        return differences
-
-    def get_attr_type(self, attribute: str) -> type:
-        """Gets the declared type of a field or property on this build's class."""
-        cls = type(self)
-        if attribute in typing.get_type_hints(cls):
-            return typing.get_type_hints(cls)[attribute]
-        cls_attr = getattr(cls, attribute, None)
-        if isinstance(cls_attr, property) and cls_attr.fget is not None:
-            return typing.get_type_hints(cls_attr.fget)["return"]
-        msg = f"Attribute {attribute} is not on {cls.__name__}."
-        raise InvalidBuildError(msg, context={"attribute": attribute})
-
-
-@dataclass(kw_only=True)
-class DoorBuild(Build):
-    """A door: a mechanism that opens and closes an opening in a wall."""
-
-    category: ClassVar[BuildCategory] = BuildCategory.DOOR
-
-    orientation: DoorOrientationLiteral = "Door"
-    door_width: int = 1
-    door_height: int = 2
-    door_depth: int | None = None
-
-    normal_opening_time: int | None = None
-    normal_closing_time: int | None = None
-    visible_opening_time: int | None = None
-    visible_closing_time: int | None = None
-
-    @property
-    def door_dimensions(self) -> tuple[int, int, int | None]:
-        """The dimensions of the door (hallway)."""
-        return self.door_width, self.door_height, self.door_depth
-
-
-@dataclass(kw_only=True)
-class ExtenderBuild(Build):
-    """A piston extender."""
-
-    category: ClassVar[BuildCategory] = BuildCategory.EXTENDER
-
-    orientation: str | None = None
-    extension_length: int | None = None
-    extender_type: str | None = None
-
-
-@dataclass(kw_only=True)
-class UtilityBuild(Build):
-    """A redstone utility."""
-
-    category: ClassVar[BuildCategory] = BuildCategory.UTILITY
-
-
-@dataclass(kw_only=True)
-class EntranceBuild(Build):
-    """An entrance that is not a door."""
-
-    category: ClassVar[BuildCategory] = BuildCategory.ENTRANCE
-
-
-@dataclass(kw_only=True)
-class OtherBuild(Build):
-    """A build outside the named categories."""
-
-    category: ClassVar[BuildCategory] = BuildCategory.OTHER
-
-
-BUILD_CLASS_BY_CATEGORY: Mapping[BuildCategory, type[Build]] = {
-    BuildCategory.DOOR: DoorBuild,
-    BuildCategory.EXTENDER: ExtenderBuild,
-    BuildCategory.UTILITY: UtilityBuild,
-    BuildCategory.ENTRANCE: EntranceBuild,
-    BuildCategory.OTHER: OtherBuild,
-}
-
-
 @dataclass(kw_only=True)
 class BuildDraft(StagedMedia, StagedTaxonomy):
     """A mutable pre-category accumulator for guided submission and inference.
@@ -641,6 +408,8 @@ class BuildDraft(StagedMedia, StagedTaxonomy):
         Raises:
             InvalidBuildError: If no category has been set.
         """
+        from squid.builds.models import DoorBuild, EntranceBuild, ExtenderBuild, OtherBuild, UtilityBuild
+
         if self.category is None:
             msg = "A build draft cannot be finalized before its category is known."
             raise InvalidBuildError(msg, context={"category": None})
@@ -746,3 +515,7 @@ def parse_time_string(time_string: str | None) -> int | None:
     if ticks_per_unit is None:
         return None
     return round(float(match["value"]) * ticks_per_unit)
+
+
+if TYPE_CHECKING:
+    from squid.builds.models import Build, BuildLink

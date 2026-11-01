@@ -7,7 +7,8 @@ from enum import StrEnum
 from squid.bot.submission.input import split_values
 from squid.bot.submission.parse import format_dimensions, parse_dimensions
 from squid.builds.application.editing import BuildEditPatch
-from squid.builds.domain import Build, BuildCategory
+from squid.builds.domain import BuildCategory
+from squid.builds.models import Build
 from squid.core.i18n import tr
 
 

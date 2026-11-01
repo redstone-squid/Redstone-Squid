@@ -284,7 +284,9 @@ class TagAssignment(Base, kw_only=True, init=False):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
-    definition: Mapped[TagDefinition] = relationship(back_populates="assignments", lazy="joined", default=None)
+    definition: Mapped[TagDefinition] = relationship(
+        back_populates="assignments", lazy="raise_on_sql", default=None, cascade=""
+    )
 
     def __init__(
         self,

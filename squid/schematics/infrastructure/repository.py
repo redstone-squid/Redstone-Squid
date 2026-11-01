@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.artifacts import ArtifactStore
-from squid.builds.models import Build as SQLBuild
+from squid.builds.models import Build
 from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
     FingerprintPreset,
@@ -21,7 +21,7 @@ from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_v
 from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
 from squid.schematics.models import BuildSchematic, SchematicFile
 
-_BUILD_TABLE = cast(Table, SQLBuild.__table__)
+_BUILD_TABLE = cast(Table, Build.__table__)
 
 _FINGERPRINT_COLUMNS = {
     FingerprintPreset.STRUCTURAL: BuildSchematic.fingerprint_structural,

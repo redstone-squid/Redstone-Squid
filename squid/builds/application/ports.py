@@ -8,7 +8,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.builds.domain import Build
+from squid.builds.models import Build
 
 
 @dataclass(frozen=True, slots=True)

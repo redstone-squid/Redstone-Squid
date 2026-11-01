@@ -16,8 +16,9 @@ from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.ui.views import EDIT_FIELDS, BuildEditScreen
 from squid.bot.ui import DISCORD_GREEN, DISCORD_GREY, DISCORD_RED, DISCORD_YELLOW, DiscordColour
 from squid.builds.application import BuildService
-from squid.builds.domain import Build, BuildLink, DoorBuild, SourceMessage, Status
+from squid.builds.domain import SourceMessage, Status
 from squid.builds.errors import BuildRevisionMismatchError
+from squid.builds.models import Build, BuildLink, DoorBuild
 from squid.search.application import SearchService
 from squid.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.sponsors import PublicSponsor

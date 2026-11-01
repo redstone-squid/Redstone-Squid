@@ -9,8 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
-from squid.builds.models import Build as SQLBuild
-from squid.builds.models import BuildLink
+from squid.builds.models import Build, BuildLink
 from squid.core.errors import DataIntegrityError
 from squid.persistence.types import now
 from squid.schematics.application.previews import PreviewObjectReservation, StoredRender
@@ -21,7 +20,7 @@ from squid.schematics.models import (
     SchematicRenderQueueItem,
 )
 
-_BUILD_TABLE = cast(Table, SQLBuild.__table__)
+_BUILD_TABLE = cast(Table, Build.__table__)
 
 
 class PostgresSchematicPreviewPublisher:

@@ -6,7 +6,8 @@ from typing import Any, cast
 import pytest
 
 from squid.bot.voting.sessions import ensure_build_review
-from squid.builds.domain import OtherBuild, Status
+from squid.builds.domain import Status
+from squid.builds.models import OtherBuild
 
 
 async def test_a_guild_without_a_vote_channel_does_not_fail_the_submission(

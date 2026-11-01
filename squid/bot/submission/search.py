@@ -2,7 +2,6 @@
 
 import json
 import logging
-from dataclasses import asdict
 from enum import Enum, StrEnum
 from typing import TYPE_CHECKING, Any, Self, override
 
@@ -19,7 +18,7 @@ from squid.bot.submission.search_view import SearchScreen
 from squid.bot.submission.submit import BuildSubmitCommands
 from squid.bot.utils.autocomplete import autocompletes
 from squid.bot.utils.permissions import allows, subject_for_interaction
-from squid.builds.domain import Build
+from squid.builds.models import Build
 from squid.permissions.domain import PermissionNode
 from squid.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DETECT_LATTICE,
@@ -76,7 +75,7 @@ def _targeted(target: SearchTarget, query: str) -> tuple[SearchScope, str]:
 
 def _debug_dump(build: Build) -> str:
     """Serialize a build's internal state as readable JSON without its embedding."""
-    state: dict[str, Any] = {key: value for key, value in asdict(build).items() if key != "embedding"}
+    state: dict[str, Any] = {key: value for key, value in build.edit_values().items() if key != "embedding"}
     state["category"] = build.category
     state["embedding_dimensions"] = len(build.embedding) if build.embedding is not None else None
     return json.dumps(_jsonable(state), indent=2, sort_keys=True, default=str)

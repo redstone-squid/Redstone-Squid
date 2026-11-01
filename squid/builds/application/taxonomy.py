@@ -4,7 +4,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from squid.builds.domain import Build, BuildCategory, UnknownRestrictions
+from squid.builds.domain import BuildCategory, UnknownRestrictions
+from squid.builds.models import Build
 from squid.tags.domain import TagAuthority, TagSemanticKind
 from squid.tags.models import TagAssignment
 
