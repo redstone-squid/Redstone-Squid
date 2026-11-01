@@ -330,11 +330,11 @@ class Builds(sd.Cog):
         return BuildScreen(user_id=request.user.id)
 ```
 
-For native Discord callbacks, resolve the request once under the existing owner
+For listeners and callbacks without a command binding, resolve the request through the cog
 scope. Pass it to helpers that need to defer, prompt, or reply:
 
 ```python
-request = await sd.request(interaction, owner=self)
+request = await self.ui.request(interaction)
 await request.defer("private")
 await request.respond(BuildScreen(user_id=request.user.id))
 ```
@@ -350,7 +350,8 @@ Use one request API for commands, native callbacks, and component events:
 | Previous API | Replacement |
 |---|---|
 | `DiscordUIConfig` or installation keyword arguments | `sd.install(client, sd.Config(...))` |
-| `scope.request(source)` or `bot.app_ui.request(source)` | `await sd.request(source, owner=owner)` when the callback knows its registered owner; otherwise `await sd.request(source)` |
+| `sd.request(source, owner=self)` | `await self.ui.request(source)` for listeners and callbacks without command bindings |
+| `bot.app_ui.request(source)` | `await sd.request(source)` for native commands, component events, and application-owned callbacks |
 | Scope response defaults | `Config.responses`, screen class policy, or call keywords |
 | `sd.responder(event).message_root` | `(await sd.request(event)).root` |
 | `sd.native(event)` | `(await sd.request(event)).interaction` |
@@ -363,8 +364,17 @@ Use one request API for commands, native callbacks, and component events:
 
 `sd.request` is asynchronous for every source. The root and session fields are optional because
 commands and native callbacks need not originate on a live panel. A component event supplies its
-root and inherits that root's owner scope. `Scope` now owns lifetime and out-of-band sends/edits;
-it does not resolve requests or carry response defaults.
+root and inherits that root's owner scope. Native commands infer ownership from their Discord
+binding. `Scope.request` supplies an owner when no command identifies one, while sharing the same
+memoized request and ledger. `Scope` also owns lifetime and out-of-band sends/edits; it carries no
+response defaults.
+
+A missing or closed command-owner scope raises rather than falling back to application lifetime.
+Use `sd.Cog` to register and close native commands' scopes automatically; a plain discord.py cog
+must manage its own `runtime.scope(cog)` lifetime.
+Bound resolution rejects another client's source or another owner's request. An application-scoped
+request can be claimed before its first message or form; after that, attempting to change its owner
+raises. Truly unbound sources and free commands remain application-owned.
 
 `ErrorPolicy.render(request, error)` returns a document. `observe(request, error, delivery)` records
 the failure; delivery is absent when no notice was sent. Pending commands replace their card and

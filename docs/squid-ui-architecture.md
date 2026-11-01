@@ -171,7 +171,9 @@ planning, that is a DrawInvariantError, not a second degradation mechanism.
 |---|---|---|
 | Runtime for one discord.py client | `runtime = sd.install(client, config)` | `DiscordUIRuntime`: scopes, sessions, scheduler, challenges, and localization |
 | Authority for one application owner | `ui = runtime.scope(owner)` | an identity-bound `Scope[OwnerT]` closed with its owner |
-| Current command or routed action | `request = await sd.request(source)` | typed owner/source, localization, user, guild, and acknowledgement state |
+| Squid command | `@sd.command`, `@sd.hybrid_command`, or `@sd.prefix_command` | an injected request with the binding's scope |
+| Native command or component event | `request = await sd.request(source)` | ownership inferred from the command binding or component root |
+| Listener or callback without a command binding | `request = await self.ui.request(source)` | the same memoized request, bound to this cog's scope |
 | Terminal response | `await request.respond(content, audience=...)` | `Sent`, `Presented`, `Rejected`, or `Abandoned` |
 | Plain live panel | `await request.respond(component, access=...)` | a `Presented` outcome with its `MessageRoot` and delivery |
 | Reusable application screen | `await request.respond(MyScreen(...))` | screen class policy composed with installation and call policy |
@@ -208,10 +210,22 @@ the handler's source slot. `sd.Group` and `sd.hybrid_group` supply inherited `pe
 policy. They return native discord.py commands, so native checks and parameter decorators compose
 normally. `sd.Cog` registers its scope and context menus and closes them on unload.
 
-Native callbacks and portable component handlers resolve `await sd.request(source)` themselves;
-`owner=` selects an already registered scope when the callback knows its owner. Request resolution
-is always asynchronous, including component events. A component request carries `root`, `session`,
-and the native `interaction`. Re-resolving its interaction returns the same request and ledger.
+Native commands resolve `await sd.request(source)`: prefix and hybrid contexts supply the command's
+cog, and application commands supply their binding. Component events inherit their message root's
+scope. Listeners and callbacks without a command binding use `await self.ui.request(source)`;
+`Scope.request` delegates to the same resolver and preserves `Request[OwnerT]` typing. There is no
+public `owner=` argument to remember.
+
+An unbound source starts in the application scope. Command lookup or a bound resolver can claim
+that same request before its first response, preserving any deferral. Once claimed by another owner,
+or once a message or form has been sent, a conflicting scope raises. Missing or closed command-owner
+scopes, finished component roots, and cross-client bound resolution also raise instead of changing
+the panel's lifetime. Free commands and class-body groups use the application scope; groups do not
+introduce a separate lifetime.
+
+Request resolution is always asynchronous, including component events. A component request carries
+`root`, `session`, and the native `interaction`. Re-resolving its interaction returns the same request
+and ledger.
 `defer("private")` fixes subsequent response visibility; `request.audience` exposes the chosen
 visibility. Use `request.form(...)` for a native modal and the event's `present_form(...)` for a
 portable form participating in component dispatch.
