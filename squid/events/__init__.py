@@ -1,12 +1,12 @@
 """Durable domain-event transitions and their per-consumer delivery."""
 
 from squid.events.application import (
-    DomainEvent,
     DomainEventDelivery,
     DomainEventRepository,
     DomainEventService,
     UnsupportedEventVersionError,
 )
+from squid.events.models import DomainEvent
 
 __all__ = [
     "DomainEvent",

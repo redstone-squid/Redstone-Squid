@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.builds.domain import BuildCategory
 from squid.builds.infrastructure.repository import BuildRepository
-from squid.events.models import DomainEventRecord
+from squid.events.models import DomainEvent
 from squid.records.application.models import (
     CandidateFacet,
     CategoryCompetition,
@@ -117,9 +117,7 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
         events = (
             (
                 await session.execute(
-                    select(DomainEventRecord)
-                    .where(DomainEventRecord.event_type == "record_run.activated")
-                    .order_by(DomainEventRecord.id)
+                    select(DomainEvent).where(DomainEvent.event_type == "record_run.activated").order_by(DomainEvent.id)
                 )
             )
             .scalars()

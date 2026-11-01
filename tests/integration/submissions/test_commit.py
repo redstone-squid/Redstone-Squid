@@ -12,7 +12,7 @@ from whenever import Instant
 from squid.builds.domain import BuildCategory
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.models import Build
-from squid.events.models import DomainEventRecord
+from squid.events.models import DomainEvent
 from squid.media.domain import MediaKind
 from squid.media.domain.jobs import MediaJobStatus
 from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
@@ -102,9 +102,9 @@ async def test_executor_commits_build_receipt_and_event_once(
         assert (
             await session.scalar(
                 select(func.count())
-                .select_from(DomainEventRecord)
+                .select_from(DomainEvent)
                 .where(
-                    DomainEventRecord.event_type == "build.submitted",
+                    DomainEvent.event_type == "build.submitted",
                 )
             )
             == 1
@@ -132,9 +132,9 @@ async def test_receipt_failure_rolls_back_build_and_events(
         assert (
             await session.scalar(
                 select(func.count())
-                .select_from(DomainEventRecord)
+                .select_from(DomainEvent)
                 .where(
-                    DomainEventRecord.event_type == "build.submitted",
+                    DomainEvent.event_type == "build.submitted",
                 )
             )
             == 0

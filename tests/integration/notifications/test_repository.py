@@ -13,8 +13,7 @@ from whenever import Instant
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.models import Account, AccountIdentity
 from squid.bot.notifications import render_delivery
-from squid.events import DomainEvent
-from squid.events.models import DomainEventRecord
+from squid.events.models import DomainEvent
 from squid.notifications.domain import (
     InboxVisibility,
     NotificationCandidate,
@@ -104,7 +103,7 @@ async def _seed_delivery(
                 dm_enabled=True,
             )
         )
-        event = DomainEventRecord(
+        event = DomainEvent(
             event_type="build.confirmed",
             aggregate_kind="build",
             aggregate_id=build_id,
@@ -324,7 +323,7 @@ async def test_read_state_changes_are_idempotent_and_visibility_safe(
     async with async_session_factory.begin() as session:
         account_id = (await session.scalars(select(NotificationProfile.account_id))).one()
         ordinary_id = (await session.scalars(select(InboxNotification.id))).one()
-        event = DomainEventRecord(event_type="build.submitted", aggregate_kind="build", aggregate_id=43)
+        event = DomainEvent(event_type="build.submitted", aggregate_kind="build", aggregate_id=43)
         session.add(event)
         await session.flush()
         staff = InboxNotification(
@@ -379,7 +378,7 @@ async def test_inbox_count_and_both_keyset_directions_share_visibility(
         session.add(account)
         await session.flush()
         session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=False))
-        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        event = DomainEvent(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
         session.add(event)
         await session.flush()
         session.add_all(
@@ -515,14 +514,14 @@ async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(
     expired_at = Instant.now().subtract(hours=24 * 91)
     async with async_session_factory.begin() as session:
         await session.execute(update(InboxNotification).values(created_at=expired_at))
-        await session.execute(update(DomainEventRecord).values(occurred_at=expired_at))
+        await session.execute(update(DomainEvent).values(occurred_at=expired_at))
 
     assert await repository.cleanup(retention_days=90) == 1
 
     async with async_session_factory() as session:
         assert await session.scalar(select(InboxNotification)) is None
         assert await session.scalar(select(NotificationDeliveryRecord)) is None
-        assert await session.scalar(select(DomainEventRecord)) is None
+        assert await session.scalar(select(DomainEvent)) is None
 
 
 async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
@@ -582,11 +581,15 @@ async def test_candidate_materialization_has_constant_query_count(
         for index, account in enumerate(accounts, start=1):
             session.add(AccountIdentity(account_id=account.id, provider=IdentityProvider.DISCORD, subject=str(index)))
             session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=True))
-        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        event = DomainEvent(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
         session.add(event)
         await session.flush()
         materialized_event = DomainEvent(
-            event.id, event.event_type, event.aggregate_kind, event.aggregate_id, Instant.now()
+            id=event.id,
+            event_type=event.event_type,
+            aggregate_kind=event.aggregate_kind,
+            aggregate_id=event.aggregate_id,
+            occurred_at=Instant.now(),
         )
         candidates = tuple(
             NotificationCandidate(
@@ -615,15 +618,15 @@ async def test_candidate_materialization_is_unique_under_concurrent_replay(
         await session.flush()
         session.add(AccountIdentity(account_id=account.id, provider=IdentityProvider.DISCORD, subject="123"))
         session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=True))
-        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        event = DomainEvent(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
         session.add(event)
         await session.flush()
         materialized_event = DomainEvent(
-            event.id,
-            event.event_type,
-            event.aggregate_kind,
-            event.aggregate_id,
-            Instant.now(),
+            id=event.id,
+            event_type=event.event_type,
+            aggregate_kind=event.aggregate_kind,
+            aggregate_id=event.aggregate_id,
+            occurred_at=Instant.now(),
         )
         candidate = NotificationCandidate(
             account_id=account.id,
@@ -707,7 +710,7 @@ async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
             )
             session.add(NotificationProfile(account_id=account.id, web_enabled=web, dm_enabled=dm))
             accounts[name] = account.id
-        record = DomainEventRecord(event_type="build.submitted", aggregate_kind="build", aggregate_id=7)
+        record = DomainEvent(event_type="build.submitted", aggregate_kind="build", aggregate_id=7)
         session.add(record)
         await session.flush()
         event = DomainEvent(

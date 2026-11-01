@@ -25,8 +25,7 @@ from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.builds.models import Build, BuildLink
 from squid.core.errors import DataIntegrityError
-from squid.events import DomainEvent
-from squid.events.models import DomainEventRecord
+from squid.events.models import DomainEvent
 from squid.minecraft_auth.domain.models import MinecraftClientOrigin
 from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
@@ -347,9 +346,9 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
         events = tuple(
             (
                 await session.scalars(
-                    select(DomainEventRecord).where(
-                        DomainEventRecord.event_type == "build.submitted",
-                        DomainEventRecord.aggregate_id == result.build_id,
+                    select(DomainEvent).where(
+                        DomainEvent.event_type == "build.submitted",
+                        DomainEvent.aggregate_id == result.build_id,
                     )
                 )
             ).all()
@@ -417,7 +416,7 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
                 NotificationProfile(account_id=absorbed.id, web_enabled=True, dm_enabled=True),
             ]
         )
-        event = DomainEventRecord(event_type="build.submitted", aggregate_kind="build", aggregate_id=build.id)
+        event = DomainEvent(event_type="build.submitted", aggregate_kind="build", aggregate_id=build.id)
         session.add(event)
         await session.flush()
         survivor_id = survivor.id

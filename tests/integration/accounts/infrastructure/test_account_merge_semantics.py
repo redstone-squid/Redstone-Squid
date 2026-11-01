@@ -13,8 +13,7 @@ from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
 from squid.core.errors import DataIntegrityError
-from squid.events import DomainEvent
-from squid.events.models import DomainEventRecord
+from squid.events.models import DomainEvent
 from squid.notifications.domain import (
     NotificationCandidate,
     NotificationKind,
@@ -63,7 +62,7 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
                 expires_at=seeded_at.add(days=1, days_assumed_24h_ok=True),
             )
         )
-        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=99)
+        event = DomainEvent(event_type="build.confirmed", aggregate_kind="build", aggregate_id=99)
         session.add(event)
         await session.flush()
         notification = InboxNotification(
@@ -178,7 +177,7 @@ async def test_no_collision_notification_and_delivery_move_together_at_merge_com
     assert survivor.id is not None
     assert absorbed.id is not None
     async with migrated_session_factory.begin() as session:
-        event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        event = DomainEvent(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
         session.add(event)
         await session.flush()
         notification = InboxNotification(
@@ -232,7 +231,7 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
                 NotificationProfile(account_id=absorbed.id, web_enabled=True, dm_enabled=True),
             ]
         )
-        event = DomainEventRecord(event_type="record_run.activated", aggregate_kind="record_run", aggregate_id=5)
+        event = DomainEvent(event_type="record_run.activated", aggregate_kind="record_run", aggregate_id=5)
         session.add(event)
         await session.flush()
         notification = InboxNotification(

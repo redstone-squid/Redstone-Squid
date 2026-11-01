@@ -16,8 +16,7 @@ from squid.accounts.infrastructure.consent import account_consent_current
 from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import Status
 from squid.builds.models import Build, BuildCreator
-from squid.events import DomainEvent
-from squid.events.models import DomainEventDeliveryRecord, DomainEventRecord
+from squid.events.models import DomainEvent, DomainEventDeliveryRecord
 from squid.notifications.domain import (
     InboxVisibility,
     NotificationCandidate,
@@ -319,10 +318,10 @@ class PostgresNotificationRepository:
             )
             removed = await session.scalar(select(func.count()).select_from(removed_rows))
             await session.execute(
-                delete(DomainEventRecord).where(
-                    DomainEventRecord.occurred_at < cutoff,
-                    ~exists().where(InboxNotification.event_id == DomainEventRecord.id),
-                    ~exists().where(DomainEventDeliveryRecord.event_id == DomainEventRecord.id),
+                delete(DomainEvent).where(
+                    DomainEvent.occurred_at < cutoff,
+                    ~exists().where(InboxNotification.event_id == DomainEvent.id),
+                    ~exists().where(DomainEventDeliveryRecord.event_id == DomainEvent.id),
                 )
             )
             return int(removed or 0)
@@ -628,10 +627,10 @@ class PostgresNotificationRepository:
         previous = await session.scalar(
             select(
                 exists().where(
-                    DomainEventRecord.aggregate_kind == "build",
-                    DomainEventRecord.aggregate_id == event.aggregate_id,
-                    DomainEventRecord.event_type == "build.confirmed",
-                    DomainEventRecord.id < event.id,
+                    DomainEvent.aggregate_kind == "build",
+                    DomainEvent.aggregate_id == event.aggregate_id,
+                    DomainEvent.event_type == "build.confirmed",
+                    DomainEvent.id < event.id,
                 )
             )
         )
@@ -640,10 +639,10 @@ class PostgresNotificationRepository:
     @staticmethod
     async def _is_latest_outcome(session: AsyncSession, event: DomainEvent) -> bool:
         latest_id = await session.scalar(
-            select(func.max(DomainEventRecord.id)).where(
-                DomainEventRecord.aggregate_kind == "build",
-                DomainEventRecord.aggregate_id == event.aggregate_id,
-                DomainEventRecord.event_type.in_(("build.confirmed", "build.denied")),
+            select(func.max(DomainEvent.id)).where(
+                DomainEvent.aggregate_kind == "build",
+                DomainEvent.aggregate_id == event.aggregate_id,
+                DomainEvent.event_type.in_(("build.confirmed", "build.denied")),
             )
         )
         return latest_id == event.id

@@ -11,7 +11,7 @@ from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, now
 
 
-class DomainEventRecord(Base, kw_only=True):
+class DomainEvent(Base, kw_only=True):
     """One state transition, recorded once and never coalesced."""
 
     __tablename__ = "domain_events"
@@ -20,7 +20,7 @@ class DomainEventRecord(Base, kw_only=True):
         Index("domain_events_aggregate_idx", "aggregate_kind", "aggregate_id"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     event_type: Mapped[str] = mapped_column(Text, nullable=False)
     schema_version: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("1"), default=1)
     aggregate_kind: Mapped[str] = mapped_column(Text, nullable=False)

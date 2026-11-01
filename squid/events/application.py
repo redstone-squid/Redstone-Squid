@@ -1,7 +1,7 @@
 """Application service for durable domain-event delivery."""
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
@@ -9,19 +9,7 @@ from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.i18n import tr
-
-
-@dataclass(frozen=True, slots=True)
-class DomainEvent:
-    """One recorded state transition."""
-
-    id: int
-    event_type: str
-    aggregate_kind: str
-    aggregate_id: int
-    occurred_at: Instant
-    payload: dict[str, object] = field(default_factory=dict)
-    schema_version: int = 1
+from squid.events.models import DomainEvent
 
 
 @dataclass(frozen=True, slots=True)

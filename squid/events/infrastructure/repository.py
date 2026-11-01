@@ -3,8 +3,8 @@
 from sqlalchemy import ColumnElement, join, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.events.application import DomainEvent, DomainEventDelivery
-from squid.events.models import DomainEventConsumer, DomainEventDeliveryRecord, DomainEventRecord
+from squid.events.application import DomainEventDelivery
+from squid.events.models import DomainEvent, DomainEventConsumer, DomainEventDeliveryRecord
 from squid.persistence.queue import ClaimedRowQueue, QueueHealthShape, QueueSpec
 
 DOMAIN_EVENT_DELIVERY_SPEC = QueueSpec(
@@ -61,9 +61,7 @@ class PostgresDomainEventRepository:
                 event.id: event
                 for event in (
                     await session.scalars(
-                        select(DomainEventRecord).where(
-                            DomainEventRecord.id.in_([delivery.event_id for delivery in deliveries])
-                        )
+                        select(DomainEvent).where(DomainEvent.id.in_([delivery.event_id for delivery in deliveries]))
                     )
                 ).all()
             }
@@ -106,18 +104,10 @@ class PostgresDomainEventRepository:
         return outcome.dead_lettered
 
 
-def _delivery(record: DomainEventDeliveryRecord, event: DomainEventRecord) -> DomainEventDelivery:
+def _delivery(record: DomainEventDeliveryRecord, event: DomainEvent) -> DomainEventDelivery:
     assert record.claimed_at is not None and record.claim_token is not None
     return DomainEventDelivery(
-        event=DomainEvent(
-            id=event.id,
-            event_type=event.event_type,
-            schema_version=event.schema_version,
-            aggregate_kind=event.aggregate_kind,
-            aggregate_id=event.aggregate_id,
-            occurred_at=event.occurred_at,
-            payload=dict(event.payload),
-        ),
+        event=event,
         consumer=record.consumer,
         attempts=record.attempts,
         claimed_at=record.claimed_at,
