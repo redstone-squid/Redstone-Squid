@@ -471,6 +471,11 @@ def test_applied_schematic_render_projection_migration_upgrades_and_downgrades(
     engine = create_engine(migration_database_url)
     try:
         with engine.begin() as connection:
+            # Historical revisions import current trigger bodies, which require newer columns.
+            # Isolate this schema migration from those unrelated delivery triggers.
+            connection.execute(text("ALTER TABLE builds DISABLE TRIGGER builds_emit_domain_event"))
+            connection.execute(text("ALTER TABLE builds DISABLE TRIGGER builds_enqueue_discord_sync"))
+            connection.execute(text("ALTER TABLE builds DISABLE TRIGGER builds_enqueue_search"))
             user_id = connection.execute(
                 text("INSERT INTO users (discord_id) VALUES (1830001) RETURNING id")
             ).scalar_one()
@@ -598,6 +603,9 @@ def test_nullable_vote_thresholds_migrate_sentinels_in_both_directions(
     engine = create_engine(migration_database_url)
     try:
         with engine.begin() as connection:
+            # Historical revisions import current trigger bodies, which require newer columns.
+            # Isolate this schema migration from those unrelated delivery triggers.
+            connection.execute(text("ALTER TABLE vote_sessions DISABLE TRIGGER vote_sessions_enqueue_discord_sync"))
             account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
             connection.execute(text("INSERT INTO server_settings (server_id) VALUES (503)"))
             vote_session_id = connection.execute(
