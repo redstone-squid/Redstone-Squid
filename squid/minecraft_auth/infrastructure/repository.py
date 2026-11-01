@@ -10,14 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError
-from squid.minecraft_auth.domain import (
-    MinecraftClientOrigin,
-    PaperInstallation,
-    PlayerAuthorizationChallenge,
-    PlayerGrant,
-    PublicServerProfile,
-    PublishedPaperServer,
-)
+from squid.minecraft_auth.domain import MinecraftClientOrigin, PublicServerProfile, PublishedPaperServer
 from squid.minecraft_auth.errors import (
     AuthorizationPendingError,
     ChallengeAlreadyExchangedError,
@@ -27,72 +20,8 @@ from squid.minecraft_auth.errors import (
     InvalidInstallationCredentialError,
     TooManyActiveChallengesError,
 )
-from squid.minecraft_auth.models import (
-    PaperInstallationRecord,
-    PlayerChallengeRecord,
-    PlayerGrantRecord,
-)
+from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
-
-
-def _profile(record: PaperInstallationRecord) -> PublicServerProfile:
-    return PublicServerProfile(
-        enabled=record.public_profile_enabled,
-        display_name=record.public_display_name,
-        address=record.public_address,
-        description=record.public_description,
-        website_url=record.public_website_url,
-        sponsor_opt_in=record.sponsor_opt_in,
-    )
-
-
-def _installation(record: PaperInstallationRecord) -> PaperInstallation:
-    return PaperInstallation(
-        id=record.id,
-        owner_account_id=record.owner_account_id,
-        label=record.label,
-        secret_hash=record.secret_hash,
-        credential_version=record.credential_version,
-        profile=_profile(record),
-        created_at=record.created_at,
-        rotated_at=record.rotated_at,
-        revoked_at=record.revoked_at,
-    )
-
-
-def _challenge(record: PlayerChallengeRecord) -> PlayerAuthorizationChallenge:
-    return PlayerAuthorizationChallenge(
-        id=record.id,
-        device_code_hash=record.device_code_hash,
-        user_code_hash=record.user_code_hash,
-        origin=MinecraftClientOrigin(record.origin),
-        java_uuid=record.java_uuid,
-        installation_id=record.installation_id,
-        installation_credential_version=record.installation_credential_version,
-        pkce_s256_challenge=record.pkce_s256_challenge,
-        created_at=record.created_at,
-        expires_at=record.expires_at,
-        approved_by_account_id=record.approved_by_account_id,
-        approved_at=record.approved_at,
-        exchanged_at=record.exchanged_at,
-        revoked_at=record.revoked_at,
-    )
-
-
-def _grant(record: PlayerGrantRecord) -> PlayerGrant:
-    return PlayerGrant(
-        id=record.id,
-        challenge_id=record.challenge_id,
-        token_hash=record.token_hash,
-        account_id=record.account_id,
-        java_uuid=record.java_uuid,
-        origin=MinecraftClientOrigin(record.origin),
-        installation_id=record.installation_id,
-        installation_credential_version=record.installation_credential_version,
-        issued_at=record.issued_at,
-        expires_at=record.expires_at,
-        revoked_at=record.revoked_at,
-    )
 
 
 class PostgresMinecraftAuthorizationRepository:
@@ -104,59 +33,44 @@ class PostgresMinecraftAuthorizationRepository:
     async def add_installation(self, installation: PaperInstallation) -> PaperInstallation:
         """Insert one account-owned Paper installation."""
         async with self._session_factory.begin() as session:
-            record = PaperInstallationRecord(
-                id=installation.id,
-                owner_account_id=installation.owner_account_id,
-                label=installation.label,
-                secret_hash=installation.secret_hash,
-                credential_version=installation.credential_version,
-                public_profile_enabled=installation.profile.enabled,
-                public_display_name=installation.profile.display_name,
-                public_address=installation.profile.address,
-                public_description=installation.profile.description,
-                public_website_url=installation.profile.website_url,
-                sponsor_opt_in=installation.profile.sponsor_opt_in,
-                created_at=installation.created_at,
-                rotated_at=installation.rotated_at,
-                revoked_at=installation.revoked_at,
-            )
+            record = installation
             session.add(record)
             await session.flush()
-            return _installation(record)
+            return record
 
     async def get_installation(self, installation_id: UUID) -> PaperInstallation | None:
         """Return one installation without exposing any plaintext credential."""
         async with self._session_factory() as session:
-            record = await session.get(PaperInstallationRecord, installation_id)
-            return None if record is None else _installation(record)
+            record = await session.get(PaperInstallation, installation_id)
+            return None if record is None else record
 
     async def list_installations(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
         """List one account's installations, including revoked entries for audit."""
         async with self._session_factory() as session:
             records = (
                 await session.scalars(
-                    select(PaperInstallationRecord)
-                    .where(PaperInstallationRecord.owner_account_id == owner_account_id)
-                    .order_by(PaperInstallationRecord.created_at, PaperInstallationRecord.id)
+                    select(PaperInstallation)
+                    .where(PaperInstallation.owner_account_id == owner_account_id)
+                    .order_by(PaperInstallation.created_at, PaperInstallation.id)
                 )
             ).all()
-        return tuple(_installation(record) for record in records)
+        return tuple(record for record in records)
 
     async def list_public_servers(self) -> tuple[PublishedPaperServer, ...]:
         """Return explicit, active public profiles without credential or owner internals."""
         async with self._session_factory() as session:
             records = (
                 await session.scalars(
-                    select(PaperInstallationRecord)
+                    select(PaperInstallation)
                     .where(
-                        PaperInstallationRecord.public_profile_enabled.is_(True),
-                        PaperInstallationRecord.revoked_at.is_(None),
+                        PaperInstallation.public_profile_enabled.is_(True),
+                        PaperInstallation.revoked_at.is_(None),
                     )
-                    .order_by(PaperInstallationRecord.created_at, PaperInstallationRecord.id)
+                    .order_by(PaperInstallation.created_at, PaperInstallation.id)
                 )
             ).all()
             return tuple(
-                PublishedPaperServer(installation_id=record.id, profile=_profile(record), created_at=record.created_at)
+                PublishedPaperServer(installation_id=record.id, profile=record.profile, created_at=record.created_at)
                 for record in records
             )
 
@@ -164,16 +78,16 @@ class PostgresMinecraftAuthorizationRepository:
         """Return one sponsor-enabled active public profile without loading the public directory."""
         async with self._session_factory() as session:
             record = await session.scalar(
-                select(PaperInstallationRecord).where(
-                    PaperInstallationRecord.id == installation_id,
-                    PaperInstallationRecord.public_profile_enabled.is_(True),
-                    PaperInstallationRecord.sponsor_opt_in.is_(True),
-                    PaperInstallationRecord.revoked_at.is_(None),
+                select(PaperInstallation).where(
+                    PaperInstallation.id == installation_id,
+                    PaperInstallation.public_profile_enabled.is_(True),
+                    PaperInstallation.sponsor_opt_in.is_(True),
+                    PaperInstallation.revoked_at.is_(None),
                 )
             )
         if record is None:
             return None
-        return PublishedPaperServer(installation_id=record.id, profile=_profile(record), created_at=record.created_at)
+        return PublishedPaperServer(installation_id=record.id, profile=record.profile, created_at=record.created_at)
 
     async def rotate_installation(
         self,
@@ -193,7 +107,7 @@ class PostgresMinecraftAuthorizationRepository:
             record.rotated_at = rotated_at
             await self._fence_installation(session, installation_id, rotated_at)
             await session.flush()
-            return _installation(record)
+            return record
 
     async def revoke_installation(
         self,
@@ -211,7 +125,7 @@ class PostgresMinecraftAuthorizationRepository:
                 record.revoked_at = revoked_at
                 await self._fence_installation(session, installation_id, revoked_at)
                 await session.flush()
-            return _installation(record)
+            return record
 
     async def update_installation_profile(
         self,
@@ -232,7 +146,7 @@ class PostgresMinecraftAuthorizationRepository:
             record.public_website_url = profile.website_url
             record.sponsor_opt_in = profile.sponsor_opt_in
             await session.flush()
-            return _installation(record)
+            return record
 
     async def add_challenge(
         self,
@@ -251,7 +165,7 @@ class PostgresMinecraftAuthorizationRepository:
                 if challenge.installation_id is None or challenge.installation_credential_version is None:
                     raise InvalidInstallationCredentialError
                 installation = await session.get(
-                    PaperInstallationRecord,
+                    PaperInstallation,
                     challenge.installation_id,
                     with_for_update=True,
                 )
@@ -263,55 +177,42 @@ class PostgresMinecraftAuthorizationRepository:
                     raise InvalidInstallationCredentialError
 
             conditions = [
-                PlayerChallengeRecord.origin == challenge.origin.value,
-                PlayerChallengeRecord.java_uuid == challenge.java_uuid,
-                PlayerChallengeRecord.expires_at > challenge.created_at,
-                PlayerChallengeRecord.exchanged_at.is_(None),
-                PlayerChallengeRecord.revoked_at.is_(None),
+                PlayerAuthorizationChallenge.origin == challenge.origin.value,
+                PlayerAuthorizationChallenge.java_uuid == challenge.java_uuid,
+                PlayerAuthorizationChallenge.expires_at > challenge.created_at,
+                PlayerAuthorizationChallenge.exchanged_at.is_(None),
+                PlayerAuthorizationChallenge.revoked_at.is_(None),
             ]
             if challenge.installation_id is None:
-                conditions.append(PlayerChallengeRecord.installation_id.is_(None))
+                conditions.append(PlayerAuthorizationChallenge.installation_id.is_(None))
             else:
-                conditions.append(PlayerChallengeRecord.installation_id == challenge.installation_id)
-            active = await session.scalar(select(func.count()).select_from(PlayerChallengeRecord).where(*conditions))
+                conditions.append(PlayerAuthorizationChallenge.installation_id == challenge.installation_id)
+            active = await session.scalar(
+                select(func.count()).select_from(PlayerAuthorizationChallenge).where(*conditions)
+            )
             if active is not None and active >= max_active:
                 raise TooManyActiveChallengesError
 
-            record = PlayerChallengeRecord(
-                id=challenge.id,
-                device_code_hash=challenge.device_code_hash,
-                user_code_hash=challenge.user_code_hash,
-                origin=challenge.origin.value,
-                java_uuid=challenge.java_uuid,
-                installation_id=challenge.installation_id,
-                installation_credential_version=challenge.installation_credential_version,
-                pkce_s256_challenge=challenge.pkce_s256_challenge,
-                created_at=challenge.created_at,
-                expires_at=challenge.expires_at,
-                approved_by_account_id=challenge.approved_by_account_id,
-                approved_at=challenge.approved_at,
-                exchanged_at=challenge.exchanged_at,
-                revoked_at=challenge.revoked_at,
-            )
+            record = challenge
             session.add(record)
             await session.flush()
-            return _challenge(record)
+            return record
 
     async def get_challenge_by_user_code_hash(self, code_hash: bytes) -> PlayerAuthorizationChallenge | None:
         """Resolve a keyed user-code digest."""
         async with self._session_factory() as session:
             record = await session.scalar(
-                select(PlayerChallengeRecord).where(PlayerChallengeRecord.user_code_hash == code_hash)
+                select(PlayerAuthorizationChallenge).where(PlayerAuthorizationChallenge.user_code_hash == code_hash)
             )
-            return None if record is None else _challenge(record)
+            return None if record is None else record
 
     async def get_challenge_by_device_code_hash(self, code_hash: bytes) -> PlayerAuthorizationChallenge | None:
         """Resolve a keyed device-code digest."""
         async with self._session_factory() as session:
             record = await session.scalar(
-                select(PlayerChallengeRecord).where(PlayerChallengeRecord.device_code_hash == code_hash)
+                select(PlayerAuthorizationChallenge).where(PlayerAuthorizationChallenge.device_code_hash == code_hash)
             )
-            return None if record is None else _challenge(record)
+            return None if record is None else record
 
     async def approve_challenge(
         self,
@@ -322,7 +223,7 @@ class PostgresMinecraftAuthorizationRepository:
     ) -> PlayerAuthorizationChallenge:
         """Approve one still-live challenge, idempotently for the same account."""
         async with self._session_factory.begin() as session:
-            record = await session.get(PlayerChallengeRecord, challenge_id, with_for_update=True)
+            record = await session.get(PlayerAuthorizationChallenge, challenge_id, with_for_update=True)
             if record is None or record.revoked_at is not None:
                 raise InvalidChallengeError
             if record.expires_at <= approved_at:
@@ -332,11 +233,11 @@ class PostgresMinecraftAuthorizationRepository:
             if record.approved_by_account_id is not None:
                 if record.approved_by_account_id != account_id:
                     raise ChallengeApprovalDeniedError
-                return _challenge(record)
+                return record
             record.approved_by_account_id = account_id
             record.approved_at = approved_at
             await session.flush()
-            return _challenge(record)
+            return record
 
     async def exchange_challenge(
         self,
@@ -351,7 +252,7 @@ class PostgresMinecraftAuthorizationRepository:
     ) -> PlayerGrant:
         """Consume one approval and insert its hash-only grant in the same transaction."""
         async with self._session_factory.begin() as session:
-            record = await session.get(PlayerChallengeRecord, challenge_id, with_for_update=True)
+            record = await session.get(PlayerAuthorizationChallenge, challenge_id, with_for_update=True)
             if (
                 record is None
                 or record.revoked_at is not None
@@ -370,7 +271,7 @@ class PostgresMinecraftAuthorizationRepository:
             self._validate_grant_matches(record, grant)
 
             if record.installation_id is not None:
-                installation = await session.get(PaperInstallationRecord, record.installation_id, with_for_update=True)
+                installation = await session.get(PaperInstallation, record.installation_id, with_for_update=True)
                 if (
                     installation is None
                     or installation.revoked_at is not None
@@ -379,35 +280,23 @@ class PostgresMinecraftAuthorizationRepository:
                     raise InvalidChallengeError
 
             record.exchanged_at = exchanged_at
-            grant_record = PlayerGrantRecord(
-                id=grant.id,
-                challenge_id=grant.challenge_id,
-                token_hash=grant.token_hash,
-                account_id=grant.account_id,
-                java_uuid=grant.java_uuid,
-                origin=grant.origin.value,
-                installation_id=grant.installation_id,
-                installation_credential_version=grant.installation_credential_version,
-                issued_at=grant.issued_at,
-                expires_at=grant.expires_at,
-                revoked_at=grant.revoked_at,
-            )
+            grant_record = grant
             session.add(grant_record)
             await session.flush()
-            return _grant(grant_record)
+            return grant_record
 
     async def get_grant(self, grant_id: UUID) -> PlayerGrant | None:
         """Return a player grant without its plaintext bearer secret."""
         async with self._session_factory() as session:
-            record = await session.get(PlayerGrantRecord, grant_id)
-            return None if record is None else _grant(record)
+            record = await session.get(PlayerGrant, grant_id)
+            return None if record is None else record
 
     async def revoke_grant(self, *, grant_id: UUID, account_id: int, revoked_at: Instant) -> bool:
         """Revoke one account-owned grant, idempotently."""
         async with self._session_factory.begin() as session:
             record = await session.scalar(
-                select(PlayerGrantRecord)
-                .where(PlayerGrantRecord.id == grant_id, PlayerGrantRecord.account_id == account_id)
+                select(PlayerGrant)
+                .where(PlayerGrant.id == grant_id, PlayerGrant.account_id == account_id)
                 .with_for_update()
             )
             if record is None:
@@ -423,8 +312,8 @@ class PostgresMinecraftAuthorizationRepository:
             result = cast(
                 CursorResult[Any],
                 await session.execute(
-                    update(PlayerGrantRecord)
-                    .where(PlayerGrantRecord.account_id == account_id, PlayerGrantRecord.revoked_at.is_(None))
+                    update(PlayerGrant)
+                    .where(PlayerGrant.account_id == account_id, PlayerGrant.revoked_at.is_(None))
                     .values(revoked_at=revoked_at)
                 ),
             )
@@ -435,12 +324,12 @@ class PostgresMinecraftAuthorizationRepository:
         session: AsyncSession,
         installation_id: UUID,
         owner_account_id: int,
-    ) -> PaperInstallationRecord | None:
+    ) -> PaperInstallation | None:
         return await session.scalar(
-            select(PaperInstallationRecord)
+            select(PaperInstallation)
             .where(
-                PaperInstallationRecord.id == installation_id,
-                PaperInstallationRecord.owner_account_id == owner_account_id,
+                PaperInstallation.id == installation_id,
+                PaperInstallation.owner_account_id == owner_account_id,
             )
             .with_for_update()
         )
@@ -448,25 +337,25 @@ class PostgresMinecraftAuthorizationRepository:
     @staticmethod
     async def _fence_installation(session: AsyncSession, installation_id: UUID, fenced_at: Instant) -> None:
         await session.execute(
-            update(PlayerChallengeRecord)
+            update(PlayerAuthorizationChallenge)
             .where(
-                PlayerChallengeRecord.installation_id == installation_id,
-                PlayerChallengeRecord.revoked_at.is_(None),
-                PlayerChallengeRecord.exchanged_at.is_(None),
+                PlayerAuthorizationChallenge.installation_id == installation_id,
+                PlayerAuthorizationChallenge.revoked_at.is_(None),
+                PlayerAuthorizationChallenge.exchanged_at.is_(None),
             )
             .values(revoked_at=fenced_at)
         )
         await session.execute(
-            update(PlayerGrantRecord)
+            update(PlayerGrant)
             .where(
-                PlayerGrantRecord.installation_id == installation_id,
-                PlayerGrantRecord.revoked_at.is_(None),
+                PlayerGrant.installation_id == installation_id,
+                PlayerGrant.revoked_at.is_(None),
             )
             .values(revoked_at=fenced_at)
         )
 
     @staticmethod
-    def _validate_grant_matches(record: PlayerChallengeRecord, grant: PlayerGrant) -> None:
+    def _validate_grant_matches(record: PlayerAuthorizationChallenge, grant: PlayerGrant) -> None:
         matches = (
             grant.challenge_id == record.id
             and grant.account_id == record.approved_by_account_id

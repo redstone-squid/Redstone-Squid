@@ -45,7 +45,7 @@ from squid.records.models import (
     RecordSeries,
     RecordStanding,
 )
-from squid.tags.models import BuildTagAssignment
+from squid.tags.models import TagAssignment
 
 
 def _durable_staff_notification_role_ids():
@@ -759,12 +759,12 @@ class PostgresNotificationRepository:
         assignments = (
             await session.execute(
                 select(
-                    BuildTagAssignment.build_id,
-                    BuildTagAssignment.tag_id,
-                    BuildTagAssignment.numeric_value,
-                    BuildTagAssignment.text_value,
-                    BuildTagAssignment.boolean_value,
-                ).where(BuildTagAssignment.build_id.in_(build_ids))
+                    TagAssignment.build_id,
+                    TagAssignment.tag_id,
+                    TagAssignment.numeric_value,
+                    TagAssignment.text_value,
+                    TagAssignment.boolean_value,
+                ).where(TagAssignment.build_id.in_(build_ids))
             )
         ).all()
         tags_by_build: dict[int, dict[int, Decimal | str | bool | None]] = defaultdict(dict)

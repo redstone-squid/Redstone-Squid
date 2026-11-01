@@ -26,9 +26,9 @@ from squid.minecraft_auth.errors import (
 )
 from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
 from squid.minecraft_auth.models import (
-    PaperInstallationRecord,
-    PlayerChallengeRecord,
-    PlayerGrantRecord,
+    PaperInstallation,
+    PlayerAuthorizationChallenge,
+    PlayerGrant,
 )
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
 from squid.persistence.base import Base
@@ -43,9 +43,9 @@ PKCE_CHALLENGE = base64.urlsafe_b64encode(hashlib.sha256(PKCE_VERIFIER.encode())
 _TABLES: tuple[Table, ...] = (
     cast(Table, Account.__table__),
     cast(Table, AccountIdentity.__table__),
-    cast(Table, PaperInstallationRecord.__table__),
-    cast(Table, PlayerChallengeRecord.__table__),
-    cast(Table, PlayerGrantRecord.__table__),
+    cast(Table, PaperInstallation.__table__),
+    cast(Table, PlayerAuthorizationChallenge.__table__),
+    cast(Table, PlayerGrant.__table__),
 )
 
 
@@ -142,8 +142,8 @@ async def test_fabric_codes_and_token_are_hash_only_and_exchange_is_one_time(
         await players.exchange_fabric(device_code=challenge.device_code, pkce_verifier=PKCE_VERIFIER)
 
     async with async_session_factory() as session:
-        challenge_record = await session.get(PlayerChallengeRecord, challenge.id)
-        grant_record = await session.get(PlayerGrantRecord, issued.grant.id)
+        challenge_record = await session.get(PlayerAuthorizationChallenge, challenge.id)
+        grant_record = await session.get(PlayerGrant, issued.grant.id)
     assert challenge_record is not None
     assert grant_record is not None
     persisted = challenge_record.device_code_hash + challenge_record.user_code_hash + grant_record.token_hash
@@ -181,7 +181,7 @@ async def test_paper_rotation_atomically_fences_credential_challenge_and_grant(
     with pytest.raises(InvalidPlayerTokenError):
         await players.authenticate_paper_player(grant.token, authenticated)
     async with async_session_factory() as session:
-        stored_grant = await session.get(PlayerGrantRecord, grant.grant.id)
+        stored_grant = await session.get(PlayerGrant, grant.grant.id)
     assert stored_grant is not None
     assert stored_grant.revoked_at == NOW
 
@@ -209,8 +209,8 @@ async def test_targeted_public_sponsor_lookup_isolated_from_unrelated_malformed_
     malformed = await installations.register(owner_account_id=account_id, label="Malformed public server")
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(PaperInstallationRecord)
-            .where(PaperInstallationRecord.id == malformed.installation.id)
+            update(PaperInstallation)
+            .where(PaperInstallation.id == malformed.installation.id)
             .values(public_profile_enabled=True, public_display_name=" ", sponsor_opt_in=True)
         )
 
@@ -274,7 +274,9 @@ async def test_expired_challenge_does_not_consume_active_quota(
     expired = await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
     async with async_session_factory.begin() as session:
         await session.execute(
-            update(PlayerChallengeRecord).where(PlayerChallengeRecord.id == expired.id).values(expires_at=NOW)
+            update(PlayerAuthorizationChallenge)
+            .where(PlayerAuthorizationChallenge.id == expired.id)
+            .values(created_at=NOW.subtract(minutes=1), expires_at=NOW)
         )
 
     replacement = await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)

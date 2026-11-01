@@ -7,14 +7,8 @@ from decimal import Decimal
 import pytest
 
 from squid.tags.application import TagService
-from squid.tags.domain import (
-    TagAuthority,
-    TagDefinition,
-    TagModerationStatus,
-    TagSemanticKind,
-    TagValue,
-    TagValueType,
-)
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
+from squid.tags.models import TagDefinition
 
 
 class FakeRepository:

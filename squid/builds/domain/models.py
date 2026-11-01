@@ -35,7 +35,7 @@ from squid.builds.errors import InvalidBuildError
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.i18n import tr
 from squid.sponsors import PublicSponsor
-from squid.tags.domain import TagAssignment
+from squid.tags.models import TagAssignment
 
 RecordCategoryLiteral = Literal["Smallest", "Fastest", "First"]
 RECORD_CATEGORIES: Sequence[RecordCategoryLiteral] = cast(

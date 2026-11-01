@@ -9,18 +9,10 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.models import Build
 from squid.tags.application import TagDefinitionRepository
-from squid.tags.domain import (
-    TagAuthority,
-    TagDefinition,
-    TagModerationStatus,
-    TagSemanticKind,
-    TagValue,
-    TagValueType,
-)
-from squid.tags.models import BuildTagAssignment
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValue, TagValueType
+from squid.tags.models import TagAssignment, TagDefinition
 from squid.tags.models import TagDefinition as SQLTagDefinition
 
 
@@ -51,8 +43,8 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             restriction_type=None,
             value_type=value_type,
             record_operator=None,
-            canonical_unit_key=None,
-            default_display_unit_key=None,
+            canonical_unit=None,
+            default_display_unit=None,
             numeric_step=None,
             render_template="{name}" if value_type is TagValueType.NONE else "{name}: {value}{unit}",
             default_display_order=0,
@@ -63,7 +55,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         async with self._session_factory.begin() as session:
             session.add(row)
             await session.flush()
-            return BuildMapper.tag_definition_to_domain(row)
+            return row
 
     @override
     async def pending(self) -> Sequence[TagDefinition]:
@@ -75,13 +67,13 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                     .order_by(SQLTagDefinition.created_at, SQLTagDefinition.id)
                 )
             ).all()
-            return tuple(BuildMapper.tag_definition_to_domain(row) for row in rows)
+            return tuple(row for row in rows)
 
     @override
     async def get(self, tag_id: int) -> TagDefinition | None:
         async with self._session_factory() as session:
             row = await session.get(SQLTagDefinition, tag_id)
-            return None if row is None else BuildMapper.tag_definition_to_domain(row)
+            return None if row is None else row
 
     @override
     async def approved(self) -> Sequence[TagDefinition]:
@@ -95,7 +87,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                     )
                 )
             ).all()
-            return tuple(BuildMapper.tag_definition_to_domain(row) for row in rows)
+            return tuple(row for row in rows)
 
     @override
     async def set_status(self, tag_id: int, status: TagModerationStatus) -> TagDefinition | None:
@@ -124,7 +116,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
                     "action": "upsert" if status is TagModerationStatus.APPROVED else "delete",
                 },
             )
-            return BuildMapper.tag_definition_to_domain(row)
+            return row
 
     @override
     async def assign_showcase(
@@ -147,14 +139,9 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             definition = await session.get(SQLTagDefinition, tag_id)
             if definition is None:
                 return False
-            # `value_type` is a bare `Text` column with no TypeDecorator, so a row read
-            # back from the database carries a `str` where the annotation promises the
-            # enum. `_split_value` compares with `is`, so every branch fell through and
-            # every assignment raised. Coerced here rather than in `_split_value` so the
-            # helper keeps a single, honest input type.
-            value_type = TagValueType(definition.value_type)
+            value_type = definition.value_type
             numeric_value, text_value, boolean_value = _split_value(value_type, value)
-            statement = insert(BuildTagAssignment).values(
+            statement = insert(TagAssignment).values(
                 build_id=build_id,
                 tag_id=tag_id,
                 value_type=definition.value_type,
@@ -166,7 +153,7 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
             )
             await session.execute(
                 statement.on_conflict_do_update(
-                    index_elements=[BuildTagAssignment.build_id, BuildTagAssignment.tag_id],
+                    index_elements=[TagAssignment.build_id, TagAssignment.tag_id],
                     set_={
                         "numeric_value": statement.excluded.numeric_value,
                         "text_value": statement.excluded.text_value,

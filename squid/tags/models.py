@@ -24,12 +24,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC, StrEnumText, now
 from squid.tags.domain import (
     RecordOperator,
     TagAuthority,
     TagModerationStatus,
     TagSemanticKind,
+    TagValue,
     TagValueType,
 )
 
@@ -114,22 +115,24 @@ class TagDefinition(Base, kw_only=True):
         Index("tag_definitions_lookup_idx", "normalized_name", "semantic_kind"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     stable_key: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
-    normalized_name: Mapped[str] = mapped_column(Text, nullable=False)
+    normalized_name: Mapped[str] = mapped_column(Text, nullable=False, default="")
     query_name: Mapped[str | None] = mapped_column(Text, default=None)
-    authority: Mapped[TagAuthority] = mapped_column(Text, nullable=False)
-    semantic_kind: Mapped[TagSemanticKind] = mapped_column(Text, nullable=False)
+    authority: Mapped[TagAuthority] = mapped_column(StrEnumText(TagAuthority), nullable=False)
+    semantic_kind: Mapped[TagSemanticKind] = mapped_column(StrEnumText(TagSemanticKind), nullable=False)
     restriction_type: Mapped[str | None] = mapped_column(Text, default=None)
-    value_type: Mapped[TagValueType] = mapped_column(Text, nullable=False)
-    record_operator: Mapped[RecordOperator | None] = mapped_column(Text, default=None)
-    canonical_unit_key: Mapped[str | None] = mapped_column(
+    value_type: Mapped[TagValueType] = mapped_column(StrEnumText(TagValueType), nullable=False)
+    record_operator: Mapped[RecordOperator | None] = mapped_column(StrEnumText(RecordOperator), default=None)
+    canonical_unit: Mapped[str | None] = mapped_column(
+        "canonical_unit_key",
         Text,
         ForeignKey("tag_units.key", name="tag_definitions_canonical_unit_fkey", ondelete="RESTRICT"),
         default=None,
     )
-    default_display_unit_key: Mapped[str | None] = mapped_column(
+    default_display_unit: Mapped[str | None] = mapped_column(
+        "default_display_unit_key",
         Text,
         ForeignKey("tag_units.key", name="tag_definitions_display_unit_fkey", ondelete="RESTRICT"),
         default=None,
@@ -137,7 +140,7 @@ class TagDefinition(Base, kw_only=True):
     numeric_step: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
     render_template: Mapped[str] = mapped_column(Text, nullable=False, default="{name}")
     default_display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
-    moderation_status: Mapped[TagModerationStatus] = mapped_column(Text, nullable=False)
+    moderation_status: Mapped[TagModerationStatus] = mapped_column(StrEnumText(TagModerationStatus), nullable=False)
     created_by_account_id: Mapped[int | None] = mapped_column(
         ForeignKey("accounts.id", name="tag_definitions_created_by_account_id_fkey", ondelete="SET NULL"),
         default=None,
@@ -154,9 +157,13 @@ class TagDefinition(Base, kw_only=True):
     applicabilities: Mapped[list[TagApplicability]] = relationship(
         back_populates="definition", default_factory=list, lazy="selectin"
     )
-    assignments: Mapped[list[BuildTagAssignment]] = relationship(
+    assignments: Mapped[list[TagAssignment]] = relationship(
         back_populates="definition", default_factory=list, lazy="raise_on_sql", repr=False
     )
+
+    def __post_init__(self) -> None:
+        if not self.normalized_name:
+            self.normalized_name = " ".join(self.display_name.casefold().split())
 
 
 class TagAlias(Base, kw_only=True):
@@ -198,7 +205,7 @@ class TagApplicability(Base, kw_only=True):
     definition: Mapped[TagDefinition] = relationship(back_populates="applicabilities", lazy="joined", default=None)
 
 
-class BuildTagAssignment(Base, kw_only=True):
+class TagAssignment(Base, kw_only=True, init=False):
     """A typed tag value attached to one build."""
 
     __tablename__ = "build_tag_assignments"
@@ -253,11 +260,12 @@ class BuildTagAssignment(Base, kw_only=True):
         init=False,
     )
     tag_id: Mapped[int] = mapped_column(BigInteger, init=False)
-    value_type: Mapped[TagValueType] = mapped_column(Text, nullable=False)
+    value_type: Mapped[TagValueType] = mapped_column(StrEnumText(TagValueType), nullable=False)
     numeric_value: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
     text_value: Mapped[str | None] = mapped_column(Text, default=None)
     boolean_value: Mapped[bool | None] = mapped_column(Boolean, default=None)
-    display_unit_key: Mapped[str | None] = mapped_column(
+    display_unit: Mapped[str | None] = mapped_column(
+        "display_unit_key",
         Text,
         ForeignKey("tag_units.key", name="build_tag_assignments_display_unit_fkey", ondelete="RESTRICT"),
         default=None,
@@ -277,6 +285,56 @@ class BuildTagAssignment(Base, kw_only=True):
     )
 
     definition: Mapped[TagDefinition] = relationship(back_populates="assignments", lazy="joined", default=None)
+
+    def __init__(
+        self,
+        definition: TagDefinition,
+        value: TagValue = None,
+        display_unit: str | None = None,
+        display_order: int | None = None,
+        evidence: str | None = None,
+        provenance: str = "submitted",
+        *,
+        created_by_account_id: int | None = None,
+    ) -> None:
+        self.definition = definition
+        self.value_type = definition.value_type
+        self.value = value
+        self.display_unit = display_unit
+        self.display_order = display_order
+        self.evidence = evidence
+        self.provenance = provenance
+        self.created_by_account_id = created_by_account_id
+        self.created_at = self.updated_at = now()
+
+    @property
+    def value(self) -> TagValue:
+        """The scalar stored in the column selected by the definition's value type."""
+        match self.value_type:
+            case TagValueType.NONE:
+                return None
+            case TagValueType.NUMERIC:
+                return self.numeric_value
+            case TagValueType.TEXT:
+                return self.text_value
+            case TagValueType.BOOLEAN:
+                return self.boolean_value
+
+    @value.setter
+    def value(self, value: TagValue) -> None:
+        self.numeric_value = self.text_value = self.boolean_value = None
+        match self.value_type, value:
+            case TagValueType.NONE, None:
+                pass
+            case TagValueType.NUMERIC, Decimal():
+                self.numeric_value = value
+            case TagValueType.TEXT, str():
+                self.text_value = value
+            case TagValueType.BOOLEAN, bool():
+                self.boolean_value = value
+            case _:
+                msg = f"Invalid {self.value_type.value} tag value: {value!r}"
+                raise ValueError(msg)
 
 
 class TagRelation(Base, kw_only=True):
@@ -317,6 +375,8 @@ class TagRecordThreshold(Base, kw_only=True):
     )
 
     tag_id: Mapped[int] = mapped_column(BigInteger)
-    value_type: Mapped[TagValueType] = mapped_column(Text, nullable=False, default=TagValueType.NUMERIC)
+    value_type: Mapped[TagValueType] = mapped_column(
+        StrEnumText(TagValueType), nullable=False, default=TagValueType.NUMERIC
+    )
     numeric_value: Mapped[Decimal] = mapped_column(Numeric, nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

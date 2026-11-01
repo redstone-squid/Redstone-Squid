@@ -15,14 +15,15 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, composite, mapped_column
 from whenever import Instant
 
+from squid.minecraft_auth.domain.models import MinecraftClientOrigin, PublicServerProfile
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC, StrEnumText, now
 
 
-class PaperInstallationRecord(Base, kw_only=True):
+class PaperInstallation(Base, kw_only=True):
     """An account-owned Paper installation with a non-recoverable credential."""
 
     __tablename__ = "minecraft_paper_installations"
@@ -68,21 +69,36 @@ class PaperInstallationRecord(Base, kw_only=True):
     secret_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
     credential_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"), default=1)
     public_profile_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=text("false"), default=False
+        Boolean, nullable=False, server_default=text("false"), init=False
     )
-    public_display_name: Mapped[str | None] = mapped_column(Text, default=None)
-    public_address: Mapped[str | None] = mapped_column(Text, default=None)
-    public_description: Mapped[str | None] = mapped_column(Text, default=None)
-    public_website_url: Mapped[str | None] = mapped_column(Text, default=None)
-    sponsor_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    public_display_name: Mapped[str | None] = mapped_column(Text, init=False)
+    public_address: Mapped[str | None] = mapped_column(Text, init=False)
+    public_description: Mapped[str | None] = mapped_column(Text, init=False)
+    public_website_url: Mapped[str | None] = mapped_column(Text, init=False)
+    sponsor_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), init=False)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     rotated_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
+    profile: Mapped[PublicServerProfile] = composite(
+        PublicServerProfile,
+        "public_profile_enabled",
+        "public_display_name",
+        "public_address",
+        "public_description",
+        "public_website_url",
+        "sponsor_opt_in",
+        default_factory=PublicServerProfile,
+    )
 
-class PlayerChallengeRecord(Base, kw_only=True):
+    def is_active_at(self, _instant: Instant) -> bool:
+        """Return whether this installation has not been revoked."""
+        return self.revoked_at is None
+
+
+class PlayerAuthorizationChallenge(Base, kw_only=True):
     """A short-lived device flow storing only hashes of both bearer codes."""
 
     __tablename__ = "minecraft_player_challenges"
@@ -126,7 +142,7 @@ class PlayerChallengeRecord(Base, kw_only=True):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     device_code_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
     user_code_hash: Mapped[bytes] = mapped_column(LargeBinary(32), nullable=False)
-    origin: Mapped[str] = mapped_column(Text, nullable=False)
+    origin: Mapped[MinecraftClientOrigin] = mapped_column(StrEnumText(MinecraftClientOrigin), nullable=False)
     java_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     installation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
@@ -150,8 +166,12 @@ class PlayerChallengeRecord(Base, kw_only=True):
     exchanged_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
+    def is_expired_at(self, instant: Instant) -> bool:
+        """Return whether the challenge can no longer be approved or exchanged."""
+        return self.expires_at <= instant
 
-class PlayerGrantRecord(Base, kw_only=True):
+
+class PlayerGrant(Base, kw_only=True):
     """A short-lived origin- and identity-bound player bearer grant."""
 
     __tablename__ = "minecraft_player_grants"
@@ -192,7 +212,7 @@ class PlayerGrantRecord(Base, kw_only=True):
         nullable=False,
     )
     java_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    origin: Mapped[str] = mapped_column(Text, nullable=False)
+    origin: Mapped[MinecraftClientOrigin] = mapped_column(StrEnumText(MinecraftClientOrigin), nullable=False)
     installation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey(
@@ -206,3 +226,7 @@ class PlayerGrantRecord(Base, kw_only=True):
     issued_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+
+    def is_active_at(self, instant: Instant) -> bool:
+        """Return whether the bearer grant is inside its validity window."""
+        return self.revoked_at is None and self.issued_at <= instant < self.expires_at

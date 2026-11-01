@@ -52,11 +52,10 @@ from squid.minecraft_auth.domain.models import (
     IssuedPlayerChallenge,
     IssuedPlayerGrant,
     MinecraftPlayerContext,
-    PaperInstallation,
-    PlayerAuthorizationChallenge,
     PublicServerProfile,
 )
 from squid.minecraft_auth.errors import InvalidChallengeError, InvalidInstallationCredentialError
+from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
 from squid.notifications import NotificationPreferences, NotificationService
 from squid.notifications.domain import (
     DEFAULT_INBOX_VISIBILITY,
@@ -99,7 +98,7 @@ from squid.submissions.domain.schematics import DraftSchematic
 from squid.submissions.errors import DraftNotFoundError
 from squid.suggestions.application import SuggestionRegistry, SuggestionService
 from squid.tags.application import TagService
-from squid.tags.domain.models import TagDefinition
+from squid.tags.models import TagDefinition
 from squid.versions.application.services import VersionService
 from squid.voting.application import VoteService
 from squid.voting.domain.models import VoteSessionSnapshot

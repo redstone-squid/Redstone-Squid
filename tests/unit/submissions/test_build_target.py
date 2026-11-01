@@ -31,13 +31,8 @@ from squid.submissions.domain import (
     VerifiedSubmissionArtifacts,
 )
 from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
-from squid.tags.domain import (
-    TagAuthority,
-    TagDefinition,
-    TagModerationStatus,
-    TagSemanticKind,
-    TagValueType,
-)
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagDefinition
 from squid.versions.domain import MinecraftVersion
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000501")

@@ -32,7 +32,7 @@ from squid.builds.domain import (
 from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, IntEnumSmallInt, now
-from squid.tags.models import BuildTagAssignment
+from squid.tags.models import TagAssignment
 
 
 class Build(Base, kw_only=True):
@@ -160,7 +160,7 @@ class Build(Base, kw_only=True):
         cascade="all, delete-orphan",
         passive_deletes=True,
     )
-    tag_assignments: Mapped[list[BuildTagAssignment]] = relationship(
+    tag_assignments: Mapped[list[TagAssignment]] = relationship(
         default_factory=list,
         lazy="selectin",
         cascade="all, delete-orphan",

@@ -49,7 +49,7 @@ def _field_definition(
         "boolean": FieldType.BOOLEAN,
     }[definition.value_type]
     unit_scales: tuple[tuple[str, Decimal], ...] = ()
-    canonical = units.get(definition.canonical_unit_key or "")
+    canonical = units.get(definition.canonical_unit or "")
     if canonical is not None:
         aliases: list[tuple[str, Decimal]] = []
         for unit in units.values():

@@ -6,7 +6,7 @@ from typing import Self, override
 from pydantic import ConfigDict
 
 from squid.api.v1.schemas import FromDomain
-from squid.tags.domain import TagDefinition
+from squid.tags.models import TagDefinition
 
 
 class TagDetail(FromDomain[TagDefinition]):

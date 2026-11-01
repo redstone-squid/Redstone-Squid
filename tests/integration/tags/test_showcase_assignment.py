@@ -11,7 +11,7 @@ from squid.builds.domain import Status
 from squid.builds.models import Build
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
-from squid.tags.models import BuildTagAssignment, TagDefinition
+from squid.tags.models import TagAssignment, TagDefinition
 
 
 @pytest.fixture
@@ -59,8 +59,8 @@ async def _approved_tag(session_factory: async_sessionmaker[AsyncSession], *, cr
             restriction_type=None,
             value_type=TagValueType.NONE,
             record_operator=None,
-            canonical_unit_key=None,
-            default_display_unit_key=None,
+            canonical_unit=None,
+            default_display_unit=None,
             numeric_step=None,
             render_template="{name}",
             default_display_order=0,
@@ -88,7 +88,7 @@ async def test_an_account_without_discord_can_tag_its_own_build(
 
     assert assigned is True
     async with migrated_session_factory() as session:
-        stored = await session.scalar(select(BuildTagAssignment).where(BuildTagAssignment.build_id == build_id))
+        stored = await session.scalar(select(TagAssignment).where(TagAssignment.build_id == build_id))
         assert stored is not None
         assert stored.created_by_account_id == account_id
 
@@ -108,4 +108,4 @@ async def test_an_account_cannot_tag_someone_elses_build(
 
     assert assigned is False
     async with migrated_session_factory() as session:
-        assert await session.scalar(select(BuildTagAssignment)) is None
+        assert await session.scalar(select(TagAssignment)) is None

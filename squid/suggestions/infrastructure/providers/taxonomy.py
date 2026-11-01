@@ -11,7 +11,7 @@ from squid.suggestions.application import Candidate, candidate
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.cache import TtlCache
 from squid.suggestions.infrastructure.repository import TaxonomyEntry
-from squid.tags.domain import TagDefinition
+from squid.tags.models import TagDefinition
 
 
 class TaxonomyReader(Protocol):

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from whenever import Instant
@@ -43,25 +44,6 @@ class PublicServerProfile:
 
 
 @dataclass(frozen=True, slots=True)
-class PaperInstallation:
-    """An account-owned Paper server without a recoverable secret."""
-
-    id: UUID
-    owner_account_id: int
-    label: str
-    secret_hash: bytes
-    credential_version: int
-    profile: PublicServerProfile
-    created_at: Instant
-    rotated_at: Instant | None = None
-    revoked_at: Instant | None = None
-
-    def is_active_at(self, _instant: Instant) -> bool:
-        """Return whether this installation has not been revoked."""
-        return self.revoked_at is None
-
-
-@dataclass(frozen=True, slots=True)
 class PublishedPaperServer:
     """Safe public projection of an explicitly listed Paper installation."""
 
@@ -92,30 +74,6 @@ class AuthenticatedPaperInstallation:
 
 
 @dataclass(frozen=True, slots=True)
-class PlayerAuthorizationChallenge:
-    """A persisted device authorization request containing only code digests."""
-
-    id: UUID
-    device_code_hash: bytes
-    user_code_hash: bytes
-    origin: MinecraftClientOrigin
-    java_uuid: UUID
-    created_at: Instant
-    expires_at: Instant
-    installation_id: UUID | None = None
-    installation_credential_version: int | None = None
-    pkce_s256_challenge: str | None = None
-    approved_by_account_id: int | None = None
-    approved_at: Instant | None = None
-    exchanged_at: Instant | None = None
-    revoked_at: Instant | None = None
-
-    def is_expired_at(self, instant: Instant) -> bool:
-        """Return whether the challenge can no longer be approved or exchanged."""
-        return self.expires_at <= instant
-
-
-@dataclass(frozen=True, slots=True)
 class IssuedPlayerChallenge:
     """Device-flow codes returned only when a challenge is created."""
 
@@ -124,27 +82,6 @@ class IssuedPlayerChallenge:
     user_code: str
     expires_at: Instant
     polling_interval_seconds: int
-
-
-@dataclass(frozen=True, slots=True)
-class PlayerGrant:
-    """A short-lived Minecraft player grant containing only a token digest."""
-
-    id: UUID
-    challenge_id: UUID
-    token_hash: bytes
-    account_id: int
-    java_uuid: UUID
-    origin: MinecraftClientOrigin
-    issued_at: Instant
-    expires_at: Instant
-    installation_id: UUID | None = None
-    installation_credential_version: int | None = None
-    revoked_at: Instant | None = None
-
-    def is_active_at(self, instant: Instant) -> bool:
-        """Return whether the bearer grant is inside its validity window."""
-        return self.revoked_at is None and self.issued_at <= instant < self.expires_at
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,3 +101,7 @@ class MinecraftPlayerContext:
     java_uuid: UUID
     origin: MinecraftClientOrigin
     installation_id: UUID | None = None
+
+
+if TYPE_CHECKING:
+    from squid.minecraft_auth.models import PaperInstallation, PlayerGrant

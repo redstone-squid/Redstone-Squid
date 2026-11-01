@@ -404,7 +404,9 @@ class TestIdentityVisibilityAndUnlink:
                     await _wait_for_blocked_sessions(async_session_factory, holder_pid, count=2)
                     await blocker.commit()
 
-        assert [identity.id for identity in removed] == [java.id]
+        assert len(removed) == 1
+        assert removed[0] is not None
+        assert removed[0].id == java.id
         assert len(rejected) == 1
         assert rejected[0].identity_id == identity_id
         profile = await repository.get_profile(account_id)

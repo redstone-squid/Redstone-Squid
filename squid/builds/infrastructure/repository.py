@@ -56,10 +56,10 @@ from squid.builds.models import (
 from squid.core.errors import DataIntegrityError, InvalidStateError, PersistenceError
 from squid.messages.models import MessageRecord
 from squid.persistence.types import now
-from squid.tags.domain import TagAssignment as DomainTagAssignment
 from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
+from squid.tags.models import TagAssignment as DomainTagAssignment
 from squid.tags.models import (
-    BuildTagAssignment as SQLTagAssignment,
+    TagAssignment as SQLTagAssignment,
 )
 from squid.tags.models import (
     TagDefinition as SQLTagDefinition,
@@ -343,7 +343,7 @@ class BuildRepository:
                     SQLTagAssignment.numeric_value,
                     SQLTagAssignment.text_value,
                     SQLTagAssignment.boolean_value,
-                    SQLTagAssignment.display_unit_key,
+                    SQLTagAssignment.display_unit,
                 )
                 .join(SQLTagDefinition, SQLTagDefinition.id == SQLTagAssignment.tag_id)
                 .where(SQLTagAssignment.build_id.in_(public_ids))
@@ -366,7 +366,7 @@ class BuildRepository:
                         key=tag_row.stable_key,
                         name=tag_row.display_name,
                         value=value,
-                        unit=tag_row.display_unit_key,
+                        unit=tag_row.display_unit,
                     )
                 )
                 if tag_row.authority != TagAuthority.OFFICIAL:
@@ -707,15 +707,11 @@ class BuildRepository:
             if definition.value_type != assignment.definition.value_type:
                 msg = f"Tag {definition.stable_key} value type changed while the build was being edited."
                 raise InvalidBuildError(msg, context={"tag_id": definition.id})
-            numeric_value, text_value, boolean_value = _split_tag_value(assignment)
             sql_build.tag_assignments.append(
                 SQLTagAssignment(
                     definition=definition,
-                    value_type=assignment.definition.value_type,
-                    numeric_value=numeric_value,
-                    text_value=text_value,
-                    boolean_value=boolean_value,
-                    display_unit_key=assignment.display_unit,
+                    value=assignment.value,
+                    display_unit=assignment.display_unit,
                     display_order=assignment.display_order,
                     evidence=assignment.evidence,
                     provenance=assignment.provenance,

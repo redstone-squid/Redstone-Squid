@@ -9,10 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.builds.application.taxonomy import TaxonomyResolution, normalize_tag_name
 from squid.builds.domain.models import RestrictionTypeLiteral
 from squid.builds.errors import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
-from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.infrastructure.restrictions import RestrictionRepository, get_restriction_id
-from squid.tags.domain import TagAssignment, TagSemanticKind
-from squid.tags.models import TagAlias, TagApplicability, TagDefinition
+from squid.tags.domain import TagSemanticKind
+from squid.tags.models import TagAlias, TagApplicability, TagAssignment, TagDefinition
 
 
 class BuildTagsManager:
@@ -134,7 +133,7 @@ class OfficialTagResolver:
         return TaxonomyResolution(
             assignments=tuple(
                 TagAssignment(
-                    definition=BuildMapper.tag_definition_to_domain(row),
+                    definition=row,
                     provenance="submitted",
                 )
                 for row in rows

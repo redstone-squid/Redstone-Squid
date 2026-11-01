@@ -14,13 +14,8 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
 )
 from squid.tags.application import TagService
-from squid.tags.domain import (
-    TagAuthority,
-    TagDefinition,
-    TagModerationStatus,
-    TagSemanticKind,
-    TagValueType,
-)
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagDefinition
 from squid_ui.testing import labels
 
 

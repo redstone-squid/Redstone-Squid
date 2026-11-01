@@ -25,7 +25,8 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
     SubmissionCategory,
 )
-from squid.tags.domain import TagAssignment, TagDefinition, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.domain import TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagAssignment, TagDefinition
 from squid.versions.domain import MinecraftVersion
 
 _CATEGORY_MAP = {

@@ -13,10 +13,9 @@ from squid.minecraft_auth.domain import (
     IssuedPlayerChallenge,
     IssuedPlayerGrant,
     MinecraftClientOrigin,
-    PaperInstallation,
-    PlayerAuthorizationChallenge,
     PublicServerProfile,
 )
+from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
 
 InstallationLabel = Annotated[str, Field(min_length=1, max_length=80)]
 DeviceCode = Annotated[str, Field(min_length=32, max_length=256, pattern=r"^[A-Za-z0-9_-]+$")]

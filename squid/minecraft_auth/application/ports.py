@@ -9,12 +9,10 @@ from squid.minecraft_auth.domain import (
     AuthenticatedPaperInstallation,
     MinecraftClientOrigin,
     MinecraftPlayerContext,
-    PaperInstallation,
-    PlayerAuthorizationChallenge,
-    PlayerGrant,
     PublicServerProfile,
     PublishedPaperServer,
 )
+from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
 
 
 class MinecraftAuthorizationRepository(Protocol):

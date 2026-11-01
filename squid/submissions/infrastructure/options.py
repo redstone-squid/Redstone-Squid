@@ -6,7 +6,8 @@ from typing import Protocol, override
 
 from squid.submissions.application import FormOptionCatalog, FormOptionSet
 from squid.submissions.domain import ChoiceOption
-from squid.tags.domain import TagDefinition, TagSemanticKind
+from squid.tags.domain import TagSemanticKind
+from squid.tags.models import TagDefinition
 from squid.versions.domain import MinecraftVersion
 
 _SOURCES = {

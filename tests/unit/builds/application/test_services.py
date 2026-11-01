@@ -21,14 +21,8 @@ from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import GrantRecord, SubjectRecords
 from squid.permissions.domain import Subject
-from squid.tags.domain import (
-    TagAssignment,
-    TagAuthority,
-    TagDefinition,
-    TagModerationStatus,
-    TagSemanticKind,
-    TagValueType,
-)
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagAssignment, TagDefinition
 
 
 class FakeBuildRepository:

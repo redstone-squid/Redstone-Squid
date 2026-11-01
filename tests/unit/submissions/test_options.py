@@ -2,13 +2,8 @@ import pytest
 
 from squid.submissions.application import CheckedInFormManifestRegistry
 from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
-from squid.tags.domain import (
-    TagAuthority,
-    TagDefinition,
-    TagModerationStatus,
-    TagSemanticKind,
-    TagValueType,
-)
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagDefinition
 from squid.versions.domain import MinecraftVersion
 
 

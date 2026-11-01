@@ -25,9 +25,6 @@ from squid.minecraft_auth.domain import (
     IssuedPlayerGrant,
     MinecraftClientOrigin,
     MinecraftPlayerContext,
-    PaperInstallation,
-    PlayerAuthorizationChallenge,
-    PlayerGrant,
     PublicServerProfile,
     PublishedPaperServer,
 )
@@ -43,6 +40,7 @@ from squid.minecraft_auth.errors import (
     InvalidPkceError,
     InvalidPlayerTokenError,
 )
+from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
 
 CHALLENGE_LIFETIME_SECONDS = 10 * 60
 PLAYER_GRANT_LIFETIME_SECONDS = 5 * 60

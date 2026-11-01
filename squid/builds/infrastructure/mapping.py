@@ -32,17 +32,7 @@ from squid.builds.models import (
 from squid.core.errors import DataIntegrityError
 from squid.messages.models import MessageRecord
 from squid.sponsors import PublicSponsor
-from squid.tags.domain import (
-    RecordOperator,
-    TagAssignment,
-    TagAuthority,
-    TagDefinition,
-    TagModerationStatus,
-    TagSemanticKind,
-    TagValueType,
-)
-from squid.tags.models import BuildTagAssignment
-from squid.tags.models import TagDefinition as SQLTagDefinition
+from squid.tags.domain import TagAuthority, TagSemanticKind
 from squid.versions.models import Version
 
 CATEGORY_FIELD_NAMES: Mapping[BuildCategory, tuple[str, ...]] = {
@@ -183,7 +173,7 @@ class BuildMapper:
         )
         source_messages = tuple(values.source_messages.get(sql_build.id, ()))
 
-        tags = [_tag_assignment_to_domain(assignment) for assignment in sql_build.tag_assignments]
+        tags = list(sql_build.tag_assignments)
         official_restrictions = [
             assignment.definition
             for assignment in tags
@@ -254,29 +244,6 @@ class BuildMapper:
             **category_values_from_row(sql_build),
         )
 
-    @staticmethod
-    def tag_definition_to_domain(definition: SQLTagDefinition) -> TagDefinition:
-        """Map persisted tag metadata without exposing infrastructure models."""
-        return TagDefinition(
-            id=definition.id,
-            stable_key=definition.stable_key,
-            display_name=definition.display_name,
-            query_name=definition.query_name,
-            authority=TagAuthority(definition.authority),
-            semantic_kind=TagSemanticKind(definition.semantic_kind),
-            restriction_type=definition.restriction_type,
-            value_type=TagValueType(definition.value_type),
-            record_operator=(
-                RecordOperator(definition.record_operator) if definition.record_operator is not None else None
-            ),
-            canonical_unit=definition.canonical_unit_key,
-            default_display_unit=definition.default_display_unit_key,
-            numeric_step=definition.numeric_step,
-            render_template=definition.render_template,
-            default_display_order=definition.default_display_order,
-            moderation_status=TagModerationStatus(definition.moderation_status),
-        )
-
 
 def _source_message(message: MessageRecord) -> SourceMessage:
     """Map one message fact reached through a build's source-message link."""
@@ -286,24 +253,6 @@ def _source_message(message: MessageRecord) -> SourceMessage:
         channel_id=message.channel_id,
         author_id=message.author_id,
         content=message.content,
-    )
-
-
-def _tag_assignment_to_domain(assignment: BuildTagAssignment) -> TagAssignment:
-    definition = assignment.definition
-    value = {
-        TagValueType.NONE: None,
-        TagValueType.NUMERIC: assignment.numeric_value,
-        TagValueType.TEXT: assignment.text_value,
-        TagValueType.BOOLEAN: assignment.boolean_value,
-    }[assignment.value_type]
-    return TagAssignment(
-        definition=BuildMapper.tag_definition_to_domain(definition),
-        value=value,
-        display_unit=assignment.display_unit_key,
-        display_order=assignment.display_order,
-        evidence=assignment.evidence,
-        provenance=assignment.provenance,
     )
 
 

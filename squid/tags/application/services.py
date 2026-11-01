@@ -8,8 +8,9 @@ from uuid import uuid4
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
-from squid.tags.domain import TagDefinition, TagModerationStatus, TagValue, TagValueType
+from squid.tags.domain import TagModerationStatus, TagValue, TagValueType
 from squid.tags.errors import TagNotFoundError
+from squid.tags.models import TagDefinition
 
 _QUERY_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 

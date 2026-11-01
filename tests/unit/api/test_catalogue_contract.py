@@ -14,14 +14,8 @@ from squid.records.application.models import PublicRecordDetail, PublishedRecord
 from squid.records.application.services import PublicRecordQueryService
 from squid.records.domain import BuildKind, RecordClass, ResolutionStatus, VersionScope
 from squid.sponsors import PublicSponsor
-from squid.tags.domain import (
-    TagAssignment,
-    TagAuthority,
-    TagDefinition,
-    TagModerationStatus,
-    TagSemanticKind,
-    TagValueType,
-)
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagAssignment, TagDefinition
 
 
 def catalogue_build(build_id: int, **changes: Any) -> Build:

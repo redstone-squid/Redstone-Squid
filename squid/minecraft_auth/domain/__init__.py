@@ -7,9 +7,6 @@ from squid.minecraft_auth.domain.models import (
     IssuedPlayerGrant,
     MinecraftClientOrigin,
     MinecraftPlayerContext,
-    PaperInstallation,
-    PlayerAuthorizationChallenge,
-    PlayerGrant,
     PublicServerProfile,
     PublishedPaperServer,
 )
@@ -21,9 +18,6 @@ __all__ = [
     "IssuedPlayerGrant",
     "MinecraftClientOrigin",
     "MinecraftPlayerContext",
-    "PaperInstallation",
-    "PlayerAuthorizationChallenge",
-    "PlayerGrant",
     "PublicServerProfile",
     "PublishedPaperServer",
 ]

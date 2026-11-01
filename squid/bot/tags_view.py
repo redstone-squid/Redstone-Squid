@@ -17,7 +17,8 @@ from squid.permissions.domain.catalogue import (
     TAG_PROPOSAL_LIST,
     TAG_PROPOSAL_REJECT,
 )
-from squid.tags.domain import TagDefinition, TagValueType
+from squid.tags.domain import TagValueType
+from squid.tags.models import TagDefinition
 
 
 class TagOperations(Protocol):

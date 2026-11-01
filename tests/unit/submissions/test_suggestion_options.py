@@ -15,13 +15,8 @@ from squid.submissions.infrastructure.suggestion_options import SuggestionFormOp
 from squid.suggestions.application import SuggestionService
 from squid.suggestions.infrastructure.catalogue import build_registry
 from squid.suggestions.infrastructure.repository import TaxonomyEntry
-from squid.tags.domain import (
-    TagAuthority,
-    TagDefinition,
-    TagModerationStatus,
-    TagSemanticKind,
-    TagValueType,
-)
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagDefinition
 from squid.versions.domain import MinecraftVersion
 
 TAGS = (

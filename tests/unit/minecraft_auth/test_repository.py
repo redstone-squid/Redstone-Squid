@@ -6,16 +6,16 @@ import pytest
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError
-from squid.minecraft_auth.domain import MinecraftClientOrigin, PlayerGrant
+from squid.minecraft_auth.domain import MinecraftClientOrigin
 from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
-from squid.minecraft_auth.models import PlayerChallengeRecord
+from squid.minecraft_auth.models import PlayerAuthorizationChallenge, PlayerGrant
 
 
 def test_grant_mismatch_raises_a_structured_secret_free_invariant_error() -> None:
     challenge_id = UUID("11111111-1111-4111-8111-111111111111")
     grant_id = UUID("22222222-2222-4222-8222-222222222222")
     record = cast(
-        PlayerChallengeRecord,
+        PlayerAuthorizationChallenge,
         SimpleNamespace(
             id=challenge_id,
             approved_by_account_id=7,

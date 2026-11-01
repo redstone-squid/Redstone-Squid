@@ -20,13 +20,8 @@ from squid.runtime import ApiServices
 from squid.schematics.application import RenderedSchematic, RenderRequest, RenderSkipReason, SchematicService
 from squid.schematics.errors import SchematicNotFoundError, SchematicRenderRefusedError
 from squid.tags.application import TagService
-from squid.tags.domain import (
-    TagAuthority,
-    TagDefinition,
-    TagModerationStatus,
-    TagSemanticKind,
-    TagValueType,
-)
+from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.tags.models import TagDefinition
 from squid.versions.application.services import VersionService
 from squid.versions.domain import MinecraftVersion
 from squid.voting.application import VoteService

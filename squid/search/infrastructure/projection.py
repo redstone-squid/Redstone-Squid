@@ -39,8 +39,8 @@ from squid.search.models import (
     SearchProjectionQueueItem,
 )
 from squid.tags.domain import TagSemanticKind
-from squid.tags.models import BuildTagAssignment as TagAssignment
 from squid.tags.models import TagAlias, TagDefinition
+from squid.tags.models import TagAssignment as TagAssignment
 from squid.versions.models import Version
 
 logger = logging.getLogger(__name__)
@@ -787,7 +787,7 @@ def _render_tag_assignment(assignment: TagAssignment) -> str:
     value = _assignment_value(assignment)
     if value is None:
         return name
-    unit = assignment.display_unit_key or definition.default_display_unit_key or ""
+    unit = assignment.display_unit or definition.default_display_unit or ""
     template = definition.render_template
     try:
         return template.format(name=name, value=value, unit=unit)

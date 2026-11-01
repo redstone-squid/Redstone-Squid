@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from typing import Protocol, cast
 
 from squid.builds.domain import Build, BuildCategory, UnknownRestrictions
-from squid.tags.domain import TagAssignment, TagAuthority, TagSemanticKind
+from squid.tags.domain import TagAuthority, TagSemanticKind
+from squid.tags.models import TagAssignment
 
 
 def normalize_tag_name(value: str) -> str:

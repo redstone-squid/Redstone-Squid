@@ -58,7 +58,7 @@ from squid.records.models import (
     RecordSeries,
     RecordStanding,
 )
-from squid.tags.models import BuildTagAssignment, TagDefinition
+from squid.tags.models import TagAssignment, TagDefinition
 
 RULESET_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
 CALCULATOR_VERSION = "3"
@@ -576,7 +576,7 @@ class PostgresRecordRepository:
             select(Door)
             .where(Door.submission_status == Status.CONFIRMED)
             .options(
-                selectinload(Door.tag_assignments).selectinload(BuildTagAssignment.definition),
+                selectinload(Door.tag_assignments).selectinload(TagAssignment.definition),
                 selectinload(Door.build_versions),
             )
         )
@@ -589,7 +589,7 @@ class PostgresRecordRepository:
             select(Extender)
             .where(Extender.submission_status == Status.CONFIRMED)
             .options(
-                selectinload(Extender.tag_assignments).selectinload(BuildTagAssignment.definition),
+                selectinload(Extender.tag_assignments).selectinload(TagAssignment.definition),
                 selectinload(Extender.build_versions),
             )
         )
@@ -832,7 +832,7 @@ def _extender_candidate(
     )
 
 
-def _restriction_facets(assignments: Sequence[BuildTagAssignment]) -> tuple[CandidateFacet, ...]:
+def _restriction_facets(assignments: Sequence[TagAssignment]) -> tuple[CandidateFacet, ...]:
     return tuple(
         CandidateFacet(
             id=assignment.tag_id,
@@ -844,14 +844,14 @@ def _restriction_facets(assignments: Sequence[BuildTagAssignment]) -> tuple[Cand
             assigned_value=_assignment_value(assignment),
             record_operator=assignment.definition.record_operator,
             render_template=assignment.definition.render_template,
-            display_unit=assignment.display_unit_key or assignment.definition.default_display_unit_key,
+            display_unit=assignment.display_unit or assignment.definition.default_display_unit,
         )
         for assignment in assignments
         if _is_record_tag(assignment.definition, "restriction")
     )
 
 
-def _pattern_facets(assignments: Sequence[BuildTagAssignment]) -> tuple[CandidateFacet, ...]:
+def _pattern_facets(assignments: Sequence[TagAssignment]) -> tuple[CandidateFacet, ...]:
     return tuple(
         CandidateFacet(
             id=assignment.tag_id,
@@ -861,7 +861,7 @@ def _pattern_facets(assignments: Sequence[BuildTagAssignment]) -> tuple[Candidat
             value_type=assignment.value_type,
             assigned_value=_assignment_value(assignment),
             render_template=assignment.definition.render_template,
-            display_unit=assignment.display_unit_key or assignment.definition.default_display_unit_key,
+            display_unit=assignment.display_unit or assignment.definition.default_display_unit,
         )
         for assignment in assignments
         if _is_record_tag(assignment.definition, "pattern")
@@ -876,7 +876,7 @@ def _is_record_tag(definition: TagDefinition, semantic_kind: str) -> bool:
     )
 
 
-def _assignment_value(assignment: BuildTagAssignment) -> Decimal | str | bool | None:
+def _assignment_value(assignment: TagAssignment) -> Decimal | str | bool | None:
     if assignment.value_type == "numeric":
         return assignment.numeric_value
     if assignment.value_type == "text":

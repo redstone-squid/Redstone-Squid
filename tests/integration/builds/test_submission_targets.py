@@ -27,7 +27,8 @@ from squid.builds.models import Build as SQLBuild
 from squid.core.errors import DataIntegrityError
 from squid.events import DomainEvent
 from squid.events.models import DomainEventRecord
-from squid.minecraft_auth.models import PaperInstallationRecord, PlayerChallengeRecord, PlayerGrantRecord
+from squid.minecraft_auth.domain.models import MinecraftClientOrigin
+from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.notifications.models import (
     NotificationDeliveryRecord,
@@ -67,7 +68,7 @@ from squid.submissions.infrastructure.repository import PostgresDraftRepository
 from squid.submissions.models.entities import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
 from squid.submissions.models.finalization import SubmissionFinalizationInput, SubmissionFinalizationJob
 from squid.submissions.payload_integrity import submission_payload_digest
-from squid.tags.domain import TagDefinition
+from squid.tags.models import TagDefinition
 from squid.versions.application import VersionService
 from squid.versions.infrastructure.repository import VersionRepository
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
@@ -523,7 +524,7 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
                     source_installation_id=installation_id,
                     expires_at=seeded_at.add(days=7, days_assumed_24h_ok=True),
                 ),
-                PaperInstallationRecord(
+                PaperInstallation(
                     id=installation_id,
                     owner_account_id=absorbed.id,
                     label="Merge test",
@@ -570,11 +571,11 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
                     rights_attested_at=seeded_at,
                     rights_attested_by_account_id=absorbed.id,
                 ),
-                PlayerChallengeRecord(
+                PlayerAuthorizationChallenge(
                     id=challenge_id,
                     device_code_hash=bytes.fromhex("22" * 32),
                     user_code_hash=bytes.fromhex("33" * 32),
-                    origin="paper",
+                    origin=MinecraftClientOrigin.PAPER,
                     java_uuid=java_uuid,
                     installation_id=installation_id,
                     installation_credential_version=1,
@@ -588,13 +589,13 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
         )
         await session.flush()
         session.add(
-            PlayerGrantRecord(
+            PlayerGrant(
                 id=grant_id,
                 challenge_id=challenge_id,
                 token_hash=bytes.fromhex("44" * 32),
                 account_id=absorbed.id,
                 java_uuid=java_uuid,
-                origin="paper",
+                origin=MinecraftClientOrigin.PAPER,
                 installation_id=installation_id,
                 installation_credential_version=1,
                 issued_at=seeded_at,
@@ -629,28 +630,28 @@ async def test_account_merge_transfers_submission_and_minecraft_authorization_ow
         installation = (
             await session.execute(
                 select(
-                    PaperInstallationRecord.owner_account_id,
-                    PaperInstallationRecord.id,
-                    PaperInstallationRecord.secret_hash,
-                ).where(PaperInstallationRecord.id == installation_id)
+                    PaperInstallation.owner_account_id,
+                    PaperInstallation.id,
+                    PaperInstallation.secret_hash,
+                ).where(PaperInstallation.id == installation_id)
             )
         ).one()
         challenge = (
             await session.execute(
                 select(
-                    PlayerChallengeRecord.approved_by_account_id,
-                    PlayerChallengeRecord.java_uuid,
-                    PlayerChallengeRecord.installation_id,
-                ).where(PlayerChallengeRecord.id == challenge_id)
+                    PlayerAuthorizationChallenge.approved_by_account_id,
+                    PlayerAuthorizationChallenge.java_uuid,
+                    PlayerAuthorizationChallenge.installation_id,
+                ).where(PlayerAuthorizationChallenge.id == challenge_id)
             )
         ).one()
         grant = (
             await session.execute(
                 select(
-                    PlayerGrantRecord.account_id,
-                    PlayerGrantRecord.java_uuid,
-                    PlayerGrantRecord.installation_id,
-                ).where(PlayerGrantRecord.id == grant_id)
+                    PlayerGrant.account_id,
+                    PlayerGrant.java_uuid,
+                    PlayerGrant.installation_id,
+                ).where(PlayerGrant.id == grant_id)
             )
         ).one()
         java_identity_owner = await session.scalar(

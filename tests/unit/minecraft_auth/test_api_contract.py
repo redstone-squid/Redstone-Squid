@@ -31,12 +31,10 @@ from squid.minecraft_auth.domain import (
     IssuedPlayerChallenge,
     IssuedPlayerGrant,
     MinecraftClientOrigin,
-    PaperInstallation,
-    PlayerAuthorizationChallenge,
-    PlayerGrant,
     PublicServerProfile,
 )
 from squid.minecraft_auth.errors import AuthorizationPendingError, InvalidInstallationCredentialError
+from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
 from tests.unit.api.fakes import TEST_CONFIG
 
 pytestmark = pytest.mark.asyncio

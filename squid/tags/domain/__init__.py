@@ -2,9 +2,7 @@
 
 from squid.tags.domain.models import (
     RecordOperator,
-    TagAssignment,
     TagAuthority,
-    TagDefinition,
     TagModerationStatus,
     TagSemanticKind,
     TagValue,
@@ -13,9 +11,7 @@ from squid.tags.domain.models import (
 
 __all__ = [
     "RecordOperator",
-    "TagAssignment",
     "TagAuthority",
-    "TagDefinition",
     "TagModerationStatus",
     "TagSemanticKind",
     "TagValue",
