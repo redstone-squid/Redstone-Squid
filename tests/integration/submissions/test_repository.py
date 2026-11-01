@@ -11,11 +11,11 @@ from sqlalchemy import Table, func, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.models import Account
 from squid.builds.domain import SourceMessage
-from squid.media.application.jobs import MediaJobStatus
 from squid.media.domain import MediaKind
-from squid.media.infrastructure.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.domain.jobs import MediaJobStatus
+from squid.media.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
 from squid.submissions.application import StoredDraft
 from squid.submissions.domain import (
     DraftChange,
@@ -30,13 +30,13 @@ from squid.submissions.domain import (
 )
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import DraftStateConflictError
-from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
-from squid.submissions.infrastructure.models import (
+from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.models.entities import (
     SubmissionDraft,
     SubmissionDraftAccess,
     SubmissionDraftChange,
 )
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.models.finalization import SubmissionFinalizationJob
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000201")
 NOW = Instant.parse_iso("2026-08-11T12:00:00Z")

@@ -5,14 +5,9 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.media.application.jobs import (
-    MediaArtifactRole,
-    MediaJobSnapshot,
-    MediaJobStatus,
-    MediaUploadMetadata,
-    StoredMediaArtifact,
-)
+from squid.media.application.jobs import MediaJobSnapshot, MediaUploadMetadata, StoredMediaArtifact
 from squid.media.domain import MediaKind, MediaLimits
+from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.submissions.domain import (
     SchematicArtifactState,
     SubmissionAttentionIssue,

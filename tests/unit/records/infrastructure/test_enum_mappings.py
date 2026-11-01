@@ -7,7 +7,7 @@ from sqlalchemy.engine import default
 
 from squid.persistence.types import StrEnumText
 from squid.records.domain import BuildKind, RecordClass, ResolutionStatus, VersionScope
-from squid.records.infrastructure.models import (
+from squid.records.models import (
     RecordComputationRun,
     RecordComputationStatus,
     RecordDefinitionFacet,

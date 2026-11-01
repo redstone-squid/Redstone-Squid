@@ -15,8 +15,8 @@ from squid.accounts.domain import (
     AccountIdentity as AccountIdentityValue,
 )
 from squid.accounts.errors import AccountNotFoundError
-from squid.accounts.infrastructure.models import AccountMergeTicket as AccountMergeTicketModel
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import AccountMergeTicket as AccountMergeTicketModel
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
 

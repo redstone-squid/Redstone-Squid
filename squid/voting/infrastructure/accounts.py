@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import IdentityProvider
-from squid.accounts.infrastructure.models import AccountIdentity
+from squid.accounts.models import AccountIdentity
 
 
 class PostgresVoterDiscordIdLookup:

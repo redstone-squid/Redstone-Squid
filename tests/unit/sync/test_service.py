@@ -15,8 +15,8 @@ from squid.sync import (
     ReconciliationQueue,
     ReconciliationResource,
 )
-from squid.sync.infrastructure.models import DiscordSyncQueueItem
 from squid.sync.infrastructure.repository import _job as map_row
+from squid.sync.models import DiscordSyncQueueItem
 
 CLAIM_TOKEN = uuid.UUID("00000000-0000-4000-8000-000000000001")
 

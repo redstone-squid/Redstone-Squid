@@ -15,8 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from squid.persistence.base import Base
 from squid.search.application import SearchQueryParser
 from squid.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort, SortDirection
-from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
 from squid.search.infrastructure.repository import PostgresSearchBackend
+from squid.search.models import SearchDocument, SearchDocumentFacet
 
 pytestmark = pytest.mark.asyncio
 

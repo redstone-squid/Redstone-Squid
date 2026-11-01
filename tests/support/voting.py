@@ -12,7 +12,7 @@ from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.messages.infrastructure.models import Message
+from squid.messages.models import Message
 from squid.posts.models import DiscordPost
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
@@ -31,7 +31,7 @@ from squid.voting.domain import (
     VoteTarget,
     VoteVisibility,
 )
-from squid.voting.infrastructure.models import DeleteLogVoteSession, Vote, VoteSession, VoteSessionOption
+from squid.voting.models import DeleteLogVoteSession, Vote, VoteSession, VoteSessionOption
 
 GUILD_ID = 503
 CHANNEL_ID = 502

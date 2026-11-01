@@ -12,12 +12,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import fold_creator_name
-from squid.accounts.infrastructure.models import Account, CreatorAlias
+from squid.accounts.models import Account, CreatorAlias
 from squid.records.domain import VersionScope
-from squid.records.infrastructure.models import RecordRule, RecordSeries
-from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
-from squid.tags.infrastructure.models import TagApplicability, TagDefinition
-from squid.versions.infrastructure.models import Version
+from squid.records.models import RecordRule, RecordSeries
+from squid.search.models import SearchDocument, SearchDocumentFacet
+from squid.tags.models import TagApplicability, TagDefinition
+from squid.versions.models import Version
 
 TRIGRAM_FLOOR = 0.1
 """Minimum trigram similarity, matching what `PostgresSearchRepository.suggest` already accepts."""

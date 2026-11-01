@@ -7,10 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import consent_refresh_required
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.models import Account
 from squid.auth.application.ports import WebSessionRepository
 from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
-from squid.auth.infrastructure.session_models import OAuthStateModel, WebSession
+from squid.auth.models.sessions import OAuthStateModel, WebSession
 
 
 class PostgresWebSessionRepository(WebSessionRepository):

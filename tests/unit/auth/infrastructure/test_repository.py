@@ -3,8 +3,8 @@
 import pytest
 from whenever import Instant
 
-from squid.auth.infrastructure.models import ApiKey as ApiKeyModel
 from squid.auth.infrastructure.repository import _to_domain
+from squid.auth.models.entities import ApiKey as ApiKeyModel
 from squid.core.errors import DataIntegrityError
 from squid.permissions.domain import Pattern
 

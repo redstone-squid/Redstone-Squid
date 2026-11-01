@@ -11,7 +11,7 @@ from whenever import Instant
 
 from squid.posts.domain import PostReference, ResourceKind, Surface
 from squid.posts.models import DiscordPost
-from squid.sync.infrastructure.models import DiscordSyncQueueItem
+from squid.sync.models import DiscordSyncQueueItem
 
 
 class PostRepository:

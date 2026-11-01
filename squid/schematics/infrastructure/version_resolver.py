@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.versions.domain import parse_version_string
 from squid.versions.errors import InvalidVersionError
-from squid.versions.infrastructure.models import Version
+from squid.versions.models import Version
 
 
 class PostgresSchematicVersionResolver:

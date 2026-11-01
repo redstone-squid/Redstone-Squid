@@ -11,10 +11,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.accounts.infrastructure.models import Account, AccountIdentity
+from squid.accounts.models import Account, AccountIdentity
 from squid.bot.notifications import render_delivery
 from squid.events import DomainEvent
-from squid.events.infrastructure.models import DomainEventRecord
+from squid.events.models import DomainEventRecord
 from squid.notifications.domain import (
     InboxVisibility,
     NotificationCandidate,
@@ -23,18 +23,18 @@ from squid.notifications.domain import (
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.infrastructure.models import (
+from squid.notifications.infrastructure.repository import (
+    PostgresNotificationRepository,
+    _is_durable_staff_notification_recipient,
+)
+from squid.notifications.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
     NotificationRecord,
     NotificationSubscriptionRecord,
 )
-from squid.notifications.infrastructure.repository import (
-    PostgresNotificationRepository,
-    _is_durable_staff_notification_recipient,
-)
 from squid.permissions.domain import BuiltinRoleKeys
-from squid.permissions.infrastructure.models import (
+from squid.permissions.models import (
     PermissionRole,
     PermissionRoleAssignment,
     PermissionRolePattern,

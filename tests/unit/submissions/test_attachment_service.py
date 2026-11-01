@@ -10,11 +10,11 @@ from whenever import Instant
 from squid.media.application.jobs import (
     MediaDraftUploadAuthorization,
     MediaJobSnapshot,
-    MediaJobStatus,
     MediaUploadMetadata,
     StagedMediaUploadSubmission,
 )
 from squid.media.domain import MediaKind, MediaLimits
+from squid.media.domain.jobs import MediaJobStatus
 from squid.media.errors import DraftMediaConflictError, DraftMediaNotFoundError, MediaUploadConflictError
 from squid.submissions.application import DraftAttachmentService, DraftUploadAuthority, StagedUpload, StoredDraft
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin

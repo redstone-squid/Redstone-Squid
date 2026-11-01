@@ -11,7 +11,8 @@ import pytest
 
 from squid.bot.submission.draft_intake import receive_attachments
 from squid.runtime import BotServices
-from squid.submissions.application.intake import IntakeStatus, SuppliedAttachment
+from squid.submissions.application.intake import SuppliedAttachment
+from squid.submissions.domain.intake import IntakeStatus
 
 
 class Intake:

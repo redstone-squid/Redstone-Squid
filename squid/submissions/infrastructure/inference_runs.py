@@ -3,18 +3,13 @@
 from uuid import UUID, uuid4
 
 from pydantic import TypeAdapter
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, Text, func, or_, select
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.dialects.postgresql import UUID as SQLUUID
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
 from squid.builds.domain import BuildDraft
 from squid.core.errors import AuthorizationError, ConflictError, JSONValue
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
-from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
 from squid.submissions.application.inference_runs import (
     InferenceCandidate,
     InferenceClaim,
@@ -24,26 +19,10 @@ from squid.submissions.application.inference_runs import (
 )
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid.submissions.errors import DraftCapacityExceededError
+from squid.submissions.models.inference import SubmissionInferenceRun
 
 _DRAFT = TypeAdapter(BuildDraft)
 _SOURCE_FILES = TypeAdapter(tuple[SubmissionSourceFile, ...])
-
-
-class SubmissionInferenceRun(Base, kw_only=True):
-    """Exact private inference inputs and retained candidate facts under a renewable claim."""
-
-    __tablename__ = "submission_inference_runs"
-    __table_args__ = (
-        CheckConstraint("state IN ('processing', 'failed', 'completed')", name="submission_inference_runs_state_check"),
-    )
-    id: Mapped[UUID] = mapped_column(SQLUUID(as_uuid=True), primary_key=True)
-    owner_account_id: Mapped[int] = mapped_column(Integer, ForeignKey("accounts.id", ondelete="RESTRICT"), index=True)
-    inputs: Mapped[dict[str, JSONValue]] = mapped_column(JSONB)
-    state: Mapped[str] = mapped_column(Text)
-    expires_at: Mapped[Instant] = mapped_column(InstantUTC(), index=True)
-    claim_token: Mapped[UUID | None] = mapped_column(SQLUUID(as_uuid=True))
-    claim_expires_at: Mapped[Instant | None] = mapped_column(InstantUTC())
-    candidates: Mapped[list[dict[str, JSONValue]]] = mapped_column(JSONB, default_factory=list)
 
 
 class PostgresInferenceRuns:
@@ -73,7 +52,7 @@ class PostgresInferenceRuns:
                 if row.claim_expires_at is not None and row.claim_expires_at > current:
                     raise inference_busy()
             else:
-                from squid.submissions.infrastructure.models import SubmissionDraft
+                from squid.submissions.models.entities import SubmissionDraft
 
                 terminal = (
                     select(func.count())
@@ -165,8 +144,8 @@ class PostgresInferenceRuns:
 
     async def public_status(self, run_id: UUID) -> InferenceStatus | None:
         from squid.builds.application.inference import BuildInferenceInput
-        from squid.builds.infrastructure.models import Build as SQLBuild
-        from squid.submissions.infrastructure.models import SubmissionDraft
+        from squid.builds.models import Build as SQLBuild
+        from squid.submissions.models.entities import SubmissionDraft
 
         async with self._sessions() as session:
             row = await session.get(SubmissionInferenceRun, run_id)

@@ -5,13 +5,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import AccountIdentity as AccountIdentityValue
-from squid.accounts.infrastructure.models import Account
-from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
+from squid.accounts.models import Account
+from squid.accounts.models import AccountIdentity as AccountIdentityModel
 from squid.builds.domain import Status
-from squid.builds.infrastructure.models import Build
+from squid.builds.models import Build
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.infrastructure.models import BuildTagAssignment, TagDefinition
 from squid.tags.infrastructure.repository import PostgresTagDefinitionRepository
+from squid.tags.models import BuildTagAssignment, TagDefinition
 
 
 @pytest.fixture

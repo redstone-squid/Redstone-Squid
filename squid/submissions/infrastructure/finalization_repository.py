@@ -9,9 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
-from squid.media.application.jobs import MediaJobStatus
-from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.domain.jobs import MediaJobStatus
 from squid.media.infrastructure.references import media_for_draft
+from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
 from squid.submissions.application.drafts import StoredDraft
 from squid.submissions.application.finalization import (
@@ -32,15 +32,15 @@ from squid.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 from squid.submissions.errors import DraftAccessDeniedError, DraftArtifactsChangedError, DraftNotFoundError
-from squid.submissions.infrastructure.finalization_models import (
+from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
+from squid.submissions.infrastructure.issues import decode_issues, encode_issues
+from squid.submissions.infrastructure.repository import _to_stored
+from squid.submissions.models.entities import SubmissionDraft
+from squid.submissions.models.finalization import (
     SubmissionFinalizationInput,
     SubmissionFinalizationJob,
     SubmissionFinalizationResult,
 )
-from squid.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
-from squid.submissions.infrastructure.issues import decode_issues, encode_issues
-from squid.submissions.infrastructure.models import SubmissionDraft
-from squid.submissions.infrastructure.repository import _to_stored
 from squid.submissions.payload_integrity import submission_payload_digest
 
 _CLAIM_MINUTES = 5

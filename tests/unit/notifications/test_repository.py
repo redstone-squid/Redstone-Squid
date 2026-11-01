@@ -8,8 +8,8 @@ from sqlalchemy import CheckConstraint, Table
 from sqlalchemy.dialects.postgresql import dialect
 
 from squid.notifications.domain import NotificationKind, SubscriptionKind
-from squid.notifications.infrastructure.models import NotificationRecord, NotificationSubscriptionRecord
 from squid.notifications.infrastructure.repository import _exact_value
+from squid.notifications.models import NotificationRecord, NotificationSubscriptionRecord
 from squid.persistence.types import StrEnumText
 
 

@@ -21,11 +21,11 @@ from squid.accounts.domain import (
     ClaimMethod,
     LinkReservation,
 )
-from squid.accounts.infrastructure.models import Account as AccountModel
-from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
-from squid.accounts.infrastructure.models import CreatorAlias
 from squid.accounts.infrastructure.repository import AccountRepository
-from squid.builds.infrastructure import models as _build_models  # noqa: F401 — registers `builds` in metadata
+from squid.accounts.models import Account as AccountModel
+from squid.accounts.models import AccountIdentity as AccountIdentityModel
+from squid.accounts.models import CreatorAlias
+from squid.builds import models as _build_models  # noqa: F401 — registers `builds` in metadata
 from squid.builds.infrastructure import taxonomy as _taxonomy  # noqa: F401 — and its relationship targets
 from squid.persistence.base import Base
 

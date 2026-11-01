@@ -10,10 +10,10 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import IdentityProvider
-from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
+from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import OtherBuild, Status
 from squid.builds.infrastructure.repository import BuildRepository
-from squid.versions.infrastructure.models import Version
+from squid.versions.models import Version
 from tests.support.database import record_queries
 
 # Row query + tag-assignment and tag-definition eager loads + links eager load,

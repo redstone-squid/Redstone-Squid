@@ -16,8 +16,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import fold_creator_name
-from squid.accounts.infrastructure.models import CreatorAlias
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import CreatorAlias
 
 
 @pytest.fixture

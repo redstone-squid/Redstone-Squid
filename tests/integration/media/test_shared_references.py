@@ -7,14 +7,14 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.media.application.jobs import MediaJobStatus
 from squid.media.domain import MediaLimits
+from squid.media.domain.jobs import MediaJobStatus
 from squid.media.errors import MediaDraftNotFoundError
-from squid.media.infrastructure.models import MediaNormalizationJobRecord
 from squid.media.infrastructure.repository import PostgresMediaJobRepository
+from squid.media.models import MediaNormalizationJobRecord
 from squid.submissions.domain import DraftStatus
-from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.models.entities import SubmissionDraft
 from tests.integration.media.test_jobs_repository import completed_artifacts, create_submission_draft, upload
 
 

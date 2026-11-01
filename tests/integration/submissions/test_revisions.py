@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.models import Account
 from squid.builds.application import BuildEditor, BuildService
 from squid.builds.domain import Build, BuildCategory
 from squid.builds.errors import BuildRevisionMismatchError
@@ -17,8 +17,8 @@ from squid.core.errors import AuthorizationError
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Subject
 from squid.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
-from squid.permissions.infrastructure.models import PermissionGrant
 from squid.permissions.infrastructure.repository import PermissionRepository
+from squid.permissions.models import PermissionGrant
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal, revision_values
 from squid.submissions.application.revisions import RevisionProposalService
 from squid.submissions.infrastructure.revisions import PostgresRevisionProposals

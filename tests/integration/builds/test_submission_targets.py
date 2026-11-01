@@ -14,28 +14,28 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.accounts.domain import AccountIdentity as AccountIdentityValue
-from squid.accounts.infrastructure.models import Account, AccountIdentity
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import Account, AccountIdentity
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildCategory, BuildLink, Status
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.locks import BuildLockRepository
-from squid.builds.infrastructure.models import Build as SQLBuild
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.restrictions import RestrictionRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
+from squid.builds.models import Build as SQLBuild
 from squid.core.errors import DataIntegrityError
 from squid.events import DomainEvent
-from squid.events.infrastructure.models import DomainEventRecord
-from squid.minecraft_auth.infrastructure.models import PaperInstallationRecord, PlayerChallengeRecord, PlayerGrantRecord
-from squid.notifications.infrastructure.models import (
+from squid.events.models import DomainEventRecord
+from squid.minecraft_auth.models import PaperInstallationRecord, PlayerChallengeRecord, PlayerGrantRecord
+from squid.notifications.infrastructure.repository import PostgresNotificationRepository
+from squid.notifications.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
     NotificationRecord,
 )
-from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.permissions.domain import BuiltinRoleKeys
-from squid.permissions.infrastructure.models import (
+from squid.permissions.models import (
     PermissionAuditEntry,
     PermissionGrant,
     PermissionRole,
@@ -43,7 +43,7 @@ from squid.permissions.infrastructure.models import (
     PermissionRolePattern,
 )
 from squid.persistence.types import now
-from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile
+from squid.schematics.models import BuildSchematic, SchematicFile
 from squid.sponsors import PublicSponsor
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
 from squid.submissions.domain import (
@@ -59,13 +59,13 @@ from squid.submissions.domain import (
 )
 from squid.submissions.infrastructure.build_target import SubmissionBuildPreparation
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
-from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationInput, SubmissionFinalizationJob
 from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
     complete_in_session,
 )
-from squid.submissions.infrastructure.models import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.models.entities import SubmissionDraft, SubmissionDraftAccess, SubmissionDraftChange
+from squid.submissions.models.finalization import SubmissionFinalizationInput, SubmissionFinalizationJob
 from squid.submissions.payload_integrity import submission_payload_digest
 from squid.tags.domain import TagDefinition
 from squid.versions.application import VersionService

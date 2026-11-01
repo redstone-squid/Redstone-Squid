@@ -6,10 +6,11 @@ from sqlalchemy import Table, insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.settings.infrastructure.models import ServerSetting
+from squid.settings.models import ServerSetting
 from squid.starboard.application import PendingVote
 from squid.starboard.domain import OriginMessage, StarboardConfig, StarboardEmoji
-from squid.starboard.infrastructure.models import (
+from squid.starboard.infrastructure.repository import PostgresStarboardRepository
+from squid.starboard.models import (
     Starboard,
     StarboardEntry,
     StarboardOriginMessage,
@@ -17,10 +18,9 @@ from squid.starboard.infrastructure.models import (
     StarboardSource,
     StarboardVote,
 )
-from squid.starboard.infrastructure.models import (
+from squid.starboard.models import (
     StarboardEmoji as StarboardEmojiRow,
 )
-from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 
 TABLES = cast(
     tuple[Table, ...],

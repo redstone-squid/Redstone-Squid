@@ -15,7 +15,8 @@ from squid.api.request_body import streams_own_body
 from squid.api.v1.submissions import AccountId
 from squid.core.errors import ValidationError
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
-from squid.submissions.application.intake import IntakeStatus, SubmissionAttachmentIntake
+from squid.submissions.application.intake import SubmissionAttachmentIntake
+from squid.submissions.domain.intake import IntakeStatus
 
 
 class SuppliedFileResponse(BaseModel):

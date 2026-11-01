@@ -10,15 +10,15 @@ from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.models import Account
 from squid.builds.domain import Status
-from squid.builds.infrastructure.models import Build
+from squid.builds.models import Build
 from squid.core.errors import DataIntegrityError
-from squid.messages.infrastructure.models import Message
+from squid.messages.models import Message
 from squid.persistence.alembic_entities import alembic_util_entities
 from squid.persistence.base import Base
 from squid.posts.models import DiscordPost
-from squid.settings.infrastructure.models import ServerSetting
+from squid.settings.models import ServerSetting
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     DeleteLogVoteTarget,
@@ -30,7 +30,8 @@ from squid.voting.domain import (
     VoteStatus,
     VoteVisibility,
 )
-from squid.voting.infrastructure.models import (
+from squid.voting.infrastructure.repository import VoteRepository
+from squid.voting.models import (
     BuildVoteSession,
     DeleteLogVoteSession,
     GenericVoteSession,
@@ -38,7 +39,6 @@ from squid.voting.infrastructure.models import (
     VoteSession,
     VoteSessionOption,
 )
-from squid.voting.infrastructure.repository import VoteRepository
 from tests.support.schema import with_foreign_key_targets
 from tests.support.voting import (
     AUTHOR_ACCOUNT_IDS,

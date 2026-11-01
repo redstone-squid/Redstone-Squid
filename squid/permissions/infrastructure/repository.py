@@ -18,7 +18,7 @@ from squid.permissions.application.ports import (
     RuleRow,
     SubjectRecords,
 )
-from squid.permissions.infrastructure.models import (
+from squid.permissions.models import (
     PermissionAuditEntry,
     PermissionEpoch,
     PermissionGrant,

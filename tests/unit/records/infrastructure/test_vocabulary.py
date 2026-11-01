@@ -1,5 +1,5 @@
 from squid.records.infrastructure import models
-from squid.records.infrastructure.models import RecordRule, RecordSeries, RecordStanding
+from squid.records.models import RecordRule, RecordSeries, RecordStanding
 
 
 def test_record_vocabulary_preserves_physical_tables() -> None:

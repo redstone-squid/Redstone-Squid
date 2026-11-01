@@ -16,12 +16,12 @@ from squid.api.v1.submissions import authenticated_account
 from squid.media.application.jobs import (
     MediaDraftUploadAuthorization,
     MediaJobSnapshot,
-    MediaJobStatus,
     MediaUploadMetadata,
     StagedMediaUploadSubmission,
     StoredMediaArtifact,
 )
 from squid.media.domain import MediaKind, MediaLimits
+from squid.media.domain.jobs import MediaJobStatus
 from squid.submissions.application import DraftAttachmentService, StoredDraft
 from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.submissions.errors import DraftAccessDeniedError

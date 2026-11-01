@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.core.errors import DataIntegrityError
 from squid.persistence.repository import BaseAsyncRepository
 from squid.versions.domain import Edition, MinecraftVersion
-from squid.versions.infrastructure.models import Version
+from squid.versions.models import Version
 
 
 class _VersionModelRepository(BaseAsyncRepository[Version]):

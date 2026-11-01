@@ -14,12 +14,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.accounts.domain import IdentityProvider
-from squid.accounts.infrastructure.models import AccountIdentity, CreatorAlias
+from squid.accounts.models import AccountIdentity, CreatorAlias
 from squid.builds.domain import BUILD_CLASS_BY_CATEGORY, Build, BuildCategory, BuildLink, SourceMessage
-from squid.builds.infrastructure.models import (
+from squid.builds.models import (
     Build as SQLBuild,
 )
-from squid.builds.infrastructure.models import (
+from squid.builds.models import (
     BuildCreator,
     BuildSourceMessage,
     BuildVersion,
@@ -30,7 +30,7 @@ from squid.builds.infrastructure.models import (
     Utility,
 )
 from squid.core.errors import DataIntegrityError
-from squid.messages.infrastructure.models import Message
+from squid.messages.models import Message
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import (
     RecordOperator,
@@ -41,9 +41,9 @@ from squid.tags.domain import (
     TagSemanticKind,
     TagValueType,
 )
-from squid.tags.infrastructure.models import BuildTagAssignment
-from squid.tags.infrastructure.models import TagDefinition as SQLTagDefinition
-from squid.versions.infrastructure.models import Version
+from squid.tags.models import BuildTagAssignment
+from squid.tags.models import TagDefinition as SQLTagDefinition
+from squid.versions.models import Version
 
 CATEGORY_FIELD_NAMES: Mapping[BuildCategory, tuple[str, ...]] = {
     BuildCategory.DOOR: (

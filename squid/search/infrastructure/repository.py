@@ -35,7 +35,7 @@ from squid.search.domain import (
     TextExpression,
 )
 from squid.search.infrastructure.compiler import PostgresSearchQueryCompiler
-from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
+from squid.search.models import SearchDocument, SearchDocumentFacet
 
 _CANDIDATE_LIMIT = 200
 _PUBLIC_BUILD_STATUSES = frozenset({"confirmed"})

@@ -4,8 +4,8 @@ from typing import cast
 from sqlalchemy import CheckConstraint, Table
 
 from squid.submissions.domain import DraftStatus, FinalizationJobStatus, SubmissionOrigin
-from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
-from squid.submissions.infrastructure.models import SubmissionDraft
+from squid.submissions.models.entities import SubmissionDraft
+from squid.submissions.models.finalization import SubmissionFinalizationJob
 
 
 def _checked_values(table: Table, constraint_name: str) -> set[str]:

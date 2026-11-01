@@ -18,10 +18,10 @@ from squid.media.application.jobs import (
     ClaimedMediaJob,
     MediaArtifactCleanupInProgressError,
     MediaArtifactCleanupOutcome,
-    MediaJobStatus,
     StoredMediaArtifact,
 )
-from squid.media.infrastructure.models import (
+from squid.media.domain.jobs import MediaJobStatus
+from squid.media.models import (
     MediaArtifactObjectRecord,
     MediaArtifactPublicationRecord,
     MediaArtifactRecord,

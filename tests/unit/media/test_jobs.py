@@ -22,12 +22,10 @@ from squid.media.application.jobs import (
     ClaimedMediaJob,
     MediaArtifactCleanupInProgressError,
     MediaArtifactCleanupOutcome,
-    MediaArtifactRole,
     MediaDraftUploadAuthorization,
     MediaEnqueueOutcome,
     MediaJobFailureOutcome,
     MediaJobSnapshot,
-    MediaJobStatus,
     MediaNormalizationJobRunner,
     MediaNormalizationJobService,
     MediaStorageCleanup,
@@ -49,6 +47,7 @@ from squid.media.domain import (
     MediaNormalizationReport,
     MediaProbe,
 )
+from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.errors import (
     InvalidMediaError,
     MediaDraftNotFoundError,

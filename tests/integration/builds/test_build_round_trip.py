@@ -25,7 +25,7 @@ from hypothesis import strategies as st
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
+from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.application.taxonomy import apply_build_taxonomy
 from squid.builds.domain import (
     BUILD_CLASS_BY_CATEGORY,
@@ -41,10 +41,10 @@ from squid.builds.domain import (
 from squid.builds.infrastructure.repository import BuildRepository
 from squid.builds.infrastructure.taxonomy import OfficialTagResolver
 from squid.core.errors import InvalidStateError
-from squid.settings.infrastructure.models import ServerSetting
+from squid.settings.models import ServerSetting
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.tags.infrastructure.models import TagAlias, TagApplicability, TagDefinition
-from squid.versions.infrastructure.models import Version
+from squid.tags.models import TagAlias, TagApplicability, TagDefinition
+from squid.versions.models import Version
 
 # Canonical display names of the official taxonomy seeded below, one per
 # restriction bucket plus two patterns. Tests that expect a clean round trip

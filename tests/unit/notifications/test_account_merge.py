@@ -7,7 +7,7 @@ import pytest
 from squid.core.errors import DataIntegrityError
 from squid.notifications.domain import NotificationKind, NotificationSource
 from squid.notifications.infrastructure.account_merge import _coalesce_notification_deliveries
-from squid.notifications.infrastructure.models import NotificationDeliveryRecord
+from squid.notifications.models import NotificationDeliveryRecord
 from squid.persistence.types import now
 
 

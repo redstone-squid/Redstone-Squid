@@ -9,17 +9,17 @@ from squid.records.domain import (
     ResolutionStatus,
     VersionScope,
 )
-from squid.records.infrastructure.models import (
-    RecordComputationRun,
-    RecordMaterializationSource,
-    RecordRule,
-    RecordStanding,
-)
 from squid.records.infrastructure.repository import (
     CALCULATOR_VERSION,
     FORMATTER_VERSION,
     _gap_from_row,
     parse_category_key,
+)
+from squid.records.models import (
+    RecordComputationRun,
+    RecordMaterializationSource,
+    RecordRule,
+    RecordStanding,
 )
 
 

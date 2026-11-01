@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.schematics.application.render_jobs import ClaimedRenderJob
-from squid.schematics.infrastructure.models import SchematicRenderQueueItem
+from squid.schematics.models import SchematicRenderQueueItem
 
 SCHEMATIC_RENDER_QUEUE_SPEC = QueueSpec(
     name="schematic_renders",

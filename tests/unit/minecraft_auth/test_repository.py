@@ -7,8 +7,8 @@ from whenever import Instant
 
 from squid.core.errors import InvalidStateError
 from squid.minecraft_auth.domain import MinecraftClientOrigin, PlayerGrant
-from squid.minecraft_auth.infrastructure.models import PlayerChallengeRecord
 from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
+from squid.minecraft_auth.models import PlayerChallengeRecord
 
 
 def test_grant_mismatch_raises_a_structured_secret_free_invariant_error() -> None:

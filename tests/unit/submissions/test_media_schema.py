@@ -5,7 +5,8 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError as PydanticValidationError
 
 from squid.api.v1.schemas.submission_media import DraftMediaListResponse, DraftMediaResponse
-from squid.media.application.jobs import MediaArtifactRole, MediaJobStatus, StoredMediaArtifact
+from squid.media.application.jobs import StoredMediaArtifact
+from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from tests.unit.submissions.media_api_fakes import (
     DRAFT_ID,
     OTHER_UPLOAD_ID,

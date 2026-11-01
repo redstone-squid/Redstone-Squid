@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.builds.domain import BuildCategory
 from squid.builds.infrastructure.repository import BuildRepository
-from squid.events.infrastructure.models import DomainEventRecord
+from squid.events.models import DomainEventRecord
 from squid.records.application.models import (
     CandidateFacet,
     CategoryCompetition,
@@ -27,7 +27,8 @@ from squid.records.domain import (
     ResolutionStatus,
     VersionScope,
 )
-from squid.records.infrastructure.models import (
+from squid.records.infrastructure.repository import PostgresRecordRepository
+from squid.records.models import (
     RecordComputationRun,
     RecordDefinitionFacet,
     RecordHolderHistory,
@@ -35,8 +36,7 @@ from squid.records.infrastructure.models import (
     RecordRule,
     RecordRuleset,
 )
-from squid.records.infrastructure.repository import PostgresRecordRepository
-from squid.versions.infrastructure.models import Version
+from squid.versions.models import Version
 from tests.support.database import record_queries
 from tests.support.submission_targets import seed_account_and_version, submission_build
 

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import ClaimMethod
-from squid.accounts.infrastructure.models import Account, CreatorAlias
+from squid.accounts.models import Account, CreatorAlias
 from squid.persistence.base import Base
 from squid.suggestions.infrastructure.repository import PostgresSuggestionRepository
 

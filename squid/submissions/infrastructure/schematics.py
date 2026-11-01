@@ -20,8 +20,8 @@ from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicSt
 from squid.submissions.errors import DraftAccessDeniedError, DraftStateConflictError
 from squid.submissions.infrastructure.artifact_readiness import DraftSchematicSnapshot
 from squid.submissions.infrastructure.finalization_repository import _locked_draft, _require_expected_draft
-from squid.submissions.infrastructure.models import SubmissionDraft
-from squid.submissions.infrastructure.schematic_models import DraftSchematicLink, DraftSchematicSource
+from squid.submissions.models.entities import SubmissionDraft
+from squid.submissions.models.schematics import DraftSchematicLink, DraftSchematicSource
 
 MAX_DRAFT_SCHEMATICS = 10
 

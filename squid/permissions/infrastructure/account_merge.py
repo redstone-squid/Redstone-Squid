@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.selectable import ScalarSelect
 
-from squid.permissions.infrastructure.models import PermissionGrant, PermissionRoleAssignment
+from squid.permissions.models import PermissionGrant, PermissionRoleAssignment
 from squid.persistence.account_merge import AccountMergeContext, AccountReference, move_account_references
 
 PERMISSION_PROVENANCE_REFERENCES = (

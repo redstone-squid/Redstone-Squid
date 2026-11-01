@@ -14,19 +14,18 @@ from squid.media.application.jobs import (
     MEDIA_VIDEO_THUMBNAIL_ROLES,
     ClaimedMediaJob,
     MediaArtifactCleanupOutcome,
-    MediaArtifactRole,
     MediaDraftUploadAuthorization,
     MediaEnqueueOutcome,
     MediaJobFailureOutcome,
     MediaJobRepository,
     MediaJobSnapshot,
-    MediaJobStatus,
     MediaUploadConflictError,
     MediaUploadMetadata,
     StoredMediaArtifact,
     TerminalMediaSource,
 )
 from squid.media.domain import MediaBatchTotals, MediaKind, MediaLimits
+from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.errors import (
     MediaDraftNotFoundError,
     MediaDraftRevisionConflictError,
@@ -34,20 +33,20 @@ from squid.media.errors import (
     MediaLimitExceededError,
 )
 from squid.media.infrastructure.artifact_publication import PostgresArtifactPublicationRepository
-from squid.media.infrastructure.models import (
+from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
+from squid.media.models import (
     MediaArtifactRecord,
     MediaDraftReference,
     MediaNormalizationJobRecord,
     MediaUploadRecord,
 )
-from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
 from squid.persistence.advisory_locks import (
     AdvisoryLockNamespace,
     lock_uuid,
 )
 from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.submissions.domain import DraftStatus
-from squid.submissions.infrastructure.models import SubmissionDraft
+from squid.submissions.models.entities import SubmissionDraft
 
 
 class PostgresMediaJobRepository(MediaJobRepository):

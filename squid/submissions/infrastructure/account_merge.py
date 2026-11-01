@@ -10,8 +10,8 @@ from squid.core.errors import DataIntegrityError
 from squid.persistence.account_merge import AccountMergeContext, AccountReference, move_account_references
 from squid.persistence.types import now
 from squid.submissions.domain import FinalizationJobStatus
-from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
-from squid.submissions.infrastructure.models import SubmissionDraft
+from squid.submissions.models.entities import SubmissionDraft
+from squid.submissions.models.finalization import SubmissionFinalizationJob
 from squid.submissions.payload_integrity import submission_payload_digest
 
 SUBMISSION_REFERENCES = (

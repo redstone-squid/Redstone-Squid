@@ -5,14 +5,9 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from squid.media.application.jobs import (
-    MEDIA_VIDEO_THUMBNAIL_ROLES,
-    MediaArtifactRole,
-    MediaJobSnapshot,
-    MediaJobStatus,
-    StoredMediaArtifact,
-)
+from squid.media.application.jobs import MEDIA_VIDEO_THUMBNAIL_ROLES, MediaJobSnapshot, StoredMediaArtifact
 from squid.media.domain import MediaBatchTotals, MediaKind, MediaLimits
+from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.submissions.domain.finalization import (
     SchematicArtifactState,
     SubmissionArtifactReadiness,

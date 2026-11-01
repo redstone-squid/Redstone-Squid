@@ -21,13 +21,13 @@ from squid.submissions.domain import (
     SubmissionAttentionReason,
 )
 from squid.submissions.errors import DraftAccessDeniedError
-from squid.submissions.infrastructure.finalization_models import SubmissionReceiptMedia
 from squid.submissions.infrastructure.finalization_repository import (
     _claimed_job,
     _locked_draft,
     _require_current_media,
     complete_in_session,
 )
+from squid.submissions.models.finalization import SubmissionReceiptMedia
 
 
 class SubmissionBuildPreparer(Protocol):

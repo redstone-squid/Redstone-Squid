@@ -11,12 +11,12 @@ from whenever import Instant
 from squid.builds.application import BuildEditor, BuildService
 from squid.builds.domain import Build
 from squid.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
-from squid.builds.infrastructure.models import Build as SQLBuild
 from squid.builds.infrastructure.repository import BuildRepository
+from squid.builds.models import Build as SQLBuild
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
 from squid.submissions.application.revision_values import RevisionFacts, RevisionProposal
-from squid.submissions.infrastructure.revision_models import SubmissionRevisionProposal
+from squid.submissions.models.revisions import SubmissionRevisionProposal
 
 _REVISION_FACTS = TypeAdapter(RevisionFacts)
 

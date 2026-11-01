@@ -1,7 +1,5 @@
 """SQLAlchemy models for unified build tags."""
 
-from __future__ import annotations
-
 from decimal import Decimal
 
 from sqlalchemy import (

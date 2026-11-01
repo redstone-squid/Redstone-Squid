@@ -25,7 +25,7 @@ from squid.idempotency.infrastructure.crypto import (
     IdempotencyResponseCipher,
     ResponseEncryptionMetadata,
 )
-from squid.idempotency.infrastructure.models import IdempotencyRequest
+from squid.idempotency.models import IdempotencyRequest
 
 
 class PostgresIdempotencyRepository(IdempotencyRepository):

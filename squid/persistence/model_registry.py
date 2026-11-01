@@ -1,33 +1,33 @@
 """Import every SQLAlchemy model for migration metadata registration."""
 
-from squid.accounts.infrastructure import models as account_models
-from squid.auth.infrastructure import models as auth_models
-from squid.auth.infrastructure import session_models as auth_session_models
-from squid.builds.infrastructure import models as build_models
+from squid.accounts import models as account_models
+from squid.auth.models import entities as auth_models
+from squid.auth.models import sessions as auth_session_models
+from squid.builds import models as build_models
 from squid.cli_auth import models as cli_auth_models
-from squid.diagnostics.infrastructure import models as diagnostic_models
-from squid.events.infrastructure import models as event_models
-from squid.idempotency.infrastructure import models as idempotency_models
-from squid.media.infrastructure import models as media_models
-from squid.messages.infrastructure import models as message_models
-from squid.minecraft_auth.infrastructure import models as minecraft_auth_models
-from squid.notifications.infrastructure import models as notification_models
-from squid.permissions.infrastructure import models as permission_models
+from squid.diagnostics import models as diagnostic_models
+from squid.events import models as event_models
+from squid.idempotency import models as idempotency_models
+from squid.media import models as media_models
+from squid.messages import models as message_models
+from squid.minecraft_auth import models as minecraft_auth_models
+from squid.notifications import models as notification_models
+from squid.permissions import models as permission_models
 from squid.posts import models as post_models
-from squid.records.infrastructure import models as record_models
-from squid.schematics.infrastructure import models as schematic_models
-from squid.search.infrastructure import models as search_models
-from squid.settings.infrastructure import models as setting_models
-from squid.starboard.infrastructure import models as starboard_models
-from squid.submissions.infrastructure import finalization_models as submission_finalization_models
-from squid.submissions.infrastructure import intake as submission_intake_models
-from squid.submissions.infrastructure import models as submission_models
-from squid.submissions.infrastructure import revision_models as submission_revision_models
-from squid.submissions.infrastructure import schematic_models as submission_schematic_models
-from squid.sync.infrastructure import models as sync_models
-from squid.tags.infrastructure import models as tag_models
-from squid.versions.infrastructure import models as version_models
-from squid.voting.infrastructure import models as voting_models
+from squid.records import models as record_models
+from squid.schematics import models as schematic_models
+from squid.search import models as search_models
+from squid.settings import models as setting_models
+from squid.starboard import models as starboard_models
+from squid.submissions.models import entities as submission_models
+from squid.submissions.models import finalization as submission_finalization_models
+from squid.submissions.models import intake as submission_intake_models
+from squid.submissions.models import revisions as submission_revision_models
+from squid.submissions.models import schematics as submission_schematic_models
+from squid.sync import models as sync_models
+from squid.tags import models as tag_models
+from squid.versions import models as version_models
+from squid.voting import models as voting_models
 
 __all__ = [
     "account_models",
@@ -61,4 +61,4 @@ __all__ = [
     "voting_models",
 ]
 
-from squid.submissions.infrastructure import inference_runs as submission_inference_models
+from squid.submissions.models import inference as submission_inference_models

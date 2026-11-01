@@ -10,24 +10,24 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, ClaimStatus, IdentityProvider
 from squid.accounts.errors import AccountNotFoundError
-from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias, CreatorAliasClaim
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import Account, AccountIdentity, CreatorAlias, CreatorAliasClaim
 from squid.core.errors import DataIntegrityError
 from squid.events import DomainEvent
-from squid.events.infrastructure.models import DomainEventRecord
+from squid.events.models import DomainEventRecord
 from squid.notifications.domain import NotificationCandidate, NotificationKind, SubscriptionKind
-from squid.notifications.infrastructure.models import (
+from squid.notifications.infrastructure.repository import PostgresNotificationRepository
+from squid.notifications.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
     NotificationRecord,
     NotificationSubscriptionRecord,
 )
-from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.persistence.types import now
 from squid.submissions.domain import SubmissionOrigin
-from squid.submissions.infrastructure.models import SubmissionDraft
+from squid.submissions.models.entities import SubmissionDraft
 from squid.voting.domain import PollScope, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
-from squid.voting.infrastructure.models import GenericVoteSession, Vote, VoteSession
+from squid.voting.models import GenericVoteSession, Vote, VoteSession
 
 
 @pytest.mark.parametrize(

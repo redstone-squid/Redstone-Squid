@@ -27,7 +27,7 @@ from squid.minecraft_auth.errors import (
     InvalidInstallationCredentialError,
     TooManyActiveChallengesError,
 )
-from squid.minecraft_auth.infrastructure.models import (
+from squid.minecraft_auth.models import (
     PaperInstallationRecord,
     PlayerChallengeRecord,
     PlayerGrantRecord,

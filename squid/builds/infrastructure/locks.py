@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.builds.errors import BuildBusyError
-from squid.builds.infrastructure.models import Build
+from squid.builds.models import Build
 from squid.core.errors import InvalidStateError
 
 

@@ -15,8 +15,8 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod, ClaimStatus
 from squid.accounts.domain import AccountIdentity as AccountIdentityValue
-from squid.accounts.infrastructure.models import CreatorAlias
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import CreatorAlias
 from squid.persistence.base import Base
 from tests.support.database import record_queries
 

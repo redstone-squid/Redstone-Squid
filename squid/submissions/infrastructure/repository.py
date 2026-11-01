@@ -11,9 +11,9 @@ from whenever import Instant
 
 from squid.builds.domain import SourceMessage
 from squid.core.errors import JSONValue
-from squid.media.application.jobs import MediaJobStatus
-from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.domain.jobs import MediaJobStatus
 from squid.media.infrastructure.references import media_for_draft, retained_elsewhere
+from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.advisory_locks import (
     AdvisoryLockNamespace,
     lock_key,
@@ -36,13 +36,13 @@ from squid.submissions.errors import (
     DraftNotFoundError,
     DraftStateConflictError,
 )
-from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
 from squid.submissions.infrastructure.issues import decode_issues, encode_issues
-from squid.submissions.infrastructure.models import (
+from squid.submissions.models.entities import (
     SubmissionDraft,
     SubmissionDraftAccess,
     SubmissionDraftChange,
 )
+from squid.submissions.models.finalization import SubmissionFinalizationJob
 
 _ACTIVE_STATUSES = (DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION)
 

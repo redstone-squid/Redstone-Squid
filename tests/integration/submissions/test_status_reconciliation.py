@@ -13,9 +13,9 @@ from squid.core.errors import JSONValue
 from squid.submissions.application.inference_runs import candidate_id
 from squid.submissions.domain import DraftStatus
 from squid.submissions.infrastructure.inference_runs import PostgresInferenceRuns
-from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
-from squid.sync.infrastructure.models import DiscordSyncQueueItem
+from squid.submissions.models.entities import SubmissionDraft
+from squid.sync.models import DiscordSyncQueueItem
 from tests.integration.submissions.test_schematics import create_draft
 from tests.support.submission_targets import seed_account_and_version
 

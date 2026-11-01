@@ -19,7 +19,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from whenever import Instant
 
 from squid.accounts.domain import fold_creator_name
-from squid.accounts.infrastructure.models import Account, CreatorAlias
+from squid.accounts.models import Account, CreatorAlias
 from squid.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort, PublicBuildSummary, PublicBuildTag
 from squid.builds.domain import (
     BUILD_CLASS_BY_CATEGORY,
@@ -36,35 +36,35 @@ from squid.builds.domain import (
 )
 from squid.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.builds.infrastructure.mapping import SQL_CLASS_BY_CATEGORY, BuildMapper, category_values_from_domain
-from squid.builds.infrastructure.models import (
+from squid.builds.models import (
     Build as SQLBuild,
 )
-from squid.builds.infrastructure.models import (
+from squid.builds.models import (
     BuildCreator,
     BuildSourceMessage,
     BuildVersion,
 )
-from squid.builds.infrastructure.models import (
+from squid.builds.models import (
     BuildLink as SQLBuildLink,
 )
-from squid.builds.infrastructure.models import (
+from squid.builds.models import (
     Door as SQLDoor,
 )
-from squid.builds.infrastructure.models import (
+from squid.builds.models import (
     Extender as SQLExtender,
 )
 from squid.core.errors import DataIntegrityError, InvalidStateError, PersistenceError
-from squid.messages.infrastructure.models import Message
+from squid.messages.models import Message
 from squid.persistence.types import now
 from squid.tags.domain import TagAssignment as DomainTagAssignment
 from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
-from squid.tags.infrastructure.models import (
+from squid.tags.models import (
     BuildTagAssignment as SQLTagAssignment,
 )
-from squid.tags.infrastructure.models import (
+from squid.tags.models import (
     TagDefinition as SQLTagDefinition,
 )
-from squid.versions.infrastructure.models import Version
+from squid.versions.models import Version
 
 logger = logging.getLogger(__name__)
 

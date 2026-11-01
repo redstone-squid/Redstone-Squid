@@ -10,8 +10,8 @@ from whenever import Instant
 
 from squid.idempotency.domain import ExistingRequest, PendingRequest, Reservation, StoredResponse, UnsafeHttpMethod
 from squid.idempotency.infrastructure.crypto import IdempotencyCiphertextError, IdempotencyResponseCipher
-from squid.idempotency.infrastructure.models import IdempotencyRequest
 from squid.idempotency.infrastructure.repository import PostgresIdempotencyRepository
+from squid.idempotency.models import IdempotencyRequest
 from squid.persistence.base import Base
 
 _TABLE = Base.metadata.tables["idempotency_requests"]

@@ -15,17 +15,17 @@ from squid.starboard.domain import (
     StarboardEmoji,
     StarboardEntry,
 )
-from squid.starboard.infrastructure.models import (
+from squid.starboard.models import (
     Starboard,
     StarboardOriginMessage,
     StarboardRoleMultiplier,
     StarboardSource,
     StarboardVote,
 )
-from squid.starboard.infrastructure.models import (
+from squid.starboard.models import (
     StarboardEmoji as StarboardEmojiRow,
 )
-from squid.starboard.infrastructure.models import (
+from squid.starboard.models import (
     StarboardEntry as StarboardEntryRow,
 )
 

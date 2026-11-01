@@ -4,7 +4,7 @@ from sqlalchemy import ColumnElement, and_, or_
 from whenever import Instant
 
 from squid.accounts.domain import CONSENT_CUTOFF, CURRENT_CONSENT_VERSION
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.models import Account
 
 _CUTOFF = Instant.parse_iso(CONSENT_CUTOFF)
 """Parsed, because `created_at` binds through `InstantUTC` and will not take the raw string."""

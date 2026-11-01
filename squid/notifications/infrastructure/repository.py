@@ -13,11 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.accounts.domain import IdentityProvider
 from squid.accounts.infrastructure.consent import account_consent_current
-from squid.accounts.infrastructure.models import Account, AccountIdentity, CreatorAlias
+from squid.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.builds.domain import Status
-from squid.builds.infrastructure.models import Build, BuildCreator
+from squid.builds.models import Build, BuildCreator
 from squid.events import DomainEvent
-from squid.events.infrastructure.models import DomainEventDeliveryRecord, DomainEventRecord
+from squid.events.models import DomainEventDeliveryRecord, DomainEventRecord
 from squid.notifications.domain import (
     InboxNotification,
     InboxVisibility,
@@ -30,22 +30,22 @@ from squid.notifications.domain import (
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.notifications.infrastructure.models import (
+from squid.notifications.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
     NotificationRecord,
     NotificationSubscriptionRecord,
 )
 from squid.permissions.domain import BuiltinRoleKeys
-from squid.permissions.infrastructure.models import PermissionRole, PermissionRoleAssignment
+from squid.permissions.models import PermissionRole, PermissionRoleAssignment
 from squid.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
-from squid.records.infrastructure.models import (
+from squid.records.models import (
     RecordResultHolder,
     RecordRule,
     RecordSeries,
     RecordStanding,
 )
-from squid.tags.infrastructure.models import BuildTagAssignment
+from squid.tags.models import BuildTagAssignment
 
 
 def _durable_staff_notification_role_ids():

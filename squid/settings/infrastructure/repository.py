@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.persistence.repository import BaseAsyncRepository
 from squid.settings.domain import Setting, SettingOptions
-from squid.settings.infrastructure.models import ServerSetting
+from squid.settings.models import ServerSetting
 
 
 class _ServerSettingModelRepository(BaseAsyncRepository[ServerSetting]):

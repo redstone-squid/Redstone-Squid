@@ -9,7 +9,8 @@ from starlette.requests import Request
 
 from squid.api.v1.submission_intake import upload_file
 from squid.core.errors import ValidationError
-from squid.submissions.application.intake import IntakeStatus, SubmissionAttachmentIntake, SuppliedAttachment
+from squid.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
+from squid.submissions.domain.intake import IntakeStatus
 
 
 class Intake:

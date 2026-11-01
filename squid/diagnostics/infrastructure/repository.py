@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.core.errors import ErrorCode, JSONValue
 from squid.diagnostics.application import ErrorReportRepository
 from squid.diagnostics.domain import ErrorReport
-from squid.diagnostics.infrastructure.models import ErrorReport as ErrorReportRow
+from squid.diagnostics.models import ErrorReport as ErrorReportRow
 
 
 class PostgresErrorReportRepository(ErrorReportRepository):

@@ -8,7 +8,7 @@ from sqlalchemy.dialects import sqlite
 from whenever import Instant
 
 from squid.builds.domain import Status
-from squid.builds.infrastructure.models import Build
+from squid.builds.models import Build
 from squid.persistence.types import InstantUTC, IntEnumSmallInt
 
 

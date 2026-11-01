@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 import squid.persistence.model_registry  # noqa: F401
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.models import Account
 from squid.artifacts import ArtifactMetadata
 from squid.artifacts.infrastructure import LocalArtifactStore
 from squid.core.errors import DataIntegrityError

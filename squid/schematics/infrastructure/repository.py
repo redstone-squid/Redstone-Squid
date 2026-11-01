@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.artifacts import ArtifactStore
-from squid.builds.infrastructure.models import Build as SQLBuild
+from squid.builds.models import Build as SQLBuild
 from squid.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.schematics.domain.models import (
     FingerprintPreset,
@@ -18,8 +18,8 @@ from squid.schematics.domain.models import (
     SimulationResult,
 )
 from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
-from squid.schematics.infrastructure.models import BuildSchematic, SchematicFile
 from squid.schematics.infrastructure.preview_publisher import PostgresSchematicPreviewPublisher
+from squid.schematics.models import BuildSchematic, SchematicFile
 
 _BUILD_TABLE = cast(Table, SQLBuild.__table__)
 

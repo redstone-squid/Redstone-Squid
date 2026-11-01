@@ -11,11 +11,11 @@ from sqlalchemy import Table, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.models import Account
 from squid.core.errors import DataIntegrityError
-from squid.media.application.jobs import MediaJobStatus
 from squid.media.domain import MediaKind
-from squid.media.infrastructure.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.domain.jobs import MediaJobStatus
+from squid.media.models import MediaDraftReference, MediaNormalizationJobRecord, MediaUploadRecord
 from squid.persistence.base import Base
 from squid.submissions.application import DraftPreparationSnapshot, StoredDraft
 from squid.submissions.domain import (
@@ -40,21 +40,21 @@ from squid.submissions.domain import (
     VerifiedSubmissionArtifacts,
 )
 from squid.submissions.errors import DraftArtifactsChangedError, DraftNotFoundError, DraftStateConflictError
-from squid.submissions.infrastructure.finalization_models import (
-    SubmissionFinalizationInput,
-    SubmissionFinalizationJob,
-    SubmissionFinalizationResult,
-)
 from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
     complete_in_session,
 )
-from squid.submissions.infrastructure.models import (
+from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.models.entities import (
     SubmissionDraft,
     SubmissionDraftAccess,
     SubmissionDraftChange,
 )
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.models.finalization import (
+    SubmissionFinalizationInput,
+    SubmissionFinalizationJob,
+    SubmissionFinalizationResult,
+)
 
 pytestmark = pytest.mark.asyncio
 

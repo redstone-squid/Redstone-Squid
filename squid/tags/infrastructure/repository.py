@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.builds.infrastructure.mapping import BuildMapper
-from squid.builds.infrastructure.models import Build
+from squid.builds.models import Build
 from squid.tags.application import TagDefinitionRepository
 from squid.tags.domain import (
     TagAuthority,
@@ -20,8 +20,8 @@ from squid.tags.domain import (
     TagValue,
     TagValueType,
 )
-from squid.tags.infrastructure.models import BuildTagAssignment
-from squid.tags.infrastructure.models import TagDefinition as SQLTagDefinition
+from squid.tags.models import BuildTagAssignment
+from squid.tags.models import TagDefinition as SQLTagDefinition
 
 
 class PostgresTagDefinitionRepository(TagDefinitionRepository):

@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
 from squid.messages.errors import MessageNotFoundError
-from squid.messages.infrastructure.models import Message
+from squid.messages.models import Message
 from squid.persistence.repository import BaseAsyncRepository
 from squid.posts.models import DiscordPost
 from squid.voting.domain import (
@@ -36,7 +36,7 @@ from squid.voting.domain import (
     normalize_vote_options,
 )
 from squid.voting.errors import VoteSessionNotFoundError
-from squid.voting.infrastructure.models import (
+from squid.voting.models import (
     BuildVoteSession,
     DeleteLogVoteSession,
     GenericVoteSession,

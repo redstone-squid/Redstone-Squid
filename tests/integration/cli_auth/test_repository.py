@@ -12,8 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION
-from squid.accounts.infrastructure.models import Account
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import Account
 from squid.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.cli_auth.application import enrollment_proof_message, session_proof_message
 from squid.cli_auth.errors import CliEnrollmentAlreadyExchangedError, InvalidCliSessionError

@@ -12,7 +12,7 @@ from squid.builds.errors import AliasAlreadyAddedError, AliasInUseError, Restric
 from squid.builds.infrastructure.mapping import BuildMapper
 from squid.builds.infrastructure.restrictions import RestrictionRepository, get_restriction_id
 from squid.tags.domain import TagAssignment, TagSemanticKind
-from squid.tags.infrastructure.models import TagAlias, TagApplicability, TagDefinition
+from squid.tags.models import TagAlias, TagApplicability, TagDefinition
 
 
 class BuildTagsManager:

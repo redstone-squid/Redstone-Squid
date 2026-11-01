@@ -12,19 +12,19 @@ from sqlalchemy import Table, func, select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.models import Account
 from squid.media.application.jobs import (
     MediaArtifactCleanupInProgressError,
-    MediaArtifactRole,
-    MediaJobStatus,
     MediaUploadConflictError,
     MediaUploadMetadata,
     StoredMediaArtifact,
     TerminalMediaSource,
 )
 from squid.media.domain import MediaKind, MediaLimits
+from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.errors import MediaDraftNotFoundError, MediaDraftStateConflictError, MediaLimitExceededError
-from squid.media.infrastructure.models import (
+from squid.media.infrastructure.repository import PostgresMediaJobRepository
+from squid.media.models import (
     MediaArtifactObjectRecord,
     MediaArtifactPublicationRecord,
     MediaArtifactRecord,
@@ -32,11 +32,10 @@ from squid.media.infrastructure.models import (
     MediaNormalizationJobRecord,
     MediaUploadRecord,
 )
-from squid.media.infrastructure.repository import PostgresMediaJobRepository
 from squid.persistence.base import Base
 from squid.submissions.domain import DraftStatus, SubmissionOrigin
-from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.models.entities import SubmissionDraft
 
 pytestmark = pytest.mark.asyncio
 

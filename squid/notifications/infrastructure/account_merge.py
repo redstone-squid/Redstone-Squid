@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
 from squid.notifications.domain import NotificationSource
-from squid.notifications.infrastructure.models import (
+from squid.notifications.models import (
     NotificationDeliveryRecord,
     NotificationProfile,
     NotificationRecord,

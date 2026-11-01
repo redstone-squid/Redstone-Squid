@@ -32,7 +32,7 @@ from squid.builds.domain import (
 from squid.config import EMBEDDING_DIMENSION
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, IntEnumSmallInt, now
-from squid.tags.infrastructure.models import BuildTagAssignment
+from squid.tags.models import BuildTagAssignment
 
 
 class Build(Base, kw_only=True):

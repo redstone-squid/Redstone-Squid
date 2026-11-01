@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.builds.application import RestrictionDefinition
 from squid.builds.domain import RestrictionTypeLiteral
 from squid.builds.errors import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
-from squid.tags.infrastructure.models import TagAlias, TagDefinition
+from squid.tags.models import TagAlias, TagDefinition
 
 
 class RestrictionRepository:

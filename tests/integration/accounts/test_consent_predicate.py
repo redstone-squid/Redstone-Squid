@@ -9,7 +9,7 @@ from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, consent_refresh_required
 from squid.accounts.infrastructure.consent import account_consent_current
-from squid.accounts.infrastructure.models import Account as AccountModel
+from squid.accounts.models import Account as AccountModel
 from squid.persistence.base import Base
 
 SUPERSEDED = "1970-01-01"

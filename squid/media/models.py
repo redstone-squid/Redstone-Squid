@@ -19,8 +19,8 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
-from squid.media.application.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.domain import MediaKind
+from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, StrEnumText, now
 

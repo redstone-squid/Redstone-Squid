@@ -9,12 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
-from squid.builds.infrastructure.models import Build as SQLBuild
-from squid.builds.infrastructure.models import BuildLink
+from squid.builds.models import Build as SQLBuild
+from squid.builds.models import BuildLink
 from squid.core.errors import DataIntegrityError
 from squid.persistence.types import now
 from squid.schematics.application.previews import PreviewObjectReservation, StoredRender
-from squid.schematics.infrastructure.models import (
+from squid.schematics.models import (
     BuildSchematic,
     SchematicPreviewObject,
     SchematicRender,

@@ -21,7 +21,7 @@ from squid.search.domain import (
     SearchQuery,
     TextExpression,
 )
-from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
+from squid.search.models import SearchDocument, SearchDocumentFacet
 
 _DIRECT_TEXT_FIELDS = frozenset({"status"})
 _VECTOR_FIELDS = {

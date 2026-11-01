@@ -13,8 +13,8 @@ from squid.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.submissions.domain.finalization import SchematicArtifactState, SubmissionAttentionReason
 from squid.submissions.domain.schematics import DraftSchematic, DraftSchematicState
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
-from squid.submissions.infrastructure.schematic_models import DraftSchematicSource
 from squid.submissions.infrastructure.schematics import PostgresDraftSchematics
+from squid.submissions.models.schematics import DraftSchematicSource
 from tests.support.submission_targets import seed_account_and_version
 
 

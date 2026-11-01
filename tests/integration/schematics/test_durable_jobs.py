@@ -21,7 +21,7 @@ from squid.schematics.errors import AmbiguousSimulationInputError, InvalidSchema
 from squid.schematics.infrastructure import wire
 from squid.schematics.infrastructure.durable import QueuedSchematicAnalyzer, SchematicJobRunner
 from squid.schematics.infrastructure.jobs import PostgresSchematicJobRepository
-from squid.schematics.infrastructure.models import SchematicJob
+from squid.schematics.models import SchematicJob
 from tests.unit.schematics.fakes import FakeSchematicAnalyzer
 
 pytestmark = pytest.mark.asyncio

@@ -8,7 +8,7 @@ import squid_ui_discord as sd
 from squid.core.errors import JSONValue, SquidError
 from squid.runtime import BotServices
 from squid.submissions.application import FinalizationJobSnapshot, StoredDraft
-from squid.submissions.application.intake import IntakeStatus, SuppliedAttachment
+from squid.submissions.application.intake import SuppliedAttachment
 from squid.submissions.domain import (
     ChoiceOption,
     DraftChange,
@@ -20,6 +20,7 @@ from squid.submissions.domain import (
     FormManifest,
     ValueKind,
 )
+from squid.submissions.domain.intake import IntakeStatus
 from squid.topics import resource_topic
 
 

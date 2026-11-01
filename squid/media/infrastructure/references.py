@@ -5,7 +5,7 @@ from uuid import UUID
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.sql.elements import ColumnElement
 
-from squid.media.infrastructure.models import MediaDraftReference, MediaUploadRecord
+from squid.media.models import MediaDraftReference, MediaUploadRecord
 from squid.submissions.domain import DraftStatus
 
 
@@ -28,7 +28,7 @@ def media_for_draft(draft_id: UUID, *, include_discarded: bool = False) -> Colum
 
 def retained_elsewhere(draft_id: UUID) -> ColumnElement[bool]:
     """Keep a job while another active or submitted draft retains its file."""
-    from squid.submissions.infrastructure.models import SubmissionDraft
+    from squid.submissions.models.entities import SubmissionDraft
 
     return exists(
         select(MediaDraftReference.upload_id)

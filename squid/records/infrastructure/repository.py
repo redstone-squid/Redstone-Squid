@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 from whenever import Instant
 
 from squid.builds.domain import Status
-from squid.builds.infrastructure.models import Door, Extender
+from squid.builds.models import Door, Extender
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import tr
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
@@ -42,7 +42,7 @@ from squid.records.domain import (
     VersionScope,
     reduce_timing_variants,
 )
-from squid.records.infrastructure.models import (
+from squid.records.models import (
     DoorTimingVariant,
     ExtenderTimingVariant,
     RecordComputationRun,
@@ -58,7 +58,7 @@ from squid.records.infrastructure.models import (
     RecordSeries,
     RecordStanding,
 )
-from squid.tags.infrastructure.models import BuildTagAssignment, TagDefinition
+from squid.tags.models import BuildTagAssignment, TagDefinition
 
 RULESET_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
 CALCULATOR_VERSION = "3"

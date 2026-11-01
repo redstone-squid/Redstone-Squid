@@ -1,0 +1,1 @@
+"""Persisted submissions entities."""

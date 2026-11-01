@@ -9,7 +9,7 @@ from squid.persistence.types import InstantUTC, now
 from squid.posts.domain import ResourceKind, Surface
 
 
-class DiscordPost(Base, kw_only=True, eq=False):
+class DiscordPost(Base, kw_only=True):
     """A bot-owned Discord message displaying a build, vote, or other resource."""
 
     __tablename__ = "discord_posts"
@@ -57,10 +57,6 @@ class DiscordPost(Base, kw_only=True, eq=False):
     """When a rendered update was last recorded; None until the first update."""
     suppressed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     """When an external deletion was recorded. Each renderer decides whether to publish a replacement."""
-
-    # Base is a dataclass too; disabling generation alone would inherit its equality.
-    __eq__ = object.__eq__
-    __hash__ = object.__hash__
 
     @property
     def is_live(self) -> bool:

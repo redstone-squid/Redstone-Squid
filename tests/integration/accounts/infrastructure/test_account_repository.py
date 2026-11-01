@@ -21,17 +21,17 @@ from squid.accounts.domain import (
     AccountIdentity as AccountIdentityValue,
 )
 from squid.accounts.errors import AccountNotFoundError, AliasAlreadyClaimedError, CreatorAliasNotFoundError
-from squid.accounts.infrastructure.models import (
+from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import (
     Account as AccountModel,
 )
-from squid.accounts.infrastructure.models import (
+from squid.accounts.models import (
     AccountIdentity,
     CreatorAlias,
     CreatorAliasClaim,
     PublicCreatorRedirect,
     VerificationCode,
 )
-from squid.accounts.infrastructure.repository import AccountRepository
 from squid.persistence.base import Base
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))

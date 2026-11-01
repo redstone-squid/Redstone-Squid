@@ -11,7 +11,7 @@ from squid.search.application.fields import (
     FieldRegistry,
     FieldType,
 )
-from squid.tags.infrastructure.models import TagDefinition, UnitDefinition
+from squid.tags.models import TagDefinition, UnitDefinition
 
 
 class PostgresFieldRegistryProvider:

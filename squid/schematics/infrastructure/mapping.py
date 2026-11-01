@@ -21,7 +21,7 @@ from squid.schematics.domain.models import (
     SimulationSample,
     Vector3,
 )
-from squid.schematics.infrastructure.models import BuildSchematic
+from squid.schematics.models import BuildSchematic
 
 
 def to_row_values(analysis: SchematicAnalysis) -> dict[str, Any]:

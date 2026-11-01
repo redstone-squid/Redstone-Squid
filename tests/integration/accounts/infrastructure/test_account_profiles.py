@@ -23,10 +23,10 @@ from squid.accounts.domain import (
     AccountIdentity as AccountIdentityValue,
 )
 from squid.accounts.errors import AccountIdentityNotFoundError, LastIdentityError
-from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
-from squid.accounts.infrastructure.models import AccountProfile as AccountProfileModel
-from squid.accounts.infrastructure.models import CreatorAlias as CreatorAliasModel
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import AccountIdentity as AccountIdentityModel
+from squid.accounts.models import AccountProfile as AccountProfileModel
+from squid.accounts.models import CreatorAlias as CreatorAliasModel
 from squid.persistence.base import Base
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))

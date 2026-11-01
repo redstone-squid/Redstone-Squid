@@ -5,7 +5,7 @@ from typing import cast
 from sqlalchemy import CheckConstraint, ForeignKeyConstraint, Table
 
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
-from squid.schematics.infrastructure.models import SchematicFile, SchematicPreviewObject, SchematicRender
+from squid.schematics.models import SchematicFile, SchematicPreviewObject, SchematicRender
 
 
 def test_file_size_constraint_uses_the_fixed_schema_ceiling() -> None:

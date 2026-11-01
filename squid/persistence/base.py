@@ -12,7 +12,12 @@ from sqlalchemy.orm.properties import MappedColumn
 from squid.persistence.docs import extract_attribute_docstrings
 
 
-class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase):
+class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase, eq=False):
+    """Mapped entities use object identity; value objects define their own equality."""
+
+    __eq__ = object.__eq__
+    __hash__ = object.__hash__
+
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Populate table/column comments from docstrings, so the database is self-documenting.
 
@@ -41,6 +46,7 @@ class Base(BasicAttributes, AsyncAttrs, MappedAsDataclass, DeclarativeBase):
                 if column.comment is None:
                     column.comment = docstring
 
+        kwargs.setdefault("eq", False)
         super().__init_subclass__(**kwargs)
 
 

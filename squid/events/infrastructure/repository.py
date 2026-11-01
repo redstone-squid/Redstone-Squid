@@ -4,7 +4,7 @@ from sqlalchemy import ColumnElement, join, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.events.application import DomainEvent, DomainEventDelivery
-from squid.events.infrastructure.models import DomainEventConsumer, DomainEventDeliveryRecord, DomainEventRecord
+from squid.events.models import DomainEventConsumer, DomainEventDeliveryRecord, DomainEventRecord
 from squid.persistence.queue import ClaimedRowQueue, QueueHealthShape, QueueSpec
 
 DOMAIN_EVENT_DELIVERY_SPEC = QueueSpec(

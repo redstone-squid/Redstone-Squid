@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.accounts.infrastructure.models import Account, AccountIdentity
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import Account, AccountIdentity
 from squid.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
 from squid.minecraft_auth.domain import PublicServerProfile
@@ -24,12 +24,12 @@ from squid.minecraft_auth.errors import (
     InvalidPlayerTokenError,
     TooManyActiveChallengesError,
 )
-from squid.minecraft_auth.infrastructure.models import (
+from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
+from squid.minecraft_auth.models import (
     PaperInstallationRecord,
     PlayerChallengeRecord,
     PlayerGrantRecord,
 )
-from squid.minecraft_auth.infrastructure.repository import PostgresMinecraftAuthorizationRepository
 from squid.persistence.advisory_locks import AdvisoryLockNamespace, lock_key
 from squid.persistence.base import Base
 from squid.submissions.infrastructure.sponsors import PaperSponsorResolver

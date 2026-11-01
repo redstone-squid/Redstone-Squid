@@ -11,7 +11,6 @@ import tempfile
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
-from enum import StrEnum
 from functools import partial
 from pathlib import Path, PurePosixPath
 from typing import Protocol
@@ -33,6 +32,7 @@ from squid.media.domain import (
     MediaNormalizationReport,
     MediaProbe,
 )
+from squid.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.media.errors import (
     InvalidMediaError,
     MediaArtifactCleanupInProgressError,
@@ -64,26 +64,6 @@ also renew their claim before and after every publication.
 """
 MEDIA_ARTIFACT_CLEANUP_CLAIM = timedelta(hours=24)
 """Recovery window for an object deletion that may still be running after worker loss."""
-
-
-class MediaJobStatus(StrEnum):
-    """Stable durable states for one normalization request."""
-
-    PENDING = "pending"
-    CLAIMED = "claimed"
-    COMPLETED = "completed"
-    DEAD = "dead"
-    DISCARDED = "discarded"
-
-
-class MediaArtifactRole(StrEnum):
-    """The purpose of a durable artifact produced by normalization."""
-
-    OUTPUT = "output"
-    # Read-only compatibility for rows written before the video-thumbnail rollout.
-    POSTER = "poster"
-    VIDEO_THUMBNAIL = "video_thumbnail"
-    REPORT = "report"
 
 
 MEDIA_VIDEO_THUMBNAIL_ROLES = frozenset({MediaArtifactRole.POSTER, MediaArtifactRole.VIDEO_THUMBNAIL})

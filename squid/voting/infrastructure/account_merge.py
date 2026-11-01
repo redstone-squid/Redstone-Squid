@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from squid.persistence.account_merge import AccountMergeContext, AccountReference, move_account_references
-from squid.voting.infrastructure.models import Vote
+from squid.voting.models import Vote
 
 VOTING_REFERENCES = (AccountReference("vote_sessions", "author_account_id"),)
 

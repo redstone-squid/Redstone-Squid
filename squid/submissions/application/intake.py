@@ -2,7 +2,6 @@
 
 import mimetypes
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 from uuid import UUID
@@ -17,16 +16,8 @@ from squid.media.domain import MediaKind
 from squid.schematics.domain.formats import SCHEMATIC_EXTENSIONS
 from squid.submissions.application.drafts import DraftActor, StoredDraft, SubmissionDraftService
 from squid.submissions.application.schematics import DraftSchematicService
+from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
-
-
-class IntakeStatus(StrEnum):
-    """State of a supplied file before and after durable processor registration."""
-
-    PENDING = "pending"
-    READY = "ready"
-    FAILED = "failed"
-    DISCARDED = "discarded"
 
 
 @dataclass(frozen=True, slots=True)

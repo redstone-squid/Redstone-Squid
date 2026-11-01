@@ -46,15 +46,15 @@ from squid.accounts.errors import (
 )
 from squid.accounts.infrastructure.account_merge import merge_accounts
 from squid.accounts.infrastructure.consent import account_consent_current
-from squid.accounts.infrastructure.models import Account as AccountModel
-from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
-from squid.accounts.infrastructure.models import AccountMergeTicket as AccountMergeTicketModel
-from squid.accounts.infrastructure.models import AccountProfile as AccountProfileModel
-from squid.accounts.infrastructure.models import CreatorAlias as CreatorAliasModel
-from squid.accounts.infrastructure.models import CreatorAliasClaim as CreatorAliasClaimModel
-from squid.accounts.infrastructure.models import PublicCreatorRedirect
-from squid.accounts.infrastructure.models import VerificationAttempt as VerificationAttemptModel
-from squid.accounts.infrastructure.models import VerificationCode as VerificationCodeModel
+from squid.accounts.models import Account as AccountModel
+from squid.accounts.models import AccountIdentity as AccountIdentityModel
+from squid.accounts.models import AccountMergeTicket as AccountMergeTicketModel
+from squid.accounts.models import AccountProfile as AccountProfileModel
+from squid.accounts.models import CreatorAlias as CreatorAliasModel
+from squid.accounts.models import CreatorAliasClaim as CreatorAliasClaimModel
+from squid.accounts.models import PublicCreatorRedirect
+from squid.accounts.models import VerificationAttempt as VerificationAttemptModel
+from squid.accounts.models import VerificationCode as VerificationCodeModel
 from squid.core.i18n import tr
 from squid.persistence.account_merge import AccountMergeContext
 from squid.persistence.types import InstantUTC, now
@@ -62,7 +62,7 @@ from squid.persistence.types import InstantUTC, now
 _BUILD_CREDITS = table("build_creators", column("alias_id"))
 """A lightweight handle on the one column of `build_creators` this module reads.
 
-Deliberately not `squid.builds.infrastructure.models.BuildCreator`: importing that mapper pulls the
+Deliberately not `squid.builds.models.BuildCreator`: importing that mapper pulls the
 whole `Build` relationship graph into the accounts context, which both couples the two contexts and
 makes importing this module depend on the builds taxonomy being imported first. All that is wanted
 here is a count.

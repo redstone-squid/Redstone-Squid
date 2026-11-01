@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.auth.domain import ApiKey
-from squid.auth.infrastructure.models import ApiKey as ApiKeyModel
+from squid.auth.models.entities import ApiKey as ApiKeyModel
 from squid.core.errors import DataIntegrityError
 from squid.permissions.domain import InvalidPatternError, Pattern
 

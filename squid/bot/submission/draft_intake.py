@@ -13,7 +13,7 @@ from squid.core.errors import ValidationError
 from squid.runtime import BotServices
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.submissions.application.drafts import DraftActor
-from squid.submissions.application.intake import IntakeStatus
+from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
 from squid_ui.forms import UploadedFile
 

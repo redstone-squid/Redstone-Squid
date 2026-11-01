@@ -10,7 +10,7 @@ from collections.abc import Sequence
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.models import Account
 from squid.builds.application.queries import BuildListSort
 from squid.builds.domain import OtherBuild, Status
 from squid.builds.infrastructure.repository import BuildRepository

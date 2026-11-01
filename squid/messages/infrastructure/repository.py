@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.messages.domain import MessageFact, MessageRecord
-from squid.messages.infrastructure.models import Message
+from squid.messages.models import Message
 
 
 class MessageRepository:

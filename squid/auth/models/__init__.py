@@ -1,0 +1,1 @@
+"""Persisted auth entities."""

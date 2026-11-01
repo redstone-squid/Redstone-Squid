@@ -10,12 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.builds.domain import Build, BuildCategory
-from squid.builds.infrastructure.models import Build as SQLBuild
 from squid.builds.infrastructure.repository import BuildRepository
-from squid.events.infrastructure.models import DomainEventRecord
-from squid.media.application.jobs import MediaJobStatus
+from squid.builds.models import Build as SQLBuild
+from squid.events.models import DomainEventRecord
 from squid.media.domain import MediaKind
-from squid.media.infrastructure.models import MediaNormalizationJobRecord, MediaUploadRecord
+from squid.media.domain.jobs import MediaJobStatus
+from squid.media.models import MediaNormalizationJobRecord, MediaUploadRecord
 from squid.submissions.application import ClaimedFinalizationJob, StoredDraft
 from squid.submissions.domain import (
     DraftSnapshot,
@@ -26,12 +26,12 @@ from squid.submissions.domain import (
 )
 from squid.submissions.infrastructure import commit as commit_module
 from squid.submissions.infrastructure.commit import PostgresSubmissionExecutor
-from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationResult, SubmissionReceiptMedia
 from squid.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
     complete_in_session,
 )
 from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.models.finalization import SubmissionFinalizationResult, SubmissionReceiptMedia
 from tests.support.submission_targets import normalized_submission, seed_account_and_version, submission_build
 
 
@@ -166,11 +166,11 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
 ) -> None:
     from sqlalchemy import update
 
-    from squid.accounts.infrastructure.models import Account
+    from squid.accounts.models import Account
     from squid.permissions.domain import PermissionNode, Subject
     from squid.submissions.application import CheckedInFormManifestRegistry, SubmissionDraftService
     from squid.submissions.domain import BuildSubmissionRejected, SubmissionAttentionReason
-    from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
+    from squid.submissions.models.finalization import SubmissionFinalizationJob
 
     original = await claimed_submission(migrated_session_factory)
     async with migrated_session_factory.begin() as session:
@@ -227,8 +227,8 @@ async def test_merging_a_staff_requester_preserves_owner_and_fences_its_claim(
     from sqlalchemy import update
 
     from squid.accounts.infrastructure.repository import AccountRepository
-    from squid.submissions.infrastructure.finalization_models import SubmissionFinalizationJob
-    from squid.submissions.infrastructure.models import SubmissionDraft
+    from squid.submissions.models.entities import SubmissionDraft
+    from squid.submissions.models.finalization import SubmissionFinalizationJob
 
     claim = await claimed_submission(migrated_session_factory)
     accounts = AccountRepository(migrated_session_factory, "test-pepper")
@@ -272,7 +272,7 @@ async def test_source_messages_commit_with_build_and_survive_run_retention(
     from pydantic import TypeAdapter
 
     from squid.builds.domain import SourceMessage
-    from squid.submissions.infrastructure.models import SubmissionDraft
+    from squid.submissions.models.entities import SubmissionDraft
 
     sessions = migrated_session_factory
     claim = await claimed_submission(sessions)

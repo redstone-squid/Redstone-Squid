@@ -1,18 +1,18 @@
 """Persistence adapters for synchronized submission drafts."""
 
-from squid.submissions.infrastructure.finalization_models import (
-    SubmissionFinalizationJob,
-    SubmissionFinalizationResult,
-)
 from squid.submissions.infrastructure.finalization_repository import PostgresFinalizationJobRepository
-from squid.submissions.infrastructure.models import (
+from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
+from squid.submissions.infrastructure.repository import PostgresDraftRepository
+from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
+from squid.submissions.models.entities import (
     SubmissionDraft,
     SubmissionDraftAccess,
     SubmissionDraftChange,
 )
-from squid.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
-from squid.submissions.infrastructure.repository import PostgresDraftRepository
-from squid.submissions.infrastructure.sponsors import PaperSponsorResolver
+from squid.submissions.models.finalization import (
+    SubmissionFinalizationJob,
+    SubmissionFinalizationResult,
+)
 
 __all__ = [
     "ApprovedSubmissionOptionCatalog",

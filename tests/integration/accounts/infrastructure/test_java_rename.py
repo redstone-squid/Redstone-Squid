@@ -27,8 +27,8 @@ from squid.accounts.domain import (
 )
 from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.errors import AliasAlreadyClaimedError, MinecraftAccountNotFoundError
-from squid.accounts.infrastructure.models import AccountIdentity, CreatorAlias, CreatorAliasClaim
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import AccountIdentity, CreatorAlias, CreatorAliasClaim
 from squid.persistence.base import Base
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))

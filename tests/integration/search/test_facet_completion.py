@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.persistence.base import Base
 from squid.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
+from squid.search.models import SearchDocument, SearchDocumentFacet
 from squid.suggestions.domain import SuggestionRequest
 from squid.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 from squid.suggestions.infrastructure.repository import PostgresSuggestionRepository

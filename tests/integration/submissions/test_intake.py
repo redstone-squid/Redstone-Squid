@@ -6,7 +6,8 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.errors import ConflictError
-from squid.submissions.application.intake import IntakeStatus, SuppliedAttachment
+from squid.submissions.application.intake import SuppliedAttachment
+from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.infrastructure.intake import PostgresAttachmentIntake
 from tests.integration.submissions.test_schematics import create_draft, reload
 from tests.support.submission_targets import seed_account_and_version

@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.search.application.embeddings import SearchEmbeddingJob, SearchEmbeddingModel
-from squid.search.infrastructure.models import SearchDocument, SearchEmbeddingQueueItem
 from squid.search.infrastructure.repository import SemanticCandidate
+from squid.search.models import SearchDocument, SearchEmbeddingQueueItem
 
 SEARCH_EMBEDDING_QUEUE_SPEC = QueueSpec(
     name="search_embeddings",

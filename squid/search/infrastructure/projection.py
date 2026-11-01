@@ -14,11 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
-from squid.accounts.infrastructure.models import CreatorAlias
+from squid.accounts.models import CreatorAlias
 from squid.builds.domain.titles import format_build_category, format_build_display_title
 from squid.builds.errors import InvalidBuildError
 from squid.builds.infrastructure.mapping import BuildMapper
-from squid.builds.infrastructure.models import (
+from squid.builds.models import (
     Build,
     BuildCreator,
     BuildVersion,
@@ -26,22 +26,22 @@ from squid.builds.infrastructure.models import (
 from squid.core.errors import DataIntegrityError
 from squid.diagnostics.log_capture import work_lost
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
-from squid.records.infrastructure.models import (
+from squid.records.models import (
     RecordComputationRun,
     RecordResultHolder,
     RecordRule,
     RecordStanding,
 )
-from squid.search.infrastructure.models import (
+from squid.search.models import (
     SearchDocument,
     SearchDocumentFacet,
     SearchEmbeddingQueueItem,
     SearchProjectionQueueItem,
 )
 from squid.tags.domain import TagSemanticKind
-from squid.tags.infrastructure.models import BuildTagAssignment as TagAssignment
-from squid.tags.infrastructure.models import TagAlias, TagDefinition
-from squid.versions.infrastructure.models import Version
+from squid.tags.models import BuildTagAssignment as TagAssignment
+from squid.tags.models import TagAlias, TagDefinition
+from squid.versions.models import Version
 
 logger = logging.getLogger(__name__)
 PROJECTION_MAX_ATTEMPTS = 5

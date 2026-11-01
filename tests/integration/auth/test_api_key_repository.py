@@ -7,10 +7,10 @@ import pytest
 from sqlalchemy import Table, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.accounts.infrastructure.models import Account
+from squid.accounts.models import Account
 from squid.auth.application import ApiKeyService
-from squid.auth.infrastructure.models import ApiKey
 from squid.auth.infrastructure.repository import PostgresApiKeyRepository
+from squid.auth.models.entities import ApiKey
 from squid.persistence.base import Base
 
 _TABLES = [cast(Table, Account.__table__), cast(Table, ApiKey.__table__)]

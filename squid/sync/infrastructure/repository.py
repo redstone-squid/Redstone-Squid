@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.core.errors import DataIntegrityError
 from squid.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.sync.application import ReconciliationAction, ReconciliationJob, ReconciliationResource
-from squid.sync.infrastructure.models import DiscordSyncQueueItem
+from squid.sync.models import DiscordSyncQueueItem
 
 DISCORD_SYNC_QUEUE_SPEC = QueueSpec(
     name="discord_sync",

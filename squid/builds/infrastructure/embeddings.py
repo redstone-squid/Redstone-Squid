@@ -7,7 +7,7 @@ from openai import AsyncOpenAI, OpenAIError
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.builds.infrastructure.models import Build
+from squid.builds.models import Build
 from squid.config import EMBEDDING_DIMENSION, OPENAI_MAX_RETRIES, OPENAI_REQUEST_TIMEOUT_SECONDS, EmbeddingConfig
 from squid.observability import add_counter, trace_span
 

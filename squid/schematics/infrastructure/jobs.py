@@ -15,7 +15,7 @@ from squid.schematics.application.jobs import (
     SchematicJobOperation,
     SchematicJobSnapshot,
 )
-from squid.schematics.infrastructure.models import SchematicJob
+from squid.schematics.models import SchematicJob
 
 SCHEMATIC_JOB_SPEC = QueueSpec(
     name="schematic_jobs",

@@ -3,41 +3,18 @@
 from uuid import UUID
 
 from pydantic import TypeAdapter
-from sqlalchemy import CheckConstraint, ForeignKey, Text, select
-from sqlalchemy.dialects.postgresql import UUID as SQLUUID
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import Mapped, mapped_column
 
 from squid.core.errors import ConflictError, NotFoundError, ValidationError
-from squid.persistence.base import Base
-from squid.persistence.types import StrEnumText
 from squid.submissions.application.drafts import StoredDraft
-from squid.submissions.application.intake import IntakeStatus, SuppliedAttachment, classify_supplied_file
+from squid.submissions.application.intake import SuppliedAttachment, classify_supplied_file
 from squid.submissions.domain import SubmissionAttentionIssue, SubmissionAttentionReason
+from squid.submissions.domain.intake import IntakeStatus
 from squid.submissions.domain.source_files import SubmissionSourceFile
-from squid.submissions.infrastructure.models import SubmissionDraft
 from squid.submissions.infrastructure.schematics import _changed, _editable
-
-
-class SubmissionSuppliedAttachment(Base, kw_only=True):
-    """A supplied file retained before download and resolved only by registration or explicit discard."""
-
-    __tablename__ = "submission_supplied_attachments"
-    __table_args__ = (
-        CheckConstraint(
-            "status IN ('pending', 'ready', 'failed', 'discarded')", name="submission_supplied_attachments_status_check"
-        ),
-        CheckConstraint(
-            "kind IN ('schematic', 'image', 'video', 'unknown')", name="submission_supplied_attachments_kind_check"
-        ),
-    )
-    draft_id: Mapped[UUID] = mapped_column(
-        SQLUUID(as_uuid=True), ForeignKey("submission_drafts.id", ondelete="CASCADE"), primary_key=True
-    )
-    source_id: Mapped[UUID] = mapped_column(SQLUUID(as_uuid=True), primary_key=True)
-    filename: Mapped[str] = mapped_column(Text)
-    kind: Mapped[str] = mapped_column(Text)
-    status: Mapped[IntakeStatus] = mapped_column(StrEnumText(IntakeStatus))
+from squid.submissions.models.entities import SubmissionDraft
+from squid.submissions.models.intake import SubmissionSuppliedAttachment
 
 
 class PostgresAttachmentIntake:

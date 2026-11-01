@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from squid.persistence.base import Base
 from squid.search.application import SearchEmbeddingService
 from squid.search.infrastructure.embeddings import PostgresSearchEmbeddingQueue, PostgresSemanticCandidateProvider
-from squid.search.infrastructure.models import SearchDocument, SearchEmbeddingQueueItem
+from squid.search.models import SearchDocument, SearchEmbeddingQueueItem
 
 pytestmark = pytest.mark.asyncio
 
