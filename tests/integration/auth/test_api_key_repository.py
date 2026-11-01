@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 from typing import cast
 
 import pytest
-from sqlalchemy import Table, select
+from sqlalchemy import Table, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.accounts.models import Account
@@ -44,5 +44,7 @@ async def test_issue_persists_one_sorted_array_for_duplicate_unsorted_scopes(
     )
 
     async with async_session_factory() as session:
-        stored = await session.scalar(select(ApiKey.scopes).where(ApiKey.key_id == issued.key.key_id))
+        stored = await session.scalar(
+            text("SELECT scopes FROM api_keys WHERE key_id = :key_id"), {"key_id": issued.key.key_id}
+        )
     assert stored == ["account.self.read", "build.submission.read", "vote.poll.cast"]

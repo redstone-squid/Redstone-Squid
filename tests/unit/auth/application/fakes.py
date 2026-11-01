@@ -16,7 +16,8 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.accounts.domain import Account, AccountConsent, IdentityProvider
 from squid.auth.domain.oauth import ExternalIdentity
-from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
+from squid.auth.domain.sessions import WebSessionIdentity
+from squid.auth.models.sessions import OAuthState
 
 
 @dataclass(slots=True)

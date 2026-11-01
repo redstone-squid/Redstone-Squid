@@ -1,15 +1,17 @@
 """SQLAlchemy authentication models."""
 
-from sqlalchemy import ARRAY, BigInteger, ForeignKey, Identity, Index, LargeBinary, Text, func, text
+from sqlalchemy import BigInteger, ForeignKey, Identity, Index, LargeBinary, Text, func, text
 from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
+from squid.auth.models.types import PermissionPatterns
+from squid.permissions.domain import Pattern
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, now
 
 
-class ApiKey(Base):
+class ApiKey(Base, kw_only=True):
     """A revocable high-entropy credential used by an API service client."""
 
     __tablename__ = "api_keys"
@@ -20,7 +22,7 @@ class ApiKey(Base):
         Index("api_keys_active", "key_id", postgresql_where=text("revoked_at IS NULL")),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     """Internal identifier unrelated to the public token key ID."""
     key_id: Mapped[str] = mapped_column(Text, nullable=False)
     """Public lookup portion of the API token."""
@@ -32,8 +34,8 @@ class ApiKey(Base):
     """
     label: Mapped[str] = mapped_column(Text, nullable=False)
     """Human-readable description of the credential's owner or purpose."""
-    scopes: Mapped[list[str]] = mapped_column(
-        ARRAY(Text), nullable=False, server_default=text("'{}'::text[]"), default_factory=list
+    scopes: Mapped[frozenset[Pattern]] = mapped_column(
+        PermissionPatterns(), nullable=False, server_default=text("'{}'::text[]"), default_factory=frozenset
     )
     """Capabilities granted to this credential."""
     owner_account_id: Mapped[int | None] = mapped_column(
@@ -57,3 +59,7 @@ class ApiKey(Base):
     """Most recent throttled usage timestamp."""
     last_used_ip: Mapped[str | None] = mapped_column(INET, default=None)
     """IP address associated with the most recent recorded use."""
+
+    def is_active_at(self, instant: Instant) -> bool:
+        """Return whether this credential may authenticate at *instant*."""
+        return self.revoked_at is None and (self.expires_at is None or self.expires_at > instant)

@@ -9,7 +9,8 @@ from collections.abc import Callable, Iterable
 from whenever import Instant
 
 from squid.auth.application.ports import ApiKeyRepository
-from squid.auth.domain import ApiKey, IssuedApiKey
+from squid.auth.domain import IssuedApiKey
+from squid.auth.models.entities import ApiKey
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.core.i18n import tr
 from squid.permissions.application.services import PermissionService

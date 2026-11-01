@@ -9,8 +9,8 @@ from whenever import Instant
 from squid.accounts.domain import consent_refresh_required
 from squid.accounts.models import Account
 from squid.auth.application.ports import WebSessionRepository
-from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
-from squid.auth.models.sessions import OAuthStateModel, WebSession
+from squid.auth.domain.sessions import WebSessionIdentity
+from squid.auth.models.sessions import OAuthState, WebSession
 
 
 class PostgresWebSessionRepository(WebSessionRepository):
@@ -22,29 +22,17 @@ class PostgresWebSessionRepository(WebSessionRepository):
     @override
     async def save_state(self, state: OAuthState) -> None:
         async with self._session_factory() as session:
-            session.add(
-                OAuthStateModel(
-                    state=state.state,
-                    code_verifier=state.code_verifier,
-                    redirect_to=state.redirect_to,
-                    expires_at=state.expires_at,
-                    provider=state.provider,
-                )
-            )
+            session.add(state)
             await session.commit()
 
     @override
     async def consume_state(self, state: str, *, now: Instant) -> OAuthState | None:
         async with self._session_factory() as session:
-            model = await session.scalar(
-                delete(OAuthStateModel).where(OAuthStateModel.state == state).returning(OAuthStateModel)
-            )
+            model = await session.scalar(delete(OAuthState).where(OAuthState.state == state).returning(OAuthState))
             await session.commit()
             if model is None or model.expires_at <= now:
                 return None
-            return OAuthState(
-                model.state, model.code_verifier, model.redirect_to, model.expires_at, provider=model.provider
-            )
+            return model
 
     @override
     async def create_session(

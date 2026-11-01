@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.auth.application.ports import WebSessionRepository
 from squid.auth.application.providers import OAuthProvider
-from squid.auth.domain.sessions import OAuthState
+from squid.auth.models.sessions import OAuthState
 from squid.core.errors import AuthenticationError, NotFoundError, ValidationError
 
 
@@ -59,7 +59,13 @@ class WebSessionService:
         verifier = secrets.token_urlsafe(48)
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
         await self._repository.save_state(
-            OAuthState(state, verifier, redirect_to, self._now().add(minutes=10), provider=provider.provider)
+            OAuthState(
+                provider=provider.provider,
+                state=state,
+                code_verifier=verifier,
+                redirect_to=redirect_to,
+                expires_at=self._now().add(minutes=10),
+            )
         )
         return provider.authorize_url(state=state, code_challenge=challenge)
 

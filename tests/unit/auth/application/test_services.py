@@ -7,7 +7,7 @@ import pytest
 from whenever import Instant
 
 from squid.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, ApiKeyService, hash_api_key_secret
-from squid.auth.domain import ApiKey
+from squid.auth.models.entities import ApiKey
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
 from squid.permissions.application.ports import GrantRecord, SubjectRecords

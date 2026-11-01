@@ -4,8 +4,9 @@ from typing import Protocol
 
 from whenever import Instant
 
-from squid.auth.domain import ApiKey
-from squid.auth.domain.sessions import OAuthState, WebSessionIdentity
+from squid.auth.domain.sessions import WebSessionIdentity
+from squid.auth.models.entities import ApiKey
+from squid.auth.models.sessions import OAuthState
 from squid.permissions.domain import Pattern
 
 

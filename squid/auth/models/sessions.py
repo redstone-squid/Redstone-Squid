@@ -9,7 +9,7 @@ from whenever import Instant
 
 from squid.accounts.domain import IdentityProvider
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC, StrEnumText, now
 
 
 class WebSession(Base, kw_only=True):
@@ -34,14 +34,16 @@ class WebSession(Base, kw_only=True):
     user_agent: Mapped[str | None] = mapped_column(Text, default=None)
 
 
-class OAuthStateModel(Base, kw_only=True):
+class OAuthState(Base, kw_only=True):
     """One-time OAuth PKCE state shared across API replicas."""
 
     __tablename__ = "oauth_states"
 
     state: Mapped[str] = mapped_column(Text, primary_key=True)
     code_verifier: Mapped[str] = mapped_column(Text, nullable=False)
-    provider: Mapped[IdentityProvider] = mapped_column(Text, nullable=False)
+    provider: Mapped[IdentityProvider] = mapped_column(
+        StrEnumText(IdentityProvider), nullable=False, default=IdentityProvider.DISCORD
+    )
     """The namespace this state was minted for; the callback refuses a mismatch."""
     redirect_to: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=now)
