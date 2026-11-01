@@ -186,7 +186,7 @@ sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate))"
 # A schema, not a Discord modal. A rejection re-presents it with the complaints
 # and everything already typed; **prefill seeds it from state.
 return sl.form("Open the feedback form", FeedbackForm(**prefill), key="feedback")""",
-    "composition": """class Dashboard(sl.Component[sl.ComponentsV2Target]):
+    "composition": """class Dashboard(sl.Component[sl.ComponentsV2Target, sd.Request]):
     def __init__(self):
         self.left = Counter("Left")
         self.right = Counter("Right")
@@ -206,7 +206,7 @@ return sl.form("Open the feedback form", FeedbackForm(**prefill), key="feedback"
     )
 
 async def switch_language(self, event: sl.PressEvent) -> None:
-    request = await sd.request(event)
+    request = event.context
     assert request.root is not None
     request.root.localize(localization_for("zh-CN"))
 
@@ -292,7 +292,7 @@ def _fail_demo_action() -> Never:
     raise DemoRollback(message)
 
 
-class DemoCounter(sl.Component[sl.ComponentsV2Target]):
+class DemoCounter(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """A tiny child component used twice to demonstrate keyed composition."""
 
     count: int = sl.state(0)
@@ -301,7 +301,7 @@ class DemoCounter(sl.Component[sl.ComponentsV2Target]):
         self.label = label
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         count = self.count
         return sd.v2.panel(
             sd.v2.heading(self.label, level=3),
@@ -364,7 +364,7 @@ class FeedbackForm(sl.forms.Form):
         await self._on_recorded(self, event)
 
 
-class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
+class LayoutShowcase(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """One mounted tour of the engine, told as twelve problems a message runs into."""
 
     section: str = sl.state("pagination")
@@ -416,7 +416,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         return tr(t"Redrawn {clicks} times, and each press rebuilt this whole message.")
 
     @override
-    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         controls = (
             sd.v2.select(
                 *(
@@ -451,7 +451,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         )
         return (header, *self._render_section())
 
-    def _render_section(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _render_section(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         match self.section:
             case "adaptation":
                 exhibit = self._adaptation()
@@ -508,7 +508,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
                 )
         return sl.section(sl.heading(heading), sl.paragraph(lead), *body, *instructions, accent=accent)
 
-    def _pagination(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _pagination(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         total = len(self.entries)
         per = _PAGE_SIZE
         return (
@@ -527,7 +527,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             ),
         )
 
-    def _adaptation(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _adaptation(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         choices = tuple(
             sl.semantic.ActionControl(f"action.{index}", tr(t"Option {index}"), self._action_notice)
             for index in range(1, 37)
@@ -546,7 +546,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             sl.semantic.ActionControls(choices, key="showcase-actions"),
         )
 
-    def _degradation(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _degradation(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         log = sl.bullets(
             *(sl.bullet(line, key=f"log.{index}") for index, line in enumerate(_AUDIT_LOG)),
             key="audit-log",
@@ -576,7 +576,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             ),
         )
 
-    def _data(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _data(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         return (
             self._exhibit(
                 tr(t"Numbers, bars and clocks"),
@@ -600,7 +600,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             ),
         )
 
-    def _ownership(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _ownership(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         return (
             self._exhibit(
                 tr(t"Two switches that remember in different places"),
@@ -635,7 +635,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             sl.rating(key="ownership.rating", value=sl.controlled(self.rating, self._rate)),
         )
 
-    def _grid(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _grid(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         taken = {5, 10}
         cells = tuple(
             sp.GridCell(
@@ -660,7 +660,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             sl.grid(*cells, key="showcase-grid", columns=4, on_pick=self._pick_grid),
         )
 
-    def _forms(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _forms(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         prefill: dict[str, object] = {}
         if self.feedback_exhibit:
             prefill["exhibit"] = self.feedback_exhibit
@@ -698,7 +698,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             ),
         )
 
-    def _composition(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _composition(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         return (
             self._exhibit(
                 tr(t"Two copies that cannot get crossed"),
@@ -713,7 +713,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             self.boundary(self.right, key="right"),
         )
 
-    def _localization(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _localization(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         unsafe = "*shouty title* @everyone [not a link](https://example.com)"
         return (
             self._exhibit(
@@ -742,7 +742,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             ),
         )
 
-    def _history(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _history(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         return (
             self._exhibit(
                 tr(t"Undo that knows when it is too late"),
@@ -788,7 +788,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             ),
         )
 
-    def _replication(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _replication(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         return (
             self._exhibit(
                 tr(t"Your edit and somebody else's at the same time"),
@@ -823,7 +823,7 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
             ),
         )
 
-    def _effects(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _effects(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         return (
             self._exhibit(
                 tr(t"Undo that has to go and ask somebody else"),
@@ -944,9 +944,9 @@ class LayoutShowcase(sl.Component[sl.ComponentsV2Target]):
         self.feedback_score = form.score or 0
         await event.notice(tr(t"Got it -- the panel behind the form is already showing it."))
 
-    async def _switch_language(self, event: sl.ActionEvent) -> None:
+    async def _switch_language(self, event: sd.ActionEvent) -> None:
         self.display_locale = "en" if event.locale == "zh-CN" else "zh-CN"
-        request = await sd.request(event)
+        request = event.context
         assert request.root is not None
         request.root.localize(localization_for(self.display_locale))
 
@@ -1142,7 +1142,7 @@ APPEARANCE = sl.ContextKey[Appearance]("showcase.appearance")
 _DENSITIES = ("comfortable", "compact")
 
 
-class AppearanceControls(sl.Component[sl.ComponentsV2Target]):
+class AppearanceControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """A leaf that never receives the namespace as an argument -- it injects it.
 
     `inject` is render-time, so the handlers close over the handle the render found rather
@@ -1153,7 +1153,7 @@ class AppearanceControls(sl.Component[sl.ComponentsV2Target]):
     history: sl.runtime.History = sl.runtime.history(limit=5)
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         appearance = self.inject(APPEARANCE)
         density = appearance.density
         return sd.v2.controls(
@@ -1193,7 +1193,7 @@ class AppearanceControls(sl.Component[sl.ComponentsV2Target]):
         await self.history.undo()
 
 
-class AppearancePanel(sl.Component[sl.ComponentsV2Target]):
+class AppearancePanel(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """The panel that writes. It provides the namespace rather than passing it down."""
 
     def __init__(self, appearance: Appearance, session: Session) -> None:
@@ -1202,7 +1202,7 @@ class AppearancePanel(sl.Component[sl.ComponentsV2Target]):
         self.controls = AppearanceControls()
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         self.provide(APPEARANCE, self.appearance)
         focus = self.session.focus
         return sd.v2.panel(
@@ -1219,7 +1219,7 @@ class AppearancePanel(sl.Component[sl.ComponentsV2Target]):
         self.session.focus = "details" if self.session.focus == "overview" else "overview"
 
 
-class PreviewPanel(sl.Component[sl.ComponentsV2Target]):
+class PreviewPanel(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """The panel that only reads. It declares no dependency and follows both cells anyway."""
 
     def __init__(self, appearance: Appearance, session: Session) -> None:
@@ -1227,7 +1227,7 @@ class PreviewPanel(sl.Component[sl.ComponentsV2Target]):
         self.session = session
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         density = self.appearance.density
         focus = self.session.focus
         return sd.v2.panel(
@@ -1267,7 +1267,7 @@ class Lobby(sd.SharedGuildSessionScreen):
         self.host_id = host_id
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         session = self._session()
         members = frozenset({self.host_id}) if session is None else session.members
         capacity = self.capacity if session is None else session.capacity

@@ -103,7 +103,7 @@ async def test_mounted_roster_delivers_one_portable_slot_key() -> None:
     )
     button = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Button))
     await result.bindings[button.action].handler(
-        sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()))
+        sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()), context=None)
     )
 
     assert seen[0].values == ("tank",)

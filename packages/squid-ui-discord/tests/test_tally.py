@@ -38,7 +38,7 @@ async def test_mounted_tally_inherits_button_adaptation_and_reports_one_key() ->
         if isinstance(item, scene.Button) and item.label is not None and "Yes" in item.label
     )
     await result.bindings[button.action].handler(
-        sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()))
+        sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()), context=None)
     )
 
     assert seen[0].values == ("yes",)

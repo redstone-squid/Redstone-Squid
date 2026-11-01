@@ -101,9 +101,7 @@ async def test_managed_native_entity_selection_survives_a_second_render() -> Non
     handler = first.bindings["moderator"].handler
     await handler(
         EntitySelectionEvent(
-            Actor("7"),
-            _Responder(),
-            values=(sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),),
+            Actor("7"), _Responder(), values=(sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),), context=None
         )
     )
 

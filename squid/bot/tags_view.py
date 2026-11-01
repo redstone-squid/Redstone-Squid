@@ -62,7 +62,7 @@ type TagAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type ModerationRequest = Callable[[sl.PressEvent, TagDefinition, str], Awaitable[None]]
 
 
-class _ModerationActions(sl.Component[sl.ComponentsV2Target]):
+class _ModerationActions(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Portable actions for one tag detail."""
 
     def __init__(
@@ -76,7 +76,7 @@ class _ModerationActions(sl.Component[sl.ComponentsV2Target]):
         self._request = request
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             _tag_fields(self._tag),
             sl.action_controls(
@@ -115,10 +115,10 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
         self._actor_account_id = actor_account_id
         self._capabilities = capabilities
         self._authorize = authorize
-        self._catalogue: sp.Browser[TagDefinition, sl.ComponentsV2Target] | None = None
-        self._pending: sp.Browser[TagDefinition, sl.ComponentsV2Target] | None = None
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
-        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
+        self._catalogue: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request] | None = None
+        self._pending: sp.Browser[TagDefinition, sl.ComponentsV2Target, sd.Request] | None = None
+        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
+        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
         self._pending_action: tuple[TagDefinition, str] | None = None
 
     @override
@@ -180,7 +180,7 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
         self._tabs = sp.Tabs(tabs, key="tag-tabs", title=tr(t"Build tags")).build_component()
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._pending_action is not None and self._decision is not None:
             tag, action = self._pending_action
             tag_name = tag.display_name
@@ -199,7 +199,7 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
             sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="tag-actions"),
         )
 
-    def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _contribution_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._actor_account_id is None:
             return (sl.note(tr(t"Link and consent an account in `/account` before proposing or applying tags.")),)
         assignment = _ApplyForm().spec()
@@ -226,7 +226,7 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
     def _proposal_form() -> sl.forms.FormSpec:
         return _ProposalForm().spec()
 
-    def _alias_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _alias_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
                 tr(t"Add restriction alias"),
@@ -289,7 +289,7 @@ class TagsScreen(sd.UserSessionScreen, session_name="tags"):
         action: str,
     ) -> None:
         self._pending_action = (tag, action)
-        self._decision = sp.Decision[sl.ComponentsV2Target](
+        self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
             tr(t"This changes the public tag catalogue."),
             (
                 sp.DecisionOption("confirm", tr(t"Confirm"), sl.Tone.DANGER),

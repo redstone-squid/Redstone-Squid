@@ -91,6 +91,7 @@ class Target(Generic[LimitsT, BodyT, RenderTargetT_co, AdapterT_co]):
                     self.dialect.version,
                     sorted(self.protocol_capabilities),
                     self.adapter.name,
+                    self.adapter.frontend,
                     sorted(self.adapter_capabilities),
                     self.limits.digest(),
                 )

@@ -60,7 +60,7 @@ async def _fire(result, key: str, event) -> None:
 
 
 def _select(values: tuple[str, ...]) -> SelectionEvent:
-    return SelectionEvent(Actor("7"), _Responder(), values=values)
+    return SelectionEvent(Actor("7"), _Responder(), values=values, context=None)
 
 
 def _recorder[EventT]() -> tuple[list[EventT], Callable[[EventT], Awaitable[None]]]:

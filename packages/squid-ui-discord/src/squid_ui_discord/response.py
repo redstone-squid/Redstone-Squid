@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import TypedDict, Unpack, override
+from typing import Any, TypedDict, Unpack, override
 
 import discord
 
@@ -135,7 +135,7 @@ class Sent:
 
 
 @dataclass(frozen=True, slots=True)
-class Presented[ComponentT: Component[ComponentsV2Target]]:
+class Presented[ComponentT: Component[ComponentsV2Target, Any]]:
     """A live component was delivered; its root ends with its owner scope."""
 
     component: ComponentT
@@ -165,7 +165,7 @@ class Abandoned:
 
 type StaticResponseResult = Sent | Rejected | Abandoned
 type ResponseResult[
-    ComponentT: Component[ComponentsV2Target] = Component[ComponentsV2Target],
+    ComponentT: Component[ComponentsV2Target, Any] = Component[ComponentsV2Target, Any],
 ] = StaticResponseResult | Presented[ComponentT]
 
 

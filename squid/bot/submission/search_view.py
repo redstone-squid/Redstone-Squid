@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 BuildLoader = Callable[[int], Awaitable[Build | None]]
-BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target]]]
+BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]]
 
 
 def _hit_identity(hit: SearchHit) -> str:
@@ -74,8 +74,8 @@ class _SearchSource:
         return page
 
 
-class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
-    _build_node: sl.LayoutNode[sl.ComponentsV2Target] | None = sl.state(None, persist=False, opaque=True)
+class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
+    _build_node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = sl.state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -89,7 +89,7 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
         self._render_build = render_build
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         detail = self._build_node or sl.section(
             sl.heading(_detail_title(self.hit)),
             sl.truncate(sl.paragraph(_detail_text(self.hit))),
@@ -202,14 +202,16 @@ class SearchScreen(sd.UserSessionScreen, session_name="search"):
             render_build=self._render_build,
         )
 
-    def _overview(self, loaded: sl.sources.LoadedWindow[SearchHit]) -> sl.LayoutNode[sl.ComponentsV2Target] | tuple[()]:
+    def _overview(
+        self, loaded: sl.sources.LoadedWindow[SearchHit]
+    ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | tuple[()]:
         warnings = self._source.page_for(loaded).warnings
         if not warnings:
             return ()
         return sl.note("\n".join(f"⚠ {escape_markdown(item)}" for item in warnings))
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.closed:
             return (
                 sl.section(

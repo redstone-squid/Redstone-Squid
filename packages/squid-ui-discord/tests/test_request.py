@@ -171,7 +171,7 @@ async def test_a_click_resolves_to_its_root_and_scope() -> None:
     ui, interaction = installed()
     root = ui.runtime.mount(Panel(), access=sd.Owner(7))
     ui.runtime._track(ui, root)
-    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(cast(Any, interaction.source), root))
+    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(cast(Any, interaction.source), root), context=None)
 
     request = await sd.request(event)
     await request.defer("private")
@@ -186,7 +186,7 @@ async def test_a_click_resolves_to_its_root_and_scope() -> None:
 
 
 async def test_a_foreign_frontend_event_is_refused() -> None:
-    event = ActionEvent(actor=Actor("7"), responder=cast(Any, object()))
+    event = ActionEvent(actor=Actor("7"), responder=cast(Any, object()), context=None)
 
     with pytest.raises(LookupError, match="not Discord"):
         await sd.request(event)
@@ -198,7 +198,7 @@ async def test_a_click_claims_a_request_first_seen_as_a_native_interaction() -> 
     ui.runtime._track(ui, root)
     early = await sd.request(interaction.source)
 
-    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(interaction.source, root))
+    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(interaction.source, root), context=None)
     request = await sd.request(event)
 
     assert request is early
@@ -277,7 +277,7 @@ async def test_a_finished_component_cannot_fall_back_to_the_application_scope() 
     ui, interaction = installed()
     root = ui.runtime.mount(Panel(), access=sd.Owner(7))
     ui.runtime._track(ui, root)
-    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(interaction.source, root))
+    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(interaction.source, root), context=None)
     await ui.close()
 
     with pytest.raises(RuntimeError, match="finished message root"):

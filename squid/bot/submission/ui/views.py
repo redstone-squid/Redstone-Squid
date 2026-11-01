@@ -252,13 +252,13 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         builds: BuildService,
         items: Sequence[BoundBuildField[Any]] | DefaultType = DEFAULT,
         *,
-        node: sl.LayoutNode[sl.ComponentsV2Target] | None = None,
+        node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = None,
         authorize: Callable[[], Awaitable[bool]],
-        render_build: Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target]]],
+        render_build: Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]],
         refresh_posts: Callable[[int], Awaitable[None]],
         recovered: bool = False,
     ) -> None:
-        self._seed: tuple[Build, sl.LayoutNode[sl.ComponentsV2Target] | None] | None = (build, node)
+        self._seed: tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None] | None = (build, node)
         self._build_id = build.id
         self.builds = builds
         self._authorize = authorize
@@ -270,7 +270,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         self.items = tuple(items)
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
-    async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target] | None]:
+    async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None]:
         """Load the edited build and keep its preview current with the build topic."""
         if self._build_id is not None:
             sl.runtime.watch(resource_topic("build", str(self._build_id)))
@@ -287,7 +287,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
             raise LookupError(message)
         return latest
 
-    def _current(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target] | None]:
+    def _current(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None]:
         if self._seed is not None:
             return self._seed
         state = self.projection.status
@@ -302,7 +302,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
     def build(self) -> Build:
         return self._current()[0]
 
-    def _replace(self, build: Build, node: sl.LayoutNode[sl.ComponentsV2Target] | None) -> None:
+    def _replace(self, build: Build, node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None) -> None:
         if self._seed is not None:
             self._seed = (build, node)
         else:
@@ -326,7 +326,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         return await self._authorize()
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.saved:
             return (
                 sl.section(
@@ -374,7 +374,7 @@ class BuildEditScreen(sd.UserSessionScreen, session_name="build-edit"):
         if self.validation_error:
             controls.append(sl.action_control(tr(t"Reload latest"), self._reload, key="reload"))
         controls.append(sl.action_control(tr(t"Close"), self._close, key="close"))
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if self._recovered:
             nodes.append(
                 sl.status(

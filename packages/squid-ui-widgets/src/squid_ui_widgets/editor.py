@@ -39,6 +39,7 @@ type EditorCommitHandler = Callable[[TransitionEvent[EditorState], EditorValues,
 
 # PEP 695 infers variance but cannot require it. Sections must remain contravariant in
 # their render target so portable sections compose into target-specific editors.
+ContextT = TypeVar("ContextT", contravariant=True, default=object)
 StateT = TypeVar("StateT")
 ValueT = TypeVar("ValueT")
 RenderTargetT = TypeVar("RenderTargetT", bound=RenderTarget, contravariant=True, default=RenderTarget)
@@ -68,7 +69,7 @@ def _formatted(value: object) -> str:
     return display_text(value)
 
 
-class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
+class EditorSection(Generic[StateT, ValueT, RenderTargetT, ContextT]):
     """A typed adapter between one editor value and its interactive section state."""
 
     def __init__(
@@ -80,7 +81,7 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
         load: Callable[[ValueT], StateT],
         dump: Callable[[StateT], ValueT],
         summary: Callable[[ValueT], TextLike],
-        machine: StateMachine[StateT, RenderTargetT] | None = None,
+        machine: StateMachine[StateT, RenderTargetT, ContextT] | None = None,
         form: FormSpec | None = None,
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
     ) -> None:
@@ -149,15 +150,15 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
         cls,
         key: str,
         label: TextLike,
-        machine: StateMachine[StateT, RenderTargetT],
+        machine: StateMachine[StateT, RenderTargetT, ContextT],
         *,
         load: Callable[[ValueT], StateT],
         dump: Callable[[StateT], ValueT],
         summary: Callable[[ValueT], TextLike],
         issues: Callable[[StateT], Iterable[FormIssue]] | None = None,
-    ) -> EditorSection[StateT, ValueT, RenderTargetT]:
+    ) -> EditorSection[StateT, ValueT, RenderTargetT, ContextT]:
         """Adapt a nested pure machine into an editor section."""
-        section: EditorSection[StateT, ValueT, RenderTargetT] = EditorSection(
+        section: EditorSection[StateT, ValueT, RenderTargetT, ContextT] = EditorSection(
             key,
             label,
             initial=machine.initial_state,
@@ -192,16 +193,16 @@ class EditorSection(Generic[StateT, ValueT, RenderTargetT]):
         return result
 
 
-class Editor[RenderTargetT: RenderTarget = RenderTarget]:
+class Editor[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """A pure editor whose form and nested-machine sections share one commit boundary."""
 
     def __init__(
         self,
         title: TextLike,
-        sections: Iterable[EditorSection[Any, Any, RenderTargetT]],
+        sections: Iterable[EditorSection[Any, Any, RenderTargetT, ContextT]],
         *,
         key: str = "editor",
-        preview: Callable[[EditorValues], ContentLike[RenderTargetT]] | None = None,
+        preview: Callable[[EditorValues], ContentLike[RenderTargetT, ContextT]] | None = None,
         commit: CommitMode = CommitMode.EXPLICIT,
         commit_label: TextLike | None = None,
         validate: Callable[[EditorValues], Iterable[FormIssue]] | None = None,
@@ -249,7 +250,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         *,
         initial: EditorValues | EditorState | None = None,
         on_commit: EditorCommitHandler | None = None,
-    ) -> ComponentDriver[EditorState, RenderTargetT]:
+    ) -> ComponentDriver[EditorState, RenderTargetT, ContextT]:
         """Build an in-memory editor and dispatch each committed value change once."""
         state = self.initial_from(initial) if isinstance(initial, Mapping) else initial
 
@@ -315,7 +316,7 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
             ),
         )
 
-    def _nested_action(self, action: str) -> tuple[EditorSection[Any, Any, RenderTargetT], str] | None:
+    def _nested_action(self, action: str) -> tuple[EditorSection[Any, Any, RenderTargetT, ContextT], str] | None:
         """Resolve an encoded nested-machine action to its section."""
         nested = NestedAction.parse(action)
         if nested is None:
@@ -397,8 +398,8 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         return frozenset(slot.key for slot in state.sections if before.get(slot.key) != slot.committed)
 
     def render(
-        self, state: EditorState, controls: MachineControls[EditorState, RenderTargetT]
-    ) -> DocumentLike[RenderTargetT]:
+        self, state: EditorState, controls: MachineControls[EditorState, RenderTargetT, ContextT]
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render the section overview or active nested workspace."""
         if state.editing is not None:
             section = self._sections.get(state.editing)
@@ -487,12 +488,12 @@ class Editor[RenderTargetT: RenderTarget = RenderTarget]:
         )
 
 
-class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget]:
+class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget, ContextT = object]:
     """Namespace child-machine controls through an Editor transition."""
 
     def __init__(
         self,
-        parent: MachineControls[ParentStateT, RenderTargetT],
+        parent: MachineControls[ParentStateT, RenderTargetT, ContextT],
         editor_key: str,
         section_key: MachineKeySegment,
         pattern_key: str | None,
@@ -514,8 +515,8 @@ class _NestedControls[ParentStateT, ChildStateT, RenderTargetT: RenderTarget]:
         return f"{self.editor_key}.{self.section_key}.{key}"
 
     def content(
-        self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
-    ) -> tuple[LayoutNode[RenderTargetT], ...]:
+        self, content: Sequence[ContentItem[RenderTargetT, ContextT]], *, prefix: str
+    ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
         """Delegate child content through the namespaced prefix."""
         return self.parent.content(content, prefix=self._key(prefix))
 

@@ -30,6 +30,7 @@ from squid_ui_discord.sessions import (
 )
 
 if TYPE_CHECKING:
+    from squid_ui_discord.request import Request
     from squid_ui_discord.runtime import RuntimeSource
 
 
@@ -187,7 +188,7 @@ class SessionSpec:
 
     async def open(
         self,
-        component: Component[ComponentsV2Target],
+        component: Component[ComponentsV2Target, Request],
         message_destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
@@ -217,7 +218,7 @@ class SessionSpec:
 
     async def attach(
         self,
-        component: Component[ComponentsV2Target],
+        component: Component[ComponentsV2Target, Request],
         message_destination: MessageDestination,
         *,
         sessions: SessionManager | RuntimeSource,
@@ -238,7 +239,7 @@ class SessionSpec:
 
     async def respond(
         self,
-        component: Component[ComponentsV2Target],
+        component: Component[ComponentsV2Target, Request],
         interaction: discord.Interaction[Any],
         *,
         sessions: SessionManager | RuntimeSource | None = None,
@@ -261,7 +262,7 @@ class SessionSpec:
 
     async def respond_attached(
         self,
-        component: Component[ComponentsV2Target],
+        component: Component[ComponentsV2Target, Request],
         interaction: discord.Interaction[Any],
         *,
         parent: MessageRoot,

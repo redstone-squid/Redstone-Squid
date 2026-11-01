@@ -39,7 +39,7 @@ from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
 from squid_ui_discord.message_root_options import MessageRootDefaults
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
-from squid_ui_discord.request import request
+from squid_ui_discord.request import Request, request
 from squid_ui_discord.response import DEFAULT_RESPONSE_SPEC, Presented, ResponseSpec, Sent
 from squid_ui_discord.sessions import SessionManager
 
@@ -123,7 +123,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     def mount(
         self,
-        component: Component[ComponentsV2Target],
+        component: Component[ComponentsV2Target, Request],
         *,
         access: AccessPolicy,
         **overrides: Unpack[MessageRootBehaviorOptions],

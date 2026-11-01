@@ -160,18 +160,18 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         self.page = "voting"
 
     @override
-    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         if self.page == "voting":
             return self._voting_nodes()
         return self._server_nodes()
 
-    def _server_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _server_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         description = (
             tr(t"Change as many as you like; an emptied picker clears that setting.")
             if self._capabilities.edit_server
             else None
         )
-        children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(tr(t"Server settings")),
                 description and sl.truncate(sl.paragraph(description)),
@@ -233,10 +233,10 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
         children.append(sl.action_controls(*actions, key="server-actions"))
         return children
 
-    def _voting_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _voting_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         scope_note = self._scope_note()
         kind_label = tr(KIND_LABELS[self.kind])
-        children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(tr(t"Voting — {kind_label}")),
                 sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),
@@ -298,10 +298,10 @@ class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
             return
         await self.set_channel(setting, channel_id)
 
-    async def _locale_changed(self, event: sl.ChoiceEvent) -> None:
+    async def _locale_changed(self, event: sd.ChoiceEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
-        request = await sd.request(event)
+        request = event.context
         assert request.root is not None
         await self.set_locale(
             None if event.selected[0] == FOLLOW_DISCORD else event.selected[0],

@@ -7,7 +7,6 @@ from uuid import UUID
 import discord
 from discord import app_commands
 
-import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import Account, AccountConsent, IdentityProvider, LinkPreview
 from squid.bot.account_view import ConsentAnswer
@@ -51,18 +50,18 @@ class VerifyCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT], name="verify"
             await self._refresh_discord_avatar_key(account, actor)
 
         async def open_consent(
-            event: sl.ActionEvent,
+            event: sd.ActionEvent,
             answered: ConsentAnswer,
             *,
             preview: LinkPreview | None = None,
             on_abandon: Callable[[], Awaitable[None]] | None = None,
             timeout: float = 120.0,
         ) -> bool:
-            press = await sd.request(event)
+            press = event.context
             message_root = press.root
             assert message_root is not None, "a press always arrives from a mounted message"
 
-            async def completed(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+            async def completed(prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
                 await answered(prompt, consent)
                 if consent is not None:
                     await message_root.schedule()

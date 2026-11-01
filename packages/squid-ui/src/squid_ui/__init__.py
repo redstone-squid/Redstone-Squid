@@ -117,6 +117,7 @@ from squid_ui.factories import (
     uncontrolled,
     zoned_timestamp,
 )
+from squid_ui.handlers import handlers
 from squid_ui.interactions import (
     ActionEvent,
     EntitySelectionEvent,
@@ -245,6 +246,7 @@ __all__ = [
     "grid",
     "group",
     "guards",
+    "handlers",
     "heading",
     "html",
     "interactions",

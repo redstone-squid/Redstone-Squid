@@ -64,6 +64,9 @@ class AdapterCapability(StrEnum):
 class AdapterProfile[AdapterT]:
     """Verified behavior supplied by one library family and version range."""
 
+    frontend: str | None = field(default=None, kw_only=True)
+    """Dispatch identity used to select frontend-specific callback implementations."""
+
     family: type[AdapterT]
     name: str
     version_expression: str

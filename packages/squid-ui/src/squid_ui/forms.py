@@ -682,11 +682,11 @@ type FormValidator = Callable[
     [Mapping[str, object]],
     Iterable[FormIssue] | Awaitable[Iterable[FormIssue]],
 ]
-type SubmitHandler = Callable[[SubmitEvent], Awaitable[None]]
+type SubmitHandler[ContextT = object] = Callable[[SubmitEvent[ContextT]], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
-class FormSpec:
+class FormSpec[ContextT = object]:
     """A frontend-neutral, immutable form schema."""
 
     title: TextLike
@@ -694,7 +694,7 @@ class FormSpec:
     prefill: Mapping[str, object] = dataclass_field(default_factory=dict)
     validator: FormValidator | None = dataclass_field(default=None, repr=False, compare=False)
     validation: FormValidationMode = FormValidationMode.RETRY
-    on_invalid: Callable[[InvalidSubmitEvent], Awaitable[None]] | None = dataclass_field(
+    on_invalid: Callable[[InvalidSubmitEvent[ContextT]], Awaitable[None]] | None = dataclass_field(
         default=None, repr=False, compare=False
     )
 
@@ -767,12 +767,12 @@ class FormSpec:
         value = self.prefill.get(field.key, field.default)
         return field.format(value)
 
-    def with_prefill(self, values: Mapping[str, object]) -> FormSpec:
+    def with_prefill(self, values: Mapping[str, object]) -> FormSpec[ContextT]:
         """Return the same schema seeded with one attempted submission."""
         known = {field.key for field in self.items if isinstance(field, FormField)}
         return replace(self, prefill={key: value for key, value in values.items() if key in known})
 
-    def adapt(self, capabilities: frozenset[str], *, maximum_fields: int | None = None) -> FormSpec:
+    def adapt(self, capabilities: frozenset[str], *, maximum_fields: int | None = None) -> FormSpec[ContextT]:
         """Resolve extension fallbacks and enforce a target's explicit form budget."""
         if maximum_fields is not None and len(self.items) > maximum_fields:
             message = f"form has {len(self.items)} components; target permits 1-{maximum_fields}"
@@ -806,7 +806,7 @@ class FormSpec:
         return replace(self, items=tuple(adapted))
 
 
-class Form:
+class Form[ContextT = object]:
     """A form whose field attributes expose parsed submission values.
 
     Constructor values are raw prefills, available through `prefill`. Reading a field before
@@ -851,7 +851,7 @@ class Form:
         return MappingProxyType(self._prefill)
 
     @classmethod
-    def from_submission(cls, event: SubmitEvent) -> Self:
+    def from_submission(cls, event: SubmitEvent[ContextT]) -> Self:
         """Bind an already validated event for a separate screen handler."""
         if event.errors:
             message = "Cannot bind an invalid submission as a validated form"
@@ -860,7 +860,7 @@ class Form:
         form._bind(event.values)
         return form
 
-    def spec(self) -> FormSpec:
+    def spec(self) -> FormSpec[ContextT]:
         """Compile this instance's declarations and raw prefills."""
         fields = tuple(field.bind(name) for name, field in self._form_fields)
         prefill = {
@@ -889,18 +889,18 @@ class Form:
         result = self.validate()
         return await result if inspect.isawaitable(result) else result
 
-    async def _submit(self, event: SubmitEvent) -> None:
+    async def _submit(self, event: SubmitEvent[ContextT]) -> None:
         if event.errors:
             message = "Invalid submissions must use on_invalid"
             raise ValueError(message)
         self._bind(event.values)
         await self.on_submit(event)
 
-    async def _invalid(self, event: InvalidSubmitEvent) -> None:
+    async def _invalid(self, event: InvalidSubmitEvent[ContextT]) -> None:
         self._bind(event.values)
         await self.on_invalid(event)
 
-    async def on_invalid(self, event: InvalidSubmitEvent) -> None:
+    async def on_invalid(self, event: InvalidSubmitEvent[ContextT]) -> None:
         """Handle an invalid attempt; the default offers a retry with the attempted input."""
         await event.retry()
 
@@ -908,12 +908,12 @@ class Form:
         """Return cross-field errors after every field has parsed successfully."""
         return ()
 
-    async def on_submit(self, event: SubmitEvent) -> None:
+    async def on_submit(self, event: SubmitEvent[ContextT]) -> None:
         """Handle a submission after parsing and cross-field validation succeed."""
 
 
 @dataclass(frozen=True, slots=True)
-class FormBinding:
+class FormBinding[ContextT = object]:
     """One render's answer for a form key: what to present, and what to do with it.
 
     Declared by a `FormTrigger` and carried through planning so a frontend can resolve the
@@ -922,17 +922,19 @@ class FormBinding:
     """
 
     key: str
-    spec: FormSpec
-    on_submit: SubmitHandler
+    spec: FormSpec[ContextT]
+    on_submit: SubmitHandler[ContextT]
     mode: ActionMode = ActionMode.EXCLUSIVE
     label: TextLike = ""
     record: History | None = None
 
 
-type FormLike = FormSpec | Form
+type FormLike[ContextT = object] = FormSpec[ContextT] | Form[ContextT]
 
 
-def bind_form(form: FormLike, on_submit: SubmitHandler | None) -> tuple[FormSpec, SubmitHandler, ActionMode]:
+def bind_form[ContextT = object](
+    form: FormLike[ContextT], on_submit: SubmitHandler[ContextT] | None
+) -> tuple[FormSpec[ContextT], SubmitHandler[ContextT], ActionMode]:
     """Resolve value-layer and descriptor forms to one presentation binding."""
     if isinstance(form, Form):
         if on_submit is not None:

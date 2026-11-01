@@ -2,7 +2,7 @@
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Unpack, cast
+from typing import TYPE_CHECKING, Any, Unpack, cast
 
 import discord
 
@@ -28,6 +28,9 @@ from squid_ui_discord.adapter import require_discord_py_target
 from squid_ui_discord.message_payload import MessageModeError, MessagePayload
 from squid_ui_discord.renderer import V2Renderer, Wire
 from squid_ui_discord.target import DISCORD_V2_DPY27
+
+if TYPE_CHECKING:
+    from squid_ui_discord.request import Request
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +73,7 @@ class RenderedMessage[ViewT: (discord.ui.LayoutView, discord.ui.View | None), Bo
 
 
 def render_message(
-    rendered: DocumentLike[ComponentsV2Target],
+    rendered: DocumentLike[ComponentsV2Target, Request],
     *,
     wire: Wire | None = None,
     renderer: V2Renderer | None = None,
@@ -95,7 +98,7 @@ def render_message(
 
 
 def render_static(
-    nodes: DocumentLike[ComponentsV2Target] | Component[ComponentsV2Target],
+    nodes: DocumentLike[ComponentsV2Target, Request] | Component[ComponentsV2Target, Request],
     *,
     target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     **options: Unpack[StaticPlanOptions],
@@ -105,7 +108,7 @@ def render_static(
 
 
 def render_item(
-    node: LayoutNode[ComponentsV2Target],
+    node: LayoutNode[ComponentsV2Target, Request],
     *,
     target: Target[V2Limits, scene.ComponentsV2, ComponentsV2Target, DiscordPyAdapter] = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,

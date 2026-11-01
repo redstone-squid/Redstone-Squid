@@ -17,7 +17,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass, replace
 from dataclasses import field as dataclass_field
 from datetime import UTC, datetime
-from typing import Any, Literal, Unpack, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, Unpack, cast, overload
 
 import anyio
 import discord
@@ -147,6 +147,9 @@ from squid_ui_discord.render_cache import RenderProgramCache
 from squid_ui_discord.renderer import MountedRenderer, RoutedItem, RoutedSelectItem, V2Renderer
 from squid_ui_discord.rendering import RenderedMessage, render_message
 
+if TYPE_CHECKING:
+    from squid_ui_discord.request import Request
+
 logger = logging.getLogger(__name__)
 
 
@@ -216,7 +219,7 @@ def _monotonic() -> float:
     return time.monotonic()
 
 
-def _needs_load(component: Component[Any]) -> bool:
+def _needs_load(component: Component[Any, Any]) -> bool:
     """Whether this instance still owes an `on_load` before it may render.
 
     A component that does not override the hook is never deferred, so a tree declaring no
@@ -350,7 +353,7 @@ class MessageRoot[
     @overload
     def __init__(
         self: MessageRoot[ComponentsV2Target, DiscordPy27Adapter],
-        component: Component[ComponentsV2Target],
+        component: Component[ComponentsV2Target, Request],
         *,
         access: AccessPolicy,
         config: None = None,
@@ -361,7 +364,7 @@ class MessageRoot[
     @overload
     def __init__(
         self,
-        component: Component[RenderTargetT],
+        component: Component[RenderTargetT, Request],
         *,
         access: AccessPolicy,
         target: Target[Any, Any, RenderTargetT, AdapterT],
@@ -372,7 +375,7 @@ class MessageRoot[
     @overload
     def __init__(
         self,
-        component: Component[RenderTargetT],
+        component: Component[RenderTargetT, Request],
         *,
         access: AccessPolicy,
         config: MessageRootConfig[RenderTargetT, AdapterT],
@@ -382,7 +385,7 @@ class MessageRoot[
 
     def __init__(
         self,
-        component: Component[Any],
+        component: Component[Any, Any],
         *,
         access: AccessPolicy,
         config: MessageRootConfig[Any, Any] | None = None,
@@ -413,7 +416,7 @@ class MessageRoot[
         self.config = config
         """What this mount was configured with, for a replacement that should match it."""
         self.id = secrets.token_urlsafe(6)
-        self.component = cast(Component[RenderTargetT], component)
+        self.component = cast(Component[RenderTargetT, Any], component)
         self.clock = clock
         # Diagnostics only. `_active` is what the idle timeout counts from: the initial send
         # and each accepted click move it, while unattended refreshes deliberately do not.
@@ -550,11 +553,11 @@ class MessageRoot[
         self._hooks = _LifecycleHooks()
         self._assets: tuple[Asset, ...] = ()
         self._plan: PlanResult | None = None
-        self._planned_tree: ComponentTree[RenderTargetT] | None = None
+        self._planned_tree: ComponentTree[RenderTargetT, Any] | None = None
         self._planned_environment: _PlanEnvironment | None = None
-        self._document_tree: ComponentTree[RenderTargetT] | None = None
+        self._document_tree: ComponentTree[RenderTargetT, Any] | None = None
         self._document_status: TextLike | None = None
-        self._document: Document[RenderTargetT] | None = None
+        self._document: Document[RenderTargetT, Any] | None = None
         # What the committed generation read, what its single staged successor read, and what
         # this mount managed to subscribe to are three different things. A mount with no bus
         # still knows what it is looking at, which lets its own writes repaint it. A follow is
@@ -788,7 +791,7 @@ class MessageRoot[
         """
         return self._draw(self.runtime.render(terminal=self._finished), disabled=disabled)
 
-    def _document_for(self, tree: ComponentTree[RenderTargetT]) -> Document[RenderTargetT]:
+    def _document_for(self, tree: ComponentTree[RenderTargetT, Any]) -> Document[RenderTargetT, Any]:
         """Build the authored document once for an identical runtime tree and status."""
         if tree is self._document_tree and self.status == self._document_status and self._document is not None:
             return self._document
@@ -812,13 +815,18 @@ class MessageRoot[
         )
 
     def _plan_tree(
-        self, tree: ComponentTree[RenderTargetT], profile: OperationRecorder | None
+        self, tree: ComponentTree[RenderTargetT, Any], profile: OperationRecorder | None
     ) -> _PlannedCandidate[RenderTargetT]:
         """Plan one complete component tree without constructing Discord objects."""
+        frontend = self.target.adapter.frontend or self.target.adapter.name
+        for component in tree.components.values():
+            if component.event_frontend is not None and component.event_frontend != frontend:
+                message = f"{type(component).__name__} requires frontend {component.event_frontend!r}, got {frontend!r}"
+                raise TypeError(message)
         context = profile.span("planner") if profile is not None else nullcontext(None)
         with context as planner_span:
             result = plan_document(
-                cast(Document[RenderTargetT], self._document_for(tree)),
+                cast(Document[RenderTargetT, Any], self._document_for(tree)),
                 target=self.target,
                 chrome=self._chrome,
                 localization=self.localization,
@@ -858,7 +866,7 @@ class MessageRoot[
             result.session_updates,
         )
 
-    def _stage_observations(self, tree: ComponentTree[RenderTargetT]) -> None:
+    def _stage_observations(self, tree: ComponentTree[RenderTargetT, Any]) -> None:
         observed = tree.observations
         if observed and self._subscriptions.bus is None and not self._follow_warned:
             self._follow_warned = True
@@ -871,7 +879,7 @@ class MessageRoot[
 
     def _draw(
         self,
-        tree: ComponentTree[RenderTargetT],
+        tree: ComponentTree[RenderTargetT, Any],
         *,
         disabled: bool = False,
         profile: OperationRecorder | None = None,
@@ -954,7 +962,7 @@ class MessageRoot[
 
     def _preflight(
         self,
-        tree: ComponentTree[RenderTargetT],
+        tree: ComponentTree[RenderTargetT, Any],
         *,
         profile: OperationRecorder | None = None,
     ) -> _ApplicationCandidate[RenderTargetT]:
@@ -1447,7 +1455,7 @@ class MessageRoot[
         raise LayoutInvariantError(message)
 
     @staticmethod
-    def _pending_resources(tree: ComponentTree[RenderTargetT], pending: PendingMode) -> tuple[AsyncBinding, ...]:
+    def _pending_resources(tree: ComponentTree[RenderTargetT, Any], pending: PendingMode) -> tuple[AsyncBinding, ...]:
         return tuple(binding for binding in tree.async_bindings if binding.pending_mode is pending and binding.pending)
 
     async def _settle_resources(self, resources: Sequence[AsyncBinding]) -> None:
@@ -1581,7 +1589,7 @@ class MessageRoot[
                 self._commit_presented(candidate)
         return candidate
 
-    async def _load_all(self, components: Sequence[Component[RenderTargetT]]) -> None:
+    async def _load_all(self, components: Sequence[Component[RenderTargetT, Any]]) -> None:
         """Load one tier concurrently. A failure cancels its siblings; the render is doomed."""
         if len(components) == 1:
             # The overwhelmingly common case, and no group to unwrap.
@@ -1592,7 +1600,7 @@ class MessageRoot[
                 for component in components:
                     tasks.start_soon(self._load_one, component)
 
-    async def _load_one(self, component: Component[Any]) -> None:
+    async def _load_one(self, component: Component[Any, Any]) -> None:
         await component.on_load()
         component._loaded = True
 
@@ -2029,16 +2037,27 @@ class MessageRoot[
             self.invalidate()
         return True
 
-    def _event(self, interaction: discord.Interaction, values: _SelectionValues) -> ActionEvent:
+    async def _event_context(self, interaction: discord.Interaction) -> object:
+        # The request resolver depends on MessageRoot; defer this reverse dependency.
+        from squid_ui_discord.request import _resolve_request
+        from squid_ui_discord.runtime import DiscordUIRuntimeMissing
+
+        try:
+            return await _resolve_request(interaction, root=cast(MessageRoot, self))
+        except DiscordUIRuntimeMissing:
+            return None
+
+    async def _event(self, interaction: discord.Interaction, values: _SelectionValues) -> ActionEvent:
         """The portable event one Discord interaction becomes."""
+        context = await self._event_context(interaction)
         actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
         responder = ActionResponder(interaction, self, () if not isinstance(values, _EntityValues) else values.resolved)
         locale = self.localization.locale
         if values is None:
-            return PressEvent(actor, responder, locale, {"frontend": "discord"})
+            return PressEvent(actor, responder, locale, {"frontend": "discord"}, context=context)
         if isinstance(values, _EntityValues):
-            return EntitySelectionEvent(actor, responder, locale, {"frontend": "discord"}, values.refs)
-        return SelectionEvent(actor, responder, locale, {"frontend": "discord"}, tuple(values))
+            return EntitySelectionEvent(actor, responder, locale, {"frontend": "discord"}, values.refs, context=context)
+        return SelectionEvent(actor, responder, locale, {"frontend": "discord"}, tuple(values), context=context)
 
     async def _admit(
         self,
@@ -2069,7 +2088,7 @@ class MessageRoot[
                 "guard",
                 attributes={"guard": f"{type(guard).__module__}.{type(guard).__qualname__}"},
             ):
-                decision = await guard.admit(self._event(interaction, values), ledger)
+                decision = await guard.admit(await self._event(interaction, values), ledger)
         except Exception as error:
             await self.handle_error(interaction, error, f"guard:{key}")
             profile.acknowledge("error_hook")
@@ -2322,7 +2341,7 @@ class MessageRoot[
         profile: _DispatchProfile,
         busy: _BusyPaint | None = None,
     ) -> None:
-        event = self._event(interaction, values)
+        event = await self._event(interaction, values)
         action_context = ActionContext.create(
             f"{type(self.component).__name__}.{key}",
             actor=ActorRef("discord_user", str(interaction.user.id)),
@@ -2422,6 +2441,7 @@ class MessageRoot[
         try:
             with profile.operation.span("form_evaluation"):
                 evaluation = await spec.evaluate(values)
+            context = await self._event_context(interaction)
             actor = Actor(str(interaction.user.id), getattr(interaction.user, "display_name", None))
             responder = ActionResponder(interaction, self)
             event = SubmitEvent(
@@ -2432,6 +2452,7 @@ class MessageRoot[
                 evaluation.values,
                 evaluation.attempted,
                 evaluation.errors,
+                context=context,
             )
             submission_handler = binding.handler
 
@@ -2458,6 +2479,7 @@ class MessageRoot[
                     evaluation.attempted,
                     evaluation.errors,
                     _retry=retry,
+                    context=context,
                 )
                 invalid_handler = spec.on_invalid
 
@@ -3059,7 +3081,7 @@ class MessageRoot[
         except DiscordUIRuntimeMissing:
             host = None
         if host is not None:
-            await host._handle_component_error(self._event(interaction, None), error, source)
+            await host._handle_component_error(await self._event(interaction, None), error, source)
             return
         if self.on_error is not None:
             await self.on_error(interaction, error, source)
@@ -3068,7 +3090,7 @@ class MessageRoot[
 
 
 def owner_message_root(
-    component: Component[ComponentsV2Target],
+    component: Component[ComponentsV2Target, Request],
     user_id: int,
     **options: Unpack[MessageRootBehaviorOptions],
 ) -> MessageRoot:

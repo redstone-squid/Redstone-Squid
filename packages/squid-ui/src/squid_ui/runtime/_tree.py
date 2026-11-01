@@ -29,12 +29,12 @@ from squid_ui.semantic import (
 )
 from squid_ui.target_types import RenderTarget
 
-type LayoutTransform[RenderTargetT: RenderTarget] = Callable[
-    [LayoutNode[RenderTargetT], str], Sequence[LayoutNode[RenderTargetT]]
+type LayoutTransform[RenderTargetT: RenderTarget, ContextT = object] = Callable[
+    [LayoutNode[RenderTargetT, ContextT], str], Sequence[LayoutNode[RenderTargetT, ContextT]]
 ]
 type _LayoutRoute = tuple[_FieldStep | _IndexStep | _SequenceStep, ...]
-type _RoutedLayoutTransform[RenderTargetT: RenderTarget] = Callable[
-    [LayoutNode[RenderTargetT], str, _LayoutRoute], Sequence[LayoutNode[RenderTargetT]]
+type _RoutedLayoutTransform[RenderTargetT: RenderTarget, ContextT = object] = Callable[
+    [LayoutNode[RenderTargetT, ContextT], str, _LayoutRoute], Sequence[LayoutNode[RenderTargetT, ContextT]]
 ]
 
 _CHILD_FIELD_NAMES = frozenset({"children", "node", "primary", "alternates", "fallback", "variants"})
@@ -57,9 +57,9 @@ class _SequenceStep:
     start: int
 
 
-def map_layout_children[RenderTargetT: RenderTarget](
-    node: LayoutNode[RenderTargetT], path: str, transform: LayoutTransform[RenderTargetT]
-) -> LayoutNode[RenderTargetT]:
+def map_layout_children[RenderTargetT: RenderTarget, ContextT = object](
+    node: LayoutNode[RenderTargetT, ContextT], path: str, transform: LayoutTransform[RenderTargetT, ContextT]
+) -> LayoutNode[RenderTargetT, ContextT]:
     """Rebuild ``node`` after transforming each of its direct layout children.
 
     Sequence positions accept a transform that splices zero or more nodes. Singular positions
@@ -70,25 +70,27 @@ def map_layout_children[RenderTargetT: RenderTarget](
     return _map_layout_children_routed(node, path, (), lambda child, child_path, _route: transform(child, child_path))
 
 
-def _map_layout_children_routed[RenderTargetT: RenderTarget](
-    node: LayoutNode[RenderTargetT],
+def _map_layout_children_routed[RenderTargetT: RenderTarget, ContextT = object](
+    node: LayoutNode[RenderTargetT, ContextT],
     path: str,
     route: _LayoutRoute,
-    transform: _RoutedLayoutTransform[RenderTargetT],
-) -> LayoutNode[RenderTargetT]:
+    transform: _RoutedLayoutTransform[RenderTargetT, ContextT],
+) -> LayoutNode[RenderTargetT, ContextT]:
     """Rebuild a node while identifying where each transformed child lands."""
 
     def many(
-        children: Sequence[LayoutNode[RenderTargetT]], parent_path: str, field: str
-    ) -> tuple[LayoutNode[RenderTargetT], ...]:
-        transformed: list[LayoutNode[RenderTargetT]] = []
+        children: Sequence[LayoutNode[RenderTargetT, ContextT]], parent_path: str, field: str
+    ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
+        transformed: list[LayoutNode[RenderTargetT, ContextT]] = []
         for index, child in enumerate(children):
             transformed.extend(
                 transform(child, f"{parent_path}.{index}", (*route, _SequenceStep(field, len(transformed))))
             )
         return tuple(transformed)
 
-    def one(child: LayoutNode[RenderTargetT], child_path: str, child_route: _LayoutRoute) -> LayoutNode[RenderTargetT]:
+    def one(
+        child: LayoutNode[RenderTargetT, ContextT], child_path: str, child_route: _LayoutRoute
+    ) -> LayoutNode[RenderTargetT, ContextT]:
         transformed = tuple(transform(child, child_path, child_route))
         if len(transformed) != 1:
             message = f"{child_path}: this structural position requires exactly one node"
@@ -96,7 +98,7 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget](
         return transformed[0]
 
     # The suppressions below all name one mismatch, not four. This walker rewrites the
-    # *authored* tree, so it speaks `LayoutNode[RenderTargetT]` -- open, and parameterized by
+    # *authored* tree, so it speaks `LayoutNode[RenderTargetT, ContextT]` -- open, and parameterized by
     # the caller's dialect. But the primitive containers it has to rebuild (`Break`, `Budget`,
     # `Extension.fallback`, `Variant.nodes`) declare their child fields as `Node`: the closed,
     # already-lowered union, which is what lets the planner match over them exhaustively. The
@@ -200,14 +202,14 @@ def _map_layout_children_routed[RenderTargetT: RenderTarget](
             return node
 
 
-def _map_many_at[RenderTargetT: RenderTarget](
-    children: Sequence[LayoutNode[RenderTargetT]],
+def _map_many_at[RenderTargetT: RenderTarget, ContextT = object](
+    children: Sequence[LayoutNode[RenderTargetT, ContextT]],
     path: str,
     route: _LayoutRoute,
     field: str,
-    transform: _RoutedLayoutTransform[RenderTargetT],
-) -> tuple[LayoutNode[RenderTargetT], ...]:
-    transformed: list[LayoutNode[RenderTargetT]] = []
+    transform: _RoutedLayoutTransform[RenderTargetT, ContextT],
+) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
+    transformed: list[LayoutNode[RenderTargetT, ContextT]] = []
     for index, child in enumerate(children):
         transformed.extend(transform(child, f"{path}.{index}", (*route, _SequenceStep(field, len(transformed)))))
     return tuple(transformed)

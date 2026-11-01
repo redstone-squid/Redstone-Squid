@@ -210,7 +210,7 @@ def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
     return sl.forms.FormSpec(tr(t"Poll settings"), tuple(fields))
 
 
-def _poll_steps(allow_network: bool) -> tuple[sp.WizardStep[sl.ComponentsV2Target], ...]:
+def _poll_steps(allow_network: bool) -> tuple[sp.WizardStep[sl.ComponentsV2Target, sd.Request], ...]:
     return (
         sp.WizardStep("content", tr(t"Question and options"), poll_form()),
         sp.WizardStep("settings", tr(t"Visibility and duration"), _settings_form(allow_network)),
@@ -229,7 +229,7 @@ def _draft(answers: sp.WizardAnswers) -> PollDraft:
     )
 
 
-def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target]:
+def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
     draft = _draft(answers)
     options = "\n".join(f"- {line}" for line in draft.option_lines)
     fields = [
@@ -260,7 +260,7 @@ class PollScreen(sd.UserGuildSessionScreen, session_name="poll-wizard"):
     ) -> None:
         self._resolve_options = resolve_options
         self._publish = publish
-        wizard = sp.Wizard[sl.ComponentsV2Target](
+        wizard = sp.Wizard[sl.ComponentsV2Target, sd.Request](
             tr(t"Create a poll"),
             _poll_steps(allow_network),
             key="poll",
@@ -270,7 +270,7 @@ class PollScreen(sd.UserGuildSessionScreen, session_name="poll-wizard"):
         self.driver = wizard.build_component(on_finish=self._finish)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.published_url is not None:
             published_url = self.published_url
             return (sl.status(tr(t"Poll published: {published_url}"), tone=sl.Tone.SUCCESS),)

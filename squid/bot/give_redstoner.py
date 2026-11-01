@@ -109,7 +109,7 @@ class RedstonerScreen(sd.UserGuildSessionScreen, session_name="redstoner"):
         self._authorize_deploy = authorize_deploy
         self._publish_panel = publish_panel
 
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         role_mention = sl.raw_md(f"<@&{self._role_id}>")
         source_channel_mention = sl.raw_md(f"<#{self._source_channel_id}>")
         actions: list[sl.semantic.ActionControl] = []

@@ -44,8 +44,8 @@ from squid_ui_discord._factories import (
     text,
 )
 
-type Child = Renderable[ComponentsV2Target] | TextLike | None | Literal[False]
-type SectionText = Text | Heading | Footer | TextLike | None | Literal[False]
+type Child[ContextT = object] = Renderable[ComponentsV2Target, ContextT] | TextLike | Literal[False] | None
+type SectionText = Text | Heading | Footer | TextLike | Literal[False] | None
 
 
 def file(asset: Asset, *, spoiler: bool = False) -> File:
@@ -78,10 +78,10 @@ def media(*items: str | GalleryItem) -> MediaCollection:
     return MediaCollection(tuple(items))
 
 
-def section(
+def section[ContextT = object](
     *texts: SectionText,
-    accessory: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem,
-) -> Section:
+    accessory: Thumbnail | LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem,
+) -> Section[ContextT]:
     """Build exact text beside a Discord section accessory."""
     normalized = tuple(
         _text_child(value, "section", index)
@@ -91,15 +91,17 @@ def section(
     return Section(normalized, accessory)
 
 
-def panel(*children: Child, accent: Color | None = None, spoiler: bool = False) -> Panel:
+def panel[ContextT = object](
+    *children: Child[ContextT], accent: Color | None = None, spoiler: bool = False
+) -> Panel[ContextT]:
     """Build an exact Components V2 container with normalized children."""
-    normalized: list[Node] = []
+    normalized: list[Node[ContextT]] = []
     for index, child in enumerate(children):
         if child is None or child is False:
             continue
         check_content(child, "panel", index)
         if isinstance(child, Renderable):
-            normalized.append(cast(Node, child))
+            normalized.append(cast(Node[ContextT], child))
         else:
             normalized.append(Text(child))
     return Panel(tuple(normalized), accent, spoiler)

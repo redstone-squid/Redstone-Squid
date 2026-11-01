@@ -616,7 +616,9 @@ class _Responder:
 
 
 def _event(actor: str = "7") -> sl.PressEvent:
-    return sl.PressEvent(sl.interactions.Actor(actor), cast(sl.interactions.ActionResponder, _Responder()))
+    return sl.PressEvent(
+        sl.interactions.Actor(actor), cast(sl.interactions.ActionResponder, _Responder()), context=None
+    )
 
 
 def test_the_approvals_bucket_is_scoped_to_one_action_and_one_actor() -> None:

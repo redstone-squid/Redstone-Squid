@@ -34,7 +34,11 @@ def button_grid(
         for cell in declared[start : start + columns]:
 
             async def pick(event: PressEvent, cell_key: str = cell.key) -> None:
-                await on_pick(SelectionEvent(event.actor, event.responder, event.locale, event.context, (cell_key,)))
+                await on_pick(
+                    SelectionEvent(
+                        event.actor, event.responder, event.locale, event.metadata, (cell_key,), context=event.context
+                    )
+                )
 
             buttons.append(
                 Button(

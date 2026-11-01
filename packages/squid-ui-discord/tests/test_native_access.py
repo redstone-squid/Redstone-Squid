@@ -64,7 +64,9 @@ class Portable:
 async def test_request_returns_the_interaction_behind_a_discord_event() -> None:
     interaction = installed_interaction(user_id=7)
     event = PressEvent(
-        Actor("7"), ActionResponder(interaction, MessageRoot(text_component(), access=Everyone(), timeout=None))
+        Actor("7"),
+        ActionResponder(interaction, MessageRoot(text_component(), access=Everyone(), timeout=None)),
+        context=None,
     )
 
     assert (await sd.request(event)).interaction is interaction
@@ -78,11 +80,11 @@ def test_a_portable_responder_satisfies_the_protocol_it_claims() -> None:
     """
     accepted: ActionResponderProtocol = Portable()
 
-    assert PressEvent(Actor("7"), accepted).responder is accepted
+    assert PressEvent(Actor("7"), accepted, context=None).responder is accepted
 
 
 async def test_request_rejects_a_portable_responder_by_name() -> None:
-    event = PressEvent(Actor("7"), Portable(), None, {"frontend": "html"})
+    event = PressEvent(Actor("7"), Portable(), None, {"frontend": "html"}, context=None)
 
     with pytest.raises(LookupError, match="html"):
         await sd.request(event)
@@ -90,7 +92,7 @@ async def test_request_rejects_a_portable_responder_by_name() -> None:
 
 async def test_request_names_the_responder_type_when_context_omits_the_frontend() -> None:
     with pytest.raises(LookupError, match="Portable"):
-        await sd.request(PressEvent(Actor("7"), Portable()))
+        await sd.request(PressEvent(Actor("7"), Portable(), context=None))
 
 
 async def test_handlers_reach_the_dispatching_interaction_through_request() -> None:

@@ -25,7 +25,7 @@ class RevisionProposalScreen(sd.Screen):
         self.targets = targets
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         proposal = self.proposal
         if proposal.applied_revision is not None:
             return (sl.status(f"Applied to build #{proposal.build_id}, revision {proposal.applied_revision}."),)
@@ -34,7 +34,7 @@ class RevisionProposalScreen(sd.Screen):
             for name, value in proposal.after.items()
             if proposal.before.get(name) != value
         ]
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading("Review recalculation"),
                 sl.paragraph(
@@ -65,8 +65,8 @@ class RevisionProposalScreen(sd.Screen):
             )
         return tuple(nodes)
 
-    async def _match(self, event: sl.ChoiceEvent) -> None:
-        actor = await subject_for_interaction(await sd.request(event))
+    async def _match(self, event: sd.ChoiceEvent) -> None:
+        actor = await subject_for_interaction(event.context)
         try:
             self.proposal = await self.services.submission_revisions.match(
                 self.proposal.id, int(event.selected[0]), actor
@@ -74,16 +74,16 @@ class RevisionProposalScreen(sd.Screen):
         except SquidError as error:
             self.notice = error.public_detail()
 
-    async def _approve(self, event: sl.PressEvent) -> None:
+    async def _approve(self, event: sd.PressEvent) -> None:
         await event.acknowledge()
-        actor = await subject_for_interaction(await sd.request(event))
+        actor = await subject_for_interaction(event.context)
         try:
             self.proposal = await self.services.submission_revisions.approve(self.proposal.id, actor)
         except SquidError as error:
             self.notice = error.public_detail()
 
-    async def _renew(self, event: sl.PressEvent) -> None:
-        actor = await subject_for_interaction(await sd.request(event))
+    async def _renew(self, event: sd.PressEvent) -> None:
+        actor = await subject_for_interaction(event.context)
         if self.proposal.build_id is not None:
             self.proposal = await self.services.submission_revisions.match(
                 self.proposal.id, self.proposal.build_id, actor, renew=True

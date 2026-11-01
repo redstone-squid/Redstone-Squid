@@ -51,7 +51,7 @@ class ActionResponder:
         """Present a form, stated in Discord's own types.
 
         Not part of `sl.ActionResponder`: a form's payload is a frontend object, so no
-        portable protocol can type it. Application handlers use `await (await sd.request(event)).form(...)`.
+        portable protocol can type it. Application handlers use `await event.context.form(...)`.
         """
         modal = build_modal(form, limits=self.message_root.limits.components) if isinstance(form, ModalSpec) else form
         if self.interaction.response.is_done():
@@ -227,7 +227,7 @@ def _responder(event: ActionEvent) -> ActionResponder:
     """
     found = event.responder
     if not isinstance(found, ActionResponder):
-        frontend = event.context.get("frontend", type(found).__name__)
+        frontend = event.metadata.get("frontend", type(found).__name__)
         message = f"this event came from frontend {frontend!r}, not Discord"
         # LookupError, not TypeError: the argument is a valid event, the Discord fact is just absent.
         raise LookupError(message)  # noqa: TRY004

@@ -48,7 +48,7 @@ class _Responder:
 
 
 def _event(responder: _Responder | None = None) -> PressEvent:
-    return PressEvent(Actor("7"), responder or _Responder())
+    return PressEvent(Actor("7"), responder or _Responder(), context=None)
 
 
 def _button(result: sl.scene.PlanResult[scene.ComponentsV2]) -> scene.Button:

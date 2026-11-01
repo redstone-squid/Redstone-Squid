@@ -71,9 +71,9 @@ class RecordsScreen(sd.UserGuildSessionScreen, session_name="records"):
         self._can_inspect = can_inspect
         self._can_rebuild = can_rebuild
         self._authorize = authorize
-        self._gaps: sp.Browser[RecordGap, sl.ComponentsV2Target] | None = None
-        self._titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target] | None = None
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
+        self._gaps: sp.Browser[RecordGap, sl.ComponentsV2Target, sd.Request] | None = None
+        self._titles: sp.Browser[TitleDiagnosticGap, sl.ComponentsV2Target, sd.Request] | None = None
+        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
 
     @override
     async def on_load(self) -> None:
@@ -118,7 +118,7 @@ class RecordsScreen(sd.UserGuildSessionScreen, session_name="records"):
         )
 
     def _build_tabs(self) -> None:
-        tabs: list[sp.Tab[sl.ComponentsV2Target]] = []
+        tabs: list[sp.Tab[sl.ComponentsV2Target, sd.Request]] = []
         if self._gaps is not None and self._titles is not None:
             tabs.extend(
                 (
@@ -130,7 +130,7 @@ class RecordsScreen(sd.UserGuildSessionScreen, session_name="records"):
         self._tabs = sp.Tabs(tabs, key="records-tabs", title=tr(t"Records")).build_component()
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._tabs is None:
             return (sl.status(tr(t"Loading record diagnostics.")),)
         return (
@@ -138,8 +138,8 @@ class RecordsScreen(sd.UserGuildSessionScreen, session_name="records"):
             sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="record-actions"),
         )
 
-    def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
+    def _maintenance_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if self._can_inspect:
             nodes.append(sl.form(tr(t"Lookup category"), self._lookup_form(), key="lookup", on_submit=self._lookup))
         if self._can_rebuild:

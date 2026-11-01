@@ -64,7 +64,7 @@ class _Candidate[RenderTargetT: DiscordTarget]:
 
     view: AnyMountedView
     rendered: RenderedMessage[Any, Any]
-    tree: ComponentTree[RenderTargetT]
+    tree: ComponentTree[RenderTargetT, Any]
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
     generation: int
@@ -101,7 +101,7 @@ class _PlannedCandidate[RenderTargetT: DiscordTarget]:
     """A staged application render whose visible identity was checked before drawing."""
 
     plan: PlanResult
-    tree: ComponentTree[RenderTargetT]
+    tree: ComponentTree[RenderTargetT, Any]
     handlers: dict[str, ActionBinding]
     form_bindings: Mapping[str, FormBinding]
     revision: int

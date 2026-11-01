@@ -55,7 +55,7 @@ class VersionScreen(sd.UserSessionScreen, session_name="versions"):
         self._versions = versions
         self._can_create = can_create
         self._authorize_create = authorize_create
-        self._browser: sp.Browser[VersionItem, sl.ComponentsV2Target] | None = None
+        self._browser: sp.Browser[VersionItem, sl.ComponentsV2Target, sd.Request] | None = None
 
     @override
     async def on_load(self) -> None:
@@ -83,8 +83,8 @@ class VersionScreen(sd.UserSessionScreen, session_name="versions"):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.status(tr(t"Loading versions."))
             if self._browser is None
             else self.boundary(self._browser, key="browser")

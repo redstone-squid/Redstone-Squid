@@ -18,14 +18,16 @@ from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import ComponentsV2Target
 
 
-class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target](Component[RenderTargetT]):
+class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target, ContextT = object](
+    Component[RenderTargetT, ContextT]
+):
     """A component that shows one child at a time and owns the navigation controls."""
 
-    def __init__(self, root: Component[RenderTargetT]) -> None:
-        self._stack: list[Component[RenderTargetT]] = [root]
+    def __init__(self, root: Component[RenderTargetT, ContextT]) -> None:
+        self._stack: list[Component[RenderTargetT, ContextT]] = [root]
 
     @property
-    def current(self) -> Component[RenderTargetT]:
+    def current(self) -> Component[RenderTargetT, ContextT]:
         """Return the child currently visible at the top of the stack."""
         return self._stack[-1]
 
@@ -34,7 +36,7 @@ class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target](Com
         """Return the number of screens currently retained."""
         return len(self._stack)
 
-    def push(self, child: Component[RenderTargetT]) -> None:
+    def push(self, child: Component[RenderTargetT, ContextT]) -> None:
         """Show ``child``, with Back leading to the current screen."""
         self._stack.append(child)
         self.invalidate()
@@ -52,11 +54,11 @@ class StackNavigator[RenderTargetT: ComponentsV2Target = ComponentsV2Target](Com
             self.invalidate()
 
     @override
-    def render(self) -> list[LayoutNode[RenderTargetT]]:
+    def render(self) -> list[LayoutNode[RenderTargetT, ContextT]]:
         """Render the current child followed by its navigation controls."""
         # Keyed by depth: each screen owns its control namespace, so pushing the same child
         # class twice does not make the two copies share handlers.
-        nodes: list[LayoutNode[RenderTargetT]] = [self.boundary(self.current, key=f"s{self.depth - 1}")]
+        nodes: list[LayoutNode[RenderTargetT, ContextT]] = [self.boundary(self.current, key=f"s{self.depth - 1}")]
         chrome = self.inject(CHROME_CONTEXT)
         controls = [
             Button(label=chrome.back, on_click=self._back, key="__nav_back", disabled=self.depth == 1),

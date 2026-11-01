@@ -32,7 +32,7 @@ class AgreementParticipant:
 type AgreementResolveHandler = Callable[[PressEvent, tuple[str, ...]], Awaitable[None]]
 
 
-class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTargetT]):
+class Agreement[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Component[RenderTargetT, ContextT]):
     """Collect actor-keyed approvals to a declared threshold."""
 
     approved: tuple[str, ...] = state((), persist=False)
@@ -40,7 +40,7 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTarg
 
     def __init__(
         self,
-        prompt: ContentLike[RenderTargetT],
+        prompt: ContentLike[RenderTargetT, ContextT],
         participants: Sequence[AgreementParticipant],
         *,
         key: str = "agreement",
@@ -69,7 +69,7 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTarg
         self.on_resolve = on_resolve
 
     @override
-    def render(self) -> DocumentLike[RenderTargetT]:
+    def render(self) -> DocumentLike[RenderTargetT, ContextT]:
         """Render participant status and the available actor controls."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         approved = frozenset(self.approved)

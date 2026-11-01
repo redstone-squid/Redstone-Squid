@@ -56,10 +56,10 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
         self._capabilities = capabilities
         self._authorize = authorize
         self._create_board = create_board
-        self._browser: sp.Browser[StarboardConfig, sl.ComponentsV2Target] | None = None
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
+        self._browser: sp.Browser[StarboardConfig, sl.ComponentsV2Target, sd.Request] | None = None
+        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
         self._deleting: str | None = None
-        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
+        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
 
     @override
     async def on_load(self) -> None:
@@ -90,7 +90,7 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
         self._tabs = sp.Tabs(tabs, key="starboard-tabs", title=tr(t"Starboard configuration")).build_component()
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._deleting is not None and self._decision is not None:
             board_name = self._deleting
             return (
@@ -107,7 +107,7 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
             sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="starboard-actions"),
         )
 
-    def _create_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _create_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
                 tr(t"Create starboard"),
@@ -117,8 +117,8 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
             ),
         )
 
-    def _settings_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
+    def _settings_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if STARBOARD_BOARD_EDIT in self._capabilities:
             nodes.append(
                 sl.form(
@@ -139,7 +139,7 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
             )
         return tuple(nodes)
 
-    def _emoji_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _emoji_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
                 tr(t"Edit emoji"),
@@ -149,7 +149,7 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
             ),
         )
 
-    def _weight_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _weight_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
                 tr(t"Edit role weight"),
@@ -221,7 +221,7 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
             return
         form = _DeleteBoardForm.from_submission(event)
         self._deleting = form.name
-        self._decision = sp.Decision[sl.ComponentsV2Target](
+        self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
             tr(t"Deleting a starboard keeps its audit history but disables its configuration."),
             (
                 sp.DecisionOption("confirm", tr(t"Delete"), sl.Tone.DANGER),

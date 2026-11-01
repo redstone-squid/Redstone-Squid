@@ -17,6 +17,7 @@ call site, and keeps a stray dict or generator from being silently absorbed.
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Iterator, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from string.templatelib import Template
 from types import UnionType
@@ -125,7 +126,7 @@ if TYPE_CHECKING:
 type TextValue = TextLike | Template
 """Author text: trusted Markdown, already-resolved text, or a t-string to interpolate."""
 
-type Conditional[ItemT] = ItemT | None | Literal[False]
+type Conditional[ItemT] = ItemT | Literal[False] | None
 """One value, or an omitted one.
 
 ``None`` and ``False`` are skipped so ``cond and node`` composes directly. ``True`` is
@@ -134,7 +135,9 @@ deliberately *not* accepted: ``x and y`` evaluates to ``y`` or to the falsy ``x`
 would render a literal ``0`` in looser designs — a type error rather than a surprise.
 """
 
-type ChildLike[RenderTargetT = RenderTarget] = Conditional[LayoutNode[RenderTargetT] | TextLike | Template]
+type ChildLike[RenderTargetT = RenderTarget, ContextT = object] = Conditional[
+    LayoutNode[RenderTargetT, ContextT] | TextLike | Template
+]
 """Anything acceptable in a container's child position; text is promoted to `Paragraph`.
 
 `RenderTargetT` is what makes a nested dialect mistake a type error. A container factory solves it
@@ -149,7 +152,7 @@ def _node_types(annotation: object) -> Iterator[type]:
     """Flatten a union of type aliases into the concrete classes it admits.
 
     The `get_origin` branch is not decoration: once the containers became generic in their
-    dialect, `Stack[RenderTargetT]` stopped being a `type`, every container silently fell out of
+    dialect, `Stack[RenderTargetT, ContextT]` stopped being a `type`, every container silently fell out of
     `_BUILTIN_TYPES`, and `is_builtin_layout_node(sl.stack(...))` went quietly False -- which reads at
     runtime as "a stack is not content".
     """
@@ -174,7 +177,7 @@ _BUILTIN_TYPES: tuple[type, ...] = tuple(_node_types(BuiltinLayoutNode))
 _PORTABLE_TYPES: tuple[type, ...] = tuple(_node_types(PortableNode))
 
 
-def is_layout_node(value: object) -> TypeIs[Renderable[Any]]:
+def is_layout_node(value: object) -> TypeIs[Renderable[Any, Any]]:
     """True when `value` is already a layout node, rather than text or a component.
 
     What the authoring surface asks, so it answers for the whole of `LayoutNode` — a
@@ -242,17 +245,17 @@ def _is_component(value: object) -> bool:
     return isinstance(value, Component)
 
 
-def _children[RenderTargetT = RenderTarget](
-    values: tuple[ChildLike[RenderTargetT], ...], origin: str
-) -> tuple[LayoutNode[RenderTargetT], ...]:
-    collected: list[LayoutNode[RenderTargetT]] = []
+def _children[RenderTargetT = RenderTarget, ContextT = object](
+    values: tuple[ChildLike[RenderTargetT, ContextT], ...], origin: str
+) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
+    collected: list[LayoutNode[RenderTargetT, ContextT]] = []
     for index, value in enumerate(values):
         if value is None or value is False:
             continue
         if isinstance(value, str | ResolvedText | Message | Template):
             # A paragraph renders on every target, but its own annotation names the base
             # `RenderTarget`, so it cannot be spelled as satisfying an arbitrary one.
-            collected.append(cast(LayoutNode[RenderTargetT], Paragraph(_text(value))))
+            collected.append(cast(LayoutNode[RenderTargetT, ContextT], Paragraph(_text(value))))
         elif is_layout_node(value):
             collected.append(value)
         else:
@@ -281,58 +284,64 @@ def _collect[ItemT](values: Iterable[Conditional[ItemT]], kinds: tuple[type, ...
 # --- containers ---------------------------------------------------------------------------
 
 
-def group[RenderTargetT = RenderTarget](*children: ChildLike[RenderTargetT]) -> Group[RenderTargetT]:
+def group[RenderTargetT = RenderTarget, ContextT = object](
+    *children: ChildLike[RenderTargetT, ContextT],
+) -> Group[RenderTargetT, ContextT]:
     """Related content with no layout opinion; lowers to its children in place."""
     return Group(_children(children, "sl.group()"))
 
 
-def stack[RenderTargetT = RenderTarget](*children: ChildLike[RenderTargetT]) -> Stack[RenderTargetT]:
+def stack[RenderTargetT = RenderTarget, ContextT = object](
+    *children: ChildLike[RenderTargetT, ContextT],
+) -> Stack[RenderTargetT, ContextT]:
     """Content read top to bottom."""
     return Stack(_children(children, "sl.stack()"))
 
 
-def cluster[RenderTargetT = RenderTarget](*children: ChildLike[RenderTargetT]) -> Cluster[RenderTargetT]:
+def cluster[RenderTargetT = RenderTarget, ContextT = object](
+    *children: ChildLike[RenderTargetT, ContextT],
+) -> Cluster[RenderTargetT, ContextT]:
     """Content read as a set rather than a sequence."""
     return Cluster(_children(children, "sl.cluster()"))
 
 
-def themed[RenderTargetT = RenderTarget](
-    palette: Palette, *children: ChildLike[RenderTargetT]
-) -> Themed[RenderTargetT]:
+def themed[RenderTargetT = RenderTarget, ContextT = object](
+    palette: Palette, *children: ChildLike[RenderTargetT, ContextT]
+) -> Themed[RenderTargetT, ContextT]:
     """Apply a presentation palette to one semantic subtree."""
     return Themed(_children(children, "sl.themed()"), palette)
 
 
-def block[RenderTargetT = RenderTarget](
-    *children: ChildLike[RenderTargetT], accent: Accent = INHERIT
-) -> Block[RenderTargetT]:
+def block[RenderTargetT = RenderTarget, ContextT = object](
+    *children: ChildLike[RenderTargetT, ContextT], accent: Accent = INHERIT
+) -> Block[RenderTargetT, ContextT]:
     """An untitled region; ``accent`` is a house-colour override."""
     return Block(_children(children, "sl.block()"), accent)
 
 
-def section[RenderTargetT = RenderTarget](
+def section[RenderTargetT = RenderTarget, ContextT = object](
     heading: Heading,
-    *children: ChildLike[RenderTargetT],
+    *children: ChildLike[RenderTargetT, ContextT],
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
-) -> Section[RenderTargetT]:
+) -> Section[RenderTargetT, ContextT]:
     """A titled block of related content; ``accent`` is a house-colour override."""
     return Section(heading, _children(children, "sl.section()"), accent, thumbnail)
 
 
-def article[RenderTargetT = RenderTarget](
+def article[RenderTargetT = RenderTarget, ContextT = object](
     heading: Heading,
-    *children: ChildLike[RenderTargetT],
+    *children: ChildLike[RenderTargetT, ContextT],
     accent: Accent = INHERIT,
     thumbnail: str | None = None,
-) -> Article[RenderTargetT]:
+) -> Article[RenderTargetT, ContextT]:
     """A self-contained block that stands on its own."""
     return Article(heading, _children(children, "sl.article()"), accent, thumbnail)
 
 
-def aside[RenderTargetT = RenderTarget](
-    *children: ChildLike[RenderTargetT], tone: Tone = Tone.NEUTRAL
-) -> Aside[RenderTargetT]:
+def aside[RenderTargetT = RenderTarget, ContextT = object](
+    *children: ChildLike[RenderTargetT, ContextT], tone: Tone = Tone.NEUTRAL
+) -> Aside[RenderTargetT, ContextT]:
     """Tangential or advisory content, coloured by tone."""
     return Aside(_children(children, "sl.aside()"), tone)
 
@@ -350,12 +359,12 @@ def uncontrolled[ValueT](initial: ValueT) -> Uncontrolled[ValueT]:
     return Uncontrolled(initial)
 
 
-def details[RenderTargetT = RenderTarget](
+def details[RenderTargetT = RenderTarget, ContextT = object](
     summary: Summary,
-    *children: ChildLike[RenderTargetT],
+    *children: ChildLike[RenderTargetT, ContextT],
     key: str,
-    open: DisclosureOwnership = CLOSED,
-) -> Details[RenderTargetT]:
+    open: DisclosureOwnership[ContextT] = CLOSED,
+) -> Details[RenderTargetT, ContextT]:
     """Content the reader expands; ``key`` carries its disclosure state."""
     return Details(key, summary, _children(children, "sl.details()"), open)
 
@@ -365,18 +374,18 @@ def summary(content: TextValue) -> Summary:
     return Summary(_text(content))
 
 
-def form(
+def form[ContextT = object](
     label: TextValue,
-    spec: FormLike,
+    spec: FormLike[ContextT],
     *,
     key: str,
-    on_submit: SubmitHandler | None = None,
+    on_submit: SubmitHandler[ContextT] | None = None,
     mode: ActionMode | None = None,
     tone: Tone = Tone.NEUTRAL,
     emphasis: Emphasis = Emphasis.NORMAL,
     guard: Guard | None = None,
     record: History | None = None,
-) -> FormTrigger:
+) -> FormTrigger[ContextT]:
     """A content control that presents a portable form.
 
     ``guard`` gates the press that opens the form; the submission that follows completes an
@@ -390,9 +399,9 @@ def form(
     return FormTrigger(key, _text(label), resolved, handler, selected_mode, tone, emphasis, guard, record)
 
 
-def item[RenderTargetT = RenderTarget](
-    label: ItemLabel, *children: ChildLike[RenderTargetT], key: str, summary: TextValue | None = None
-) -> Item[RenderTargetT]:
+def item[RenderTargetT = RenderTarget, ContextT = object](
+    label: ItemLabel, *children: ChildLike[RenderTargetT, ContextT], key: str, summary: TextValue | None = None
+) -> Item[RenderTargetT, ContextT]:
     """One entry of an `items` collection."""
     return Item(key, label, _children(children, "sl.item()"), _opt_text(summary))
 
@@ -402,13 +411,13 @@ def item_label(content: TextValue) -> ItemLabel:
     return ItemLabel(_text(content))
 
 
-def items[RenderTargetT = RenderTarget](
-    *entries: Conditional[Item[RenderTargetT]],
+def items[RenderTargetT = RenderTarget, ContextT = object](
+    *entries: Conditional[Item[RenderTargetT, ContextT]],
     key: str,
-    opened: ItemOwnership = UNOPENED,
+    opened: ItemOwnership[ContextT] = UNOPENED,
     display: ItemDisplay = ItemDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
-) -> Items[RenderTargetT]:
+) -> Items[RenderTargetT, ContextT]:
     """A set of entries the reader browses; ``key`` carries the opened entry."""
     return Items(key, _collect(entries, (Item,), "sl.items()"), opened, display, flexibility)
 
@@ -557,26 +566,26 @@ def table(
     )
 
 
-def roster(
+def roster[ContextT = object](
     placement: RosterPlacement,
     *,
     key: str,
-    on_join: Callable[[SelectionEvent], Awaitable[None]] | None = None,
+    on_join: Callable[[SelectionEvent[ContextT]], Awaitable[None]] | None = None,
     routes: Mapping[str, str] | None = None,
     locked: bool = False,
     show_waitlist: bool = True,
-) -> Roster:
+) -> Roster[ContextT]:
     """Render one host-owned roster allocation with active localized chrome."""
     return Roster(key, placement, on_join, routes, locked, show_waitlist)
 
 
-def grid(
+def grid[ContextT = object](
     *cells: Conditional[GridCell],
     key: str,
     columns: int,
-    on_pick: Callable[[SelectionEvent], Awaitable[None]],
+    on_pick: Callable[[SelectionEvent[ContextT]], Awaitable[None]],
     flexibility: Flexibility = Flexibility.NORMAL,
-) -> Grid:
+) -> Grid[ContextT]:
     """A selectable grid that adapts without changing its submitted cell keys."""
     return Grid(key, _collect(cells, (GridCell,), "sl.grid()"), columns, on_pick, flexibility)
 
@@ -590,15 +599,15 @@ def _tally_label(option: TallyOption) -> Message:
     )
 
 
-def tally(
+def tally[ContextT = object](
     options: Sequence[TallyOption],
     *,
     key: str,
-    on_vote: Callable[[SelectionEvent], Awaitable[None]] | None = None,
+    on_vote: Callable[[SelectionEvent[ContextT]], Awaitable[None]] | None = None,
     route_id: str | None = None,
     total: int | None = None,
     show_bars: bool = True,
-) -> Stack:
+) -> Stack[RenderTarget, ContextT]:
     """Render host-owned counts with optional mounted or routed selection."""
     if not options:
         message = "sl.tally() needs at least one option"
@@ -622,12 +631,9 @@ def tally(
     )
     entries = tuple(choice(_tally_label(option), key=option.key) for option in options)
     if on_vote is not None:
+        vote = _TallySelection(on_vote)
 
-        async def vote(event: ChoiceEvent) -> None:
-            if event.selected:
-                await on_vote(SelectionEvent(event.actor, event.responder, event.locale, event.context, event.selected))
-
-        control: LayoutNode = choices(
+        control: LayoutNode[RenderTarget, ContextT] = choices(
             *entries,
             key=key,
             selection=controlled(tuple(option.key for option in options if option.mine), vote),
@@ -666,9 +672,9 @@ def media(
 # --- controls -------------------------------------------------------------------------------
 
 
-def action_control(
+def action_control[ContextT = object](
     label: TextValue,
-    on_trigger: PressHandler,
+    on_trigger: PressHandler[ContextT],
     *,
     key: str,
     tone: Tone = Tone.NEUTRAL,
@@ -679,7 +685,7 @@ def action_control(
     guard: Guard | None = None,
     busy: BusySpec | None = None,
     record: History | None = None,
-) -> ActionControl:
+) -> ActionControl[ContextT]:
     """A control that runs ``on_trigger``; ``key`` namespaces its custom id.
 
     ``guard`` decides whether a press may execute now; ``available`` decides whether the
@@ -698,16 +704,16 @@ def action_control(
     )
 
 
-def toggle(
+def toggle[ContextT = object](
     label: TextValue,
     *,
     key: str,
-    on: ToggleOwnership = OFF,
+    on: ToggleOwnership[ContextT] = OFF,
     on_label: TextValue | None = None,
     off_label: TextValue | None = None,
     tone: Tone = Tone.NEUTRAL,
     available: bool = True,
-) -> Toggle:
+) -> Toggle[ContextT]:
     """A boolean control; ``on`` declares whether the author or session owns its state."""
     return Toggle(key, _text(label), on, _opt_text(on_label), _opt_text(off_label), tone, available)
 
@@ -746,24 +752,26 @@ def routed_action_control(
     return RoutedActionControl(key, _text(label), route_id, tone, emphasis, available)
 
 
-def control_group(
-    *entries: Conditional[ActionControl | Link | RoutedActionControl], key: str, label: TextValue | None = None
-) -> ControlGroup:
+def control_group[ContextT = object](
+    *entries: Conditional[ActionControl[ContextT] | Link | RoutedActionControl],
+    key: str,
+    label: TextValue | None = None,
+) -> ControlGroup[ContextT]:
     """Controls that belong together and degrade together."""
     return ControlGroup(
         key, _collect(entries, (ActionControl, Link, RoutedActionControl), "sl.control_group()"), _opt_text(label)
     )
 
 
-def action_controls(
-    *entries: Conditional[ActionControl | Link | RoutedActionControl | ControlGroup],
+def action_controls[ContextT = object](
+    *entries: Conditional[ActionControl[ContextT] | Link | RoutedActionControl | ControlGroup[ContextT]],
     key: str,
     display: ControlDisplay = ControlDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
-) -> ActionControls:
+) -> ActionControls[ContextT]:
     """The controls offered by a view; ``key`` carries the chosen presentation."""
     return ActionControls(
-        _collect(entries, (ActionControl, Link, RoutedActionControl, ControlGroup), "sl.action_controls()"),
+        _collect(entries, (ActionControl, Link, RoutedActionControl), "sl.action_controls()"),
         key,
         display,
         flexibility,
@@ -775,14 +783,14 @@ def choice(label: TextValue, *, key: str, description: TextValue | None = None, 
     return Choice(key, _text(label), _opt_text(description), available)
 
 
-def choices(
+def choices[ContextT = object](
     *entries: Conditional[Choice],
     key: str,
-    selection: ChoiceOwnership = UNSELECTED,
+    selection: ChoiceOwnership[ContextT] = UNSELECTED,
     minimum: int = 1,
     maximum: int = 1,
     flexibility: Flexibility = Flexibility.NORMAL,
-) -> Choices:
+) -> Choices[ContextT]:
     """A control that selects among options; ``key`` namespaces its custom id."""
     return Choices(
         key,
@@ -805,17 +813,17 @@ def entity_choice(
     return EntityChoice(ref, _text(label), _opt_text(description), available)
 
 
-def entities(
+def entities[ContextT = object](
     *entries: Conditional[EntityChoice],
     key: str,
     entity_type: EntityType,
-    selection: EntityOwnership = NO_ENTITIES,
+    selection: EntityOwnership[ContextT] = NO_ENTITIES,
     minimum: int = 1,
     maximum: int = 1,
     conversation_types: tuple[ConversationType, ...] = (),
     placeholder: TextValue | None = None,
     flexibility: Flexibility = Flexibility.NORMAL,
-) -> Entities:
+) -> Entities[ContextT]:
     """Select frontend-resolved entities, optionally with an enumerated fallback."""
     return Entities(
         key,
@@ -830,13 +838,13 @@ def entities(
     )
 
 
-def rating(
+def rating[ContextT = object](
     *,
     key: str,
     maximum: int = 5,
-    value: ScaleOwnership = UNRATED,
+    value: ScaleOwnership[ContextT] = UNRATED,
     labels: Mapping[int, TextValue] | None = None,
-) -> Choices:
+) -> Choices[ContextT]:
     """An ordinal 1-to-``maximum`` picker; five or fewer points render as a star row.
 
     No new semantic node: `choices` with ``maximum=1`` already lowers to the row a rating
@@ -853,23 +861,12 @@ def rating(
         Choice(str(point), _text(named[point]) if point in named else _text(_stars(point, maximum))) for point in points
     )
     if isinstance(value, Uncontrolled):
-        selection: ChoiceOwnership = Uncontrolled(() if value.initial is None else (str(value.initial),))
+        selection: ChoiceOwnership[ContextT] = Uncontrolled(() if value.initial is None else (str(value.initial),))
     else:
         chosen = value.value
         on_change = value.on_change
 
-        async def rate(event: ChoiceEvent) -> None:
-            if not event.selected:
-                return
-            await on_change(
-                ScaleEvent(
-                    event.actor,
-                    event.responder,
-                    event.locale,
-                    event.context,
-                    int(event.selected[0]),
-                )
-            )
+        rate = _RatingSelection(on_change)
 
         selection = Controlled((), rate) if chosen is None else Controlled((str(chosen),), rate)
     return Choices(key, entries, selection, minimum=1, maximum=1)
@@ -910,13 +907,13 @@ def nav_option(label: TextValue, *, key: str, available: bool = True) -> NavOpti
     return NavOption(key, _text(label), available)
 
 
-def navigation(
+def navigation[ContextT = object](
     *entries: Conditional[NavOption],
     key: str,
-    current: NavOwnership = FIRST_OPTION,
+    current: NavOwnership[ContextT] = FIRST_OPTION,
     display: NavigationDisplay = NavigationDisplay.AUTO,
     flexibility: Flexibility = Flexibility.STABLE,
-) -> Navigation:
+) -> Navigation[ContextT]:
     """Movement between the views of one message."""
     return Navigation(
         key,
@@ -987,3 +984,34 @@ __all__ = [
     "uncontrolled",
     "zoned_timestamp",
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class _TallySelection[ContextT]:
+    callback: Callable[[SelectionEvent[ContextT]], Awaitable[None]]
+
+    async def __call__(self, event: ChoiceEvent[ContextT]) -> None:
+        if event.selected:
+            await self.callback(
+                SelectionEvent(
+                    event.actor, event.responder, event.locale, event.metadata, event.selected, context=event.context
+                )
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class _RatingSelection[ContextT]:
+    callback: Callable[[ScaleEvent[ContextT]], Awaitable[None]]
+
+    async def __call__(self, event: ChoiceEvent[ContextT]) -> None:
+        if event.selected:
+            await self.callback(
+                ScaleEvent(
+                    event.actor,
+                    event.responder,
+                    event.locale,
+                    event.metadata,
+                    int(event.selected[0]),
+                    context=event.context,
+                )
+            )

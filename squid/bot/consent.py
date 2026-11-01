@@ -28,7 +28,7 @@ class NotAskedType(Enum):
 NOT_ASKED = NotAskedType.NOT_ASKED
 """The question was never put to the user, and they have already been told why."""
 
-type ConsentContinuation = Callable[[sl.PressEvent, AccountConsent | None], Awaitable[None]]
+type ConsentContinuation = Callable[[sd.PressEvent, AccountConsent | None], Awaitable[None]]
 """What to do once the reader has answered, run by the prompt's own press.
 
 The awaiting form is only safe where the caller owns the wait. Inside a mounted action
@@ -96,7 +96,7 @@ class ConsentPrompt(sd.UserSessionScreen):
         return CURRENT_CONSENT_VERSION
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         card_fields = tuple(sl.field(field.name, field.value) for field in self._fields)
         return (
             sl.section(
@@ -117,16 +117,16 @@ class ConsentPrompt(sd.UserSessionScreen):
             ),
         )
 
-    async def _accept(self, event: sl.PressEvent) -> None:
+    async def _accept(self, event: sd.PressEvent) -> None:
         await self._finish(event, AccountConsent.grant_current())
 
-    async def _cancel(self, event: sl.PressEvent) -> None:
+    async def _cancel(self, event: sd.PressEvent) -> None:
         await self._finish(event, None)
 
-    async def _privacy(self, event: sl.PressEvent) -> None:
+    async def _privacy(self, event: sd.PressEvent) -> None:
         await event.notice(tr(PRIVACY_NOTICE))
 
-    async def _finish(self, event: sl.PressEvent, consent: AccountConsent | None) -> None:
+    async def _finish(self, event: sd.PressEvent, consent: AccountConsent | None) -> None:
         self._answer.consent = consent
         self.closed = True
         self._done.set()
@@ -313,12 +313,12 @@ async def request_consent(
     return component is not None
 
 
-type ConsentedAccountWork = Callable[[sl.ActionEvent, int], Awaitable[None]]
+type ConsentedAccountWork = Callable[[sd.ActionEvent, int], Awaitable[None]]
 """Work needing a consented account id, run against whichever press is live when it runs."""
 
 
 async def with_consented_account(
-    event: sl.ActionEvent,
+    event: sd.ActionEvent,
     accounts: AccountService,
     work: ConsentedAccountWork,
     *,
@@ -336,7 +336,7 @@ async def with_consented_account(
     through its own handle: the prompt's interaction addresses the prompt's message, and
     flushing the panel through it would draw the panel into the dialog.
     """
-    request = await sd.request(event)
+    request = event.context
     user = request.user
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
@@ -345,7 +345,7 @@ async def with_consented_account(
     message_root = request.root
     assert message_root is not None, "a press always arrives from a mounted message"
 
-    async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+    async def answered(prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
         if consent is None:
             return
         granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)

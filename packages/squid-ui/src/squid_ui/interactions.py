@@ -69,7 +69,7 @@ class ActionResponder(Protocol):
 
     Every method here is one that any frontend can honestly implement. Forms joined this
     surface once their schemas became portable; frontend-native payloads remain on concrete
-    adapters reached through helpers such as `sd.responder(event)`.
+    adapters exposed through the event's typed invocation context.
     """
 
     async def acknowledge(self) -> None: ...
@@ -99,19 +99,19 @@ class ActionResponder(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class ActionEvent:
+class ActionEvent[ContextT = object]:
     """Portable action input whose response authority ends when the handler returns.
 
-    `context` carries one reserved key, `"frontend"`, naming the adapter that dispatched
-    the event; the rest is for host-injected `ContextKey`s. It is not a place to smuggle
-    frontend facts — a Discord-only handler should reach for `sd.native(event)`
-    or `sd.responder(event)` instead, which hand back the real Discord surfaces.
+    `context` is the frontend's invocation context. Portable handlers leave its type
+    as `object`; frontend handlers specify the capabilities they require. `metadata`
+    contains dispatch facts, including the frontend identity.
     """
 
     actor: Actor
     responder: ActionResponder
     locale: str | None = None
-    context: Mapping[str, Any] = field(default_factory=dict)
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+    context: ContextT = field(kw_only=True)
 
     async def acknowledge(self) -> None:
         await self.responder.acknowledge()
@@ -173,26 +173,26 @@ class ActionEvent:
 
 
 @dataclass(frozen=True, slots=True)
-class PressEvent(ActionEvent):
+class PressEvent[ContextT = object](ActionEvent[ContextT]):
     """A button or equivalent action was pressed."""
 
 
 @dataclass(frozen=True, slots=True)
-class SelectionEvent(ActionEvent):
+class SelectionEvent[ContextT = object](ActionEvent[ContextT]):
     """A selection control submitted one or more values."""
 
     values: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
-class EntitySelectionEvent(ActionEvent):
+class EntitySelectionEvent[ContextT = object](ActionEvent[ContextT]):
     """An entity selection submitted portable concrete references."""
 
     values: tuple[EntityRef, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
-class SubmitEvent(ActionEvent):
+class SubmitEvent[ContextT = object](ActionEvent[ContextT]):
     """A portable form was submitted."""
 
     values: Mapping[str, object] = field(default_factory=dict)
@@ -201,7 +201,7 @@ class SubmitEvent(ActionEvent):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class InvalidSubmitEvent(SubmitEvent):
+class InvalidSubmitEvent[ContextT = object](SubmitEvent[ContextT]):
     """An invalid attempt with partial values; retry authority ends when the handler returns."""
 
     _retry: Callable[[], Awaitable[None]] = field(repr=False, compare=False)
@@ -248,10 +248,10 @@ class ActionMiddleware(ABC):
         """Continue once through ``proceed``, or return to short-circuit."""
 
 
-type ActionHandler = Callable[[ActionEvent], Awaitable[None]]
-type PressHandler = Callable[[PressEvent], Awaitable[None]]
-type SelectionHandler = Callable[[SelectionEvent], Awaitable[None]]
-type EntitySelectionHandler = Callable[[EntitySelectionEvent], Awaitable[None]]
+type ActionHandler[ContextT = object] = Callable[[ActionEvent[ContextT]], Awaitable[None]]
+type PressHandler[ContextT = object] = Callable[[PressEvent[ContextT]], Awaitable[None]]
+type SelectionHandler[ContextT = object] = Callable[[SelectionEvent[ContextT]], Awaitable[None]]
+type EntitySelectionHandler[ContextT = object] = Callable[[EntitySelectionEvent[ContextT]], Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
