@@ -8,7 +8,8 @@ from uuid import UUID
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 
 from squid.cli_auth.application import decode_urlsafe_bytes, public_key_fingerprint
-from squid.cli_auth.domain import CliDevice, CliDeviceEnrollment, IssuedCliEnrollment, IssuedCliSession
+from squid.cli_auth.domain import IssuedCliEnrollment, IssuedCliSession
+from squid.cli_auth.models import CliDevice, CliDeviceEnrollment
 
 DeviceLabel = Annotated[str, Field(min_length=1, max_length=80)]
 PublicKey = Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{43}$")]

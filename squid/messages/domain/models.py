@@ -20,23 +20,3 @@ class MessageFact:
     """None in DMs."""
     content: str | None = None
     created_at: Instant | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class MessageRecord:
-    """A stored message fact, as read back out of persistence."""
-
-    id: int
-    channel_id: int | None
-    author_id: int
-    guild_id: int | None = None
-    content: str | None = None
-    created_at: Instant | None = None
-    observed_at: Instant | None = None
-    edited_at: Instant | None = None
-    deleted_at: Instant | None = None
-
-    @property
-    def is_deleted(self) -> bool:
-        """Whether Discord has reported this message gone."""
-        return self.deleted_at is not None

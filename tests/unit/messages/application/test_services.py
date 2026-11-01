@@ -5,7 +5,8 @@ from dataclasses import replace
 from whenever import Instant
 
 from squid.messages.application import MessageService
-from squid.messages.domain import MessageFact, MessageRecord
+from squid.messages.domain import MessageFact
+from squid.messages.models import MessageRecord
 
 
 class FakeMessageRepository:

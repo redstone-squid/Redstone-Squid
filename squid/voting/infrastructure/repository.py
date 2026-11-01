@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
 from squid.messages.errors import MessageNotFoundError
-from squid.messages.models import Message
+from squid.messages.models import MessageRecord
 from squid.persistence.repository import BaseAsyncRepository
 from squid.posts.models import DiscordPost
 from squid.voting.domain import (
@@ -174,7 +174,7 @@ class VoteRepository:
         async with self._session_factory.begin() as session:
             if await session.scalar(select(VoteSession.id).where(VoteSession.id == vote_session_id)) is None:
                 raise VoteSessionNotFoundError(vote_session_id)
-            channel_id = await session.scalar(select(Message.channel_id).where(Message.id == message_id))
+            channel_id = await session.scalar(select(MessageRecord.channel_id).where(MessageRecord.id == message_id))
             if channel_id is None:
                 raise MessageNotFoundError(message_id)
 
@@ -553,8 +553,8 @@ class VoteRepository:
         # The guild comes from the message fact; the post says which messages are ours.
         locations = (
             await session.execute(
-                select(DiscordPost.message_id, DiscordPost.channel_id, Message.guild_id)
-                .join(Message, Message.id == DiscordPost.message_id)
+                select(DiscordPost.message_id, DiscordPost.channel_id, MessageRecord.guild_id)
+                .join(MessageRecord, MessageRecord.id == DiscordPost.message_id)
                 .where(
                     DiscordPost.resource_kind == "vote_session",
                     DiscordPost.resource_key == str(row.id),

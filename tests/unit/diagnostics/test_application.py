@@ -7,7 +7,8 @@ from whenever import Instant
 
 from squid.core.errors import ErrorCode, InvalidStateError
 from squid.diagnostics.application import ErrorReportService
-from squid.diagnostics.domain import ErrorReport, ErrorReportNotFoundError
+from squid.diagnostics.domain import ErrorReportNotFoundError
+from squid.diagnostics.models import ErrorReport
 from squid.records.errors import RecordNotFoundError
 
 FROZEN = Instant.from_utc(2026, 8, 17, 12, 0, 0)
@@ -106,7 +107,7 @@ async def test_record_captures_the_traceback_and_classification() -> None:
     assert report.error_code == ErrorCode.RECORD_NOT_FOUND
     assert report.origin == "records lookup"
     assert report.context == {"channel_id": 4}
-    assert report.log_tail == ("first", "second")
+    assert report.log_tail == ["first", "second"]
     assert "RecordNotFoundError" in report.traceback
     assert report.expires_at == FROZEN.add(hours=168)
 

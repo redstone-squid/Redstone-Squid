@@ -1,4 +1,4 @@
-from squid.records.infrastructure import models
+from squid.records import models
 from squid.records.models import RecordRule, RecordSeries, RecordStanding
 
 

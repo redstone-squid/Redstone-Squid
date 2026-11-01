@@ -21,17 +21,9 @@ from squid.api.v1.cli_auth import (
 )
 from squid.api.v1.schemas.cli_auth import CliEnrollmentCreateRequest
 from squid.cli_auth.application import CliAuthorizationService
-from squid.cli_auth.domain import (
-    CliDevice,
-    CliDeviceEnrollment,
-    CliIdentity,
-    CliSession,
-    CliSessionChallenge,
-    IssuedCliEnrollment,
-    IssuedCliSession,
-    IssuedCliSessionChallenge,
-)
+from squid.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.cli_auth.errors import CliAuthorizationPendingError
+from squid.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
 from squid.idempotency import IdempotencyService, PendingRequest
 from tests.unit.api.fakes import TEST_CONFIG
 

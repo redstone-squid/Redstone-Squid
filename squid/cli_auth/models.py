@@ -11,7 +11,7 @@ from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, now
 
 
-class CliDeviceEnrollmentRecord(Base, kw_only=True):
+class CliDeviceEnrollment(Base, kw_only=True):
     """A browser-approved enrollment storing only digests of bearer codes."""
 
     __tablename__ = "cli_device_enrollments"
@@ -57,8 +57,12 @@ class CliDeviceEnrollmentRecord(Base, kw_only=True):
     exchanged_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
+    def is_expired_at(self, instant: Instant) -> bool:
+        """Return whether this enrollment can no longer be used."""
+        return self.expires_at <= instant
 
-class CliDeviceRecord(Base, kw_only=True):
+
+class CliDevice(Base, kw_only=True):
     """An account-owned Ed25519 CLI device."""
 
     __tablename__ = "cli_devices"
@@ -93,8 +97,12 @@ class CliDeviceRecord(Base, kw_only=True):
     )
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
+    def is_active(self) -> bool:
+        """Return whether the device remains authorized."""
+        return self.revoked_at is None
 
-class CliSessionChallengeRecord(Base, kw_only=True):
+
+class CliSessionChallenge(Base, kw_only=True):
     """A one-time device proof nonce stored only as a digest."""
 
     __tablename__ = "cli_session_challenges"
@@ -125,8 +133,12 @@ class CliSessionChallengeRecord(Base, kw_only=True):
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     consumed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
+    def is_expired_at(self, instant: Instant) -> bool:
+        """Return whether this challenge can no longer be consumed."""
+        return self.expires_at <= instant
 
-class CliSessionRecord(Base, kw_only=True):
+
+class CliSession(Base, kw_only=True):
     """A short-lived CLI bearer session storing only its token digest."""
 
     __tablename__ = "cli_sessions"
@@ -155,3 +167,7 @@ class CliSessionRecord(Base, kw_only=True):
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     last_seen_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+
+    def is_active_at(self, instant: Instant) -> bool:
+        """Return whether this session is inside its validity window."""
+        return self.revoked_at is None and self.issued_at <= instant < self.expires_at

@@ -28,15 +28,9 @@ from squid.builds.domain import Build
 from squid.builds.domain.models import Status
 from squid.builds.errors import BuildNotFoundError
 from squid.cli_auth.application import CliAuthorizationService
-from squid.cli_auth.domain import (
-    CliDevice,
-    CliDeviceEnrollment,
-    CliIdentity,
-    IssuedCliEnrollment,
-    IssuedCliSession,
-    IssuedCliSessionChallenge,
-)
+from squid.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.cli_auth.errors import InvalidCliEnrollmentError
+from squid.cli_auth.models import CliDevice, CliDeviceEnrollment
 from squid.config import ApiProcessConfig
 from squid.core.errors import NotFoundError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector

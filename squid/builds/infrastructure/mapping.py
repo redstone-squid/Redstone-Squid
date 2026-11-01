@@ -30,7 +30,7 @@ from squid.builds.models import (
     Utility,
 )
 from squid.core.errors import DataIntegrityError
-from squid.messages.models import Message
+from squid.messages.models import MessageRecord
 from squid.sponsors import PublicSponsor
 from squid.tags.domain import (
     RecordOperator,
@@ -159,8 +159,8 @@ class BuildMapper:
         # provenance costs the same whether or not the page has any.
         source_messages: dict[int, list[SourceMessage]] = {build_id: [] for build_id in build_ids}
         for build_id, message in await session.execute(
-            select(BuildSourceMessage.build_id, Message)
-            .join(Message, BuildSourceMessage.message_id == Message.id)
+            select(BuildSourceMessage.build_id, MessageRecord)
+            .join(MessageRecord, BuildSourceMessage.message_id == MessageRecord.id)
             .where(BuildSourceMessage.build_id.in_(build_ids))
             .order_by(BuildSourceMessage.build_id, BuildSourceMessage.position)
         ):
@@ -278,7 +278,7 @@ class BuildMapper:
         )
 
 
-def _source_message(message: Message) -> SourceMessage:
+def _source_message(message: MessageRecord) -> SourceMessage:
     """Map one message fact reached through a build's source-message link."""
     return SourceMessage(
         message_id=message.id,

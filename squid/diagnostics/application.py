@@ -10,7 +10,8 @@ from whenever import Instant
 
 from squid.core.errors import InvalidStateError, JSONValue, SquidError
 from squid.core.i18n import tr
-from squid.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReport, ErrorReportNotFoundError
+from squid.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReportNotFoundError
+from squid.diagnostics.models import ErrorReport
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +85,7 @@ class ErrorReportService:
                 error_code=error.code if isinstance(error, SquidError) else None,
                 traceback=self._format_traceback(error),
                 context=dict(context or {}),
-                log_tail=tuple(log_tail),
+                log_tail=list(log_tail),
                 work_lost=work_lost,
             )
             await self._repository.save(report)

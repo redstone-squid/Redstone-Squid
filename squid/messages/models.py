@@ -8,7 +8,7 @@ from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, now
 
 
-class Message(Base):
+class MessageRecord(Base):
     """A Discord message the bot has seen.
 
     One row per Discord message, holding only what is true about the message itself.
@@ -48,3 +48,8 @@ class Message(Base):
     """When `content` was last refreshed from a Discord edit."""
     deleted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     """Set when Discord reports the message gone. The row is a retained fact, never erased."""
+
+    @property
+    def is_deleted(self) -> bool:
+        """Whether Discord has reported this message gone."""
+        return self.deleted_at is not None

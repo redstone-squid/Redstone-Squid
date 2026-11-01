@@ -54,7 +54,7 @@ from squid.builds.models import (
     Extender as SQLExtender,
 )
 from squid.core.errors import DataIntegrityError, InvalidStateError, PersistenceError
-from squid.messages.models import Message
+from squid.messages.models import MessageRecord
 from squid.persistence.types import now
 from squid.tags.domain import TagAssignment as DomainTagAssignment
 from squid.tags.domain import TagAuthority, TagSemanticKind, TagValueType
@@ -801,7 +801,7 @@ class BuildRepository:
         for source in build.source_messages:
             assert source.author_id is not None, "A source message must record its author."
             await session.execute(
-                pg_insert(Message)
+                pg_insert(MessageRecord)
                 .values(
                     id=source.message_id,
                     guild_id=source.guild_id,
@@ -811,7 +811,7 @@ class BuildRepository:
                     observed_at=Instant.now(),
                 )
                 .on_conflict_do_update(
-                    index_elements=[Message.id],
+                    index_elements=[MessageRecord.id],
                     set_={
                         "guild_id": source.guild_id,
                         "channel_id": source.channel_id,

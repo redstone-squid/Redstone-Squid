@@ -5,7 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 from squid.core.errors import ErrorCode, JSONValue
-from squid.diagnostics.domain import ErrorReport
+from squid.diagnostics.models import ErrorReport
 
 
 class ErrorReportSummary(BaseModel):

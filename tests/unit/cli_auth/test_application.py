@@ -17,8 +17,8 @@ from squid.cli_auth.application import (
     public_key_fingerprint,
     session_proof_message,
 )
-from squid.cli_auth.domain import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
 from squid.cli_auth.errors import InvalidCliDeviceProofError, InvalidCliSessionError
+from squid.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
 
 NOW = Instant.parse_iso("2026-08-11T22:00:00Z")
 PEPPER = b"test-cli-authorization-pepper-32-bytes"

@@ -4,11 +4,23 @@ import uuid
 
 from sqlalchemy import Boolean, Index, Text, false, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
+from squid.core.errors import ErrorCode, JSONValue
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC
+from squid.persistence.types import InstantUTC, StrEnumText
+
+
+class ErrorCodeText(StrEnumText[ErrorCode]):
+    """Read unknown codes from older deployments as unclassified errors."""
+
+    def process_result_value(self, value: str | None, dialect: Dialect) -> ErrorCode | None:
+        try:
+            return super().process_result_value(value, dialect)
+        except ValueError:
+            return None
 
 
 class ErrorReport(Base, kw_only=True):
@@ -43,15 +55,15 @@ class ErrorReport(Base, kw_only=True):
     """Which transport failed: an application command, a view callback, a route, a worker job."""
     origin: Mapped[str | None] = mapped_column(Text, default=None)
     """The command name, route, or job the failure came from, when the surface knows it."""
-    exception_type: Mapped[str] = mapped_column(Text, nullable=False)
+    exception_type: Mapped[str] = mapped_column(Text, nullable=False, default="")
     """Qualified name of the raised exception class."""
-    message: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
     """The exception's own string form, which is never shown to the user who triggered it."""
-    error_code: Mapped[str | None] = mapped_column(Text, default=None)
+    error_code: Mapped[ErrorCode | None] = mapped_column(ErrorCodeText(ErrorCode), default=None)
     """The application ErrorCode, when the failure carried one."""
-    traceback: Mapped[str] = mapped_column(Text, nullable=False)
+    traceback: Mapped[str] = mapped_column(Text, nullable=False, default="")
     """Rendered traceback, truncated from the front so the frames nearest the failure survive."""
-    context: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False, default_factory=dict)
+    context: Mapped[dict[str, JSONValue]] = mapped_column(JSONB, nullable=False, default_factory=dict)
     """Redacted diagnostic context. Never contains stable Discord account identifiers."""
     log_tail: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default_factory=list)
     """What the process logged under this correlation ID before failing, oldest first."""

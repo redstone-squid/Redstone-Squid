@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from typing import override
-from uuid import UUID
+from uuid import NAMESPACE_URL, uuid5
 
 import anyio
 import discord
@@ -13,7 +13,7 @@ from whenever import Instant
 import squid_ui_widgets as sp
 from squid.bot.diagnostics_view import ErrorReportScreen, report_attachment
 from squid.diagnostics.application import ErrorReportService
-from squid.diagnostics.domain import ErrorReport
+from squid.diagnostics.models import ErrorReport
 from squid_ui.runtime import LocalTopicBus, Resource, UIExecutionHost
 from squid_ui.sources import Position
 from squid_ui.testing import RecordingResponder, labels, press_event, render_tree
@@ -45,7 +45,7 @@ def make_report(
     work_lost: bool = False,
 ) -> ErrorReport:
     return ErrorReport(
-        id=UUID(int=0),
+        id=uuid5(NAMESPACE_URL, reference),
         correlation_id=f"{reference}-full",
         reference=reference,
         occurred_at=Instant.from_utc(2026, 8, 19, 12),
@@ -55,7 +55,7 @@ def make_report(
         exception_type="ValueError",
         message="boom",
         traceback=traceback,
-        log_tail=log_tail,
+        log_tail=list(log_tail),
         work_lost=work_lost,
     )
 
@@ -390,7 +390,7 @@ async def test_live_updates_preserve_the_open_report_and_stop_with_the_screen(
         while not screen._updates.changed.pending:
             await asyncio.sleep(0)
         assert screen._updates.changed.pending
-        assert screen._updates._shown != screen._operations.reports
+        assert screen._updates._shown != tuple(report.id for report in screen._operations.reports)
         await screen._updates.changed._load()
         assert screen._updates.changed.value is True
         view = commit_render(root)
@@ -398,7 +398,7 @@ async def test_live_updates_preserve_the_open_report_and_stop_with_the_screen(
         assert "report list has changed" in text
         assert "Error aaa111" in text
         assert screen._browser is original_browser
-        assert screen.reports == (make_report("aaa111"),)
+        assert tuple(report.reference for report in screen.reports) == ("aaa111",)
         if hide:
             screen.confirming_clear = True
             commit_render(root)
@@ -437,7 +437,7 @@ async def test_update_check_failure_keeps_manual_refresh_available() -> None:
     await updates.changed.reload()
     rendered = render_tree(updates)
     assert "Refresh reports" in labels(rendered)
-    assert screen.reports == (make_report(),)
+    assert tuple(report.reference for report in screen.reports) == ("abc123",)
 
 
 async def test_refresh_button_commits_a_new_report_window() -> None:
@@ -449,7 +449,7 @@ async def test_refresh_button_commits_a_new_report_window() -> None:
         screen._operations.reports = (make_report("bbb222"),)
         key = next(key for key in root._handlers if key.endswith("refresh"))
         await root.dispatch(key, interaction_harness())
-        assert screen.reports == (make_report("bbb222"),)
+        assert tuple(report.reference for report in screen.reports) == ("bbb222",)
         assert screen._updates is not old_updates
         assert screen._updates in root.runtime.components.values()
         assert old_updates not in root.runtime.components.values()
@@ -485,7 +485,7 @@ async def test_report_monitor_cancels_initial_check_and_remounts_with_a_new_run(
         assert first is not None
         await entered.wait()
         assert first.status is ServiceRunStatus.STARTING
-        assert screen.reports == (make_report(),)
+        assert tuple(report.reference for report in screen.reports) == ("abc123",)
         screen.confirming_clear = True
         commit_render(root)
         await root.runtime.wait_services()
@@ -516,7 +516,7 @@ async def test_initial_monitor_failure_keeps_report_and_refresh_controls_live() 
         view = commit_render(root)
         assert "Could not check for updates" in "\n".join(_texts(view))
         assert any(key.endswith("refresh") for key in root._handlers)
-        assert screen.reports == (make_report(),)
+        assert tuple(report.reference for report in screen.reports) == ("abc123",)
         assert not root.finished
         await root.finish(disable=False)
         await run.wait()

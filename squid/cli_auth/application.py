@@ -13,16 +13,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from whenever import Instant
 
-from squid.cli_auth.domain import (
-    CliDevice,
-    CliDeviceEnrollment,
-    CliIdentity,
-    CliSession,
-    CliSessionChallenge,
-    IssuedCliEnrollment,
-    IssuedCliSession,
-    IssuedCliSessionChallenge,
-)
+from squid.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.cli_auth.errors import (
     CliAuthorizationPendingError,
     CliDeviceUnavailableError,
@@ -34,6 +25,7 @@ from squid.cli_auth.errors import (
     InvalidCliSessionChallengeError,
     InvalidCliSessionError,
 )
+from squid.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
 from squid.cli_auth.ports import AccountConsentReader, CliAuthorizationRepository
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
 from squid.core.i18n import tr

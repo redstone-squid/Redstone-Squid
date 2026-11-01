@@ -17,7 +17,7 @@ import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.bot.diagnostics_refresh import ErrorReportRefresh
 from squid.bot.ui import CHROME, tr
-from squid.diagnostics.domain import ErrorReport
+from squid.diagnostics.models import ErrorReport
 
 SESSION_SECONDS = 300
 RECENT_LIMIT = 100
@@ -73,7 +73,7 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
         refresh: Callable[[sl.PressEvent], Awaitable[None]],
     ) -> None:
         self._operations = operations
-        self._shown = shown
+        self._shown = tuple(report.id for report in shown)
         self._work_lost_only = work_lost_only
         self._notice = _ReportUpdateNotice()
         self._controls = _ReportUpdateControls(refresh)
@@ -86,7 +86,7 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
 
     async def _check(self) -> bool:
         reports = await self._operations.recent(limit=RECENT_LIMIT, work_lost_only=self._work_lost_only)
-        return tuple(reports) != self._shown
+        return tuple(report.id for report in reports) != self._shown
 
     @override
     def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:

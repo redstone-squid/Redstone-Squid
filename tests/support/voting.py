@@ -12,7 +12,7 @@ from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.messages.models import Message
+from squid.messages.models import MessageRecord
 from squid.posts.models import DiscordPost
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
@@ -168,7 +168,7 @@ async def record_vote_message(
 ) -> None:
     """Record the Discord message fact that the attachment operation consumes."""
     await session.execute(
-        insert(Message).values(
+        insert(MessageRecord).values(
             id=message_id,
             guild_id=guild_id,
             channel_id=channel_id,

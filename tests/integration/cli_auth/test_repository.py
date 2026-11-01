@@ -18,10 +18,10 @@ from squid.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.cli_auth.application import enrollment_proof_message, session_proof_message
 from squid.cli_auth.errors import CliEnrollmentAlreadyExchangedError, InvalidCliSessionError
 from squid.cli_auth.models import (
-    CliDeviceEnrollmentRecord,
-    CliDeviceRecord,
-    CliSessionChallengeRecord,
-    CliSessionRecord,
+    CliDevice,
+    CliDeviceEnrollment,
+    CliSession,
+    CliSessionChallenge,
 )
 from squid.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.persistence.base import Base
@@ -32,10 +32,10 @@ NOW = Instant.parse_iso("2026-08-11T22:00:00Z")
 CLIENT_INSTANCE_ID = UUID("cafecafe-cafe-4afe-8afe-cafecafecafe")
 _TABLES: tuple[Table, ...] = (
     cast(Table, Account.__table__),
-    cast(Table, CliDeviceEnrollmentRecord.__table__),
-    cast(Table, CliDeviceRecord.__table__),
-    cast(Table, CliSessionChallengeRecord.__table__),
-    cast(Table, CliSessionRecord.__table__),
+    cast(Table, CliDeviceEnrollment.__table__),
+    cast(Table, CliDevice.__table__),
+    cast(Table, CliSessionChallenge.__table__),
+    cast(Table, CliSession.__table__),
 )
 
 
@@ -112,8 +112,8 @@ async def test_enrollment_secrets_are_hash_only_and_exchange_is_one_time(
     with pytest.raises(CliEnrollmentAlreadyExchangedError):
         await authorization.exchange_enrollment(device_code=enrollment.device_code, signature=signature)
     async with async_session_factory() as session:
-        enrollment_record = await session.get(CliDeviceEnrollmentRecord, enrollment.enrollment.id)
-        session_record = await session.get(CliSessionRecord, issued.session.id)
+        enrollment_record = await session.get(CliDeviceEnrollment, enrollment.enrollment.id)
+        session_record = await session.get(CliSession, issued.session.id)
     assert enrollment_record is not None
     assert session_record is not None
     persisted = enrollment_record.device_code_hash + enrollment_record.user_code_hash + session_record.token_hash

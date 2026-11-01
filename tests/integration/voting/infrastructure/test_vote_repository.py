@@ -14,7 +14,7 @@ from squid.accounts.models import Account
 from squid.builds.domain import Status
 from squid.builds.models import Build
 from squid.core.errors import DataIntegrityError
-from squid.messages.models import Message
+from squid.messages.models import MessageRecord
 from squid.persistence.alembic_entities import alembic_util_entities
 from squid.persistence.base import Base
 from squid.posts.models import DiscordPost
@@ -59,7 +59,7 @@ _TABLES: tuple[Table, ...] = with_foreign_key_targets(
     cast(Table, DeleteLogVoteSession.__table__),
     cast(Table, GenericVoteSession.__table__),
     cast(Table, Vote.__table__),
-    cast(Table, Message.__table__),
+    cast(Table, MessageRecord.__table__),
     cast(Table, DiscordPost.__table__),
 )
 

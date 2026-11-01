@@ -4,7 +4,8 @@ from typing import Protocol
 
 from whenever import Instant
 
-from squid.messages.domain import MessageFact, MessageRecord
+from squid.messages.domain import MessageFact
+from squid.messages.models import MessageRecord
 
 
 class MessageRepository(Protocol):

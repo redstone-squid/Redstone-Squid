@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.errors import ErrorCode
-from squid.diagnostics.domain import ErrorReport
 from squid.diagnostics.infrastructure.repository import PostgresErrorReportRepository
+from squid.diagnostics.models import ErrorReport
 from squid.persistence.base import Base
 
 _TABLES = [Base.metadata.tables["error_reports"]]
