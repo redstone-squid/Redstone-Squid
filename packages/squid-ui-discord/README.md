@@ -49,7 +49,7 @@ bot.tree.add_command(counter)
 ```
 
 Command decorators supply an owned request. Native commands can use `await sd.request(source)`
-to infer the command's cog; component events inherit their root's scope. Cog listeners without a
+to infer the command's cog; component callbacks use typed events such as `sd.PressEvent` and obtain the root-owned request from `event.context`. Cog listeners without a
 command binding use `await self.ui.request(source)`. Both resolvers share one request and ledger;
 a missing or closed command-owner scope raises instead of extending the panel's lifetime.
 
