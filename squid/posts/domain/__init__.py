@@ -1,7 +1,6 @@
 """Public bot-owned Discord post domain API."""
 
 from squid.posts.domain.models import (
-    DiscordPost,
     PostReference,
     PostTarget,
     ResourceKind,
@@ -10,7 +9,6 @@ from squid.posts.domain.models import (
 )
 
 __all__ = [
-    "DiscordPost",
     "PostReference",
     "PostTarget",
     "ResourceKind",

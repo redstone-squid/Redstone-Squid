@@ -3,11 +3,12 @@
 from collections.abc import Sequence
 
 from squid.posts.application.ports import PostRepository
-from squid.posts.domain import DiscordPost, PostReference, ResourceKind, Surface
+from squid.posts.domain import PostReference, ResourceKind, Surface
+from squid.posts.models import DiscordPost
 
 
 class PostService:
-    """Track which Discord messages the bot owns and how current each one is."""
+    """Track published posts and the revisions they display."""
 
     def __init__(self, repository: PostRepository):
         self._repository = repository
@@ -22,10 +23,9 @@ class PostService:
         surface: Surface,
         applied_revision: int,
     ) -> None:
-        """Claim a freshly sent Discord message as this resource's post in this channel.
+        """Record a sent post. An existing message ID is left unchanged.
 
-        The unique index makes a second post in the same channel a conflict rather than
-        a duplicate card, so a retry that already sent cannot double up.
+        Each resource can have one live post per channel.
         """
         await self._repository.record(
             message_id=message_id,
@@ -41,30 +41,25 @@ class PostService:
         return await self._repository.list_for_resource(resource_kind, resource_key)
 
     async def resolve(self, message_id: int) -> PostReference | None:
-        """Return what a Discord message renders, for routing reactions back to it."""
+        """Return the resource displayed by a message, or None if the post is unknown."""
         return await self._repository.resolve(message_id)
 
     async def mark_rendered(self, message_id: int, applied_revision: int) -> None:
-        """Record that one post now shows the given generation."""
+        """Advance a post's rendered generation if the supplied value is newer."""
         await self._repository.mark_rendered(message_id, applied_revision)
 
     async def mark_applied(self, resource_kind: ResourceKind, resource_key: str, generation: int) -> None:
-        """Record that every post for a resource now shows the given generation."""
+        """Advance all posts for a resource to at least the supplied generation."""
         await self._repository.mark_applied(resource_kind, resource_key, generation)
 
     async def suppress(self, message_id: int) -> bool:
-        """Note that a post was deleted outside the bot.
-
-        Returns whether a post matched. Suppressing rather than deleting is what lets a
-        renderer decide between "a moderator removed this, leave it gone" and "put it
-        back", which the two surfaces genuinely disagree about.
-        """
+        """Record an external deletion, returning True if a live post was suppressed."""
         return await self._repository.suppress(message_id)
 
     async def forget(self, message_id: int) -> None:
-        """Drop a post record whose Discord message the bot itself deleted."""
+        """Remove the tracking record for a post."""
         await self._repository.forget(message_id)
 
     async def pending_generation(self, resource_kind: ResourceKind, resource_key: str) -> int | None:
-        """Return the generation a resource is waiting on, or None when it is current."""
+        """Return the queued generation if a live post is behind, otherwise None."""
         return await self._repository.pending_generation(resource_kind, resource_key)

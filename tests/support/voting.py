@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.messages.infrastructure.models import Message
-from squid.posts.infrastructure.models import DiscordPost
+from squid.posts.models import DiscordPost
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     BuildVoteTarget,

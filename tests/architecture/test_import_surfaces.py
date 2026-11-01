@@ -17,6 +17,12 @@ NO_NATIVE_ENGINE = ("nucleation", "sqlalchemy", "discord")
         # Problem details are safe to reuse from route modules as long as the import does not
         # initialize persistence or Discord transports.
         pytest.param("squid.api.errors", ("sqlalchemy", "discord"), id="api-errors"),
+        pytest.param("squid.posts.domain", ("sqlalchemy", "discord"), id="post-values"),
+        pytest.param(
+            "squid.posts.models",
+            ("squid.persistence.engine", "squid.bootstrap", "squid.posts.infrastructure.repository", "discord"),
+            id="post-entity",
+        ),
         pytest.param("squid.bot.utils.permissions", ("squid.bot.app",), id="bot-permissions"),
         pytest.param(
             "squid.bot.submission.ui.fields",

@@ -19,7 +19,8 @@ import squid_ui_discord as sd
 from squid.bot.message_adapter import to_message_fact
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
-from squid.posts.domain import DiscordPost, ResourceKind, Surface
+from squid.posts.domain import ResourceKind, Surface
+from squid.posts.models import DiscordPost
 from squid_ui_discord import send_to
 
 if TYPE_CHECKING:

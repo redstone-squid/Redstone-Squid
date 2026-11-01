@@ -17,7 +17,7 @@ from squid.core.errors import DataIntegrityError
 from squid.messages.infrastructure.models import Message
 from squid.persistence.alembic_entities import alembic_util_entities
 from squid.persistence.base import Base
-from squid.posts.infrastructure.models import DiscordPost
+from squid.posts.models import DiscordPost
 from squid.settings.infrastructure.models import ServerSetting
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,

@@ -13,7 +13,7 @@ from squid.messages.infrastructure import models as message_models
 from squid.minecraft_auth.infrastructure import models as minecraft_auth_models
 from squid.notifications.infrastructure import models as notification_models
 from squid.permissions.infrastructure import models as permission_models
-from squid.posts.infrastructure import models as post_models
+from squid.posts import models as post_models
 from squid.records.infrastructure import models as record_models
 from squid.schematics.infrastructure import models as schematic_models
 from squid.search.infrastructure import models as search_models

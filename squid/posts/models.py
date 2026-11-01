@@ -1,4 +1,4 @@
-"""SQLAlchemy models for bot-owned Discord posts."""
+"""Discord messages the bot publishes and updates."""
 
 from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, Index, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -6,15 +6,11 @@ from whenever import Instant
 
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, now
+from squid.posts.domain import ResourceKind, Surface
 
 
-class DiscordPost(Base, kw_only=True):
-    """A Discord message the bot owns and keeps rendered for some resource.
-
-    Holds only applied state. What the post *should* look like lives in the matching
-    `discord_sync_queue` row, so staleness is `applied_revision < queue.generation`
-    rather than a desired revision copied onto every post by a trigger.
-    """
+class DiscordPost(Base, kw_only=True, eq=False):
+    """A bot-owned Discord message displaying a build, vote, or other resource."""
 
     __tablename__ = "discord_posts"
     __table_args__ = (
@@ -27,9 +23,7 @@ class DiscordPost(Base, kw_only=True):
             name="discord_posts_surface_check",
         ),
         CheckConstraint("applied_revision >= 0", name="discord_posts_applied_revision_check"),
-        # The idempotency guarantee: one live post per resource per channel. Redelivery,
-        # partial-failure retries and reconciliation all rely on this rather than on each
-        # caller inventing its own "have I already posted here?" check.
+        # Suppressed posts leave room for a replacement in the same channel.
         Index(
             "discord_posts_resource_channel_key",
             "resource_kind",
@@ -47,15 +41,28 @@ class DiscordPost(Base, kw_only=True):
         primary_key=True,
     )
     channel_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    """Denormalised from `messages.channel_id`: a unique index cannot span a join."""
-    resource_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    """Copied from the message so the unique index can limit live posts per channel."""
+    resource_kind: Mapped[ResourceKind] = mapped_column(Text, nullable=False)
+    """The type of resource displayed by this message, used to select its renderer."""
     resource_key: Mapped[str] = mapped_column(Text, nullable=False)
-    surface: Mapped[str] = mapped_column(Text, nullable=False)
+    """The resource's identifier, such as a build ID or a starboard/message ID pair."""
+    surface: Mapped[Surface] = mapped_column(Text, nullable=False)
+    """The presentation to use, such as a build card or a vote card."""
     applied_revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"), default=0)
-    """The queue generation this post was last rendered at."""
+    """The last rendered queue generation; a larger queued generation means an update is pending."""
     posted_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     rendered_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    """When a rendered update was last recorded; None until the first update."""
     suppressed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    """Set when the post was deleted outside the bot. Renderers choose whether to repost."""
+    """When an external deletion was recorded. Each renderer decides whether to publish a replacement."""
+
+    # Base is a dataclass too; disabling generation alone would inherit its equality.
+    __eq__ = object.__eq__
+    __hash__ = object.__hash__
+
+    @property
+    def is_live(self) -> bool:
+        """Whether this post has not been suppressed."""
+        return self.suppressed_at is None

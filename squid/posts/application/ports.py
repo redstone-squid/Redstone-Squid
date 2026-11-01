@@ -3,11 +3,12 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.posts.domain import DiscordPost, PostReference, ResourceKind, Surface
+from squid.posts.domain import PostReference, ResourceKind, Surface
+from squid.posts.models import DiscordPost
 
 
 class PostRepository(Protocol):
-    """Persistence required by :class:`PostService`."""
+    """Store posts and track which resource each message displays."""
 
     async def record(
         self,

@@ -12,7 +12,7 @@ from squid.core.errors import DataIntegrityError
 from squid.messages.errors import MessageNotFoundError
 from squid.messages.infrastructure.models import Message
 from squid.persistence.repository import BaseAsyncRepository
-from squid.posts.infrastructure.models import DiscordPost
+from squid.posts.models import DiscordPost
 from squid.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     BuildVoteTarget,

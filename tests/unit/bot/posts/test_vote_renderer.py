@@ -8,7 +8,8 @@ from squid.accounts.application import AccountService
 from squid.accounts.domain import Account
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
 from squid.posts.application import PostService
-from squid.posts.domain import DiscordPost, ResourceKind
+from squid.posts.domain import ResourceKind
+from squid.posts.models import DiscordPost
 from squid.settings.application import SettingsService
 from squid.settings.domain import Setting
 from squid.voting.application import VoteService

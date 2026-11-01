@@ -1,4 +1,4 @@
-"""Coverage for the guarantees `discord_posts` moves into the database."""
+"""Post persistence, replacement, and render tracking."""
 
 import pytest
 from sqlalchemy import text
@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.messages.domain import MessageFact
 from squid.messages.infrastructure.repository import MessageRepository
 from squid.posts.infrastructure.repository import PostRepository
+from tests.support.database import assert_loaded_detached
 
 CHANNEL = 5000
 OTHER_CHANNEL = 5001
@@ -30,7 +31,6 @@ async def _observe(session_factory: async_sessionmaker[AsyncSession], *message_i
 async def test_one_live_post_per_resource_and_channel(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The duplicate-card guard is a constraint, not a check each caller reimplements."""
     await _seed_guild(migrated_session_factory)
     await _observe(migrated_session_factory, 100, 101)
     posts = PostRepository(migrated_session_factory)
@@ -58,7 +58,6 @@ async def test_one_live_post_per_resource_and_channel(
 async def test_recording_the_same_message_twice_is_a_noop(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """A retry that already sent and already recorded must not fail."""
     await _seed_guild(migrated_session_factory)
     await _observe(migrated_session_factory, 100)
     posts = PostRepository(migrated_session_factory)
@@ -79,7 +78,6 @@ async def test_recording_the_same_message_twice_is_a_noop(
 async def test_suppressing_frees_the_channel_for_a_replacement(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """A post deleted by hand is tombstoned, and the slot reopens for a repost."""
     await _seed_guild(migrated_session_factory)
     await _observe(migrated_session_factory, 100, 101)
     posts = PostRepository(migrated_session_factory)
@@ -111,7 +109,6 @@ async def test_suppressing_frees_the_channel_for_a_replacement(
 async def test_applied_revision_never_moves_backwards(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Overlapping reconciler passes must not report an older render as current."""
     await _seed_guild(migrated_session_factory)
     await _observe(migrated_session_factory, 100)
     posts = PostRepository(migrated_session_factory)
@@ -130,10 +127,30 @@ async def test_applied_revision_never_moves_backwards(
     assert (await posts.list_for_resource("build", "42"))[0].applied_revision == 9
 
 
+async def test_repository_returns_detached_posts(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _seed_guild(migrated_session_factory)
+    await _observe(migrated_session_factory, 100)
+    posts = PostRepository(migrated_session_factory)
+    await posts.record(
+        message_id=100,
+        channel_id=CHANNEL,
+        resource_kind="build",
+        resource_key="42",
+        surface="build_card",
+        applied_revision=1,
+    )
+
+    post = (await posts.list_for_resource("build", "42"))[0]
+    assert_loaded_detached(post)
+    post.applied_revision = 99
+    assert (await posts.list_for_resource("build", "42"))[0].applied_revision == 1
+
+
 async def test_pending_generation_reads_desired_state_from_the_queue(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Staleness is a join against the queue, not a revision copied onto each post."""
     await _seed_guild(migrated_session_factory)
     await _observe(migrated_session_factory, 100, 101)
     posts = PostRepository(migrated_session_factory)
@@ -170,7 +187,6 @@ async def test_pending_generation_reads_desired_state_from_the_queue(
 async def test_a_post_cannot_outlive_its_message_fact(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """RESTRICT keeps the fact a post points at from being deleted underneath it."""
     await _seed_guild(migrated_session_factory)
     await _observe(migrated_session_factory, 100)
     posts = PostRepository(migrated_session_factory)
