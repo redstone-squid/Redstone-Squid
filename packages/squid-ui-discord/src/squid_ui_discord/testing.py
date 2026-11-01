@@ -42,6 +42,7 @@ from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.message_root_wiring import AnyMountedView, ClassicMountedView, MountedView
 from squid_ui_discord.rendering import render_static
+from squid_ui_discord.request import Request
 from squid_ui_discord.response import Presented, ResponseOverrides
 from squid_ui_discord.runtime import DiscordUIRuntime, install
 
@@ -689,7 +690,7 @@ def _sequence(value: object) -> Sequence[object]:
     return (value,)
 
 
-class StagedUI[ComponentT: Component[ComponentsV2Target]]:
+class StagedUI[ComponentT: Component[ComponentsV2Target, Request]]:
     """A facade-presented component; the stage context ends its root."""
 
     def __init__(
@@ -805,7 +806,7 @@ def _interaction(client: discord.Client, user_id: int) -> InteractionHarness:
 
 
 @asynccontextmanager
-async def stage[OwnerT, ComponentT: Component[ComponentsV2Target]](
+async def stage[OwnerT, ComponentT: Component[ComponentsV2Target, Request]](
     content: ComponentT,
     *,
     owner: OwnerT,

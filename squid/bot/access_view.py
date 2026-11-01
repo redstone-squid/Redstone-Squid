@@ -56,16 +56,16 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         self._capabilities = capabilities
         self._actor = actor
         self._authorize = authorize
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
+        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
         self._pending_delete: str | None = None
-        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
+        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
 
     @override
     async def on_load(self) -> None:
         await self._refresh()
 
     async def _refresh(self) -> None:
-        tabs: list[sp.Tab[sl.ComponentsV2Target]] = []
+        tabs: list[sp.Tab[sl.ComponentsV2Target, sd.Request]] = []
         if PERM_SUBJECT_INSPECT in self._capabilities:
             rules = await self._admin.rules_for(
                 account_id=self._account_id,
@@ -102,7 +102,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         return ROLE_DEFINITION_MANAGE_GUILD in self._capabilities or ROLE_DEFINITION_MANAGE in self._capabilities
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._pending_delete is not None and self._decision is not None:
             slug = self._pending_delete
             return (
@@ -120,7 +120,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
 
     def _subject_browser(
         self, rules: tuple[RuleRow, ...], assignments: tuple[AssignmentRow, ...]
-    ) -> sp.Browser[RuleRow | AssignmentRow, sl.ComponentsV2Target]:
+    ) -> sp.Browser[RuleRow | AssignmentRow, sl.ComponentsV2Target, sd.Request]:
         return sp.Browser(
             sl.sources.list_source((*rules, *assignments)),
             key="subject-access",
@@ -133,8 +133,8 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
             empty=tr(t"This subject has no explicit access rules or internal roles."),
         )
 
-    def _subject_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
+    def _subject_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if self._may_grant:
             nodes.append(sl.form(tr(t"Change direct rule"), self._rule_form(), key="rule", on_submit=self._change_rule))
         if self._may_manage_roles:
@@ -157,7 +157,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         return _AssignmentForm().spec()
 
     @staticmethod
-    def _role_browser(roles: tuple[RoleRecord, ...]) -> sp.Browser[RoleRecord, sl.ComponentsV2Target]:
+    def _role_browser(roles: tuple[RoleRecord, ...]) -> sp.Browser[RoleRecord, sl.ComponentsV2Target, sd.Request]:
         return sp.Browser(
             sl.sources.list_source(roles),
             key="roles",
@@ -170,7 +170,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
             empty=tr(t"No internal roles are visible in this server."),
         )
 
-    def _role_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _role_forms(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
                 tr(t"Create internal role"), self._create_role_form(), key="create-role", on_submit=self._create_role
@@ -187,7 +187,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         return _EditRoleForm().spec()
 
     @staticmethod
-    def _catalogue() -> sp.Browser[Any, sl.ComponentsV2Target]:
+    def _catalogue() -> sp.Browser[Any, sl.ComponentsV2Target, sd.Request]:
         nodes = tuple(CATALOGUE)
         return sp.Browser(
             sl.sources.list_source(nodes),
@@ -206,7 +206,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         )
 
     @staticmethod
-    def _audit(rows: tuple[AuditRow, ...]) -> sp.Browser[AuditRow, sl.ComponentsV2Target]:
+    def _audit(rows: tuple[AuditRow, ...]) -> sp.Browser[AuditRow, sl.ComponentsV2Target, sd.Request]:
         return sp.Browser(
             sl.sources.list_source(rows),
             key="permission-audit",
@@ -306,7 +306,7 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         role = await self._admin.role(slug, guild_id=self._guild_id)
         if operation == "delete":
             self._pending_delete = slug
-            self._decision = sp.Decision[sl.ComponentsV2Target](
+            self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
                 tr(t"Deleting an internal role removes every assignment of it."),
                 (
                     sp.DecisionOption("confirm", tr(t"Delete role"), sl.Tone.DANGER),

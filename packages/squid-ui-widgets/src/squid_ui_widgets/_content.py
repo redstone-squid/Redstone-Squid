@@ -9,9 +9,11 @@ from squid_ui.semantic import LayoutNode
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import Message, ResolvedText, TextLike
 
-type ContentItem[RenderTargetT: RenderTarget = RenderTarget] = LayoutNode[RenderTargetT] | Component[RenderTargetT]
-type ContentLike[RenderTargetT: RenderTarget = RenderTarget] = (
-    ContentItem[RenderTargetT] | TextLike | Iterable[ContentItem[RenderTargetT] | TextLike]
+type ContentItem[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
+    LayoutNode[RenderTargetT, ContextT] | Component[RenderTargetT, ContextT]
+)
+type ContentLike[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
+    ContentItem[RenderTargetT, ContextT] | TextLike | Iterable[ContentItem[RenderTargetT, ContextT] | TextLike]
 )
 """Whatever a caller hands a widget's content slot.
 
@@ -21,9 +23,9 @@ content slot, its widget, and the component shell V2-only instead of disappearin
 """
 
 
-def normalize_content[RenderTargetT: RenderTarget](
-    value: ContentLike[RenderTargetT], *, name: str
-) -> tuple[ContentItem[RenderTargetT], ...]:
+def normalize_content[RenderTargetT: RenderTarget, ContextT = object](
+    value: ContentLike[RenderTargetT, ContextT], *, name: str
+) -> tuple[ContentItem[RenderTargetT, ContextT], ...]:
     """Normalize one machine content slot into renderable nodes and child components."""
     if isinstance(value, Component):
         return (value,)
@@ -40,9 +42,9 @@ def normalize_content[RenderTargetT: RenderTarget](
     raise TypeError(message)
 
 
-def _normalize_item[RenderTargetT: RenderTarget](
-    value: ContentItem[RenderTargetT] | TextLike, *, name: str
-) -> ContentItem[RenderTargetT]:
+def _normalize_item[RenderTargetT: RenderTarget, ContextT = object](
+    value: ContentItem[RenderTargetT, ContextT] | TextLike, *, name: str
+) -> ContentItem[RenderTargetT, ContextT]:
     """Normalize one member of an iterable content slot."""
     if isinstance(value, Component):
         return value
@@ -54,9 +56,9 @@ def _normalize_item[RenderTargetT: RenderTarget](
     raise TypeError(message)
 
 
-def render_content[RenderTargetT: RenderTarget](
-    owner: Component[RenderTargetT], content: Iterable[ContentItem[RenderTargetT]], *, prefix: str
-) -> tuple[LayoutNode[RenderTargetT], ...]:
+def render_content[RenderTargetT: RenderTarget, ContextT = object](
+    owner: Component[RenderTargetT, ContextT], content: Iterable[ContentItem[RenderTargetT, ContextT]], *, prefix: str
+) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
     """Expand component children under stable embed keys while retaining semantic nodes."""
     return tuple(
         owner.boundary(item, key=f"{prefix}-{index}") if isinstance(item, Component) else item

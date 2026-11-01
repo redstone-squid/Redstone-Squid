@@ -13,14 +13,14 @@ from squid_ui_widgets.drivers import ComponentDriver, FormValues, MachineControl
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class Tab[RenderTargetT: RenderTarget = RenderTarget]:
+class Tab[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """One tab and the content shown while it is selected."""
 
     key: str
     label: TextLike
-    content: tuple[ContentItem[RenderTargetT], ...]
+    content: tuple[ContentItem[RenderTargetT, ContextT], ...]
 
-    def __init__(self, key: str, label: TextLike, content: ContentLike[RenderTargetT]) -> None:
+    def __init__(self, key: str, label: TextLike, content: ContentLike[RenderTargetT, ContextT]) -> None:
         require_key(key, name="Tab.key")
         object.__setattr__(self, "key", key)
         object.__setattr__(self, "label", label)
@@ -34,12 +34,12 @@ class TabsState:
     selected: str
 
 
-class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
+class Tabs[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """A pure keyed tab machine with generic component and router shells."""
 
     def __init__(
         self,
-        tabs: Iterable[Tab[RenderTargetT]],
+        tabs: Iterable[Tab[RenderTargetT, ContextT]],
         *,
         key: str,
         initial: str | None = None,
@@ -70,7 +70,7 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
         *,
         initial: TabsState | None = None,
         on_change: TransitionHandler[TabsState] | None = None,
-    ) -> ComponentDriver[TabsState, RenderTargetT]:
+    ) -> ComponentDriver[TabsState, RenderTargetT, ContextT]:
         """Build the in-memory shell for this tab set."""
         if initial is None:
             return ComponentDriver(self, on_change=on_change)
@@ -94,8 +94,8 @@ class Tabs[RenderTargetT: RenderTarget = RenderTarget]:
         return TabsState(selected)
 
     def render(
-        self, state: TabsState, controls: MachineControls[TabsState, RenderTargetT]
-    ) -> DocumentLike[RenderTargetT]:
+        self, state: TabsState, controls: MachineControls[TabsState, RenderTargetT, ContextT]
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render the selected tab and an adaptive selector."""
         current = next((tab for tab in self.tabs if tab.key == state.selected), self.tabs[0])
         if len(self.tabs) <= 5:

@@ -58,6 +58,7 @@ DISCORD_PY_27_ADAPTER: AdapterProfile[DiscordPyAdapter] = AdapterProfile(
     ">=2.7,<2.8",
     DISCORD_PY_BEHAVIOR_CAPABILITIES,
     {DISCORD_ITEM.name: _DiscordItemExtension()},
+    frontend="discord",
 )
 """Declared at the family, not at `DiscordPy27Adapter`, which is what `family` still records.
 
@@ -96,6 +97,7 @@ def discord_py_adapter_profile(
         version_expression,
         capabilities,
         {} if extensions is None else extensions,
+        frontend="discord",
     )
 
 

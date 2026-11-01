@@ -58,7 +58,7 @@ async def test_exact_button_grid_keeps_rows_keys_disabled_state_and_payload() ->
     assert [len(row.items) for row in rows] == [5, 1]
     assert buttons[-1].disabled
     await result.bindings[buttons[0].action].handler(
-        sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()))
+        sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()), context=None)
     )
     assert seen[0].values == ("cell-0",)
 
@@ -144,9 +144,7 @@ async def test_coordinate_grid_lists_only_available_cells_and_submits_stable_key
     assert [(option.label, option.value) for option in select.options] == [("A1 ??Open", "open")]
     await result.bindings[select.action].handler(
         sl.SelectionEvent(
-            sl.interactions.Actor("7"),
-            cast(sl.interactions.ActionResponder, object()),
-            values=("open",),
+            sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()), values=("open",), context=None
         )
     )
     assert seen[0].values == ("open",)

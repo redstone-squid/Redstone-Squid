@@ -19,7 +19,7 @@ CLAIMS_PER_PAGE = 5
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
+class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """A mounted claim queue whose choices and decisions share one semantic surface."""
 
     selected_id: int | None = sl.state(None)
@@ -54,7 +54,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         return next((claim for claim in self._claims if claim.id == self.selected_id), None)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.closed:
             return (
                 sl.section(
@@ -63,7 +63,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
                 ),
             )
         entries = tuple(_claim_entry(claim) for claim in self._claims)
-        body: sl.LayoutNode[sl.ComponentsV2Target] = (
+        body: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = (
             sd.v2.lines(
                 *entries,
                 join="\n\n",
@@ -72,7 +72,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
             if entries
             else sd.v2.text(tr(t"No creator credit claims are awaiting review."))
         )
-        choices: sl.LayoutNode[sl.ComponentsV2Target] | None = None
+        choices: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = None
         if self._claims:
             choices = sl.choices(
                 *(
@@ -90,7 +90,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
                 minimum=1,
                 maximum=1,
             )
-        buttons: list[sl.semantic.ActionControl] = []
+        buttons: list[sl.semantic.ActionControl[sd.Request]] = []
         if self._can_approve:
             buttons.append(
                 sl.action_control(
@@ -127,17 +127,17 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         total = len(self._claims)
         return tr(t"Page {page} of {pages} — {total} in total")
 
-    async def _select_claim(self, event: sl.ChoiceEvent) -> None:
+    async def _select_claim(self, event: sd.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])
         self.reassign_armed = None
 
-    async def _approve(self, event: sl.PressEvent) -> None:
+    async def _approve(self, event: sd.PressEvent) -> None:
         await self._decide(event, approve=True)
 
-    async def _reject(self, event: sl.PressEvent) -> None:
+    async def _reject(self, event: sd.PressEvent) -> None:
         await self._decide(event, approve=False)
 
-    async def _decide(self, event: sl.PressEvent, *, approve: bool) -> None:
+    async def _decide(self, event: sd.PressEvent, *, approve: bool) -> None:
         claim = self.selected
         if claim is None:
             return
@@ -146,7 +146,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
             await event.notice(tr(t"You are no longer allowed to resolve creator claims."))
             return
 
-        async def resolve(live: sl.ActionEvent, staff_account_id: int) -> None:
+        async def resolve(live: sd.ActionEvent, staff_account_id: int) -> None:
             await self._resolve(live, claim, staff_account_id, approve=approve)
 
         await with_consented_account(event, self._accounts, resolve)
@@ -187,7 +187,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         self.selected_id = None
         self.reassign_armed = None
 
-    async def _close(self, event: sl.PressEvent) -> None:
+    async def _close(self, event: sd.PressEvent) -> None:
         self.closed = True
         event.finish_on_success()
 

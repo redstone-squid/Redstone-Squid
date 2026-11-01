@@ -39,8 +39,8 @@ from squid_ui.text import TextLike
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
 
-type Conditional[ValueT] = ValueT | None | Literal[False]
-type Control = LinkButton | PremiumButton | Button | RoutedButton | RawItem
+type Conditional[ValueT] = ValueT | Literal[False] | None
+type Control[ContextT = object] = LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem
 
 
 def text(content: TextLike, *, overflow: Overflow | None = None, priority: int = 0) -> Text:
@@ -85,9 +85,9 @@ def lines(
     return Lines(tuple(entries), join=join, overflow=Spill() if overflow is None else overflow, priority=priority)
 
 
-def button(
+def button[ContextT = object](
     label: TextLike | None,
-    on_click: PressHandler,
+    on_click: PressHandler[ContextT],
     *,
     key: str,
     style: ActionStyle = ActionStyle.SECONDARY,
@@ -97,7 +97,7 @@ def button(
     guard: Guard | None = None,
     busy: BusySpec | None = None,
     record: History | None = None,
-) -> Button:
+) -> Button[ContextT]:
     """Build an exact dispatchable button."""
     return Button(label, on_click, key, style, emoji, disabled, mode, guard, busy, record)
 
@@ -142,9 +142,9 @@ def option(
     return Option(label, value, description, default, emoji)
 
 
-def select(
+def select[ContextT = object](
     *options: Option,
-    on_select: SelectionHandler,
+    on_select: SelectionHandler[ContextT],
     key: str,
     placeholder: TextLike | None = None,
     min_values: int = 1,
@@ -152,7 +152,7 @@ def select(
     disabled: bool = False,
     mode: ActionMode = ActionMode.EXCLUSIVE,
     routes: Mapping[str, ActionBinding] | None = None,
-) -> SelectMenu:
+) -> SelectMenu[ContextT]:
     """Build an exact dispatchable string select."""
     return SelectMenu(
         tuple(options),
@@ -167,9 +167,9 @@ def select(
     )
 
 
-def entity_select(
+def entity_select[ContextT = object](
     entity_type: EntityType,
-    on_select: EntitySelectionHandler,
+    on_select: EntitySelectionHandler[ContextT],
     *,
     key: str,
     placeholder: TextLike | None = None,
@@ -179,7 +179,7 @@ def entity_select(
     max_values: int = 1,
     disabled: bool = False,
     mode: ActionMode = ActionMode.EXCLUSIVE,
-) -> EntitySelect:
+) -> EntitySelect[ContextT]:
     """Build an exact entity select."""
     return EntitySelect(
         entity_type,
@@ -207,18 +207,20 @@ def routed_select(
     return RoutedSelect(tuple(options), route_id, placeholder, min_values, max_values, disabled)
 
 
-def row(*items: Conditional[Control]) -> Row:
+def row[ContextT = object](*items: Conditional[Control[ContextT]]) -> Row[ContextT]:
     """Build exactly one Discord action row."""
     return Row(_controls(items, "row"))
 
 
-def controls(*items: Conditional[Control]) -> ControlGroup:
+def controls[ContextT = object](*items: Conditional[Control[ContextT]]) -> ControlGroup[ContextT]:
     """Build controls that the planner may arrange across valid rows."""
     return ControlGroup(_controls(items, "controls"))
 
 
-def _controls(items: tuple[object, ...], origin: str) -> tuple[Control, ...]:
-    collected: list[Control] = []
+def _controls[ContextT = object](
+    items: tuple[Conditional[Control[ContextT]], ...], origin: str
+) -> tuple[Control[ContextT], ...]:
+    collected: list[Control[ContextT]] = []
     for index, item in enumerate(items):
         if item is None or item is False:
             continue

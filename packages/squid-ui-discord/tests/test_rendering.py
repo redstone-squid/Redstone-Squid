@@ -745,7 +745,7 @@ def test_boundaries_expand_and_namespace_inside_every_primitive_child_container(
 ) -> None:
     child = Counter("nested")
 
-    class Parent(Component[Any]):
+    class Parent(Component[Any, Any]):
         @override
         def render(self) -> Node:
             return wrap((self.boundary(child, key="child"),))

@@ -22,12 +22,12 @@ class RankedListState:
     page: PagePosition = FIRST_PAGE
 
 
-type ContentHook[RenderTargetT: DiscordTarget = DiscordTarget] = (
-    ContentLike[RenderTargetT] | Callable[[int], ContentLike[RenderTargetT]]
+type ContentHook[RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = (
+    ContentLike[RenderTargetT, ContextT] | Callable[[int], ContentLike[RenderTargetT, ContextT]]
 )
 
 
-class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
+class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object]:
     """Render a fully materialized ranking through either machine shell."""
 
     def __init__(
@@ -39,11 +39,11 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
         value: Projector[EntryT] | None = None,
         identity: Projector[EntryT] | None = None,
         title: TextLike | None = None,
-        header: ContentHook[RenderTargetT] | None = None,
-        footer: ContentHook[RenderTargetT] | None = None,
+        header: ContentHook[RenderTargetT, ContextT] | None = None,
+        footer: ContentHook[RenderTargetT, ContextT] | None = None,
         page_size: int | None = None,
         top_n: int | None = None,
-        empty: ContentLike[RenderTargetT] = "No entries",
+        empty: ContentLike[RenderTargetT, ContextT] = "No entries",
         initial_page: PagePosition = FIRST_PAGE,
     ) -> None:
         self.key = require_key(key, name="RankedList.key")
@@ -70,7 +70,7 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
 
     def build_component(
         self, *, initial: RankedListState | None = None
-    ) -> ComponentDriver[RankedListState, RenderTargetT]:
+    ) -> ComponentDriver[RankedListState, RenderTargetT, ContextT]:
         """Build the in-memory shell for this ranking."""
         if initial is None:
             return ComponentDriver(self)
@@ -100,19 +100,19 @@ class RankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget]:
 
     def _hook(
         self,
-        hook: ContentHook[RenderTargetT],
+        hook: ContentHook[RenderTargetT, ContextT],
         total: int,
-        controls: MachineControls[RankedListState, RenderTargetT],
+        controls: MachineControls[RankedListState, RenderTargetT, ContextT],
         *,
         name: str,
-    ) -> tuple[LayoutNode[RenderTargetT], ...]:
+    ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
         """Resolve and normalize header or footer content."""
         value = hook(total) if callable(hook) else hook
         return controls.content(normalize_content(value, name=name), prefix=name)
 
     def render(
-        self, state: RankedListState, controls: MachineControls[RankedListState, RenderTargetT]
-    ) -> DocumentLike[RenderTargetT]:
+        self, state: RankedListState, controls: MachineControls[RankedListState, RenderTargetT, ContextT]
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render the ranked window with stable global row numbers."""
         displayed = self.entries if self.top_n is None else self.entries[: self.top_n]
         total = len(displayed)

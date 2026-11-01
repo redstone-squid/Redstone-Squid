@@ -111,7 +111,7 @@ def adopt(
     keys: KeyFactory | None = None,
     assets: Sequence[Asset] = (),
     discard_timeout: bool = False,
-) -> Component[ComponentsV2Target]: ...
+) -> Component[ComponentsV2Target, Any]: ...
 
 
 def adopt(
@@ -120,7 +120,7 @@ def adopt(
     keys: KeyFactory | None = None,
     assets: Sequence[Asset] = (),
     discard_timeout: bool = False,
-) -> Component[Any]:
+) -> Component[Any, Any]:
     """Draw an unsent discord.py view as a Squid component, keeping its callbacks.
 
     The view becomes a model: Squid builds its own controls from `view.children` on every
@@ -200,7 +200,7 @@ def _validate_adoptable(view: discord.ui.View | discord.ui.LayoutView, *, discar
         raise AdoptionError(message)
 
 
-class _AdoptedView(Component[Any]):
+class _AdoptedView(Component[Any, Any]):
     """A component whose whole model is one legacy view."""
 
     _view: discord.ui.View | discord.ui.LayoutView = state(persist=False, opaque=True)
@@ -219,12 +219,12 @@ class _AdoptedView(Component[Any]):
         self._render_keys: dict[int, str] | None = None
 
     @override
-    def render(self) -> list[Node] | Document[ComponentsV2Target]:
+    def render(self) -> list[Node] | Document[ComponentsV2Target, Any]:
         if isinstance(self._view, discord.ui.LayoutView):
             key_map = self._layout_key_map()
             self._render_keys = {id(item): key for key, item in key_map.items()}
             try:
-                return Document[ComponentsV2Target](
+                return Document[ComponentsV2Target, Any](
                     cast(
                         Any, tuple(self._layout_node(item, (index,)) for index, item in enumerate(self._view.children))
                     ),

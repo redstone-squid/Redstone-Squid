@@ -70,6 +70,7 @@ HTML_ADAPTER = AdapterProfile(
     "squid-ui.html",
     ">=0.1.0a1,<0.2",
     capabilities=frozenset({AdapterCapability.RENDER_HTML}),
+    frontend="html",
 )
 
 

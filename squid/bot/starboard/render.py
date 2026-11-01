@@ -21,7 +21,7 @@ def starboard_layout(
     heading = f"**{author_name}**"
     if config.ping_author:
         heading = f"{message.author.mention} · {heading}"
-    children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+    children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
         sd.v2.section(
             sd.v2.text(f"{heading}\n{message.content or tr(tr(t'-# (no text content)'))}"),
             accessory=sd.v2.thumbnail(avatar_url),

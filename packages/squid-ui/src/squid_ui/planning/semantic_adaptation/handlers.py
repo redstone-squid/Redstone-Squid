@@ -73,10 +73,11 @@ class ChoiceCommit:
                         event.actor,
                         event.responder,
                         event.locale,
-                        event.context,
+                        event.metadata,
                         selected,
                         tuple(key for key in selected if key not in self.previous),
                         tuple(key for key in self.previous if key not in selected),
+                        context=event.context,
                     )
                 )
             case Uncontrolled():
@@ -119,10 +120,11 @@ class EntityCommit:
                         event.actor,
                         event.responder,
                         event.locale,
-                        event.context,
+                        event.metadata,
                         selected,
                         tuple(value for value in selected if value not in self.previous),
                         tuple(value for value in self.previous if value not in selected),
+                        context=event.context,
                     )
                 )
             case Uncontrolled():
@@ -159,7 +161,11 @@ class ItemCommit:
     async def commit(self, event: ActionEvent, opened: str | None) -> None:
         match self.ownership:
             case Controlled(on_change=on_change):
-                await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=opened))
+                await on_change(
+                    OpenEvent(
+                        event.actor, event.responder, event.locale, event.metadata, opened=opened, context=event.context
+                    )
+                )
             case Uncontrolled():
                 await event.acknowledge()
                 self.session.select(self.key, () if opened is None else (opened,))
@@ -193,7 +199,11 @@ class NavigationCommit:
     async def commit(self, event: ActionEvent, destination: str) -> None:
         match self.ownership:
             case Controlled(on_change=on_change):
-                await on_change(NavigateEvent(event.actor, event.responder, event.locale, event.context, destination))
+                await on_change(
+                    NavigateEvent(
+                        event.actor, event.responder, event.locale, event.metadata, destination, context=event.context
+                    )
+                )
             case Uncontrolled():
                 await event.acknowledge()
                 self.session.select(self.key, (destination,))
@@ -231,7 +241,14 @@ class ToggleDetails(GeneratedHandler[PressEvent]):
         match self.node.open:
             case Controlled(on_change=on_change):
                 await on_change(
-                    OpenEvent(event.actor, event.responder, event.locale, event.context, opened=not self.open)
+                    OpenEvent(
+                        event.actor,
+                        event.responder,
+                        event.locale,
+                        event.metadata,
+                        opened=not self.open,
+                        context=event.context,
+                    )
                 )
             case Uncontrolled(initial=seed):
                 await event.acknowledge()
@@ -250,7 +267,11 @@ class FlipToggle(GeneratedHandler[PressEvent]):
     async def __call__(self, event: PressEvent) -> None:
         match self.node.on:
             case Controlled(on_change=on_change):
-                await on_change(ToggleEvent(event.actor, event.responder, event.locale, event.context, not self.on))
+                await on_change(
+                    ToggleEvent(
+                        event.actor, event.responder, event.locale, event.metadata, not self.on, context=event.context
+                    )
+                )
             case Uncontrolled(initial=initial):
                 await event.acknowledge()
                 current = self.session.toggle(self.node.key, initial=initial).on
@@ -265,7 +286,11 @@ class ForwardSelection(GeneratedHandler[PressEvent]):
 
     @override
     async def __call__(self, event: PressEvent) -> None:
-        await self.handler(SelectionEvent(event.actor, event.responder, event.locale, event.context, (self.key,)))
+        await self.handler(
+            SelectionEvent(
+                event.actor, event.responder, event.locale, event.metadata, (self.key,), context=event.context
+            )
+        )
 
 
 @dataclass(frozen=True, slots=True)

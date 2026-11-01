@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
-from typing import Any, Generic, Protocol, TypeVar, cast, overload, override
+from typing import Any, ClassVar, Generic, Protocol, TypeVar, cast, overload, override
 
 from squid_reactivity.core import (
     Observation,
@@ -96,7 +96,7 @@ from squid_ui.semantic import (
 from squid_ui.semantic import Toggle as SemanticToggle
 from squid_ui.target_types import RenderTarget
 
-type AnyComponent = Component[Any]
+type AnyComponent = Component[Any, Any]
 """A mounted component for any render target.
 
 `Component`'s `RenderTargetT` defaults, so a bare `Component` annotation means `Component[RenderTarget]`
@@ -122,11 +122,13 @@ class _Missing:
 _MISSING = _Missing()
 
 
+ContextT = TypeVar("ContextT", contravariant=True, default=object)
+
 RenderTargetT = TypeVar("RenderTargetT", contravariant=True, default=RenderTarget)
 """The dialects a component's rendered nodes can be drawn in.
 
 Declared the old way, and contravariant on purpose, in a file that otherwise uses PEP 695.
-`RenderTargetT` reaches `Component` through `DocumentLike[RenderTargetT]`, which is contravariant
+`RenderTargetT` reaches `Component` through `DocumentLike[RenderTargetT, ContextT]`, which is contravariant
 because `Renderable` puts the render target in a parameter position -- and neither pyrefly nor
 basedpyright infers variance through that nesting. PEP 695 has no syntax for declaring variance,
 so this is the only way to preserve portable-component substitution.
@@ -134,10 +136,10 @@ so this is the only way to preserve portable-component substitution.
 
 
 @dataclass(frozen=True, slots=True)
-class ComponentTree(Generic[RenderTargetT]):
+class ComponentTree(Generic[RenderTargetT, ContextT]):
     """One expanded render and the component identities that produced it."""
 
-    nodes: tuple[LayoutNode[RenderTargetT], ...]
+    nodes: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     components: dict[str, AnyComponent]
     assets: tuple[Asset, ...] = ()
     document_key: str | None = None
@@ -164,14 +166,14 @@ class ComponentTree(Generic[RenderTargetT]):
 
 
 @dataclass(slots=True)
-class _ComponentRender[RenderTargetT: RenderTarget]:
+class _ComponentRender[RenderTargetT: RenderTarget, ContextT = object]:
     """One component's current pure render result and everything that read produced."""
 
     revision: int
     root: bool
     inherited_context: dict[ContextKey[Any], object]
     child_context: dict[ContextKey[Any], object]
-    nodes: tuple[LayoutNode[RenderTargetT], ...]
+    nodes: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     assets: tuple[Asset, ...]
     document_key: str | None
     observation: Observation
@@ -180,12 +182,12 @@ class _ComponentRender[RenderTargetT: RenderTarget]:
 
 
 @dataclass(slots=True)
-class _ExpandedSubtree[RenderTargetT: RenderTarget]:
+class _ExpandedSubtree[RenderTargetT: RenderTarget, ContextT = object]:
     """A complete expansion below one stable component path, before parent namespacing."""
 
     component: AnyComponent
     inherited_context: dict[ContextKey[Any], object]
-    nodes: tuple[LayoutNode[RenderTargetT], ...]
+    nodes: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     components: dict[str, AnyComponent]
     assets: tuple[Asset, ...]
     async_bindings: tuple[AsyncBinding, ...]
@@ -202,14 +204,14 @@ class _NodeSplice:
 
 
 @dataclass(frozen=True, slots=True)
-class _SpliceResult[RenderTargetT: RenderTarget]:
-    subtree: _ExpandedSubtree[RenderTargetT]
+class _SpliceResult[RenderTargetT: RenderTarget, ContextT = object]:
+    subtree: _ExpandedSubtree[RenderTargetT, ContextT]
     base_topology: object
     removed: tuple[tuple[str, AnyComponent], ...]
     added: tuple[tuple[str, AnyComponent], ...]
 
 
-class Component(StateOwner, ABC, Generic[RenderTargetT]):
+class Component(StateOwner, ABC, Generic[RenderTargetT, ContextT]):
     """Base class for mounted, stateful views.
 
     Abstract in :meth:`render`, so a subclass that does not describe a message cannot be
@@ -245,15 +247,18 @@ class Component(StateOwner, ABC, Generic[RenderTargetT]):
     def on_state_rollback(self) -> None:
         vars(self)["_state_revision"] = vars(self).get("_state_revision", 0) + 1
 
+    event_frontend: ClassVar[str | None] = None
+    """An explicit dispatch requirement; None leaves the component portable."""
+
     @abstractmethod
-    def render(self) -> DocumentLike[RenderTargetT]:
+    def render(self) -> DocumentLike[RenderTargetT, ContextT]:
         """Describe the message for the current state. Pure and synchronous."""
 
-    def boundary(self, child: Component[RenderTargetT], *, key: str) -> Boundary[RenderTargetT]:
+    def boundary(self, child: Component[RenderTargetT, ContextT], *, key: str) -> Boundary[RenderTargetT, ContextT]:
         """Place child in this render tree under a stable key and namespace.
 
         The child is bound to this component's own dialect. `Component` is contravariant in
-        it -- `render` returns a `DocumentLike[RenderTargetT]`, which is contravariant -- so a
+        it -- `render` returns a `DocumentLike[RenderTargetT, ContextT]`, which is contravariant -- so a
         portable child goes anywhere, while a V2-only child may only be embedded by a parent
         that is itself V2-only. A bare `Component` here would have accepted portable children
         alone, which is every child except the ones a V2 screen is actually built from.
@@ -349,9 +354,9 @@ def _inside(route: _LayoutRoute) -> _LayoutRoute:
     return route
 
 
-def _items[RenderTargetT: RenderTarget](
-    rendered: DocumentLike[RenderTargetT], path: str
-) -> tuple[tuple[LayoutNode[RenderTargetT], ...], tuple[Asset, ...], str | None]:
+def _items[RenderTargetT: RenderTarget, ContextT = object](
+    rendered: DocumentLike[RenderTargetT, ContextT], path: str
+) -> tuple[tuple[LayoutNode[RenderTargetT, ContextT], ...], tuple[Asset, ...], str | None]:
     """Normalize whatever `render()` returned into nodes, assets, and a document key."""
     if isinstance(rendered, Document):
         if rendered.key is not None and path != "$":
@@ -367,7 +372,7 @@ def _same_context(left: dict[ContextKey[Any], object], right: dict[ContextKey[An
 
 
 @dataclass(slots=True)
-class IncrementalRender[RenderTargetT: RenderTarget = RenderTarget]:
+class IncrementalRender[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """What one runtime carries between renders so the next can reuse what did not change.
 
     Owned by the caller, not by a render: a render reads these and updates them in place.
@@ -376,19 +381,19 @@ class IncrementalRender[RenderTargetT: RenderTarget = RenderTarget]:
     default-constructed instance is a cold render that reuses nothing.
     """
 
-    render_cache: dict[AnyComponent, _ComponentRender[RenderTargetT]] = field(default_factory=dict)
+    render_cache: dict[AnyComponent, _ComponentRender[RenderTargetT, ContextT]] = field(default_factory=dict)
     """Each component's last render snapshot, keyed by instance."""
     dirty: set[AnyComponent] = field(default_factory=set)
     forced: set[AnyComponent] = field(default_factory=set)
     """Dirty components whose dependencies must not be consulted -- re-render regardless."""
     force_all: bool = False
-    subtree_cache: dict[str, _ExpandedSubtree[RenderTargetT]] = field(default_factory=dict)
+    subtree_cache: dict[str, _ExpandedSubtree[RenderTargetT, ContextT]] = field(default_factory=dict)
     dirty_paths: set[str] = field(default_factory=set)
     component_paths: dict[AnyComponent, str] | None = None
     """Where each component sat last time, for locating a splice. None disables splicing."""
 
 
-class _TreeRender[RenderTargetT: RenderTarget]:
+class _TreeRender[RenderTargetT: RenderTarget, ContextT = object]:
     """One component-tree expansion, ended when ``run`` returns its accumulated tree.
 
     A render walks the tree once while filling a dozen parallel collections -- the components
@@ -402,12 +407,12 @@ class _TreeRender[RenderTargetT: RenderTarget]:
 
     def __init__(
         self,
-        root: Component[RenderTargetT],
+        root: Component[RenderTargetT, ContextT],
         *,
         runtime: RuntimeOwner | None,
         context: dict[ContextKey[Any], object] | None,
-        defer: Callable[[Component[RenderTargetT]], bool] | None,
-        incremental: IncrementalRender[RenderTargetT],
+        defer: Callable[[Component[RenderTargetT, ContextT]], bool] | None,
+        incremental: IncrementalRender[RenderTargetT, ContextT],
     ) -> None:
         self.root = root
         self.runtime = runtime
@@ -423,10 +428,10 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         self.observed_addresses: list[Address] = []
         self.observed_bindings: list[AsyncBinding] = []
 
-    def run(self) -> ComponentTree[RenderTargetT]:
+    def run(self) -> ComponentTree[RenderTargetT, ContextT]:
         """Expand the tree, splicing in place when only part of it changed."""
         incremental = self.incremental
-        spliced: _SpliceResult[RenderTargetT] | None = None
+        spliced: _SpliceResult[RenderTargetT, ContextT] | None = None
         attempted_splices: set[AnyComponent] = set()
         try:
             spliced = _splice_dirty_subtrees(self.root, incremental, self.expand, attempted_splices)
@@ -470,7 +475,7 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         self.observed_bindings.clear()
         self.document_key = None
 
-    def _spliced_tree(self, spliced: _SpliceResult[RenderTargetT]) -> ComponentTree[RenderTargetT]:
+    def _spliced_tree(self, spliced: _SpliceResult[RenderTargetT, ContextT]) -> ComponentTree[RenderTargetT, ContextT]:
         """The tree a successful splice describes: the reused subtree plus what moved."""
         subtree = spliced.subtree
         for held in subtree.components.values():
@@ -491,10 +496,10 @@ class _TreeRender[RenderTargetT: RenderTarget]:
 
     def rendered(
         self,
-        component: Component[RenderTargetT],
+        component: Component[RenderTargetT, ContextT],
         path: str,
         inherited_context: dict[ContextKey[Any], object],
-    ) -> _ComponentRender[RenderTargetT]:
+    ) -> _ComponentRender[RenderTargetT, ContextT]:
         """This component's render snapshot, reused when nothing it read has moved."""
         vars(component)["_ownership_sealed"] = True
         if (owner := component._owned_services) is not None:
@@ -530,7 +535,7 @@ class _TreeRender[RenderTargetT: RenderTarget]:
                 own_nodes, own_assets, own_key = _items(value, path)
         finally:
             _CURRENT_CONTEXT.reset(token)
-        snapshot = _ComponentRender[RenderTargetT](
+        snapshot = _ComponentRender[RenderTargetT, ContextT](
             revision,
             path == "$",
             dict(inherited_context),
@@ -554,9 +559,9 @@ class _TreeRender[RenderTargetT: RenderTarget]:
     def _reuse_subtree(
         self,
         path: str,
-        component: Component[RenderTargetT],
+        component: Component[RenderTargetT, ContextT],
         inherited_context: dict[ContextKey[Any], object],
-    ) -> _ExpandedSubtree[RenderTargetT] | None:
+    ) -> _ExpandedSubtree[RenderTargetT, ContextT] | None:
         """The cached expansion at this path, if it still describes this component here."""
         incremental = self.incremental
         cached = incremental.subtree_cache.get(path)
@@ -572,10 +577,10 @@ class _TreeRender[RenderTargetT: RenderTarget]:
 
     def expand(
         self,
-        component: Component[RenderTargetT],
+        component: Component[RenderTargetT, ContextT],
         path: str,
         inherited_context: dict[ContextKey[Any], object],
-    ) -> list[LayoutNode[RenderTargetT]]:
+    ) -> list[LayoutNode[RenderTargetT, ContextT]]:
         """Render this component and splice its children in, namespaced by boundary key."""
         identity = id(component)
         if identity in self.active:
@@ -603,8 +608,8 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         context = snapshot.child_context
 
         def expand_item(
-            item: LayoutNode[RenderTargetT], item_path: str, route: _LayoutRoute
-        ) -> list[LayoutNode[RenderTargetT]]:
+            item: LayoutNode[RenderTargetT, ContextT], item_path: str, route: _LayoutRoute
+        ) -> list[LayoutNode[RenderTargetT, ContextT]]:
             if isinstance(item, Boundary):
                 if item.key in embed_keys:
                     message = f"{item_path}: duplicate Boundary key {item.key!r}"
@@ -627,13 +632,13 @@ class _TreeRender[RenderTargetT: RenderTarget]:
             return [_map_layout_children_routed(item, item_path, _inside(route), expand_item)]
 
         try:
-            nodes: list[LayoutNode[RenderTargetT]] = []
+            nodes: list[LayoutNode[RenderTargetT, ContextT]] = []
             for index, item in enumerate(snapshot.nodes):
                 nodes.extend(expand_item(item, f"{path}.{index}", (_SequenceStep(None, len(nodes)),)))
             if snapshot.document_key is not None:
                 self.document_key = snapshot.document_key
             if len(self.deferred) == deferred_start:
-                self.incremental.subtree_cache[path] = _ExpandedSubtree[RenderTargetT](
+                self.incremental.subtree_cache[path] = _ExpandedSubtree[RenderTargetT, ContextT](
                     component,
                     dict(inherited_context),
                     tuple(nodes),
@@ -654,7 +659,7 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         finally:
             self.active.remove(identity)
 
-    def _adopt(self, cached: _ExpandedSubtree[RenderTargetT]) -> list[LayoutNode[RenderTargetT]]:
+    def _adopt(self, cached: _ExpandedSubtree[RenderTargetT, ContextT]) -> list[LayoutNode[RenderTargetT, ContextT]]:
         """Take a reused subtree's components and observations into this render."""
         for cached_path, cached_component in cached.components.items():
             cached_identity = id(cached_component)
@@ -670,14 +675,14 @@ class _TreeRender[RenderTargetT: RenderTarget]:
         return list(cached.nodes)
 
 
-def render_component_tree[RenderTargetT: RenderTarget](
-    root: Component[RenderTargetT],
+def render_component_tree[RenderTargetT: RenderTarget, ContextT = object](
+    root: Component[RenderTargetT, ContextT],
     *,
     runtime: RuntimeOwner | None = None,
     context: dict[ContextKey[Any], object] | None = None,
-    defer: Callable[[Component[RenderTargetT]], bool] | None = None,
-    incremental: IncrementalRender[RenderTargetT] | None = None,
-) -> ComponentTree[RenderTargetT]:
+    defer: Callable[[Component[RenderTargetT, ContextT]], bool] | None = None,
+    incremental: IncrementalRender[RenderTargetT, ContextT] | None = None,
+) -> ComponentTree[RenderTargetT, ContextT]:
     """Render and expand a component tree, preserving keyed component identity.
 
     ``defer`` makes this a *discovery* render: an embedded component it selects is recorded in
@@ -697,12 +702,15 @@ def render_component_tree[RenderTargetT: RenderTarget](
     ).run()
 
 
-def _splice_dirty_subtrees[RenderTargetT: RenderTarget](
-    root: Component[RenderTargetT],
-    incremental: IncrementalRender[RenderTargetT],
-    expand: Callable[[Component[RenderTargetT], str, dict[ContextKey[Any], object]], list[LayoutNode[RenderTargetT]]],
+def _splice_dirty_subtrees[RenderTargetT: RenderTarget, ContextT = object](
+    root: Component[RenderTargetT, ContextT],
+    incremental: IncrementalRender[RenderTargetT, ContextT],
+    expand: Callable[
+        [Component[RenderTargetT, ContextT], str, dict[ContextKey[Any], object]],
+        list[LayoutNode[RenderTargetT, ContextT]],
+    ],
     attempted: set[AnyComponent],
-) -> _SpliceResult[RenderTargetT] | None:
+) -> _SpliceResult[RenderTargetT, ContextT] | None:
     """Patch independently dirty cached subtrees through their structural parent routes."""
     dirty = incremental.dirty
     component_paths = incremental.component_paths
@@ -782,7 +790,7 @@ def _splice_dirty_subtrees[RenderTargetT: RenderTarget](
                     if changed_components.get(removed_path) is removed:
                         changed_components.pop(removed_path)
                 changed_components.update(changed_child.components)
-            changed_parent = _ExpandedSubtree[RenderTargetT](
+            changed_parent = _ExpandedSubtree[RenderTargetT, ContextT](
                 parent.component,
                 parent.inherited_context,
                 _splice_nodes(parent.nodes, splice, replacement),
@@ -799,7 +807,7 @@ def _splice_dirty_subtrees[RenderTargetT: RenderTarget](
             child_path = parent_path
     if (root_subtree := subtree_cache.get("$")) is None:
         return None
-    return _SpliceResult[RenderTargetT](
+    return _SpliceResult[RenderTargetT, ContextT](
         root_subtree,
         base_topology,
         tuple(removed_components),
@@ -811,8 +819,8 @@ def _same_component_map(left: dict[str, AnyComponent], right: dict[str, AnyCompo
     return left.keys() == right.keys() and all(left[path] is right[path] for path in left)
 
 
-def _same_subtree_presentation_metadata[RenderTargetT: RenderTarget](
-    left: _ExpandedSubtree[RenderTargetT], right: _ExpandedSubtree[RenderTargetT]
+def _same_subtree_presentation_metadata[RenderTargetT: RenderTarget, ContextT = object](
+    left: _ExpandedSubtree[RenderTargetT, ContextT], right: _ExpandedSubtree[RenderTargetT, ContextT]
 ) -> bool:
     return (
         left.assets == right.assets
@@ -821,11 +829,11 @@ def _same_subtree_presentation_metadata[RenderTargetT: RenderTarget](
     )
 
 
-def _splice_nodes[RenderTargetT: RenderTarget](
-    nodes: tuple[LayoutNode[RenderTargetT], ...],
+def _splice_nodes[RenderTargetT: RenderTarget, ContextT = object](
+    nodes: tuple[LayoutNode[RenderTargetT, ContextT], ...],
     splice: _NodeSplice,
-    replacement: tuple[LayoutNode[RenderTargetT], ...],
-) -> tuple[LayoutNode[RenderTargetT], ...]:
+    replacement: tuple[LayoutNode[RenderTargetT, ContextT], ...],
+) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
     def rewrite(value: Any, steps: _LayoutRoute) -> Any:
         step = steps[0]
         rest = steps[1:]
@@ -844,9 +852,9 @@ def _splice_nodes[RenderTargetT: RenderTarget](
     return rewrite(nodes, splice.route)
 
 
-def _namespace[RenderTargetT: RenderTarget](
-    nodes: list[LayoutNode[RenderTargetT]], prefix: str
-) -> list[LayoutNode[RenderTargetT]]:
+def _namespace[RenderTargetT: RenderTarget, ContextT = object](
+    nodes: list[LayoutNode[RenderTargetT, ContextT]], prefix: str
+) -> list[LayoutNode[RenderTargetT, ContextT]]:
     """Rewrite an embedded subtree's control keys under ``prefix``.
 
     Explicit control keys are scoped under the embed path, so inserting a sibling cannot
@@ -924,4 +932,4 @@ def _namespace[RenderTargetT: RenderTarget](
     # `rewrite` is written over the erased union: it matches on primitive shapes, none of which
     # carry a target, and returns the same nodes rekeyed. That costs the local walker's
     # precision, not the caller's, so the target the caller passed in is what comes back.
-    return cast(list[LayoutNode[RenderTargetT]], [rewrite(node) for node in nodes])
+    return cast(list[LayoutNode[RenderTargetT, ContextT]], [rewrite(node) for node in nodes])

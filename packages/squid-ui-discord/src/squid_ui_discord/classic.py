@@ -10,7 +10,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal, Unpack, cast
+from typing import TYPE_CHECKING, Any, Literal, Unpack, cast
 
 import discord
 
@@ -81,9 +81,12 @@ from squid_ui_discord.message_payload import MessageMode, MessageModeError, Mess
 from squid_ui_discord.rendering import RenderedMessage
 from squid_ui_discord.target import DISCORD_V1_DPY27
 
+if TYPE_CHECKING:
+    from squid_ui_discord.request import Request
+
 logger = logging.getLogger(__name__)
 
-type Child = Renderable[ClassicTarget] | TextLike | None | Literal[False]
+type Child = Renderable[ClassicTarget] | TextLike | Literal[False] | None
 
 
 def content(value: TextLike, *, overflow: Overflow | None = None, priority: int = 0) -> Content:
@@ -137,7 +140,7 @@ def card(
 
 
 def render_message(
-    rendered: DocumentLike[ClassicTarget],
+    rendered: DocumentLike[ClassicTarget, Request],
     *,
     wire: Wire | None = None,
     renderer: ClassicRenderer | None = None,
@@ -162,7 +165,7 @@ def render_message(
 
 
 def render_static(
-    nodes: DocumentLike[ClassicTarget] | Component[ClassicTarget],
+    nodes: DocumentLike[ClassicTarget, Request] | Component[ClassicTarget, Request],
     *,
     target: Target[ClassicLimits, scene.ClassicMessage, ClassicTarget, DiscordPyAdapter] = DISCORD_V1_DPY27,
     **options: Unpack[StaticPlanOptions],
@@ -230,7 +233,7 @@ def measure_host(
 
 
 def contribute(
-    document: DocumentLike[ClassicTarget],
+    document: DocumentLike[ClassicTarget, Request],
     *,
     to: MessagePayload,
     followed_by: Sequence[discord.Embed] = (),

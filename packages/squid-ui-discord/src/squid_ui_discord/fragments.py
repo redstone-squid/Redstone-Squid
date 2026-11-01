@@ -13,7 +13,7 @@ prove they fit.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -32,6 +32,9 @@ from squid_ui_discord.attachments import files_for
 from squid_ui_discord.inspection import MessageReservation, audit, cost, measure
 from squid_ui_discord.rendering import render_message
 from squid_ui_discord.target import DISCORD_V2_DPY27
+
+if TYPE_CHECKING:
+    from squid_ui_discord.request import Request
 
 
 class StaleReservationError(LayoutError):
@@ -185,7 +188,7 @@ class Fragment:
 
 
 def fragment(
-    document: DocumentLike[ComponentsV2Target],
+    document: DocumentLike[ComponentsV2Target, Request],
     *,
     alongside: discord.ui.LayoutView | None = None,
     reserve: ResourceCost = EMPTY_COST,
@@ -235,7 +238,7 @@ def fragment(
 
 
 def contribute(
-    document: DocumentLike[ComponentsV2Target],
+    document: DocumentLike[ComponentsV2Target, Request],
     *,
     to: discord.ui.LayoutView,
     followed_by: Sequence[discord.ui.Item[Any]] = (),

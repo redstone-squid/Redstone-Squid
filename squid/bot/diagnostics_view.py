@@ -60,7 +60,7 @@ class _ReportChanges(sl.runtime.SharedState):
         return await self._check()
 
 
-class _ReportUpdates(sl.Component[sl.ComponentsV2Target]):
+class _ReportUpdates(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Check for report changes without replacing the browser the reader is using."""
 
     def __init__(
@@ -89,7 +89,7 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target]):
         return tuple(reports) != self._shown
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         self.provide(_REPORT_MONITOR, self.monitor)
         return self.boundary(self._notice, key="notice"), self.boundary(self._controls, key="controls")
 
@@ -97,18 +97,18 @@ class _ReportUpdates(sl.Component[sl.ComponentsV2Target]):
 _REPORT_MONITOR = sl.runtime.ContextKey[ErrorReportRefresh]("report-monitor")
 
 
-class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target]):
+class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Display the shared monitor's latest comparison without changing the open report."""
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         status = self.inject(_REPORT_MONITOR).changes.status
         changed = (
             status.value
             if isinstance(status, sl.resources.Ready)
             else (status.previous.value if status.previous is not None else False)
         )
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if isinstance(status, sl.resources.Failed):
             nodes.append(sl.note(tr(t"Could not check for updates. You can still refresh reports.")))
         elif changed:
@@ -116,14 +116,14 @@ class _ReportUpdateNotice(sl.Component[sl.ComponentsV2Target]):
         return tuple(nodes)
 
 
-class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target]):
+class _ReportUpdateControls(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Keep manual refresh available while automatic checks load or fail."""
 
     def __init__(self, refresh: Callable[[sl.PressEvent], Awaitable[None]]) -> None:
         self._refresh = refresh
 
     @override
-    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def render(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         status = self.inject(_REPORT_MONITOR).changes.status
         changed = isinstance(status, sl.resources.Ready) and status.value
         return sl.action_controls(
@@ -149,7 +149,9 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
     cleared_count: int | None = sl.state(None)
     _reports: tuple[ErrorReport, ...] = sl.state((), persist=False, opaque=True)
     _updates: _ReportUpdates | None = sl.state(None, persist=False, opaque=True)
-    _browser: sp.Browser[ErrorReport, sl.ComponentsV2Target] | None = sl.state(None, persist=False, opaque=True)
+    _browser: sp.Browser[ErrorReport, sl.ComponentsV2Target, sd.Request] | None = sl.state(
+        None, persist=False, opaque=True
+    )
 
     def __init__(
         self,
@@ -213,7 +215,7 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
         return self._reports
 
     @override
-    def render(self) -> sl.Document[sl.ComponentsV2Target]:
+    def render(self) -> sl.Document[sl.ComponentsV2Target, sd.Request]:
         if self.cleared_count is not None:
             count = self.cleared_count
             return sl.Document(
@@ -255,10 +257,10 @@ class ErrorReportScreen(sd.UserSessionScreen, session_name="errors"):
             )
         )
 
-    def _render_report(self, report: ErrorReport, matches: int) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def _render_report(self, report: ErrorReport, matches: int) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         reference = report.reference
         traceback_text: sl.TextLike = report.traceback.strip() or tr(t"No traceback was recorded.")
-        children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sd.v2.heading(tr(t"Error {reference}")),
             # Opens at the end because the failing frame is the last one.
             sd.v2.code(traceback_text, overflow=sl.primitives.Paginate(key="traceback", initial="end")),

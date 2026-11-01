@@ -64,7 +64,7 @@ def texts(view: discord.ui.LayoutView) -> str:
 
 
 async def mounted(
-    panel: Component[Any], bus: LocalTopicBus, scheduler: MessageRootScheduler
+    panel: Component[Any, Any], bus: LocalTopicBus, scheduler: MessageRootScheduler
 ) -> tuple[MessageRoot, Any]:
     message: Any = message_harness()
     message_root = MessageRoot(panel, access=Everyone(), scheduler=scheduler, timeout=None)

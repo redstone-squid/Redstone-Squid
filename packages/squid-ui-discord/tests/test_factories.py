@@ -268,7 +268,7 @@ class TestRating:
         assert node.selection.value == ("2",)
 
         actor = sl.interactions.Actor("7")
-        await node.selection.on_change(sl.ChoiceEvent(actor, _responder(), None, {}, ("4",)))
+        await node.selection.on_change(sl.ChoiceEvent(actor, _responder(), None, {}, ("4",), context=None))
         assert seen == [4]
 
     async def test_a_cleared_selection_reaches_no_handler(self) -> None:
@@ -282,7 +282,9 @@ class TestRating:
         assert isinstance(node.selection, sl.semantic.Controlled)
         assert node.selection.value == ()
 
-        await node.selection.on_change(sl.ChoiceEvent(sl.interactions.Actor("7"), _responder(), None, {}, ()))
+        await node.selection.on_change(
+            sl.ChoiceEvent(sl.interactions.Actor("7"), _responder(), None, {}, (), context=None)
+        )
         assert not rated
 
     def test_a_scale_needs_at_least_two_points(self) -> None:

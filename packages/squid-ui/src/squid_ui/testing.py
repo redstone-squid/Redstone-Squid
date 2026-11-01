@@ -243,14 +243,14 @@ def _responder(responder: ActionResponder | None) -> ActionResponder:
 
 def press_event(*, actor: str = "1", responder: ActionResponder | None = None, locale: str | None = None) -> PressEvent:
     """A press, carrying a `RecordingResponder` unless one is supplied."""
-    return PressEvent(Actor(actor), _responder(responder), locale)
+    return PressEvent(Actor(actor), _responder(responder), locale, context=None)
 
 
 def selection_event(
     *values: str, actor: str = "1", responder: ActionResponder | None = None, locale: str | None = None
 ) -> SelectionEvent:
     """A selection of `values`, carrying a `RecordingResponder` unless one is supplied."""
-    return SelectionEvent(Actor(actor), _responder(responder), locale, values=values)
+    return SelectionEvent(Actor(actor), _responder(responder), locale, values=values, context=None)
 
 
 def choice_event(
@@ -274,6 +274,7 @@ def choice_event(
         selected=selected,
         added=tuple(added),
         removed=tuple(removed),
+        context=None,
     )
 
 
@@ -295,6 +296,7 @@ def submit_event(
         values=submitted,
         attempted=dict(attempted) if attempted is not None else submitted,
         errors=tuple(errors),
+        context=None,
     )
 
 

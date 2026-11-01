@@ -10,6 +10,7 @@ while remaining two APIs.
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 from squid_ui import scene
 from squid_ui.document import DocumentLike
@@ -36,7 +37,7 @@ def span(profile: OperationRecorder | None, name: str) -> Iterator[SpanRecorder 
 
 
 def plan_and_draw[BodyT: scene.Body, RenderTargetT](
-    rendered: DocumentLike[RenderTargetT],
+    rendered: DocumentLike[RenderTargetT, Any],
     request: PlanRequest[BodyT, RenderTargetT, DiscordPyAdapter],
     *,
     drawer: MountedRenderer[BodyT],

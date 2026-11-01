@@ -16,11 +16,13 @@ from squid_ui_discord.session_specs import ScopeKind, SessionSpec
 from squid_ui_discord.sessions import DEFAULT_ADMISSION, AdmissionSpec, Reject
 
 
-class Screen[OwnerT = Any](Component[ComponentsV2Target]):
+class Screen[OwnerT = Any](Component[ComponentsV2Target, Request[Any]]):
     """A component whose class compiles immutable presentation policy once.
 
     `Screen[Cog]` types `opening.owner`; the bare form leaves it `Any`.
     """
+
+    event_frontend: ClassVar[str | None] = "discord"
 
     audience: ClassVar[Audience] = "personal"
     access: ClassVar[AccessSetting] = invoker_only

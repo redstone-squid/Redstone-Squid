@@ -262,7 +262,7 @@ class TestCandidateSettlement:
 
 
 async def _armed_root(
-    component: Component[Any] | None = None,
+    component: Component[Any, Any] | None = None,
     *,
     access: squid_ui_discord.AccessPolicy | None = None,
     on_error: squid_ui_discord.message_root_contracts.ErrorHook | None = None,
@@ -838,7 +838,8 @@ class TestRenderAndWire:
         await message_root.dispatch("inspect", interaction_harness(user_id=42))
 
         assert seen[0].actor.id == "42"
-        assert seen[0].context == {"frontend": "discord"}
+        assert seen[0].metadata == {"frontend": "discord"}
+        assert seen[0].context is None
 
     async def test_press_event_carries_the_mounts_negotiated_locale(self):
         seen: list[PressEvent] = []

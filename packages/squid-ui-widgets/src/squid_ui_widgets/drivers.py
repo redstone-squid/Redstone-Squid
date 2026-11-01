@@ -68,15 +68,15 @@ class _MissingInitialState:
 _MISSING_INITIAL_STATE = _MissingInitialState()
 
 
-class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol):
+class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Protocol):
     """A pure state machine that describes a tree through injected controls."""
 
     @property
     def initial_state(self) -> StateT: ...
 
     def render(
-        self, state: StateT, controls: MachineControls[StateT, RenderTargetT]
-    ) -> DocumentLike[RenderTargetT]: ...
+        self, state: StateT, controls: MachineControls[StateT, RenderTargetT, ContextT]
+    ) -> DocumentLike[RenderTargetT, ContextT]: ...
 
     def transition(
         self,
@@ -89,8 +89,8 @@ class StateMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol)
 
 
 @runtime_checkable
-class FormPresentingMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](
-    StateMachine[StateT, RenderTargetT], Protocol
+class FormPresentingMachine[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
+    StateMachine[StateT, RenderTargetT, ContextT], Protocol
 ):
     """A machine that can answer one of its own actions with a form.
 
@@ -101,15 +101,15 @@ class FormPresentingMachine[StateT, RenderTargetT: RenderTarget = RenderTarget](
     def form_for(self, state: StateT, action: str) -> FormSpec | None: ...
 
 
-class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget](Protocol):
+class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Protocol):
     """Control and content construction injected into a pure machine render."""
 
     @property
     def chrome(self) -> Chrome: ...
 
     def content(
-        self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
-    ) -> tuple[LayoutNode[RenderTargetT], ...]: ...
+        self, content: Sequence[ContentItem[RenderTargetT, ContextT]], *, prefix: str
+    ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]: ...
 
     def action_control(
         self,
@@ -147,7 +147,9 @@ class MachineControls[StateT, RenderTargetT: RenderTarget = RenderTarget](Protoc
     ) -> FormTrigger | RoutedActionControl: ...
 
 
-class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Component[RenderTargetT]):
+class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
+    Component[RenderTargetT, ContextT]
+):
     """Store machine state in ``sl.state`` and inject closure-backed controls."""
 
     # RouteDriver is the restart boundary; a generic state dataclass has no honest JSON
@@ -157,7 +159,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
     @overload
     def __init__(
         self,
-        machine: StateMachine[StateT, RenderTargetT],
+        machine: StateMachine[StateT, RenderTargetT, ContextT],
         *,
         on_change: TransitionHandler[StateT] | None = None,
         handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
@@ -167,7 +169,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
     @overload
     def __init__(
         self,
-        machine: StateMachine[StateT, RenderTargetT],
+        machine: StateMachine[StateT, RenderTargetT, ContextT],
         *,
         initial: StateT,
         on_change: TransitionHandler[StateT] | None = None,
@@ -177,7 +179,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
 
     def __init__(
         self,
-        machine: StateMachine[StateT, RenderTargetT],
+        machine: StateMachine[StateT, RenderTargetT, ContextT],
         *,
         initial: StateT | _MissingInitialState = _MISSING_INITIAL_STATE,
         on_change: TransitionHandler[StateT] | None = None,
@@ -191,7 +193,7 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
         self.finish_actions = frozenset(finish_actions)
 
     @override
-    def render(self) -> DocumentLike[RenderTargetT]:
+    def render(self) -> DocumentLike[RenderTargetT, ContextT]:
         """Render the current machine state with mounted controls."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         # `MachineControls` never mentions `StateT` in a member, so BasedPyright cannot solve it
@@ -220,16 +222,16 @@ class ComponentDriver[StateT, RenderTargetT: RenderTarget = RenderTarget](Compon
             event.finish_on_success()
 
 
-class _ComponentControls[StateT, RenderTargetT: RenderTarget]:
+class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
     """Mounted control bindings for one component driver."""
 
-    def __init__(self, owner: ComponentDriver[StateT, RenderTargetT], chrome: Chrome) -> None:
+    def __init__(self, owner: ComponentDriver[StateT, RenderTargetT, ContextT], chrome: Chrome) -> None:
         self.owner = owner
         self.chrome = chrome
 
     def content(
-        self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
-    ) -> tuple[LayoutNode[RenderTargetT], ...]:
+        self, content: Sequence[ContentItem[RenderTargetT, ContextT]], *, prefix: str
+    ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
         """Embed child components under stable keys."""
         return render_content(self.owner, content, prefix=prefix)
 
@@ -299,7 +301,7 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget]:
 
 
 @dataclass(frozen=True, slots=True)
-class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
+class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """Inject route-backed controls into a stateless machine render.
 
     A host route decodes ``TransitionRoute.state``, calls :meth:`transition` when the
@@ -309,7 +311,9 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
     route: RouteEncoder[StateT]
     chrome: Chrome = DEFAULT_CHROME
 
-    def render(self, machine: StateMachine[StateT, RenderTargetT], state: StateT) -> DocumentLike[RenderTargetT]:
+    def render(
+        self, machine: StateMachine[StateT, RenderTargetT, ContextT], state: StateT
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render `state` with route-backed controls."""
         # As in `ComponentDriver.render`: `MachineControls`'s unused `StateT` is unsolvable for
         # BasedPyright when it matches a control object structurally.
@@ -318,7 +322,7 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
 
     def transition(
         self,
-        machine: StateMachine[StateT, RenderTargetT],
+        machine: StateMachine[StateT, RenderTargetT, ContextT],
         state: StateT,
         action_name: str,
         *,
@@ -329,12 +333,12 @@ class RouteDriver[StateT, RenderTargetT: RenderTarget = RenderTarget]:
         return machine.transition(state, action_name, values=values, submitted=submitted)
 
 
-class _RoutedControls[StateT, RenderTargetT: RenderTarget]:
+class _RoutedControls[StateT, RenderTargetT: RenderTarget, ContextT = object]:
     """Route-backed control bindings for one stateless render."""
 
     def __init__(
         self,
-        machine: StateMachine[StateT, RenderTargetT],
+        machine: StateMachine[StateT, RenderTargetT, ContextT],
         current: StateT,
         route: RouteEncoder[StateT],
         chrome: Chrome,
@@ -345,11 +349,11 @@ class _RoutedControls[StateT, RenderTargetT: RenderTarget]:
         self.chrome = chrome
 
     def content(
-        self, content: Sequence[ContentItem[RenderTargetT]], *, prefix: str
-    ) -> tuple[LayoutNode[RenderTargetT], ...]:
+        self, content: Sequence[ContentItem[RenderTargetT, ContextT]], *, prefix: str
+    ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
         """Return portable content and reject mounted child components."""
         del prefix
-        nodes: list[LayoutNode[RenderTargetT]] = []
+        nodes: list[LayoutNode[RenderTargetT, ContextT]] = []
         for item in content:
             if isinstance(item, Component):
                 message = (

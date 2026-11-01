@@ -19,10 +19,7 @@ SLACK_SDK_BEHAVIOR_CAPABILITIES = frozenset(
 )
 
 SLACK_SDK_343_ADAPTER = AdapterProfile(
-    SlackSdk343Adapter,
-    "slack-sdk",
-    ">=3.43,<3.44",
-    SLACK_SDK_BEHAVIOR_CAPABILITIES,
+    SlackSdk343Adapter, "slack-sdk", ">=3.43,<3.44", SLACK_SDK_BEHAVIOR_CAPABILITIES, frontend="slack"
 )
 
 
@@ -45,7 +42,7 @@ def slack_sdk_adapter_profile(
     capabilities: frozenset[AdapterCapability] = SLACK_SDK_BEHAVIOR_CAPABILITIES,
 ) -> AdapterProfile[SlackSdkAdapter]:
     """Declare an application-verified Slack SDK adapter profile."""
-    return AdapterProfile(SlackSdkAdapter, name, version_expression, capabilities)
+    return AdapterProfile(SlackSdkAdapter, name, version_expression, capabilities, frontend="slack")
 
 
 def require_slack_sdk_capability(

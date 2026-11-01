@@ -53,7 +53,7 @@ async def open_screen(
     return outcome.component, sessions[0].root, interaction
 
 
-async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardState, sl.ComponentsV2Target]:
+async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardState, sl.ComponentsV2Target, sd.Request]:
     harness = wt.driving(screen.driver)
     await harness.submit("poll.content", {"question": "Best door?", "options": "One\nTwo"})
     await harness.submit(

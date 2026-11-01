@@ -33,7 +33,7 @@ from squid.schematics.errors import AmbiguousSimulationInputError, SchematicRend
 from squid.topics import resource_topic
 from squid_ui.sources import window_fingerprint
 
-type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target]]]
+type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]]
 type BuildAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type RefreshPosts = Callable[[int], Awaitable[None]]
 
@@ -83,7 +83,7 @@ class _BuildSource:
         return window_fingerprint(window.items, lambda build: str(build.id))
 
 
-class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
+class _BuildDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """Live detail and capability-aware actions for one persisted build."""
 
     def __init__(
@@ -110,13 +110,13 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
         self._actor_account_id = actor_account_id
         self._authorize = authorize
         self._refresh_posts = refresh_posts
-        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
+        self._decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
         self._pending_review: str | None = None
         self._schematic_result: sl.TextLike | None = None
         self._asset: sl.document.Asset | None = None
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
-    async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target]]:
+    async def projection(self) -> tuple[Build, sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         sl.runtime.watch(resource_topic("build", str(self._build_id)))
         build, self._seed = self._seed, None
         if build is None:
@@ -127,7 +127,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
         return build, await self._render_build(build)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         state = self.projection.status
         if not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status(tr(t"Loading build.")),)
@@ -138,7 +138,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
             build, node = state.previous.value
         if self._decision is not None:
             return (node, self._review_prompt(), self.boundary(self._decision, key="review-decision"))
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [node]
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [node]
         actions = self._detail_actions(build)
         if actions is not None:
             nodes.append(actions)
@@ -149,7 +149,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
             nodes.append(sl.download(tr(t"Download result"), self._asset, key="build-download"))
         return tuple(nodes)
 
-    def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target] | None:
+    def _detail_actions(self, build: Build) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None:
         actions: list[sl.semantic.ActionControl | sl.semantic.RoutedActionControl] = []
         if self._capabilities.edit or (
             build.submission_status is Status.PENDING
@@ -167,7 +167,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
             actions.append(sl.action_control(tr(t"Debug download"), self._debug, key="debug"))
         return sl.action_controls(*actions, key="build-actions") if actions else None
 
-    def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _schematic_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if not self._schematics.available:
             return ()
         actions = [
@@ -177,7 +177,9 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
         ]
         if self._capabilities.detect_lattice:
             actions.append(sl.action_control(tr(t"Detect lattice"), self._detect_lattice, key="detect-lattice"))
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [sl.action_controls(*actions, key="schematic-actions")]
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
+            sl.action_controls(*actions, key="schematic-actions")
+        ]
         nodes.append(sl.form(tr(t"Convert schematic"), self._convert_form(), key="convert", on_submit=self._convert))
         if self._capabilities.measure_timing:
             nodes.append(sl.form(tr(t"Measure timing"), self._timing_form(), key="timing", on_submit=self._timing))
@@ -191,7 +193,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
     def _timing_form() -> sl.forms.FormSpec:
         return _TimingForm().spec()
 
-    def _review_prompt(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def _review_prompt(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         action = self._pending_review or "review"
         build_id = self._build_id
         return sl.section(
@@ -207,7 +209,7 @@ class _BuildDetail(sl.Component[sl.ComponentsV2Target]):
 
     def _request_review(self, action: str) -> None:
         self._pending_review = action
-        self._decision = sp.Decision[sl.ComponentsV2Target](
+        self._decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
             tr(t"This changes the build's review state."),
             (
                 sp.DecisionOption("confirm", tr(t"Confirm"), sl.Tone.DANGER),
@@ -390,7 +392,7 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
             empty=tr(t"No builds are available."),
         )
         self._selected: _BuildDetail | None = None
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
+        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
 
     @override
     async def on_load(self) -> None:
@@ -406,7 +408,7 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
         ).build_component()
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._selected is not None:
             return (
                 self.boundary(self._selected, key="selected-build"),
@@ -423,7 +425,7 @@ class BuildBrowseScreen(sd.UserSessionScreen, session_name="build-browse"):
             sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="build-screen-actions"),
         )
 
-    def _find_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _find_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
                 tr(t"Open by ID"),

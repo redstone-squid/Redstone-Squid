@@ -20,7 +20,7 @@ class Service:
     """A collaborator a component holds and never mutates."""
 
 
-def cell_of(component: Component[Any], name: str) -> Cell:
+def cell_of(component: Component[Any, Any], name: str) -> Cell:
     descriptor = next(
         vars(klass)[name] for klass in type(component).__mro__ if isinstance(vars(klass).get(name), StateDescriptor)
     )

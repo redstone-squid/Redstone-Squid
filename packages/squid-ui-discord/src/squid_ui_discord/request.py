@@ -300,7 +300,7 @@ class Request[OwnerT = Any]:
         return deliver
 
     @overload
-    async def respond[ComponentT: Component[ComponentsV2Target]](
+    async def respond[ComponentT: Component[ComponentsV2Target, Request]](
         self,
         content: ComponentT | Response[ComponentT],
         *,
@@ -452,18 +452,19 @@ async def _request_for_binding(source: RequestOrigin, binding: object | None) ->
     return await _resolve_request(source, scope=scope)
 
 
-async def _resolve_request(source: RequestOrigin, *, scope: Scope[Any] | None = None) -> Request[Any]:
+async def _resolve_request(
+    source: RequestOrigin, *, scope: Scope[Any] | None = None, root: MessageRoot | None = None
+) -> Request[Any]:
     """Share source normalization and memoization between inferred and bound resolution."""
     # Runtime imports Scope, and Scope imports this module.
     from squid_ui_discord.runtime import DiscordUIRuntime
 
-    root: MessageRoot | None = None
     native: object = source
-    localization: Localization | None = None
+    localization: Localization | None = None if root is None else root.localization
     if isinstance(source, ActionEvent):
         responder = source.responder
         if not isinstance(responder, ActionResponder):
-            frontend = source.context.get("frontend", type(responder).__name__)
+            frontend = source.metadata.get("frontend", type(responder).__name__)
             message = f"this event came from frontend {frontend!r}, not Discord"
             raise LookupError(message)  # noqa: TRY004
         native = responder.interaction

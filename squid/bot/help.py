@@ -88,7 +88,7 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
         folded = needle.casefold().removeprefix("/")
         return next((item for item in self._commands if item.qualified_name.casefold() == folded), None)
 
-    def _detail(self, command: AnyCommand) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def _detail(self, command: AnyCommand) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         signature = getattr(command, "signature", "")
         qualified_name = command.qualified_name
         heading = f"/{qualified_name}{f' {signature}' if signature else ''}"
@@ -110,10 +110,10 @@ class HelpScreen(sd.UserSessionScreen, session_name="help"):
         )
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._needle is not None and self._focused is None:
             needle = self._needle
-            body: sl.LayoutNode[sl.ComponentsV2Target] = sl.section(
+            body: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = sl.section(
                 sl.heading(tr(t"Command not found")),
                 sl.paragraph(tr(t"No command named `{needle}` is available.")),
             )

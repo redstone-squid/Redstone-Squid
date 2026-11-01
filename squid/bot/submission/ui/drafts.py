@@ -62,7 +62,7 @@ class DraftEditorScreen(sd.Screen):
         return next((field for field in self.fields if field.id == self.selected), None)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         state = self.projection.status
         if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status("Loading submission draft."),)
@@ -75,7 +75,7 @@ class DraftEditorScreen(sd.Screen):
         )
         editable = draft.status in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}
         fields = self.fields[self.page * 20 : (self.page + 1) * 20]
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading("Submission draft"),
                 sl.paragraph(status),

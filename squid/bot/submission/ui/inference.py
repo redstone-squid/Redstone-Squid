@@ -42,8 +42,8 @@ class InferenceCandidatesScreen(sd.Screen):
         return max(1, (len(self.candidates) + 24) // 25)
 
     @override
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading("Inferred candidates"),
                 sl.paragraph(self.notice or "Choose a candidate. Missing facts and file assignments require review."),
@@ -100,9 +100,9 @@ class InferenceCandidatesScreen(sd.Screen):
             )
         return tuple(nodes)
 
-    async def _retry(self, event: sl.PressEvent) -> None:
+    async def _retry(self, event: sd.PressEvent) -> None:
         await event.acknowledge()
-        actor = await subject_for_interaction(await sd.request(event))
+        actor = await subject_for_interaction(event.context)
         try:
             candidates = await self.services.submission_inference.resume(self.run_id, actor)
             if candidates is not None:
@@ -135,8 +135,8 @@ class InferenceCandidatesScreen(sd.Screen):
             self.selected = None
             self.category = None
 
-    async def _open(self, event: sl.PressEvent) -> None:
-        actor = await subject_for_interaction(await sd.request(event))
+    async def _open(self, event: sd.PressEvent) -> None:
+        actor = await subject_for_interaction(event.context)
         candidates = await self.services.submission_inference.get(self.run_id, actor)
         current = next((item for item in candidates if str(item.id) == self.selected), None)
         if current is None:

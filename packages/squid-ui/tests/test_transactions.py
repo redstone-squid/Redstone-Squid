@@ -37,7 +37,7 @@ class Panel(Component[DiscordTarget]):
         return Text(str(self.declared))
 
 
-def attached[ComponentT: Component[Any]](component: ComponentT) -> ComponentT:
+def attached[ComponentT: Component[Any, Any]](component: ComponentT) -> ComponentT:
     """Give a component a runtime, which is what makes its writes state changes."""
     ComponentRuntime(component)
     return component
