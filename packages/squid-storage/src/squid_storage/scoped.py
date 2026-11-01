@@ -433,7 +433,7 @@ class PostgresScopedStore:
                     (slot_name, scope_key, payload, version, ttl_seconds, expires_at)
                 VALUES (
                     $1, $2, $3, $4, $5,
-                    CASE WHEN $5 IS NULL THEN NULL
+                    CASE WHEN $5::double precision IS NULL THEN NULL
                          ELSE clock_timestamp() + ($5 * INTERVAL '1 second') END
                 )
                 ON CONFLICT(slot_name, scope_key) DO UPDATE SET
