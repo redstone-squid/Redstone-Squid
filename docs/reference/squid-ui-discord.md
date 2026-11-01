@@ -304,3 +304,14 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui_discord.target` | Discord target conveniences bound to the shipped adapter. |
 | `squid_ui_discord.targets` | The registry that resolves a durable snapshot's target. |
 | `squid_ui_discord.testing` | Doubles and payload assertions with no Discord attached. |
+
+## Event contexts
+
+`sd.PressEvent`, `sd.SelectionEvent`, `sd.EntitySelectionEvent`, `sd.SubmitEvent`, and
+`sd.InvalidSubmitEvent` specialize the corresponding portable event with `sd.Request`.
+Semantic aliases include `sd.ChoiceEvent`, `sd.EntityEvent`, `sd.ToggleEvent`,
+`sd.NavigateEvent`, `sd.ScaleEvent`, and `sd.OpenEvent[ValueT]`.
+
+Use `event.context` for that invocation's request and `event.metadata` for dispatch metadata.
+`sd.on_press` and the matching `sd.on_*` registration functions supply implementations to
+`sl.handlers`; plain callbacks remain the normal single-frontend authoring path.

@@ -56,7 +56,7 @@ Its scope owns the screens it opens. Squid command decorators supply that scope 
 Inside native commands, `await sd.request(ctx)` or `await sd.request(interaction)` infers it from
 Discord's command binding. In a cog listener without a command binding, use
 `await self.ui.request(source)` so the panel ends when that cog unloads. Component handlers use
-`await sd.request(event)` and inherit their root's scope.
+`sd.PressEvent` (or the matching event alias) and use `event.context`, whose request inherits the root's scope.
 For a common logical session policy, choose a named screen preset:
 
 ```python

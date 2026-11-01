@@ -799,6 +799,34 @@ operation's progress covers the author-controlled one, for the same reason.
 
 ## Actions and frontend adapters
 
+Events carry two independent things: semantic input and a typed invocation `context`.
+`sl.PressEvent[ContextT]` defaults to `object`, so portable handlers cannot assume frontend
+capabilities. Discord's `sd.PressEvent` is an alias for `sl.PressEvent[sd.Request]`;
+`event.context.respond(...)` uses the root-owned request shared by that interaction.
+The old dictionary is now `event.metadata`, including its `frontend` dispatch identity.
+Standalone roots without an installation supply `None` as their context and continue to
+support portable event operations.
+
+Context constraints are independent of render-target constraints. Controls, containers,
+documents, components, and widget content slots preserve both; for example,
+`sl.LayoutNode[sl.ComponentsV2Target, sd.Request]` requires a Discord invocation context.
+`sd.Screen` fixes that context and declares its `event_frontend` as `discord`. The message
+root validates declarations throughout the component tree before exposing controls.
+Every public Discord mount and render entry point requires a context compatible with
+`sd.Request`; a matching render target alone is insufficient. `StackNavigator` preserves
+its children's context constraint so nesting cannot bypass this check. Portable components
+accepting `object` remain compatible. Internal planner storage erases context types only
+after the authoring boundary.
+
+An action with frontend-specific implementations uses
+`sl.handlers(sd.on_press(discord_callback), fallback=portable_callback)`. Matching branches
+win over fallback. The adapter profile declares its `frontend` identity; planning resolves
+registrations, including generated semantic handlers and forms, before exposing controls.
+Duplicate registrations and missing implementations are errors. Function annotations are
+never inspected for dispatch. Other adapters can register their typed implementations using
+`FrontendHandler` from `squid_ui.handlers`.
+
+
 Components receive PressEvent or SelectionEvent, not discord.Interaction. Events expose
 portable actor facts and response intents: notice, present_form, download, redirect, and
 finish. Each frontend implements ActionResponder; Discord details live in

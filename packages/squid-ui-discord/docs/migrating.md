@@ -262,7 +262,7 @@ its callback body into the submit handler.
 | `View.interaction_check` | `AccessPolicy`; action guards | `Owner`, `Users`, `Everyone`, or async `Check` gates the message root. Guards apply finer action policy. |
 | `View.on_error` | `MessageRoot(on_error=...)` / `MessageRootDefaults(on_error=...)` | One host hook receives the interaction, exception, and action source. Routers configure their own hook. |
 | `DynamicItem` | `Route`, `RouteGroup`, `Router` | Keep stable IDs and aliases; register the router at startup. |
-| Decorated button callback | `sl.action_control(..., on_click=...)` | Reuse the service call, not the live item. Resolve `await sd.request(event)` for Discord facts. |
+| Decorated button callback | `sl.action_control(..., on_click=...)` | Reuse the service call, not the live item. Annotate the callback with `sd.PressEvent` and use `event.context` for Discord facts. |
 | `Modal.on_submit` | `FormSpec` or `sl.forms.Form` plus `SubmitEvent` | Parsing and retry policy move out of the Discord modal class. |
 | Ephemeral edit token | `RenewEphemeral` with an expiry-supervising `MessageRootScheduler` | Interactive edits can renew credentials; unattended authority still expires. |
 
@@ -353,9 +353,9 @@ Use one request API for commands, native callbacks, and component events:
 | `sd.request(source, owner=self)` | `await self.ui.request(source)` for listeners and callbacks without command bindings |
 | `bot.app_ui.request(source)` | `await sd.request(source)` for native commands, component events, and application-owned callbacks |
 | Scope response defaults | `Config.responses`, screen class policy, or call keywords |
-| `sd.responder(event).message_root` | `(await sd.request(event)).root` |
-| `sd.native(event)` | `(await sd.request(event)).interaction` |
-| `responder(event).send_modal(modal)` | `await (await sd.request(event)).form(modal)` |
+| `sd.responder(event).message_root` | `event.context.root` |
+| `sd.native(event)` | `event.context.interaction` |
+| `responder(event).send_modal(modal)` | `await event.context.form(modal)` |
 | `squid_ui_discord.ext` | `squid_ui_discord` |
 | `ext.testing.stage` / `invoke` | `sd.testing.stage` / `invoke` |
 | `run_managed_result` | A command's `pending=` card and returned document |
@@ -385,3 +385,28 @@ still use their transport error hook; installing a runtime requires application 
 `RouteGroup.define` returns the existing route for an identical format and aliases, including after
 registration. Reloading a handler module needs no application route cache; changed aliases and
 new overlapping definitions still fail.
+
+## Typed event contexts
+
+Use Discord event aliases when a handler needs Discord capabilities:
+
+```python
+async def clicked(event: sd.PressEvent) -> None:
+    await event.context.respond("Hello!", audience="personal")
+```
+
+The same applies to `sd.ChoiceEvent`, `sd.SubmitEvent`, and the other semantic event aliases.
+Keep `sl.PressEvent` for callbacks that only change state or use portable operations such
+as `event.notice`. The old `event.context` metadata dictionary is now `event.metadata`.
+Constructing a portable event explicitly requires `context=`; pass `None` when there is
+no frontend invocation context.
+
+A screen containing Discord callbacks returns
+`sl.LayoutNode[sl.ComponentsV2Target, sd.Request]` (or a sequence/document of that type).
+The second parameter also carries through child components and widget content slots.
+Bare layout annotations describe portable invocation capabilities.
+
+For multiple implementations, use `sl.handlers(sd.on_press(callback), fallback=portable)`.
+The `on_selection`, `on_choice`, `on_submit`, and other event registration functions provide
+the same selection for their respective shapes. Registrations are selected using the
+adapter profile's explicit `frontend`, with no callback annotation inspection.
