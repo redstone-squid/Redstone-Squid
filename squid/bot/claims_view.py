@@ -6,8 +6,8 @@ from typing import override
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.application import AccountService
-from squid.accounts.domain import AliasClaim
 from squid.accounts.errors import AliasAlreadyClaimedError
+from squid.accounts.models import AliasClaim
 from squid.bot.consent import with_consented_account
 from squid.bot.profile_render import present_claimant
 from squid.bot.ui import DISCORD_BLUE, tr

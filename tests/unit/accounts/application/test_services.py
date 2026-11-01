@@ -14,15 +14,10 @@ from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     MERGE_PROOF_MAX_AGE_SECONDS,
     MERGE_TICKET_TTL_SECONDS,
-    Account,
     AccountConsent,
-    AccountIdentity,
     AccountMerge,
-    AccountProfile,
-    AliasClaim,
     ClaimMethod,
     ClaimStatus,
-    CreatorAlias,
     CreatorProfile,
     CreatorProfileRecord,
     CreditPreview,
@@ -30,7 +25,6 @@ from squid.accounts.domain import (
     IdentityRefresh,
     LinkPreview,
     LinkReservation,
-    MergeTicket,
     ProfileLink,
     ProfileUpdate,
     RecentAccountProof,
@@ -51,6 +45,7 @@ from squid.accounts.errors import (
     NoLinkedMinecraftAccountError,
     VerificationAttemptsExhaustedError,
 )
+from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
 from squid.core.errors import ValidationError
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
@@ -95,7 +90,13 @@ class FakeAccountRepository:
         identities = [replace(AccountIdentity.for_provider(provider, str(subject), verified_at=NOW), id=1)]
         if java_uuid is not None:
             identities.append(replace(AccountIdentity.java(java_uuid, username="Player", verified_at=NOW), id=2))
-        account = Account(tuple(identities), consent, self._next_id, NOW, UUID(int=self._next_id))
+        account = Account(
+            identities=tuple(identities),
+            consent=consent,
+            id=self._next_id,
+            created_at=NOW,
+            public_creator_id=UUID(int=self._next_id),
+        )
         self.accounts[self._next_id] = account
         self._next_id += 1
         return account
@@ -106,7 +107,13 @@ class FakeAccountRepository:
         consent: AccountConsent | None = None,
         identities: Sequence[AccountIdentity] = (),
     ) -> Account:
-        account = Account(tuple(identities), consent, self._next_id, NOW, UUID(int=self._next_id))
+        account = Account(
+            identities=tuple(identities),
+            consent=consent,
+            id=self._next_id,
+            created_at=NOW,
+            public_creator_id=UUID(int=self._next_id),
+        )
         self.accounts[self._next_id] = account
         self._next_id += 1
         return account
@@ -121,7 +128,7 @@ class FakeAccountRepository:
         self.merge_tickets = {
             digest: ticket for digest, ticket in self.merge_tickets.items() if ticket.account_id != account_id
         }
-        ticket = MergeTicket(account_id, NOW, NOW.add(seconds=ttl_seconds))
+        ticket = MergeTicket(account_id=account_id, created_at=NOW, expires_at=NOW.add(seconds=ttl_seconds))
         self.merge_tickets[code] = ticket
         return ticket
 
@@ -237,7 +244,13 @@ class FakeAccountRepository:
 
     async def update_consent(self, account_id: int, consent: AccountConsent) -> Account:
         account = self.accounts[account_id]
-        updated = Account(account.identities, consent, account.id, account.created_at, account.public_creator_id)
+        updated = Account(
+            identities=account.identities,
+            consent=consent,
+            id=account.id,
+            created_at=account.created_at,
+            public_creator_id=account.public_creator_id,
+        )
         self.accounts[account_id] = updated
         return updated
 
@@ -283,7 +296,14 @@ class FakeAccountRepository:
     async def request_claim(self, *, name: str, account_id: int) -> AliasClaim:
         alias = await self.get_alias_by_name(name)
         assert alias is not None
-        claim = AliasClaim(len(self.claims) + 1, alias.id, alias.name, account_id, ClaimStatus.PENDING, NOW)
+        claim = AliasClaim(
+            id=len(self.claims) + 1,
+            alias_id=alias.id,
+            alias_name=alias.name,
+            account_id=account_id,
+            status=ClaimStatus.PENDING,
+            created_at=NOW,
+        )
         self.claims[claim.id] = claim
         return claim
 
@@ -314,14 +334,14 @@ class FakeAccountRepository:
         self.reassign_requested = reassign
         claim = self.claims[claim_id]
         resolved = AliasClaim(
-            claim.id,
-            claim.alias_id,
-            claim.alias_name,
-            claim.account_id,
-            status,
-            claim.created_at,
-            NOW,
-            resolved_by_account_id,
+            id=claim.id,
+            alias_id=claim.alias_id,
+            alias_name=claim.alias_name,
+            account_id=claim.account_id,
+            status=status,
+            created_at=claim.created_at,
+            resolved_at=NOW,
+            resolved_by_account_id=resolved_by_account_id,
         )
         self.claims[claim_id] = resolved
         return resolved
@@ -372,11 +392,8 @@ async def test_discord_login_creates_an_account_without_making_discord_primary()
 
     account = await service(repository).get_or_create_identity(IdentityProvider.DISCORD, "123")
 
-    # The fake assigns identity ids because persistence does, and per-identity visibility and
-    # unlink are both addressed by that id.
-    assert account.identities_for(IdentityProvider.DISCORD) == (
-        replace(AccountIdentity.discord(123, verified_at=NOW), id=1),
-    )
+    (identity,) = account.identities_for(IdentityProvider.DISCORD)
+    assert (identity.id, identity.subject, identity.verified_at) == (1, "123", NOW)
     assert account.identities_for(IdentityProvider.JAVA) == ()
 
 
@@ -407,7 +424,7 @@ async def test_link_rejects_an_invalid_or_conflicting_java_identity() -> None:
 async def test_link_returns_the_automatically_claimed_alias() -> None:
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT, java_uuid=JAVA_UUID)
-    alias = CreatorAlias(1, "Player", account_id=account.id, claim_method=ClaimMethod.VERIFIED_IGN)
+    alias = CreatorAlias(id=1, name="Player", account_id=account.id, claim_method=ClaimMethod.VERIFIED_IGN)
     repository.link_result = _linked(account, claimed_alias=alias)
     assert account.id is not None
 
@@ -614,7 +631,7 @@ async def test_alias_claim_requires_current_consent() -> None:
     repository = FakeAccountRepository()
     seeded = repository.seed_account(123)
     assert seeded.id is not None
-    repository.aliases[1] = CreatorAlias(1, "OldName")
+    repository.aliases[1] = CreatorAlias(id=1, name="OldName")
 
     with pytest.raises(ConsentRequiredError):
         await service(repository).request_alias_claim(seeded.id, "OldName")
@@ -624,7 +641,7 @@ async def test_staff_resolution_records_the_staff_account() -> None:
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
-    repository.aliases[1] = CreatorAlias(1, "OldName")
+    repository.aliases[1] = CreatorAlias(id=1, name="OldName")
     claim = await service(repository).request_alias_claim(account.id, "OldName")
 
     resolved = await service(repository).approve_alias_claim(claim.id, staff_account_id=99)
@@ -758,7 +775,7 @@ async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> Non
     account = repository.seed_account(555, provider=IdentityProvider.BEDROCK, consent=CONSENT, java_uuid=JAVA_UUID)
     assert account.id is not None
     assert account.identities_for(IdentityProvider.DISCORD) == ()
-    alias = CreatorAlias(1, "Player", account_id=account.id, claim_method=ClaimMethod.VERIFIED_IGN)
+    alias = CreatorAlias(id=1, name="Player", account_id=account.id, claim_method=ClaimMethod.VERIFIED_IGN)
     repository.link_result = _linked(account, claimed_alias=alias)
     accounts = service(repository)
 

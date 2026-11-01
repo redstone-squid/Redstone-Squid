@@ -17,9 +17,6 @@ from squid.accounts.domain import (
     ClaimStatus,
     IdentityProvider,
 )
-from squid.accounts.domain import (
-    AccountIdentity as AccountIdentityValue,
-)
 from squid.accounts.errors import AccountNotFoundError, AliasAlreadyClaimedError, CreatorAliasNotFoundError
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import (
@@ -27,11 +24,12 @@ from squid.accounts.models import (
 )
 from squid.accounts.models import (
     AccountIdentity,
+    AliasClaim,
     CreatorAlias,
-    CreatorAliasClaim,
     PublicCreatorRedirect,
     VerificationCode,
 )
+from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.persistence.base import Base
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
@@ -118,7 +116,9 @@ async def test_account_can_hold_discord_java_and_bedrock_identities(repository: 
 
     assert account.id is not None
     assert {identity.provider for identity in account.identities} == set(IdentityProvider)
-    assert (await repository.get_by_identity(IdentityProvider.BEDROCK, str(2**63))) == account
+    loaded = await repository.get_by_identity(IdentityProvider.BEDROCK, str(2**63))
+    assert loaded is not None
+    assert loaded.id == account.id
 
 
 @pytest.mark.parametrize("provider", [IdentityProvider.DISCORD, IdentityProvider.BEDROCK])
@@ -330,7 +330,7 @@ async def test_repeated_claim_requests_reuse_the_pending_row(
 
     assert first.id == second.id
     async with async_session_factory() as session:
-        assert len((await session.scalars(select(CreatorAliasClaim))).all()) == 1
+        assert len((await session.scalars(select(AliasClaim))).all()) == 1
 
 
 async def test_claiming_a_held_credit_is_rejected(

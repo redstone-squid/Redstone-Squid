@@ -12,20 +12,14 @@ from squid.accounts.application.ports import AccountRepository
 from squid.accounts.domain import (
     MERGE_CODE_BYTES,
     MERGE_TICKET_TTL_SECONDS,
-    Account,
     AccountConsent,
-    AccountIdentity,
     AccountMerge,
-    AccountProfile,
-    AliasClaim,
     ClaimStatus,
-    CreatorAlias,
     CreatorProfile,
     IdentityProvider,
     IdentityRefresh,
     LinkReservation,
     MergePreview,
-    MergeTicket,
     ProfileUpdate,
     PublicCreatorProfile,
     RecentAccountProof,
@@ -46,6 +40,7 @@ from squid.accounts.errors import (
     NoLinkedMinecraftAccountError,
     VerificationAttemptsExhaustedError,
 )
+from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
 from squid.core.errors import InvalidStateError
 
 logger = logging.getLogger(__name__)

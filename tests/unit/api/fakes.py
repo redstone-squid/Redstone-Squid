@@ -15,9 +15,10 @@ from uuid import UUID
 from fastapi import FastAPI
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import AccountIdentity, AccountProfile, CreatorAlias, CreatorProfile
+from squid.accounts.domain import CreatorProfile
 from squid.accounts.domain.profiles import PublicCreatorProfile
 from squid.accounts.errors import MinecraftAccountNotFoundError
+from squid.accounts.models import AccountIdentity, AccountProfile, CreatorAlias
 from squid.api.app import create_api_app
 from squid.auth.application.web import WebSessionService
 from squid.builds.application import BuildQueryService, BuildService

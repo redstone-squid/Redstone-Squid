@@ -6,16 +6,8 @@ profile, which shows hidden fields, and a stranger's, which has already been fil
 describing the same profile differently.
 """
 
-from squid.accounts.domain import (
-    AccountIdentity,
-    AccountProfile,
-    AliasClaim,
-    IdentityProvider,
-    ProfileLink,
-    PublicCreatorProfile,
-    PublicIdentity,
-    avatar_url_for,
-)
+from squid.accounts.domain import IdentityProvider, ProfileLink, PublicCreatorProfile, PublicIdentity, avatar_url_for
+from squid.accounts.models import AccountIdentity, AccountProfile, AliasClaim
 from squid.bot.ui import CardField, tr
 from squid_ui.text import raw_md
 

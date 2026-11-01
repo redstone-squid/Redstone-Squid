@@ -25,14 +25,13 @@ from squid.accounts.domain import (
     MAX_PROFILE_LINKS,
     MAX_PRONOUNS_LENGTH,
     AccountConsent,
-    AccountIdentity,
-    AccountProfile,
     IdentityProvider,
     LinkPreview,
     ProfileLink,
     ProfileUpdate,
 )
 from squid.accounts.errors import AccountNotFoundError
+from squid.accounts.models import AccountIdentity, AccountProfile
 from squid.bot.profile_render import own_profile_avatar
 from squid.bot.ui import CardField, tr
 from squid.core.errors import ValidationError

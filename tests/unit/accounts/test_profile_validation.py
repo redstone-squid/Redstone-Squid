@@ -7,10 +7,10 @@ from squid.accounts.domain import (
     MAX_DISPLAY_NAME_LENGTH,
     MAX_PROFILE_LINKS,
     UNSET,
-    AccountProfile,
     ProfileLink,
     ProfileUpdate,
 )
+from squid.accounts.models import AccountProfile
 from squid.core.errors import ValidationError
 
 

@@ -13,9 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
-from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import Account, AccountIdentity
+from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.builds.application import BuildService
 from squid.builds.domain import Build, BuildCategory, BuildLink, Status
 from squid.builds.errors import InvalidBuildError

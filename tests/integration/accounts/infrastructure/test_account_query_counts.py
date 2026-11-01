@@ -14,11 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod, ClaimStatus
-from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.accounts.models import CreatorAlias
 from squid.persistence.base import Base
-from tests.support.database import record_queries
+from tests.support.database import assert_loaded_detached, record_queries
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
 
@@ -210,7 +210,17 @@ async def test_create_returns_exactly_what_it_persisted(
     )
     assert created.id is not None
 
-    assert await repository.get_by_id(created.id) == created
+    loaded = await repository.get_by_id(created.id)
+    assert loaded is not None
+    assert loaded.created_at == created.created_at
+    assert loaded.consent == created.consent
+    assert [(identity.id, identity.verified_at) for identity in loaded.identities] == [
+        (identity.id, identity.verified_at) for identity in created.identities
+    ]
+    assert_loaded_detached(created)
+    assert_loaded_detached(loaded)
+    for identity in loaded.identities:
+        assert_loaded_detached(identity)
 
 
 async def test_claim_timestamps_survive_a_reload_unchanged(

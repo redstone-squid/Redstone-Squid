@@ -8,23 +8,18 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.accounts.domain import (
-    Account,
     AccountConsent,
-    AccountIdentity,
     AccountMerge,
-    AccountProfile,
-    AliasClaim,
     ClaimMethod,
     ClaimStatus,
-    CreatorAlias,
     CreatorProfile,
     CreatorProfileRecord,
     IdentityProvider,
     IdentityRefresh,
     LinkReservation,
-    MergeTicket,
     ProfileUpdate,
 )
+from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias, MergeTicket
 
 
 @dataclass(frozen=True, slots=True)

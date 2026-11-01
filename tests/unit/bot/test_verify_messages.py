@@ -10,15 +10,8 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.accounts.domain import (
-    Account,
-    AccountIdentity,
-    AliasClaim,
-    ClaimStatus,
-    CreatorAlias,
-    IdentityRefresh,
-    LinkPreview,
-)
+from squid.accounts.domain import ClaimStatus, IdentityRefresh, LinkPreview
+from squid.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
 from squid.bot.account_presentation import (
     link_conflict,
     link_message,
@@ -59,7 +52,7 @@ def test_rename_names_both_the_old_and_new_name() -> None:
 
 
 def test_a_claimed_credit_is_reported() -> None:
-    message = refresh_message(_refresh(claimed_alias=CreatorAlias(5, "NewName", account_id=1)))
+    message = refresh_message(_refresh(claimed_alias=CreatorAlias(id=5, name="NewName", account_id=1)))
 
     assert "Build credits under **NewName**" in message
 
@@ -68,8 +61,10 @@ def test_a_contested_name_says_it_was_not_moved_and_names_the_claim() -> None:
     message = refresh_message(
         _refresh(
             current_name="Contested",
-            contested_alias=CreatorAlias(9, "Contested", account_id=2),
-            opened_claim=AliasClaim(3, 9, "Contested", 1, ClaimStatus.PENDING, NOW),
+            contested_alias=CreatorAlias(id=9, name="Contested", account_id=2),
+            opened_claim=AliasClaim(
+                id=3, alias_id=9, alias_name="Contested", account_id=1, status=ClaimStatus.PENDING, created_at=NOW
+            ),
         ),
     )
 
@@ -81,7 +76,7 @@ def test_a_contested_name_says_it_was_not_moved_and_names_the_claim() -> None:
 def test_retained_names_are_listed() -> None:
     message = refresh_message(
         _refresh(
-            claimed_alias=CreatorAlias(5, "NewName", account_id=1),
+            claimed_alias=CreatorAlias(id=5, name="NewName", account_id=1),
             retained_alias_names=("OldName", "OlderName"),
         ),
     )
@@ -101,7 +96,9 @@ def test_a_link_names_the_account_it_linked() -> None:
 
 def test_a_link_reports_the_credit_it_claimed() -> None:
     message = link_message(
-        _refresh(current_name="Notch", previous_name=None, claimed_alias=CreatorAlias(5, "Notch", account_id=1)),
+        _refresh(
+            current_name="Notch", previous_name=None, claimed_alias=CreatorAlias(id=5, name="Notch", account_id=1)
+        ),
     )
 
     assert "Build credits under **Notch**" in message
@@ -117,8 +114,10 @@ def test_a_link_reports_a_contested_credit() -> None:
         _refresh(
             current_name="Notch",
             previous_name=None,
-            contested_alias=CreatorAlias(9, "Notch", account_id=2),
-            opened_claim=AliasClaim(3, 9, "Notch", 1, ClaimStatus.PENDING, NOW),
+            contested_alias=CreatorAlias(id=9, name="Notch", account_id=2),
+            opened_claim=AliasClaim(
+                id=3, alias_id=9, alias_name="Notch", account_id=1, status=ClaimStatus.PENDING, created_at=NOW
+            ),
         ),
     )
 
@@ -128,7 +127,9 @@ def test_a_link_reports_a_contested_credit() -> None:
 
 def test_link_and_refresh_describe_a_credit_in_the_same_words() -> None:
     """One vocabulary for the reconciliation, which is the same operation in both commands."""
-    refresh = _refresh(claimed_alias=CreatorAlias(5, "NewName", account_id=1), retained_alias_names=("OldName",))
+    refresh = _refresh(
+        claimed_alias=CreatorAlias(id=5, name="NewName", account_id=1), retained_alias_names=("OldName",)
+    )
 
     shared = reconciliation_lines(refresh)
 
@@ -179,25 +180,35 @@ def test_multiple_java_identities_report_the_first_persisted_mismatch() -> None:
 
 
 def _claim(claimant: Account | None) -> AliasClaim:
-    return AliasClaim(7, 9, "Notch", 42, ClaimStatus.PENDING, NOW, claimant=claimant)
+    return AliasClaim(
+        id=7,
+        alias_id=9,
+        alias_name="Notch",
+        account_id=42,
+        status=ClaimStatus.PENDING,
+        created_at=NOW,
+        claimant=claimant,
+    )
 
 
 def test_a_claimant_with_discord_is_shown_as_a_mention() -> None:
     """The only handle a reviewer can click, and the only one Discord resolves for us."""
-    claim = _claim(Account((AccountIdentity.discord(555),), None, 42, NOW))
+    claim = _claim(Account(identities=(AccountIdentity.discord(555),), consent=None, id=42, created_at=NOW))
 
     assert present_claimant(claim) == "<@555>"
 
 
 def test_a_claimant_without_discord_falls_back_to_the_java_name() -> None:
-    claim = _claim(Account((AccountIdentity.java(JAVA_UUID, username="Notch"),), None, 42, NOW))
+    claim = _claim(
+        Account(identities=(AccountIdentity.java(JAVA_UUID, username="Notch"),), consent=None, id=42, created_at=NOW)
+    )
 
     assert present_claimant(claim) == "Notch"
 
 
 def test_a_claimant_with_only_a_public_creator_is_named_by_it() -> None:
     creator = UUID("33333333-3333-3333-3333-333333333333")
-    claim = _claim(Account((), None, 42, NOW, creator))
+    claim = _claim(Account(identities=(), consent=None, id=42, created_at=NOW, public_creator_id=creator))
 
     presented = present_claimant(claim)
 
@@ -215,9 +226,16 @@ def test_the_internal_id_is_last_and_labelled_as_a_diagnostic() -> None:
 
 def test_the_autocomplete_prefers_a_readable_name_over_a_snowflake() -> None:
     """The canonical presenter disables mentions where Discord would render their raw syntax."""
-    java_only = _claim(Account((AccountIdentity.java(JAVA_UUID, username="Notch"),), None, 42, NOW))
+    java_only = _claim(
+        Account(identities=(AccountIdentity.java(JAVA_UUID, username="Notch"),), consent=None, id=42, created_at=NOW)
+    )
     with_discord = _claim(
-        Account((AccountIdentity.discord(555), AccountIdentity.java(JAVA_UUID, username="Notch")), None, 42, NOW)
+        Account(
+            identities=(AccountIdentity.discord(555), AccountIdentity.java(JAVA_UUID, username="Notch")),
+            consent=None,
+            id=42,
+            created_at=NOW,
+        )
     )
 
     assert _claimant_description(java_only) == "Notch"
@@ -227,13 +245,15 @@ def test_the_autocomplete_prefers_a_readable_name_over_a_snowflake() -> None:
 
 def test_the_autocomplete_description_respects_discords_limit() -> None:
     long_name = "N" * 250
-    claim = _claim(Account((AccountIdentity.java(JAVA_UUID, username=long_name),), None, 42, NOW))
+    claim = _claim(
+        Account(identities=(AccountIdentity.java(JAVA_UUID, username=long_name),), consent=None, id=42, created_at=NOW)
+    )
 
     assert len(_claimant_description(claim)) <= 100
 
 
 async def test_registered_claim_provider_uses_the_canonical_presentation() -> None:
-    claim = _claim(Account((AccountIdentity.discord(555),), None, 42, NOW))
+    claim = _claim(Account(identities=(AccountIdentity.discord(555),), consent=None, id=42, created_at=NOW))
 
     class Claims:
         async def pending_alias_claims(self, *, with_claimants: bool = False) -> tuple[AliasClaim, ...]:
@@ -255,11 +275,13 @@ async def test_registered_claim_provider_uses_the_canonical_presentation() -> No
     [
         pytest.param(_refresh(current_name="Steve", previous_name="Steve"), id="unchanged"),
         pytest.param(_refresh(), id="renamed-nothing-claimed"),
-        pytest.param(_refresh(claimed_alias=CreatorAlias(5, "NewName", account_id=1)), id="renamed-claimed"),
+        pytest.param(_refresh(claimed_alias=CreatorAlias(id=5, name="NewName", account_id=1)), id="renamed-claimed"),
         pytest.param(
             _refresh(
-                contested_alias=CreatorAlias(9, "NewName", account_id=2),
-                opened_claim=AliasClaim(3, 9, "NewName", 1, ClaimStatus.PENDING, NOW),
+                contested_alias=CreatorAlias(id=9, name="NewName", account_id=2),
+                opened_claim=AliasClaim(
+                    id=3, alias_id=9, alias_name="NewName", account_id=1, status=ClaimStatus.PENDING, created_at=NOW
+                ),
             ),
             id="contested",
         ),

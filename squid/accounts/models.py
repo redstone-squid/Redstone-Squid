@@ -1,6 +1,7 @@
 """SQLAlchemy account models, keyed by account rather than by identity provider."""
 
 import uuid
+from typing import override
 
 from sqlalchemy import (
     UUID,
@@ -19,9 +20,11 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine import Dialect
 from sqlalchemy.engine.default import DefaultExecutionContext
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.attributes import get_history
+from sqlalchemy.types import TypeDecorator
 from whenever import Instant
 
 from squid.accounts.domain import (
@@ -31,8 +34,13 @@ from squid.accounts.domain import (
     IdentityProvider,
     fold_creator_name,
 )
+from squid.accounts.domain.consent import AccountConsent, consent_refresh_required
+from squid.accounts.domain.models import _POSITIVE_DECIMAL, _identity_order
+from squid.accounts.domain.profiles import ProfileLink
+from squid.core.errors import ValidationError
+from squid.core.i18n import tr
 from squid.persistence.base import Base
-from squid.persistence.types import InstantUTC, now
+from squid.persistence.types import InstantUTC, StrEnumText, now
 
 _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in IdentityProvider)
 """Generated from the enum so the CHECK cannot drift from the domain."""
@@ -52,7 +60,26 @@ def _fold_from_name(context: DefaultExecutionContext) -> str:
     return fold_creator_name(context.get_current_parameters()["name"])
 
 
-class Account(Base):
+class ProfileLinks(TypeDecorator[tuple[ProfileLink, ...]]):
+    """Store profile links as the existing JSON array."""
+
+    impl = JSONB
+    cache_ok = True
+
+    @override
+    def process_bind_param(
+        self, value: tuple[ProfileLink, ...] | None, dialect: Dialect
+    ) -> list[dict[str, str]] | None:
+        return None if value is None else [{"label": link.label, "url": link.url} for link in value]
+
+    @override
+    def process_result_value(
+        self, value: list[dict[str, str]] | None, dialect: Dialect
+    ) -> tuple[ProfileLink, ...] | None:
+        return None if value is None else tuple(ProfileLink(**link) for link in value)
+
+
+class Account(Base, kw_only=True):
     """An internal caller independent of every external identity provider."""
 
     __tablename__ = "accounts"
@@ -63,7 +90,7 @@ class Account(Base):
             name="accounts_consent_receipt_complete",
         ),
     )
-    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(primary_key=True, default=None)
     public_creator_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
@@ -73,8 +100,50 @@ class Account(Base):
     consent_version: Mapped[str | None] = mapped_column(Text, default=None)
     consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
+    identities: tuple[AccountIdentity, ...] = ()
+    """Linked identities, populated together by the repository."""
 
-class AccountIdentity(Base):
+    consent: AccountConsent | None = None
+
+    def identities_for(self, provider: IdentityProvider) -> tuple[AccountIdentity, ...]:
+        """Return every identity for *provider* in persistence order."""
+        return tuple(identity for identity in self.identities if identity.provider is provider)
+
+    def identity_for(self, provider: IdentityProvider, subject: str) -> AccountIdentity | None:
+        """Return the identity for one exact canonical provider subject, if present."""
+        return next((identity for identity in self.identities_for(provider) if identity.subject == subject), None)
+
+    def most_recent_identity_for(self, provider: IdentityProvider) -> AccountIdentity | None:
+        """Return the most recently verified identity for *provider*, breaking ties by persistence order."""
+        selected: AccountIdentity | None = None
+        for identity in self.identities_for(provider):
+            if selected is None:
+                selected = identity
+                continue
+            if selected.verified_at is None:
+                if identity.verified_at is not None or _identity_order(identity) > _identity_order(selected):
+                    selected = identity
+                continue
+            if identity.verified_at is not None and (
+                identity.verified_at > selected.verified_at
+                or (
+                    identity.verified_at == selected.verified_at
+                    and _identity_order(identity) > _identity_order(selected)
+                )
+            ):
+                selected = identity
+        return selected
+
+    @property
+    def needs_consent_refresh(self) -> bool:
+        """Whether the current privacy notice must be accepted before storing more identity data."""
+        return consent_refresh_required(
+            self.created_at,
+            None if self.consent is None else self.consent.version,
+        )
+
+
+class AccountIdentity(Base, kw_only=True):
     """A verified provider subject attached to exactly one account."""
 
     __tablename__ = "account_identities"
@@ -87,16 +156,17 @@ class AccountIdentity(Base):
         CheckConstraint("subject = btrim(subject) AND subject <> ''", name="account_identities_subject_check"),
         Index("account_identities_account_provider_idx", "account_id", "provider"),
     )
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     account_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="account_identities_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
+        default=None,
     )
-    provider: Mapped[IdentityProvider] = mapped_column(Text, nullable=False)
+    provider: Mapped[IdentityProvider] = mapped_column(StrEnumText(IdentityProvider), nullable=False)
     subject: Mapped[str] = mapped_column(Text, nullable=False)
     display_name: Mapped[str | None] = mapped_column(Text, default=None)
-    verified_at: Mapped[Instant] = mapped_column(
+    verified_at: Mapped[Instant | None] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     created_at: Mapped[Instant] = mapped_column(
@@ -112,8 +182,83 @@ class AccountIdentity(Base):
     the UUID, so this stays NULL there.
     """
 
+    @classmethod
+    def for_provider(
+        cls,
+        provider: IdentityProvider,
+        subject: str,
+        *,
+        display_name: str | None = None,
+        verified_at: Instant | None = None,
+    ) -> AccountIdentity:
+        """Build an identity in *provider*'s canonical subject form.
 
-class AccountProfile(Base):
+        This is the only authority on subject format; the database carries no format
+        constraint. The `match` is exhaustive by construction, so adding a member to
+        `IdentityProvider` is a type error here until its subject format is stated — which
+        is the reason the enum stays closed.
+        """
+        match provider:
+            case IdentityProvider.DISCORD:
+                if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**63:
+                    raise ValidationError(
+                        tr(t"Discord identity subjects must be positive signed 64-bit integers, got {subject!r}.")
+                    )
+                return cls(provider=provider, subject=subject, display_name=display_name, verified_at=verified_at)
+            case IdentityProvider.BEDROCK:
+                if _POSITIVE_DECIMAL.fullmatch(subject) is None or int(subject) >= 2**64:
+                    raise ValidationError(tr(t"Bedrock XUIDs must be unsigned 64-bit integers, got {subject!r}."))
+                return cls(provider=provider, subject=subject, display_name=display_name, verified_at=verified_at)
+            case IdentityProvider.JAVA:
+                # `UUID` also lowercases and hyphenates, so an uppercase or bare-hex
+                # subject from an external API normalizes rather than being rejected.
+                try:
+                    canonical = str(uuid.UUID(subject))
+                except ValueError as error:
+                    raise ValidationError(tr(t"Java identity subjects must be UUIDs, got {subject!r}.")) from error
+                return cls(provider=provider, subject=canonical, display_name=display_name, verified_at=verified_at)
+
+    @classmethod
+    def discord(cls, discord_id: int, *, verified_at: Instant | None = None) -> AccountIdentity:
+        """Create a canonical Discord identity."""
+        return cls.for_provider(IdentityProvider.DISCORD, str(discord_id), verified_at=verified_at)
+
+    @classmethod
+    def java(
+        cls,
+        minecraft_uuid: uuid.UUID,
+        *,
+        username: str | None = None,
+        verified_at: Instant | None = None,
+    ) -> AccountIdentity:
+        """Create a canonical Java Edition identity."""
+        return cls.for_provider(
+            IdentityProvider.JAVA, str(minecraft_uuid), display_name=username, verified_at=verified_at
+        )
+
+    @classmethod
+    def bedrock(
+        cls,
+        xuid: int,
+        *,
+        gamertag: str | None = None,
+        verified_at: Instant | None = None,
+    ) -> AccountIdentity:
+        """Create a canonical Bedrock identity from an unsigned XUID."""
+        return cls.for_provider(IdentityProvider.BEDROCK, str(xuid), display_name=gamertag, verified_at=verified_at)
+
+    @property
+    def discord_id(self) -> int | None:
+        """Return the Discord snowflake represented by this identity, if any."""
+        return int(self.subject) if self.provider is IdentityProvider.DISCORD else None
+
+    @property
+    def java_uuid(self) -> uuid.UUID | None:
+        """Return the Java UUID represented by this identity, if any."""
+        return uuid.UUID(self.subject) if self.provider is IdentityProvider.JAVA else None
+
+
+class AccountProfile(Base, kw_only=True):
     """What an account chooses to publish about itself on its creator page.
 
     A child of `accounts` rather than more columns on it. The account row is an identity anchor
@@ -159,8 +304,8 @@ class AccountProfile(Base):
 
     bio: Mapped[str | None] = mapped_column(Text, default=None)
     pronouns: Mapped[str | None] = mapped_column(Text, default=None)
-    links: Mapped[list[dict[str, str]]] = mapped_column(
-        JSONB, nullable=False, server_default=text("'[]'::jsonb"), default_factory=list
+    links: Mapped[tuple[ProfileLink, ...]] = mapped_column(
+        ProfileLinks(), nullable=False, server_default=text("'[]'::jsonb"), default_factory=tuple
     )
     """External links as `[{"label": ..., "url": ...}]`.
 
@@ -192,6 +337,11 @@ class AccountProfile(Base):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
+    @classmethod
+    def empty(cls, account_id: int) -> AccountProfile:
+        """Return the profile every account starts with: public, and saying nothing."""
+        return cls(account_id=account_id)
+
 
 class PublicCreatorRedirect(Base):
     """Permanent redirect from a merged public creator identifier."""
@@ -209,7 +359,7 @@ class PublicCreatorRedirect(Base):
     )
 
 
-class CreatorAlias(Base):
+class CreatorAlias(Base, kw_only=True):
     """A creator name credited on a build, optionally claimed by an account."""
 
     __tablename__ = "creator_aliases"
@@ -244,7 +394,7 @@ class CreatorAlias(Base):
             name="creator_aliases_claim_method_check",
         ),
     )
-    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(primary_key=True, default=None)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     normalized_name: Mapped[str] = mapped_column(
         Text,
@@ -258,10 +408,18 @@ class CreatorAlias(Base):
         default=None,
     )
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
-    claim_method: Mapped[ClaimMethod | None] = mapped_column(Text, default=None)
+    claim_method: Mapped[ClaimMethod | None] = mapped_column(StrEnumText(ClaimMethod), default=None)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+
+    public_creator_id: uuid.UUID | None = None
+    """Public identifier of the account claiming this alias."""
+
+    @property
+    def is_claimed(self) -> bool:
+        """Whether an account has been credited with this name."""
+        return self.account_id is not None
 
 
 @event.listens_for(CreatorAlias, "before_update")
@@ -276,7 +434,7 @@ def _refold_on_name_change(_mapper: object, _connection: object, target: Creator
         target.normalized_name = fold_creator_name(target.name)
 
 
-class CreatorAliasClaim(Base):
+class AliasClaim(Base, kw_only=True):
     """An account's request to be credited under a creator alias."""
 
     __tablename__ = "creator_alias_claims"
@@ -299,7 +457,7 @@ class CreatorAliasClaim(Base):
             name="creator_alias_claims_resolution_complete",
         ),
     )
-    id: Mapped[int] = mapped_column(primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(primary_key=True, default=None)
     alias_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("creator_aliases.id", name="creator_alias_claims_alias_id_fkey", ondelete="CASCADE"),
@@ -310,7 +468,7 @@ class CreatorAliasClaim(Base):
         ForeignKey("accounts.id", name="creator_alias_claims_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
-    status: Mapped[ClaimStatus] = mapped_column(Text, nullable=False, default=ClaimStatus.PENDING)
+    status: Mapped[ClaimStatus] = mapped_column(StrEnumText(ClaimStatus), nullable=False, default=ClaimStatus.PENDING)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -321,8 +479,12 @@ class CreatorAliasClaim(Base):
         default=None,
     )
 
+    alias_name: str = ""
+    claimant: Account | None = None
+    """Claiming account, populated when a staff queue requests it."""
 
-class VerificationCode(Base):
+
+class VerificationCode(Base, kw_only=True):
     """A verification code for linking Java Edition identities."""
 
     __tablename__ = "verification_codes"
@@ -333,7 +495,7 @@ class VerificationCode(Base):
         ),
     )
 
-    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(SmallInteger, primary_key=True, default=None)
     minecraft_uuid: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     code: Mapped[str] = mapped_column(Text, nullable=False)
     username: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -380,7 +542,7 @@ class VerificationAttempt(Base):
         CheckConstraint("consecutive_failures >= 0", name="verification_attempts_failures_non_negative"),
     )
 
-    provider: Mapped[IdentityProvider] = mapped_column(Text, primary_key=True)
+    provider: Mapped[IdentityProvider] = mapped_column(StrEnumText(IdentityProvider), primary_key=True)
     subject: Mapped[str] = mapped_column(Text, primary_key=True)
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
     locked_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
@@ -389,7 +551,7 @@ class VerificationAttempt(Base):
     )
 
 
-class AccountMergeTicket(Base):
+class MergeTicket(Base, kw_only=True):
     """A live, single-use claim that one account consents to being absorbed by another.
 
     A merge needs recent proof of *both* accounts, and no one session can hold both. The ticket is
@@ -412,7 +574,7 @@ class AccountMergeTicket(Base):
         ForeignKey("accounts.id", name="account_merge_tickets_account_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
-    code_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    code_digest: Mapped[str] = mapped_column(Text, nullable=False, default="")
     """Digest, never the code. The plaintext is shown once at mint time and never stored, exactly
     as a verification code is."""
 
@@ -427,3 +589,7 @@ class AccountMergeTicket(Base):
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+
+    def is_live_at(self, now: Instant) -> bool:
+        """Whether this ticket may still be redeemed."""
+        return now < self.expires_at

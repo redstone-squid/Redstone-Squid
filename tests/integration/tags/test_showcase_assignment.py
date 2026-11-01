@@ -4,9 +4,9 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.models import Account
 from squid.accounts.models import AccountIdentity as AccountIdentityModel
+from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.builds.domain import Status
 from squid.builds.models import Build
 from squid.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType

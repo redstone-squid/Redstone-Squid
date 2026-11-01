@@ -10,7 +10,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import CreatorAlias, CreditedAlias, PublicCreatorProfile
+from squid.accounts.domain import CreditedAlias, PublicCreatorProfile
+from squid.accounts.models import CreatorAlias
 from squid.api.dependencies import get_services
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.builds.application import BuildQueryService
@@ -73,7 +74,7 @@ class AccountFake(AccountService):
     async def get_creator_alias(self, name: str) -> CreatorAlias | None:
         if name.casefold() != "builder":
             return None
-        return CreatorAlias(7, "Builder", account_id=42, public_creator_id=CREATOR_PUBLIC_ID)
+        return CreatorAlias(id=7, name="Builder", account_id=42, public_creator_id=CREATOR_PUBLIC_ID)
 
     @override
     async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:

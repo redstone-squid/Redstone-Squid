@@ -11,7 +11,8 @@ import discord
 import pytest
 from whenever import Instant
 
-from squid.accounts.domain import CURRENT_CONSENT_VERSION, Account, AccountConsent, AccountIdentity, IdentityProvider
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
+from squid.accounts.models import Account, AccountIdentity
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionResolver, ReactionRouter
 from squid.bot.utils.permissions import AccountIdCache
 from squid.bot.voting.vote import VoteCog

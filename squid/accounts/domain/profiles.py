@@ -1,5 +1,6 @@
 """Public creator profiles: what an account chooses to show, and what it hides.
 
+from squid.accounts.models import AccountProfile
 A profile is presentation, deliberately separate from `CreatorAlias`, which is build credit.
 Renaming yourself here moves no credit and needs no staff review; the public page shows both, so
 attribution never depends on what somebody calls themself this week.
@@ -10,13 +11,13 @@ authority is `present_public_profile`: everything else stores flags.
 
 import unicodedata
 from dataclasses import dataclass, replace
-from typing import Final, override
+from typing import TYPE_CHECKING, Final, override
 from urllib.parse import urlsplit
 from uuid import UUID
 
 from whenever import Instant
 
-from squid.accounts.domain.models import AccountIdentity, IdentityProvider
+from squid.accounts.domain.models import IdentityProvider
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid_ui.text import Message
@@ -115,29 +116,6 @@ class ProfileLink:
         return cls(label=clean_label, url=clean_url)
 
 
-@dataclass(frozen=True, slots=True)
-class AccountProfile:
-    """The presentation an account has chosen for itself.
-
-    Every field is optional: a brand-new account has a profile row with nothing in it, which is
-    still a valid public profile showing its aliases and build credits.
-    """
-
-    account_id: int
-    display_name: str | None = None
-    bio: str | None = None
-    pronouns: str | None = None
-    links: tuple[ProfileLink, ...] = ()
-    hidden: bool = False
-    avatar_identity_id: int | None = None
-    updated_at: Instant | None = None
-
-    @classmethod
-    def empty(cls, account_id: int) -> AccountProfile:
-        """Return the profile every account starts with: public, and saying nothing."""
-        return cls(account_id=account_id)
-
-
 class _Unset:
     """Sentinel type distinguishing "leave alone" from "set to null" in a patch."""
 
@@ -199,7 +177,7 @@ class ProfileUpdate:
         return replace(self, **changes)  # type: ignore[arg-type]
 
     def apply(self, profile: AccountProfile) -> AccountProfile:
-        """Return *profile* with this update's present fields written over it."""
+        """Apply the present fields to the profile and return it."""
         changes = {
             name: value
             for name, value in (
@@ -212,7 +190,9 @@ class ProfileUpdate:
             )
             if not isinstance(value, _Unset)
         }
-        return replace(profile, **changes)  # type: ignore[arg-type]
+        for name, value in changes.items():
+            setattr(profile, name, value)
+        return profile
 
 
 @dataclass(frozen=True, slots=True)
@@ -331,23 +311,6 @@ def present_public_profile(record: CreatorProfileRecord) -> PublicCreatorProfile
 
 
 @dataclass(frozen=True, slots=True)
-class MergeTicket:
-    """A live claim that one account authenticated recently and consents to being absorbed.
-
-    The plaintext code is returned once, at mint time, and never stored: persistence keeps only a
-    digest, exactly like a verification code.
-    """
-
-    account_id: int
-    created_at: Instant
-    expires_at: Instant
-
-    def is_live_at(self, now: Instant) -> bool:
-        """Whether this ticket may still be redeemed."""
-        return now < self.expires_at
-
-
-@dataclass(frozen=True, slots=True)
 class MergePreview:
     """What completing a merge would do, shown before the irreversible button.
 
@@ -359,3 +322,7 @@ class MergePreview:
     alias_names: tuple[str, ...] = ()
     identity_count: int = 0
     build_count: int = 0
+
+
+if TYPE_CHECKING:
+    from squid.accounts.models import AccountIdentity, AccountProfile

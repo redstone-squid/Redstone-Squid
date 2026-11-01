@@ -14,14 +14,9 @@ import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
-    Account,
     AccountConsent,
-    AccountIdentity,
     AccountMerge,
-    AccountProfile,
-    AliasClaim,
     ClaimStatus,
-    CreatorAlias,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
@@ -32,6 +27,7 @@ from squid.accounts.domain import (
     PublicCreatorProfile,
 )
 from squid.accounts.errors import AccountNotFoundError
+from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
 from squid.bot.account_presentation import refresh_message
 from squid.bot.account_view import AccountScreen, ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
@@ -169,12 +165,12 @@ class LinkAccountService(AccountService):
         assert subject == str(AUTHOR_ID)
         assert consent is not None
         self.created_consents.append(consent)
-        return Account((AccountIdentity.discord(AUTHOR_ID),), consent, ACCOUNT_ID, NOW)
+        return Account(identities=(AccountIdentity.discord(AUTHOR_ID),), consent=consent, id=ACCOUNT_ID, created_at=NOW)
 
     @override
     async def grant_current_consent(self, account_id: int) -> Account:
         self.granted.append(account_id)
-        return Account((DISCORD,), AccountConsent.grant_current(), account_id, NOW)
+        return Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=account_id, created_at=NOW)
 
     @override
     async def reserve_minecraft_link(
@@ -261,7 +257,7 @@ class AccountMutationService(AccountService):
     @override
     async def grant_current_consent(self, account_id: int) -> Account:
         self.consent_grants.append(account_id)
-        return Account((), AccountConsent.grant_current(), account_id, NOW)
+        return Account(identities=(), consent=AccountConsent.grant_current(), id=account_id, created_at=NOW)
 
     @override
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
@@ -312,7 +308,7 @@ async def test_somebody_elses_creator_page_uses_the_public_profile_projection() 
 
 
 async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
-    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
     accounts = LinkAccountService()
     consent = ConsentCapture()
 
@@ -350,7 +346,7 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
 
 @pytest.mark.parametrize("abandoned", [False, True], ids=["cancel", "timeout"])
 async def test_link_reservation_is_released_when_consent_does_not_complete(abandoned: bool) -> None:
-    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
     accounts = LinkAccountService()
     consent = ConsentCapture()
 
@@ -382,7 +378,7 @@ async def test_link_reservation_is_released_when_consent_does_not_complete(aband
 
 
 async def test_link_reservation_is_released_when_prompt_is_not_opened() -> None:
-    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
     accounts = LinkAccountService()
     consent = ConsentCapture(opened=False)
 
@@ -467,7 +463,7 @@ async def test_accountless_link_agreement_creates_the_account_then_consumes_the_
 
 
 async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
-    account = Account((DISCORD,), AccountConsent("older-notice", NOW), ACCOUNT_ID, NOW)
+    account = Account(identities=(DISCORD,), consent=AccountConsent("older-notice", NOW), id=ACCOUNT_ID, created_at=NOW)
     accounts = LinkAccountService()
     consent = ConsentCapture()
 
@@ -496,7 +492,7 @@ async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
 
 
 def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -> None:
-    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
 
     async def authorize(_node: PermissionNode) -> bool:
         return True
@@ -519,7 +515,7 @@ def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -
 
 
 def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> None:
-    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
 
     async def authorize(_node: PermissionNode) -> bool:
         return True
@@ -543,7 +539,7 @@ def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> No
 
 @pytest.mark.parametrize("allowed", [False, True], ids=["revoked", "allowed"])
 async def test_own_refresh_rechecks_permission_at_the_handler(allowed: bool) -> None:
-    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
     refresh = IdentityRefresh(ACCOUNT_ID, JAVA_UUID, "Notch", "Notch")
     accounts = StaffRefreshService(None, refresh)
     authorized: list[PermissionNode] = []
@@ -578,7 +574,9 @@ async def test_own_refresh_rechecks_permission_at_the_handler(allowed: bool) -> 
 
 
 async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> None:
-    target = Account((AccountIdentity.discord(999),), AccountConsent.grant_current(), 99, NOW)
+    target = Account(
+        identities=(AccountIdentity.discord(999),), consent=AccountConsent.grant_current(), id=99, created_at=NOW
+    )
     accounts = StaffRefreshService(target, IdentityRefresh(99, JAVA_UUID, "Notch"))
 
     async def authorize(_node: PermissionNode) -> bool:
@@ -639,7 +637,7 @@ async def test_staff_refresh_reports_a_named_member_without_an_account() -> None
                 JAVA_UUID,
                 "New",
                 "Old",
-                claimed_alias=CreatorAlias(5, "New", account_id=99),
+                claimed_alias=CreatorAlias(id=5, name="New", account_id=99),
             ),
             id="claimed",
         ),
@@ -649,8 +647,10 @@ async def test_staff_refresh_reports_a_named_member_without_an_account() -> None
                 JAVA_UUID,
                 "New",
                 "Old",
-                contested_alias=CreatorAlias(5, "New", account_id=100),
-                opened_claim=AliasClaim(7, 5, "New", 99, ClaimStatus.PENDING, NOW),
+                contested_alias=CreatorAlias(id=5, name="New", account_id=100),
+                opened_claim=AliasClaim(
+                    id=7, alias_id=5, alias_name="New", account_id=99, status=ClaimStatus.PENDING, created_at=NOW
+                ),
             ),
             id="contested",
         ),
@@ -658,7 +658,9 @@ async def test_staff_refresh_reports_a_named_member_without_an_account() -> None
     ],
 )
 async def test_staff_refresh_renders_every_reconciliation_branch(refresh: IdentityRefresh) -> None:
-    target = Account((AccountIdentity.discord(999),), AccountConsent.grant_current(), 99, NOW)
+    target = Account(
+        identities=(AccountIdentity.discord(999),), consent=AccountConsent.grant_current(), id=99, created_at=NOW
+    )
     accounts = StaffRefreshService(target, refresh)
 
     async def authorize(_node: PermissionNode) -> bool:
@@ -685,7 +687,7 @@ async def test_staff_refresh_renders_every_reconciliation_branch(refresh: Identi
 
 
 async def test_merge_requires_the_workspace_decision() -> None:
-    account = Account((DISCORD,), AccountConsent.grant_current(), ACCOUNT_ID, NOW)
+    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
     accounts = MergeAccountService()
 
     async def authorize(_node: PermissionNode) -> bool:
@@ -734,7 +736,7 @@ def _account_panel(profile: AccountProfile) -> AccountScreen:
 def test_profile_editor_splits_profile_fields_from_ordered_links() -> None:
     panel = _account_panel(
         AccountProfile(
-            ACCOUNT_ID,
+            account_id=ACCOUNT_ID,
             display_name="Builder",
             bio="Hello",
             links=(ProfileLink("Site", "https://example.com"),),

@@ -6,14 +6,13 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.accounts.domain import (
-    AccountIdentity,
-    AccountProfile,
     CreatorProfileRecord,
     CreditedAlias,
     IdentityProvider,
     ProfileLink,
     present_public_profile,
 )
+from squid.accounts.models import AccountIdentity, AccountProfile
 
 PUBLIC_ID = UUID("11111111-1111-4111-8111-111111111111")
 JOINED = Instant.from_utc(2026, 1, 1)

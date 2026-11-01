@@ -5,14 +5,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 from whenever import Instant
 
-from squid.accounts.domain import (
-    CreatorAlias,
-    CreditedAlias,
-    IdentityProvider,
-    ProfileLink,
-    PublicCreatorProfile,
-    PublicIdentity,
-)
+from squid.accounts.domain import CreditedAlias, IdentityProvider, ProfileLink, PublicCreatorProfile, PublicIdentity
+from squid.accounts.models import CreatorAlias
 
 
 class CreatorAliasDetail(BaseModel):

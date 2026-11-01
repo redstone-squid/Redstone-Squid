@@ -6,7 +6,8 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.accounts.domain import Account, AccountIdentity, IdentityProvider
+from squid.accounts.domain import IdentityProvider
+from squid.accounts.models import Account, AccountIdentity
 
 JAVA_UUID = UUID("069a79f4-44e9-4726-a5be-fca90e38aaf5")
 
@@ -75,20 +76,19 @@ def test_every_provider_has_an_arm() -> None:
 
 
 def test_typed_conveniences_delegate_to_for_provider() -> None:
-    assert AccountIdentity.discord(7) == AccountIdentity.for_provider(IdentityProvider.DISCORD, "7")
-    assert AccountIdentity.bedrock(7, gamertag="Builder") == AccountIdentity.for_provider(
-        IdentityProvider.BEDROCK, "7", display_name="Builder"
-    )
-    assert AccountIdentity.java(JAVA_UUID, username="Notch") == AccountIdentity.for_provider(
-        IdentityProvider.JAVA, str(JAVA_UUID), display_name="Notch"
-    )
+    discord = AccountIdentity.discord(7)
+    bedrock = AccountIdentity.bedrock(7, gamertag="Builder")
+    java = AccountIdentity.java(JAVA_UUID, username="Notch")
+    assert (discord.provider, discord.subject) == (IdentityProvider.DISCORD, "7")
+    assert (bedrock.provider, bedrock.subject, bedrock.display_name) == (IdentityProvider.BEDROCK, "7", "Builder")
+    assert (java.provider, java.subject, java.display_name) == (IdentityProvider.JAVA, str(JAVA_UUID), "Notch")
 
 
 def test_account_returns_every_provider_identity_and_selects_exact_subject() -> None:
     first = replace(AccountIdentity.discord(7), id=11)
     java = replace(AccountIdentity.java(JAVA_UUID), id=12)
     second = replace(AccountIdentity.discord(8), id=13)
-    account = Account((first, java, second))
+    account = Account(identities=(first, java, second))
 
     assert account.identities_for(IdentityProvider.DISCORD) == (first, second)
     assert account.identity_for(IdentityProvider.DISCORD, "8") == second
@@ -99,6 +99,6 @@ def test_most_recent_identity_selector_is_explicit_and_deterministic() -> None:
     earlier = replace(AccountIdentity.discord(7, verified_at=Instant.parse_iso("2026-08-01T00:00:00Z")), id=11)
     newest_first = replace(AccountIdentity.discord(8, verified_at=Instant.parse_iso("2026-08-02T00:00:00Z")), id=12)
     newest_last = replace(AccountIdentity.discord(9, verified_at=Instant.parse_iso("2026-08-02T00:00:00Z")), id=13)
-    account = Account((earlier, newest_first, newest_last))
+    account = Account(identities=(earlier, newest_first, newest_last))
 
     assert account.most_recent_identity_for(IdentityProvider.DISCORD) == newest_last

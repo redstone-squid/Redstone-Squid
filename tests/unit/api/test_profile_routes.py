@@ -8,18 +8,9 @@ import pytest
 from whenever import Instant
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import (
-    UNSET,
-    AccountIdentity,
-    AccountMerge,
-    AccountProfile,
-    IdentityProvider,
-    MergePreview,
-    MergeTicket,
-    ProfileLink,
-    ProfileUpdate,
-)
+from squid.accounts.domain import UNSET, AccountMerge, IdentityProvider, MergePreview, ProfileLink, ProfileUpdate
 from squid.accounts.errors import InvalidMergeCodeError, LastIdentityError
+from squid.accounts.models import AccountIdentity, AccountProfile, MergeTicket
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.me import (
     clear_profile,
@@ -95,7 +86,9 @@ class AccountRecorder(AccountService):
     @override
     async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
         self.merge_codes.append(account_id)
-        return "ABCD2345", MergeTicket(1, Instant.from_utc(2026, 8, 18), Instant.from_utc(2026, 8, 18, 0, 10))
+        return "ABCD2345", MergeTicket(
+            account_id=1, created_at=Instant.from_utc(2026, 8, 18), expires_at=Instant.from_utc(2026, 8, 18, 0, 10)
+        )
 
     @override
     async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:

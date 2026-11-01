@@ -14,7 +14,8 @@ from typing import override
 from whenever import Instant
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import Account, AccountConsent, IdentityProvider
+from squid.accounts.domain import AccountConsent, IdentityProvider
+from squid.accounts.models import Account
 from squid.auth.domain.oauth import ExternalIdentity
 from squid.auth.domain.sessions import WebSessionIdentity
 from squid.auth.models.sessions import OAuthState

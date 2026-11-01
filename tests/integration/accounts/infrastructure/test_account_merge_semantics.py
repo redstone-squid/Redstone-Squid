@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, ClaimStatus, IdentityProvider
 from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.infrastructure.repository import AccountRepository
-from squid.accounts.models import Account, AccountIdentity, CreatorAlias, CreatorAliasClaim
+from squid.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
 from squid.core.errors import DataIntegrityError
 from squid.events import DomainEvent
 from squid.events.models import DomainEventRecord
@@ -355,15 +355,15 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
         )
         session.add_all(
             [
-                CreatorAliasClaim(alias_id=alias.id, account_id=survivor.id),
-                CreatorAliasClaim(alias_id=alias.id, account_id=absorbed.id),
-                CreatorAliasClaim(
+                AliasClaim(alias_id=alias.id, account_id=survivor.id),
+                AliasClaim(alias_id=alias.id, account_id=absorbed.id),
+                AliasClaim(
                     alias_id=alias.id,
                     account_id=survivor.id,
                     status=ClaimStatus.APPROVED,
                     resolved_at=resolved_at,
                 ),
-                CreatorAliasClaim(
+                AliasClaim(
                     alias_id=alias.id,
                     account_id=absorbed.id,
                     status=ClaimStatus.REJECTED,
@@ -426,11 +426,7 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
 
     async with migrated_session_factory() as session:
         claims = tuple(
-            (
-                await session.execute(
-                    select(CreatorAliasClaim.account_id, CreatorAliasClaim.status).order_by(CreatorAliasClaim.id)
-                )
-            ).all()
+            (await session.execute(select(AliasClaim.account_id, AliasClaim.status).order_by(AliasClaim.id))).all()
         )
         vote_accounts = tuple(await session.scalars(select(Vote.account_id)))
         subscriptions = tuple(

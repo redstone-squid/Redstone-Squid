@@ -15,10 +15,8 @@ from squid.accounts.domain import (
     ProfileUpdate,
     present_public_profile,
 )
-from squid.accounts.domain import (
-    AccountIdentity as AccountIdentityValue,
-)
 from squid.accounts.infrastructure.repository import AccountRepository
+from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.accounts.models import CreatorAlias
 from squid.builds import models as _build_models  # noqa: F401 — registers `builds` in metadata
 from squid.builds.infrastructure import taxonomy as _taxonomy  # noqa: F401 — and its relationship targets

@@ -15,13 +15,12 @@ from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     PRIVACY_NOTICE,
-    Account,
     AccountConsent,
-    AccountIdentity,
     CreditPreview,
     IdentityProvider,
     LinkPreview,
 )
+from squid.accounts.models import Account, AccountIdentity
 from squid.bot.consent import NOT_ASKED, _consent_prompt, ensure_consented_account, prompt_for_consent, request_consent
 from squid.core.i18n import tr
 from squid_ui.testing import RecordingResponder, press

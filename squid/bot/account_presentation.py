@@ -3,7 +3,8 @@
 from collections.abc import Sequence
 from uuid import UUID
 
-from squid.accounts.domain import AccountIdentity, IdentityRefresh, LinkPreview
+from squid.accounts.domain import IdentityRefresh, LinkPreview
+from squid.accounts.models import AccountIdentity
 from squid.core.i18n import tr
 from squid_ui.text import raw_md
 

@@ -9,8 +9,9 @@ import squid_ui as sl
 import squid_ui_discord as sd
 import squid_ui_widgets as sp
 from squid.accounts.application import AccountService
-from squid.accounts.domain import Account, AccountConsent, IdentityProvider
+from squid.accounts.domain import AccountConsent, IdentityProvider
 from squid.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
+from squid.accounts.models import Account
 from squid.bot.account_presentation import link_conflict, link_message, refresh_message
 from squid.bot.account_view import AccountScreen, ConsentRequest
 from squid.bot.claims_view import ClaimReviewComponent

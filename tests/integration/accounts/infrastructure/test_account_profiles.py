@@ -19,12 +19,10 @@ from squid.accounts.domain import (
     ProfileLink,
     ProfileUpdate,
 )
-from squid.accounts.domain import (
-    AccountIdentity as AccountIdentityValue,
-)
 from squid.accounts.errors import AccountIdentityNotFoundError, LastIdentityError
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import AccountIdentity as AccountIdentityModel
+from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.accounts.models import AccountProfile as AccountProfileModel
 from squid.accounts.models import CreatorAlias as CreatorAliasModel
 from squid.persistence.base import Base
@@ -176,7 +174,10 @@ class TestProfileWrites:
         assert cleared.links == ()
         assert not cleared.hidden
         assert cleared.avatar_identity_id is None
-        assert await repository.get_profile(account.id) == cleared
+        loaded = await repository.get_profile(account.id)
+        assert loaded is not None
+        assert (loaded.display_name, loaded.bio, loaded.links, loaded.hidden) == (None, None, (), False)
+        assert loaded.updated_at == cleared.updated_at
 
     async def test_database_refuses_an_overlong_display_name(
         self,
@@ -201,7 +202,7 @@ class TestProfileWrites:
         async with async_session_factory() as session:
             profile = await session.get(AccountProfileModel, account.id)
             assert profile is not None
-            profile.links = [{"label": f"n{i}", "url": f"https://example.com/{i}"} for i in range(11)]
+            profile.links = tuple(ProfileLink(label=f"n{i}", url=f"https://example.com/{i}") for i in range(11))
             with pytest.raises(IntegrityError):
                 await session.commit()
 
@@ -360,7 +361,7 @@ class TestIdentityVisibilityAndUnlink:
         profile = await repository.get_profile(account_id)
         assert profile is not None
         assert profile.avatar_identity_id == remaining.id
-        assert (await service.list_identities(account_id)) == (remaining,)
+        assert [identity.id for identity in await service.list_identities(account_id)] == [remaining.id]
         with pytest.raises(AccountIdentityNotFoundError):
             await service.unlink_identity(account_id, 9999)
 
@@ -403,7 +404,7 @@ class TestIdentityVisibilityAndUnlink:
                     await _wait_for_blocked_sessions(async_session_factory, holder_pid, count=2)
                     await blocker.commit()
 
-        assert removed == [java]
+        assert [identity.id for identity in removed] == [java.id]
         assert len(rejected) == 1
         assert rejected[0].identity_id == identity_id
         profile = await repository.get_profile(account_id)

@@ -25,10 +25,10 @@ from squid.accounts.domain import (
     ClaimStatus,
     IdentityProvider,
 )
-from squid.accounts.domain import AccountIdentity as AccountIdentityValue
 from squid.accounts.errors import AliasAlreadyClaimedError, MinecraftAccountNotFoundError
 from squid.accounts.infrastructure.repository import AccountRepository
-from squid.accounts.models import AccountIdentity, CreatorAlias, CreatorAliasClaim
+from squid.accounts.models import AccountIdentity, AliasClaim, CreatorAlias
+from squid.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.persistence.base import Base
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
@@ -186,7 +186,7 @@ async def test_repeated_refresh_into_a_held_name_reuses_one_claim(
     assert second.opened_claim is not None
     assert first.opened_claim.id == second.opened_claim.id
     async with async_session_factory() as session:
-        assert len((await session.scalars(select(CreatorAliasClaim))).all()) == 1
+        assert len((await session.scalars(select(AliasClaim))).all()) == 1
 
 
 async def test_refresh_is_idempotent(repository: AccountRepository) -> None:

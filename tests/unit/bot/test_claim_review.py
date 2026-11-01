@@ -10,8 +10,9 @@ from whenever import Instant
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.application import AccountService
-from squid.accounts.domain import Account, AccountIdentity, AliasClaim, ClaimStatus
+from squid.accounts.domain import ClaimStatus
 from squid.accounts.errors import AliasAlreadyClaimedError
+from squid.accounts.models import Account, AccountIdentity, AliasClaim
 from squid.bot.claims_view import ClaimReviewComponent
 from squid.permissions.domain import PermissionNode
 from squid_ui.testing import RecordingResponder, choose, press, press_event
@@ -23,8 +24,16 @@ NOW = Instant.from_utc(2026, 8, 19)
 
 
 def make_claim(claim_id: int, *, name: str = "Notch", discord_id: int = 555) -> AliasClaim:
-    claimant = Account((AccountIdentity.discord(discord_id),), None, 42, NOW)
-    return AliasClaim(claim_id, 9, name, 42, ClaimStatus.PENDING, NOW, claimant=claimant)
+    claimant = Account(identities=(AccountIdentity.discord(discord_id),), consent=None, id=42, created_at=NOW)
+    return AliasClaim(
+        id=claim_id,
+        alias_id=9,
+        alias_name=name,
+        account_id=42,
+        status=ClaimStatus.PENDING,
+        created_at=NOW,
+        claimant=claimant,
+    )
 
 
 class AccountRecorder(AccountService):

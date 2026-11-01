@@ -6,10 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from whenever import Instant
 
 from squid.accounts.domain import (
-    Account,
-    AccountIdentity,
     AccountMerge,
-    AccountProfile,
     IdentityProvider,
     IdentityRefresh,
     MergePreview,
@@ -18,6 +15,7 @@ from squid.accounts.domain import (
     avatar_url_for,
 )
 from squid.accounts.domain.profiles import UNSET
+from squid.accounts.models import Account, AccountIdentity, AccountProfile
 
 
 class ProfileLinkDetail(BaseModel):

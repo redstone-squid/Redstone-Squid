@@ -7,7 +7,7 @@ from sqlalchemy.orm import aliased
 from squid.accounts.domain import AccountMerge, ClaimStatus
 from squid.accounts.errors import AccountNotFoundError
 from squid.accounts.models import Account as AccountModel
-from squid.accounts.models import CreatorAliasClaim as CreatorAliasClaimModel
+from squid.accounts.models import AliasClaim as CreatorAliasClaimModel
 from squid.accounts.models import PublicCreatorRedirect
 from squid.notifications.infrastructure.account_merge import merge_account_notifications
 from squid.permissions.infrastructure.account_merge import merge_permissions

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.accounts.domain import AliasClaim
+from squid.accounts.models import AliasClaim
 from squid.bot.profile_render import present_claimant
 from squid.suggestions.application import Candidate, candidate
 from squid.suggestions.domain import MAX_SUGGESTIONS, SuggestionRequest

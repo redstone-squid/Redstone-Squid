@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 from typing import Any, cast, override
 
 from squid.accounts.application import AccountService
-from squid.accounts.domain import Account
+from squid.accounts.models import Account
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
 from squid.posts.application import PostService
 from squid.posts.domain import ResourceKind

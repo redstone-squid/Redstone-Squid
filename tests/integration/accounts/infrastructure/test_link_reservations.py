@@ -14,17 +14,11 @@ from sqlalchemy import insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.accounts.domain import (
-    CURRENT_CONSENT_VERSION,
-    AccountConsent,
-    AccountIdentity,
-    ClaimMethod,
-    LinkReservation,
-)
+from squid.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod, LinkReservation
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.accounts.models import Account as AccountModel
+from squid.accounts.models import AccountIdentity, CreatorAlias
 from squid.accounts.models import AccountIdentity as AccountIdentityModel
-from squid.accounts.models import CreatorAlias
 from squid.builds import models as _build_models  # noqa: F401 — registers `builds` in metadata
 from squid.builds.infrastructure import taxonomy as _taxonomy  # noqa: F401 — and its relationship targets
 from squid.persistence.base import Base

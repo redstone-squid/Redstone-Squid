@@ -8,7 +8,8 @@ import discord
 from discord import app_commands
 
 import squid_ui_discord as sd
-from squid.accounts.domain import Account, AccountConsent, IdentityProvider, LinkPreview
+from squid.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
+from squid.accounts.models import Account
 from squid.bot.account_view import ConsentAnswer
 from squid.bot.account_workspace import AccountWorkspace
 from squid.bot.consent import request_consent

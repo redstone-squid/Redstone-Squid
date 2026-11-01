@@ -15,16 +15,12 @@ from whenever import Instant
 from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
-    Account,
     AccountConsent,
-    AccountIdentity,
-    AccountProfile,
-    AliasClaim,
     ClaimStatus,
-    CreatorAlias,
     IdentityProvider,
     IdentityRefresh,
 )
+from squid.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.me import get_me, grant_consent, refresh_minecraft_identity, refresh_minecraft_identity_for
 from squid.core.errors import AuthenticationError
@@ -178,7 +174,7 @@ async def test_refresh_reports_a_rename_and_its_new_credit() -> None:
         java_uuid=JAVA_UUID,
         current_name="NewName",
         previous_name="OldName",
-        claimed_alias=CreatorAlias(5, "NewName", account_id=1),
+        claimed_alias=CreatorAlias(id=5, name="NewName", account_id=1),
         retained_alias_names=("OldName",),
     )
     accounts = _accounts(refresh=refresh)
@@ -201,8 +197,10 @@ async def test_refresh_reports_a_contested_name_without_claiming_it() -> None:
         java_uuid=JAVA_UUID,
         current_name="Contested",
         previous_name="OldName",
-        contested_alias=CreatorAlias(9, "Contested", account_id=2),
-        opened_claim=AliasClaim(3, 9, "Contested", 1, ClaimStatus.PENDING, NOW),
+        contested_alias=CreatorAlias(id=9, name="Contested", account_id=2),
+        opened_claim=AliasClaim(
+            id=3, alias_id=9, alias_name="Contested", account_id=1, status=ClaimStatus.PENDING, created_at=NOW
+        ),
     )
     accounts = _accounts(refresh=refresh)
 
@@ -219,7 +217,7 @@ async def test_refresh_reports_an_unchanged_name() -> None:
         java_uuid=JAVA_UUID,
         current_name="Steve",
         previous_name="Steve",
-        claimed_alias=CreatorAlias(5, "Steve", account_id=1),
+        claimed_alias=CreatorAlias(id=5, name="Steve", account_id=1),
     )
     accounts = _accounts(refresh=refresh)
 
