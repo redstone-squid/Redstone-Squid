@@ -14,11 +14,12 @@ from sqlalchemy.exc import DBAPIError
 from testcontainers.postgres import PostgresContainer
 
 from alembic import command
-from scripts import migration_history
 from squid.persistence.alembic_entities import alembic_util_entities
 from squid.persistence.migration_history import (
     HISTORY_TABLE,
+    adopt_script_digests,
     divergent_revisions,
+    repair_script_digests,
     script_digest,
 )
 from squid.schematics.domain.models import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
@@ -1334,7 +1335,6 @@ def test_inferred_capacity_migration_preserves_provenance(
 def test_migration_history_records_the_chain_and_guards_edited_scripts(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
 ) -> None:
     """The ledger records every applied step and refuses a chain whose scripts have changed.
 
@@ -1392,8 +1392,8 @@ def test_migration_history_records_the_chain_and_guards_edited_scripts(
             connection.execute(text(f"TRUNCATE {HISTORY_TABLE}"))
         command.upgrade(config, "head")
 
-        migration_history.main(["adopt"])
-        assert "Adopted" in capsys.readouterr().out
+        with engine.begin() as connection:
+            assert set(adopt_script_digests(connection, script_directory)) == set(scripts)
         with engine.connect() as connection:
             rows = connection.execute(text(f"SELECT revision, script_sha256 FROM {HISTORY_TABLE}")).all()
         assert {row.revision: row.script_sha256 for row in rows} == {
@@ -1408,10 +1408,8 @@ def test_migration_history_records_the_chain_and_guards_edited_scripts(
         with pytest.raises(CommandError, match="have been edited since this database ran them"):
             command.upgrade(config, "head")
 
-        # Through the operator entry point rather than the function it wraps, so the recipe the
-        # failure message names is known to resolve its own config and database URL.
-        migration_history.main(["repair"])
-        assert head_revision in capsys.readouterr().out
+        with engine.begin() as connection:
+            assert set(repair_script_digests(connection, script_directory)) == {head_revision}
         with engine.connect() as connection:
             assert divergent_revisions(connection, script_directory) == {}
         command.upgrade(config, "head")

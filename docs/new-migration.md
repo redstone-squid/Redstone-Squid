@@ -63,11 +63,7 @@ FAILED: 1 already-applied revision(s) have been edited since this database ran t
 
 The fix is a new revision that applies whatever the edit was going to do. Once you have confirmed
 the edits changed no DDL an existing database already ran — a reformat, a corrected docstring —
-accept the new digests:
-
-```console
-just db-repair-history
-```
+accept the new digests with `squid.persistence.migration_history.repair_script_digests()` inside a database transaction.
 
 That appends a `stamp` row per repaired revision rather than rewriting the original, because
 nothing in this table is ever edited: the repair is itself part of the history.

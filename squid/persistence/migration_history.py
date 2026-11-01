@@ -199,8 +199,8 @@ def verify_script_digests(connection: Connection, script_directory: ScriptDirect
     msg = (
         f"{len(divergent)} already-applied revision(s) have been edited since this database ran them: "
         f"{detail}. This database no longer matches the scripts that claim to describe it. Review the "
-        f"edits, apply any missing change as a new revision, then run `just db-repair-history` to accept "
-        f"the new digests."
+        f"edits and apply any missing change as a new revision. Use repair_script_digests() "
+        f"to accept reviewed changes to the recorded digests."
     )
     raise CommandError(msg)
 
