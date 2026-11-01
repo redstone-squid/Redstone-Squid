@@ -67,7 +67,7 @@ async def facade_inference(
     ui = runtime.scope(cog)
     assert_type(ui, sd.Scope[Builds])
 
-    request = await sd.request(interaction, owner=ui.owner)
+    request = await ui.request(interaction)
     assert_type(request, sd.Request[Builds])
     assert_type(request.owner, Builds)
 

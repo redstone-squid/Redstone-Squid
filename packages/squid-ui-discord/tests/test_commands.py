@@ -353,3 +353,89 @@ async def test_cog_finds_the_installed_runtime_without_a_bot_ui_attribute() -> N
     await cog.cog_unload()
     assert cog.ui.closed
     await bot.close()
+
+
+class NativeCommands(sd.Cog[commands.Bot]):
+    @app_commands.command(name="native-slash")
+    async def slash(self, interaction: discord.Interaction) -> None:
+        await (await sd.request(interaction)).respond(sl.paragraph("Slash"))
+
+    @commands.command(name="native-prefix")
+    async def prefix(self, context: commands.Context) -> None:
+        await (await sd.request(context)).respond(sl.paragraph("Prefix"))
+
+
+@pytest.mark.parametrize("source", ["slash", "prefix"])
+async def test_native_commands_infer_the_cog_scope(source: str) -> None:
+    bot = installed_bot()
+    cog = NativeCommands(bot)
+    await bot.add_cog(cog)
+    if source == "slash":
+        harness = interaction_for(bot)
+        harness.command = cog.slash
+        native = harness.source
+        command = cog.slash
+    else:
+        context = ContextHarness(bot=bot)
+        context.command = cog.prefix
+        native = context.source
+        command = cog.prefix
+
+    await run(command, cog, native)
+
+    request = await sd.request(native)
+    assert request.scope is cog.ui
+    assert request.owner is cog
+    await bot.close()
+
+
+async def test_inference_claims_a_request_resolved_before_command_lookup() -> None:
+    bot = installed_bot()
+    cog = NativeCommands(bot)
+    harness = interaction_for(bot)
+    early = await sd.request(harness.source)
+    harness.command = cog.slash
+
+    resolved = await sd.request(harness.source)
+
+    assert resolved is early
+    assert resolved.scope is cog.ui
+
+
+async def test_native_command_cannot_be_resolved_through_another_cog() -> None:
+    bot = installed_bot()
+    cog = NativeCommands(bot)
+    other = Builds(bot)
+    harness = interaction_for(bot)
+    harness.command = cog.slash
+
+    with pytest.raises(ValueError, match="different UI scope"):
+        await other.ui.request(harness.source)
+
+
+async def test_missing_native_command_owner_is_not_an_application_request() -> None:
+    class Unregistered(commands.Cog):
+        @app_commands.command()
+        async def native(self, interaction: discord.Interaction) -> None:
+            pass
+
+    bot = installed_bot()
+    cog = Unregistered()
+    harness = interaction_for(bot)
+    harness.command = cog.native
+
+    with pytest.raises(RuntimeError, match="no live UI scope"):
+        await sd.request(harness.source)
+    assert "squid_ui_discord.request" not in harness.extras
+
+
+async def test_unloaded_cog_dispatch_does_not_open_application_owned_panels() -> None:
+    bot = installed_bot()
+    cog = Builds(bot)
+    harness = interaction_for(bot)
+    await cog.cog_unload()
+
+    with pytest.raises(RuntimeError, match="no live UI scope"):
+        await run(cog.build, cog, harness.source, 42)
+    assert not harness.deferrals
+    assert not harness.sends

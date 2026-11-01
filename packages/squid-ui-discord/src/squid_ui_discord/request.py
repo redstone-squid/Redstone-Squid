@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Unpack, cast, overload
 
 import discord
+from discord import app_commands
+from discord.ext import commands
 
+from squid_ui import paragraph
 from squid_ui.forms import FormSpec
 from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.component import Component
@@ -275,8 +278,6 @@ class Request[OwnerT = Any]:
         public = self._ordinary_destination(personal=False, files=(), allowed_mentions=allowed_mentions)
 
         async def deliver(payload: MessagePayload) -> DeliveryResult:
-            from squid_ui import paragraph
-
             try:
                 result = await private(payload)
             except discord.Forbidden:
@@ -415,20 +416,45 @@ class Request[OwnerT = Any]:
         self._form_opened = True
 
 
-@overload
-async def request[OwnerT](source: RequestOrigin, *, owner: OwnerT) -> Request[OwnerT]: ...
-@overload
-async def request(source: RequestOrigin) -> Request[Any]: ...
-async def request(source: RequestOrigin, *, owner: object | None = None) -> Request[Any]:
-    """The one request for `source`, resolving it on first sight.
+async def request(source: RequestOrigin) -> Request[Any]:
+    """Resolve the one request for a source, inferring its owner from Discord dispatch.
 
-    `owner` names the object whose scope tracks what the request opens; a command decorator
-    passes its binding. Without it, a click inherits the scope of the root it was raised
-    from, and anything else lands in the app scope. The app scope is only a waiting room:
-    middleware that resolves a request before dispatch (for its localization, say) leaves
-    it there, and the first owner claim before any response moves it into the owner's
-    scope. A request that has responded keeps the scope it responded under.
+    Commands inherit their binding's registered scope; component events inherit their root's
+    scope. Unbound sources use the application scope until an owner claims them before a
+    response. For listeners without a command binding, use `self.ui.request(source)`.
+    Missing or closed command-owner scopes raise instead of falling back to the application.
     """
+    return await _resolve_request(source)
+
+
+def _command_binding(source: object) -> object | None:
+    """Read only discord.py command objects; arbitrary source attributes are not ownership."""
+    command = getattr(source, "command", None)
+    if isinstance(command, commands.Command):
+        return command.cog
+    if isinstance(command, app_commands.Command):
+        return command.binding
+    return None
+
+
+def _binding_scope(runtime: DiscordUIRuntime[Any], binding: object) -> Scope[Any]:
+    # Class-body groups organize commands but do not own panel lifetimes.
+    return runtime.app if isinstance(binding, app_commands.Group) else runtime.scope_for(binding)
+
+
+async def _request_for_binding(source: RequestOrigin, binding: object | None) -> Request[Any]:
+    """Apply the wrapper's actual binding, including context-menu and autocomplete callbacks."""
+    # Runtime constructs scopes, whose request method imports this resolver.
+    from squid_ui_discord.runtime import DiscordUIRuntime
+
+    runtime = DiscordUIRuntime.of(cast(Any, source))
+    scope = runtime.app if binding is None else _binding_scope(runtime, binding)
+    return await _resolve_request(source, scope=scope)
+
+
+async def _resolve_request(source: RequestOrigin, *, scope: Scope[Any] | None = None) -> Request[Any]:
+    """Share source normalization and memoization between inferred and bound resolution."""
+    # Runtime imports Scope, and Scope imports this module.
     from squid_ui_discord.runtime import DiscordUIRuntime
 
     root: MessageRoot | None = None
@@ -443,18 +469,34 @@ async def request(source: RequestOrigin, *, owner: object | None = None) -> Requ
         native = responder.interaction
         root = responder.message_root
         localization = root.localization
+    runtime = DiscordUIRuntime.of(cast(Any, native))
+    if scope is not None:
+        scope._require_live()
+        if scope.runtime is not runtime:
+            message = "the request source belongs to a different Discord runtime"
+            raise ValueError(message)
+    inferred: Scope[Any] | None = None
+    if root is not None:
+        inferred = runtime.scope_of_root(root)
+    elif (binding := _command_binding(native)) is not None:
+        inferred = _binding_scope(runtime, binding)
+    if scope is not None and inferred is not None and scope is not inferred:
+        message = "the request source belongs to a different UI scope"
+        raise ValueError(message)
+    selected = scope if scope is not None else inferred
     found = _memo_get(native)
     if found is not None:
+        found.scope._require_live()
+        if selected is not None and found.scope is not selected:
+            if found.scope is not runtime.app or found.responded or found._form_opened:
+                message = "the request already belongs to a different UI scope"
+                raise ValueError(message)
+            found.scope = selected
         if root is not None and found.root is None:
             found.root = root
             found.localization = root.localization
-            if found.scope is found.runtime.app and not found.responded:
-                found.scope = found.runtime.scope_of_root(root)
-        if owner is not None and found.scope is found.runtime.app and not found.responded:
-            found.scope = found.runtime.scope_for(owner)
         return found
     kind = _kind(native)
-    runtime = DiscordUIRuntime.of(cast(Any, native))
     if localization is None:
         localization = runtime.defaults.localization
         if runtime.localization is not None:
@@ -463,10 +505,11 @@ async def request(source: RequestOrigin, *, owner: object | None = None) -> Requ
     if user is None:
         message = "request source identifies no user"
         raise TypeError(message)
-    scope = runtime.scope_for(owner) if owner is not None else runtime.scope_of_root(root)
+    selected = runtime.app if selected is None else selected
+    selected._require_live()
     resolved = Request[Any](
         runtime,
-        scope,
+        selected,
         cast(ResponseSource, native),
         kind,
         localization,

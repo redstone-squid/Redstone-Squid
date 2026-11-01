@@ -18,6 +18,7 @@ from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import PauseUpdates, RenewEphemeral
 from squid_ui_discord.rendering import render_static
+from squid_ui_discord.request import Request, RequestOrigin, _resolve_request
 from squid_ui_discord.response import (
     UNSET,
     Abandoned,
@@ -35,7 +36,6 @@ from squid_ui_discord.sessions import Opened
 from squid_ui_discord.sessions import Rejected as SessionRejected
 
 if TYPE_CHECKING:
-    from squid_ui_discord.request import Request
     from squid_ui_discord.runtime import DiscordUIRuntime
 
 
@@ -78,6 +78,16 @@ class Scope[OwnerT = Any]:
         if isinstance(screen_spec, ResponseSpec):
             policy = policy.overlay(screen_spec)
         return policy.overlay(None, **overrides)
+
+    async def request(self, source: RequestOrigin) -> Request[OwnerT]:
+        """Resolve this owner's request, sharing the source's existing acknowledgement ledger.
+
+        Use this in listeners and native callbacks whose source carries no command binding.
+        A closed scope, a source from another runtime, or a request already owned elsewhere
+        raises instead of opening a panel with a different lifetime.
+        """
+        self._require_live()
+        return cast(Request[OwnerT], await _resolve_request(source, scope=self))
 
     def render(self, content: FacadeContent, *, localization: Localization | None = None) -> MessagePayload:
         """Render supported static content through installed rendering defaults."""

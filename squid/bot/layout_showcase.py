@@ -1376,7 +1376,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
         entries: app_commands.Range[int, 12, 120] = 30,
     ) -> None:
         """Open an interactive tour of how this bot lays out its messages."""
-        request = await sd.request(ctx, owner=self)
+        request = await self.ui.request(ctx)
         locale = await resolve_locale(ctx, self.bot.services.settings)
         await request.respond(
             LayoutShowcase(section=section, entries=entries, locale=locale),
@@ -1386,7 +1386,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     @layout_group.command(name="shared")
     async def shared(self, ctx: Context[BotT]) -> None:
         """Open two live panels that agree on settings neither of them owns."""
-        request = await sd.request(ctx, owner=self)
+        request = await self.ui.request(ctx)
         scope = OpenContext(ctx.author.id, ctx.guild.id if ctx.guild else None).user()
         appearance = self._appearance.get(scope)
         # Co-existence state: only the two panels hold it, so it is collected when the second
@@ -1408,7 +1408,7 @@ class LayoutShowcaseCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
     async def lobby(self, ctx: Context[BotT]) -> None:
         """Open a four-seat lobby anyone can join, with the roster held by the session."""
         assert ctx.guild is not None
-        request = await sd.request(ctx, owner=self)
+        request = await self.ui.request(ctx)
         await request.respond(Lobby(ctx.author.id))
 
 

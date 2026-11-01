@@ -44,7 +44,7 @@ class BuildEditCommands[BotT: "squid.bot.app.RedstoneSquid"](BuildCommandGroup[B
         Not registered as a command since `26002d83`; kept for the staging logic until the
         slash form returns.
         """
-        request = await sd.request(interaction, owner=self)
+        request = await self.ui.request(interaction)
         await request.defer("private")
 
         build = await self.builds.get(build_id)

@@ -28,7 +28,7 @@ from squid_ui_discord._pending import _ManagedResult
 from squid_ui_discord.access import Everyone
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, RequestSource
 from squid_ui_discord.modal import ModalSpec
-from squid_ui_discord.request import Deferral, Request, request
+from squid_ui_discord.request import Deferral, Request, _request_for_binding
 from squid_ui_discord.response import Abandoned, Presented, Rejected, Response, ResponseResult, Sent
 
 type CommandResult = FacadeContent | Response[Any] | FormSpec | ModalSpec | discord.ui.Modal | ResponseResult | None
@@ -298,7 +298,7 @@ async def _dispatch(
         raise TypeError(message)
     source = _as_request_source(args[source_index])
     # args[0] is Command.binding: the cog for cog commands, the group for class-body groups.
-    req = await request(source, owner=args[0]) if source_index == 1 else await request(source)
+    req = await _request_for_binding(source, args[0] if source_index == 1 else None)
     policy = _group_policy(req).overlay(own)
     if policy.defer is not None:
         await req.defer(policy.defer)
@@ -549,7 +549,7 @@ def autocomplete[OwnerT, **P]() -> Callable[
         @wraps(callback)
         async def outward(*args: object, **kwargs: object) -> list[app_commands.Choice[ChoiceValue]]:
             source = _as_request_source(args[source_index])
-            req = await request(source, owner=args[0]) if source_index == 1 else await request(source)
+            req = await _request_for_binding(source, args[0] if source_index == 1 else None)
             injected = [*args]
             injected[source_index] = req
             values = await dynamic_callback(*injected, **kwargs)

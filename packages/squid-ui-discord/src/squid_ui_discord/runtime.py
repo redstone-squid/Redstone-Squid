@@ -18,7 +18,7 @@ declined by a host that wants per-job health granularity; either way the host su
 import logging
 import weakref
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, Never, Unpack, cast, overload
+from typing import Any, Never, Unpack, cast, overload
 
 import anyio
 import discord
@@ -34,15 +34,14 @@ from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
 from squid_ui_discord.config import Config
 from squid_ui_discord.contracts import LocalizationResolver
 from squid_ui_discord.delivery import DeliveryResult, Replyable
+from squid_ui_discord.facade import Scope
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
 from squid_ui_discord.message_root_options import MessageRootDefaults
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
+from squid_ui_discord.request import request
+from squid_ui_discord.response import DEFAULT_RESPONSE_SPEC, Presented, ResponseSpec, Sent
 from squid_ui_discord.sessions import SessionManager
-
-if TYPE_CHECKING:
-    from squid_ui_discord.facade import Scope
-    from squid_ui_discord.response import ResponseSpec
 
 type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable | discord.Message
 """Anything an installation can be found from: the client, or something carrying one."""
@@ -207,8 +206,6 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     def scope[OwnerT](self, owner: OwnerT | None) -> Scope[OwnerT]:
         """Return the one live scope registered for ``owner`` by exact identity."""
-        from squid_ui_discord.facade import Scope
-
         if owner is None:
             message = "None cannot own a Discord UI scope"
             raise TypeError(message)
@@ -226,19 +223,19 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         return self.scope(self.client)
 
     def scope_for[OwnerT](self, owner: OwnerT) -> Scope[OwnerT]:
-        """The live scope registered for `owner`, or the app scope if it never registered one.
-
-        A cog that skipped `ui_load` still gets its commands answered; it just does not get
-        its own lifetime for what they open.
-        """
+        """Return an owner's registered live scope, raising if it is missing or closed."""
         for scope in self._scopes:
             if scope.owner is owner and not scope.closed:
-                return cast("Scope[OwnerT]", scope)
-        return cast("Scope[OwnerT]", self.app)
+                return cast(Scope[OwnerT], scope)
+        message = f"{type(owner).__name__} has no live UI scope; register it before dispatch"
+        raise RuntimeError(message)
 
     def scope_of_root(self, root: MessageRoot | None) -> Scope[Any]:
         """The scope that tracked `root`, so a click inherits the lifetime of the panel it hit."""
         if root is not None:
+            if root.finished:
+                message = "the component request belongs to a finished message root"
+                raise RuntimeError(message)
             for scope in self._scopes:
                 if root in self._scope_roots.get(id(scope), ()):
                     return scope
@@ -249,9 +246,6 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     async def _handle_component_error(self, event: ActionEvent, error: Exception, source: str) -> None:
         """Present and observe a rolled-back component failure through the installed policy."""
-        from squid_ui_discord.request import request
-        from squid_ui_discord.response import Presented, Sent
-
         policy = self.config.errors
         if policy.render is None and policy.observe is None:
             logging.getLogger(__name__).error("unhandled component error in %s", source, exc_info=error)
@@ -307,8 +301,6 @@ def install[ClientT: discord.Client](
             way one client has one router per id language -- a second would give the same
             click two answers.
     """
-    from squid_ui_discord.response import DEFAULT_RESPONSE_SPEC
-
     selected = config or Config()
     defaults = selected.defaults
     if defaults.execution_host is None:
