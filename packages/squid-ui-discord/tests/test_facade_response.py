@@ -47,7 +47,7 @@ async def test_static_response_returns_sent_and_resolves_localization_once() -> 
     interaction = InteractionHarness(user_id=7)
     cast(Any, interaction).client = client
 
-    request = await sd.request(interaction.source, owner=ui.owner)
+    request = await ui.request(interaction.source)
     outcome = await request.respond("Hello", audience="personal")
 
     assert isinstance(outcome, sd.Sent)
@@ -60,7 +60,7 @@ async def test_live_response_returns_typed_presentation_and_tracks_owner() -> No
     ui, interaction = installed()
     panel = Panel()
 
-    request = await sd.request(interaction.source, owner=ui.owner)
+    request = await ui.request(interaction.source)
     outcome = await request.respond(panel)
 
     assert isinstance(outcome, sd.Presented)
@@ -103,7 +103,7 @@ def test_response_policy_overlays_in_documented_order() -> None:
 async def test_private_interaction_is_ephemeral() -> None:
     ui, interaction = installed()
 
-    request = await sd.request(interaction.source, owner=ui.owner)
+    request = await ui.request(interaction.source)
     await request.respond("Secret", audience=sd.Private("sensitive"))
 
     assert interaction.response.send_message.await_args.kwargs["ephemeral"] is True

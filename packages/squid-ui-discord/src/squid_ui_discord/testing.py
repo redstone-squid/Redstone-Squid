@@ -42,7 +42,6 @@ from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
 from squid_ui_discord.message_root_wiring import AnyMountedView, ClassicMountedView, MountedView
 from squid_ui_discord.rendering import render_static
-from squid_ui_discord.request import request
 from squid_ui_discord.response import Presented, ResponseOverrides
 from squid_ui_discord.runtime import DiscordUIRuntime, install
 
@@ -818,13 +817,13 @@ async def stage[OwnerT, ComponentT: Component[ComponentsV2Target]](
     client = commands.Bot(command_prefix="!", intents=discord.Intents.none())
     runtime = install(client, _owner_config(owner, config))
     client.ui = runtime  # type: ignore[attr-defined]
-    runtime.scope(owner)
+    scope = runtime.scope(owner)
     interaction = _interaction(client, user_id)
     try:
         async with anyio.create_task_group() as tasks:
             await tasks.start(runtime.run)
             try:
-                result = await (await request(interaction.source, owner=owner)).respond(content, **overrides)
+                result = await (await scope.request(interaction.source)).respond(content, **overrides)
                 if not isinstance(result, Presented):
                     message = f"staging live content produced {type(result).__name__}"
                     raise TypeError(message)
