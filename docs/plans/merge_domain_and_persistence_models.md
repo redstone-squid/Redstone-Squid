@@ -1,5 +1,10 @@
 # Unify persisted entities, then introduce units of work
 
+## Status
+
+Phase 1 is implemented. Phase 2 has not started; repositories still own transactions and require explicit writes.
+See [Entities and persistence](../models.md) for the current model boundary.
+
 ## Goal and boundaries
 
 Use one SQLAlchemy model for each persisted entity, including larger entities such as Build and Account. Move business behavior onto those models and remove duplicate domain classes and mechanical conversion code.
@@ -75,7 +80,7 @@ Start with one simple write service, then build edits, submission finalization, 
 
 ## Verification and completion
 
-- Establish schema and public-contract baselines before moving classes. Require unchanged tables, columns, constraints, defaults, comments, polymorphic identities, and migration heads; run the schema-drift integration checks.
+- Establish schema and public-contract baselines before moving classes. Require unchanged tables, columns, constraints, defaults, and polymorphic identities. Collect documentation changes in one migration and run the schema-drift integration checks.
 - Test construction without a database, validation, enum loading, typed JSON, and insertion/update/reload for each migrated context.
 - Verify returned entities remain usable after session closure and that property access issues no unexpected SQL. Preserve existing batching and query-count guarantees.
 - Test preview isolation, stale edits, rollback, cancellation, generated IDs, immutable fields, and atomic audit/event writes.
@@ -84,4 +89,22 @@ Start with one simple write service, then build edits, submission finalization, 
 - Run focused tests with --no-cov per slice, formatting/linting, project typechecking, architecture checks, and git diff --check. Run the full suite and PostgreSQL integration suite at each phase gate because the impact is broad.
 - Update architecture guidance, migration documentation, and the build-attribute guide to reflect the unified model boundary. Phase one is complete only when duplicate entity classes and mechanical entity mappers are gone; phase two is complete when application operations consistently own business transactions.
 
-No schema migration is planned. Preserve the existing uncommitted documentation change until the documentation pass.
+## Phase 1 verification
+
+The model move preserves structural DDL and indexes. Revision `a2c6e9f4b7d0` collects the documentation changes
+in one reversible migration: four table comments and seventeen column comments. It is the single migration head.
+
+- Unit, architecture, and workspace package suite: 5,798 passed, 1 skipped.
+- PostgreSQL integration suite: 532 passed, 4 skipped, 5 existing failures reproduced on pre-refactor revision `3082bbd0f`.
+- Project Pyrefly check: no errors. Formatting, linting, and `git diff --check` pass.
+- Clean migration upgrade, schema drift, downgrade, and re-upgrade checks pass.
+
+The five existing integration failures are:
+
+- The disposable API stack uses a Docker build path without BuildKit support for `RUN --mount`.
+- The scoped storage query leaves PostgreSQL parameter `$5` without a type.
+- The installed OpenTelemetry instrumentor rejects SQLAlchemy 2.1.6.
+- The historical schematic-render migration fixture runs an event trigger against the old submitter column.
+- The historical nullable-vote-threshold fixture runs a queue trigger before `available_at` exists.
+
+The four integration skips require ffmpeg/ffprobe; the unit skip covers PostgreSQL arrays on SQLite.

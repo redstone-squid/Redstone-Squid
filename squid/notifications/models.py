@@ -47,11 +47,7 @@ class RecordFilterJSON(TypeDecorator[RecordSubscriptionFilter]):
 
 
 class NotificationProfile(Base, kw_only=True):
-    """Independent notification channel preferences.
-
-    Carries no consent receipt: notifications are covered by the one privacy notice, whose
-    receipt lives on `accounts`. A row here means "these switches", not "this person agreed".
-    """
+    """Channel preferences for an account. Consent is recorded on the account itself."""
 
     __tablename__ = "notification_profiles"
 

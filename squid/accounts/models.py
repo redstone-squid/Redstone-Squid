@@ -47,16 +47,7 @@ _PROVIDER_VALUES = ", ".join(f"'{provider.value}'" for provider in IdentityProvi
 
 
 def _fold_from_name(context: DefaultExecutionContext) -> str:
-    """Derive `normalized_name` from the `name` being inserted.
-
-    Attached to the column rather than left to callers so that no insert path can skip it:
-    this fires for ORM flushes, Core `insert()`, `pg_insert(...).on_conflict_do_nothing`,
-    and executemany alike.
-
-    Insert only. A column-level `onupdate` would fire for every UPDATE of the row, including
-    the claim updates that touch only `account_id`, where `name` is not among the parameters
-    at all. `_refold_on_name_change` handles the update side precisely instead.
-    """
+    """Derive the normalized alias for ORM and Core inserts."""
     return fold_creator_name(context.get_current_parameters()["name"])
 
 
@@ -91,6 +82,7 @@ class Account(Base, kw_only=True):
         ),
     )
     id: Mapped[int] = mapped_column(primary_key=True, default=None)
+    """Internal account identifier; assigned when the account is first saved."""
     public_creator_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
@@ -176,11 +168,7 @@ class AccountIdentity(Base, kw_only=True):
     """Whether this identity appears on the account's public creator profile."""
 
     avatar_key: Mapped[str | None] = mapped_column(Text, default=None)
-    """Provider rendering key, where the subject alone is not enough to build an avatar URL.
-
-    Discord avatar URLs need the hash, which only the gateway supplies. Java heads derive from
-    the UUID, so this stays NULL there.
-    """
+    """Provider avatar key, such as a Discord avatar hash. Java avatars use the subject UUID."""
 
     @classmethod
     def for_provider(
@@ -259,13 +247,7 @@ class AccountIdentity(Base, kw_only=True):
 
 
 class AccountProfile(Base, kw_only=True):
-    """What an account chooses to publish about itself on its creator page.
-
-    A child of `accounts` rather than more columns on it. The account row is an identity anchor
-    that thirty-odd foreign keys point at and that link and merge paths lock `FOR UPDATE`;
-    profile text is user-edited prose with an entirely different write cadence, and widening the
-    anchor to carry it would make every identity read pay for a bio.
-    """
+    """Public profile content and visibility choices for an account."""
 
     __tablename__ = "account_profiles"
     __table_args__ = (
@@ -299,37 +281,24 @@ class AccountProfile(Base, kw_only=True):
         primary_key=True,
     )
     display_name: Mapped[str | None] = mapped_column(Text, default=None)
-    """Presentation only, deliberately not a `creator_aliases` name: renaming yourself here moves
-    no build credit and needs no staff review."""
+    """Public display name, independent of the creator aliases used for build credits."""
 
     bio: Mapped[str | None] = mapped_column(Text, default=None)
     pronouns: Mapped[str | None] = mapped_column(Text, default=None)
     links: Mapped[tuple[ProfileLink, ...]] = mapped_column(
         ProfileLinks(), nullable=False, server_default=text("'[]'::jsonb"), default_factory=tuple
     )
-    """External links as `[{"label": ..., "url": ...}]`.
-
-    JSONB rather than a child table: nothing queries links, and every write replaces the whole
-    list from one owner, so a table would buy referential integrity to nothing and cost a join on
-    the hottest public read.
-    """
+    """Published links, stored as a JSON array. Replace the tuple when editing links."""
 
     hidden: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
-    """Whether to withhold the profile. A hidden profile still serves its aliases and build
-    credits, because a creator page that vanished would strand every build crediting it."""
+    """Whether to hide profile content. Aliases and build credits remain public."""
 
     avatar_identity_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("account_identities.id", name="account_profiles_avatar_identity_id_fkey", ondelete="SET NULL"),
         default=None,
     )
-    """The linked identity this profile's avatar is rendered from.
-
-    `SET NULL` so unlinking that identity clears the avatar rather than leaving a render pointing
-    at a subject we no longer hold. Ownership — that the identity belongs to this same account —
-    is checked in the repository, since the composite foreign key that would enforce it here
-    cannot coexist with `ON DELETE SET NULL`.
-    """
+    """Linked identity used for the avatar. Unlinking it clears this choice; writes check account ownership."""
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -424,12 +393,7 @@ class CreatorAlias(Base, kw_only=True):
 
 @event.listens_for(CreatorAlias, "before_update")
 def _refold_on_name_change(_mapper: object, _connection: object, target: CreatorAlias) -> None:
-    """Recompute the fold when, and only when, a display spelling is corrected.
-
-    The claim paths update `account_id` and friends without touching `name`, so this has to
-    be conditional on the attribute actually being dirty rather than a blanket column
-    `onupdate`.
-    """
+    """Recompute the normalized alias when its display spelling changes."""
     if get_history(target, "name").has_changes():
         target.normalized_name = fold_creator_name(target.name)
 
@@ -510,31 +474,14 @@ class VerificationCode(Base, kw_only=True):
         default_factory=lambda: Instant.now().add(minutes=10),
     )
     reserved_token: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
-    """Digest of the token held by whoever is currently being shown this code's consent prompt.
-
-    A digest rather than the token, for the same reason `code` is one. Deliberately says nothing
-    about *who* reserved it: the prompt runs before an account exists, and the notice promises that
-    cancelling stores no account information, so a reservation identifies nobody.
-    """
+    """Digest of the token holding this code while its consent prompt is open."""
 
     reserved_until: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
-    """When the hold lapses, freeing the code without anything having to reap it.
-
-    A crashed process therefore costs one prompt's worth of delay rather than a stuck code, and the
-    legitimate owner can always mint a fresh one from the game.
-    """
+    """When the reservation expires and the code becomes available again."""
 
 
 class VerificationAttempt(Base):
-    """Consecutive failed code redemptions for one external identity.
-
-    Keyed on `(provider, subject)` rather than on an account, because the guesser may not have an
-    account yet: a redemption is the first thing many callers ever do, and creating a row for
-    someone in order to rate-limit them would defeat the point. No foreign key for the same reason.
-
-    The counter is *consecutive*: a success clears it, so an honest user who mistypes twice and then
-    gets it right is never closer to a lockout than someone who never failed.
-    """
+    """Consecutive failed code redemptions for an external identity. A successful redemption resets the count."""
 
     __tablename__ = "verification_attempts"
     __table_args__ = (
@@ -552,16 +499,7 @@ class VerificationAttempt(Base):
 
 
 class MergeTicket(Base, kw_only=True):
-    """A live, single-use claim that one account consents to being absorbed by another.
-
-    A merge needs recent proof of *both* accounts, and no one session can hold both. The ticket is
-    that second proof, carried through the only channel the two sides share: a person who can sign
-    into each. Minting one is the absorbed side authenticating; redeeming it is the surviving side
-    doing so, inside the ticket's lifetime.
-
-    Keyed on the account rather than on the digest, so minting replaces. One account can only ever
-    have one live ticket, which is most of why an eight-character code is enough.
-    """
+    """A single-use proof that an account consents to being merged into another account."""
 
     __tablename__ = "account_merge_tickets"
     __table_args__ = (
@@ -575,16 +513,14 @@ class MergeTicket(Base, kw_only=True):
         primary_key=True,
     )
     code_digest: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    """Digest, never the code. The plaintext is shown once at mint time and never stored, exactly
-    as a verification code is."""
+    """Digest of the code shown once when the ticket is minted."""
 
     expires_at: Mapped[Instant] = mapped_column(
         InstantUTC(),
         nullable=False,
         default_factory=lambda: Instant.now().add(seconds=MERGE_TICKET_TTL_SECONDS),
     )
-    """Doubles as the proof timestamp: a ticket is redeemable for exactly as long as
-    `RecentAccountProof` accepts the authentication that minted it."""
+    """End of the authentication proof window in which the ticket can be redeemed."""
 
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now

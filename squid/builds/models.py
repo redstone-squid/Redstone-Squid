@@ -110,12 +110,15 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=None)
     revision: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("1"), default=1)
+    """Optimistic version checked by explicit repository writes."""
     submission_status: Mapped[Status | None] = mapped_column(IntEnumSmallInt(Status), nullable=False, default=None)
     record_category: Mapped[RecordCategoryLiteral | None] = mapped_column(Text, default=None)
     width: Mapped[int | None] = mapped_column(Integer, default=None)
+    """Declared width in blocks; None means unknown."""
     height: Mapped[int | None] = mapped_column(Integer, default=None)
     depth: Mapped[int | None] = mapped_column(Integer, default=None)
     completion_time: Mapped[str | None] = mapped_column(Text, default=None)  # Given by user, not parsable as a datetime
+    """Completion date as supplied by the submitter, including partial dates."""
     completion_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     completion_evidence: Mapped[str | None] = mapped_column(Text, default=None)
     description: Mapped[str | None] = mapped_column(Text, default=None)
@@ -208,8 +211,10 @@ class Build(Base, StagedMedia, StagedTaxonomy, kw_only=True):
     miscellaneous_restrictions: list[str] = field(default_factory=list)
     creators_ign: list[str] = field(default_factory=list)
     sponsor: Final[PublicSponsor | None] = frozen_field(default=None)
+    """Public sponsor details captured at submission time."""
     submitter_discord_id: int | None = None
     source_messages: Final[tuple[SourceMessage, ...]] = frozen_field(default=())
+    """Source messages in submission order. This provenance is fixed after submission."""
 
     def __post_init__(self) -> None:
         if type(self) is Build:

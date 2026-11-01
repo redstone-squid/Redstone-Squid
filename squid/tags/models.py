@@ -274,6 +274,7 @@ class TagAssignment(Base, kw_only=True, init=False):
         ForeignKey("tag_units.key", name="build_tag_assignments_display_unit_fkey", ondelete="RESTRICT"),
         default=None,
     )
+    """Unit used for presentation; the stored numeric value uses the definition's canonical unit."""
     display_order: Mapped[int | None] = mapped_column(SmallInteger, default=None)
     evidence: Mapped[str | None] = mapped_column(Text, default=None)
     provenance: Mapped[str] = mapped_column(Text, nullable=False, default="submitted")

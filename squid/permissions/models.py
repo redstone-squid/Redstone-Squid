@@ -71,9 +71,7 @@ class PermissionRole(Base, kw_only=True):
     builtin_key: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     """Identifies a role whose patterns are defined in code rather than here."""
     rank: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"), default=0)
-    """Management hierarchy only: who may edit whom. Deliberately absent from
-    permission resolution, so reordering roles can never change an authorization
-    outcome. Enforced by property P10."""
+    """Management rank used to decide who may edit the role. It does not affect permission resolution."""
     protected: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
     """Refuses structural edits from anyone but the bot owner."""
     created_by_account_id: Mapped[int | None] = mapped_column(
@@ -209,9 +207,7 @@ class PermissionGrant(Base, kw_only=True):
         nullable=True,
         default=None,
     )
-    """Who issued this, or NULL when the system did: a migration backfill or the
-    owner recovery CLI has no human grantor, and inventing one would put a
-    fictional account into the audit trail."""
+    """Account that issued the grant, or None for a system operation."""
     subject_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="permission_grants_subject_account_fkey", ondelete="CASCADE"),
@@ -223,9 +219,7 @@ class PermissionGrant(Base, kw_only=True):
     subject_guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
     """The guild the subject Discord role lives in."""
     scope_guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
-    """Where the rule applies, or NULL for everywhere. A guild-scoped rule can
-    never satisfy a global node; the resolver checks that against the node's
-    declared scope, so nodes added later are safe under old grants."""
+    """Guild where the grant applies, or None for all guilds. Guild-scoped grants cannot satisfy global nodes."""
     expires_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
     granted_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
