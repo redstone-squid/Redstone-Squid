@@ -250,13 +250,13 @@ class PostgresSchematicStore:
             await session.commit()
 
     @staticmethod
-    def _joined() -> Select[tuple[BuildSchematic, str, int]]:
+    def _joined() -> Select[BuildSchematic, str, int]:
         """Select an attachment together with the two facts that live on its file row."""
         return select(BuildSchematic, SchematicFile.source_format, SchematicFile.byte_size).join(
             SchematicFile, BuildSchematic.file_sha256 == SchematicFile.sha256
         )
 
-    async def _fetch(self, statement: Select[tuple[BuildSchematic, str, int]]) -> list[StoredSchematic]:
+    async def _fetch(self, statement: Select[BuildSchematic, str, int]) -> list[StoredSchematic]:
         async with self._session_factory() as session:
             rows = (await session.execute(statement)).all()
         return [

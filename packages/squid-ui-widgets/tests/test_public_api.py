@@ -24,5 +24,5 @@ def test_package_metadata_names_only_the_engine() -> None:
     metadata = tomllib.loads((Path(__file__).parents[1] / "pyproject.toml").read_text())
     project = metadata["project"]
     assert project["version"] == "0.1.0a1"
-    assert project["dependencies"] == ["squid-ui==0.1.0a1"]
+    assert project["dependencies"] == ["squid-ui==0.1.0a1", "squid-reactivity==0.1.0a1"]
     assert "optional-dependencies" not in project

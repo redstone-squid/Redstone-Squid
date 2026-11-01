@@ -1,9 +1,14 @@
 """End-to-end durable session coordination without Discord network I/O."""
 
+import asyncio
+import gc
 import json
 import time
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+import weakref
+from collections.abc import AsyncIterator, Callable, Sequence
+from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
+from typing import override
 
 import anyio
 import pytest
@@ -14,7 +19,7 @@ from squid_storage import SessionRecord
 from squid_ui.primitives import Text
 from squid_ui.profiling import PresentationStatus
 from squid_ui_discord import Everyone, SessionKey, SessionManager
-from squid_ui_discord.delivery import DeliveryResult
+from squid_ui_discord.delivery import DeliveryResult, MessageDestination
 from squid_ui_discord.durability import (
     ComponentRegistry,
     DurabilityHealth,
@@ -31,10 +36,12 @@ from squid_ui_discord.durability import (
     RecoveredBinding,
     Unreachable,
 )
+from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.sessions import (
     AdmissionSpec,
     MembershipStatus,
     Opened,
+    OpenResult,
     Rejected,
     RejectionReason,
     Session,
@@ -46,6 +53,7 @@ from squid_ui_discord.testing import delivered_to, message_harness
 class Counter(sl.Component[sl.ComponentsV2Target]):
     count: int = sl.state(0)
 
+    @override
     def render(self):
         return Text(f"count {self.count}")
 
@@ -53,6 +61,7 @@ class Counter(sl.Component[sl.ComponentsV2Target]):
 class HiddenDraft(sl.Component[sl.ComponentsV2Target]):
     advanced: bool = sl.state(default=False)
 
+    @override
     def render(self):
         return Text("Draft")
 
@@ -148,6 +157,198 @@ async def open_counter(
         expires_at=expires_at,
     )
     return message_root, result
+
+
+@dataclass
+class Pause:
+    """Hold an operation at a known await until the test releases it."""
+
+    entered: asyncio.Event = field(default_factory=asyncio.Event)
+    release: asyncio.Event = field(default_factory=asyncio.Event)
+
+    async def __call__(self) -> None:
+        self.entered.set()
+        await self.release.wait()
+
+
+async def attach_counter(
+    session: Session,
+    child: squid_ui_discord.MessageRoot,
+    destination: MessageDestination,
+    *,
+    parent: squid_ui_discord.MessageRoot | None = None,
+) -> OpenResult:
+    if isinstance(session, DurableSession):
+        return await session.attach(child, destination, recipe="counter", parent=parent)
+    return await session.attach(child, destination, parent=parent)
+
+
+@asynccontextmanager
+async def lifecycle_session(mode: str, frontend: FakeFrontend) -> AsyncIterator[tuple[Session, MemorySessionStore]]:
+    """Exercise the same lifecycle contract for local, durable, and reconstructed graphs."""
+    store = MemorySessionStore()
+    if mode == "ordinary":
+        opened = await SessionManager().open(
+            squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None),
+            delivered_to(message_harness()),
+        )
+        assert isinstance(opened, Opened)
+        try:
+            yield opened.session, store
+        finally:
+            await opened.session.finish()
+        return
+
+    if mode == "recovered":
+        first = runtime(store, frontend)
+        async with anyio.create_task_group() as tasks:
+            await tasks.start(first.run)
+            _, opened = await open_counter(first)
+            assert isinstance(opened, Opened)
+            child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
+            await attach_counter(opened.session, child, delivered_to(message_harness(message_id=100)))
+            tasks.cancel_scope.cancel()
+
+    durable = runtime(store, frontend)
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(durable.run)
+        if mode == "recovered":
+            session = next(durable.sessions.active())
+        else:
+            _, opened = await open_counter(durable)
+            assert isinstance(opened, Opened)
+            session = opened.session
+        try:
+            yield session, store
+        finally:
+            await session.finish()
+            tasks.cancel_scope.cancel()
+
+
+@pytest.mark.parametrize(
+    ("mode", "stage"),
+    [
+        ("ordinary", "delivery"),
+        ("durable", "delivery"),
+        ("durable", "promotion"),
+        ("recovered", "delivery"),
+        ("recovered", "promotion"),
+    ],
+)
+@pytest.mark.parametrize("close_parent_only", [False, True])
+async def test_closure_during_attachment_leaves_no_orphan(
+    mode: str, stage: str, close_parent_only: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    frontend = FakeFrontend()
+    with anyio.fail_after(3):
+        async with lifecycle_session(mode, frontend) as (session, store):
+            parent = session.root
+            if close_parent_only:
+                parent = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
+                await attach_counter(session, parent, delivered_to(message_harness(message_id=101)))
+            child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
+            pause = Pause()
+            promote = FakeFrontend.promote
+
+            async def paused_promote(
+                self: FakeFrontend, root: squid_ui_discord.MessageRoot, result: DeliveryResult
+            ) -> Promoted | NotDurable:
+                if stage == "promotion":
+                    await pause()
+                return await promote(self, root, result)
+
+            monkeypatch.setattr(FakeFrontend, "promote", paused_promote)
+            destination = delivered_to(message_harness(message_id=102))
+
+            async def deliver(payload: MessagePayload) -> DeliveryResult:
+                if stage == "delivery":
+                    await pause()
+                return await destination(payload)
+
+            results: list[OpenResult] = []
+
+            async def attach() -> None:
+                results.append(await attach_counter(session, child, deliver, parent=parent))
+
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(attach)
+                await pause.entered.wait()
+                await parent.finish()
+                pause.release.set()
+
+            assert len(results) == 1 and isinstance(results[0], Rejected)
+            assert results[0].reason is RejectionReason.SESSION_FINISHED
+            assert child.finished
+            await child.wait()
+            assert child not in session.message_roots
+            assert session._manager.session_for(child) is None
+            if not close_parent_only:
+                assert await store.list() == ()
+
+
+@pytest.mark.parametrize("mode", ["ordinary", "durable", "recovered"])
+async def test_completed_children_are_collectible_while_session_stays_open(mode: str) -> None:
+    async with lifecycle_session(mode, FakeFrontend()) as (session, _store):
+        references: list[weakref.ReferenceType[squid_ui_discord.MessageRoot]] = []
+        for child in session.message_roots[1:]:
+            references.append(weakref.ref(child))
+            await child.finish()
+        for _ in range(3):
+            child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
+            references.append(weakref.ref(child))
+            await attach_counter(session, child, delivered_to(message_harness(message_id=100)))
+            await child.finish()
+        del child
+        await anyio.sleep(0)
+        gc.collect()
+
+        assert session.message_roots == (session.root,)
+        assert not session.root.finished
+        assert all(reference() is None for reference in references)
+
+
+@pytest.mark.parametrize("interrupt", ["cancel", "error", "refuse"])
+async def test_interrupted_promotion_transfers_delivered_child_to_cleanup(
+    interrupt: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    frontend = FakeFrontend()
+    with anyio.fail_after(3):
+        async with lifecycle_session("durable", frontend) as (session, _store):
+            child = squid_ui_discord.MessageRoot(Counter(), access=Everyone(), timeout=None)
+            pause = Pause()
+            scope = anyio.CancelScope()
+
+            async def promote(
+                self: FakeFrontend, root: squid_ui_discord.MessageRoot, result: DeliveryResult
+            ) -> NotDurable:
+                await pause()
+                if interrupt == "error":
+                    raise ValueError("promotion failed")
+                return NotDurable("temporary delivery")
+
+            monkeypatch.setattr(FakeFrontend, "promote", promote)
+
+            async def attach() -> None:
+                with scope:
+                    if interrupt == "error":
+                        with pytest.raises(ValueError, match="promotion failed"):
+                            await attach_counter(session, child, delivered_to(message_harness(message_id=100)))
+                    else:
+                        result = await attach_counter(session, child, delivered_to(message_harness(message_id=100)))
+                        assert isinstance(result, Rejected)
+
+            async with anyio.create_task_group() as tasks:
+                tasks.start_soon(attach)
+                await pause.entered.wait()
+                if interrupt == "cancel":
+                    scope.cancel()
+                else:
+                    pause.release.set()
+
+            assert child.finished
+            await child.wait()
+            assert session.message_roots == (session.root,)
+            assert session._manager.session_for(child) is None
 
 
 async def test_open_publishes_one_whole_session_and_finish_deletes_it() -> None:
@@ -383,6 +584,7 @@ async def test_remote_summaries_participate_in_distributed_cardinality() -> None
 async def test_corrupt_record_does_not_block_healthy_recovery() -> None:
     store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
+    broken_id: str | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(first_runtime.run)
@@ -392,6 +594,8 @@ async def test_corrupt_record_does_not_block_healthy_recovery() -> None:
         assert isinstance(broken, Opened)
         broken_id = broken.session.id
         tasks.cancel_scope.cancel()
+
+    assert broken_id is not None, "the first runtime must have opened both sessions"
 
     stored = await store.load(broken_id)
     assert stored is not None
@@ -413,6 +617,7 @@ async def test_corrupt_record_does_not_block_healthy_recovery() -> None:
 async def test_missing_root_is_reported_and_deleted() -> None:
     store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
+    record_id: str | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(first_runtime.run)
@@ -420,6 +625,8 @@ async def test_missing_root_is_reported_and_deleted() -> None:
         assert isinstance(opened, Opened)
         record_id = opened.session.id
         tasks.cancel_scope.cancel()
+
+    assert record_id is not None, "the first runtime must have opened the session"
 
     second_runtime = runtime(store, FakeFrontend(missing_ids=frozenset({"root"})))
     async with anyio.create_task_group() as tasks:
@@ -433,6 +640,8 @@ async def test_missing_root_is_reported_and_deleted() -> None:
 async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
     store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
+    child_id: str | None = None
+    record_id: str | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(first_runtime.run)
@@ -452,6 +661,8 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
         record_id = opened.session.id
         tasks.cancel_scope.cancel()
 
+    assert child_id is not None and record_id is not None, "the first runtime must have attached the child"
+
     second_runtime = runtime(store, FakeFrontend(missing_ids=frozenset({child_id})))
     async with anyio.create_task_group() as tasks:
         report = await tasks.start(second_runtime.run)
@@ -470,6 +681,7 @@ async def test_missing_child_is_pruned_from_the_whole_session_record() -> None:
 async def test_expired_record_is_deleted_before_reconnection() -> None:
     store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend(), clock=lambda: 0.0)
+    record_id: str | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(first_runtime.run)
@@ -477,6 +689,8 @@ async def test_expired_record_is_deleted_before_reconnection() -> None:
         assert isinstance(opened, Opened)
         record_id = opened.session.id
         tasks.cancel_scope.cancel()
+
+    assert record_id is not None, "the first runtime must have opened the session"
 
     second_runtime = runtime(store, FakeFrontend(), clock=lambda: 11.0)
     async with anyio.create_task_group() as tasks:
@@ -490,6 +704,7 @@ async def test_expired_record_is_deleted_before_reconnection() -> None:
 async def test_unreachable_record_is_retained_and_released() -> None:
     store = MemorySessionStore()
     first_runtime = runtime(store, FakeFrontend())
+    record_id: str | None = None
 
     async with anyio.create_task_group() as tasks:
         await tasks.start(first_runtime.run)
@@ -497,6 +712,8 @@ async def test_unreachable_record_is_retained_and_released() -> None:
         assert isinstance(opened, Opened)
         record_id = opened.session.id
         tasks.cancel_scope.cancel()
+
+    assert record_id is not None, "the first runtime must have opened the session"
 
     second_runtime = runtime(store, FakeFrontend(unreachable_ids=frozenset({"root"})))
     async with anyio.create_task_group() as tasks:

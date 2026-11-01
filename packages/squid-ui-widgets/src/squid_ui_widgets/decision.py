@@ -2,6 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Collection, Iterable
 from dataclasses import dataclass
+from typing import override
 
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_controls, stack, status
@@ -32,12 +33,12 @@ class DecisionState:
 type DecisionHandler = Callable[[TransitionEvent[DecisionState], str], Awaitable[None]]
 
 
-class Decision[RenderTargetT: RenderTarget = RenderTarget]:
+class Decision[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """A pending prompt that becomes immutable after one valid choice."""
 
     def __init__(
         self,
-        prompt: ContentLike[RenderTargetT],
+        prompt: ContentLike[RenderTargetT, ContextT],
         options: Iterable[DecisionOption],
         *,
         key: str = "decision",
@@ -67,7 +68,7 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
         *,
         on_decide: DecisionHandler | None = None,
         finish_on: Collection[str] = (),
-    ) -> ComponentDriver[DecisionState, RenderTargetT]:
+    ) -> ComponentDriver[DecisionState, RenderTargetT, ContextT]:
         """Build a component shell and dispatch the chosen option."""
         handlers = {}
         if on_decide is not None:
@@ -99,8 +100,8 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
         return DecisionState(key) if key in {option.key for option in self.options} else state
 
     def render(
-        self, state: DecisionState, controls: MachineControls[DecisionState, RenderTargetT]
-    ) -> DocumentLike[RenderTargetT]:
+        self, state: DecisionState, controls: MachineControls[DecisionState, RenderTargetT, ContextT]
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render the prompt, options, and optional decision result."""
         options = self._options(controls)
         selected = next((option for option in options if option.key == state.decided), None)
@@ -124,18 +125,18 @@ class Decision[RenderTargetT: RenderTarget = RenderTarget]:
             status(controls.chrome.decided(selected.label), tone=selected.tone) if selected is not None else None,
         )
 
-    def _options(self, controls: MachineControls[DecisionState, RenderTargetT]) -> tuple[DecisionOption, ...]:
+    def _options(self, controls: MachineControls[DecisionState, RenderTargetT, ContextT]) -> tuple[DecisionOption, ...]:
         """Return the decision options bound to shell callbacks."""
         del controls
         return self.options
 
 
-class _Confirmation[RenderTargetT: RenderTarget = RenderTarget](Decision[RenderTargetT]):
+class _Confirmation[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Decision[RenderTargetT, ContextT]):
     """Two-option confirmation specialization."""
 
     def __init__(
         self,
-        prompt: ContentLike[RenderTargetT],
+        prompt: ContentLike[RenderTargetT, ContextT],
         *,
         key: str,
         confirm_label: TextLike | None,
@@ -153,7 +154,8 @@ class _Confirmation[RenderTargetT: RenderTarget = RenderTarget](Decision[RenderT
         self.confirm_label = confirm_label
         self.cancel_label = cancel_label
 
-    def _options(self, controls: MachineControls[DecisionState, RenderTargetT]) -> tuple[DecisionOption, ...]:
+    @override
+    def _options(self, controls: MachineControls[DecisionState, RenderTargetT, ContextT]) -> tuple[DecisionOption, ...]:
         """Bind confirm and cancel options to their configured callbacks."""
         return (
             DecisionOption(
@@ -166,8 +168,8 @@ class _Confirmation[RenderTargetT: RenderTarget = RenderTarget](Decision[RenderT
         )
 
 
-def confirm[RenderTargetT: RenderTarget](
-    prompt: ContentLike[RenderTargetT],
+def confirm[RenderTargetT: RenderTarget, ContextT = object](
+    prompt: ContentLike[RenderTargetT, ContextT],
     *,
     key: str = "confirm",
     on_confirm: Callable[[TransitionEvent[DecisionState]], Awaitable[None]],
@@ -175,7 +177,7 @@ def confirm[RenderTargetT: RenderTarget](
     confirm_label: TextLike | None = None,
     cancel_label: TextLike | None = None,
     tone: Tone = Tone.DANGER,
-) -> ComponentDriver[DecisionState, RenderTargetT]:
+) -> ComponentDriver[DecisionState, RenderTargetT, ContextT]:
     """Build a ready two-option decision shell."""
     machine = _Confirmation(
         prompt,

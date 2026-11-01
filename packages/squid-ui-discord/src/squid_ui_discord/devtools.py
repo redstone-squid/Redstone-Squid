@@ -5,7 +5,7 @@ import io
 import json
 from collections.abc import Awaitable, Callable, Sequence
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 import discord
 from discord.ext import commands
@@ -21,11 +21,11 @@ from squid_reactivity.actions import (
     ResourceEventSnapshot,
     add_action_result_sink,
 )
+from squid_reactivity.topics import BusSnapshot, TopicBus
 from squid_ui.document import InlineAsset
 from squid_ui.factories import code, paragraph, section
 from squid_ui.profiling import AttributeValue, OperationAggregate, OperationKind, Profiler, RuntimeTrace
 from squid_ui.runtime.histories import HistorySnapshot
-from squid_ui.runtime.topics import BusSnapshot, TopicBus
 from squid_ui.semantic import LayoutNode
 from squid_ui_discord import delivery
 from squid_ui_discord.devtools_runtime import (
@@ -35,9 +35,15 @@ from squid_ui_discord.devtools_runtime import (
     RuntimeUnavailable,
     TargetNotFound,
 )
-from squid_ui_discord.devtools_view import OperationalInspector, metrics_text, plan_text, scene_attachment
+from squid_ui_discord.devtools_view import (
+    DevToolsSection,
+    OperationalInspector,
+    metrics_text,
+    plan_text,
+    scene_attachment,
+)
 from squid_ui_discord.live import find
-from squid_ui_discord.message_root import owner_message_root
+from squid_ui_discord.message_root import MessageRoot, owner_message_root
 from squid_ui_discord.message_root_contracts import MessageRootSnapshot
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler, MessageRootSchedulerSnapshot
 from squid_ui_discord.routing import routers
@@ -56,6 +62,40 @@ SESSION_SECONDS = 300
 async def _owner_only[BotT: commands.Bot](ctx: Context[BotT]) -> bool:
     """Use discord.py's configured owner as the safe default authorization policy."""
     return await ctx.bot.is_owner(ctx.author)
+
+
+async def open_devtools(
+    source: delivery.Replyable,
+    *,
+    runtime: DevToolsRuntime,
+    action_ledger: ActionLedger | None = None,
+    focus: DevToolsSection | str = DevToolsSection.OVERVIEW,
+    message_root_id: str | None = None,
+    session_id: str | None = None,
+    timeout: float | None = SESSION_SECONDS,
+) -> MessageRoot:
+    """Open a caller-owned dashboard until it closes, times out, or its host stops.
+
+    The host command authorizes the caller before opening; the runtime policy
+    controls which operations the dashboard may execute.
+    """
+    actor = getattr(source, "author", getattr(source, "user", None))
+    actor_id = getattr(actor, "id", None)
+    if not isinstance(actor_id, int):
+        message = "devtools source names no Discord user"
+        raise TypeError(message)
+    client = getattr(source, "bot", getattr(source, "client", None))
+    inspector = OperationalInspector(
+        runtime,
+        client=client if isinstance(client, discord.Client) else None,
+        action_ledger=action_ledger,
+    )
+    inspector.section = focus.value if isinstance(focus, DevToolsSection) else focus
+    inspector.message_root_id = message_root_id
+    inspector.session_id = session_id
+    message_root = owner_message_root(inspector, actor_id, timeout=timeout)
+    await message_root.send(delivery.reply_to(source, ephemeral=getattr(source, "interaction", None) is not None))
+    return message_root
 
 
 class DevTools[BotT: commands.Bot](commands.Cog):
@@ -88,22 +128,30 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         if self._owns_action_ledger:
             add_action_result_sink(self._action_ledger)
 
+    @override
     async def cog_unload(self) -> None:
         """Close the DevTools-owned action ledger when Discord unloads this cog."""
         if self._owns_action_ledger:
             self._action_ledger.close()
 
+    @override
     # pyrefly: ignore[bad-override]  # MaybeCoro[bool] covers a coroutine; pyrefly drops the parameter
-    async def cog_check(self, ctx: Context[BotT]) -> bool:
+    async def cog_check(self, ctx: Context[BotT]) -> bool:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Authorize every command through the single injected gate."""
         return await self._check(ctx)
 
-    @commands.group(name="dev", hidden=True, invoke_without_command=True)
+    @commands.hybrid_group(
+        name="dev",
+        hidden=True,
+    )
+    @discord.app_commands.default_permissions(administrator=True)
     async def dev_group(self, ctx: Context[BotT]) -> None:
         """Development-only operational diagnostics."""
         await ctx.send_help("dev")
 
-    @dev_group.group(name="ui", invoke_without_command=True)
+    @dev_group.group(
+        name="ui",
+    )
     async def ui_group(self, ctx: Context[BotT]) -> None:
         """Open the unified operational dashboard."""
         await self._open(ctx)
@@ -385,15 +433,14 @@ class DevTools[BotT: commands.Bot](commands.Cog):
         message_root_id: str | None = None,
         session_id: str | None = None,
     ) -> None:
-        inspector = OperationalInspector(self._runtime)
-        if focus is not None:
-            inspector.section = focus
-        if message_root_id is not None:
-            inspector.message_root_id = message_root_id
-        if session_id is not None:
-            inspector.session_id = session_id
-        message_root = owner_message_root(inspector, ctx.author.id, timeout=SESSION_SECONDS)
-        await message_root.send(delivery.reply_to(ctx, ephemeral=ctx.interaction is not None))
+        await open_devtools(
+            ctx,
+            runtime=self._runtime,
+            action_ledger=self._action_ledger,
+            focus=DevToolsSection.OVERVIEW if focus is None else focus,
+            message_root_id=message_root_id,
+            session_id=session_id,
+        )
 
     async def _snapshot_or_refuse(self, ctx: Context[BotT], message_root_id: str) -> MessageRootSnapshot | None:
         message_root = find(message_root_id)
@@ -437,10 +484,11 @@ def _json_default(value: object) -> object:
         return value
     if isinstance(value, (bytes, bytearray)):
         return value.hex()
+    # Both guarded by `hasattr`, which pyright does not narrow through.
     if hasattr(value, "value"):
-        return value.value
+        return value.value  # pyright: ignore[reportAttributeAccessIssue]
     if hasattr(value, "isoformat"):
-        return value.isoformat()
+        return value.isoformat()  # pyright: ignore[reportAttributeAccessIssue]
     return repr(value)
 
 
@@ -566,4 +614,4 @@ def _histogram_count(aggregate: OperationAggregate) -> int:
     return histogram.observations
 
 
-__all__ = ["DevTools", "DevToolsCheck"]
+__all__ = ["DevTools", "DevToolsCheck", "open_devtools"]

@@ -22,6 +22,7 @@ from squid_ui.planning.layout_measurement.solver import (
     measure,
 )
 from squid_ui.planning.planner import plan
+from squid_ui.planning.resources import ResourceCost
 from squid_ui.planning.search import (
     DEFAULT_SEARCH_BUDGET,
     StrategyAssignment,
@@ -30,8 +31,9 @@ from squid_ui.planning.search import (
     choose_strategy,
     iter_assignments,
 )
-from squid_ui.planning.target import PreparedExtension, ResourceCost, Target
-from squid_ui.planning.types import (
+from squid_ui.planning.target import PreparedExtension, Target
+from squid_ui.sources import POSITION_RESOLVER, Position, PositionResolver
+from squid_ui.target_types import (
     ClassicTarget,
     ComponentsV2Target,
     DiscordAdapter,
@@ -50,7 +52,6 @@ from squid_ui.planning.types import (
     SlackSdkAdapter,
     SlackTarget,
 )
-from squid_ui.sources import POSITION_RESOLVER, Position, PositionResolver
 
 __all__ = [
     "CLASSIC_PROTOCOL_CAPABILITIES",

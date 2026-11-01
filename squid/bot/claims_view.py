@@ -1,9 +1,10 @@
 """The semantic review workspace for creator credit claims."""
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import cast
+from typing import override
 
 import squid_ui as sl
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
 from squid.accounts.domain import AliasClaim
 from squid.accounts.errors import AliasAlreadyClaimedError
@@ -18,7 +19,7 @@ CLAIMS_PER_PAGE = 5
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
+class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target, sd.Request]):
     """A mounted claim queue whose choices and decisions share one semantic surface."""
 
     selected_id: int | None = sl.state(None)
@@ -52,7 +53,8 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
     def selected(self) -> AliasClaim | None:
         return next((claim for claim in self._claims if claim.id == self.selected_id), None)
 
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.closed:
             return (
                 sl.section(
@@ -61,37 +63,34 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
                 ),
             )
         entries = tuple(_claim_entry(claim) for claim in self._claims)
-        body: sl.primitives.Node = (
-            sl.primitives.Lines(
-                entries,
+        body: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] = (
+            sd.v2.lines(
+                *entries,
                 join="\n\n",
                 overflow=sl.primitives.Paginate(key="claims", footer=self._page_footer),
             )
             if entries
-            else sl.primitives.Text(tr(t"No creator credit claims are awaiting review."))
+            else sd.v2.text(tr(t"No creator credit claims are awaiting review."))
         )
-        choices: sl.primitives.Node | None = None
+        choices: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = None
         if self._claims:
-            choices = cast(
-                sl.primitives.Node,
-                sl.choices(
-                    *(
-                        sl.choice(
-                            _claim_label(claim),
-                            key=str(claim.id),
-                            description=present_claimant(claim, mention=False),
-                        )
-                        for claim in self._claims
-                    ),
-                    key="claim",
-                    selection=sl.controlled(
-                        (str(self.selected_id),) if self.selected_id is not None else (), self._select_claim
-                    ),
-                    minimum=1,
-                    maximum=1,
+            choices = sl.choices(
+                *(
+                    sl.choice(
+                        _claim_label(claim),
+                        key=str(claim.id),
+                        description=present_claimant(claim, mention=False),
+                    )
+                    for claim in self._claims
                 ),
+                key="claim",
+                selection=sl.controlled(
+                    (str(self.selected_id),) if self.selected_id is not None else (), self._select_claim
+                ),
+                minimum=1,
+                maximum=1,
             )
-        buttons: list[sl.semantic.ActionControl] = []
+        buttons: list[sl.semantic.ActionControl[sd.Request]] = []
         if self._can_approve:
             buttons.append(
                 sl.action_control(
@@ -115,12 +114,10 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
             )
         buttons.append(sl.action_control(tr(t"Close"), self._close, key="close"))
         return (
-            sl.primitives.Panel(
-                (
-                    sl.primitives.Heading(tr(t"Creator credit claims awaiting review")),
-                    body,
-                    *((choices,) if choices is not None else ()),
-                ),
+            sd.v2.panel(
+                sd.v2.heading(tr(t"Creator credit claims awaiting review")),
+                body,
+                choices,
                 accent=DISCORD_BLUE,
             ),
             sl.action_controls(*buttons, key="claim-actions"),
@@ -130,17 +127,17 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         total = len(self._claims)
         return tr(t"Page {page} of {pages} — {total} in total")
 
-    async def _select_claim(self, event: sl.ChoiceEvent) -> None:
+    async def _select_claim(self, event: sd.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])
         self.reassign_armed = None
 
-    async def _approve(self, event: sl.PressEvent) -> None:
+    async def _approve(self, event: sd.PressEvent) -> None:
         await self._decide(event, approve=True)
 
-    async def _reject(self, event: sl.PressEvent) -> None:
+    async def _reject(self, event: sd.PressEvent) -> None:
         await self._decide(event, approve=False)
 
-    async def _decide(self, event: sl.PressEvent, *, approve: bool) -> None:
+    async def _decide(self, event: sd.PressEvent, *, approve: bool) -> None:
         claim = self.selected
         if claim is None:
             return
@@ -149,7 +146,7 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
             await event.notice(tr(t"You are no longer allowed to resolve creator claims."))
             return
 
-        async def resolve(live: sl.ActionEvent, staff_account_id: int) -> None:
+        async def resolve(live: sd.ActionEvent, staff_account_id: int) -> None:
             await self._resolve(live, claim, staff_account_id, approve=approve)
 
         await with_consented_account(event, self._accounts, resolve)
@@ -190,9 +187,9 @@ class ClaimReviewComponent(sl.Component[sl.ComponentsV2Target]):
         self.selected_id = None
         self.reassign_armed = None
 
-    async def _close(self, event: sl.PressEvent) -> None:
+    async def _close(self, event: sd.PressEvent) -> None:
         self.closed = True
-        await event.finish()
+        event.finish_on_success()
 
 
 def _claim_entry(claim: AliasClaim) -> sl.TextLike:

@@ -3,7 +3,7 @@
 import re
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass, replace
-from typing import cast
+from typing import cast, override
 
 import squid_ui as sl
 import squid_ui_discord as sd
@@ -210,7 +210,7 @@ def _settings_form(allow_network: bool) -> sl.forms.FormSpec:
     return sl.forms.FormSpec(tr(t"Poll settings"), tuple(fields))
 
 
-def _poll_steps(allow_network: bool) -> tuple[sp.WizardStep[sl.ComponentsV2Target], ...]:
+def _poll_steps(allow_network: bool) -> tuple[sp.WizardStep[sl.ComponentsV2Target, sd.Request], ...]:
     return (
         sp.WizardStep("content", tr(t"Question and options"), poll_form()),
         sp.WizardStep("settings", tr(t"Visibility and duration"), _settings_form(allow_network)),
@@ -229,7 +229,7 @@ def _draft(answers: sp.WizardAnswers) -> PollDraft:
     )
 
 
-def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target]:
+def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
     draft = _draft(answers)
     options = "\n".join(f"- {line}" for line in draft.option_lines)
     fields = [
@@ -241,10 +241,9 @@ def _review(answers: sp.WizardAnswers) -> sl.LayoutNode[sl.ComponentsV2Target]:
     return sl.section(sl.heading(draft.question), sl.paragraph(options), sl.fields(*fields))
 
 
-class PollScreen(sd.Screen):
+class PollScreen(sd.UserGuildSessionScreen, session_name="poll-wizard"):
     """A poll wizard that ends when published, cancelled, replaced, or timed out."""
 
-    session = sd.SessionSpec("poll-wizard", scope=sd.ScopeKind.USER_GUILD)
     timeout = 900
     expiry = sd.RenewEphemeral()
     follow_topics = True
@@ -261,7 +260,7 @@ class PollScreen(sd.Screen):
     ) -> None:
         self._resolve_options = resolve_options
         self._publish = publish
-        wizard = sp.Wizard[sl.ComponentsV2Target](
+        wizard = sp.Wizard[sl.ComponentsV2Target, sd.Request](
             tr(t"Create a poll"),
             _poll_steps(allow_network),
             key="poll",
@@ -270,7 +269,8 @@ class PollScreen(sd.Screen):
         self.wizard = wizard
         self.driver = wizard.build_component(on_finish=self._finish)
 
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.published_url is not None:
             published_url = self.published_url
             return (sl.status(tr(t"Poll published: {published_url}"), tone=sl.Tone.SUCCESS),)
@@ -297,8 +297,8 @@ class PollScreen(sd.Screen):
             self.driver.machine_state = replace(event.state, complete=False)
             await event.source.notice(error.message)
             return
-        await event.source.finish()
+        event.source.finish_on_success()
 
     async def _cancel(self, event: sl.PressEvent) -> None:
         self.cancelled = True
-        await event.finish()
+        event.finish_on_success()

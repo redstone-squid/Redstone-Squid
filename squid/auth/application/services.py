@@ -16,6 +16,8 @@ from squid.permissions.application.services import PermissionService
 from squid.permissions.domain import CATALOGUE, Pattern, Subject
 
 API_KEY_PREFIX = "sq"
+API_KEY_ID_BYTES = 12
+API_KEY_ID_LENGTH = (API_KEY_ID_BYTES * 8 + 5) // 6
 API_KEY_SECRET_BYTES = 32
 LAST_USED_WRITE_INTERVAL_SECONDS = 60
 
@@ -78,7 +80,7 @@ class ApiKeyService:
         """
         requested = frozenset(pattern if isinstance(pattern, Pattern) else Pattern.parse(pattern) for pattern in scopes)
         await self._reject_beyond_owner_authority(requested, owner_account_id)
-        key_id = self._urlsafe_token(12)
+        key_id = self._urlsafe_token(API_KEY_ID_BYTES)
         secret = self._urlsafe_token(API_KEY_SECRET_BYTES)
         key = await self._repository.add(
             key_id=key_id,
@@ -144,7 +146,10 @@ class ApiKeyService:
     @staticmethod
     def _parse_token(token: str) -> tuple[str, str] | None:
         prefix, separator, remainder = token.partition("_")
-        key_id, second_separator, secret = remainder.partition("_")
-        if prefix != API_KEY_PREFIX or not separator or not second_separator or not key_id or not secret:
+        # Base64url IDs may contain underscores, so only their fixed-width boundary separates the secret.
+        key_id = remainder[:API_KEY_ID_LENGTH]
+        second_separator = remainder[API_KEY_ID_LENGTH : API_KEY_ID_LENGTH + 1]
+        secret = remainder[API_KEY_ID_LENGTH + 1 :]
+        if prefix != API_KEY_PREFIX or not separator or second_separator != "_" or not secret:
             return None
         return key_id, secret

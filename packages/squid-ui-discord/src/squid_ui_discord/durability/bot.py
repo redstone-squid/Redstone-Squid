@@ -1,5 +1,7 @@
 """A commands.Bot lifecycle with durable-session recovery ordering."""
 
+from typing import override
+
 import anyio
 from discord.ext import commands
 
@@ -36,11 +38,13 @@ class DurableBot(commands.Bot):
     async def on_sessions_recovered(self, report: RecoveryReport) -> None:
         """Run after recovery is ready and before gateway interaction dispatch."""
 
+    @override
     async def login(self, token: str) -> None:
         """Authenticate after making the runtime available to ``setup_hook()``."""
         _ = self.durable_sessions
         await super().login(token)
 
+    @override
     async def connect(self, *, reconnect: bool = True) -> None:
         """Recover under supervision before connecting to the gateway."""
         runtime = self.durable_sessions

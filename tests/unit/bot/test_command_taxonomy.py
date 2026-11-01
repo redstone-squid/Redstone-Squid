@@ -108,14 +108,18 @@ def test_build_slash_group_includes_the_app_only_workspaces() -> None:
         command for command in cast(Any, SearchCog).__cog_app_commands__ if command.qualified_name == "build"
     )
 
-    assert {command.qualified_name for command in build_group.walk_commands()} == {"build browse", "build submit"}
+    assert {command.qualified_name for command in build_group.walk_commands()} == {
+        "build browse",
+        "build submit",
+        "build drafts",
+    }
 
 
 def test_guided_submit_puts_attachments_last() -> None:
     """The tab order through the options is the form: typed fields first, attachments trailing.
 
     Attachments-first was the original dogfooding complaint against `/build submit`
-    (docs/plans/command-redesign/01-build-submit.md), so the order is pinned.
+    (docs/plans/completed/command-redesign/01-build-submit.md), so the order is pinned.
     """
     build_group = next(
         command for command in cast(Any, SearchCog).__cog_app_commands__ if command.qualified_name == "build"

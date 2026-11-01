@@ -5,10 +5,12 @@ same idea: a computed, which is a pure function of cells and needs no address of
 a resource, which is loaded and therefore can move on its own -- so it publishes.
 """
 
+from typing import override
+
 import pytest
 
 import squid_ui as sl
-from squid_ui.runtime.shared import describe
+from squid_reactivity.shared_state import describe
 from squid_ui_discord import Everyone, MessageRoot, MessageRootScheduler
 from squid_ui_discord import testing as sd
 from squid_ui_discord.testing import delivered_to, message_harness
@@ -41,6 +43,7 @@ class Reader(sl.Component[sl.ComponentsV2Target]):
     def __init__(self, catalog: Catalog) -> None:
         self.catalog = catalog
 
+    @override
     def render(self):
         match self.catalog.entries.status:
             case sl.resources.Ready(value=value):
@@ -94,6 +97,7 @@ async def test_a_message_root_reading_a_namespace_computed_follows_the_cells_beh
     prefs = Prefs(bus, 1)
 
     class Panel(sl.Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return sl.paragraph(prefs.full)
 
@@ -216,6 +220,7 @@ def test_a_component_resource_carries_no_address() -> None:
         async def value(self) -> str:
             return "loaded"
 
+        @override
         def render(self):
             return sl.paragraph("x")
 

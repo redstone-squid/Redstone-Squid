@@ -7,7 +7,7 @@ looking at it and removing it belong to the same message (audit C5's retyping ha
 """
 
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, override
 from uuid import UUID
 
 import squid_ui as sl
@@ -32,7 +32,7 @@ SESSION_SECONDS = 300
 MAX_LISTED = 25
 """A select holds 25 options, which is also as many as a card should list."""
 
-type VisibilityResolver = Callable[[sl.ActionEvent], Awaitable[InboxVisibility]]
+type VisibilityResolver = Callable[[sd.ActionEvent], Awaitable[InboxVisibility]]
 
 
 def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
@@ -45,12 +45,10 @@ def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
             return tr(t"Record filter")
 
 
-class NotificationScreen(sd.Screen):
+class NotificationScreen(sd.UserSessionScreen, session_name="notifications"):
     """A notification workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("notifications")
     timeout = SESSION_SECONDS
-    audience = "personal"
 
     selected_ids: tuple[str, ...] = sl.state(())
     selected_inbox_ids: tuple[str, ...] = sl.state(())
@@ -75,10 +73,11 @@ class NotificationScreen(sd.Screen):
         self._visibility = visibility
         self._visibility_resolver = visibility_resolver
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
-    async def _refresh(self, event: sl.ActionEvent | None = None) -> None:
+    async def _refresh(self, event: sd.ActionEvent | None = None) -> None:
         """Re-read this account's channels and follows. Also what unfollowing calls afterwards."""
         if event is not None:
             await self._resolve_visibility(event)
@@ -112,7 +111,8 @@ class NotificationScreen(sd.Screen):
     def subscriptions(self) -> tuple[NotificationSubscription, ...]:
         return self._subscriptions[:MAX_LISTED]
 
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.closed:
             return (sl.section(sl.heading(tr(t"Notifications closed"))),)
         on, off = tr(t"On"), tr(t"Off")
@@ -124,7 +124,7 @@ class NotificationScreen(sd.Screen):
         )
         description = tr(t"Toggle where notifications arrive, and unfollow what you no longer want.")
         suspension_note = self._suspension_note()
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(tr(t"Notifications")),
                 sl.truncate(sl.paragraph(description)),
@@ -253,19 +253,19 @@ class NotificationScreen(sd.Screen):
         )
         return tuple(nodes)
 
-    async def _selection_changed(self, event: sl.ChoiceEvent) -> None:
+    async def _selection_changed(self, event: sd.ChoiceEvent) -> None:
         self.selected_ids = event.selected
 
-    async def _inbox_selection_changed(self, event: sl.ChoiceEvent) -> None:
+    async def _inbox_selection_changed(self, event: sd.ChoiceEvent) -> None:
         self.selected_inbox_ids = event.selected
 
-    async def _mark_selected_read(self, event: sl.PressEvent) -> None:
+    async def _mark_selected_read(self, event: sd.PressEvent) -> None:
         await self._set_selected_read_state(event, read=True)
 
-    async def _mark_selected_unread(self, event: sl.PressEvent) -> None:
+    async def _mark_selected_unread(self, event: sd.PressEvent) -> None:
         await self._set_selected_read_state(event, read=False)
 
-    async def _set_selected_read_state(self, event: sl.PressEvent, *, read: bool) -> None:
+    async def _set_selected_read_state(self, event: sd.PressEvent, *, read: bool) -> None:
         await event.acknowledge()
         visibility = await self._resolve_visibility(event)
         operation = self._notifications.mark_read if read else self._notifications.mark_unread
@@ -274,7 +274,7 @@ class NotificationScreen(sd.Screen):
         await self._refresh()
         self.invalidate()
 
-    async def _toggle_web(self, event: sl.ToggleEvent) -> None:
+    async def _toggle_web(self, event: sd.ToggleEvent) -> None:
         await event.acknowledge()
         self._preferences = await self._notifications.set_preferences(
             self._account_id,
@@ -283,7 +283,7 @@ class NotificationScreen(sd.Screen):
         )
         await self._refresh(event)
 
-    async def _toggle_dm(self, event: sl.ToggleEvent) -> None:
+    async def _toggle_dm(self, event: sd.ToggleEvent) -> None:
         await event.acknowledge()
         self._preferences = await self._notifications.set_preferences(
             self._account_id,
@@ -292,14 +292,14 @@ class NotificationScreen(sd.Screen):
         )
         await self._refresh(event)
 
-    async def _unfollow(self, event: sl.PressEvent) -> None:
+    async def _unfollow(self, event: sd.PressEvent) -> None:
         await event.acknowledge()
         for subscription_id in self.selected_ids:
             await self._notifications.unsubscribe(self._account_id, int(subscription_id))
         await self._refresh(event)
         self.invalidate()
 
-    async def _follow_creator(self, event: sl.SubmitEvent) -> None:
+    async def _follow_creator(self, event: sd.SubmitEvent) -> None:
         creator = self._uuid(event.values["creator"])
         if creator is None:
             await event.notice(tr(t"Enter a creator profile ID in UUID form."))
@@ -311,7 +311,7 @@ class NotificationScreen(sd.Screen):
         )
         await self._followed(event, tr(t"Following that creator."))
 
-    async def _follow_record(self, event: sl.SubmitEvent) -> None:
+    async def _follow_record(self, event: sd.SubmitEvent) -> None:
         competition = self._uuid(event.values["competition"])
         if competition is None:
             await event.notice(tr(t"Enter a record competition ID in UUID form."))
@@ -323,7 +323,7 @@ class NotificationScreen(sd.Screen):
         )
         await self._followed(event, tr(t"Following that record."))
 
-    async def _follow_filter(self, event: sl.SubmitEvent) -> None:
+    async def _follow_filter(self, event: sd.SubmitEvent) -> None:
         build_kind = self._optional_text(event.values.get("build_kind"))
         record_class = self._optional_text(event.values.get("record_class"))
         version_scope = self._optional_text(event.values.get("version_scope"))
@@ -347,11 +347,11 @@ class NotificationScreen(sd.Screen):
         )
         await self._followed(event, tr(t"Following records matching that filter."))
 
-    async def _followed(self, event: sl.SubmitEvent, notice: sl.TextLike) -> None:
+    async def _followed(self, event: sd.SubmitEvent, notice: sl.TextLike) -> None:
         await self._refresh(event)
         await event.notice(notice)
 
-    async def _resolve_visibility(self, event: sl.ActionEvent) -> InboxVisibility:
+    async def _resolve_visibility(self, event: sd.ActionEvent) -> InboxVisibility:
         if self._visibility_resolver is not None:
             self._visibility = await self._visibility_resolver(event)
         return self._visibility
@@ -381,9 +381,9 @@ class NotificationScreen(sd.Screen):
             ),
         )
 
-    async def _close(self, event: sl.PressEvent) -> None:
+    async def _close(self, event: sd.PressEvent) -> None:
         self.closed = True
-        await event.finish()
+        event.finish_on_success()
 
     def _subscription_list(self) -> sl.TextLike:
         if not self._subscriptions:
@@ -414,7 +414,9 @@ class NotificationScreen(sd.Screen):
                 return tr(t"Record gained")
             case "staff_build_submitted":
                 return tr(t"Build awaiting review")
-            case _:
+            # The cases above cover NotificationKind exhaustively today; the default is what a
+            # kind added to the enum later renders as instead of falling off the end.
+            case _:  # pyright: ignore[reportUnnecessaryComparison]
                 return tr(t"Build notification")
 
     def describe(self, subscription: NotificationSubscription) -> sl.TextLike:

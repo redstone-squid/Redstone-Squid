@@ -95,6 +95,7 @@ async def no_refresh() -> None:
 class NoticeSource:
     def __init__(self, **values: object) -> None:
         self.values = values
+        self.errors: tuple[sl.forms.FormIssue, ...] = ()
         self.notices: list[object] = []
 
     async def notice(self, text: object, **_kwargs: object) -> None:
@@ -331,7 +332,7 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
     event = NoticeSource(code="abcd")
 
-    await workspace._link(cast(sl.SubmitEvent, event))
+    await workspace._link(cast(sd.SubmitEvent, event))
 
     assert accounts.linked == []
     assert consent.preview is accounts.reservation.preview
@@ -339,7 +340,7 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
     assert accounts.reservation_ttls == [120]
 
     assert consent.answered is not None
-    await consent.answered(cast(sl.PressEvent, event), AccountConsent.grant_current())
+    await consent.answered(cast(sd.PressEvent, event), AccountConsent.grant_current())
 
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
     assert accounts.released == []
@@ -368,13 +369,13 @@ async def test_link_reservation_is_released_when_consent_does_not_complete(aband
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
 
-    await workspace._link(cast(sl.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
     if abandoned:
         assert consent.on_abandon is not None
         await consent.on_abandon()
     else:
         assert consent.answered is not None
-        await consent.answered(cast(sl.PressEvent, NoticeSource()), None)
+        await consent.answered(cast(sd.PressEvent, NoticeSource()), None)
 
     assert accounts.linked == []
     assert accounts.released == ["abcd"]
@@ -399,7 +400,7 @@ async def test_link_reservation_is_released_when_prompt_is_not_opened() -> None:
         authorize_claim=authorize,
     )
 
-    await workspace._link(cast(sl.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
 
     assert accounts.linked == []
     assert accounts.released == ["abcd"]
@@ -424,10 +425,10 @@ async def test_accountless_link_cancel_releases_without_creating_personal_rows()
     )
 
     assert "Link Minecraft account" in labels(workspace._identity_nodes())
-    await workspace._link(cast(sl.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
     assert accounts.created_consents == []
     assert consent.answered is not None
-    await consent.answered(cast(sl.PressEvent, NoticeSource()), None)
+    await consent.answered(cast(sd.PressEvent, NoticeSource()), None)
 
     assert accounts.created_consents == []
     assert accounts.linked == []
@@ -454,10 +455,10 @@ async def test_accountless_link_agreement_creates_the_account_then_consumes_the_
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
     prompt = NoticeSource()
 
-    await workspace._link(cast(sl.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
     granted = AccountConsent.grant_current()
     assert consent.answered is not None
-    await consent.answered(cast(sl.PressEvent, prompt), granted)
+    await consent.answered(cast(sd.PressEvent, prompt), granted)
 
     assert accounts.created_consents == [granted]
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
@@ -485,10 +486,10 @@ async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
 
-    await workspace._link(cast(sl.SubmitEvent, NoticeSource(code="abcd")))
+    await workspace._link(cast(sd.SubmitEvent, NoticeSource(code="abcd")))
     assert accounts.granted == []
     assert consent.answered is not None
-    await consent.answered(cast(sl.PressEvent, NoticeSource()), AccountConsent.grant_current())
+    await consent.answered(cast(sd.PressEvent, NoticeSource()), AccountConsent.grant_current())
 
     assert accounts.granted == [ACCOUNT_ID]
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
@@ -565,7 +566,7 @@ async def test_own_refresh_rechecks_permission_at_the_handler(allowed: bool) -> 
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
     event = NoticeSource()
 
-    await workspace._refresh_identity(cast(sl.PressEvent, event))
+    await workspace._refresh_identity(cast(sd.PressEvent, event))
 
     assert authorized == [ACCOUNT_IDENTITY_REFRESH]
     assert accounts.refreshed == ([ACCOUNT_ID] if allowed else [])
@@ -596,7 +597,7 @@ async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> 
     )
     event = NoticeSource(user=discord.Object(id=999))
 
-    await workspace._refresh_member_identity(cast(sl.SubmitEvent, event))
+    await workspace._refresh_member_identity(cast(sd.SubmitEvent, event))
 
     assert accounts.identity_reads == []
     assert "no longer allowed" in str(event.notices[0])
@@ -621,7 +622,7 @@ async def test_staff_refresh_reports_a_named_member_without_an_account() -> None
     )
 
     with pytest.raises(AccountNotFoundError) as caught:
-        await workspace._refresh_member_identity(cast(sl.SubmitEvent, NoticeSource(user=discord.Object(id=999))))
+        await workspace._refresh_member_identity(cast(sd.SubmitEvent, NoticeSource(user=discord.Object(id=999))))
 
     assert caught.value.context["provider"] == IdentityProvider.DISCORD.value
     assert caught.value.context["subject"] == "999"
@@ -677,7 +678,7 @@ async def test_staff_refresh_renders_every_reconciliation_branch(refresh: Identi
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
     event = NoticeSource(user=discord.Object(id=999))
 
-    await workspace._refresh_member_identity(cast(sl.SubmitEvent, event))
+    await workspace._refresh_member_identity(cast(sd.SubmitEvent, event))
 
     assert accounts.refreshed == [99]
     assert event.notices == [refresh_message(refresh)]
@@ -702,7 +703,7 @@ async def test_merge_requires_the_workspace_decision() -> None:
     )
     submit = NoticeSource(code="merge-me")
 
-    await workspace._request_merge(cast(sl.SubmitEvent, submit))
+    await workspace._request_merge(cast(sd.SubmitEvent, submit))
 
     assert accounts.completed == []
     assert workspace._merge_decision is not None
@@ -802,7 +803,7 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountScreen, dict[s
         del preview, on_abandon, timeout
 
         async def answer(consent: AccountConsent | None) -> None:
-            await on_answer(cast(sl.PressEvent, event), consent)
+            await on_answer(cast(sd.PressEvent, event), consent)
             if consent is not None:
                 await cast(Any, event).responder.message_root.schedule()
 
@@ -837,8 +838,6 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
     -- up to two minutes. Nothing here waits, so the editor is simply not open yet.
     """
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     message_root = ScheduleRoot()
 
     await panel._edit_page(cast(Any, _press(message_root)))
@@ -857,8 +856,6 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
 async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
     """Cancelling stores nothing, changes nothing, and does not redraw anything."""
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     message_root = ScheduleRoot()
 
     await panel._edit_page(cast(Any, _press(message_root)))
@@ -879,8 +876,6 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
     to sit in the handler rather than in the control declaration.
     """
     panel, opened = _gated_panel(monkeypatch)
-    monkeypatch.setattr("squid_ui_discord.native", lambda event: event.responder.interaction)
-    monkeypatch.setattr("squid_ui_discord.responder", lambda event: event.responder)
     panel._identities = (DISCORD,)
     panel.selected_id = DISCORD.id
     message_root = ScheduleRoot()

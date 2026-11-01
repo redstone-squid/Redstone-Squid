@@ -90,7 +90,10 @@ async def test_checked_in_registry_resolves_only_exact_revision() -> None:
     current = await registry.current(locale="en")
 
     assert await registry.get(current.schema_id, current.revision, locale="en") == current
-    assert await registry.get(current.schema_id, current.revision + 1, locale="en") is None
+    next_revision = await registry.get(current.schema_id, 2, locale="en")
+    assert next_revision is not None
+    assert next_revision.revision == 2
+    assert await registry.get(current.schema_id, 999, locale="en") is None
 
 
 @pytest.mark.asyncio

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, fields
 from enum import Enum
-from typing import TypedDict, Unpack
+from typing import Any, TypedDict, Unpack, override
 
 import discord
 
@@ -31,6 +31,7 @@ type Setting[T] = T | _Unset
 
 
 class _InvokerOnly:
+    @override
     def __repr__(self) -> str:
         return "invoker_only"
 
@@ -49,6 +50,7 @@ class ResponseOverrides(TypedDict, total=False):
     timeout: float | None
     expiry: ExpiryPolicy | None
     follow_topics: bool
+    retain_routed_on_timeout: bool
     session: SessionSpec | None
     allowed_mentions: discord.AllowedMentions | None
     chrome: Chrome | None
@@ -63,6 +65,7 @@ class ResponseSpec:
     timeout: Setting[float | None] = UNSET
     expiry: Setting[ExpiryPolicy | None] = UNSET
     follow_topics: Setting[bool] = UNSET
+    retain_routed_on_timeout: Setting[bool] = UNSET
     session: Setting[SessionSpec | None] = UNSET
     allowed_mentions: Setting[discord.AllowedMentions | None] = UNSET
     chrome: Setting[Chrome | None] = UNSET
@@ -84,6 +87,7 @@ DEFAULT_RESPONSE_SPEC = ResponseSpec(
     timeout=180,
     expiry=None,
     follow_topics=False,
+    retain_routed_on_timeout=False,
     session=None,
     allowed_mentions=None,
     chrome=None,
@@ -96,14 +100,15 @@ class Response[ContentT: FacadeContent = FacadeContent]:
     What a command handler returns when the content alone would get the wrong audience.
     """
 
-    __slots__ = ("content", "overrides")
+    __slots__ = ("_options", "content")
 
     def __init__(self, content: ContentT, **overrides: Unpack[ResponseOverrides]) -> None:
         self.content = content
-        self.overrides = overrides
+        self._options = overrides
 
+    @override
     def __repr__(self) -> str:
-        return f"Response({self.content!r}, {self.overrides!r})"
+        return f"Response({self.content!r}, {self._options!r})"
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,7 +135,7 @@ class Sent:
 
 
 @dataclass(frozen=True, slots=True)
-class Presented[ComponentT: Component[ComponentsV2Target]]:
+class Presented[ComponentT: Component[ComponentsV2Target, Any]]:
     """A live component was delivered; its root ends with its owner scope."""
 
     component: ComponentT
@@ -160,7 +165,7 @@ class Abandoned:
 
 type StaticResponseResult = Sent | Rejected | Abandoned
 type ResponseResult[
-    ComponentT: Component[ComponentsV2Target] = Component[ComponentsV2Target],
+    ComponentT: Component[ComponentsV2Target, Any] = Component[ComponentsV2Target, Any],
 ] = StaticResponseResult | Presented[ComponentT]
 
 

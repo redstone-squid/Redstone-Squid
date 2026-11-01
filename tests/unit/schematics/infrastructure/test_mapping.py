@@ -1,13 +1,14 @@
 """Tests for persisted schematic row decoding."""
 
+import json
 from collections.abc import Callable
 
 import pytest
-from whenever import Instant
 
 from squid.core.errors import DataIntegrityError
-from squid.schematics.infrastructure.mapping import to_stored_schematic
+from squid.schematics.infrastructure.mapping import simulation_to_json, to_row_values, to_stored_schematic
 from squid.schematics.infrastructure.models import BuildSchematic
+from squid.schematics.infrastructure.wire import decode_simulation
 
 
 def row() -> BuildSchematic:
@@ -89,8 +90,6 @@ def test_corrupt_persisted_values_raise_structured_error(
         ("signs", "not-an-array"),
         ("signs", [{"x": True, "y": 2, "z": 3, "text": "label"}]),
         ("signs", [{"x": 1, "y": 2, "z": 3, "text": 4}]),
-        ("sanitization_report", []),
-        ("sanitization_report", {"removed": object()}),
         ("lattice", []),
         ("lattice", {**lattice(), "mode": "3d"}),
         ("lattice", {**lattice(), "vectors": [[1, 0, 0], [0, 1, 0]]}),
@@ -132,9 +131,6 @@ def test_valid_persisted_json_is_decoded_without_coercion() -> None:
     stored.signs = [{"x": 1, "y": 2, "z": 3, "text": "open"}]
     stored.lattice = lattice()
     stored.simulation_evidence = simulation()
-    stored.sanitized_at = Instant.parse_iso("2026-08-31T12:00:00Z")
-    stored.sanitizer_version = "sanitizer-1"
-    stored.sanitization_report = {"removed": 0, "paths": ["Metadata.Author"]}
 
     decoded = to_stored_schematic(stored, source_format="litematic", byte_size=256)
 
@@ -144,4 +140,8 @@ def test_valid_persisted_json_is_decoded_without_coercion() -> None:
     assert decoded.analysis.lattice.mode == "1d"
     assert decoded.simulation_evidence is not None
     assert decoded.simulation_evidence.trustworthy is True
-    assert decoded.publication.sanitization_report == {"removed": 0, "paths": ["Metadata.Author"]}
+
+    assert to_row_values(decoded.analysis)["lattice"] == lattice()
+    evidence = simulation_to_json(decoded.simulation_evidence)
+    assert evidence == json.loads(json.dumps(evidence))
+    assert decode_simulation(evidence) == decoded.simulation_evidence

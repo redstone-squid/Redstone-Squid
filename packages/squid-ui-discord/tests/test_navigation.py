@@ -1,5 +1,7 @@
 """StackNavigator: stack navigation by composition."""
 
+from typing import override
+
 import squid_ui as sl
 from squid_ui import Component
 from squid_ui.primitives import Heading, Text
@@ -13,6 +15,7 @@ class Screen(Component[sl.ComponentsV2Target]):
     def __init__(self, name: str) -> None:
         self.name = name
 
+    @override
     def render(self):
         return [Heading(self.name), Text(f"content of {self.name}")]
 
@@ -31,7 +34,7 @@ async def test_push_pop_and_controls_render_last():
     assert "## child" in sd.payload_texts(pushed)
 
     await message_root.dispatch("__nav_back", interaction_harness())
-    assert navigator.current.name == "root"  # pyrefly: ignore
+    assert navigator.current.name == "root"  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore
 
 
 async def test_home_appears_only_when_deep():
@@ -52,6 +55,7 @@ async def test_child_state_changes_rerender_through_the_shared_root():
     class Counting(Component[sl.ComponentsV2Target]):
         count: int = state(0)
 
+        @override
         def render(self):
             return [Text(f"count {self.count}")]
 

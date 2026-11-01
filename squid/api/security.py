@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import Depends, Request, Security
+from fastapi import Depends, Request, Response, Security
 from fastapi.security import APIKeyHeader
 
 from squid.accounts.errors import ConsentRequiredError
@@ -235,6 +235,22 @@ def require_consented_account(caller: Caller) -> int:
             end_user_action="Accept the current privacy notice and retry.",
         )
     return caller.account_id
+
+
+async def current_browser_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:
+    """Require a signed-in browser account with current privacy consent."""
+    if caller.kind != "account" or caller.account_id is None:
+        raise AuthenticationError
+    return require_consented_account(caller)
+
+
+BrowserAccountId = Annotated[int, Depends(current_browser_account_id)]
+
+
+async def prevent_credential_storage(response: Response) -> None:
+    """Keep credential-bearing responses out of browser and intermediary caches."""
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
 
 
 async def consented_account_id(caller: Annotated[Caller, Depends(current_caller)]) -> int:

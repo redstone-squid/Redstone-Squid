@@ -27,10 +27,12 @@ def test_sponsor_attribution_activation_is_default_off_and_requires_minecraft_au
     with pytest.raises(ValueError, match="requires the Minecraft authorization flow"):
         MinecraftAuthConfig(sponsor_attribution_enabled=True)
 
-    configured = MinecraftAuthConfig(
-        pepper="p" * 32,
-        verification_uri="https://example.test/minecraft/link",
-        sponsor_attribution_enabled=True,
+    configured = MinecraftAuthConfig.model_validate(
+        {
+            "pepper": "p" * 32,
+            "verification_uri": "https://example.test/minecraft/link",
+            "sponsor_attribution_enabled": True,
+        }
     )
 
     assert configured.sponsor_attribution_enabled is True

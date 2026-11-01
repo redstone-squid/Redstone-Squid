@@ -38,6 +38,7 @@ from squid.search.infrastructure.compiler import PostgresSearchQueryCompiler
 from squid.search.infrastructure.models import SearchDocument, SearchDocumentFacet
 
 _CANDIDATE_LIMIT = 200
+_PUBLIC_BUILD_STATUSES = frozenset({"confirmed"})
 _SEMANTIC_WARNING = "Semantic search is temporarily unavailable; showing lexical results."
 ResourceKind = Literal["record", "build", "metadata"]
 logger = logging.getLogger(__name__)
@@ -112,12 +113,9 @@ class PostgresSearchBackend(SearchBackend):
         predicate = self._scope_predicate(request.scope) & (compiler or self._compiler).compile(query)
         visible_statuses = request.visible_statuses
         if visible_statuses is None and request.scope in {SearchScope.BUILDS, SearchScope.ALL}:
-            visible_statuses = frozenset({"confirmed"})
+            visible_statuses = _PUBLIC_BUILD_STATUSES
         if visible_statuses is not None and request.scope in {SearchScope.BUILDS, SearchScope.ALL}:
-            predicate &= or_(
-                SearchDocument.resource_kind != "build",
-                func.lower(SearchDocument.status).in_(sorted(status.casefold() for status in visible_statuses)),
-            )
+            predicate &= _visible_builds(visible_statuses)
         return predicate
 
     async def _sorted(
@@ -183,7 +181,10 @@ class PostgresSearchBackend(SearchBackend):
         async with self._session_factory() as session:
             statement = (
                 select(SearchDocument.title)
-                .where(func.similarity(SearchDocument.fuzzy_text, terms) > 0.1)
+                .where(
+                    _visible_builds(_PUBLIC_BUILD_STATUSES),
+                    func.similarity(SearchDocument.fuzzy_text, terms) > 0.1,
+                )
                 .order_by(func.similarity(SearchDocument.fuzzy_text, terms).desc(), SearchDocument.normalized_title)
                 .limit(limit)
             )
@@ -378,6 +379,14 @@ class PostgresSearchBackend(SearchBackend):
         if scope is SearchScope.METADATA:
             return SearchDocument.resource_kind.not_in(("record", "build"))
         return true()
+
+
+def _visible_builds(statuses: frozenset[str]) -> ColumnElement[bool]:
+    """Apply the build moderation fence without excluding records or metadata."""
+    return or_(
+        SearchDocument.resource_kind != "build",
+        func.lower(SearchDocument.status).in_(sorted(status.casefold() for status in statuses)),
+    )
 
 
 def _ranking_text(query: SearchQuery) -> str:

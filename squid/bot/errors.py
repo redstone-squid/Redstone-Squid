@@ -33,7 +33,7 @@ from squid_ui.text import NEUTRAL, localization_scope
 logger = logging.getLogger(__name__)
 
 _PRESENTED_ATTRIBUTE = "_squid_error_presented"
-type ErrorResponder = Callable[[sl.LayoutNode[sl.ComponentsV2Target]], Awaitable[None]]
+type ErrorResponder = Callable[[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]], Awaitable[None]]
 
 
 def _reports_from(client: object) -> ErrorReportService | None:
@@ -55,7 +55,7 @@ class ErrorNotice:
     ID, while a moderator looking one up will be quoting whatever the card showed.
     """
 
-    def to_node(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def to_node(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         """Build the composable Components V2 node for this error."""
         return error_node(self.title, self.detail)
 
@@ -331,7 +331,7 @@ def _error_responder(request: sd.Request[Any]) -> ErrorResponder:
     would leave it spinning forever.
     """
 
-    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target]) -> None:
+    async def respond(node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request]) -> None:
         if request.deferred is None:
             await request.respond(node, audience="personal")
         else:
@@ -340,15 +340,17 @@ def _error_responder(request: sd.Request[Any]) -> ErrorResponder:
     return respond
 
 
-def render_request_error(request: sd.Request[Any], error: Exception) -> sl.LayoutNode[sl.ComponentsV2Target]:
-    """Render a failed `pending=` command's notice in the request's locale."""
+def render_request_error(
+    request: sd.Request[Any], error: Exception
+) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
+    """Render a failed command or component's notice in the request's locale."""
     return build_error_notice(error, request.localization.locale).to_node()
 
 
 async def observe_request_error(
     request: sd.Request[Any], error: Exception, delivery: sd.delivery.DeliveryResult | None
 ) -> None:
-    """Record a failed `pending=` command once its notice has replaced the card."""
+    """Record a failed command or component after attempting to present its notice."""
     await record_operation_error(
         error,
         locale=request.localization.locale,
@@ -358,7 +360,7 @@ async def observe_request_error(
     )
 
 
-COMMAND_ERRORS = sd.ErrorPolicy(render=render_request_error, observe=observe_request_error)
+UI_ERRORS = sd.ErrorPolicy(render=render_request_error, observe=observe_request_error)
 
 
 async def handle_context_error[BotT: commands.Bot](

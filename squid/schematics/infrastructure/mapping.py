@@ -1,6 +1,7 @@
 """Translation between schematic domain values and their persisted rows."""
 
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from math import isfinite
 from typing import Any, Literal, cast
 
@@ -128,16 +129,11 @@ def _mapping_error(schematic_id: int) -> DataIntegrityError:
 def _lattice_to_json(lattice: AutostackLattice | None) -> dict[str, Any] | None:
     if lattice is None:
         return None
-    return {
-        "mode": lattice.mode,
-        "vectors": [list(vector) for vector in lattice.vectors],
-        "coverage": lattice.coverage,
-        "cell_min": list(lattice.cell_min),
-        "cell_max": list(lattice.cell_max),
-        "region_min": list(lattice.region_min),
-        "region_max": list(lattice.region_max),
-        "label": lattice.label,
-    }
+    values: dict[str, Any] = asdict(lattice)
+    values["vectors"] = [list(vector) for vector in lattice.vectors]
+    for field in ("cell_min", "cell_max", "region_min", "region_max"):
+        values[field] = list(values[field])
+    return values
 
 
 def _lattice_from_json(payload: object | None) -> AutostackLattice | None:
@@ -171,29 +167,11 @@ def _lattice_from_json(payload: object | None) -> AutostackLattice | None:
 
 def simulation_to_json(result: SimulationResult) -> dict[str, Any]:
     """Flatten persisted simulation evidence into JSON-safe values."""
-    return {
-        "ticks_run": result.ticks_run,
-        "settled_tick": result.settled_tick,
-        "input_position": list(result.input_position) if result.input_position is not None else None,
-        "input_source": result.input_source,
-        "last_piston_tick": result.last_piston_tick,
-        "block_changes": result.block_changes,
-        "piston_events": result.piston_events,
-        "redstone_events": result.redstone_events,
-        "trustworthy": result.trustworthy,
-        "samples": [
-            {
-                "tick": sample.tick,
-                "x": sample.x,
-                "y": sample.y,
-                "z": sample.z,
-                "powered": sample.powered,
-                "signal_strength": sample.signal_strength,
-            }
-            for sample in result.samples
-        ],
-        "notes": list(result.notes),
-    }
+    values: dict[str, Any] = asdict(result)
+    values["input_position"] = list(result.input_position) if result.input_position is not None else None
+    values["samples"] = list(values["samples"])
+    values["notes"] = list(result.notes)
+    return values
 
 
 def _simulation_from_json(payload: object | None) -> SimulationResult | None:
@@ -212,10 +190,15 @@ def _simulation_from_json(payload: object | None) -> SimulationResult | None:
         input_position=(
             None if input_position is None else _vector(input_position, field="simulation_evidence.input_position")
         ),
+        # Cast for the same reason as `lattice.mode` above: `_literal` validates the value against
+        # its options at runtime, but the checker widens the type variable back to `str`.
         input_source=(
             None
             if source is None
-            else _literal(source, ("insign", "heuristic", "manual"), field="simulation_evidence.input_source")
+            else cast(
+                Literal["insign", "heuristic", "manual"],
+                _literal(source, ("insign", "heuristic", "manual"), field="simulation_evidence.input_source"),
+            )
         ),
         last_piston_tick=(
             None

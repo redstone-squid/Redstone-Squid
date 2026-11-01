@@ -46,6 +46,7 @@ class Page[ItemT]:
     """One page of results and the parameters addressing its neighbours."""
 
     items: tuple[ItemT, ...]
+    # TODO: If profiling shows count queries are costly, make totals optional for callers that only need navigation.
     total: int
     next: PageAnchor | None
     prev: PageAnchor | None

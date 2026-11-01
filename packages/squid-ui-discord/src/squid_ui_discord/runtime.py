@@ -15,32 +15,33 @@ Nothing here starts a task. `DiscordUIRuntime.run()` is offered for a host that 
 declined by a host that wants per-job health granularity; either way the host supervises it.
 """
 
+import logging
 import weakref
 from collections.abc import Iterator
-from typing import TYPE_CHECKING, Any, Never, Unpack, cast, overload
+from typing import Any, Never, Unpack, cast, overload
 
 import anyio
 import discord
+from anyio.abc import TaskStatus
 
 from squid_ui.errors import SquidUiError
-from squid_ui.profiling import Profiler
+from squid_ui.interactions import ActionEvent
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.topics import TopicBus
+from squid_ui.runtime.services import UIExecutionHost
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui_discord.access import AccessPolicy
 from squid_ui_discord.challenges import ChallengeRunner, DialogPresenter
-from squid_ui_discord.config import DiscordUIConfig
+from squid_ui_discord.config import Config
 from squid_ui_discord.contracts import LocalizationResolver
-from squid_ui_discord.delivery import Replyable
+from squid_ui_discord.delivery import DeliveryResult, Replyable
+from squid_ui_discord.facade import Scope
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import MessageRootBehaviorOptions
 from squid_ui_discord.message_root_options import MessageRootDefaults
 from squid_ui_discord.message_root_scheduler import MessageRootScheduler
+from squid_ui_discord.request import Request, request
+from squid_ui_discord.response import DEFAULT_RESPONSE_SPEC, Presented, ResponseSpec, Sent
 from squid_ui_discord.sessions import SessionManager
-
-if TYPE_CHECKING:
-    from squid_ui_discord.facade import Scope
-    from squid_ui_discord.response import ResponseSpec
 
 type RuntimeSource = discord.Client | discord.Interaction[Any] | Replyable | discord.Message
 """Anything an installation can be found from: the client, or something carrying one."""
@@ -94,7 +95,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         scheduler: MessageRootScheduler | None,
         localization: LocalizationResolver | None,
         response_defaults: ResponseSpec,
-        config: DiscordUIConfig,
+        config: Config,
     ) -> None:
         self.client = client
         self.sessions = sessions
@@ -103,6 +104,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         self.localization = localization
         self.response_defaults = response_defaults
         self.config = config
+        self.execution_host = sessions.defaults.execution_host
         self._scopes: list[Scope[Any]] = []
         self._scope_roots: dict[int, set[MessageRoot]] = {}
 
@@ -121,7 +123,7 @@ class DiscordUIRuntime[ClientT: discord.Client]:
 
     def mount(
         self,
-        component: Component[ComponentsV2Target],
+        component: Component[ComponentsV2Target, Request],
         *,
         access: AccessPolicy,
         **overrides: Unpack[MessageRootBehaviorOptions],
@@ -133,33 +135,48 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         """
         return self.defaults.mount(component, access=access, **overrides)
 
-    async def run(self) -> None:
-        """Serve this host's scheduler and challenge runner until the caller cancels.
+    async def run(self, *, task_status: TaskStatus[None] = anyio.TASK_STATUS_IGNORED) -> None:
+        """Run the scheduler, challenges, and execution host until the caller cancels.
 
-        A convenience for a host content to supervise one job. A host wanting per-job health
-        granularity starts `scheduler.run()` and `challenges.run()` separately instead; the
-        package still starts nothing on its own either way.
+        Use ``await tasks.start(runtime.run)`` to wait until services can be mounted.
+        Applications that track each job's health can start ``scheduler.run()``,
+        ``challenges.run()``, and ``execution_host.run()`` separately instead.
         """
-        # A task group rather than gather: a failing job must cancel the other one rather
-        # than leave a half-served host running.
         async with anyio.create_task_group() as tasks:
             if self.scheduler is not None:
                 tasks.start_soon(self.scheduler.run)
             tasks.start_soon(self.challenges.run)
+            if self.execution_host is not None:
+                await tasks.start(self.execution_host.run)
+            task_status.started()
 
     async def close(self) -> None:
-        """Finish every session, then stop answering :meth:`of` for this client.
+        """Finish the sessions, close the execution host, and unregister this runtime.
 
-        Does not cancel `run()`: the task belongs to whoever started it, and a supervisor
-        that owns the job is the thing entitled to end it.
+        The application's task group still owns ``run()``. Cancel it there when the
+        application is ready to stop the scheduler and challenge runner too.
         """
+        errors: list[Exception] = []
         try:
             for scope in tuple(self._scopes):
-                await scope.close()
-            await self.sessions.close_all()
+                try:
+                    await scope.close()
+                except Exception as error:
+                    errors.append(error)
+            try:
+                await self.sessions.close_all()
+            except Exception as error:
+                errors.append(error)
         finally:
-            if _INSTALLED.get(self.client) is self:
-                del _INSTALLED[self.client]
+            try:
+                if self.execution_host is not None:
+                    await self.execution_host.close()
+            finally:
+                if _INSTALLED.get(self.client) is self:
+                    del _INSTALLED[self.client]
+        if errors:
+            message = "Discord runtime shutdown failed"
+            raise ExceptionGroup(message, errors)
 
     @classmethod
     def of(cls, source: RuntimeSource) -> DiscordUIRuntime[Any]:
@@ -182,27 +199,20 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         raise DiscordUIRuntimeMissing(message)
 
     @overload
-    def scope(self, owner: None, *, defaults: ResponseSpec | None = None) -> Never: ...
+    def scope(self, owner: None) -> Never: ...
 
     @overload
-    def scope[OwnerT](self, owner: OwnerT, *, defaults: ResponseSpec | None = None) -> Scope[OwnerT]: ...
+    def scope[OwnerT](self, owner: OwnerT) -> Scope[OwnerT]: ...
 
-    def scope[OwnerT](self, owner: OwnerT | None, *, defaults: ResponseSpec | None = None) -> Scope[OwnerT]:
+    def scope[OwnerT](self, owner: OwnerT | None) -> Scope[OwnerT]:
         """Return the one live scope registered for ``owner`` by exact identity."""
-        from squid_ui_discord.facade import Scope
-        from squid_ui_discord.response import ResponseSpec
-
         if owner is None:
             message = "None cannot own a Discord UI scope"
             raise TypeError(message)
-        selected = ResponseSpec() if defaults is None else defaults
         for scope in self._scopes:
             if scope.owner is owner and not scope.closed:
-                if defaults is not None and scope.defaults != selected:
-                    message = "owner is already registered with different response defaults"
-                    raise ValueError(message)
                 return cast(Scope[OwnerT], scope)
-        scope = Scope(cast(DiscordUIRuntime[discord.Client], self), owner, selected)
+        scope = Scope(cast(DiscordUIRuntime[discord.Client], self), owner)
         self._scopes.append(cast(Scope[Any], scope))
         self._scope_roots[id(scope)] = set()
         return scope
@@ -213,19 +223,19 @@ class DiscordUIRuntime[ClientT: discord.Client]:
         return self.scope(self.client)
 
     def scope_for[OwnerT](self, owner: OwnerT) -> Scope[OwnerT]:
-        """The live scope registered for `owner`, or the app scope if it never registered one.
-
-        A cog that skipped `ui_load` still gets its commands answered; it just does not get
-        its own lifetime for what they open.
-        """
+        """Return an owner's registered live scope, raising if it is missing or closed."""
         for scope in self._scopes:
             if scope.owner is owner and not scope.closed:
-                return cast("Scope[OwnerT]", scope)
-        return cast("Scope[OwnerT]", self.app)
+                return cast(Scope[OwnerT], scope)
+        message = f"{type(owner).__name__} has no live UI scope; register it before dispatch"
+        raise RuntimeError(message)
 
     def scope_of_root(self, root: MessageRoot | None) -> Scope[Any]:
         """The scope that tracked `root`, so a click inherits the lifetime of the panel it hit."""
         if root is not None:
+            if root.finished:
+                message = "the component request belongs to a finished message root"
+                raise RuntimeError(message)
             for scope in self._scopes:
                 if root in self._scope_roots.get(id(scope), ()):
                     return scope
@@ -234,51 +244,67 @@ class DiscordUIRuntime[ClientT: discord.Client]:
     def _track[OwnerT](self, scope: Scope[OwnerT], message_root: MessageRoot) -> None:
         self._scope_roots[id(scope)].add(message_root)
 
+    async def _handle_component_error(self, event: ActionEvent, error: Exception, source: str) -> None:
+        """Present and observe a rolled-back component failure through the installed policy."""
+        policy = self.config.errors
+        if policy.render is None and policy.observe is None:
+            logging.getLogger(__name__).error("unhandled component error in %s", source, exc_info=error)
+            return
+        req = await request(event)
+        delivery: DeliveryResult | None = None
+        try:
+            if policy.render is not None:
+                content = policy.render(req, error)
+                audience = req.audience if req.deferred is not None else "personal"
+                result = await req.respond(content, audience=audience or "personal")
+                if isinstance(result, Sent | Presented):
+                    delivery = result.delivery
+        finally:
+            if policy.observe is not None:
+                await policy.observe(req, error, delivery)
+
     async def _close_scope[OwnerT](self, scope: Scope[OwnerT]) -> None:
         roots = self._scope_roots.pop(id(scope), set())
-        for message_root in tuple(roots):
-            session = self.sessions.session_for(message_root)
-            if session is not None:
-                await session.finish()
-            else:
-                await message_root.finish()
+        targets = {session.root if (session := self.sessions.session_for(root)) is not None else root for root in roots}
+        errors: list[Exception] = []
+        for message_root in targets:
+            try:
+                await message_root.finish(wait=False)
+            except Exception as error:
+                errors.append(error)
+        for message_root in targets:
+            if message_root.finished:
+                try:
+                    await message_root.wait()
+                except Exception as error:
+                    errors.append(error)
         self._scopes = [candidate for candidate in self._scopes if candidate is not scope]
+        if errors:
+            message = "UI scope shutdown failed"
+            raise ExceptionGroup(message, errors)
 
 
 def install[ClientT: discord.Client](
     client: ClientT,
-    config: DiscordUIConfig | None = None,
-    *,
-    defaults: MessageRootDefaults | None = None,
-    bus: TopicBus | None = None,
-    profiler: Profiler | None = None,
-    localization: LocalizationResolver | None = None,
+    config: Config | None = None,
 ) -> DiscordUIRuntime[ClientT]:
     """Assemble the Discord runtime for `client` and record it against the client.
 
-    `bus` is what makes a scheduler: with one, message roots refresh from topics and shared state, and
+    `config.bus` is what makes a scheduler: with one, message roots refresh from topics and shared state, and
     the scheduler becomes the default scheduler; without one, a mount is refreshed only by its
-    own clicks. `profiler` instruments that scheduler. `localization` is the host's one async
-    hook for resolving a request's render-time locale; it runs when an owner scope resolves
-    the request.
+    own clicks. `config.profiler` instruments that scheduler. `config.localization` is the host's one async
+    hook for resolving a request's render-time locale; it runs when `sd.request` first resolves
+    a native source.
 
     Raises:
         ValueError: A host is already installed on this client. One client has one host, the
             way one client has one router per id language -- a second would give the same
             click two answers.
     """
-    from squid_ui_discord.response import DEFAULT_RESPONSE_SPEC
-
-    if config is not None and any(value is not None for value in (defaults, bus, profiler, localization)):
-        message = "pass DiscordUIConfig or legacy installation keywords, not both"
-        raise TypeError(message)
-    selected = config or DiscordUIConfig(
-        defaults=MessageRootDefaults() if defaults is None else defaults,
-        bus=bus,
-        profiler=profiler,
-        localization=localization,
-    )
+    selected = config or Config()
     defaults = selected.defaults
+    if defaults.execution_host is None:
+        defaults = defaults.replace(execution_host=UIExecutionHost())
     bus = selected.bus
     profiler = selected.profiler
     localization = selected.localization

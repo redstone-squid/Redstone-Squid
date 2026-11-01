@@ -81,7 +81,7 @@
       `get_creator_profile`, so a public creator identity is unreachable from Discord.
   - Treating "who holds this creator credit" as staff-only information was a mistake: the profile is public data,
     and `accounts.public_creator_id` exists to be shown.
-  - Blocks the useful half of `docs/plans/pr-183-review/01-consent-verification-ux.md` §5 — naming the creator who
+  - Blocks the useful half of `docs/plans/completed/pr-183-review/01-consent-verification-ux.md` §5 — naming the creator who
     holds a contested alias only helps if the reader has somewhere to look the name up.
 
 ## Migration and cleanup

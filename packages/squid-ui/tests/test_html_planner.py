@@ -1,12 +1,12 @@
 """Native semantic planning for the first-class HTML target."""
 
 from datetime import UTC, date, datetime, time
-from typing import Any, cast
+from typing import Any, cast, override
 
 import pytest
 
 import squid_ui as sl
-from squid_ui import scene, testing
+from squid_ui import grids, scene, testing
 from squid_ui.errors import LayoutDegradedError, LayoutInvariantError
 from squid_ui.forms import (
     BoolField,
@@ -121,8 +121,8 @@ def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
                 sl.aside(sl.note("Caveat"), tone=sl.Tone.WARNING),
                 sl.roster(placement, key="roster", on_join=_selected),
                 sl.grid(
-                    sl.grids.GridCell("a", "A"),
-                    sl.grids.GridCell("b", "B", available=False),
+                    grids.GridCell("a", "A"),
+                    grids.GridCell("b", "B", available=False),
                     columns=2,
                     key="grid",
                     on_pick=_selected,
@@ -190,6 +190,7 @@ def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
 class _PortableExtension(ExtensionField[str]):
     capability = "forms.test.native"
 
+    @override
     def parse(self, raw: object) -> str | None:
         # Never reached in this test: the target lacks the capability, so the portable
         # fallback stands in and it is the fallback's parse that runs.

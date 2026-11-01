@@ -1,6 +1,10 @@
 """Static contracts shared by the owner-scoped Discord facade."""
 
 from collections.abc import Awaitable, Callable, Sequence
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from squid_ui_discord.request import Request
 
 import discord
 from discord.ext import commands
@@ -20,10 +24,12 @@ type ResponseSource = RequestSource
 type LocalizationSource = ResponseSource | Replyable
 
 type DocumentContent = (
-    Document[ComponentsV2Target] | LayoutNode[ComponentsV2Target] | Sequence[LayoutNode[ComponentsV2Target]]
+    Document[ComponentsV2Target, Request]
+    | LayoutNode[ComponentsV2Target, Request]
+    | Sequence[LayoutNode[ComponentsV2Target, Request]]
 )
 type StaticContent = MessagePayload | str | discord.Embed | discord.ui.View | DocumentContent
-type FacadeContent = StaticContent | Component[ComponentsV2Target]
+type FacadeContent = StaticContent | Component[ComponentsV2Target, Request]
 # Both halves for the same reason `send_to` has two overloads: discord.py's overloaded `send`
 # does not structurally satisfy the protocol, so a real channel needs naming on its own.
 type SendDestination = discord.abc.Messageable | Messageable

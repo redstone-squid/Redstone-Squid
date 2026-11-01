@@ -65,7 +65,7 @@ class SlackSdk343Adapter(SlackSdkAdapter):
     """Marker for Squid's verified Slack Python SDK 3.43 adapter."""
 
 
-class Renderable[RenderTargetT = RenderTarget]:
+class Renderable[RenderTargetT = RenderTarget, ContextT = object]:
     """A value whose accepted protocol target is tracked by the type checker."""
 
     __slots__ = ()
@@ -74,6 +74,9 @@ class Renderable[RenderTargetT = RenderTarget]:
     A base without `__slots__` grants every subclass a `__dict__`, which silently defeated
     the `@dataclass(frozen=True, slots=True)` on every node in the package.
     """
+
+    def _accepts_context(self, context: ContextT, /) -> None:
+        del context
 
     def _accepts_target(self, target: RenderTargetT, /) -> None:
         del target

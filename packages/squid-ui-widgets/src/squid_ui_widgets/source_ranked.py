@@ -1,7 +1,10 @@
 """An explicitly asynchronous ranking component backed by a window source."""
 
 from collections.abc import Callable
+from typing import override
 
+from squid_reactivity.core import state
+from squid_reactivity.resources import Failed, Pending, Ready, resource
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, action_controls, heading, note, stack
@@ -13,8 +16,6 @@ from squid_ui.planning.navigation import (
 )
 from squid_ui.primitives import Lines
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.reactivity import state
-from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import LayoutNode
 from squid_ui.sources import (
     ORIGIN,
@@ -38,12 +39,14 @@ from squid_ui_widgets._window import (
     source_navigation_state,
 )
 
-type SourceContentHook[RenderTargetT: DiscordTarget = DiscordTarget] = (
-    ContentLike[RenderTargetT] | Callable[[int | None], ContentLike[RenderTargetT]]
+type SourceContentHook[RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = (
+    ContentLike[RenderTargetT, ContextT] | Callable[[int | None], ContentLike[RenderTargetT, ContextT]]
 )
 
 
-class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Component[RenderTargetT]):
+class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object](
+    Component[RenderTargetT, ContextT]
+):
     """Render a ranking whose visible async resource is backed by a window source."""
 
     _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
@@ -58,9 +61,9 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         label: Projector[EntryT] | None = None,
         value: Projector[EntryT] | None = None,
         title: TextLike | None = None,
-        header: SourceContentHook[RenderTargetT] | None = None,
-        footer: SourceContentHook[RenderTargetT] | None = None,
-        empty: ContentLike[RenderTargetT] = "No entries",
+        header: SourceContentHook[RenderTargetT, ContextT] | None = None,
+        footer: SourceContentHook[RenderTargetT, ContextT] | None = None,
+        empty: ContentLike[RenderTargetT, ContextT] = "No entries",
         initial_position: Position = ORIGIN,
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
     ) -> None:
@@ -111,13 +114,14 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         self._request = WindowRequest(self._request.operation, self._request.position)
 
     def _hook(
-        self, hook: SourceContentHook[RenderTargetT], total: int | None, *, name: str
-    ) -> tuple[LayoutNode[RenderTargetT], ...]:
+        self, hook: SourceContentHook[RenderTargetT, ContextT], total: int | None, *, name: str
+    ) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
         """Resolve and normalize source-aware header or footer content."""
         value = hook(total) if callable(hook) else hook
         return render_content(self, normalize_content(value, name=name), prefix=name)
 
-    def render(self) -> DocumentLike[RenderTargetT]:
+    @override
+    def render(self) -> DocumentLike[RenderTargetT, ContextT]:
         """Render ready, pending, or failed ranking state."""
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
@@ -134,7 +138,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
                     return self._status(self.copy.failed, retry=True)
                 return self._render_loaded(previous.value, status=self.copy.failed, retry=True)
 
-    def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT]:
+    def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT, ContextT]:
         """Render a source status without a stale ranking window."""
         return stack(
             heading(self.title) if self.title is not None else None,
@@ -153,7 +157,7 @@ class SourceRankedList[EntryT, RenderTargetT: DiscordTarget = DiscordTarget](Com
         *,
         status: TextLike | None = None,
         retry: bool = False,
-    ) -> DocumentLike[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render one ranked source window with navigation facts."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         nav = self.inject(NAV_FACTORY_CONTEXT, default_nav)

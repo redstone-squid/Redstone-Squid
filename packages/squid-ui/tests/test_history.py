@@ -4,7 +4,7 @@ import gc
 import uuid
 import weakref
 from datetime import UTC, datetime
-from typing import cast
+from typing import cast, override
 
 import anyio
 import pytest
@@ -19,6 +19,7 @@ from squid_reactivity import (
     on_action_commit,
 )
 from squid_reactivity.actions import ChangeToken
+from squid_reactivity.core import readonly_transaction
 from squid_reactivity.operations import OperationContext
 from squid_ui import Component, DiscordTarget, state
 from squid_ui.primitives import Text
@@ -36,6 +37,7 @@ from squid_ui.runtime import (
     HistoryResultStatus,
     LocalTopicBus,
     MemoryCompensationOutbox,
+    ReactiveWriteError,
     SharedState,
     UndoMode,
     history,
@@ -59,6 +61,7 @@ class Panel(Component[DiscordTarget]):
     def __init__(self, workspace: Workspace) -> None:
         self.workspace = workspace
 
+    @override
     def render(self):
         return Text(str(self.page))
 
@@ -76,6 +79,7 @@ class UnassignedPanel(Component[DiscordTarget]):
     history: History = history()
     value: int = state(0)
 
+    @override
     def render(self):
         return Text("unassigned")
 
@@ -691,3 +695,10 @@ async def test_outbox_failure_after_external_success_needs_reconciliation_before
     assert repeated is result
     assert subject.page == 4
     assert calls == ["outbox"]
+
+
+def test_readonly_action_cannot_record_history() -> None:
+    subject, _ = panel()
+    with readonly_transaction(), pytest.raises(ReactiveWriteError, match="nothing to record"):
+        subject.history.record("read")
+    assert not subject.history.entries

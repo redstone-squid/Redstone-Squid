@@ -9,7 +9,7 @@ the shape 5.3 and 5.4 already removed from notifications and claim review).
 """
 
 from collections.abc import Awaitable, Callable, Iterable, Mapping
-from typing import Protocol, cast
+from typing import Protocol, cast, override
 
 import discord
 
@@ -42,7 +42,7 @@ SESSION_SECONDS = 300
 MAX_LISTED = 25
 """A select holds 25 options, and only a long merge history reaches even a handful."""
 
-type ConsentAnswer = Callable[[sl.PressEvent, AccountConsent | None], Awaitable[None]]
+type ConsentAnswer = Callable[[sd.PressEvent, AccountConsent | None], Awaitable[None]]
 
 
 class ConsentRequest(Protocol):
@@ -50,7 +50,7 @@ class ConsentRequest(Protocol):
 
     def __call__(
         self,
-        event: sl.ActionEvent,
+        event: sd.ActionEvent,
         answered: ConsentAnswer,
         *,
         preview: LinkPreview | None = None,
@@ -90,12 +90,10 @@ def _error_detail(error: ValidationError) -> sl.TextLike:
     return tr(t"{message} {action}")
 
 
-class AccountScreen(sd.Screen):
+class AccountScreen(sd.UserSessionScreen, session_name="account"):
     """An account workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("account")
     timeout = SESSION_SECONDS
-    audience = "personal"
 
     selected_id: int | None = sl.state(None)
     closed: bool = sl.state(default=False)
@@ -104,7 +102,7 @@ class AccountScreen(sd.Screen):
     _needs_consent: bool = sl.state(default=False, persist=False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state(persist=False)
-    _profile_editor: sp.ComponentDriver[sp.EditorState, sl.ComponentsV2Target] | None = sl.state(
+    _profile_editor: sp.ComponentDriver[sp.EditorState, sl.ComponentsV2Target, sd.Request] | None = sl.state(
         None, persist=False, opaque=True
     )
 
@@ -123,6 +121,7 @@ class AccountScreen(sd.Screen):
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
 
+    @override
     async def on_load(self) -> None:
         await self._refresh()
 
@@ -149,7 +148,8 @@ class AccountScreen(sd.Screen):
     def page_hidden(self) -> bool:
         return self._profile.hidden
 
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.closed:
             return (sl.section(sl.heading(tr(t"Account controls closed"))),)
         if self._profile_editor is not None:
@@ -168,7 +168,7 @@ class AccountScreen(sd.Screen):
         footer = self._footer()
         media = own_profile_avatar(self._profile, self._identities)
         extra_media = media[1:]
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(self._profile.display_name or tr(t"Your account")),
                 # The bio is the card's shock absorber: truncate lets it give up characters
@@ -240,10 +240,10 @@ class AccountScreen(sd.Screen):
         )
         return tuple(nodes)
 
-    async def _selection_changed(self, event: sl.ChoiceEvent) -> None:
+    async def _selection_changed(self, event: sd.ChoiceEvent) -> None:
         self.selected_id = int(event.selected[0])
 
-    async def _toggle_identity(self, event: sl.ToggleEvent) -> None:
+    async def _toggle_identity(self, event: sd.ToggleEvent) -> None:
         identity = self.selected
         if identity is None or identity.id is None:
             return
@@ -255,7 +255,7 @@ class AccountScreen(sd.Screen):
 
         await self._with_consent(event, apply)
 
-    async def _toggle_page(self, event: sl.ToggleEvent) -> None:
+    async def _toggle_page(self, event: sd.ToggleEvent) -> None:
         hidden = not event.value
 
         async def apply() -> None:
@@ -264,7 +264,7 @@ class AccountScreen(sd.Screen):
 
         await self._with_consent(event, apply)
 
-    async def _unlink(self, event: sl.PressEvent) -> None:
+    async def _unlink(self, event: sd.PressEvent) -> None:
         """Remove the selected identity. The reader has already agreed to this."""
         identity = self.selected
         if identity is None or identity.id is None:
@@ -275,13 +275,13 @@ class AccountScreen(sd.Screen):
         removed_label = _identity_label(removed)
         await event.notice(tr(t"Unlinked {removed_label}. Any build credit you hold is unaffected."))
 
-    async def _edit_page(self, event: sl.PressEvent) -> None:
+    async def _edit_page(self, event: sd.PressEvent) -> None:
         async def apply() -> None:
             self._profile_editor = self._build_profile_editor()
 
         await self._with_consent(event, apply)
 
-    def _build_profile_editor(self) -> sp.ComponentDriver[sp.EditorState, sl.ComponentsV2Target]:
+    def _build_profile_editor(self) -> sp.ComponentDriver[sp.EditorState, sl.ComponentsV2Target, sd.Request]:
         profile_section = sp.EditorSection.from_form(
             "profile",
             tr(t"Profile"),
@@ -340,7 +340,7 @@ class AccountScreen(sd.Screen):
             summary=lambda value: _link_count(len(value)),
             issues=lambda state: (sl.forms.FormError(message) for message in links.errors(state)),
         )
-        editor = sp.Editor[sl.ComponentsV2Target](
+        editor = sp.Editor[sl.ComponentsV2Target, sd.Request](
             tr(t"Edit your creator page"),
             (profile_section, links_section),
             preview=self._profile_preview,
@@ -384,7 +384,7 @@ class AccountScreen(sd.Screen):
             return (sl.forms.FormError(_error_detail(error)),)
         return ()
 
-    def _profile_preview(self, values: sp.EditorValues) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    def _profile_preview(self, values: sp.EditorValues) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         draft = self._raw_profile_update(values).apply(self._profile)
         fields = tuple(sl.field(field.name, field.value) for field in self._profile_fields(draft))
         return sl.section(
@@ -404,10 +404,10 @@ class AccountScreen(sd.Screen):
         self._profile_editor = None
         await event.source.notice(tr(t"Profile saved."))
 
-    async def _cancel_profile_edit(self, _event: sl.PressEvent) -> None:
+    async def _cancel_profile_edit(self, _event: sd.PressEvent) -> None:
         self._profile_editor = None
 
-    async def _with_consent(self, event: sl.ActionEvent, work: Callable[[], Awaitable[None]]) -> None:
+    async def _with_consent(self, event: sd.ActionEvent, work: Callable[[], Awaitable[None]]) -> None:
         """Run `work` now, or once the reader has agreed to be recorded.
 
         Opening the notice ends this press: `request_consent` returns as soon as it is on
@@ -420,7 +420,7 @@ class AccountScreen(sd.Screen):
             await work()
             return
 
-        async def answered(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+        async def answered(_prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
             if consent is None:
                 # Cancelled. The notice said agreeing is what stores anything, and the prompt
                 # closing is the whole answer; the panel already shows the unchanged truth.
@@ -435,9 +435,9 @@ class AccountScreen(sd.Screen):
         await self._refresh()
         self.invalidate()
 
-    async def _close(self, event: sl.PressEvent) -> None:
+    async def _close(self, event: sd.PressEvent) -> None:
         self.closed = True
-        await event.finish()
+        event.finish_on_success()
 
     def _fields(self) -> list[CardField]:
         fields = self._profile_fields(self._profile)

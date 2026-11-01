@@ -1,6 +1,6 @@
 """A cog that owns a UI scope and registers its declared context menus."""
 
-from typing import Self, cast
+from typing import Self, cast, override
 
 import discord
 from discord import app_commands
@@ -8,6 +8,7 @@ from discord.ext import commands
 
 from squid_ui_discord.commands import AsyncHandler, bind_context_menu, context_menu_declaration
 from squid_ui_discord.facade import Scope
+from squid_ui_discord.runtime import DiscordUIRuntime
 
 type ContextMenuTarget = discord.Message | discord.Member | discord.User
 
@@ -31,10 +32,7 @@ class Cog[BotT: commands.Bot](commands.Cog):
     def __init__(self, bot: BotT) -> None:
         super().__init__()
         self.bot = bot
-        runtime = getattr(bot, "ui", None)
-        if runtime is None:
-            message = "sd.Cog requires a bot with an installed Discord UI runtime"
-            raise TypeError(message)
+        runtime = DiscordUIRuntime.of(bot)
         self.ui: Scope[Self] = runtime.scope(self)
         self._squid_context_menus: list[app_commands.ContextMenu] = []
 
@@ -44,6 +42,7 @@ class Cog[BotT: commands.Bot](commands.Cog):
     async def ui_unload(self) -> None:
         """Run application-specific work before facade declarations are removed."""
 
+    @override
     async def cog_load(self) -> None:
         """Register declarations and roll them back if application loading fails."""
         try:
@@ -54,6 +53,7 @@ class Cog[BotT: commands.Bot](commands.Cog):
             await self.ui.close()
             raise
 
+    @override
     async def cog_unload(self) -> None:
         """Run application teardown, unregister declarations, and close the scope."""
         try:

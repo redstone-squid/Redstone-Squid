@@ -1,24 +1,29 @@
 """The owner-only mount inspector: what it lists, what it opens, and what it refuses."""
 
+import json
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, override
 
+import anyio
 import discord
 import pytest
 
 import squid_ui as sl
 import squid_ui_discord
+from squid_storage import MemorySessionStore, SessionRecord
 from squid_ui.primitives import Button, Heading, Row, Text
 from squid_ui_discord import Everyone, MessageRoot, Owner
 from squid_ui_discord import testing as sd
-from squid_ui_discord.devtools_runtime import DevToolsRuntime
+from squid_ui_discord.devtools_runtime import DevToolsPolicy, DevToolsRuntime
 from squid_ui_discord.devtools_view import (
     MessageRootInspector,
     OperationalInspector,
     metrics_text,
+    operational_attachment,
     plan_text,
     scene_attachment,
 )
+from squid_ui_discord.durability import ComponentRegistry, DiscordFrontend, DurableSessionRuntime
 from squid_ui_discord.testing import assert_within_limits, commit_render, delivered_to, interaction_harness
 
 
@@ -36,6 +41,7 @@ class Subject(sl.Component[sl.ComponentsV2Target]):
         """Never rendered, so never evaluated -- which the inspector should say."""
         return "unused"
 
+    @override
     def render(self):
         return [
             Heading("Subject"),
@@ -240,7 +246,7 @@ class TestOperationalInspectorSections:
 
     @pytest.mark.parametrize(
         "section",
-        ["overview", "roots", "sessions", "queues", "profile", "persistence"],
+        ["overview", "roots", "sessions", "routes", "activity", "queues", "profile", "persistence"],
     )
     async def test_each_dashboard_section_renders(self, section: str) -> None:
         inspector = OperationalInspector(DevToolsRuntime())
@@ -262,3 +268,148 @@ class TestOperationalInspectorSections:
             inspector.section = "sessions"
             inspector.session_id = snapshot.sessions[0].id
             assert list(inspector.render())
+
+    def test_overview_snapshot_download_is_round_trippable_json(self) -> None:
+        asset = operational_attachment(DevToolsRuntime().snapshot())
+
+        assert isinstance(asset.source, sl.document.InlineAsset)
+        payload = json.loads(asset.source.data)
+        assert payload["sessions"] == []
+        assert payload["message_roots"] == []
+
+    def test_mutation_controls_are_omitted_by_default_and_explicitly_enabled(self) -> None:
+        read_only = OperationalInspector(DevToolsRuntime())
+        read_only.section = "queues"
+        writable = OperationalInspector(DevToolsRuntime(policy=DevToolsPolicy.full_access()))
+        writable.section = "queues"
+
+        read_only_view = commit_render(MessageRoot(read_only, access=Owner(1)))
+        writable_view = commit_render(MessageRoot(writable, access=Owner(1)))
+
+        read_only_labels = {
+            item.label for item in read_only_view.walk_children() if isinstance(item, discord.ui.Button)
+        }
+        writable_labels = {item.label for item in writable_view.walk_children() if isinstance(item, discord.ui.Button)}
+        assert "Wait for idle" not in read_only_labels
+        assert "Wait for idle" in writable_labels
+
+
+async def test_confirm_close_session_runs_after_inspector_action_commits() -> None:
+    manager = squid_ui_discord.SessionManager()
+    subject = MessageRoot(Subject(), access=Everyone())
+    opened = await manager.open(subject, delivered_to(sd.message_harness()))
+    assert isinstance(opened, squid_ui_discord.sessions.Opened)
+    inspector = OperationalInspector(DevToolsRuntime(sessions=manager, policy=DevToolsPolicy.full_access()))
+    inspector.section = "sessions"
+    inspector.session_id = opened.session.id
+    inspector.confirming_session = opened.session.id
+    root = MessageRoot(inspector, access=Everyone())
+    await root.send(delivered_to(sd.message_harness()))
+
+    await root.dispatch("confirm-close", interaction_harness())
+
+    assert subject.finished
+    assert inspector.session_id is None
+    assert inspector.confirming_session is None
+    assert inspector.notice == f"Session `{opened.session.id}` closed."
+    assert not root.finished
+    await root.finish()
+
+
+async def test_inspector_can_refresh_its_own_root_after_dispatch() -> None:
+    inspector = OperationalInspector(DevToolsRuntime(policy=DevToolsPolicy.full_access()))
+    root = MessageRoot(inspector, access=Everyone())
+    inspector.section = "roots"
+    inspector.message_root_id = root.id
+    await root.send(delivered_to(sd.message_harness()))
+
+    await root.refresh()
+    with anyio.fail_after(2):
+        await root.dispatch("refresh-root", interaction_harness())
+
+    assert inspector.notice == "message root refreshed"
+    assert root.generation > 1
+
+
+class InspectableStore(MemorySessionStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.reads = 0
+        self.unavailable = False
+
+    @override
+    async def list(self) -> tuple[SessionRecord, ...]:
+        self.reads += 1
+        if self.unavailable:
+            raise RuntimeError("store unavailable")
+        return await super().list()
+
+
+async def test_persistence_records_load_on_demand_and_purge_after_confirmation() -> None:
+    store = InspectableStore()
+    client = discord.Client(intents=discord.Intents.none())
+    durable = DurableSessionRuntime(
+        sessions=squid_ui_discord.SessionManager(),
+        components=ComponentRegistry(),
+        store=store,
+        frontend=DiscordFrontend(client),
+    )
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(durable.run)
+        reservation = await store.reserve("test", "seed", 30)
+        assert reservation is not None
+        claim = await store.commit(
+            reservation, key="saved-panel", snapshot_payload="{}", record_payload="{}", victims=(), lease_seconds=30
+        )
+        assert claim is not None
+        assert await store.release(claim)
+        store.reads = 0
+        inspector = OperationalInspector(DevToolsRuntime(durable=durable, policy=DevToolsPolicy.full_access()))
+        root = MessageRoot(inspector, access=Everyone())
+        await root.send(delivered_to(sd.message_harness()))
+        assert store.reads == 0
+
+        await root.dispatch("section", interaction_harness(), values=["persistence"])
+        assert store.reads == 1
+        assert isinstance(inspector.persistence_records.status, sl.resources.Ready)
+        assert inspector.persistence_records.status.value[0].key == "saved-panel"
+
+        await root.dispatch("purge-records", interaction_harness(), values=["saved-panel"])
+        await root.dispatch("purge", interaction_harness())
+        assert await store.load("saved-panel") is not None
+        await root.dispatch("confirm-purge", interaction_harness())
+        assert await store.load("saved-panel") is None
+        assert inspector.selected_records == ()
+        assert inspector.notice == "Persistence purge completed; deleted=1."
+        assert store.reads == 2
+
+        await root.dispatch("back", interaction_harness())
+        await root.dispatch("refresh", interaction_harness())
+        assert store.reads == 2
+        tasks.cancel_scope.cancel()
+    await client.close()
+
+
+async def test_persistence_record_failure_is_displayed_and_can_be_retried() -> None:
+    store = InspectableStore()
+    store.unavailable = True
+    client = discord.Client(intents=discord.Intents.none())
+    durable = DurableSessionRuntime(
+        sessions=squid_ui_discord.SessionManager(),
+        components=ComponentRegistry(),
+        store=store,
+        frontend=DiscordFrontend(client),
+    )
+    inspector = OperationalInspector(DevToolsRuntime(durable=durable))
+    inspector.section = "persistence"
+    root = MessageRoot(inspector, access=Everyone())
+    message = sd.message_harness()
+    await root.send(delivered_to(message))
+    assert isinstance(inspector.persistence_records.status, sl.resources.Failed)
+    assert "store unavailable" in str(commit_render(root).to_components())
+
+    store.unavailable = False
+    await root.dispatch("refresh", interaction_harness())
+    assert isinstance(inspector.persistence_records.status, sl.resources.Ready)
+    assert store.reads == 2
+    await client.close()

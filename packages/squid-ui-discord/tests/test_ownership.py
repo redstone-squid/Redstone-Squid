@@ -33,7 +33,12 @@ class _Responder:
 
     async def redirect(self, url: str) -> None: ...
 
-    async def finish(self) -> None: ...
+    def finish_on_success(self) -> None: ...
+
+    def on_success[ValueT](
+        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
+    ) -> sl.runtime.PostCommitOperation[ValueT]:
+        raise AssertionError
 
     async def present_form(
         self,
@@ -55,7 +60,7 @@ async def _fire(result, key: str, event) -> None:
 
 
 def _select(values: tuple[str, ...]) -> SelectionEvent:
-    return SelectionEvent(Actor("7"), _Responder(), values=values)
+    return SelectionEvent(Actor("7"), _Responder(), values=values, context=None)
 
 
 def _recorder[EventT]() -> tuple[list[EventT], Callable[[EventT], Awaitable[None]]]:

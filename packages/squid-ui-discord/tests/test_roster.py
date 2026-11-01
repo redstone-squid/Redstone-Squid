@@ -1,7 +1,7 @@
 """Host-owned roster allocation and semantic rendering."""
 
 from datetime import UTC, datetime, timedelta
-from typing import cast
+from typing import cast, override
 
 import pytest
 
@@ -103,7 +103,7 @@ async def test_mounted_roster_delivers_one_portable_slot_key() -> None:
     )
     button = next(item for item in testing.walk(result.scene.body) if isinstance(item, scene.Button))
     await result.bindings[button.action].handler(
-        sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()))
+        sl.PressEvent(sl.interactions.Actor("7"), cast(sl.interactions.ActionResponder, object()), context=None)
     )
 
     assert seen[0].values == ("tank",)
@@ -120,6 +120,7 @@ def test_roster_validates_dispatch_modes_and_namespaces_its_controls() -> None:
         sl.roster(placement, key="raid", routes={"tank": "raid:tank"})
 
     class Child(sl.Component[sl.ComponentsV2Target]):
+        @override
         def render(self):
             return sl.roster(placement, key="raid", on_join=join)
 
@@ -127,6 +128,7 @@ def test_roster_validates_dispatch_modes_and_namespaces_its_controls() -> None:
         def __init__(self) -> None:
             self.child = Child()
 
+        @override
         def render(self):
             return self.boundary(self.child, key="child")
 

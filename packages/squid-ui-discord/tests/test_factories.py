@@ -1,7 +1,7 @@
 """The factory layer: what it normalizes, and what it refuses to guess."""
 
 from datetime import UTC, datetime
-from typing import cast
+from typing import cast, override
 
 import pytest
 
@@ -81,6 +81,7 @@ class TestRefusals:
 
     def test_a_component_is_pointed_at_a_boundary(self) -> None:
         class Child(sl.Component[sl.ComponentsV2Target]):
+            @override
             def render(self):
                 return sl.paragraph("child")
 
@@ -206,7 +207,8 @@ class TestDrift:
 
     def test_every_semantic_node_has_a_root_level_factory(self) -> None:
         for member in SemanticNode.__value__.__args__:
-            name = self._ALIASES.get(member.__name__, member.__name__.lower())
+            member_name: str = member.__name__
+            name = self._ALIASES.get(member_name, member_name.lower())
             assert callable(getattr(sl, name))
 
 
@@ -266,7 +268,7 @@ class TestRating:
         assert node.selection.value == ("2",)
 
         actor = sl.interactions.Actor("7")
-        await node.selection.on_change(sl.ChoiceEvent(actor, _responder(), None, {}, ("4",)))
+        await node.selection.on_change(sl.ChoiceEvent(actor, _responder(), None, {}, ("4",), context=None))
         assert seen == [4]
 
     async def test_a_cleared_selection_reaches_no_handler(self) -> None:
@@ -280,7 +282,9 @@ class TestRating:
         assert isinstance(node.selection, sl.semantic.Controlled)
         assert node.selection.value == ()
 
-        await node.selection.on_change(sl.ChoiceEvent(sl.interactions.Actor("7"), _responder(), None, {}, ()))
+        await node.selection.on_change(
+            sl.ChoiceEvent(sl.interactions.Actor("7"), _responder(), None, {}, (), context=None)
+        )
         assert not rated
 
     def test_a_scale_needs_at_least_two_points(self) -> None:

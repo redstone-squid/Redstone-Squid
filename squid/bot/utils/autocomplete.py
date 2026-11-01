@@ -20,6 +20,7 @@ import anyio
 import discord
 from discord import app_commands
 
+import squid_ui_discord as sd
 from squid.bot.utils.permissions import allows
 from squid.observability import trace_span
 from squid.suggestions.application import SuggestionSource
@@ -85,7 +86,8 @@ def suggests(
 
     # Stamped so the wiring test can read which source a command actually asks for. discord.py
     # validates that the parameter exists; nothing else would catch a source id that does not.
-    autocomplete.__squid_source__ = source  # pyrefly: ignore[missing-attribute]
+    # Both checkers type a function object as FunctionType, which has no room for the attribute.
+    autocomplete.__squid_source__ = source  # pyrefly: ignore[missing-attribute]  # pyright: ignore[reportFunctionMemberAccess]
     return autocomplete
 
 
@@ -120,7 +122,7 @@ class _InteractionAuthorizer:
         self._interaction = interaction
 
     async def allows(self, node: str) -> bool:
-        return await allows(self._interaction, node)
+        return await allows(await sd.request(self._interaction), node)
 
 
 async def _choices(

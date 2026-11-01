@@ -141,10 +141,10 @@ PALETTES = ui.PaletteRegistry(
 
 
 def render_item(
-    node: ui.LayoutNode[ui.ComponentsV2Target],
+    node: ui.LayoutNode[ui.ComponentsV2Target, sd.Request],
     *,
     localization: ui.text.Localization = ui.text.NEUTRAL,
-    reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
+    reservation: sd.ResourceCost = sd.EMPTY_COST,
 ) -> discord.ui.Item[Any]:
     """Render one node to a detached item through the bot's chrome and catalogue."""
     return sd.render_item(
@@ -157,11 +157,11 @@ def render_item(
 
 
 def render_payload(
-    nodes: ui.DocumentLike[ui.ComponentsV2Target],
+    nodes: ui.DocumentLike[ui.ComponentsV2Target, sd.Request],
     *,
     localization: ui.text.Localization = ui.text.NEUTRAL,
     strict: bool = False,
-    reservation: sd.ResourceCost = sd.EMPTY_RESERVATION,
+    reservation: sd.ResourceCost = sd.EMPTY_COST,
 ) -> sd.message_payload.MessagePayload:
     """Render a complete Discord payload through the bot's chrome and catalogue."""
     return sd.render_static(
@@ -183,15 +183,8 @@ def truncate_display_text(content: str, limit: int) -> str:
     return content[: limit - 1].rstrip() + "\u2026"
 
 
-async def _component_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
-    # Imported lazily to keep error handling independent from the command UI catalogue.
-    from squid.bot.errors import handle_interaction_error
-
-    await handle_interaction_error(interaction, error, surface=f"component:{source}")
-
-
-HOST_DEFAULTS = sd.MessageRootDefaults(chrome=CHROME, palette=PALETTES.resolve(), on_error=_component_error_hook)
-"""What the bot installs with: the chrome and error handling every panel shares.
+HOST_DEFAULTS = sd.MessageRootDefaults(chrome=CHROME, palette=PALETTES.resolve())
+"""What the bot installs with: the chrome and rendering palette every panel shares.
 
 Only the half that can be written down as a value. The other half -- a challenge presenter,
 which needs the session registry and the background runner -- is assembled by
@@ -219,7 +212,7 @@ def card_node(
     sections: Sequence[CardSection] = (),
     footer: ui.TextLike | None = None,
     media: Sequence[str] = (),
-) -> ui.LayoutNode[ui.ComponentsV2Target]:
+) -> ui.LayoutNode[ui.ComponentsV2Target, sd.Request]:
     """Build a semantic card that can be composed inside a component render."""
     extra_media = media[1:]
     return ui.section(
@@ -238,11 +231,13 @@ def card_node(
     )
 
 
-def text_node(content: ui.TextLike, *, accent_colour: int | None = None) -> ui.LayoutNode[ui.ComponentsV2Target]:
+def text_node(
+    content: ui.TextLike, *, accent_colour: int | None = None
+) -> ui.LayoutNode[ui.ComponentsV2Target, sd.Request]:
     """Build a truncating text response for composition inside a component render."""
     # Truncate-wrapped rather than bare: a plain paragraph lowers to Never, which *raises*
     # on an overlong message. This is the bot's most-used reply path, so it clips.
-    node: ui.LayoutNode[ui.ComponentsV2Target] = ui.truncate(ui.paragraph(content))
+    node: ui.LayoutNode[ui.ComponentsV2Target, sd.Request] = ui.truncate(ui.paragraph(content))
     if accent_colour is not None:
         node = ui.block(node, accent=accent_colour)
     return node
@@ -257,7 +252,7 @@ def _prefixed(prefix: str, value: ui.TextLike) -> ui.TextLike:
     return prefix + value
 
 
-def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target]:
+def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target, sd.Request]:
     """Build an error card for composition inside a component render."""
     return card_node(
         title,
@@ -266,7 +261,7 @@ def error_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.Layout
     )
 
 
-def info_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target]:
+def info_node(title: ui.TextLike, description: ui.TextLike | None) -> ui.LayoutNode[ui.ComponentsV2Target, sd.Request]:
     """Build an informational card for composition inside a component render."""
     return card_node(title, description, accent_colour=DISCORD_GREEN)
 
@@ -277,7 +272,7 @@ def link_node(
     *,
     description: ui.TextLike | None = None,
     label: ui.TextLike = _OPEN_LINK,
-) -> ui.LayoutNode[ui.ComponentsV2Target]:
+) -> ui.LayoutNode[ui.ComponentsV2Target, sd.Request]:
     """Build a link card for composition inside a component render."""
     return ui.section(
         ui.heading(title),

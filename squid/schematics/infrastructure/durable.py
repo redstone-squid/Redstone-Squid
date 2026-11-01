@@ -35,6 +35,7 @@ from squid.schematics.domain.models import (
 )
 from squid.schematics.domain.values import VerifiedResourcePack
 from squid.schematics.errors import (
+    AmbiguousSimulationInputError,
     InvalidSchematicError,
     SchematicSupportUnavailableError,
     SchematicTimeoutError,
@@ -249,8 +250,7 @@ class SchematicJobRunner:
         await run_all_settled([partial(self._process, job) for job in jobs])
 
     async def cleanup(self) -> None:
-        for object_key in await self._jobs.cleanup():
-            await self._artifacts.delete(object_key)
+        await self._jobs.cleanup(self._artifacts.delete)
 
     async def _process(self, job: ClaimedSchematicJob) -> None:
         token = current_schematic_job_id.set(job.id)
@@ -265,7 +265,11 @@ class SchematicJobRunner:
             inputs = await run_all([partial(self._load_input, job, key) for key in job.input_keys])
             result, output = await self._execute(job, inputs)
             if output is not None:
-                result_object_key = f"schematic-jobs/results/{job.id}"
+                # A reclaimed job can finish before its old worker. Fence the object as well
+                # as the row so a rejected completion only deletes that worker's own output.
+                result_object_key = f"schematic-jobs/results/{job.id}/{job.claim_token}"
+                if not await self._jobs.register_result_object(job, result_object_key):
+                    return
                 content_type = "image/png" if job.operation == "render" else "application/octet-stream"
                 await self._artifacts.put(result_object_key, output, content_type=content_type)
             applied = await self._jobs.complete(job, result, result_object_key)
@@ -362,6 +366,8 @@ def _classify_error(error: Exception) -> tuple[SchematicJobErrorKind, Mapping[st
     context = dict(error.context) if isinstance(error, SquidError) else {}
     if isinstance(error, SchematicTooLargeError):
         return "too_large", context, True
+    if isinstance(error, AmbiguousSimulationInputError):
+        return "ambiguous_simulation_input", wire.encode_simulation_input_error(error), True
     if isinstance(error, InvalidSchematicError):
         return "invalid", context, True
     if isinstance(error, SchematicSupportUnavailableError):
@@ -386,6 +392,14 @@ def _job_failure(
             actual=int(context.get("actual", 0)),
             limit=int(context.get("limit", 0)),
             measure=str(context.get("measure", "size")),
+        )
+    # Older workers stored this subclass under its generic base kind, but retained both
+    # coordinate fields. Recover those rows without changing ordinary invalid schematics.
+    if snapshot.error_kind == "ambiguous_simulation_input" or (
+        snapshot.error_kind == "invalid" and "input_candidates" in context and "rejected" in context
+    ):
+        return wire.decode_simulation_input_error(context).with_context(
+            context={"job_id": snapshot.id, "operation": operation}
         )
     if snapshot.error_kind == "invalid":
         return InvalidSchematicError(snapshot.last_error, context={**context, "job_id": snapshot.id})

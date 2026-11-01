@@ -5,8 +5,6 @@ path uses, so what this pins is that the generator covers every queue and that t
 predicate it emits is the one the adapters actually claim on.
 """
 
-from typing import Any
-
 from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -25,7 +23,7 @@ EXPECTED_QUEUES = {
 }
 
 
-async def _health(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, Row[Any]]:
+async def _health(session_factory: async_sessionmaker[AsyncSession]) -> dict[str, Row[str, int, int, int, int]]:
     async with session_factory() as session:
         return {row.queue: row for row in (await session.execute(QUEUE_HEALTH_STATEMENT)).all()}
 

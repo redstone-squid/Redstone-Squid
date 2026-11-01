@@ -10,7 +10,9 @@ import squid_ui_discord as sd
 ## Installing a runtime
 
 One runtime per Discord client. `install()` starts no background work; supervise
-`runtime.run()` yourself if you use scheduled refreshes or challenge flows.
+`runtime.run()` before opening panels and close the runtime during shutdown.
+
+::: squid_ui_discord.Config
 
 ::: squid_ui_discord.install
 
@@ -21,16 +23,26 @@ One runtime per Discord client. `install()` starts no background work; supervise
 ## Entry points
 
 `DiscordUIRuntime` owns process resources. Its exact-identity owner scopes provide delivery, while
-`DiscordRequest` normalizes one event and its acknowledgement state. `Screen` declares reusable
-opening policy and is always presented through an owner scope.
+`Request` normalizes one event and its acknowledgement state. Command decorators inject it;
+`sd.request(source)` infers native command and component ownership. Listeners without a command
+binding use `self.ui.request(source)`, sharing the same request through the cog's scope. Missing
+or closed expected scopes raise. `Screen` declares reusable opening policy.
 
 ::: squid_ui_discord.Screen
 
-::: squid_ui_discord.DiscordUI
+::: squid_ui_discord.UserSessionScreen
 
-::: squid_ui_discord.DiscordRequest
+::: squid_ui_discord.UserGuildSessionScreen
 
-::: squid_ui_discord.DiscordAction
+::: squid_ui_discord.SharedGuildSessionScreen
+
+::: squid_ui_discord.Scope
+
+::: squid_ui_discord.Request
+
+::: squid_ui_discord.request
+
+::: squid_ui_discord.Response
 
 ::: squid_ui_discord.ResponseSpec
 
@@ -42,23 +54,36 @@ opening policy and is always presented through an owner scope.
 
 ::: squid_ui_discord.StackNavigator
 
-## Optional discord.py integration
+::: squid_ui_discord.open_devtools
 
-`squid_ui_discord.ext` composes owner request injection and cog lifecycle with ordinary discord.py
-decorators. Its testing stage exercises facade presentation, access, sessions, dispatch, generated
-forms, and serialized payload limits without connecting a gateway.
+::: squid_ui_discord.DevToolsSection
 
-::: squid_ui_discord.ext.Cog
+## Commands and testing
 
-::: squid_ui_discord.ext.command
+`sd.command` and `sd.hybrid_command` return native discord.py commands whose handlers receive
+a `Request`. `sd.Group` and `sd.hybrid_group` add inherited command policy; `sd.Cog` owns their
+scope and context menus. `sd.testing.stage` exercises presentation, access, sessions, dispatch,
+generated forms, and serialized payload limits without connecting a gateway.
 
-::: squid_ui_discord.ext.context_menu
+::: squid_ui_discord.Cog
 
-::: squid_ui_discord.ext.autocomplete
+::: squid_ui_discord.command
 
-::: squid_ui_discord.ext.testing.stage
+::: squid_ui_discord.hybrid_command
 
-::: squid_ui_discord.ext.testing.invoke
+::: squid_ui_discord.prefix_command
+
+::: squid_ui_discord.Group
+
+::: squid_ui_discord.hybrid_group
+
+::: squid_ui_discord.context_menu
+
+::: squid_ui_discord.autocomplete
+
+::: squid_ui_discord.testing.stage
+
+::: squid_ui_discord.testing.invoke
 
 ## Access policies
 
@@ -77,7 +102,7 @@ Every message root names who may use it.
 ## Message roots
 
 A `MessageRoot` owns one live Discord message for its whole life. Most hosts construct them
-through `DiscordUI.respond` or a session spec rather than directly.
+through `Request.respond` or a session spec rather than directly.
 
 ::: squid_ui_discord.MessageRoot
 
@@ -92,8 +117,6 @@ through `DiscordUI.respond` or a session spec rather than directly.
 ::: squid_ui_discord.SessionOptions
 
 ::: squid_ui_discord.SessionOptionsResolver
-
-::: squid_ui_discord.MessageRootFactory
 
 ::: squid_ui_discord.owner_message_root
 
@@ -174,27 +197,15 @@ Static rendering without a mount, and the payload/destination vocabulary for del
 
 ::: squid_ui_discord.deliver_to
 
-::: squid_ui_discord.responder
+## Error policy
 
-::: squid_ui_discord.native
+Configure command and component failure rendering and observation through `Config.errors`.
 
-## Managed results
-
-Deliver an operation's outcome with consistent success and error presentation.
-
-::: squid_ui_discord.run_managed_result
-
-::: squid_ui_discord.ManagedError
-
-::: squid_ui_discord.ManagedDelivery
-
-::: squid_ui_discord.SuccessRenderer
+::: squid_ui_discord.ErrorPolicy
 
 ::: squid_ui_discord.ErrorRenderer
 
 ::: squid_ui_discord.ErrorObserver
-
-::: squid_ui_discord.Work
 
 ::: squid_ui_discord.ResourceCost
 
@@ -246,7 +257,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 
 ::: squid_ui_discord.conform
 
-::: squid_ui_discord.EMPTY_RESERVATION
+::: squid_ui_discord.EMPTY_COST
 
 ::: squid_ui_discord.button_grid
 
@@ -263,6 +274,7 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui_discord.adapter` | The verified discord.py adapter profile and boundary checks. |
 | `squid_ui_discord.challenges` | Showing a guard's challenge, and running the approved press. |
 | `squid_ui_discord.classic` | Composing classic Discord messages. |
+| `squid_ui_discord.v2` | Exact Components V2 layout factories. |
 | `squid_ui_discord.classic_renderer` | Mechanical drawing of resolved classic messages. |
 | `squid_ui_discord.conformance` | Boundary gate that keeps built views inside Discord's limits. |
 | `squid_ui_discord.delivery` | Send/edit mechanics for rendered Discord messages. |
@@ -292,3 +304,14 @@ Contribute Squid regions to a view somebody else owns, or validate one.
 | `squid_ui_discord.target` | Discord target conveniences bound to the shipped adapter. |
 | `squid_ui_discord.targets` | The registry that resolves a durable snapshot's target. |
 | `squid_ui_discord.testing` | Doubles and payload assertions with no Discord attached. |
+
+## Event contexts
+
+`sd.PressEvent`, `sd.SelectionEvent`, `sd.EntitySelectionEvent`, `sd.SubmitEvent`, and
+`sd.InvalidSubmitEvent` specialize the corresponding portable event with `sd.Request`.
+Semantic aliases include `sd.ChoiceEvent`, `sd.EntityEvent`, `sd.ToggleEvent`,
+`sd.NavigateEvent`, `sd.ScaleEvent`, and `sd.OpenEvent[ValueT]`.
+
+Use `event.context` for that invocation's request and `event.metadata` for dispatch metadata.
+`sd.on_press` and the matching `sd.on_*` registration functions supply implementations to
+`sl.handlers`; plain callbacks remain the normal single-frontend authoring path.

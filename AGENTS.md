@@ -1,79 +1,55 @@
-## Project: Redstone Squid Discord Bot
+# Redstone Squid
 
-This is a Discord bot for managing Minecraft redstone build submissions, built with Python 3.14+ and discord.py. The bot manages a database of records, handles voting on submissions, and provides automated moderation features.
+Discord bot for Minecraft redstone build submissions, records, voting, and moderation.
+Uses Python 3.14+ and discord.py.
 
-### Code Style
-- **Formatting**: 120-character lines and Python 3.14 target
-- **Documentation**: Google-style docstrings with type information
-- **Type Safety**: Full type hints. **Pyrefly is the type checker for local development** — run it
-  with `just typecheck` (`uv run --locked pyrefly check --config pyproject.toml`); it is also a
-  pre-push hook in `prek.toml`. BasedPyright still runs in CI at `--level=warning` and is not
-  installed locally, so `# pyright: ignore[...]` comments already in the tree stay meaningful; write
-  new suppressions as `# type: ignore` or `# pyrefly: ignore` unless the finding is BasedPyright's
-  alone. Use your best judgement for when to suppress and when to fix the typing issue.
-- **Don't use Python 3.8 typings**: Never import `List`, `Tuple` or other deprecated classes from `typing`, use `list`, `tuple` etc. instead, or import from `collections.abc`
-- Do not `from __future__ import annotations` and do not quote forward references in type hints — Python 3.14 defers annotation evaluation by default (PEP 649/749), so plain unquoted names work everywhere.
-- Add code comments sparingly. Focus on why something is done, especially for complex logic. For unintuitive code, explain until it is clear.
-- **Lifetime in docstrings**: a type that defines a terminating verb (`close`, `detach`,
-  `finish`, `cancel`, `discard`, `run`) or hands out expiring authority states what ends it,
-  in one clause, in its first paragraph. Everything else states nothing — a frozen value has
-  no lifetime to describe. The trigger is a method the class defines, not how it is spelled.
-  See `docs/squid-ui-architecture.md` for the verb table and the naming rules
-  `tests/architecture/test_naming.py` enforces.
+## Code style
 
-### Concurrency
-- **Task lifetime and cancellation go through anyio** — `anyio.create_task_group()`,
-  `CancelScope`, `fail_after`/`move_on_after`. Every task must have an owner; do not reach for
-  a bare `asyncio.create_task`. Process background work belongs to `BackgroundTaskSupervisor`
+- Use 120-character lines and full type hints.
+- Use built-in generics (`list`, `tuple`, etc.) and `collections.abc`, not deprecated `typing` aliases.
+- Do not use `from __future__ import annotations` or quote forward references in annotations.
+  Python 3.14 defers annotation evaluation by default.
+- Keep docstrings plain and concise, with Google-style sections where useful. Explain behavior and
+  edge cases callers need to know. Use comments to explain non-obvious decisions.
+- Pyrefly is the local type checker; BasedPyright also runs in CI. Keep existing `# pyright: ignore[...]`
+  comments. Use `# type: ignore` or `# pyrefly: ignore` for new suppressions unless specific to BasedPyright.
+
+## Concurrency
+
+- Use anyio task groups and cancellation scopes for task lifetime, cancellation, and timeouts.
+  Do not use bare `asyncio.create_task`. Process background work belongs to `BackgroundTaskSupervisor`
   in `squid/runtime.py`.
-- **Everything else stays on asyncio.** `asyncio.Lock`, `Event`, `Queue` and `to_thread`
-  interoperate fine under anyio's asyncio backend, and swapping them buys nothing.
-- **Trio is not an option and anyio must stay on the asyncio backend.** discord.py, asyncpg,
-  SQLAlchemy's greenlet bridge, redis.asyncio, aiohttp and uvloop are all asyncio-only.
-- Tests stay on pytest-asyncio with `asyncio_mode = "auto"`. anyio code runs correctly under a
-  pytest-asyncio loop, so do not add `anyio_backend` fixtures or `@pytest.mark.anyio`.
-- Prefer a task group over `asyncio.gather`. Reach for `gather(..., return_exceptions=True)`
-  only when every branch must settle regardless of failure, and say why in a comment.
+- Keep anyio on the asyncio backend; our dependencies do not support Trio. Continue using
+  `asyncio.Lock`, `Event`, `Queue`, and `to_thread`.
+- Use pytest-asyncio with `asyncio_mode = "auto"`, without `anyio_backend` fixtures or `@pytest.mark.anyio`.
+- Prefer task groups over `asyncio.gather`. Use `gather(..., return_exceptions=True)` only when every
+  branch must settle regardless of failure, and explain why in a comment.
 
-### Git Workflow
-- Always commit changes unless the user explicitly asks not to. Commit early and at each coherent milestone;
-  keep every commit small, cohesive, independently valid, and easy to review.
-- Write commit messages in Mitchell Hashimoto's style: use a concise, imperative, component-scoped subject
-  (for example, `builds: parse tick units in time strings`), then add a wrapped body for non-trivial changes
-  that explains the problem and its impact before describing the solution. Include relevant testing, tradeoffs,
-  or follow-up context when useful.
+## Git
 
-### Validation Workflow
-- During development, run the smallest test set that directly covers the changed behavior. Use
-  `--no-cov` for these iterative runs when coverage reporting is enabled by default.
-- After the final edit, run the focused tests once more together with cheap relevant checks such
-  as `alembic heads` and `git diff --check`.
-- Run formatting and linting only over changed files or affected packages. If verified commit hooks
-  already enforce formatting or linting, let the hooks perform those checks; do not assume hooks
-  exist without confirming it.
-- Type-check with `just typecheck`. Pyrefly is configured project-wide in `[tool.pyrefly]`, so it
-  has no changed-file mode: run it once and read the whole result. The tree carries no baseline and
-  reports zero errors, so **any error it prints is yours** — there is no pre-change run to diff
-  against. Do not reintroduce a baseline file to absorb new errors; fix or suppress them at the
-  line, with a reason.
-- `[tool.pyrefly] search-path` must list every `[tool.uv.workspace]` member's `src` directory. uv
-  installs the workspace packages as editable `.pth` files pointing at those directories, which puts
-  them on Pyrefly's site-package path where they count as third-party and are skipped entirely.
-  Dropping an entry silently stops that package from being type-checked at all, with no error.
-- Defer the full test suite to CI unless the change affects central behavior with a broad or
-  uncertain blast radius, CI is unavailable, or the user explicitly requests a full local run.
-- Do not rerun an unchanged check after it has passed unless a subsequent edit could affect its
-  result.
+- Commit changes unless the user asks otherwise. Make small, independently valid commits as work progresses.
+- Use concise, imperative, component-scoped subjects, e.g. `builds: parse tick units in time strings`.
+  For non-trivial changes, add a wrapped body explaining the problem, solution, and relevant testing or tradeoffs.
+- There is generally no need to mention how many tests you ran in the commit message.
 
-### Upstream Reporting
-- **Report any nucleation bug or docs mismatch upstream** at
-  [Schem-at/Nucleation](https://github.com/Schem-at/Nucleation/issues), as well as working around
-  it here. The maintainer is responsive and has fixed every report so far, so a workaround left
-  unreported upstream is a workaround we keep forever.
-- Check the current upstream docs before filing — several early findings were doc bugs that have
-  since been corrected, and re-reporting a fixed one wastes everyone's time.
-- Include the exact version, a self-contained reproducer that runs against a clean install, and
-  what the wrong behaviour actually cost us. Findings from integration tests are worth more than
-  findings from reading, so say which it was.
-- Record the issue number in the workaround's code comment or in `docs/plans/`, so the workaround
-  can be removed when the fix lands.
+## Validation
+
+- Run focused tests during development with `--no-cov`, then again after the final edit.
+  Run `git diff --check` and other relevant checks, such as `alembic heads` for migration changes.
+- Format and lint changed files or affected packages. Let installed commit hooks handle checks they cover;
+  confirm the hooks are installed before relying on them.
+- Run `just typecheck` once for the whole project (`uv run --locked pyrefly check --config pyproject.toml`).
+  It also runs on pre-push. Resolve every error; use a justified inline suppression when needed, never a baseline file.
+- Keep every workspace member's `src` directory in `[tool.pyrefly] search-path`. Without it, Pyrefly treats
+  the editable package as third-party and silently skips checking it.
+- Leave the full test suite to CI unless the change has broad or uncertain impact, CI is unavailable,
+  or the user requests a local run.
+- Rerun passed checks only when later edits could affect their results.
+
+## Nucleation issues
+
+- Report bugs and documentation mismatches to [Schem-at/Nucleation](https://github.com/Schem-at/Nucleation/issues)
+  as well as working around them here. Check current upstream docs before filing.
+- Include the exact version, a self-contained reproducer for a clean install, and the impact on this project.
+  Say whether the finding came from integration tests or code inspection.
+- Record the issue number in the workaround's comment or in `docs/plans/` so we can remove it when fixed.

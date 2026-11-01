@@ -7,6 +7,7 @@ failure. All three are mount behaviour, and none of them exists until a message 
 """
 
 from dataclasses import dataclass
+from typing import override
 
 import discord
 import pytest
@@ -46,7 +47,7 @@ class ScoreSource:
         self.capabilities = capabilities
         self.requests: list[Position] = []
 
-    async def fetch(self, position: Position, extent: int) -> Window[tuple[str, int]]:
+    async def fetch(self, position: Position, extent: int) -> Window[sp.RankedEntry | tuple[str, int]]:
         self.requests.append(position)
         keys = tuple(label for label, _score in self.entries)
         if position.anchor in keys:
@@ -76,7 +77,8 @@ class FlakyScoreSource(ScoreSource):
         super().__init__(entries, capabilities=capabilities)
         self.fail_next = False
 
-    async def fetch(self, position: Position, extent: int) -> Window[tuple[str, int]]:
+    @override
+    async def fetch(self, position: Position, extent: int) -> Window[sp.RankedEntry | tuple[str, int]]:
         if self.fail_next:
             self.fail_next = False
             raise RuntimeError("source unavailable")

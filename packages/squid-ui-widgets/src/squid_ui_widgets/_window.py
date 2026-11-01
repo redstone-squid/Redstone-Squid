@@ -3,10 +3,10 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from squid_reactivity.resources import Failed, Pending, ResourceStatus
 from squid_ui.chrome import Chrome
 from squid_ui.errors import LayoutInvariantError
 from squid_ui.planning.navigation import NavigationState
-from squid_ui.runtime.resources import Failed, Pending, ResourceStatus
 from squid_ui.sources import CountPrecision, LoadedWindow, Position, SourceCapabilities, WindowLoader
 from squid_ui.text import TextLike
 

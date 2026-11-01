@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, override
 
 import anyio
 
@@ -19,7 +19,6 @@ from squid.accounts.domain import (
 )
 from squid.bot.ui import CardField, text_node, tr
 from squid.bot.utils.sentinel import Sentinel
-from squid_ui_discord.sessions import AdmissionSpec, Reject
 
 
 class NotAskedType(Enum):
@@ -29,7 +28,7 @@ class NotAskedType(Enum):
 NOT_ASKED = NotAskedType.NOT_ASKED
 """The question was never put to the user, and they have already been told why."""
 
-type ConsentContinuation = Callable[[sl.PressEvent, AccountConsent | None], Awaitable[None]]
+type ConsentContinuation = Callable[[sd.PressEvent, AccountConsent | None], Awaitable[None]]
 """What to do once the reader has answered, run by the prompt's own press.
 
 The awaiting form is only safe where the caller owns the wait. Inside a mounted action
@@ -46,23 +45,21 @@ CONSENT_PROMPT_TIMEOUT_SECONDS = 120.0
 class _Answer:
     """What the reader said, held off the component on purpose.
 
-    Nothing renders it, and it has to outlive the press that writes it: the answering handler
-    runs in a transaction, so a declared cell would only be staged -- invisible to a waiter in
-    another task, and dropped by the teardown `finish` performs a line later. Writing through
-    an object the component merely holds is what keeps it off `Component.__setattr__`, which
-    is where an undeclared write raises.
+    Nothing renders it. A waiter in another task needs the answer as soon as the handler
+    signals it, before the action transaction commits. Holding it in an ordinary object
+    makes that handoff independent of transactional render state.
     """
 
     consent: AccountConsent | None = None
 
 
-class ConsentPrompt(sd.Screen):
+class ConsentPrompt(sd.UserSessionScreen):
     """A semantic consent prompt with a native-free waiting lifecycle."""
 
     session = sd.SessionSpec(
         "consent",
-        admission=AdmissionSpec(
-            collision=Reject(notice=tr(t"You already have a consent prompt open. Please answer that one."))
+        admission=sd.AdmissionSpec(
+            collision=sd.Reject(notice=tr(t"You already have a consent prompt open. Please answer that one."))
         ),
     )
     timeout = CONSENT_PROMPT_TIMEOUT_SECONDS
@@ -98,7 +95,8 @@ class ConsentPrompt(sd.Screen):
     def notice_version(self) -> str:
         return CURRENT_CONSENT_VERSION
 
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         card_fields = tuple(sl.field(field.name, field.value) for field in self._fields)
         return (
             sl.section(
@@ -119,26 +117,26 @@ class ConsentPrompt(sd.Screen):
             ),
         )
 
-    async def _accept(self, event: sl.PressEvent) -> None:
+    async def _accept(self, event: sd.PressEvent) -> None:
         await self._finish(event, AccountConsent.grant_current())
 
-    async def _cancel(self, event: sl.PressEvent) -> None:
+    async def _cancel(self, event: sd.PressEvent) -> None:
         await self._finish(event, None)
 
-    async def _privacy(self, event: sl.PressEvent) -> None:
+    async def _privacy(self, event: sd.PressEvent) -> None:
         await event.notice(tr(PRIVACY_NOTICE))
 
-    async def _finish(self, event: sl.PressEvent, consent: AccountConsent | None) -> None:
+    async def _finish(self, event: sd.PressEvent, consent: AccountConsent | None) -> None:
         self._answer.consent = consent
         self.closed = True
         self._done.set()
-        # The continuation runs last, so nothing in this handler can fail after it and roll
-        # back what it wrote. Closing first also answers the click inside its own deadline,
-        # whatever the continuation then goes on to do.
-        await event.finish()
+        # Request closure as part of this action. The dispatcher closes the prompt
+        # after the continuation succeeds and the action commits.
+        event.finish_on_success()
         if self._on_answer is not None:
             await self._on_answer(event, consent)
 
+    @override
     def on_unmount(self) -> None:
         self._done.set()
 
@@ -315,12 +313,12 @@ async def request_consent(
     return component is not None
 
 
-type ConsentedAccountWork = Callable[[sl.ActionEvent, int], Awaitable[None]]
+type ConsentedAccountWork = Callable[[sd.ActionEvent, int], Awaitable[None]]
 """Work needing a consented account id, run against whichever press is live when it runs."""
 
 
 async def with_consented_account(
-    event: sl.ActionEvent,
+    event: sd.ActionEvent,
     accounts: AccountService,
     work: ConsentedAccountWork,
     *,
@@ -338,7 +336,7 @@ async def with_consented_account(
     through its own handle: the prompt's interaction addresses the prompt's message, and
     flushing the panel through it would draw the panel into the dialog.
     """
-    request = await sd.request(event)
+    request = event.context
     user = request.user
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
@@ -347,7 +345,7 @@ async def with_consented_account(
     message_root = request.root
     assert message_root is not None, "a press always arrives from a mounted message"
 
-    async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+    async def answered(prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
         if consent is None:
             return
         granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)

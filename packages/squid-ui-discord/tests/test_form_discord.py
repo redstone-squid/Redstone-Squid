@@ -1,19 +1,18 @@
 """Discord form presentation, submission funnel, and validation retry."""
 
-from typing import cast
+from typing import cast, override
 from unittest.mock import AsyncMock, Mock
 
 import discord
 import pytest
 
 import squid_ui as sl
-from squid_ui.entity import EntityKind, EntityRef
+from squid_ui.entity import EntityKind, EntityRef, EntityType
 from squid_ui.forms import FormText
 from squid_ui_discord import Everyone, MessageRoot
 from squid_ui_discord.modal import (
     CheckboxGroupField,
     EntityField,
-    EntityType,
     FileField,
     _entity_defaults,
     build_form_modal,
@@ -241,6 +240,7 @@ class DurationPanel(sl.Component[sl.ComponentsV2Target]):
             validation=validation,
         )
 
+    @override
     def render(self) -> sl.LayoutNode:
         return sl.form("Duration", self.spec, key="duration", on_submit=self.submitted)
 
@@ -284,6 +284,33 @@ async def test_invalid_submission_preserves_input_for_framework_retry() -> None:
     await retry.callback(retry_interaction)
     retried = retry_interaction.response.send_modal.await_args.args[0]
     assert _text_input(retried).default == "eventually"
+
+
+async def test_shared_error_displays_both_labels_and_message_once() -> None:
+    start = sl.forms.TextField(key="start", label="Start")
+    end = sl.forms.TextField(key="end", label="End")
+    panel = DurationPanel()
+    panel.spec = sl.forms.FormSpec(
+        "Range",
+        (start, end),
+        validator=lambda values: (sl.forms.FieldError(start, end, message="Invalid range"),),
+    )
+    message_root = MessageRoot(panel, access=Everyone(), timeout=None)
+    commit_render(message_root)
+    modal = await _open_form(panel, message_root)
+    for item in modal.walk_children():
+        if isinstance(item, discord.ui.TextInput):
+            item._value = "value"  # pyrefly: ignore[missing-attribute]
+
+    submission = interaction_harness()
+    await modal.on_submit(submission)
+
+    retry_view = submission.response.send_message.await_args.kwargs["view"]
+    text = "\n".join(item.content for item in retry_view.walk_children() if isinstance(item, discord.ui.TextDisplay))
+    assert text.count("Invalid range") == 1
+    assert "Start, End" in text
+    retry = next(item for item in retry_view.walk_children() if isinstance(item, discord.ui.Button))
+    assert retry.label == "Try again"
 
 
 async def test_valid_submission_dispatches_typed_event_and_commits_the_runtime() -> None:
@@ -344,7 +371,10 @@ async def test_accept_and_mark_delivers_parse_errors_to_the_handler() -> None:
     await modal.on_submit(interaction_harness())
 
     assert len(panel.events) == 1
-    assert panel.events[0].errors == (sl.forms.FieldError("duration", "Enter a duration such as 30m, 12h, or 7d."),)
+    (error,) = panel.events[0].errors
+    assert isinstance(error, sl.forms.FieldError)
+    assert tuple(field.key for field in error.fields) == ("duration",)
+    assert error.message == "Enter a duration such as 30m, 12h, or 7d."
 
 
 def test_scale_field_renders_a_radio_group_within_the_radio_span() -> None:
@@ -401,3 +431,60 @@ def test_mentionable_entity_prefill_drops_bare_ids_it_cannot_type() -> None:
     defaults = _entity_defaults([5, EntityRef(kind=EntityKind.ROLE, id=6)], EntityType.MENTIONABLE)
 
     assert [(value.id, value.type) for value in defaults] == [(6, discord.SelectDefaultValueType.role)]
+
+
+@pytest.mark.parametrize("custom_invalid", [False, True])
+async def test_descriptor_form_hooks_keep_invalid_attempts_out_of_on_submit(custom_invalid: bool) -> None:
+    submitted: list[tuple[int, str | None]] = []
+    invalid: list[sl.InvalidSubmitEvent] = []
+
+    class DurationForm(sl.forms.Form):
+        duration = sl.forms.IntField()
+        note = sl.forms.TextField(required=False)
+
+        @override
+        async def on_submit(self, event: sl.SubmitEvent) -> None:
+            submitted.append((self.duration, self.note))
+
+    class CustomForm(DurationForm):
+        @override
+        async def on_invalid(self, event: sl.InvalidSubmitEvent) -> None:
+            invalid.append(event)
+            with pytest.raises(sl.forms.FieldNotReadyError):
+                _ = self.duration
+            assert self.note is None
+            await event.retry()
+
+    form = CustomForm(duration="initial") if custom_invalid else DurationForm(duration="initial")
+
+    class Panel(sl.Component[sl.ComponentsV2Target]):
+        @override
+        def render(self) -> sl.LayoutNode:
+            return sl.form("Duration", form, key="duration")
+
+    root = MessageRoot(Panel(), access=Everyone(), timeout=None)
+    commit_render(root)
+    opening = interaction_harness()
+    await root.dispatch("duration", opening)
+    modal = opening.response.send_modal.await_args.args[0]
+    inputs = [item for item in modal.walk_children() if isinstance(item, discord.ui.TextInput)]
+    inputs[0]._value = "bad"  # pyrefly: ignore[missing-attribute]
+    inputs[1]._value = ""  # pyrefly: ignore[missing-attribute]
+    attempt = interaction_harness()
+    await modal.on_submit(attempt)
+    assert submitted == []
+    if custom_invalid:
+        assert len(invalid) == 1
+        assert invalid[0].attempted == {"duration": "bad", "note": ""}
+        assert invalid[0].values == {"note": None}
+    view = attempt.response.send_message.await_args.kwargs["view"]
+    retry = next(item for item in view.walk_children() if isinstance(item, discord.ui.Button))
+    opening = interaction_harness()
+    await retry.callback(opening)
+    modal = opening.response.send_modal.await_args.args[0]
+    inputs = [item for item in modal.walk_children() if isinstance(item, discord.ui.TextInput)]
+    assert inputs[0].default == "bad"
+    inputs[0]._value = "42"  # pyrefly: ignore[missing-attribute]
+    inputs[1]._value = ""  # pyrefly: ignore[missing-attribute]
+    await modal.on_submit(interaction_harness())
+    assert submitted == [(42, None)]

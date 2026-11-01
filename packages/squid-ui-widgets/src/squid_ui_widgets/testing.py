@@ -37,14 +37,14 @@ from squid_ui_widgets.drivers import (
 
 
 @dataclass
-class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget]:
+class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """One machine's component shell, rendered and driven through its own semantic tree.
 
     `nodes` re-renders on every read, so a test reads the tree after a press the way a frontend
     would rather than holding a stale one.
     """
 
-    driver: ComponentDriver[StateT, RenderTargetT]
+    driver: ComponentDriver[StateT, RenderTargetT, ContextT]
     responder: engine.RecordingResponder
 
     @property
@@ -97,34 +97,34 @@ class MachineHarness[StateT, RenderTargetT: RenderTarget = RenderTarget]:
 
 
 @overload
-def mounted[StateT, RenderTargetT: RenderTarget](
-    machine: StateMachine[StateT, RenderTargetT],
+def mounted[StateT, RenderTargetT: RenderTarget, ContextT = object](
+    machine: StateMachine[StateT, RenderTargetT, ContextT],
     *,
     on_change: TransitionHandler[StateT] | None = None,
     handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
     finish_actions: Collection[str] = (),
-) -> MachineHarness[StateT, RenderTargetT]: ...
+) -> MachineHarness[StateT, RenderTargetT, ContextT]: ...
 
 
 @overload
-def mounted[StateT, RenderTargetT: RenderTarget](
-    machine: StateMachine[StateT, RenderTargetT],
+def mounted[StateT, RenderTargetT: RenderTarget, ContextT = object](
+    machine: StateMachine[StateT, RenderTargetT, ContextT],
     *,
     initial: StateT,
     on_change: TransitionHandler[StateT] | None = None,
     handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
     finish_actions: Collection[str] = (),
-) -> MachineHarness[StateT, RenderTargetT]: ...
+) -> MachineHarness[StateT, RenderTargetT, ContextT]: ...
 
 
-def mounted[StateT, RenderTargetT: RenderTarget](
-    machine: StateMachine[StateT, RenderTargetT],
+def mounted[StateT, RenderTargetT: RenderTarget, ContextT = object](
+    machine: StateMachine[StateT, RenderTargetT, ContextT],
     *,
     initial: StateT | _MissingInitialState = _MISSING_INITIAL_STATE,
     on_change: TransitionHandler[StateT] | None = None,
     handlers: Mapping[str, TransitionHandler[StateT]] | None = None,
     finish_actions: Collection[str] = (),
-) -> MachineHarness[StateT, RenderTargetT]:
+) -> MachineHarness[StateT, RenderTargetT, ContextT]:
     """A `machine` in a bare component shell, ready to be driven by key.
 
     Builds the driver directly, so a machine's *own* wiring is not applied -- `Menu` finishes
@@ -132,7 +132,7 @@ def mounted[StateT, RenderTargetT: RenderTarget](
     `build_component`. A test about any of it wants `driving(machine.build_component(...))`.
     """
     if isinstance(initial, _MissingInitialState):
-        driver: ComponentDriver[StateT, RenderTargetT] = ComponentDriver(
+        driver: ComponentDriver[StateT, RenderTargetT, ContextT] = ComponentDriver(
             machine,
             on_change=on_change,
             handlers=handlers,
@@ -149,9 +149,9 @@ def mounted[StateT, RenderTargetT: RenderTarget](
     return MachineHarness(driver, engine.RecordingResponder())
 
 
-def driving[StateT, RenderTargetT: RenderTarget](
-    driver: ComponentDriver[StateT, RenderTargetT],
-) -> MachineHarness[StateT, RenderTargetT]:
+def driving[StateT, RenderTargetT: RenderTarget, ContextT = object](
+    driver: ComponentDriver[StateT, RenderTargetT, ContextT],
+) -> MachineHarness[StateT, RenderTargetT, ContextT]:
     """A harness around a component a machine built for itself.
 
     `mounted` constructs the driver directly, which cannot reach a machine's own builder
@@ -162,10 +162,10 @@ def driving[StateT, RenderTargetT: RenderTarget](
 
 
 @dataclass(frozen=True, slots=True)
-class RoutedRender[StateT, RenderTargetT: RenderTarget = RenderTarget]:
+class RoutedRender[StateT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """One stateless render and every route it asked the host to encode."""
 
-    nodes: tuple[LayoutNode[RenderTargetT], ...]
+    nodes: tuple[LayoutNode[RenderTargetT, ContextT], ...]
     routes: tuple[TransitionRoute[StateT], ...]
 
     def texts(self) -> list[str]:
@@ -202,42 +202,42 @@ class _RouteRecorder[StateT]:
 
 
 @overload
-def routed[StateT, RenderTargetT: RenderTarget](
-    machine: StateMachine[StateT, RenderTargetT],
+def routed[StateT, RenderTargetT: RenderTarget, ContextT = object](
+    machine: StateMachine[StateT, RenderTargetT, ContextT],
     *,
     chrome: Chrome = DEFAULT_CHROME,
-) -> RoutedRender[StateT, RenderTargetT]: ...
+) -> RoutedRender[StateT, RenderTargetT, ContextT]: ...
 
 
 @overload
-def routed[StateT, RenderTargetT: RenderTarget](
-    machine: StateMachine[StateT, RenderTargetT],
+def routed[StateT, RenderTargetT: RenderTarget, ContextT = object](
+    machine: StateMachine[StateT, RenderTargetT, ContextT],
     state: StateT,
     *,
     chrome: Chrome = DEFAULT_CHROME,
-) -> RoutedRender[StateT, RenderTargetT]: ...
+) -> RoutedRender[StateT, RenderTargetT, ContextT]: ...
 
 
-def routed[StateT, RenderTargetT: RenderTarget](
-    machine: StateMachine[StateT, RenderTargetT],
+def routed[StateT, RenderTargetT: RenderTarget, ContextT = object](
+    machine: StateMachine[StateT, RenderTargetT, ContextT],
     state: StateT | _MissingInitialState = _MISSING_INITIAL_STATE,
     *,
     chrome: Chrome = DEFAULT_CHROME,
-) -> RoutedRender[StateT, RenderTargetT]:
+) -> RoutedRender[StateT, RenderTargetT, ContextT]:
     """Render `machine` in its stateless shell and report the routes it asked for.
 
     The encoder is supplied rather than taken, because what a test wants to see is *which*
     routes a render requested and in what order -- not what a particular host spells them.
     """
     recorder: _RouteRecorder[StateT] = _RouteRecorder()
-    driver: RouteDriver[StateT, RenderTargetT] = RouteDriver(recorder, chrome)
+    driver: RouteDriver[StateT, RenderTargetT, ContextT] = RouteDriver(recorder, chrome)
     result = driver.render(machine, machine.initial_state if isinstance(state, _MissingInitialState) else state)
     return RoutedRender(_as_nodes(result), tuple(recorder.routes))
 
 
-def _as_nodes[RenderTargetT: RenderTarget](
-    result: DocumentLike[RenderTargetT],
-) -> tuple[LayoutNode[RenderTargetT], ...]:
+def _as_nodes[RenderTargetT: RenderTarget, ContextT = object](
+    result: DocumentLike[RenderTargetT, ContextT],
+) -> tuple[LayoutNode[RenderTargetT, ContextT], ...]:
     """A `DocumentLike` is one node, a sequence of them, or a document; queries want a tuple."""
     return as_document(result).children
 

@@ -55,7 +55,7 @@ def own_profile_fields(profile: AccountProfile) -> list[CardField]:
 
     The linked accounts are not here, unlike in the public view: the panel that renders this lists
     them one field each, because it also has to say whether each is published and offer the
-    controls for it (docs/plans/command-redesign/07-account.md).
+    controls for it (docs/plans/completed/command-redesign/07-account.md).
     """
     fields: list[CardField] = []
     if profile.pronouns:

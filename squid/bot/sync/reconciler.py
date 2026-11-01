@@ -52,7 +52,8 @@ class ReconciliationCog[BotT: "squid.bot.app.RedstoneSquid"](Cog):
         try:
             # The same reconciler the bot exposes for latency nudges, so a command and
             # this job cannot render a resource two different ways.
-            await self.bot.post_reconciler.reconcile(job.resource_kind.post_kind, job.source_key, job.generation)
+            if job.resource_kind.post_kind != "submission_draft":
+                await self.bot.post_reconciler.reconcile(job.resource_kind.post_kind, job.source_key, job.generation)
         except Exception as error:
             dead_lettered = await self.bot.services.discord_reconciliation.fail(job, error)
             if dead_lettered:

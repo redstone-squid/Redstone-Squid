@@ -52,13 +52,23 @@ class _DiscordItemExtension:
 
 DISCORD_PY_BEHAVIOR_CAPABILITIES = frozenset(AdapterCapability)
 
-DISCORD_PY_27_ADAPTER = AdapterProfile(
+DISCORD_PY_27_ADAPTER: AdapterProfile[DiscordPyAdapter] = AdapterProfile(
     DiscordPy27Adapter,
     "discord.py",
     ">=2.7,<2.8",
     DISCORD_PY_BEHAVIOR_CAPABILITIES,
     {DISCORD_ITEM.name: _DiscordItemExtension()},
+    frontend="discord",
 )
+"""Declared at the family, not at `DiscordPy27Adapter`, which is what `family` still records.
+
+Every `adapter=` parameter in this package is typed `AdapterProfile[DiscordPyAdapter]`, and a
+frozen dataclass field is only read, so the narrower inference should have been usable there.
+BasedPyright infers variance from `family: type[AdapterT]` as if it were writable and calls the
+parameter invariant, which made this value unusable as the default it exists to be. Widening the
+declaration says the same thing the version expression already says, and loses nothing: no caller
+reads `family` off this constant.
+"""
 
 
 @cache
@@ -87,6 +97,7 @@ def discord_py_adapter_profile(
         version_expression,
         capabilities,
         {} if extensions is None else extensions,
+        frontend="discord",
     )
 
 
@@ -116,7 +127,13 @@ def require_discord_py_target(
 ) -> AdapterProfile[DiscordPyAdapter]:
     """Extract and verify the discord.py profile bound to a target."""
     profile = target.adapter
-    if profile is None or not issubclass(profile.family, DiscordPyAdapter):
+    if (
+        # Dead to the checker, because `Target.adapter` is not optional. Kept because `AnyTarget`
+        # is fully erased and one can be built by untyped code, where naming the missing profile
+        # beats letting `issubclass` raise TypeError on None.
+        profile is None  # pyright: ignore[reportUnnecessaryComparison]
+        or not issubclass(profile.family, DiscordPyAdapter)
+    ):
         message = f"target {target.id!r} cannot {operation}; it is not bound to a discord.py adapter profile"
         raise LayoutInvariantError(message)
     # `issubclass` on `profile.family` proves the family but cannot narrow the profile's

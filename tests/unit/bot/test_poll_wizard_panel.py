@@ -45,14 +45,15 @@ async def open_screen(
     interaction.locale = "en-US"
     if message is not None:
         interaction.original_response.return_value = message
-    outcome = await bot.app_ui.respond(interaction, screen)
+    request = await sd.request(interaction)
+    outcome = await request.respond(screen)
     assert isinstance(outcome, sd.Presented)
     sessions = bot.sessions.get(sd.SessionKey.user_guild("poll-wizard", OWNER_ID, 7))
     assert len(sessions) == 1
     return outcome.component, sessions[0].root, interaction
 
 
-async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardState, sl.ComponentsV2Target]:
+async def complete_wizard(screen: PollScreen) -> wt.MachineHarness[sp.WizardState, sl.ComponentsV2Target, sd.Request]:
     harness = wt.driving(screen.driver)
     await harness.submit("poll.content", {"question": "Best door?", "options": "One\nTwo"})
     await harness.submit(

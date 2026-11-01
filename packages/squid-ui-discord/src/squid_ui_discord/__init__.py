@@ -15,8 +15,7 @@ from squid_ui.errors import (
 from squid_ui.planning import limits as limits
 from squid_ui.planning import navigation as navigation_controls
 from squid_ui.planning.limits import LIMITS as V2_LIMITS
-from squid_ui.planning.planner import EMPTY_RESERVATION
-from squid_ui.planning.target import ResourceCost
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 from squid_ui_discord import (
     access,
     actions,
@@ -54,6 +53,7 @@ from squid_ui_discord import (
     target,
     targets,
     testing,
+    v2,
 )
 from squid_ui_discord import (
     modal as modals,
@@ -63,10 +63,6 @@ from squid_ui_discord.access import (
     Everyone,
     Owner,
     Users,
-)
-from squid_ui_discord.actions import (
-    native,
-    responder,
 )
 from squid_ui_discord.adoption import (
     AdoptionError,
@@ -92,7 +88,7 @@ from squid_ui_discord.commands import (
     hybrid_group,
     prefix_command,
 )
-from squid_ui_discord.config import DiscordUIConfig, ErrorPolicy
+from squid_ui_discord.config import Config, ErrorObserver, ErrorPolicy, ErrorRenderer
 from squid_ui_discord.conformance import conform
 from squid_ui_discord.contracts import LocalizationResolver, RequestSource, ResponseSource
 from squid_ui_discord.delivery import (
@@ -103,20 +99,36 @@ from squid_ui_discord.delivery import (
     respond_to,
     send_to,
 )
-from squid_ui_discord.facade import DiscordUI, Scope
+from squid_ui_discord.devtools import open_devtools
+from squid_ui_discord.devtools_view import DevToolsSection
+from squid_ui_discord.events import (
+    ActionEvent,
+    ChoiceEvent,
+    EntityEvent,
+    EntitySelectionEvent,
+    InvalidSubmitEvent,
+    NavigateEvent,
+    OpenEvent,
+    PressEvent,
+    ScaleEvent,
+    SelectionEvent,
+    SubmitEvent,
+    ToggleEvent,
+    on_choice,
+    on_entity,
+    on_entity_selection,
+    on_invalid_submit,
+    on_navigate,
+    on_press,
+    on_scale,
+    on_selection,
+    on_submit,
+    on_toggle,
+)
+from squid_ui_discord.facade import Scope
 from squid_ui_discord.fragments import contribute
 from squid_ui_discord.grids import button_grid
 from squid_ui_discord.live import message_roots
-from squid_ui_discord.managed import (
-    ErrorObserver,
-    ErrorRenderer,
-    ManagedDelivery,
-    ManagedError,
-    MessageRootFactory,
-    SuccessRenderer,
-    Work,
-    run_managed_result,
-)
 from squid_ui_discord.message_payload import (
     MessageMode,
     MessageModeError,
@@ -133,6 +145,8 @@ from squid_ui_discord.message_root_contracts import (
     ChallengeRequest,
     ChallengeSupervisor,
     MessageRootConfig,
+    MessageRootSnapshot,
+    MessageRootStatus,
     PauseUpdates,
     RenewEphemeral,
 )
@@ -185,9 +199,11 @@ from squid_ui_discord.runtime import (
     DiscordUIRuntimeMissing,
     install,
 )
-from squid_ui_discord.screen import Screen
+from squid_ui_discord.screen import Screen, SharedGuildSessionScreen, UserGuildSessionScreen, UserSessionScreen
 from squid_ui_discord.session_specs import OpenContext, ScopeKind, SessionOptions, SessionOptionsResolver, SessionSpec
 from squid_ui_discord.sessions import (
+    AdmissionSpec,
+    Reject,
     SessionKey,
     SessionManager,
 )
@@ -228,11 +244,13 @@ __all__ = [
     "DEFAULT_MESSAGE_ROOT_CONFIG",
     "DISCORD_V1_DPY27",
     "DISCORD_V2_DPY27",
-    "EMPTY_RESERVATION",
+    "EMPTY_COST",
     "EXACTLY_ONE",
     "V2_LIMITS",
     "Abandoned",
     "AccessPolicy",
+    "ActionEvent",
+    "AdmissionSpec",
     "AdoptionError",
     "Audience",
     "Cardinality",
@@ -240,15 +258,18 @@ __all__ = [
     "ChallengeRequest",
     "ChallengeRunner",
     "ChallengeSupervisor",
+    "ChoiceEvent",
     "Cog",
     "CommandPolicy",
     "CommandResult",
+    "Config",
     "Deferral",
+    "DevToolsSection",
     "DialogPresenter",
-    "DiscordUI",
-    "DiscordUIConfig",
     "DiscordUIRuntime",
     "DiscordUIRuntimeMissing",
+    "EntityEvent",
+    "EntitySelectionEvent",
     "ErrorObserver",
     "ErrorPolicy",
     "ErrorRenderer",
@@ -256,10 +277,9 @@ __all__ = [
     "ExistingLayoutError",
     "Group",
     "HybridGroup",
+    "InvalidSubmitEvent",
     "LimitViolationError",
     "LocalizationResolver",
-    "ManagedDelivery",
-    "ManagedError",
     "MessageDestination",
     "MessageMode",
     "MessageModeError",
@@ -267,20 +287,25 @@ __all__ = [
     "MessageRoot",
     "MessageRootConfig",
     "MessageRootDefaults",
-    "MessageRootFactory",
     "MessageRootOptions",
     "MessageRootScheduler",
     "MessageRootSchedulerSnapshot",
+    "MessageRootSnapshot",
+    "MessageRootStatus",
     "NativeCommandKwargs",
     "NativeContextMenuKwargs",
     "NativeHybridKwargs",
     "NativePrefixKwargs",
+    "NavigateEvent",
     "OpenContext",
+    "OpenEvent",
     "Owner",
     "PauseUpdates",
     "PendingCard",
     "Presented",
+    "PressEvent",
     "Private",
+    "Reject",
     "Rejected",
     "RenderedMessage",
     "RenewEphemeral",
@@ -303,20 +328,25 @@ __all__ = [
     "RoleTransitionResult",
     "RolesUnchanged",
     "RolesUpdated",
+    "ScaleEvent",
     "Scope",
     "ScopeKind",
     "Screen",
+    "SelectionEvent",
     "Sent",
     "SessionKey",
     "SessionManager",
     "SessionOptions",
     "SessionOptionsResolver",
     "SessionSpec",
+    "SharedGuildSessionScreen",
     "StackNavigator",
-    "SuccessRenderer",
+    "SubmitEvent",
+    "ToggleEvent",
+    "UserGuildSessionScreen",
+    "UserSessionScreen",
     "Users",
     "Visibility",
-    "Work",
     "access",
     "actions",
     "adapter",
@@ -358,9 +388,19 @@ __all__ = [
     "message_root",
     "message_roots",
     "modals",
-    "native",
     "navigation",
     "navigation_controls",
+    "on_choice",
+    "on_entity",
+    "on_entity_selection",
+    "on_invalid_submit",
+    "on_navigate",
+    "on_press",
+    "on_scale",
+    "on_selection",
+    "on_submit",
+    "on_toggle",
+    "open_devtools",
     "owner_message_root",
     "prefix_command",
     "render_item",
@@ -371,11 +411,9 @@ __all__ = [
     "reply_to",
     "request",
     "respond_to",
-    "responder",
     "response",
     "roles",
     "routing",
-    "run_managed_result",
     "runtime",
     "screen",
     "send_to",
@@ -384,4 +422,5 @@ __all__ = [
     "target",
     "targets",
     "testing",
+    "v2",
 ]

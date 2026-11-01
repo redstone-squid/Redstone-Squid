@@ -31,11 +31,11 @@ def accepts_classic(component: sl.Component[ClassicTarget]) -> None:
 
 
 accepts_classic(portable_tabs.build_component())
-accepts_classic(v2_component)  # pyrefly: ignore[bad-argument-type]
+accepts_classic(v2_component)  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
 routed = sp.RouteDriver[sp.TabsState, ComponentsV2Target](lambda route: route.action).render(
     v2_tabs, v2_tabs.initial_state
 )
 assert_type(routed, DocumentLike[ComponentsV2Target])
 plan(routed, target=v2())
-plan(routed, target=classic())  # pyrefly: ignore[no-matching-overload, bad-argument-type]
+plan(routed, target=classic())  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[no-matching-overload, bad-argument-type]

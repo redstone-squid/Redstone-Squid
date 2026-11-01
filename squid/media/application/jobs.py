@@ -17,7 +17,7 @@ from pathlib import Path, PurePosixPath
 from typing import Protocol
 from uuid import UUID, uuid4
 
-import anyio
+import anyio.to_thread
 from whenever import Instant
 
 from squid.artifacts import ArtifactStore
@@ -293,6 +293,8 @@ class MediaJobRepository(Protocol):
 
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool: ...
 
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, limits: MediaLimits) -> bool: ...
+
     async def claim(self, *, limit: int) -> Sequence[ClaimedMediaJob]: ...
 
     async def heartbeat(self, job: ClaimedMediaJob) -> bool: ...
@@ -370,34 +372,7 @@ class MediaNormalizationJobService:
         authorization: MediaDraftUploadAuthorization | None = None,
     ) -> UUID:
         """Stage a raw object and idempotently enqueue its immutable metadata."""
-        if len(submission.source) > self._limits.max_source_bytes:
-            limit = self._limits.max_source_bytes
-            raise ValidationError(tr(t"Media upload exceeds the {limit}-byte source limit."))
-        digest = hashlib.sha256(submission.source).hexdigest()
-        upload_id = submission.upload_id or uuid4()
-        object_key = f"media/raw/{upload_id}/{digest}"
-        stored = await self._artifacts.put(
-            object_key,
-            submission.source,
-            content_type=submission.source_content_type.strip(),
-        )
-        if stored.byte_size != len(submission.source) or stored.sha256 not in {None, digest}:
-            await self._artifacts.delete(object_key)
-            msg = "Object storage did not confirm the staged media upload."
-            raise MediaJobArtifactError(msg)
-        return await self._register(
-            MediaUploadMetadata(
-                id=upload_id,
-                draft_id=submission.draft_id,
-                kind=submission.kind,
-                source_content_type=submission.source_content_type.strip(),
-                source_byte_size=len(submission.source),
-                source_sha256=digest,
-                source_object_key=object_key,
-                strip_audio=submission.strip_audio,
-            ),
-            authorization=authorization,
-        )
+        return await self._submit(submission, authorization=authorization)
 
     async def submit_staged(
         self,
@@ -406,20 +381,36 @@ class MediaNormalizationJobService:
         authorization: MediaDraftUploadAuthorization | None = None,
     ) -> UUID:
         """Stage a bounded regular file without buffering it in application memory."""
-        byte_size, digest = await anyio.to_thread.run_sync(
-            _staged_source_metadata,
-            submission.source_path,
-            self._limits.max_source_bytes,
-            abandon_on_cancel=False,
-        )
+        return await self._submit(submission, authorization=authorization)
+
+    async def _submit(
+        self,
+        submission: MediaUploadSubmission | StagedMediaUploadSubmission,
+        *,
+        authorization: MediaDraftUploadAuthorization | None,
+    ) -> UUID:
+        if isinstance(submission, StagedMediaUploadSubmission):
+            byte_size, digest = await anyio.to_thread.run_sync(
+                _staged_source_metadata,
+                submission.source_path,
+                self._limits.max_source_bytes,
+                abandon_on_cancel=False,
+            )
+        else:
+            byte_size = len(submission.source)
+            if byte_size > self._limits.max_source_bytes:
+                limit = self._limits.max_source_bytes
+                raise ValidationError(tr(t"Media upload exceeds the {limit}-byte source limit."))
+            digest = hashlib.sha256(submission.source).hexdigest()
         upload_id = submission.upload_id or uuid4()
         object_key = f"media/raw/{upload_id}/{digest}"
-        stored = await self._artifacts.put_path(
-            object_key,
-            submission.source_path,
-            content_type=submission.source_content_type.strip(),
-            max_bytes=self._limits.max_source_bytes,
-        )
+        content_type = submission.source_content_type
+        if isinstance(submission, StagedMediaUploadSubmission):
+            stored = await self._artifacts.put_path(
+                object_key, submission.source_path, content_type=content_type, max_bytes=self._limits.max_source_bytes
+            )
+        else:
+            stored = await self._artifacts.put(object_key, submission.source, content_type=content_type)
         if stored.byte_size != byte_size or stored.sha256 not in {None, digest}:
             await self._artifacts.delete(object_key)
             msg = "Object storage did not confirm the staged media upload."
@@ -429,7 +420,7 @@ class MediaNormalizationJobService:
                 id=upload_id,
                 draft_id=submission.draft_id,
                 kind=submission.kind,
-                source_content_type=submission.source_content_type.strip(),
+                source_content_type=content_type,
                 source_byte_size=byte_size,
                 source_sha256=digest,
                 source_object_key=object_key,
@@ -480,6 +471,10 @@ class MediaNormalizationJobService:
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
         """Withdraw one upload and schedule any remaining raw source for cleanup."""
         return await self._repository.discard(draft_id, upload_id)
+
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID) -> bool:
+        """Share an existing normalization job under the repository's ownership fence."""
+        return await self._repository.attach(source_id, target_id, upload_id, self._limits)
 
     async def claim(self, *, limit: int = 8) -> Sequence[ClaimedMediaJob]:
         if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
@@ -594,7 +589,6 @@ class MediaNormalizationJobRunner:
         normalization: MediaNormalizationService,
         *,
         working_directory: Path | None = None,
-        cleanup: MediaStorageCleanup | None = None,
         heartbeat_interval_seconds: float = MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS,
     ) -> None:
         if jobs.limits != normalization.limits:
@@ -607,7 +601,6 @@ class MediaNormalizationJobRunner:
         self._artifacts = artifacts
         self._normalization = normalization
         self._working_directory = working_directory
-        self._cleanup = cleanup or MediaStorageCleanup(jobs, artifacts)
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
 
     async def process_batch(self, *, limit: int = 8) -> None:
@@ -618,14 +611,6 @@ class MediaNormalizationJobRunner:
         # so it would hold its claim, its heartbeat and its temporary directory
         # until the lease expires. Failures still raise once the batch is done.
         await run_all_settled([partial(self._process, job) for job in claimed])
-
-    async def cleanup_terminal_sources(self, *, limit: int = 100) -> None:
-        """Retry idempotent deletion of raw objects committed to terminal states."""
-        await self._cleanup.cleanup_terminal_sources(limit=limit)
-
-    async def cleanup_terminal_artifacts(self, *, limit: int = 100) -> None:
-        """Retry reference-fenced deletion of normalized objects and reports."""
-        await self._cleanup.cleanup_terminal_artifacts(limit=limit)
 
     async def _process(self, job: ClaimedMediaJob) -> None:
         claim_lost = asyncio.Event()
@@ -725,48 +710,22 @@ class MediaNormalizationJobRunner:
             )
         )
         await self._require_claim(job, claim_lost)
-        output = await asyncio.to_thread(
-            _read_verified,
-            result.output_path,
-            result.report.output,
-            self._jobs.limits.max_output_bytes,
-        )
-        prepared: list[tuple[StoredMediaArtifact, bytes]] = [
-            (
-                self._artifact_metadata(
-                    MediaArtifactRole.OUTPUT,
-                    output,
-                    result.report.output.content_type,
-                    result.report.output.sha256,
-                    width=result.report.output.width,
-                    height=result.report.output.height,
-                ),
-                output,
-            )
-        ]
+        files = [(MediaArtifactRole.OUTPUT, result.output_path, result.report.output)]
         if result.report.poster is not None:
             if result.poster_path is None:
                 msg = "A video normalization result omitted its poster path."
                 raise MediaJobArtifactError(msg)
-            poster = await asyncio.to_thread(
-                _read_verified,
-                result.poster_path,
-                result.report.poster,
-                self._jobs.limits.max_output_bytes,
-            )
+            # Keep the legacy durable value until readers predating the dual-read rollout have drained.
+            files.append((MediaArtifactRole.POSTER, result.poster_path, result.report.poster))
+        prepared: list[tuple[StoredMediaArtifact, bytes]] = []
+        for role, path, facts in files:
+            data = await asyncio.to_thread(_read_verified, path, facts, self._jobs.limits.max_output_bytes)
             prepared.append(
                 (
                     self._artifact_metadata(
-                        # Keep the legacy durable value until every reader that
-                        # predates the dual-read rollout has drained.
-                        MediaArtifactRole.POSTER,
-                        poster,
-                        result.report.poster.content_type,
-                        result.report.poster.sha256,
-                        width=result.report.poster.width,
-                        height=result.report.poster.height,
+                        role, data, facts.content_type, facts.sha256, width=facts.width, height=facts.height
                     ),
-                    poster,
+                    data,
                 )
             )
         report = _encode_report(result.report)

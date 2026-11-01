@@ -1,23 +1,25 @@
 """Installing the Discord runtime on a client, and finding it again from a click."""
 
 import asyncio
-from typing import Any, cast
+from typing import Any, cast, override
 from unittest.mock import AsyncMock
 
+import anyio
 import discord
 import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
 from squid_reactivity import LocalTopicBus
+from squid_reactivity.topics import Topic
 from squid_ui.primitives import Heading
-from squid_ui.runtime.topics import Topic
 from squid_ui_discord import DiscordUIRuntime, install
 from squid_ui_discord.runtime import _INSTALLED, DiscordUIRuntimeMissing
 from squid_ui_discord.testing import ContextHarness, delivered_to, interaction_harness, message_harness
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return [Heading("Panel")]
 
@@ -46,7 +48,7 @@ def test_install_wires_the_presenter_the_registry_could_not_build_for_itself() -
 
 def test_install_makes_a_reactor_only_when_given_a_bus() -> None:
     without = install(cast(discord.Client, fake_client()))
-    with_bus = install(cast(discord.Client, fake_client()), bus=LocalTopicBus())
+    with_bus = install(cast(discord.Client, fake_client()), sd.Config(bus=LocalTopicBus()))
 
     assert without.scheduler is None
     assert without.defaults.scheduler is None
@@ -66,7 +68,9 @@ def test_a_second_install_on_one_client_is_refused() -> None:
 def test_install_keeps_host_defaults_and_adds_to_them() -> None:
     chrome = sl.chrome.Chrome(close=sl.text.ResolvedText("Dismiss"))
 
-    runtime = install(cast(discord.Client, fake_client()), defaults=sd.MessageRootDefaults(chrome=chrome, strict=True))
+    runtime = install(
+        cast(discord.Client, fake_client()), sd.Config(defaults=sd.MessageRootDefaults(chrome=chrome, strict=True))
+    )
 
     assert runtime.defaults.chrome is chrome
     assert runtime.defaults.strict is True
@@ -77,7 +81,7 @@ def test_install_keeps_the_optional_localization_resolver() -> None:
         del source
         return sl.text.Localization(locale="en-GB")
 
-    runtime = install(cast(discord.Client, fake_client()), localization=resolve)
+    runtime = install(cast(discord.Client, fake_client()), sd.Config(localization=resolve))
 
     assert runtime.localization is resolve
 
@@ -135,31 +139,29 @@ async def test_close_drops_the_installation_even_when_a_teardown_fails() -> None
     runtime = install(cast(discord.Client, client))
     runtime.sessions.close_all = AsyncMock(side_effect=RuntimeError("gateway is gone"))
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ExceptionGroup):
         await runtime.close()
 
     assert client not in _INSTALLED
 
 
 async def test_run_serves_the_reactor_and_the_challenge_runner_together() -> None:
-    runtime = install(cast(discord.Client, fake_client()), bus=LocalTopicBus())
+    runtime = install(cast(discord.Client, fake_client()), sd.Config(bus=LocalTopicBus()))
     assert runtime.scheduler is not None
 
-    task = asyncio.create_task(runtime.run())
-    await asyncio.sleep(0)
-    await asyncio.sleep(0)
-
-    assert runtime.scheduler._running
-    assert runtime.challenges._running
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
+    async with anyio.create_task_group() as tasks:
+        await tasks.start(runtime.run)
+        assert runtime.scheduler._running
+        assert runtime.challenges._running
+        assert runtime.execution_host is not None
+        runtime.execution_host._require_running()
+        tasks.cancel_scope.cancel()
 
 
 async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
     """The scheduler `install` built is the one `run` drains, not a spare."""
     bus = LocalTopicBus()
-    runtime = install(cast(discord.Client, fake_client()), bus=bus)
+    runtime = install(cast(discord.Client, fake_client()), sd.Config(bus=bus))
     assert runtime.scheduler is not None
     message_root = runtime.mount(Panel(), access=sd.Everyone(), timeout=None)
     message_root.refresh = AsyncMock()  # pyrefly: ignore
@@ -175,3 +177,15 @@ async def test_run_serves_a_refresh_the_host_reactor_queued() -> None:
     finally:
         task.cancel()
     message_root.refresh.assert_awaited()
+
+
+async def test_close_drops_installation_when_execution_host_cleanup_fails() -> None:
+    client = fake_client()
+    runtime = install(cast(discord.Client, client))
+    assert runtime.execution_host is not None
+    runtime.execution_host.close = AsyncMock(side_effect=RuntimeError("service host cleanup failed"))
+
+    with pytest.raises(RuntimeError, match="service host cleanup failed"):
+        await runtime.close()
+
+    assert client not in _INSTALLED

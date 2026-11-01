@@ -1,12 +1,13 @@
 """Owner identity and lifetime for the explicit Discord facade."""
 
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
 
 import squid_ui as sl
 import squid_ui_discord as sd
+from squid_ui_discord.testing import delivered_to, message_harness
 
 
 class FakeClient:
@@ -18,6 +19,7 @@ class Owner:
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return sl.heading("Panel")
 
@@ -34,15 +36,11 @@ def test_scope_reuses_exact_owner_identity() -> None:
     assert installed.scope(Owner()) is not installed.scope(owner)
 
 
-def test_scope_rejects_none_and_conflicting_defaults() -> None:
+def test_scope_rejects_none() -> None:
     installed = runtime()
-    owner = Owner()
-    installed.scope(owner, defaults=sd.ResponseSpec(timeout=10))
 
     with pytest.raises(TypeError, match="None cannot own"):
         installed.scope(None)
-    with pytest.raises(ValueError, match="different response defaults"):
-        installed.scope(owner, defaults=sd.ResponseSpec(timeout=20))
 
 
 async def test_scope_close_finishes_tracked_roots_and_allows_a_new_scope() -> None:
@@ -67,6 +65,23 @@ async def test_runtime_close_closes_every_scope() -> None:
 
     assert first.closed
     assert second.closed
+
+
+async def test_scope_close_finishes_session_when_it_tracks_a_child() -> None:
+    installed = runtime()
+    ui = installed.scope(Owner())
+    root = installed.mount(Panel(), access=sd.Everyone())
+    opened = await installed.sessions.open(root, delivered_to(message_harness()))
+    assert isinstance(opened, sd.sessions.Opened)
+    child = installed.mount(Panel(), access=sd.Everyone())
+    await opened.session.attach(child, delivered_to(message_harness()))
+    installed._track(ui, child)
+
+    await ui.close()
+
+    assert root.finished
+    assert child.finished
+    assert tuple(installed.sessions.active()) == ()
 
 
 def test_runtime_has_no_delivery_methods() -> None:

@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from squid_ui.entity import EntityRef, encode_entity_ref
 from squid_ui.forms import FormSpec, SubmitHandler
@@ -46,6 +46,7 @@ class PresentForm(GeneratedHandler[PressEvent]):
     label: TextLike
     record: History | None
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await event.present_form(
             self.spec,
@@ -72,10 +73,11 @@ class ChoiceCommit:
                         event.actor,
                         event.responder,
                         event.locale,
-                        event.context,
+                        event.metadata,
                         selected,
                         tuple(key for key in selected if key not in self.previous),
                         tuple(key for key in self.previous if key not in selected),
+                        context=event.context,
                     )
                 )
             case Uncontrolled():
@@ -89,6 +91,7 @@ class ChooseChoice(GeneratedHandler[PressEvent]):
     commit: ChoiceCommit
     key: str
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.commit.commit(event, (self.key,))
 
@@ -97,6 +100,7 @@ class ChooseChoice(GeneratedHandler[PressEvent]):
 class SelectChoices(GeneratedHandler[SelectionEvent]):
     commit: ChoiceCommit
 
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         await self.commit.commit(event, event.values)
 
@@ -116,10 +120,11 @@ class EntityCommit:
                         event.actor,
                         event.responder,
                         event.locale,
-                        event.context,
+                        event.metadata,
                         selected,
                         tuple(value for value in selected if value not in self.previous),
                         tuple(value for value in self.previous if value not in selected),
+                        context=event.context,
                     )
                 )
             case Uncontrolled():
@@ -132,6 +137,7 @@ class EntityCommit:
 class SelectEntities(GeneratedHandler[EntitySelectionEvent]):
     commit: EntityCommit
 
+    @override
     async def __call__(self, event: EntitySelectionEvent) -> None:
         await self.commit.commit(event, event.values)
 
@@ -141,6 +147,7 @@ class SelectEntityFallback(GeneratedHandler[ChoiceEvent]):
     commit: EntityCommit
     by_key: Mapping[str, EntityRef]
 
+    @override
     async def __call__(self, event: ChoiceEvent) -> None:
         await self.commit.commit(event, tuple(self.by_key[key] for key in event.selected if key in self.by_key))
 
@@ -154,7 +161,11 @@ class ItemCommit:
     async def commit(self, event: ActionEvent, opened: str | None) -> None:
         match self.ownership:
             case Controlled(on_change=on_change):
-                await on_change(OpenEvent(event.actor, event.responder, event.locale, event.context, opened=opened))
+                await on_change(
+                    OpenEvent(
+                        event.actor, event.responder, event.locale, event.metadata, opened=opened, context=event.context
+                    )
+                )
             case Uncontrolled():
                 await event.acknowledge()
                 self.session.select(self.key, () if opened is None else (opened,))
@@ -165,6 +176,7 @@ class ItemCommit:
 class CloseItem(GeneratedHandler[PressEvent]):
     commit: ItemCommit
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.commit.commit(event, None)
 
@@ -173,6 +185,7 @@ class CloseItem(GeneratedHandler[PressEvent]):
 class FocusItem(GeneratedHandler[SelectionEvent]):
     commit: ItemCommit
 
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         await self.commit.commit(event, event.values[0] if event.values else None)
 
@@ -186,7 +199,11 @@ class NavigationCommit:
     async def commit(self, event: ActionEvent, destination: str) -> None:
         match self.ownership:
             case Controlled(on_change=on_change):
-                await on_change(NavigateEvent(event.actor, event.responder, event.locale, event.context, destination))
+                await on_change(
+                    NavigateEvent(
+                        event.actor, event.responder, event.locale, event.metadata, destination, context=event.context
+                    )
+                )
             case Uncontrolled():
                 await event.acknowledge()
                 self.session.select(self.key, (destination,))
@@ -197,6 +214,7 @@ class NavigationCommit:
 class SelectDestination(GeneratedHandler[SelectionEvent]):
     commit: NavigationCommit
 
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         if event.values:
             await self.commit.commit(event, event.values[0])
@@ -207,6 +225,7 @@ class GoToDestination(GeneratedHandler[PressEvent]):
     commit: NavigationCommit
     key: str
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         await self.commit.commit(event, self.key)
 
@@ -217,11 +236,19 @@ class ToggleDetails(GeneratedHandler[PressEvent]):
     open: bool
     session: PresentationState
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         match self.node.open:
             case Controlled(on_change=on_change):
                 await on_change(
-                    OpenEvent(event.actor, event.responder, event.locale, event.context, opened=not self.open)
+                    OpenEvent(
+                        event.actor,
+                        event.responder,
+                        event.locale,
+                        event.metadata,
+                        opened=not self.open,
+                        context=event.context,
+                    )
                 )
             case Uncontrolled(initial=seed):
                 await event.acknowledge()
@@ -236,10 +263,15 @@ class FlipToggle(GeneratedHandler[PressEvent]):
     on: bool
     session: PresentationState
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
         match self.node.on:
             case Controlled(on_change=on_change):
-                await on_change(ToggleEvent(event.actor, event.responder, event.locale, event.context, not self.on))
+                await on_change(
+                    ToggleEvent(
+                        event.actor, event.responder, event.locale, event.metadata, not self.on, context=event.context
+                    )
+                )
             case Uncontrolled(initial=initial):
                 await event.acknowledge()
                 current = self.session.toggle(self.node.key, initial=initial).on
@@ -252,14 +284,20 @@ class ForwardSelection(GeneratedHandler[PressEvent]):
     handler: Callable[[SelectionEvent], Awaitable[None]]
     key: str
 
+    @override
     async def __call__(self, event: PressEvent) -> None:
-        await self.handler(SelectionEvent(event.actor, event.responder, event.locale, event.context, (self.key,)))
+        await self.handler(
+            SelectionEvent(
+                event.actor, event.responder, event.locale, event.metadata, (self.key,), context=event.context
+            )
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class RouteSelection(GeneratedHandler[SelectionEvent]):
     routes: Mapping[str, ActionBinding]
 
+    @override
     async def __call__(self, event: SelectionEvent) -> None:
         binding = self.routes.get(event.values[0]) if len(event.values) == 1 else None
         if binding is not None:

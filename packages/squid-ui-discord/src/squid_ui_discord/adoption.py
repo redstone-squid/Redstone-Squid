@@ -15,12 +15,13 @@ the legacy object a second writer raises `AdoptionError` instead of being quietl
 """
 
 from collections.abc import Awaitable, Callable, Sequence
-from typing import Any, cast, overload
+from typing import Any, cast, overload, override
 from typing import Never as TypingNever
 from urllib.parse import urlsplit
 
 import discord
 
+from squid_reactivity.core import state
 from squid_ui.assets import Asset, StoredAsset
 from squid_ui.document import Document
 from squid_ui.emoji import Emoji, normalize_emoji
@@ -48,9 +49,8 @@ from squid_ui.primitives.nodes import (
 )
 from squid_ui.primitives.styles import ActionStyle
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.reactivity import state
 from squid_ui.target_types import ComponentsV2Target
-from squid_ui_discord.actions import ActionResponder, responder, selected_entities
+from squid_ui_discord.actions import ActionResponder, _responder, _selected_entities
 from squid_ui_discord.message_root_wiring import _CONVERSATION_TYPES
 
 type Item = discord.ui.Item[Any]
@@ -111,7 +111,7 @@ def adopt(
     keys: KeyFactory | None = None,
     assets: Sequence[Asset] = (),
     discard_timeout: bool = False,
-) -> Component[ComponentsV2Target]: ...
+) -> Component[ComponentsV2Target, Any]: ...
 
 
 def adopt(
@@ -120,7 +120,7 @@ def adopt(
     keys: KeyFactory | None = None,
     assets: Sequence[Asset] = (),
     discard_timeout: bool = False,
-) -> Component[Any]:
+) -> Component[Any, Any]:
     """Draw an unsent discord.py view as a Squid component, keeping its callbacks.
 
     The view becomes a model: Squid builds its own controls from `view.children` on every
@@ -200,7 +200,7 @@ def _validate_adoptable(view: discord.ui.View | discord.ui.LayoutView, *, discar
         raise AdoptionError(message)
 
 
-class _AdoptedView(Component[Any]):
+class _AdoptedView(Component[Any, Any]):
     """A component whose whole model is one legacy view."""
 
     _view: discord.ui.View | discord.ui.LayoutView = state(persist=False, opaque=True)
@@ -218,12 +218,13 @@ class _AdoptedView(Component[Any]):
         self._asset_by_name, self._asset_by_reference = _index_assets(self._assets)
         self._render_keys: dict[int, str] | None = None
 
-    def render(self) -> list[Node] | Document[ComponentsV2Target]:
+    @override
+    def render(self) -> list[Node] | Document[ComponentsV2Target, Any]:
         if isinstance(self._view, discord.ui.LayoutView):
             key_map = self._layout_key_map()
             self._render_keys = {id(item): key for key, item in key_map.items()}
             try:
-                return Document[ComponentsV2Target](
+                return Document[ComponentsV2Target, Any](
                     cast(
                         Any, tuple(self._layout_node(item, (index,)) for index, item in enumerate(self._view.children))
                     ),
@@ -388,7 +389,8 @@ class _AdoptedView(Component[Any]):
                         self._unsupported(child, _layout_path((*path, index)), expected="TextDisplay")
                 walk(item.accessory, (*path, len(item.children)))
             elif isinstance(item, discord.ui.Item) and hasattr(item, "children"):
-                for index, child in enumerate(item.children):
+                # pyright has no `hasattr` narrowing, so the guard above buys it nothing.
+                for index, child in enumerate(item.children):  # pyright: ignore[reportAttributeAccessIssue]
                     walk(child, (*path, index))
 
         for index, child in enumerate(self._view.children):
@@ -568,7 +570,7 @@ class _AdoptedView(Component[Any]):
 
     def _entity_selection(self, key: str) -> Callable[[EntitySelectionEvent], Awaitable[None]]:
         async def on_select(event: EntitySelectionEvent) -> None:
-            await self._invoke(key, event, list(selected_entities(event)))
+            await self._invoke(key, event, list(_selected_entities(event)))
 
         return on_select
 
@@ -585,7 +587,7 @@ class _AdoptedView(Component[Any]):
             message = f"no adopted control is named {key!r} any more; a render that is not a function of the view"
             raise AdoptionError(message)
 
-        answers = responder(event)
+        answers = _responder(event)
         proxy = _InteractionProxy(self, answers, view)
         try:
             try:
@@ -595,7 +597,7 @@ class _AdoptedView(Component[Any]):
                 if values is not None:
                     # Never the item discord.py dispatched -- Squid built the control that was clicked --
                     # so `values` reaches the legacy select through the same field discord.py fills.
-                    item._values = values  # pyrefly: ignore[missing-attribute]
+                    item._values = values  # pyright: ignore[reportAttributeAccessIssue]  # pyrefly: ignore[missing-attribute]
                 await item.callback(cast(Any, proxy))
             except Exception as error:
                 if not _overrides(view, "on_error"):
@@ -606,7 +608,7 @@ class _AdoptedView(Component[Any]):
             # and `mutated` cannot undo that. Reporting it is what keeps the next render honest.
             self.mutated(view)
             if view.is_finished():
-                await answers.finish()
+                answers.finish_on_success()
 
     def _adopt_modal(self, modal: discord.ui.Modal, message_root: Any) -> None:
         """Put the proxy in front of a modal's submit, which is a second interaction.
@@ -743,7 +745,7 @@ class _ProxyResponse:
             shown = "None" if view is None else type(view).__name__
             message = (
                 f"edit_message(view={shown}) would replace the adopted view with a different screen; "
-                "push one with squid_ui_discord.StackNavigator, or end this one with responder(event).finish()"
+                "push one with squid_ui_discord.StackNavigator, or end this one with event.finish_on_success()"
             )
             raise AdoptionError(message)
         self._proxy.flush_requested = True
@@ -759,7 +761,7 @@ class _ProxyResponse:
             named = ", ".join(carried)
             message = (
                 f"send_message({named}=...) is not available to an adopted view; a plain notice goes "
-                "through responder(event).notice(), and a richer message through followup.send()"
+                "through event.notice(), and a richer message through followup.send()"
             )
             raise AdoptionError(message)
         visibility = Visibility.PRIVATE if ephemeral else Visibility.PUBLIC
@@ -821,7 +823,7 @@ class _ProxyMessage:
         raise AdoptionError(message)
 
     async def delete(self, *_args: Any, **_kwargs: Any) -> Any:
-        message = "interaction.message.delete() is the mount's to do; use responder(event).finish()"
+        message = "interaction.message.delete() is the mount's to do; use event.finish_on_success()"
         raise AdoptionError(message)
 
     def __getattr__(self, name: str) -> Any:
@@ -868,7 +870,7 @@ class _InteractionProxy:
         raise AdoptionError(message)
 
     async def delete_original_response(self, *_args: Any, **_kwargs: Any) -> Any:
-        message = "delete_original_response() is the mount's to do; use responder(event).finish()"
+        message = "delete_original_response() is the mount's to do; use event.finish_on_success()"
         raise AdoptionError(message)
 
     def __getattr__(self, name: str) -> Any:

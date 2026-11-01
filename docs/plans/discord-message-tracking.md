@@ -5,7 +5,7 @@
 > and the `PostRenderer`/`PostReconciler` split all exist as described (`squid/messages/`,
 > `squid/posts/`, `squid/sync/`, `squid/bot/posts/reconciler.py`). One item under
 > [Still open](#still-open) has since landed; the `VoteTarget`/`get_by_message` item remains open
-> and is tracked separately under `docs/plans/pr-183-review/09-voting-redesign.md`.
+> and is tracked separately under `docs/plans/completed/pr-183-review/09-voting-redesign.md`.
 
 ## The problem this replaced
 
@@ -110,7 +110,7 @@ applied. This is what the per-resource counter got wrong.
 - `VoteTarget` conflates a build target and a message target, and the voting service is
   still addressed by `message_id` rather than session id. `get_by_message` was
   repointed at `discord_posts` rather than rewriting the addressing model; see
-  `docs/plans/pr-183-review/09-voting-redesign.md`.
+  `docs/plans/completed/pr-183-review/09-voting-redesign.md`.
 
 Resolved since this section was written: `Base.__init_subclass__` used to extract attribute
 docstrings intending to become column comments, but looked the column up after SQLAlchemy had

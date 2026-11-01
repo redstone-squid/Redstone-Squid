@@ -2,29 +2,28 @@
 
 from collections.abc import Hashable, Sequence
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, Unpack, cast, overload
+from typing import TYPE_CHECKING, Any, Unpack, cast
 
 import discord
 
 from squid_ui import paragraph
 from squid_ui.runtime.component import Component
-from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import Localization
 from squid_ui_discord.access import AccessPolicy, Owner
 from squid_ui_discord.audience import Audience
 from squid_ui_discord.contracts import DocumentContent, FacadeContent, ResponseSource, SendDestination
 from squid_ui_discord.delivery import Abandoned as DeliveryAbandoned
-from squid_ui_discord.delivery import DeliveryResult, edit_to, no_mentions, send_to
+from squid_ui_discord.delivery import DeliveryResult, MessageDestination, edit_to, no_mentions, send_to
 from squid_ui_discord.message_payload import MessagePayload
 from squid_ui_discord.message_root import MessageRoot
 from squid_ui_discord.message_root_contracts import PauseUpdates, RenewEphemeral
 from squid_ui_discord.rendering import render_static
+from squid_ui_discord.request import Request, RequestOrigin, _resolve_request
 from squid_ui_discord.response import (
     UNSET,
     Abandoned,
     Presented,
     Rejected,
-    Response,
     ResponseOverrides,
     ResponseResult,
     ResponseSpec,
@@ -37,7 +36,6 @@ from squid_ui_discord.sessions import Opened
 from squid_ui_discord.sessions import Rejected as SessionRejected
 
 if TYPE_CHECKING:
-    from squid_ui_discord.request import Request
     from squid_ui_discord.runtime import DiscordUIRuntime
 
 
@@ -49,10 +47,9 @@ class Scope[OwnerT = Any]:
     edit of a message nobody just clicked.
     """
 
-    def __init__(self, runtime: DiscordUIRuntime[discord.Client], owner: OwnerT, defaults: ResponseSpec) -> None:
+    def __init__(self, runtime: DiscordUIRuntime[discord.Client], owner: OwnerT) -> None:
         self._runtime = runtime
         self._owner = owner
-        self._defaults = defaults
         self._closed = False
 
     @property
@@ -66,11 +63,6 @@ class Scope[OwnerT = Any]:
         return self._owner
 
     @property
-    def defaults(self) -> ResponseSpec:
-        """The response policy applied after installation defaults."""
-        return self._defaults
-
-    @property
     def closed(self) -> bool:
         """Whether this scope has ended."""
         return self._closed
@@ -81,18 +73,21 @@ class Scope[OwnerT = Any]:
             raise RuntimeError(message)
 
     def _policy(self, content: FacadeContent, overrides: ResponseOverrides) -> ResponseSpec:
-        policy = self._runtime.response_defaults.overlay(self._defaults)
+        policy = self._runtime.response_defaults
         screen_spec = getattr(type(content), "__response_spec__", None)
         if isinstance(screen_spec, ResponseSpec):
             policy = policy.overlay(screen_spec)
         return policy.overlay(None, **overrides)
 
-    async def request(self, source: ResponseSource) -> Request[OwnerT]:
-        """The request for `source`, created under this scope if no request has seen it yet."""
-        self._require_live()
-        from squid_ui_discord.request import request
+    async def request(self, source: RequestOrigin) -> Request[OwnerT]:
+        """Resolve this owner's request, sharing the source's existing acknowledgement ledger.
 
-        return await request(source, owner=self._owner)
+        Use this in listeners and native callbacks whose source carries no command binding.
+        A closed scope, a source from another runtime, or a request already owned elsewhere
+        raises instead of opening a panel with a different lifetime.
+        """
+        self._require_live()
+        return cast(Request[OwnerT], await _resolve_request(source, scope=self))
 
     def render(self, content: FacadeContent, *, localization: Localization | None = None) -> MessagePayload:
         """Render supported static content through installed rendering defaults."""
@@ -117,44 +112,6 @@ class Scope[OwnerT = Any]:
             palette=defaults.palette,
             strict=defaults.strict,
         )
-
-    @overload
-    async def respond[ComponentT: Component[ComponentsV2Target]](
-        self,
-        source: ResponseSource,
-        content: ComponentT | Response[ComponentT],
-        *,
-        files: Sequence[discord.File] = (),
-        parent: MessageRoot | None = None,
-        session_key: Hashable | None = None,
-        **overrides: Unpack[ResponseOverrides],
-    ) -> ResponseResult[ComponentT]: ...
-
-    @overload
-    async def respond(
-        self,
-        source: ResponseSource,
-        content: FacadeContent | Response,
-        *,
-        files: Sequence[discord.File] = (),
-        parent: MessageRoot | None = None,
-        session_key: Hashable | None = None,
-        **overrides: Unpack[ResponseOverrides],
-    ) -> ResponseResult: ...
-
-    async def respond(
-        self,
-        source: ResponseSource,
-        content: FacadeContent | Response[Any],
-        *,
-        files: Sequence[discord.File] = (),
-        parent: MessageRoot | None = None,
-        session_key: Hashable | None = None,
-        **overrides: Unpack[ResponseOverrides],
-    ) -> ResponseResult:
-        """Transitional: `(await scope.request(source)).respond(...)` for call sites not yet ported."""
-        request = await self.request(source)
-        return await request.respond(content, files=files, parent=parent, session_key=session_key, **overrides)
 
     async def send(
         self,
@@ -234,7 +191,7 @@ class Scope[OwnerT = Any]:
         self,
         content: FacadeContent,
         *,
-        destination,
+        destination: MessageDestination,
         policy: ResponseSpec,
         localization: Localization,
         source: ResponseSource | None,
@@ -319,6 +276,7 @@ class Scope[OwnerT = Any]:
         chrome = self._setting(policy.chrome, default=None)
         if chrome is not None:
             options["chrome"] = chrome
+        options["retain_routed_on_timeout"] = self._setting(policy.retain_routed_on_timeout, default=False)
         options["timeout"] = self._setting(policy.timeout, default=180)
         options["localization"] = localization
         scheduler = self._runtime.scheduler if self._setting(policy.follow_topics, default=False) else None
@@ -360,7 +318,4 @@ class Scope[OwnerT = Any]:
         self._closed = True
 
 
-# Transitional name; removed once the bot is ported.
-DiscordUI = Scope
-
-__all__ = ["DiscordUI", "Scope"]
+__all__ = ["Scope"]

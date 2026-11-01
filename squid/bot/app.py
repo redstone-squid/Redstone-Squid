@@ -17,9 +17,10 @@ from squid.bootstrap import create_bot_runtime
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
-from squid.bot.errors import COMMAND_ERRORS, SquidCommandTree
+from squid.bot.errors import UI_ERRORS, SquidCommandTree
 from squid.bot.i18n import SquidAppCommandTranslator, localization_resolver
 from squid.bot.posts import BuildCardRenderer, PostReconciler, StarboardEntryRenderer, VoteSessionRenderer
+from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
 from squid.bot.reactions import ReactionRouter
 from squid.bot.routes import router as control_router
 from squid.bot.submission.build_handler import BuildHandler
@@ -54,7 +55,7 @@ from squid_reactivity import LocalTopicBus
 from squid_storage import PostgresTopicBridge
 from squid_ui.profiling import MemoryProfiler
 from squid_ui.text import localization_scope
-from squid_ui_discord import DiscordUIConfig, DiscordUIRuntime, SessionManager, install
+from squid_ui_discord import Config, DiscordUIRuntime, SessionManager, install
 
 logger = logging.getLogger(__name__)
 type MaybeAwaitableFunc[**P, T] = Callable[P, T | Awaitable[T]]
@@ -153,7 +154,12 @@ class RedstoneSquid(Bot):
         self.reactions = ReactionRouter(self, self.background_tasks)
         self.post_reconciler = PostReconciler(
             self,
-            [BuildCardRenderer(self), VoteSessionRenderer(self), StarboardEntryRenderer(self)],
+            [
+                BuildCardRenderer(self),
+                VoteSessionRenderer(self),
+                StarboardEntryRenderer(self),
+                SubmissionStatusRenderer(self),
+            ],
         )
         self.catbox = CatboxClient(catbox_config)
         self.media_previews = MediaPreviewClient()
@@ -172,19 +178,14 @@ class RedstoneSquid(Bot):
         # a guard's dialog resumes an approved press through.
         self.ui: DiscordUIRuntime[Self] = install(
             self,
-            DiscordUIConfig(
+            Config(
                 defaults=HOST_DEFAULTS,
                 bus=self.topic_bus,
                 profiler=self.layout_profiler,
                 localization=localization_resolver,
-                errors=COMMAND_ERRORS,
+                errors=UI_ERRORS,
             ),
         )
-
-    @property
-    def app_ui(self) -> sd.Scope[Self]:
-        """The cached owner scope for bot-level and routed application work."""
-        return self.ui.scope(self)
 
     @property
     def sessions(self) -> SessionManager:
@@ -211,7 +212,9 @@ class RedstoneSquid(Bot):
         }
         if ctx.guild is not None:
             attributes["squid.guild.id"] = ctx.guild.id
-        if ctx.channel is not None:
+        # A real Context always has a channel, but Context doubles built in tests (and any
+        # partially constructed context) do not, and this attribute is not worth crashing over.
+        if ctx.channel is not None:  # pyright: ignore[reportUnnecessaryComparison]
             attributes["squid.channel.id"] = ctx.channel.id
         with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
             request = await sd.request(ctx)
@@ -227,8 +230,13 @@ class RedstoneSquid(Bot):
         # Panels are left showing disabled controls rather than silently going dead. Bounded
         # because each one is a gateway round trip: a slow Discord must not stall shutdown,
         # and an undisabled panel times out on its own anyway.
-        with anyio.move_on_after(3.0):
-            await self.ui.close()
+        with anyio.move_on_after(3.0) as ui_shutdown:
+            try:
+                await self.ui.close()
+            except Exception:
+                logger.exception("UI cleanup failed during application shutdown")
+        if ui_shutdown.cancel_called:
+            logger.error("UI cleanup did not finish before the application shutdown deadline")
         await self.background_tasks.close()
         # After the supervisor, so the bridge's listener is already cancelled and cannot
         # log a torn connection on the way out. Bounded, then hung up: shutdown must not

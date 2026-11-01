@@ -48,6 +48,7 @@ pip install -r requirements/base.txt requirements/dev.txt
 ```
 
 Alternatively, if you use `uv`, you can run `uv sync`. The requirements folder and `uv.lock` are kept in sync.
+On Termux, use `sh scripts/termux.sh`; see [the Termux setup notes](scripts/README.md#termux).
 
 ### Configuration
 

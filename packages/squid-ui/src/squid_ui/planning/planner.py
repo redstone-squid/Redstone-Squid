@@ -1,11 +1,13 @@
 """Public target-neutral planning dispatcher."""
 
 from collections.abc import Mapping
+from dataclasses import replace
 from typing import Any
 
 from squid_ui import scene
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.document import DocumentLike, PortableDocumentLike
+from squid_ui.handlers import bind_handlers
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.cache import PlanCache, PlanMemo
 from squid_ui.planning.navigation import PlannedNav
@@ -18,8 +20,6 @@ from squid_ui.scene.model import PlanResult
 from squid_ui.sources import Position
 from squid_ui.text import NEUTRAL, Localization
 
-EMPTY_RESERVATION = EMPTY_COST
-
 
 def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     rendered: DocumentLike[RenderTargetT] | PortableDocumentLike,
@@ -29,7 +29,7 @@ def plan[RenderTargetT, AdapterT, BodyT: scene.Body](
     localization: Localization = NEUTRAL,
     palette: Palette = DEFAULT_PALETTE,
     strict: bool = False,
-    reservation: ResourceCost = EMPTY_RESERVATION,
+    reservation: ResourceCost = EMPTY_COST,
     positions: Mapping[str, Position] | None = None,
     nav: PlannedNav | None = None,
     session: PresentationState | None = None,
@@ -67,7 +67,15 @@ def plan_request[RenderTargetT, AdapterT, BodyT: scene.Body](
     reassembled -- every layer between a mount and a backend is one of those.
     """
     backend = request.target.dialect.planner
-    return backend.plan(rendered, request, cache=cache, memo=memo)
+    result = backend.plan(rendered, request, cache=cache, memo=memo)
+    frontend = request.target.adapter.frontend or request.target.adapter.name
+    bindings = bind_handlers(result.bindings, frontend)
+    forms = bind_handlers(result.form_bindings, frontend)
+    return (
+        replace(result, bindings=bindings, form_bindings=forms)
+        if bindings is not result.bindings or forms is not result.form_bindings
+        else result
+    )
 
 
-__all__ = ["EMPTY_RESERVATION", "plan", "plan_request"]
+__all__ = ["plan", "plan_request"]

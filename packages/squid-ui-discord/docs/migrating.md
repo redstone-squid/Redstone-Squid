@@ -262,7 +262,7 @@ its callback body into the submit handler.
 | `View.interaction_check` | `AccessPolicy`; action guards | `Owner`, `Users`, `Everyone`, or async `Check` gates the message root. Guards apply finer action policy. |
 | `View.on_error` | `MessageRoot(on_error=...)` / `MessageRootDefaults(on_error=...)` | One host hook receives the interaction, exception, and action source. Routers configure their own hook. |
 | `DynamicItem` | `Route`, `RouteGroup`, `Router` | Keep stable IDs and aliases; register the router at startup. |
-| Decorated button callback | `sl.action_control(..., on_click=...)` | Reuse the service call, not the live item. Use `sd.native(event)` only when the interaction itself is required. |
+| Decorated button callback | `sl.action_control(..., on_click=...)` | Reuse the service call, not the live item. Annotate the callback with `sd.PressEvent` and use `event.context` for Discord facts. |
 | `Modal.on_submit` | `FormSpec` or `sl.forms.Form` plus `SubmitEvent` | Parsing and retry policy move out of the Discord modal class. |
 | Ephemeral edit token | `RenewEphemeral` with an expiry-supervising `MessageRootScheduler` | Interactive edits can renew credentials; unattended authority still expires. |
 
@@ -280,3 +280,133 @@ messages after a process restart.
 See [Durable sessions](durable-message-roots.md) for recipes, recovery, storage, leases, and the durable
 open path. Durability preserves component and presentation state; consequential domain writes still
 belong in the application's authoritative service.
+
+## Alpha policy and exact-layout conveniences
+
+Replace repeated `Screen` policy declarations with the closest preset while retaining a stable name:
+
+```python
+class Settings(sd.UserGuildSessionScreen, session_name="settings"):
+    pass
+```
+
+`UserSessionScreen` and `UserGuildSessionScreen` are personal and owner-only. A
+`SharedGuildSessionScreen` is public, admits everyone, and rejects duplicate opens; migrating a shared
+guild screen therefore changes replacement into an explicit rejection.
+
+Use `sd.v2.panel(*children)` and `sd.classic.card(*children)` when exact Discord structure is needed.
+These factories promote bare text and omit `None`/`False`; primitive dataclass constructors are not
+deprecated.
+
+DevTools mutations are no longer enabled by default. Preserve the previous operational capability
+set with an explicit allowlist, or opt into every operation:
+
+```python
+runtime = sd.devtools_runtime.DevToolsRuntime(
+    policy=sd.devtools_runtime.DevToolsPolicy.full_access(),
+)
+```
+
+The bundled Cog now exposes prefix `dev ui` and a hybrid `/dev ui` command tree. A custom command can call
+`sd.open_devtools(ctx, runtime=runtime)` instead of installing that Cog.
+
+Preset classes retain `Screen[OwnerT]` typing. For customized admission or membership limits,
+declare a complete `session = sd.SessionSpec(...)` instead of the `session_name` class keyword;
+that explicit recipe takes precedence over the preset's session defaults. Presentation still
+goes through `Request.respond(ScreenInstance())`, and `opening` is that same typed `Request`.
+The host must authorize callers of `open_devtools`; the opener restricts the resulting panel to
+that caller, while the bundled Cog defaults to bot-owner authorization.
+
+## Respond through a request
+
+`Scope.respond` has been removed. Commands declared with `@sd.command`,
+`@sd.hybrid_command`, or `@sd.prefix_command` receive a `Request`; return the
+screen and let the command wrapper present it:
+
+```python
+class Builds(sd.Cog):
+    @sd.command()
+    async def browse(self, request: sd.Request) -> BuildScreen:
+        return BuildScreen(user_id=request.user.id)
+```
+
+For listeners and callbacks without a command binding, resolve the request through the cog
+scope. Pass it to helpers that need to defer, prompt, or reply:
+
+```python
+request = await self.ui.request(interaction)
+await request.defer("private")
+await request.respond(BuildScreen(user_id=request.user.id))
+```
+
+Use `Scope.send` and `Scope.edit` for work without an incoming request. Closing
+the scope still finishes the screens opened by its requests.
+
+
+## Finish the request-centric migration
+
+Use one request API for commands, native callbacks, and component events:
+
+| Previous API | Replacement |
+|---|---|
+| `DiscordUIConfig` or installation keyword arguments | `sd.install(client, sd.Config(...))` |
+| `sd.request(source, owner=self)` | `await self.ui.request(source)` for listeners and callbacks without command bindings |
+| `bot.app_ui.request(source)` | `await sd.request(source)` for native commands, component events, and application-owned callbacks |
+| Scope response defaults | `Config.responses`, screen class policy, or call keywords |
+| `sd.responder(event).message_root` | `event.context.root` |
+| `sd.native(event)` | `event.context.interaction` |
+| `responder(event).send_modal(modal)` | `await event.context.form(modal)` |
+| `squid_ui_discord.ext` | `squid_ui_discord` |
+| `ext.testing.stage` / `invoke` | `sd.testing.stage` / `invoke` |
+| `run_managed_result` | A command's `pending=` card and returned document |
+| Application `MessageRootDefaults.on_error` | `Config.errors=sd.ErrorPolicy(render=..., observe=...)` |
+| `Screen.root_options` | Typed screen fields such as `chrome` and `retain_routed_on_timeout` |
+
+`sd.request` is asynchronous for every source. The root and session fields are optional because
+commands and native callbacks need not originate on a live panel. A component event supplies its
+root and inherits that root's owner scope. Native commands infer ownership from their Discord
+binding. `Scope.request` supplies an owner when no command identifies one, while sharing the same
+memoized request and ledger. `Scope` also owns lifetime and out-of-band sends/edits; it carries no
+response defaults.
+
+A missing or closed command-owner scope raises rather than falling back to application lifetime.
+Use `sd.Cog` to register and close native commands' scopes automatically; a plain discord.py cog
+must manage its own `runtime.scope(cog)` lifetime.
+Bound resolution rejects another client's source or another owner's request. An application-scoped
+request can be claimed before its first message or form; after that, attempting to change its owner
+raises. Truly unbound sources and free commands remain application-owned.
+
+`ErrorPolicy.render(request, error)` returns a document. `observe(request, error, delivery)` records
+the failure; delivery is absent when no notice was sent. Pending commands replace their card and
+re-raise the failure for discord.py's command error handler. Component failures roll back first,
+then use the same policy to send a notice and report the failure. Standalone low-level roots can
+still use their transport error hook; installing a runtime requires application errors in `Config`.
+
+`RouteGroup.define` returns the existing route for an identical format and aliases, including after
+registration. Reloading a handler module needs no application route cache; changed aliases and
+new overlapping definitions still fail.
+
+## Typed event contexts
+
+Use Discord event aliases when a handler needs Discord capabilities:
+
+```python
+async def clicked(event: sd.PressEvent) -> None:
+    await event.context.respond("Hello!", audience="personal")
+```
+
+The same applies to `sd.ChoiceEvent`, `sd.SubmitEvent`, and the other semantic event aliases.
+Keep `sl.PressEvent` for callbacks that only change state or use portable operations such
+as `event.notice`. The old `event.context` metadata dictionary is now `event.metadata`.
+Constructing a portable event explicitly requires `context=`; pass `None` when there is
+no frontend invocation context.
+
+A screen containing Discord callbacks returns
+`sl.LayoutNode[sl.ComponentsV2Target, sd.Request]` (or a sequence/document of that type).
+The second parameter also carries through child components and widget content slots.
+Bare layout annotations describe portable invocation capabilities.
+
+For multiple implementations, use `sl.handlers(sd.on_press(callback), fallback=portable)`.
+The `on_selection`, `on_choice`, `on_submit`, and other event registration functions provide
+the same selection for their respective shapes. Registrations are selected using the
+adapter profile's explicit `frontend`, with no callback annotation inspection.

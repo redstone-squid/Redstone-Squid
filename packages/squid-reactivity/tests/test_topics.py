@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Callable
+from typing import override
 
 import pytest
 
@@ -105,6 +106,7 @@ def test_reconciler_commit_promotes_and_close_releases() -> None:
 
 def test_reconciler_unwinds_a_partial_stage() -> None:
     class BrokenBus(LocalTopicBus):
+        @override
         def subscribe[AddressT: Address](
             self, address: AddressT, callback: Callable[[AddressT], None]
         ) -> Callable[[], None]:

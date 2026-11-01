@@ -1,7 +1,10 @@
 """Resource-backed master-detail browsing."""
 
 from collections.abc import Awaitable, Callable, Sequence
+from typing import override
 
+from squid_reactivity.core import state
+from squid_reactivity.resources import Failed, Pending, Ready, resource
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
 from squid_ui.factories import (
@@ -24,8 +27,6 @@ from squid_ui.planning.navigation import (
     default_nav,
 )
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.reactivity import state
-from squid_ui.runtime.resources import Failed, Pending, Ready, resource
 from squid_ui.semantic import ActionControl, ChoiceEvent, ControlDisplay, Link
 from squid_ui.sources import (
     ORIGIN,
@@ -47,19 +48,23 @@ from squid_ui_widgets._window import (
     source_navigation_state,
 )
 
-type BrowserDetail[ItemT, RenderTargetT: DiscordTarget = DiscordTarget] = Callable[[ItemT], ContentLike[RenderTargetT]]
+type BrowserDetail[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = Callable[
+    [ItemT], ContentLike[RenderTargetT, ContextT]
+]
 type BrowserOpenHandler[ItemT] = Callable[[ActionEvent, ItemT], Awaitable[None]]
-type BrowserOverview[ItemT, RenderTargetT: DiscordTarget = DiscordTarget] = Callable[
-    [LoadedWindow[ItemT]], ContentLike[RenderTargetT]
+type BrowserOverview[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object] = Callable[
+    [LoadedWindow[ItemT]], ContentLike[RenderTargetT, ContextT]
 ]
 
 
-class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[RenderTargetT]):
+class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget, ContextT = object](
+    Component[RenderTargetT, ContextT]
+):
     """Browse a remote window, open one item, and act within its detail."""
 
     _request: WindowRequest = state(default=WindowRequest(), persist=False, opaque=True)
     opened: ItemT | None = state(None, persist=False, opaque=True)
-    _detail_value: ContentLike[RenderTargetT] | None = state(None, persist=False, opaque=True)
+    _detail_value: ContentLike[RenderTargetT, ContextT] | None = state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -68,14 +73,14 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         key: str = "browser",
         identity: Callable[[ItemT], str],
         label: Callable[[ItemT], TextLike],
-        detail: BrowserDetail[ItemT, RenderTargetT],
+        detail: BrowserDetail[ItemT, RenderTargetT, ContextT],
         summary: Callable[[ItemT], TextLike] | None = None,
         entry_actions: Callable[[ItemT], Sequence[ActionControl | Link]] | None = None,
-        overview: BrowserOverview[ItemT, RenderTargetT] | None = None,
+        overview: BrowserOverview[ItemT, RenderTargetT, ContextT] | None = None,
         page_size: int = 10,
         on_open: BrowserOpenHandler[ItemT] | None = None,
         title: TextLike | None = None,
-        empty: ContentLike[RenderTargetT] = "No entries",
+        empty: ContentLike[RenderTargetT, ContextT] = "No entries",
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
     ) -> None:
         self.key = require_key(key, name="Browser.key")
@@ -181,7 +186,8 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         """Open the next item in the visible window."""
         await self._adjacent(event, 1)
 
-    def render(self) -> DocumentLike[RenderTargetT]:
+    @override
+    def render(self) -> DocumentLike[RenderTargetT, ContextT]:
         """Render ready, pending, or failed source state."""
         # One arm per member of `Ready | Pending | Failed`, with the `previous` case inside it.
         # Splitting on `previous` in the pattern left the match unprovably exhaustive, so the
@@ -198,7 +204,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
                     return self._status(self.copy.failed, retry=True)
                 return self._render_loaded(previous.value, status_text=self.copy.failed, retry=True)
 
-    def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT]:
+    def _status(self, message: TextLike, *, retry: bool = False) -> DocumentLike[RenderTargetT, ContextT]:
         """Render a source status without a stale window."""
         return stack(
             heading(self.title) if self.title is not None else None,
@@ -216,7 +222,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         *,
         status_text: TextLike | None = None,
         retry: bool = False,
-    ) -> DocumentLike[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render a loaded window as either overview or detail."""
         opened = None
         if self.opened is not None:
@@ -234,7 +240,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         *,
         status_text: TextLike | None,
         retry: bool,
-    ) -> DocumentLike[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render overview content, item selection, and navigation."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items
@@ -306,7 +312,7 @@ class Browser[ItemT, RenderTargetT: DiscordTarget = DiscordTarget](Component[Ren
         *,
         status_text: TextLike | None,
         retry: bool,
-    ) -> DocumentLike[RenderTargetT]:
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render one opened item and its local actions."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         items = loaded.window.items

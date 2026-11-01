@@ -5,7 +5,7 @@ import re
 from collections.abc import Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, override
 
 import discord
 
@@ -354,7 +354,7 @@ async def _send_default_notice(interaction: discord.Interaction[Any], result: Ro
         await interaction.response.send_message(content, ephemeral=True, allowed_mentions=allowed_mentions)
 
 
-class RolePanel(Component[DiscordTarget]):
+class RolePanel(Component[DiscordTarget, Any]):
     """A stateless, persistent panel for managing member self-roles."""
 
     def __init__(
@@ -437,9 +437,10 @@ class RolePanel(Component[DiscordTarget]):
             raise
         return toggle_route, set_route
 
-    def render(self) -> Sequence[LayoutNode[DiscordTarget]]:
+    @override
+    def render(self) -> Sequence[LayoutNode[DiscordTarget, Any]]:
         """Render stateless buttons with a planner-owned select fallback."""
-        nodes: list[LayoutNode[DiscordTarget]] = [Heading(self.title)]
+        nodes: list[LayoutNode[DiscordTarget, Any]] = [Heading(self.title)]
         for category in self.categories:
             nodes.append(Heading(category.label, level=3))
             if category.description is not None:

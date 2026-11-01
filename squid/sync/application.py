@@ -17,6 +17,8 @@ class ReconciliationResource(StrEnum):
     BUILD = "build"
     VOTE_SESSION = "vote_session"
     STARBOARD_ENTRY = "starboard_entry"
+    INFERENCE_RUN = "inference_run"
+    SUBMISSION_DRAFT = "submission_draft"
 
     @property
     def post_kind(self) -> PostResourceKind:
@@ -35,6 +37,10 @@ class ReconciliationResource(StrEnum):
                 return "vote_session"
             case ReconciliationResource.STARBOARD_ENTRY:
                 return "starboard_entry"
+            case ReconciliationResource.INFERENCE_RUN:
+                return "inference_run"
+            case ReconciliationResource.SUBMISSION_DRAFT:
+                return "submission_draft"
 
 
 class ReconciliationAction(StrEnum):

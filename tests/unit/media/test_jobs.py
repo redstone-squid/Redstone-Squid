@@ -18,6 +18,7 @@ import squid.media.application.jobs as media_jobs
 from squid.artifacts import ArtifactMetadata
 from squid.media.application.commands import MediaNormalizationRequest
 from squid.media.application.jobs import (
+    MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS,
     ClaimedMediaJob,
     MediaArtifactCleanupInProgressError,
     MediaArtifactCleanupOutcome,
@@ -29,6 +30,7 @@ from squid.media.application.jobs import (
     MediaJobStatus,
     MediaNormalizationJobRunner,
     MediaNormalizationJobService,
+    MediaStorageCleanup,
     MediaUploadConflictError,
     MediaUploadMetadata,
     MediaUploadSubmission,
@@ -207,6 +209,9 @@ class MemoryMediaJobs:
         return tuple(
             snapshot for snapshot in snapshots if snapshot is not None and snapshot.upload.draft_id == draft_id
         )
+
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, limits: MediaLimits) -> bool:
+        raise NotImplementedError
 
     async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
         state = self.states.get(upload_id)
@@ -492,6 +497,23 @@ class WritingNormalizer:
         pass
 
 
+def make_runner(
+    jobs: MediaNormalizationJobService,
+    artifacts: MemoryArtifacts,
+    normalizer: WritingNormalizer,
+    working_directory: Path,
+    *,
+    heartbeat_interval_seconds: float = MEDIA_JOB_HEARTBEAT_INTERVAL_SECONDS,
+) -> MediaNormalizationJobRunner:
+    return MediaNormalizationJobRunner(
+        jobs,
+        artifacts,
+        MediaNormalizationService(normalizer),
+        working_directory=working_directory,
+        heartbeat_interval_seconds=heartbeat_interval_seconds,
+    )
+
+
 class BlockingNormalizer(WritingNormalizer):
     def __init__(self, kind: MediaKind) -> None:
         super().__init__(kind)
@@ -530,12 +552,8 @@ async def test_submit_is_retry_safe_and_does_not_overwrite_conflicting_source() 
     assert original is not None
     original_key = original.upload.source_object_key
 
-    try:
+    with pytest.raises(MediaUploadConflictError):
         await jobs.submit(replace(submission, source=b"different"))
-    except MediaUploadConflictError:
-        pass
-    else:
-        raise AssertionError
 
     assert artifacts.objects[original_key] == b"image"
     assert all(data != b"different" for data in artifacts.objects.values())
@@ -564,7 +582,7 @@ async def test_submit_staged_streams_a_regular_file_and_rejects_empty_source(tmp
     assert artifacts.objects[snapshot.upload.source_object_key] == b"image"
 
     source.write_bytes(b"")
-    try:
+    with pytest.raises(ValueError, match="empty"):
         await jobs.submit_staged(
             StagedMediaUploadSubmission(
                 draft_id=DRAFT_ID,
@@ -573,10 +591,6 @@ async def test_submit_staged_streams_a_regular_file_and_rejects_empty_source(tmp
                 source_content_type="image/jpeg",
             )
         )
-    except ValueError:
-        pass
-    else:
-        raise AssertionError
 
 
 async def test_submit_staged_cancellation_settles_metadata_reader_before_returning(
@@ -674,7 +688,7 @@ async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -
                 source_content_type="image/png",
             )
         )
-    assert exc_info.value.violation.measure.value == "image_count"
+    assert exc_info.value.violations[0].measure.value == "image_count"
     assert all(data != b"second" for data in artifacts.objects.values())
 
     assert await jobs.discard(DRAFT_ID, first_id)
@@ -704,12 +718,7 @@ async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_
     )
     await jobs.submit(submission)
     normalizer = WritingNormalizer(MediaKind.VIDEO)
-    runner = MediaNormalizationJobRunner(
-        jobs,
-        artifacts,
-        MediaNormalizationService(normalizer),
-        working_directory=tmp_path,
-    )
+    runner = make_runner(jobs, artifacts, normalizer, tmp_path)
 
     await runner.process_batch()
 
@@ -718,7 +727,8 @@ async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_
     assert before_cleanup.upload.raw_deleted_at is None
     assert before_cleanup.upload.source_object_key in artifacts.objects
     assert repository.artifact_cleanup_calls == 0
-    await runner.cleanup_terminal_sources()
+    cleanup = MediaStorageCleanup(jobs, artifacts)
+    await cleanup.cleanup_terminal_sources()
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.COMPLETED
@@ -759,13 +769,7 @@ async def test_runner_heartbeats_while_normalization_is_still_running(tmp_path: 
         )
     )
     normalizer = BlockingNormalizer(MediaKind.IMAGE)
-    runner = MediaNormalizationJobRunner(
-        jobs,
-        artifacts,
-        MediaNormalizationService(normalizer),
-        working_directory=tmp_path,
-        heartbeat_interval_seconds=0.01,
-    )
+    runner = make_runner(jobs, artifacts, normalizer, tmp_path, heartbeat_interval_seconds=0.01)
 
     with fail_after(1):
         async with create_task_group() as tasks:
@@ -794,13 +798,7 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
         )
     )
     normalizer = BlockingNormalizer(MediaKind.IMAGE)
-    runner = MediaNormalizationJobRunner(
-        jobs,
-        artifacts,
-        MediaNormalizationService(normalizer),
-        working_directory=tmp_path,
-        heartbeat_interval_seconds=0.01,
-    )
+    runner = make_runner(jobs, artifacts, normalizer, tmp_path, heartbeat_interval_seconds=0.01)
 
     with fail_after(1):
         async with create_task_group() as tasks:
@@ -832,13 +830,7 @@ async def test_cancelling_runner_stops_heartbeat_and_cleans_private_working_tree
         )
     )
     normalizer = BlockingNormalizer(MediaKind.IMAGE)
-    runner = MediaNormalizationJobRunner(
-        jobs,
-        artifacts,
-        MediaNormalizationService(normalizer),
-        working_directory=tmp_path,
-        heartbeat_interval_seconds=0.01,
-    )
+    runner = make_runner(jobs, artifacts, normalizer, tmp_path, heartbeat_interval_seconds=0.01)
 
     with fail_after(1):
         async with create_task_group() as tasks:
@@ -866,12 +858,7 @@ async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: 
             upload_id=UPLOAD_ID,
         )
     )
-    runner = MediaNormalizationJobRunner(
-        jobs,
-        artifacts,
-        MediaNormalizationService(WritingNormalizer(MediaKind.IMAGE)),
-        working_directory=tmp_path,
-    )
+    runner = make_runner(jobs, artifacts, WritingNormalizer(MediaKind.IMAGE), tmp_path)
 
     await runner.process_batch()
 
@@ -898,16 +885,12 @@ async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path)
             upload_id=UPLOAD_ID,
         )
     )
-    runner = MediaNormalizationJobRunner(
-        jobs,
-        artifacts,
-        MediaNormalizationService(WritingNormalizer(MediaKind.IMAGE)),
-        working_directory=tmp_path,
-    )
+    runner = make_runner(jobs, artifacts, WritingNormalizer(MediaKind.IMAGE), tmp_path)
 
     await runner.process_batch()
-    await runner.cleanup_terminal_sources()
-    await runner.cleanup_terminal_artifacts()
+    cleanup = MediaStorageCleanup(jobs, artifacts)
+    await cleanup.cleanup_terminal_sources()
+    await cleanup.cleanup_terminal_artifacts()
 
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
@@ -931,12 +914,7 @@ async def test_discarded_artifact_cleanup_retries_without_losing_tombstone_metad
             upload_id=UPLOAD_ID,
         )
     )
-    runner = MediaNormalizationJobRunner(
-        jobs,
-        artifacts,
-        MediaNormalizationService(WritingNormalizer(MediaKind.IMAGE)),
-        working_directory=tmp_path,
-    )
+    runner = make_runner(jobs, artifacts, WritingNormalizer(MediaKind.IMAGE), tmp_path)
     await runner.process_batch()
     completed = await jobs.get(UPLOAD_ID)
     assert completed is not None
@@ -945,11 +923,12 @@ async def test_discarded_artifact_cleanup_retries_without_losing_tombstone_metad
     artifacts.fail_once.add(failing_key)
 
     assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
-    await runner.cleanup_terminal_artifacts()
+    cleanup = MediaStorageCleanup(jobs, artifacts)
+    await cleanup.cleanup_terminal_artifacts()
     assert failing_key in artifacts.objects
     assert any(key not in artifacts.objects for key in object_keys - {failing_key})
 
-    await runner.cleanup_terminal_artifacts()
+    await cleanup.cleanup_terminal_artifacts()
     discarded = await jobs.get(UPLOAD_ID)
     assert discarded is not None
     assert discarded.status is MediaJobStatus.DISCARDED
@@ -976,15 +955,11 @@ async def test_terminal_validation_failure_cleans_raw_while_retryable_failure_ke
             )
         )
         normalizer = WritingNormalizer(MediaKind.IMAGE, failure=failure)
-        runner = MediaNormalizationJobRunner(
-            jobs,
-            artifacts,
-            MediaNormalizationService(normalizer),
-            working_directory=tmp_path,
-        )
+        runner = make_runner(jobs, artifacts, normalizer, tmp_path)
 
         await runner.process_batch()
-        await runner.cleanup_terminal_sources()
+        cleanup = MediaStorageCleanup(jobs, artifacts)
+        await cleanup.cleanup_terminal_sources()
 
         snapshot = await jobs.get(upload_id)
         assert snapshot is not None
@@ -1049,11 +1024,8 @@ async def test_runner_finishes_the_rest_of_the_batch_when_one_job_cannot_be_fail
                 upload_id=upload_id,
             )
         )
-    runner = MediaNormalizationJobRunner(
-        jobs,
-        artifacts,
-        MediaNormalizationService(SelectivelyFailingNormalizer(MediaKind.IMAGE, failing_source=b"broken-image")),
-        working_directory=tmp_path,
+    runner = make_runner(
+        jobs, artifacts, SelectivelyFailingNormalizer(MediaKind.IMAGE, failing_source=b"broken-image"), tmp_path
     )
 
     # The batch still reports its failure, but only once every job has settled.

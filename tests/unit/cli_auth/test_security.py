@@ -1,7 +1,7 @@
 """CLI bearer authentication at the shared API security boundary."""
 
 from dataclasses import dataclass
-from typing import cast
+from typing import cast, override
 from uuid import UUID
 
 import pytest
@@ -26,6 +26,7 @@ class FakeCliAuthorization(CliAuthorizationService):
         self.valid = valid
         self.token: str | None = None
 
+    @override
     async def authenticate(self, token: str) -> CliIdentity:
         self.token = token
         if not self.valid:

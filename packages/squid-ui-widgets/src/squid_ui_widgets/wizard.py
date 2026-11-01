@@ -26,12 +26,12 @@ class WizardAnswer:
 
 
 @dataclass(frozen=True, slots=True)
-class WizardReview[RenderTargetT: RenderTarget = RenderTarget]:
+class WizardReview[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """A final screen that shows every answer and lets the reader jump back to one."""
 
     label: TextLike | None = None
     """Heading and control wording for the review destination; `None` uses chrome."""
-    summarize: Callable[[WizardAnswers], ContentLike[RenderTargetT]] | None = None
+    summarize: Callable[[WizardAnswers], ContentLike[RenderTargetT, ContextT]] | None = None
     """Replace the default per-step rows with content of your own."""
 
 
@@ -52,19 +52,19 @@ class WizardState:
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class WizardStep[RenderTargetT: RenderTarget = RenderTarget]:
+class WizardStep[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """One keyed form or plain-content step."""
 
     key: str
     label: TextLike
     form: FormSpec | None
-    content: tuple[ContentItem[RenderTargetT], ...]
+    content: tuple[ContentItem[RenderTargetT, ContextT], ...]
 
-    def __init__(self, key: str, label: TextLike, body: FormLike | ContentLike[RenderTargetT]) -> None:
+    def __init__(self, key: str, label: TextLike, body: FormLike | ContentLike[RenderTargetT, ContextT]) -> None:
         require_key(key, name="WizardStep.key")
         if isinstance(body, Form):
             form_spec: FormSpec | None = body.spec()
-            content: tuple[ContentItem[RenderTargetT], ...] = ()
+            content: tuple[ContentItem[RenderTargetT, ContextT], ...] = ()
         elif isinstance(body, FormSpec):
             form_spec = body
             content = ()
@@ -78,27 +78,30 @@ class WizardStep[RenderTargetT: RenderTarget = RenderTarget]:
 
 
 type WizardAnswers = Mapping[str, FormValues]
-type StepSource[RenderTargetT: RenderTarget = RenderTarget] = (
-    Iterable[WizardStep[RenderTargetT]] | Callable[[WizardAnswers], Iterable[WizardStep[RenderTargetT]]]
+type StepSource[RenderTargetT: RenderTarget = RenderTarget, ContextT = object] = (
+    Iterable[WizardStep[RenderTargetT, ContextT]]
+    | Callable[[WizardAnswers], Iterable[WizardStep[RenderTargetT, ContextT]]]
 )
 type WizardFinishHandler = Callable[[TransitionEvent[WizardState], WizardAnswers], Awaitable[None]]
 
 
-class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
+class Wizard[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """A pure branching wizard whose step list is recomputed after every answer."""
 
     def __init__(
         self,
         title: TextLike,
-        steps: StepSource[RenderTargetT],
+        steps: StepSource[RenderTargetT, ContextT],
         *,
         key: str = "wizard",
-        review: WizardReview[RenderTargetT] | bool = False,
+        review: WizardReview[RenderTargetT, ContextT] | bool = False,
     ) -> None:
         self.key = require_key(key, name="Wizard.key")
         self.title = title
         self.steps = steps
-        self.review: WizardReview[RenderTargetT] | None = WizardReview() if review is True else (review or None)
+        self.review: WizardReview[RenderTargetT, ContextT] | None = (
+            WizardReview() if review is True else (review or None)
+        )
         initial_steps = self._steps(())
         if not initial_steps:
             message = "Wizard needs at least one initial step"
@@ -115,7 +118,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         *,
         initial: WizardState | None = None,
         on_finish: WizardFinishHandler | None = None,
-    ) -> ComponentDriver[WizardState, RenderTargetT]:
+    ) -> ComponentDriver[WizardState, RenderTargetT, ContextT]:
         """Build an in-memory wizard shell and dispatch Finish once."""
 
         async def changed(event: TransitionEvent[WizardState]) -> None:
@@ -131,7 +134,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         """Expand serialized answers for branch and form logic."""
         return {answer.step: dict(answer.values) for answer in answers}
 
-    def _steps(self, answers: tuple[WizardAnswer, ...]) -> tuple[WizardStep[RenderTargetT], ...]:
+    def _steps(self, answers: tuple[WizardAnswer, ...]) -> tuple[WizardStep[RenderTargetT, ContextT], ...]:
         """Resolve and validate the branch selected by retained answers."""
         answer_map = self._answer_map(answers)
         resolved = tuple(self.steps(MappingProxyType(answer_map)) if callable(self.steps) else self.steps)
@@ -150,7 +153,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
             raise ValueError(message)
         return resolved
 
-    def live_steps(self, state: WizardState) -> tuple[WizardStep[RenderTargetT], ...]:
+    def live_steps(self, state: WizardState) -> tuple[WizardStep[RenderTargetT, ContextT], ...]:
         """Return the branch visible for all answers currently retained."""
         return self._steps(state.answers)
 
@@ -175,7 +178,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         return tuple(result)
 
     @staticmethod
-    def _index(steps: tuple[WizardStep[RenderTargetT], ...], key: str) -> int:
+    def _index(steps: tuple[WizardStep[RenderTargetT, ContextT], ...], key: str) -> int:
         """Locate a step, falling back to the first live step."""
         return next((index for index, step in enumerate(steps) if step.key == key), 0)
 
@@ -238,7 +241,7 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
             return WizardState(recomputed[recomputed_index].key, answers, complete=True)
         return WizardState(recomputed[recomputed_index + 1].key, answers)
 
-    def _prefilled(self, step: WizardStep[RenderTargetT], state: WizardState) -> FormSpec:
+    def _prefilled(self, step: WizardStep[RenderTargetT, ContextT], state: WizardState) -> FormSpec:
         """Apply a retained answer to one form step."""
         assert step.form is not None
         attempted = self._answer_map(state.answers).get(step.key)
@@ -253,7 +256,9 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         return None if step is None or step.form is None else self._prefilled(step, state)
 
     @staticmethod
-    def _summarize_step(step: WizardStep[RenderTargetT], answer: FormValues | None, unanswered: TextLike) -> TextLike:
+    def _summarize_step(
+        step: WizardStep[RenderTargetT, ContextT], answer: FormValues | None, unanswered: TextLike
+    ) -> TextLike:
         """One step's answers as a single line, each value through its field's prefill form."""
         if step.form is None or answer is None:
             return unanswered
@@ -268,15 +273,15 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
     def _render_review(
         self,
         state: WizardState,
-        controls: MachineControls[WizardState, RenderTargetT],
-        review: WizardReview[RenderTargetT],
-    ) -> DocumentLike[RenderTargetT]:
+        controls: MachineControls[WizardState, RenderTargetT, ContextT],
+        review: WizardReview[RenderTargetT, ContextT],
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render live answers and controls for the review screen."""
         live = self.live_steps(state)
         answered = self._answer_map(state.answers)
         steps = tuple(step for step in live if step.form is not None)
         if review.summarize is not None:
-            body: tuple[LayoutNode[RenderTargetT], ...] = controls.content(
+            body: tuple[LayoutNode[RenderTargetT, ContextT], ...] = controls.content(
                 normalize_content(review.summarize(self.live_answers(state)), name=f"Wizard {self.key!r} review"),
                 prefix=f"{self.key}-review",
             )
@@ -324,8 +329,8 @@ class Wizard[RenderTargetT: RenderTarget = RenderTarget]:
         )
 
     def render(
-        self, state: WizardState, controls: MachineControls[WizardState, RenderTargetT]
-    ) -> DocumentLike[RenderTargetT]:
+        self, state: WizardState, controls: MachineControls[WizardState, RenderTargetT, ContextT]
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render the current step or configured review screen."""
         if self.review is not None and state.current == REVIEW_STEP:
             return self._render_review(state, controls, self.review)

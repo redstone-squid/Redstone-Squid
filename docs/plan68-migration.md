@@ -106,7 +106,7 @@ document/backend/schema/source/action identity and a verified payload hash. The 
 Python values and its retained tokens coordinate shallow compaction. The text-only Loro and pycrdt engines
 remain conformance tools. The host owns authentication, authorization, durable storage, and transport tasks;
 the envelope hash detects corruption but does not authenticate a sender. See
-[the conclusive backend report](plans/68-replicated-backend-report.md).
+[the conclusive backend report](plans/completed/68-replicated-backend-report.md).
 
 ## Durable records
 

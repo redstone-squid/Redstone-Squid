@@ -14,8 +14,11 @@ from typing import Any, Protocol, Self, overload
 
 from squid_reactivity.actions import (
     DEFAULT_REDACTION,
+    ActionCommit,
+    ActionContext,
     ActionContinuation,
     ActionId,
+    ActionPurpose,
     CausalRef,
     ChangeToken,
     ConflictDetail,
@@ -25,20 +28,13 @@ from squid_reactivity.actions import (
     current_action,
     emit_causal_event,
 )
-from squid_reactivity.operations import OperationContext
-from squid_ui.chrome import DEFAULT_CHROME, Chrome
-from squid_ui.errors import SquidUiError
-from squid_ui.factories import action_control, control_group
-from squid_ui.interactions import ActionEvent
-from squid_ui.runtime.reactivity import (
-    ActionCommit,
-    ActionContext,
-    ActionPurpose,
+from squid_reactivity.core import (
     CellPatchSet,
     ConditionalCellPatch,
     FrameworkIntegrityError,
     FreshActionError,
     ReactiveConflictError,
+    ReactiveWriteError,
     TransactionParticipant,
     TransactionView,
     apply_conditional_patches,
@@ -48,6 +44,12 @@ from squid_ui.runtime.reactivity import (
     has_action_hook,
     on_action_commit,
 )
+from squid_reactivity.internals import CURRENT_TRANSACTION
+from squid_reactivity.operations import OperationContext
+from squid_ui.chrome import DEFAULT_CHROME, Chrome
+from squid_ui.errors import SquidUiError
+from squid_ui.factories import action_control, control_group
+from squid_ui.interactions import ActionEvent
 from squid_ui.semantic import ControlGroup
 from squid_ui.text import TextLike
 
@@ -88,10 +90,12 @@ class UndoMode(Enum):
 
 
 class HistoryOwner(Protocol):
-    __dict__: dict[str, Any]
-    """Declared because `_HistoryField` writes its stack straight into it.
+    """`_HistoryField` writes its stack into the owner's instance dictionary.
 
-    `squid_reactivity.resources.ResourceOwner` declares the same member for the same reason.
+    That is reached through `vars()` rather than declared here as `__dict__`. Declaring it
+    makes the protocol unsatisfiable for any owner with a metaclass: BasedPyright resolves
+    `__dict__` through the metaclass to `MappingProxyType`, which is not assignable to
+    `dict`, so every `Component` subclass -- `Component` inherits `ABC` -- was rejected.
     """
 
     def invalidate(self) -> None: ...
@@ -865,6 +869,10 @@ class History:
         self._owner.invalidate()
 
     def _reserve(self, callback: Callable[[ActionCommit, ActionContinuation], None]) -> None:
+        current = CURRENT_TRANSACTION.get()
+        if current is not None and current.readonly:
+            message = "a read-only action changed nothing, so it has nothing to record"
+            raise ReactiveWriteError(message)
         if has_action_hook(self):
             message = "this action already used this history; only one history operation is allowed"
             raise HistoryError(message)

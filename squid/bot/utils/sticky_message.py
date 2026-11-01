@@ -3,13 +3,13 @@
 import abc
 import asyncio
 import logging
-from collections.abc import Callable, Coroutine
-from typing import Any, override
 
+import anyio
 import discord
 from discord import TextChannel
 
 import squid_ui_discord as sd
+from squid.runtime import BackgroundTaskSupervisor, JobHandle
 from squid_ui_discord import send_to
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ DEFAULT_DEBOUNCE_DELAY = 5.0
 
 
 class StickyMessage(abc.ABC):
-    """Coordinates a sticky message pinned to the bottom of Discord channels.
+    """Coordinate sticky channel messages until close cancels their pending work.
 
     Maintains a single message per channel by deleting the prior instance and sending a new one.
     To avoid rate-limit churn and message spam during active conversations, repositioning is
@@ -29,16 +29,19 @@ class StickyMessage(abc.ABC):
 
     def __init__(
         self,
+        supervisor: BackgroundTaskSupervisor,
         *,
         stale_threshold: int = DEFAULT_STALE_THRESHOLD,
         debounce_delay: float = DEFAULT_DEBOUNCE_DELAY,
     ) -> None:
+        self._supervisor = supervisor
+        self._closed = False
         self.stale_threshold = stale_threshold
         self.debounce_delay = debounce_delay
         self._last_message_id: dict[int, int] = {}
         self._messages_since_reposition: dict[int, int] = {}
         self._locks: dict[int, asyncio.Lock] = {}
-        self._debounce_tasks: dict[int, asyncio.Task[None]] = {}
+        self._debounce_tasks: dict[int, JobHandle] = {}
 
     def _lock_for(self, channel_id: int) -> asyncio.Lock:
         if channel_id not in self._locks:
@@ -69,6 +72,7 @@ class StickyMessage(abc.ABC):
         If no sticky message exists or the staleness threshold has been reached, repositions
         immediately. Otherwise, schedules a trailing debounce timer.
         """
+        self._require_open()
         channel_id = channel.id
         self.record_activity(channel_id)
         staleness = self._messages_since_reposition.get(channel_id, 0)
@@ -82,25 +86,31 @@ class StickyMessage(abc.ABC):
     def _schedule_debounce(self, channel: TextChannel) -> None:
         channel_id = channel.id
         existing = self._debounce_tasks.get(channel_id)
-        if existing is not None and not existing.done():
+        if existing is not None and not existing.finished.is_set():
             return
 
         async def _delayed_reposition() -> None:
             try:
-                await asyncio.sleep(self.debounce_delay)
-                await self.reposition(channel)
-            except asyncio.CancelledError:
-                pass
+                await anyio.sleep(self.debounce_delay)
+                await self._reposition(channel, cancel_debounce=False)
+            finally:
+                if self._debounce_tasks.get(channel_id) is handle:
+                    self._debounce_tasks.pop(channel_id)
 
-        self._debounce_tasks[channel_id] = asyncio.create_task(_delayed_reposition())
+        handle = self._supervisor.start(_delayed_reposition(), name=f"sticky-message-{channel_id}")
+        self._debounce_tasks[channel_id] = handle
 
     async def reposition(self, channel: TextChannel) -> None:
         """Force immediate deletion of the old sticky message and posting of a new one."""
-        async with self._lock_for(channel.id):
-            task = self._debounce_tasks.pop(channel.id, None)
-            if task is not None and not task.done():
-                task.cancel()
+        self._require_open()
+        await self._reposition(channel, cancel_debounce=True)
 
+    async def _reposition(self, channel: TextChannel, *, cancel_debounce: bool) -> None:
+        async with self._lock_for(channel.id):
+            if self._closed:
+                return
+            if cancel_debounce:
+                await self._cancel_debounce(channel.id)
             old_id = self._last_message_id.get(channel.id)
             if old_id is not None:
                 try:
@@ -129,10 +139,7 @@ class StickyMessage(abc.ABC):
     async def dismiss(self, channel: TextChannel) -> None:
         """Delete the current sticky message and remove it from active tracking."""
         async with self._lock_for(channel.id):
-            task = self._debounce_tasks.pop(channel.id, None)
-            if task is not None and not task.done():
-                task.cancel()
-
+            await self._cancel_debounce(channel.id)
             old_id = self._last_message_id.pop(channel.id, None)
             self._messages_since_reposition.pop(channel.id, None)
             if old_id is not None:
@@ -142,20 +149,18 @@ class StickyMessage(abc.ABC):
                 except discord.NotFound, discord.Forbidden, discord.HTTPException:
                     pass
 
+    async def close(self) -> None:
+        """Stop accepting triggers and settle every pending reposition."""
+        self._closed = True
+        await self._supervisor.cancel(*tuple(self._debounce_tasks.values()))
+        self._debounce_tasks.clear()
 
-class FunctionalStickyMessage(StickyMessage):
-    """A sticky message defined via a renderer callback rather than subclassing."""
+    async def _cancel_debounce(self, channel_id: int) -> None:
+        handle = self._debounce_tasks.pop(channel_id, None)
+        if handle is not None:
+            await self._supervisor.cancel(handle)
 
-    def __init__(
-        self,
-        renderer: Callable[[TextChannel], Coroutine[Any, Any, sd.message_payload.MessagePayload]],
-        *,
-        stale_threshold: int = DEFAULT_STALE_THRESHOLD,
-        debounce_delay: float = DEFAULT_DEBOUNCE_DELAY,
-    ) -> None:
-        super().__init__(stale_threshold=stale_threshold, debounce_delay=debounce_delay)
-        self._renderer = renderer
-
-    @override
-    async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
-        return await self._renderer(channel)
+    def _require_open(self) -> None:
+        if self._closed:
+            msg = "Sticky messages cannot be refreshed after closing."
+            raise RuntimeError(msg)

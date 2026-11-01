@@ -2,23 +2,23 @@
 
 from typing import Protocol
 
-from squid.catalogue.domain.titles import CategoryText, DoorCategory, ExtenderCategory, RulesTitleFormatter
+from squid.catalogue.domain.titles import DoorCategory, ExtenderCategory, FormattedTitle, RulesTitleFormatter
 from squid.records.domain.models import RecordClass
 
-__all__ = ["CategoryText", "DoorCategory", "ExtenderCategory", "RulesTitleFormatter", "TitleFormatter"]
+__all__ = ["DoorCategory", "ExtenderCategory", "FormattedTitle", "RulesTitleFormatter", "TitleFormatter"]
 
 
 class TitleFormatter(Protocol):
     """A ruleset-specific formatter used when snapshotting record results."""
 
-    def format_door(self, category: DoorCategory) -> CategoryText:
+    def format_door(self, category: DoorCategory) -> FormattedTitle:
         """Format a piston-door category."""
         ...
 
-    def format_extender(self, category: ExtenderCategory) -> CategoryText:
+    def format_extender(self, category: ExtenderCategory) -> FormattedTitle:
         """Format a piston-extender category."""
         ...
 
-    def format_record(self, record_class: RecordClass, category: CategoryText) -> CategoryText:
+    def format_record(self, record_class: RecordClass, category: FormattedTitle) -> FormattedTitle:
         """Prefix a category with its record class."""
         ...

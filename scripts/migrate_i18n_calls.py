@@ -7,6 +7,7 @@ import sys
 import tokenize
 from dataclasses import dataclass
 from pathlib import Path
+from typing import override
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +73,7 @@ class CallRewriter(ast.NodeVisitor):
         self.ambiguous: list[tuple[int, str]] = []
         self.parents: list[ast.AST] = []
 
+    @override
     def visit(self, node: ast.AST) -> None:
         self.parents.append(node)
         try:
@@ -79,6 +81,7 @@ class CallRewriter(ast.NodeVisitor):
         finally:
             self.parents.pop()
 
+    @override
     def visit_Call(self, node: ast.Call) -> None:
         name = _name(node)
         if name == "locale_str" and len(node.args) == 1 and not node.keywords:
@@ -133,6 +136,7 @@ class CallRewriter(ast.NodeVisitor):
 
         self.generic_visit(node)
 
+    @override
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         names = list(node.names)
         changed = False
@@ -151,6 +155,7 @@ class CallRewriter(ast.NodeVisitor):
         start, end = _span(node, self.source, self.offsets)
         self.replacements.append(Replacement(start, end, replacement))
 
+    @override
     def visit_Expr(self, node: ast.Expr) -> None:
         value = node.value
         if (

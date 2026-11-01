@@ -65,11 +65,6 @@ class MediaLimitExceededError(ValidationError):
         )
         self.violations = ordered
 
-    @property
-    def violation(self) -> MediaViolation:
-        """Return the first violation for compatibility with single-limit callers."""
-        return self.violations[0]
-
 
 class MediaDraftStateConflictError(ConflictError):
     """A media mutation lost a race with submission finalization."""

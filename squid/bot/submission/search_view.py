@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from discord.utils import escape_markdown
 
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 BuildLoader = Callable[[int], Awaitable[Build | None]]
-BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target]]]
+BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]]
 
 
 def _hit_identity(hit: SearchHit) -> str:
@@ -74,8 +74,8 @@ class _SearchSource:
         return page
 
 
-class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
-    _build_node: sl.LayoutNode[sl.ComponentsV2Target] | None = sl.state(None, persist=False, opaque=True)
+class _SearchDetail(sl.Component[sl.ComponentsV2Target, sd.Request]):
+    _build_node: sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | None = sl.state(None, persist=False, opaque=True)
 
     def __init__(
         self,
@@ -88,7 +88,8 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
         self._load_build = load_build
         self._render_build = render_build
 
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         detail = self._build_node or sl.section(
             sl.heading(_detail_title(self.hit)),
             sl.truncate(sl.paragraph(_detail_text(self.hit))),
@@ -121,10 +122,9 @@ class _SearchDetail(sl.Component[sl.ComponentsV2Target]):
         self._build_node = await self._render_build(build)
 
 
-class SearchScreen(sd.Screen):
+class SearchScreen(sd.UserSessionScreen, session_name="search"):
     """A resource-backed search workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("search")
     timeout = 180
     audience = "public"
 
@@ -186,24 +186,6 @@ class SearchScreen(sd.Screen):
         """Return whether a later page exists."""
         return self._visible_window().window.has_next
 
-    @property
-    def detail_index(self) -> int | None:
-        """Return the opened page index for compatibility with the historical view."""
-        if self._browser.opened is None:
-            return None
-        identity = _hit_identity(self._browser.opened)
-        return next((index for index, hit in enumerate(self.hits) if _hit_identity(hit) == identity), None)
-
-    @detail_index.setter
-    def detail_index(self, index: int | None) -> None:
-        if index is None:
-            self._browser.opened = None
-            self._browser._detail_value = None
-            return
-        hit = self.hits[index]
-        self._browser.opened = hit
-        self._browser._detail_value = self._detail(hit)
-
     def _visible_window(self) -> sl.sources.LoadedWindow[SearchHit]:
         state = self._browser.window.status
         if isinstance(state, sl.resources.Ready):
@@ -220,13 +202,16 @@ class SearchScreen(sd.Screen):
             render_build=self._render_build,
         )
 
-    def _overview(self, loaded: sl.sources.LoadedWindow[SearchHit]) -> sl.LayoutNode[sl.ComponentsV2Target] | tuple[()]:
+    def _overview(
+        self, loaded: sl.sources.LoadedWindow[SearchHit]
+    ) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request] | tuple[()]:
         warnings = self._source.page_for(loaded).warnings
         if not warnings:
             return ()
         return sl.note("\n".join(f"⚠ {escape_markdown(item)}" for item in warnings))
 
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self.closed:
             return (
                 sl.section(
@@ -241,7 +226,7 @@ class SearchScreen(sd.Screen):
 
     async def _close(self, event: sl.PressEvent) -> None:
         self.closed = True
-        await event.finish()
+        event.finish_on_success()
 
 
 def _build_id(hit: SearchHit) -> int | None:

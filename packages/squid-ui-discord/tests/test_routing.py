@@ -1,6 +1,6 @@
 """Stateless routed controls: ids, dispatch, and drawing without a session."""
 
-from typing import Any, cast
+from typing import Any, cast, override
 
 import anyio
 import discord
@@ -110,7 +110,7 @@ class TestRouter:
         async def localize(_source) -> sl.text.Localization:
             return sl.text.Localization(locale="en-GB")
 
-        runtime = squid_ui_discord.install(cast(discord.Client, client), localization=localize)
+        runtime = squid_ui_discord.install(cast(discord.Client, client), squid_ui_discord.Config(localization=localize))
         interaction = interaction_harness()
         interaction.client = client
         seen: list[str | None] = []
@@ -507,6 +507,7 @@ class TestRouteGroups:
         root = squid_ui_discord.routing.RouteGroup("r")
         polls = root.group("polls")
         route = polls.define("close")
+        assert polls.define("close") is route
         polls.add(route, _noop)
         router = Router(namespace=root, on_gone=_noop)
 
@@ -531,6 +532,9 @@ class TestRouteGroups:
         router = Router(namespace=root, on_gone=_noop)
         router.register(_FakeClient())  # type: ignore[arg-type]
 
+        assert polls.define("close") is route
+        with pytest.raises(ValueError, match="changed aliases"):
+            polls.define("close", aliases=("old:close",))
         with pytest.raises(RuntimeError, match="before the route group is registered"):
             polls.define("refresh")
         with pytest.raises(RuntimeError, match="before registration"):
@@ -566,6 +570,7 @@ class TestMiddleware:
             def __init__(self, name: str) -> None:
                 self.name = name
 
+            @override
             async def dispatch(self, request, proceed) -> None:
                 seen.append(f"{self.name}:before")
                 await proceed()
@@ -599,6 +604,7 @@ class TestMiddleware:
         seen: list[str] = []
 
         class Stop(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 seen.append("stopped")
 
@@ -622,6 +628,7 @@ class TestMiddleware:
             seen.append("router-error")
 
         class Catch(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 try:
                     await proceed()
@@ -646,6 +653,7 @@ class TestMiddleware:
             seen.append("router-error")
 
         class Observe(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 seen.append("before")
                 try:
@@ -671,6 +679,7 @@ class TestMiddleware:
             errors.append(error)
 
         class Twice(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
                 await proceed()
@@ -688,6 +697,7 @@ class TestMiddleware:
         saved: list[squid_ui_discord.routing.RouteProceed] = []
 
         class Save(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 saved.append(proceed)
 
@@ -703,6 +713,7 @@ class TestMiddleware:
         seen: list[str] = []
 
         class Record(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 seen.append("middleware")
                 await proceed()
@@ -722,6 +733,7 @@ class TestMiddleware:
         requests: list[squid_ui_discord.routing.RouteRequest[discord.Client]] = []
 
         class Capture(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 requests.append(request)
                 await proceed()
@@ -750,10 +762,12 @@ class TestMiddleware:
 
     def test_descriptions_include_effective_middleware_provenance(self) -> None:
         class RouterPolicy(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
         class GroupPolicy(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
@@ -772,6 +786,7 @@ class TestMiddleware:
 
     def test_middleware_freezes_at_registration(self) -> None:
         class Policy(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
@@ -862,6 +877,7 @@ class TestAcknowledgement:
 class TestProfiling:
     async def test_route_trace_profiles_middleware_handler_and_acknowledgement(self) -> None:
         class Continue(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 await proceed()
 
@@ -895,6 +911,7 @@ class TestProfiling:
 
     async def test_short_circuit_and_caught_failure_remain_distinct(self) -> None:
         class Stop(squid_ui_discord.routing.Middleware[discord.Client]):
+            @override
             async def dispatch(self, request, proceed) -> None:
                 pass
 

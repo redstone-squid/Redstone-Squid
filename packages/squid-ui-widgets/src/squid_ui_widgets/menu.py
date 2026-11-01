@@ -20,22 +20,22 @@ _MISSING = _Missing()
 
 
 @dataclass(frozen=True, slots=True, init=False)
-class MenuEntry[RenderTargetT: RenderTarget = RenderTarget]:
+class MenuEntry[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """One menu destination, optionally containing a nested submenu."""
 
     key: str
     label: TextLike
-    content: tuple[ContentItem[RenderTargetT], ...]
-    entries: tuple[MenuEntry[RenderTargetT], ...]
+    content: tuple[ContentItem[RenderTargetT, ContextT], ...]
+    entries: tuple[MenuEntry[RenderTargetT, ContextT], ...]
 
     def __init__(
         self,
         key_or_label: str,
-        label_or_content: ContentLike[RenderTargetT],
-        content: ContentLike[RenderTargetT] | _Missing = _MISSING,
+        label_or_content: ContentLike[RenderTargetT, ContextT],
+        content: ContentLike[RenderTargetT, ContextT] | _Missing = _MISSING,
         *,
         key: str | None = None,
-        entries: Iterable[MenuEntry[RenderTargetT]] = (),
+        entries: Iterable[MenuEntry[RenderTargetT, ContextT]] = (),
     ) -> None:
         if isinstance(content, _Missing):
             resolved_key = slug(key_or_label) if key is None else key
@@ -69,13 +69,13 @@ class MenuState:
     path: tuple[str, ...] = ()
 
 
-class Menu[RenderTargetT: RenderTarget = RenderTarget]:
+class Menu[RenderTargetT: RenderTarget = RenderTarget, ContextT = object]:
     """A pure keyed drill-down menu."""
 
     def __init__(
         self,
         title: TextLike,
-        entries: Iterable[MenuEntry[RenderTargetT]],
+        entries: Iterable[MenuEntry[RenderTargetT, ContextT]],
         *,
         key: str = "menu",
         initial: Iterable[str] = (),
@@ -93,15 +93,23 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget]:
         """Return the validated initial drill-down path."""
         return self._initial_state
 
-    def build_component(self, *, initial: MenuState | None = None) -> ComponentDriver[MenuState, RenderTargetT]:
+    def build_component(
+        self, *, initial: MenuState | None = None
+    ) -> ComponentDriver[MenuState, RenderTargetT, ContextT]:
         """Build the in-memory shell, with Close ending its mount."""
         if initial is None:
             return ComponentDriver(self, finish_actions=("close",))
         return ComponentDriver(self, initial=initial, finish_actions=("close",))
 
     @staticmethod
-    def _validate_entries(entries: tuple[MenuEntry[RenderTargetT], ...], *, where: str) -> None:
-        """Require unique sibling keys throughout the menu tree."""
+    def _validate_entries[EntryTargetT: RenderTarget, EntryContextT = object](
+        entries: tuple[MenuEntry[EntryTargetT, EntryContextT], ...], *, where: str
+    ) -> None:
+        """Require unique sibling keys throughout the menu tree.
+
+        The target parameter belongs to the method, not to `Menu`: a static method has no
+        instance to read `Menu`'s own parameter from, and the check reads only keys anyway.
+        """
         keys = [entry.key for entry in entries]
         if len(set(keys)) != len(keys):
             message = f"{where} keys must be unique: {keys!r}"
@@ -111,10 +119,10 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget]:
 
     def _resolve_path(
         self, path: tuple[str, ...]
-    ) -> tuple[MenuEntry[RenderTargetT] | None, tuple[MenuEntry[RenderTargetT], ...]]:
+    ) -> tuple[MenuEntry[RenderTargetT, ContextT] | None, tuple[MenuEntry[RenderTargetT, ContextT], ...]]:
         """Resolve a path to its current entry and child destinations."""
         entries = self.entries
-        current: MenuEntry[RenderTargetT] | None = None
+        current: MenuEntry[RenderTargetT, ContextT] | None = None
         for key in path:
             current = next((entry for entry in entries if entry.key == key), None)
             if current is None:
@@ -148,8 +156,8 @@ class Menu[RenderTargetT: RenderTarget = RenderTarget]:
         return MenuState((*state.path, destination))
 
     def render(
-        self, state: MenuState, controls: MachineControls[MenuState, RenderTargetT]
-    ) -> DocumentLike[RenderTargetT]:
+        self, state: MenuState, controls: MachineControls[MenuState, RenderTargetT, ContextT]
+    ) -> DocumentLike[RenderTargetT, ContextT]:
         """Render the current destination and navigation chrome."""
         current, entries = self._resolve_path(state.path)
         if len(entries) <= 5:

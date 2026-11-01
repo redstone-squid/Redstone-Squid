@@ -1,7 +1,7 @@
 """Canonical account workflow combining identity, consent, claims, and merge operations."""
 
 from collections.abc import Awaitable, Callable
-from typing import cast
+from typing import override
 
 import discord
 
@@ -23,12 +23,10 @@ from squid_ui_discord.modal import EntityField
 type ClaimAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class AccountWorkspace(sd.Screen):
+class AccountWorkspace(sd.UserSessionScreen, session_name="account"):
     """An account workspace that ends when closed, replaced, or timed out."""
 
-    session = sd.SessionSpec("account")
     timeout = 300
-    audience = "personal"
 
     def __init__(
         self,
@@ -56,10 +54,11 @@ class AccountWorkspace(sd.Screen):
         self._can_refresh_identity = can_refresh_identity
         self._overview: AccountScreen | None = None
         self._claims: ClaimReviewComponent | None = None
-        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target] | None = None
+        self._tabs: sp.ComponentDriver[sp.TabsState, sl.ComponentsV2Target, sd.Request] | None = None
         self._merge_code: str | None = None
-        self._merge_decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target] | None = None
+        self._merge_decision: sp.ComponentDriver[sp.DecisionState, sl.ComponentsV2Target, sd.Request] | None = None
 
+    @override
     async def on_load(self) -> None:
         await self._rebuild()
 
@@ -86,7 +85,7 @@ class AccountWorkspace(sd.Screen):
                 can_reject=self._can_reject_claims,
                 authorize=self._authorize_claim,
             )
-        tabs: list[sp.Tab[sl.ComponentsV2Target]] = []
+        tabs: list[sp.Tab[sl.ComponentsV2Target, sd.Request]] = []
         if self._overview is not None:
             tabs.append(sp.Tab("overview", tr(t"Overview"), self._overview))
         tabs.append(sp.Tab("identity", tr(t"Link and refresh"), self._identity_nodes()))
@@ -97,7 +96,8 @@ class AccountWorkspace(sd.Screen):
             tabs.append(sp.Tab("review", tr(t"Review claims"), self._claims))
         self._tabs = sp.Tabs(tabs, key="account-tabs", title=tr(t"Account")).build_component()
 
-    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    @override
+    def render(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         if self._merge_code is not None and self._merge_decision is not None:
             return (self.boundary(self._merge_decision, key="merge-decision"),)
         if self._tabs is None:
@@ -107,9 +107,9 @@ class AccountWorkspace(sd.Screen):
             sl.action_controls(sl.action_control(tr(t"Close"), self._close, key="close"), key="account-actions"),
         )
 
-    def _identity_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _identity_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         account = self._account
-        nodes: list[sl.LayoutNode[sl.ComponentsV2Target]] = []
+        nodes: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = []
         if account is None or account.needs_consent_refresh:
             nodes.append(
                 sl.action_controls(
@@ -120,10 +120,7 @@ class AccountWorkspace(sd.Screen):
         nodes.append(
             sl.form(
                 tr(t"Link Minecraft account"),
-                sl.forms.FormSpec(
-                    tr(t"Link Minecraft account"),
-                    (sl.forms.TextField(key="code", label=tr(t"In-game link code"), maximum=100),),
-                ),
+                _LinkForm().spec(),
                 key="link",
                 on_submit=self._link,
             )
@@ -144,30 +141,24 @@ class AccountWorkspace(sd.Screen):
             nodes.append(
                 sl.form(
                     tr(t"Refresh another member's Minecraft identity"),
-                    sl.forms.FormSpec(
-                        tr(t"Refresh member identity"),
-                        (EntityField(key="user", label=tr(t"Discord member")),),
-                    ),
+                    _RefreshMemberForm().spec(),
                     key="staff-refresh",
                     on_submit=self._refresh_member_identity,
                 )
             )
         return tuple(nodes)
 
-    def _claim_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _claim_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.form(
                 tr(t"Claim creator credit"),
-                sl.forms.FormSpec(
-                    tr(t"Claim an older creator name"),
-                    (sl.forms.TextField(key="name", label=tr(t"Creator name"), maximum=100),),
-                ),
+                _ClaimForm().spec(),
                 key="claim",
                 on_submit=self._claim,
             ),
         )
 
-    def _merge_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target], ...]:
+    def _merge_nodes(self) -> tuple[sl.LayoutNode[sl.ComponentsV2Target, sd.Request], ...]:
         return (
             sl.action_controls(
                 sl.action_control(tr(t"Create merge code"), self._create_merge_code, key="merge-code"),
@@ -175,17 +166,14 @@ class AccountWorkspace(sd.Screen):
             ),
             sl.form(
                 tr(t"Merge another account into this one"),
-                sl.forms.FormSpec(
-                    tr(t"Preview account merge"),
-                    (sl.forms.TextField(key="code", label=tr(t"Merge code"), maximum=100),),
-                ),
+                _MergeForm().spec(),
                 key="merge",
                 on_submit=self._request_merge,
             ),
         )
 
-    async def _consent(self, event: sl.PressEvent) -> None:
-        async def answered(_prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+    async def _consent(self, event: sd.PressEvent) -> None:
+        async def answered(_prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
             if consent is None:
                 return
             account = self._account
@@ -201,9 +189,10 @@ class AccountWorkspace(sd.Screen):
 
         await self._request_consent(event, answered)
 
-    async def _link(self, event: sl.SubmitEvent) -> None:
+    async def _link(self, event: sd.SubmitEvent) -> None:
         account = self._account
-        code = cast(str, event.values["code"])
+        form = _LinkForm.from_submission(event)
+        code = form.code
         attempted_by = (IdentityProvider.DISCORD, str(self._actor_id))
         reservation = await self._accounts.reserve_minecraft_link(
             code,
@@ -245,7 +234,7 @@ class AccountWorkspace(sd.Screen):
                 raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(self._actor_id))
             return account_id
 
-        async def answered(prompt: sl.PressEvent, consent: AccountConsent | None) -> None:
+        async def answered(prompt: sd.PressEvent, consent: AccountConsent | None) -> None:
             nonlocal settled
             if consent is None:
                 await release()
@@ -276,7 +265,7 @@ class AccountWorkspace(sd.Screen):
         if not opened:
             await release()
 
-    async def _refresh_identity(self, event: sl.PressEvent) -> None:
+    async def _refresh_identity(self, event: sd.PressEvent) -> None:
         if not await self._authorize_claim(ACCOUNT_IDENTITY_REFRESH):
             await event.notice(tr(t"You are no longer allowed to refresh your Minecraft identity."))
             return
@@ -285,11 +274,13 @@ class AccountWorkspace(sd.Screen):
         await self._rebuild()
         await event.notice(refresh_message(refresh))
 
-    async def _refresh_member_identity(self, event: sl.SubmitEvent) -> None:
+    async def _refresh_member_identity(self, event: sd.SubmitEvent) -> None:
         if not await self._authorize_claim(ACCOUNT_IDENTITY_REFRESH_ANY):
             await event.notice(tr(t"You are no longer allowed to refresh another member's identity."))
             return
-        member = cast(discord.Member | discord.User, event.values["user"])
+        form = _RefreshMemberForm.from_submission(event)
+        member = form.user
+        assert isinstance(member, discord.abc.Snowflake)
         account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(member.id))
         if account is None or account.id is None:
             raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(member.id))
@@ -297,27 +288,29 @@ class AccountWorkspace(sd.Screen):
         await self._rebuild()
         await event.notice(refresh_message(refresh))
 
-    async def _claim(self, event: sl.SubmitEvent) -> None:
-        claim = await self._accounts.request_alias_claim(self._account_id(), cast(str, event.values["name"]))
+    async def _claim(self, event: sd.SubmitEvent) -> None:
+        form = _ClaimForm.from_submission(event)
+        claim = await self._accounts.request_alias_claim(self._account_id(), form.name)
         claim_id = claim.id
         alias_name = claim.alias_name
         await event.notice(tr(t"Claim #{claim_id} for **{alias_name}** is awaiting staff approval."))
 
-    async def _create_merge_code(self, event: sl.PressEvent) -> None:
+    async def _create_merge_code(self, event: sd.PressEvent) -> None:
         code, ticket = await self._accounts.create_merge_code(self._account_id())
         expiry = ticket.expires_at.to_stdlib().isoformat()
         await event.notice(
             tr(t"Merge code: `{code}`. It expires {expiry}. Keep it private: it hands this account over.")
         )
 
-    async def _request_merge(self, event: sl.SubmitEvent) -> None:
-        code = cast(str, event.values["code"])
+    async def _request_merge(self, event: sd.SubmitEvent) -> None:
+        form = _MergeForm.from_submission(event)
+        code = form.code
         preview = await self._accounts.preview_merge(self._account_id(), code)
         aliases = len(preview.alias_names)
         identities = preview.identity_count
         builds = preview.build_count
         self._merge_code = code
-        self._merge_decision = sp.Decision[sl.ComponentsV2Target](
+        self._merge_decision = sp.Decision[sl.ComponentsV2Target, sd.Request](
             tr(
                 t"Move {aliases} creator names, {identities} identities, and {builds} build credits here? "
                 t"This cannot be undone."
@@ -349,5 +342,29 @@ class AccountWorkspace(sd.Screen):
             raise RuntimeError(message)
         return account.id
 
-    async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+    async def _close(self, event: sd.PressEvent) -> None:
+        event.finish_on_success()
+
+
+class _LinkForm(sl.forms.Form):
+    title = tr(t"Link Minecraft account")
+
+    code = sl.forms.TextField(label=tr(t"In-game link code"), maximum=100)
+
+
+class _RefreshMemberForm(sl.forms.Form):
+    title = tr(t"Refresh member identity")
+
+    user = EntityField(label=tr(t"Discord member"))
+
+
+class _ClaimForm(sl.forms.Form):
+    title = tr(t"Claim an older creator name")
+
+    name = sl.forms.TextField(label=tr(t"Creator name"), maximum=100)
+
+
+class _MergeForm(sl.forms.Form):
+    title = tr(t"Preview account merge")
+
+    code = sl.forms.TextField(label=tr(t"Merge code"), maximum=100)

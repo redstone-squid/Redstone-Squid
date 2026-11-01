@@ -8,7 +8,8 @@ and a fingerprint, and recovery refuses anything it cannot resolve exactly.
 """
 
 from squid_ui.errors import LayoutInvariantError
-from squid_ui_discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27, Target
+from squid_ui.planning.target import Target
+from squid_ui_discord.target import DISCORD_V1_DPY27, DISCORD_V2_DPY27
 
 
 class TargetRegistry:

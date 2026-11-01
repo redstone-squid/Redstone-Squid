@@ -31,6 +31,7 @@ from squid_ui.temporal import ZonedDateTime
 from squid_ui.text import TextLike
 
 if TYPE_CHECKING:
+    from squid_ui.runtime.component import Component
     from squid_ui.runtime.histories import History
 
 
@@ -142,11 +143,11 @@ class PremiumButton(Renderable[DiscordTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Button(Renderable[DiscordTarget]):
+class Button[ContextT = object](Renderable[DiscordTarget, ContextT]):
     """An interactive button whose handler runs through the mount's dispatch funnel."""
 
     label: TextLike | None
-    on_click: PressHandler
+    on_click: PressHandler[ContextT]
     key: str
     style: ActionStyle = ActionStyle.SECONDARY
     emoji: EmojiLike | None = None
@@ -162,7 +163,7 @@ class Button(Renderable[DiscordTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class FormButton(Button):
+class FormButton[ContextT = object](Button[ContextT]):
     """A button that presents a form, carrying the binding its handler closes over.
 
     The handler alone is opaque: a frontend holding it cannot tell which form it presents,
@@ -205,11 +206,11 @@ class Option:
 
 
 @dataclass(frozen=True, slots=True)
-class SelectMenu(Renderable[DiscordTarget]):
+class SelectMenu[ContextT = object](Renderable[DiscordTarget, ContextT]):
     """A string select; occupies its own row when materialized."""
 
     options: tuple[Option, ...]
-    on_select: SelectionHandler
+    on_select: SelectionHandler[ContextT]
     key: str
     placeholder: TextLike | None = None
     min_values: int = 1
@@ -220,11 +221,11 @@ class SelectMenu(Renderable[DiscordTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class EntitySelect(Renderable[DiscordTarget]):
+class EntitySelect[ContextT = object](Renderable[DiscordTarget, ContextT]):
     """A frontend-resolved entity picker; occupies its own row."""
 
     entity_type: EntityType
-    on_select: EntitySelectionHandler
+    on_select: EntitySelectionHandler[ContextT]
     key: str
     placeholder: TextLike | None = None
     default_values: tuple[EntityRef, ...] = ()
@@ -268,16 +269,10 @@ class RawItem(Renderable[DiscordTarget]):
 
 
 @dataclass(frozen=True, slots=True)
-class Boundary(Renderable[RenderTarget]):
-    """A keyed component boundary expanded before portable planning.
+class Boundary[RenderTargetT = RenderTarget, ContextT = object](Renderable[RenderTargetT, ContextT]):
+    """A keyed child whose target restriction survives until runtime expansion."""
 
-    Named for what it is rather than what it draws to. The runtime removes it before planning,
-    so it is portable even when the child it protects is target-specific. The child component's
-    target parameter carries that restriction; assigning one to this transient marker as well
-    would erase it when the marker stores the component as an opaque object.
-    """
-
-    component: object
+    component: Component[RenderTargetT, ContextT]
     key: str
 
     def __post_init__(self) -> None:
@@ -395,17 +390,17 @@ class Extension[PayloadT = object, RenderTargetT = DiscordTarget](Renderable[Ren
 
 
 @dataclass(frozen=True, slots=True)
-class Row(Renderable[DiscordTarget]):
+class Row[ContextT = object](Renderable[DiscordTarget, ContextT]):
     """An exact target row; invalid local structure is a planning error."""
 
-    items: tuple[LinkButton | PremiumButton | Button | RoutedButton | RawItem, ...]
+    items: tuple[LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class ControlGroup(Renderable[DiscordTarget]):
+class ControlGroup[ContextT = object](Renderable[DiscordTarget, ContextT]):
     """Buttons automatically arranged into as many valid target rows as needed."""
 
-    items: tuple[LinkButton | PremiumButton | Button | RoutedButton | RawItem, ...]
+    items: tuple[LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -450,18 +445,18 @@ class MediaCollection(Renderable[ComponentsV2Target]):
 
 
 @dataclass(frozen=True, slots=True)
-class Section(Renderable[ComponentsV2Target]):
+class Section[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
     """Up to three text nodes beside an accessory; extra texts are dropped with a note."""
 
     texts: tuple[Text | Heading | Footer, ...]
-    accessory: Thumbnail | LinkButton | PremiumButton | Button | RoutedButton | RawItem
+    accessory: Thumbnail | LinkButton | PremiumButton | Button[ContextT] | RoutedButton | RawItem
 
 
 @dataclass(frozen=True, slots=True)
-class Panel(Renderable[ComponentsV2Target]):
+class Panel[ContextT = object](Renderable[ComponentsV2Target, ContextT]):
     """A Container: children grouped under an optional accent colour."""
 
-    children: tuple[Node, ...]
+    children: tuple[Node[ContextT], ...]
     accent: Color | None = None
     spoiler: bool = False
 
@@ -624,7 +619,7 @@ class Variants[RenderTargetT = DiscordTarget](Renderable[RenderTargetT]):
         )
 
 
-type Node = (
+type Node[ContextT = object] = (
     Text
     | Heading
     | Footer
@@ -634,24 +629,24 @@ type Node = (
     | ZonedTime
     | File
     | Sep
-    | Row
-    | ControlGroup
-    | Button
+    | Row[ContextT]
+    | ControlGroup[ContextT]
+    | Button[ContextT]
     | LinkButton
-    | SelectMenu
-    | EntitySelect
+    | SelectMenu[ContextT]
+    | EntitySelect[ContextT]
     | RoutedSelect
     | RoutedButton
     | PremiumButton
     | Thumbnail
     | Gallery
     | MediaCollection
-    | Section
-    | Panel
+    | Section[ContextT]
+    | Panel[ContextT]
     | Budget
     | Break
     | RawItem
-    | Boundary
+    | Boundary[Any, ContextT]
     | Card
     | Content
     | Extension

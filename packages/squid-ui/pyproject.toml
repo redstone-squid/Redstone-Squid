@@ -16,6 +16,9 @@ classifiers = [
 ]
 dependencies = ["markdown-it-py>=4.0,<5", "squid-reactivity==0.1.0a1"]
 
+[project.optional-dependencies]
+services = ["anyio>=4.14,<5"]
+
 [project.urls]
 Changelog = "https://github.com/redstone-squid/Redstone-Squid/blob/master/CHANGELOG.md"
 Documentation = "https://redstone-squid.github.io/Redstone-Squid/squid-ui/"

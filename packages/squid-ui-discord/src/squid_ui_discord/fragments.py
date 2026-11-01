@@ -13,7 +13,7 @@ prove they fit.
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import discord
 
@@ -23,15 +23,18 @@ from squid_ui.document import DocumentLike
 from squid_ui.errors import ExistingLayoutError, LayoutError
 from squid_ui.palette import DEFAULT_PALETTE, Palette
 from squid_ui.planning.limits import LIMITS, Axis, V2Limits
-from squid_ui.planning.planner import EMPTY_RESERVATION
-from squid_ui.planning.target import ResourceCost
-from squid_ui.scene.model import PlanReport, PlanResult
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
+from squid_ui.planning.target import Target
+from squid_ui.scene.model import ComponentsV2, PlanReport, PlanResult
 from squid_ui.target_types import ComponentsV2Target
 from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.attachments import files_for
 from squid_ui_discord.inspection import MessageReservation, audit, cost, measure
 from squid_ui_discord.rendering import render_message
-from squid_ui_discord.target import DISCORD_V2_DPY27, Target
+from squid_ui_discord.target import DISCORD_V2_DPY27
+
+if TYPE_CHECKING:
+    from squid_ui_discord.request import Request
 
 
 class StaleReservationError(LayoutError):
@@ -48,7 +51,7 @@ class AttachedFragment:
 
     items: tuple[discord.ui.Item[Any], ...]
     view: discord.ui.LayoutView
-    plan: PlanResult
+    plan: PlanResult[ComponentsV2]
     assets: tuple[Asset, ...]
     fingerprint: str
 
@@ -89,7 +92,7 @@ class Fragment:
     """A planned, drawn, sessionless Squid region waiting to be placed."""
 
     items: tuple[discord.ui.Item[Any], ...]
-    plan: PlanResult
+    plan: PlanResult[ComponentsV2]
     assets: tuple[Asset, ...]
     reservation: MessageReservation
     followed_by: tuple[discord.ui.Item[Any], ...] = ()
@@ -185,10 +188,10 @@ class Fragment:
 
 
 def fragment(
-    document: DocumentLike[ComponentsV2Target],
+    document: DocumentLike[ComponentsV2Target, Request],
     *,
     alongside: discord.ui.LayoutView | None = None,
-    reserve: ResourceCost = EMPTY_RESERVATION,
+    reserve: ResourceCost = EMPTY_COST,
     followed_by: Sequence[discord.ui.Item[Any]] = (),
     attachments: int = 0,
     target: Target = DISCORD_V2_DPY27,
@@ -235,11 +238,11 @@ def fragment(
 
 
 def contribute(
-    document: DocumentLike[ComponentsV2Target],
+    document: DocumentLike[ComponentsV2Target, Request],
     *,
     to: discord.ui.LayoutView,
     followed_by: Sequence[discord.ui.Item[Any]] = (),
-    reserve: ResourceCost = EMPTY_RESERVATION,
+    reserve: ResourceCost = EMPTY_COST,
     attachments: int = 0,
     target: Target = DISCORD_V2_DPY27,
     chrome: Chrome = DEFAULT_CHROME,

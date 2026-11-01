@@ -3,15 +3,18 @@
 from collections.abc import AsyncGenerator
 from uuid import UUID
 
+import anyio
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.accounts.application import AccountService
 from squid.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     AccountConsent,
+    ClaimMethod,
     IdentityProvider,
     ProfileLink,
     ProfileUpdate,
@@ -19,8 +22,10 @@ from squid.accounts.domain import (
 from squid.accounts.domain import (
     AccountIdentity as AccountIdentityValue,
 )
-from squid.accounts.errors import AccountIdentityNotFoundError
+from squid.accounts.errors import AccountIdentityNotFoundError, LastIdentityError
+from squid.accounts.infrastructure.models import AccountIdentity as AccountIdentityModel
 from squid.accounts.infrastructure.models import AccountProfile as AccountProfileModel
+from squid.accounts.infrastructure.models import CreatorAlias as CreatorAliasModel
 from squid.accounts.infrastructure.repository import AccountRepository
 from squid.persistence.base import Base
 
@@ -60,6 +65,29 @@ def repository(
 
 async def _account(repository: AccountRepository, discord_id: int = 1):
     return await repository.create(consent=CONSENT, identities=(AccountIdentityValue.discord(discord_id),))
+
+
+async def _wait_for_blocked_sessions(
+    sessions: async_sessionmaker[AsyncSession], holder_pid: int, *, count: int
+) -> None:
+    # Include indirect blockers: one writer can hold the account lock while waiting on the
+    # test's identity lock, leaving the other writer queued behind the first.
+    blocked = text(
+        """
+        WITH RECURSIVE blocked(pid) AS (
+            SELECT CAST(:holder_pid AS integer)
+            UNION
+            SELECT waiting.pid FROM pg_stat_activity AS waiting
+            JOIN blocked ON blocked.pid = ANY(pg_blocking_pids(waiting.pid))
+        )
+        SELECT count(*) - 1 FROM blocked
+        """
+    )
+    with anyio.fail_after(5):
+        while True:
+            async with sessions() as observer:
+                if await observer.scalar(blocked, {"holder_pid": holder_pid}) == count:
+                    return
 
 
 class TestProfileRow:
@@ -133,14 +161,22 @@ class TestProfileWrites:
         await repository.upsert_profile(
             account.id,
             ProfileUpdate(
-                display_name="Spam", bio="spam", links=(ProfileLink("Spam", "https://spam.example"),), hidden=True
+                display_name="Spam",
+                bio="spam",
+                pronouns="spam",
+                links=(ProfileLink("Spam", "https://spam.example"),),
+                hidden=True,
+                avatar_identity_id=account.identities[0].id,
             ).validated(),
         )
         cleared = await repository.clear_profile(account.id)
         assert cleared.display_name is None
         assert cleared.bio is None
+        assert cleared.pronouns is None
         assert cleared.links == ()
         assert not cleared.hidden
+        assert cleared.avatar_identity_id is None
+        assert await repository.get_profile(account.id) == cleared
 
     async def test_database_refuses_an_overlong_display_name(
         self,
@@ -261,16 +297,119 @@ class TestIdentityVisibilityAndUnlink:
         assert reloaded is not None
         assert len(reloaded.identities) == 1
 
-    async def test_count_identities(self, repository: AccountRepository) -> None:
+    async def test_concurrent_unlinks_keep_a_login_and_creator_credit(
+        self,
+        repository: AccountRepository,
+        async_session_factory: async_sessionmaker[AsyncSession],
+    ) -> None:
         account = await repository.create(
             consent=CONSENT,
-            identities=(
-                AccountIdentityValue.discord(1),
-                AccountIdentityValue.java(MINECRAFT_UUID, username="Notch"),
-            ),
+            identities=(AccountIdentityValue.discord(1), AccountIdentityValue.java(MINECRAFT_UUID)),
         )
         assert account.id is not None
-        assert await repository.count_identities(account.id) == 2
+        account_id = account.id
+        async with async_session_factory.begin() as session:
+            session.add(
+                CreatorAliasModel(
+                    name="Player",
+                    account_id=account_id,
+                    claimed_at=CONSENT.granted_at,
+                    claim_method=ClaimMethod.VERIFIED_IGN,
+                )
+            )
+
+        async def unused_username_lookup(_uuid: UUID) -> str | None:
+            return None
+
+        service = AccountService(repository, unused_username_lookup, lambda: 123456)
+        outcomes: list[AccountIdentityValue | LastIdentityError] = []
+
+        async def unlink(identity_id: int) -> None:
+            try:
+                outcomes.append(await service.unlink_identity(account_id, identity_id))
+            except LastIdentityError as error:
+                outcomes.append(error)
+
+        async with async_session_factory() as blocker:
+            await blocker.execute(
+                select(AccountIdentityModel).where(AccountIdentityModel.account_id == account_id).with_for_update()
+            )
+            holder_pid = await blocker.scalar(text("SELECT pg_backend_pid()"))
+            with anyio.fail_after(5):
+                async with anyio.create_task_group() as tasks:
+                    for identity in account.identities:
+                        assert identity.id is not None
+                        tasks.start_soon(unlink, identity.id)
+                    assert holder_pid is not None
+                    await _wait_for_blocked_sessions(async_session_factory, holder_pid, count=2)
+                    await blocker.commit()
+
+        assert sum(isinstance(outcome, AccountIdentityValue) for outcome in outcomes) == 1
+        assert sum(isinstance(outcome, LastIdentityError) for outcome in outcomes) == 1
+        reloaded = await repository.get_by_id(account_id)
+        assert reloaded is not None
+        (remaining,) = reloaded.identities
+        assert remaining.id is not None
+        alias = await repository.get_alias_by_name("Player")
+        assert alias is not None
+        assert alias.account_id == account_id
+
+        await repository.upsert_profile(account_id, ProfileUpdate(avatar_identity_id=remaining.id).validated())
+        with pytest.raises(LastIdentityError):
+            await service.unlink_identity(account_id, remaining.id)
+        profile = await repository.get_profile(account_id)
+        assert profile is not None
+        assert profile.avatar_identity_id == remaining.id
+        assert (await service.list_identities(account_id)) == (remaining,)
+        with pytest.raises(AccountIdentityNotFoundError):
+            await service.unlink_identity(account_id, 9999)
+
+    async def test_avatar_edit_serializes_with_identity_unlink(
+        self,
+        repository: AccountRepository,
+        async_session_factory: async_sessionmaker[AsyncSession],
+    ) -> None:
+        account = await repository.create(
+            consent=CONSENT,
+            identities=(AccountIdentityValue.discord(1), AccountIdentityValue.java(MINECRAFT_UUID)),
+        )
+        assert account.id is not None
+        account_id = account.id
+        java = next(identity for identity in account.identities if identity.provider is IdentityProvider.JAVA)
+        assert java.id is not None
+        identity_id = java.id
+        await repository.upsert_profile(account_id, ProfileUpdate(display_name="Builder").validated())
+        removed: list[AccountIdentityValue | None] = []
+        rejected: list[AccountIdentityNotFoundError] = []
+
+        async def unlink() -> None:
+            removed.append(await repository.unlink_identity(account_id, identity_id))
+
+        async def edit_avatar() -> None:
+            try:
+                await repository.upsert_profile(account_id, ProfileUpdate(avatar_identity_id=identity_id).validated())
+            except AccountIdentityNotFoundError as error:
+                rejected.append(error)
+
+        async with async_session_factory() as blocker:
+            await blocker.get(AccountIdentityModel, identity_id, with_for_update=True)
+            holder_pid = await blocker.scalar(text("SELECT pg_backend_pid()"))
+            assert holder_pid is not None
+            with anyio.fail_after(5):
+                async with anyio.create_task_group() as tasks:
+                    tasks.start_soon(unlink)
+                    await _wait_for_blocked_sessions(async_session_factory, holder_pid, count=1)
+                    tasks.start_soon(edit_avatar)
+                    await _wait_for_blocked_sessions(async_session_factory, holder_pid, count=2)
+                    await blocker.commit()
+
+        assert removed == [java]
+        assert len(rejected) == 1
+        assert rejected[0].identity_id == identity_id
+        profile = await repository.get_profile(account_id)
+        assert profile is not None
+        assert profile.avatar_identity_id is None
+        assert profile.display_name == "Builder"
 
     async def test_avatar_key_is_stored_for_discord(self, repository: AccountRepository) -> None:
         account = await _account(repository)

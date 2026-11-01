@@ -2,6 +2,7 @@
 
 import base64
 from dataclasses import dataclass
+from typing import override
 from uuid import UUID, uuid4
 
 import pytest
@@ -12,9 +13,8 @@ from pydantic import ValidationError as PydanticValidationError
 from whenever import Instant
 
 from squid.api.errors import register_exception_handlers
-from squid.api.security import Caller, current_caller
+from squid.api.security import Caller, current_browser_account_id, current_caller
 from squid.api.v1.cli_auth import (
-    current_browser_account_id,
     current_cli_identity,
     get_cli_authorization_service,
     router,
@@ -108,6 +108,7 @@ class FakeCliAuthorization(CliAuthorizationService):
         self.revoked_identity: CliIdentity | None = None
         self.pending = False
 
+    @override
     async def start_enrollment(
         self,
         *,
@@ -118,15 +119,18 @@ class FakeCliAuthorization(CliAuthorizationService):
         self.started = (public_key, client_instance_id, label)
         return IssuedCliEnrollment(enrollment(), DEVICE_CODE, USER_CODE, 3)
 
+    @override
     async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
         assert user_code == USER_CODE
         return enrollment()
 
+    @override
     async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment:
         assert user_code == USER_CODE
         self.approved_as = account_id
         return enrollment(approved=True)
 
+    @override
     async def exchange_enrollment(self, *, device_code: str, signature: bytes) -> IssuedCliSession:
         assert device_code == DEVICE_CODE
         if self.pending:
@@ -134,6 +138,7 @@ class FakeCliAuthorization(CliAuthorizationService):
         self.enrollment_signature = signature
         return issued_session()
 
+    @override
     async def start_session_challenge(self, device_id: UUID) -> IssuedCliSessionChallenge:
         assert device_id == DEVICE_ID
         return IssuedCliSessionChallenge(
@@ -147,6 +152,7 @@ class FakeCliAuthorization(CliAuthorizationService):
             NONCE,
         )
 
+    @override
     async def exchange_session_challenge(
         self,
         *,
@@ -158,14 +164,17 @@ class FakeCliAuthorization(CliAuthorizationService):
         self.session_proof = (device_id, challenge_id, nonce, signature)
         return issued_session()
 
+    @override
     async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
         assert account_id == ACCOUNT_ID
         return (device(),)
 
+    @override
     async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
         self.revoked_device = (device_id, account_id)
         return True
 
+    @override
     async def revoke_current_session(self, identity: CliIdentity) -> bool:
         self.revoked_identity = identity
         return True
@@ -254,6 +263,7 @@ async def test_enrollment_returns_fragment_approval_link_and_no_store() -> None:
 
     assert response.status_code == 201
     assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
     assert response.json()["verification_uri_complete"] == f"{VERIFICATION_URI}#code=ABCD-EFGH"
     assert cli.started == (PUBLIC_KEY, CLIENT_INSTANCE_ID, "Test workstation")
     caller = idempotency.reservations[0]["caller"]
@@ -276,6 +286,9 @@ async def test_browser_previews_fingerprint_before_approval() -> None:
     assert approved.status_code == 200
     assert approved.json()["approved_at"] is not None
     assert cli.approved_as == ACCOUNT_ID
+    for response in (preview, approved):
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["pragma"] == "no-cache"
 
 
 async def test_device_proofs_exchange_for_one_time_session_tokens() -> None:
@@ -332,6 +345,12 @@ async def test_account_and_current_session_revocation_are_separately_scoped() ->
     assert listed.json()["devices"][0]["id"] == str(DEVICE_ID)
     assert revoked_device.status_code == 204
     assert revoked_session.status_code == 204
+    for response in (listed, revoked_device, revoked_session):
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["pragma"] == "no-cache"
+    for response in (revoked_device, revoked_session):
+        assert response.content == b""
+        assert "content-type" not in response.headers
     assert cli.revoked_device == (DEVICE_ID, ACCOUNT_ID)
     assert cli.revoked_identity == CliIdentity(
         account_id=ACCOUNT_ID,

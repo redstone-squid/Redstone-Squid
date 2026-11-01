@@ -686,7 +686,7 @@ class LoroDocumentBranch:
         elif operation.kind in {"movable_delete", "movable_delete_ids"}:
             container = self.doc.get_movable_list(_root_name("movable", operation.path))
             item_ids = [data["item_id"]] if operation.kind == "movable_delete" else data["item_ids"]
-            deleted: list[tuple[str, str, object]] = []
+            removed: list[tuple[str, str, object]] = []
             authority = self.doc.get_map(_authority_root("movable", operation.path))
             for item_id in item_ids:
                 found = _find_item(container, item_id)
@@ -697,10 +697,10 @@ class LoroDocumentBranch:
                 before_id, after_id = _anchors(container, index)
                 data.setdefault("before_id", before_id)
                 data.setdefault("after_id", after_id)
-                deleted.append(item)
+                removed.append(item)
                 authority.insert(item_id, operation.identity)
                 container.delete(index, 1)
-            data.update(item_ids=item_ids, items=deleted)
+            data.update(item_ids=item_ids, items=removed)
         elif operation.kind == "movable_restore":
             container = self.doc.get_movable_list(_root_name("movable", operation.path))
             index = _anchor_index(container, data.get("before_id"), data.get("after_id"))
@@ -1026,12 +1026,12 @@ def _set_snapshot(entries: Mapping[str, LoroValue]) -> frozenset[str]:
     removals: dict[str, set[str]] = {}
     cancelled: set[str] = set()
     for key, value in entries.items():
-        if key.startswith("r:") and isinstance(value, dict) and isinstance(value.get("tags"), list | tuple):
-            for tag in value["tags"]:
+        if key.startswith("r:") and isinstance(value, dict) and isinstance(tags := value.get("tags"), list | tuple):
+            for tag in tags:
                 if isinstance(tag, str):
                     removals.setdefault(tag, set()).add(key[2:])
-        elif key.startswith("u:") and isinstance(value, dict) and isinstance(value.get("removal"), str):
-            cancelled.add(value["removal"])
+        elif key.startswith("u:") and isinstance(value, dict) and isinstance(removal := value.get("removal"), str):
+            cancelled.add(removal)
     return frozenset(value for tag, value in adds.items() if not (removals.get(tag, set()) - cancelled))
 
 

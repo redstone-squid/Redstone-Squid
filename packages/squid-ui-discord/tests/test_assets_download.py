@@ -1,5 +1,7 @@
 """Visible downloads hoist assets without losing portable scene identity."""
 
+from typing import override
+
 import discord
 import pytest
 
@@ -81,6 +83,7 @@ class _DownloadComponent(Component[sl.ComponentsV2Target]):
     def __init__(self, asset: sl.document.Asset) -> None:
         self.asset = asset
 
+    @override
     def render(self) -> DocumentLike[sl.ComponentsV2Target]:
         return sl.download("Report", self.asset, key="report-download")
 

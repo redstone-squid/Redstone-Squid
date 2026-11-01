@@ -447,9 +447,12 @@ def reply_to(
     mentions = no_mentions() if allowed_mentions is None else allowed_mentions
 
     async def send(payload: MessagePayload) -> DeliveryResult:
-        interaction = getattr(ctx, "interaction", None)
-        active = interaction is not None and not interaction.is_expired()
-        response_done = active and interaction.response.is_done()
+        # The interaction itself rather than a bool, so the handles below still see it as one.
+        # Annotated because `getattr` yields `Any | None`, which narrows to nothing useful.
+        source: discord.Interaction[Any] | None = getattr(ctx, "interaction", None)
+        active = None if source is None or source.is_expired() else source
+        # Sampled before the send on purpose: this send is what makes the response done.
+        response_done = active is not None and active.response.is_done()
         message = await ctx.send(
             files=_merged_files(files, payload),
             ephemeral=ephemeral,
@@ -457,11 +460,11 @@ def reply_to(
             **payload._send_fields(),
         )
         mode = payload.mode
-        if not active:
+        if active is None:
             return DeliveryResult(message, handle_for(message, mode=mode))
         if response_done:
-            return DeliveryResult(message, _WebhookMessageHandle(interaction, message.id, message, mode=mode))
-        return DeliveryResult(message, _OriginalResponseHandle(interaction, message, mode=mode))
+            return DeliveryResult(message, _WebhookMessageHandle(active, message.id, message, mode=mode))
+        return DeliveryResult(message, _OriginalResponseHandle(active, message, mode=mode))
 
     return send
 

@@ -80,11 +80,6 @@ async def reserve_idempotent_request_for(
     setattr(request.state, _STATE_KEY, IdempotencyReservationState(service, reservation))
 
 
-# Route declarations keep these compatibility names during the terminology transition.
-enforce_request_idempotency = reserve_idempotent_request
-enforce_request_idempotency_for = reserve_idempotent_request_for
-
-
 async def replay_response(_request: Request, error: Exception) -> Response:
     """Render a response stored by a completed equivalent request."""
     if not isinstance(error, IdempotencyReplay):
@@ -139,9 +134,6 @@ class CompleteIdempotentResponseMiddleware:
             await send(message)
 
 
-IdempotencyResponseMiddleware = CompleteIdempotentResponseMiddleware
-
-
 def assert_idempotency_completion_installed(app: FastAPI) -> None:
     """Fail application construction when reservation has no completion middleware."""
     if not any(middleware.cls is CompleteIdempotentResponseMiddleware for middleware in app.user_middleware):
@@ -160,10 +152,12 @@ def assert_idempotency_completion_installed(app: FastAPI) -> None:
 
 
 async def _request_fingerprint(request: Request, route_path: str) -> bytes:
+    """Identify the concrete mutation, including the resource within its route."""
     digest = hashlib.sha256()
     for value in (
         request.method.encode(),
         route_path.encode(),
+        request.url.path.encode(),
         request.scope.get("query_string", b""),
         request.headers.get("content-type", "").encode(),
         await request.body(),

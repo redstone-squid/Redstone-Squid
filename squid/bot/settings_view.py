@@ -1,8 +1,8 @@
 """Interactive Components V2 rendering for server settings."""
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, cast, override
 
 import discord
 
@@ -73,10 +73,9 @@ class SettingsCapabilities:
 type SettingsAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 
 
-class SettingsPanel(sd.Screen):
+class SettingsPanel(sd.UserGuildSessionScreen, session_name="settings"):
     """A semantic, mount-owned settings workspace."""
 
-    session = sd.SessionSpec("settings", scope=sd.ScopeKind.USER_GUILD)
     timeout = SESSION_SECONDS
 
     history: sl.runtime.History = sl.runtime.history(limit=10)
@@ -134,6 +133,7 @@ class SettingsPanel(sd.Screen):
     def weight_for(self, role_id: int) -> float | None:
         return next((weight.multiplier for weight in self._weights if weight.role_id == role_id), None)
 
+    @override
     async def on_load(self) -> None:
         """Open the first page allowed by the caller.
 
@@ -159,18 +159,19 @@ class SettingsPanel(sd.Screen):
         self.confirming_reset = False
         self.page = "voting"
 
-    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    @override
+    def render(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         if self.page == "voting":
             return self._voting_nodes()
         return self._server_nodes()
 
-    def _server_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _server_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         description = (
             tr(t"Change as many as you like; an emptied picker clears that setting.")
             if self._capabilities.edit_server
             else None
         )
-        children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(tr(t"Server settings")),
                 description and sl.truncate(sl.paragraph(description)),
@@ -232,10 +233,10 @@ class SettingsPanel(sd.Screen):
         children.append(sl.action_controls(*actions, key="server-actions"))
         return children
 
-    def _voting_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target]]:
+    def _voting_nodes(self) -> Sequence[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]]:
         scope_note = self._scope_note()
         kind_label = tr(KIND_LABELS[self.kind])
-        children: list[sl.LayoutNode[sl.ComponentsV2Target]] = [
+        children: list[sl.LayoutNode[sl.ComponentsV2Target, sd.Request]] = [
             sl.section(
                 sl.heading(tr(t"Voting — {kind_label}")),
                 sl.fields(*(sl.field(field.name, field.value) for field in self._voting_fields())),
@@ -297,12 +298,14 @@ class SettingsPanel(sd.Screen):
             return
         await self.set_channel(setting, channel_id)
 
-    async def _locale_changed(self, event: sl.ChoiceEvent) -> None:
+    async def _locale_changed(self, event: sd.ChoiceEvent) -> None:
         if not await self._may_event(event, SETTINGS_SERVER_EDIT):
             return
+        request = event.context
+        assert request.root is not None
         await self.set_locale(
             None if event.selected[0] == FOLLOW_DISCORD else event.selected[0],
-            message_root=sd.responder(event).message_root,
+            message_root=request.root,
         )
 
     async def _kind_changed(self, event: sl.ChoiceEvent) -> None:
@@ -321,18 +324,11 @@ class SettingsPanel(sd.Screen):
             return
         role_name = role.name
         await event.present_form(
-            sl.forms.FormSpec(
-                tr(t"Vote weight for {role_name}"),
-                (
-                    sl.forms.TextField(
-                        key="multiplier",
-                        label=tr(t"Multiplier; leave empty to remove this role's weight"),
-                        placeholder="1.5",
-                        default=(f"{current:g}" if (current := self.weight_for(role.id)) is not None else ""),
-                        required=False,
-                        maximum=16,
-                    ),
-                ),
+            replace(
+                _VoteWeightForm(
+                    multiplier=f"{current:g}" if (current := self.weight_for(role.id)) is not None else "",
+                ).spec(),
+                title=tr(t"Vote weight for {role_name}"),
             ),
             key="role-weight",
             on_submit=lambda form_event: self._role_weight_submitted(form_event, role.id),
@@ -342,32 +338,25 @@ class SettingsPanel(sd.Screen):
         if await self._may_event(event, SETTINGS_VOTING_EDIT):
             kind = self.kind.value
             await event.present_form(
-                sl.forms.FormSpec(
-                    tr(t"{kind} vote emojis"),
-                    (
-                        sl.forms.TextAreaField(
-                            key="aliases",
-                            label=tr(t"One `choice | emoji` per line"),
-                            placeholder="approve | ✅\ndeny | ❌",
-                            default=self.emoji_preset_text(),
-                            minimum=1,
-                            maximum=1000,
-                        ),
-                    ),
+                replace(
+                    _VoteEmojisForm(aliases=self.emoji_preset_text()).spec(),
+                    title=tr(t"{kind} vote emojis"),
                 ),
                 key="vote-emojis",
                 on_submit=self._emoji_form_submitted,
             )
 
     async def _role_weight_submitted(self, event: sl.SubmitEvent, role_id: int) -> None:
-        text = cast(str, event.values["multiplier"]).strip()
+        form = _VoteWeightForm.from_submission(event)
+        text = (form.multiplier or "").strip()
         try:
             await self.set_weight(role_id, float(text) if text else None)
         except InvalidVoteConfigurationError, ValueError:
             await event.notice(tr(t"A vote multiplier must be a positive number, such as 1.5."))
 
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
-        text = cast(str, event.values["aliases"])
+        form = _VoteEmojisForm.from_submission(event)
+        text = form.aliases
         options: list[VoteOption] = []
         for position, line in enumerate(filter(None, (line.strip() for line in text.splitlines()))):
             parts = [part.strip() for part in line.split("|", 1)]
@@ -438,7 +427,7 @@ class SettingsPanel(sd.Screen):
         await self.open_server()
 
     async def _close(self, event: sl.PressEvent) -> None:
-        await event.finish()
+        event.finish_on_success()
 
     async def _may_event(self, event: sl.ActionEvent, node: PermissionNode) -> bool:
         if await self._authorize(node):
@@ -556,3 +545,21 @@ class SettingsPanel(sd.Screen):
         if self.kind is not VoteKind.BUILD or self._owner_guild_id in (None, self._guild.id):
             return None
         return tr(t"Build reviews are weighted by the network's own server, so these multipliers do not apply here.")
+
+
+class _VoteWeightForm(sl.forms.Form):
+    multiplier = sl.forms.TextField(
+        label=tr(t"Multiplier; leave empty to remove this role's weight"),
+        placeholder="1.5",
+        required=False,
+        maximum=16,
+    )
+
+
+class _VoteEmojisForm(sl.forms.Form):
+    aliases = sl.forms.TextAreaField(
+        label=tr(t"One `choice | emoji` per line"),
+        placeholder="approve | ✅\ndeny | ❌",
+        minimum=1,
+        maximum=1000,
+    )

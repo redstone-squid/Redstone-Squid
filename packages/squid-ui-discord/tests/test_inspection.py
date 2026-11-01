@@ -94,7 +94,7 @@ class TestMeasure:
 
     def test_something_that_is_neither_is_refused_by_name(self):
         with pytest.raises(TypeError, match="not str"):
-            measure("a message")  # pyrefly: ignore[bad-argument-type]
+            measure("a message")  # pyright: ignore[reportArgumentType]  # pyrefly: ignore[bad-argument-type]
 
     def test_invalid_host_raises_on_request(self):
         view = sd.layout_view(discord.ui.TextDisplay("x" * (LIMITS.total_text + 1)))

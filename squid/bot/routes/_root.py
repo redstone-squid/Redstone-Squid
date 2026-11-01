@@ -1,10 +1,13 @@
 """Root route group, router lifecycle hooks, and process-wide middleware."""
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 import discord
 
 import squid_ui_discord as sd
+from squid.bot.errors import handle_interaction_error
+from squid.bot.ui import text_node
+from squid.core.i18n import tr
 from squid.observability import SpanAttribute, TraceSurface, correlation_scope, trace_span
 
 if TYPE_CHECKING:
@@ -15,7 +18,6 @@ routes: sd.routing.RouteGroup[RedstoneSquid] = sd.routing.RouteGroup("r")
 """The ordinary root group reserving the bot's durable ``r:`` namespace."""
 
 _FEATURE_GROUPS: dict[str, sd.routing.RouteGroup[RedstoneSquid]] = {}
-_FEATURE_ROUTES: dict[tuple[str, str], sd.routing.Route] = {}
 
 
 def _feature_group(prefix: str) -> tuple[sd.routing.RouteGroup[RedstoneSquid], bool]:
@@ -27,24 +29,10 @@ def _feature_group(prefix: str) -> tuple[sd.routing.RouteGroup[RedstoneSquid], b
     return group, True
 
 
-def _feature_route(
-    group: sd.routing.RouteGroup[RedstoneSquid], format: str, *, aliases: tuple[str, ...] = ()
-) -> sd.routing.Route:
-    """Define an identity once while allowing discord.py to reload its handler module."""
-    key = (group.prefix, format)
-    if route := _FEATURE_ROUTES.get(key):
-        if route.aliases != aliases:
-            message = f"reloaded route {route.format!r} changed aliases"
-            raise ValueError(message)
-        return route
-    route = group.define(format, aliases=aliases)
-    _FEATURE_ROUTES[key] = route
-    return route
-
-
 class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
     """Trace every routed interaction without recording user-controlled route values."""
 
+    @override
     async def dispatch(self, request: sd.routing.RouteRequest[BotT], proceed: sd.routing.RouteProceed) -> None:
         attributes: dict[str, SpanAttribute] = {
             "squid.surface": TraceSurface.DISCORD_ROUTE,
@@ -60,20 +48,14 @@ class TraceRoutes[BotT: discord.Client](sd.routing.Middleware[BotT]):
 
 
 async def _route_gone_hook(interaction: discord.Interaction[RedstoneSquid]) -> None:
-    from squid.bot.ui import text_node
-    from squid.core.i18n import tr
-
-    await interaction.client.app_ui.respond(
-        interaction,
+    request = await sd.request(interaction)
+    await request.respond(
         text_node(tr(t"This control is no longer available.")),
         audience="personal",
     )
 
 
 async def _route_error_hook(interaction: discord.Interaction, error: Exception, source: str) -> None:
-    # Keep the route hook lazy so importing the router does not import the command UI catalogue.
-    from squid.bot.errors import handle_interaction_error
-
     await handle_interaction_error(interaction, error, surface=source)
 
 

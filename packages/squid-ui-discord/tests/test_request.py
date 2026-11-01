@@ -1,6 +1,6 @@
 """One request per Discord event: resolution, memoization, and the response ledger."""
 
-from typing import Any, cast
+from typing import Any, cast, override
 
 import discord
 import pytest
@@ -21,6 +21,7 @@ class Owner:
 
 
 class Panel(sl.Component[sl.ComponentsV2Target]):
+    @override
     def render(self):
         return sl.heading("Panel")
 
@@ -95,7 +96,9 @@ async def test_a_request_that_responded_keeps_its_scope() -> None:
     early = await sd.request(interaction.source)
     await early.respond("first")
 
-    assert (await ui.request(interaction.source)).scope is ui.runtime.app
+    with pytest.raises(ValueError, match="already belongs to a different UI scope"):
+        await ui.request(interaction.source)
+    assert (await sd.request(interaction.source)).scope is ui.runtime.app
 
 
 async def test_defer_fixes_the_audience_of_what_follows() -> None:
@@ -168,7 +171,7 @@ async def test_a_click_resolves_to_its_root_and_scope() -> None:
     ui, interaction = installed()
     root = ui.runtime.mount(Panel(), access=sd.Owner(7))
     ui.runtime._track(ui, root)
-    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(cast(Any, interaction.source), root))
+    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(cast(Any, interaction.source), root), context=None)
 
     request = await sd.request(event)
     await request.defer("private")
@@ -183,7 +186,99 @@ async def test_a_click_resolves_to_its_root_and_scope() -> None:
 
 
 async def test_a_foreign_frontend_event_is_refused() -> None:
-    event = ActionEvent(actor=Actor("7"), responder=cast(Any, object()))
+    event = ActionEvent(actor=Actor("7"), responder=cast(Any, object()), context=None)
 
     with pytest.raises(LookupError, match="not Discord"):
+        await sd.request(event)
+
+
+async def test_a_click_claims_a_request_first_seen_as_a_native_interaction() -> None:
+    ui, interaction = installed()
+    root = ui.runtime.mount(Panel(), access=sd.Owner(7), localization=sl.text.Localization(locale="fr"))
+    ui.runtime._track(ui, root)
+    early = await sd.request(interaction.source)
+
+    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(interaction.source, root), context=None)
+    request = await sd.request(event)
+
+    assert request is early
+    assert request.root is root
+    assert request.scope is ui
+    assert request.localization is root.localization
+
+
+async def test_request_exposes_the_audience_of_its_first_response() -> None:
+    _ui, interaction = installed()
+    request = await sd.request(interaction.source)
+    assert request.audience is None
+
+    await request.respond("Private", audience="personal")
+    assert request.audience == "personal"
+
+
+async def test_bound_resolution_preserves_deferral_when_claiming_an_early_request() -> None:
+    ui, interaction = installed()
+    early = await sd.request(interaction.source)
+    await early.defer("private")
+
+    claimed = await ui.request(interaction.source)
+    outcome = await claimed.respond(Panel())
+
+    assert claimed is early
+    assert claimed.scope is ui
+    assert isinstance(outcome, sd.Presented)
+    interaction.edit_original_response.assert_awaited_once()
+    await ui.close()
+    assert outcome.root.finished
+
+
+async def test_another_owner_cannot_claim_a_bound_request() -> None:
+    ui, interaction = installed()
+    first = await ui.request(interaction.source)
+    other = ui.runtime.scope(Owner())
+
+    with pytest.raises(ValueError, match="different UI scope"):
+        await other.request(interaction.source)
+    assert first.scope is ui
+
+
+async def test_bound_resolution_rejects_a_different_client() -> None:
+    ui, _ = installed()
+    _other, interaction = installed()
+
+    with pytest.raises(ValueError, match="different Discord runtime"):
+        await ui.request(interaction.source)
+    assert "squid_ui_discord.request" not in interaction.extras
+
+
+async def test_closed_scopes_and_their_memoized_requests_are_rejected() -> None:
+    ui, interaction = installed()
+    await ui.request(interaction.source)
+    await ui.close()
+
+    with pytest.raises(RuntimeError, match="scope is closed"):
+        await ui.request(interaction.source)
+    with pytest.raises(RuntimeError, match="scope is closed"):
+        await sd.request(interaction.source)
+    with pytest.raises(RuntimeError, match="no live UI scope"):
+        ui.runtime.scope_for(ui.owner)
+
+
+async def test_an_opened_form_cannot_change_owner() -> None:
+    ui, interaction = installed()
+    early = await sd.request(interaction.source)
+    await early.form(discord.ui.Modal(title="Edit"))
+
+    with pytest.raises(ValueError, match="different UI scope"):
+        await ui.request(interaction.source)
+
+
+async def test_a_finished_component_cannot_fall_back_to_the_application_scope() -> None:
+    ui, interaction = installed()
+    root = ui.runtime.mount(Panel(), access=sd.Owner(7))
+    ui.runtime._track(ui, root)
+    event = ActionEvent(actor=Actor("7"), responder=ActionResponder(interaction.source, root), context=None)
+    await ui.close()
+
+    with pytest.raises(RuntimeError, match="finished message root"):
         await sd.request(event)

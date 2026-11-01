@@ -173,7 +173,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         return render_payload([await self.render_node()])
 
     async def render_container(
-        self, *, reservation: sd.ResourceCost = sd.EMPTY_RESERVATION
+        self, *, reservation: sd.ResourceCost = sd.EMPTY_COST
     ) -> discord.ui.Container[discord.ui.LayoutView]:
         """Render the build card as a detached item, for composition into a larger V2 layout.
 
@@ -184,7 +184,7 @@ class BuildHandler[BotT: "squid.bot.app.RedstoneSquid"]:
         assert isinstance(container, discord.ui.Container)
         return container
 
-    async def render_node(self) -> sl.LayoutNode[sl.ComponentsV2Target]:
+    async def render_node(self) -> sl.LayoutNode[sl.ComponentsV2Target, sd.Request]:
         """The build card as layout IR, for callers composing a whole message at once."""
         build = self.build
         current_java_version = await self.bot.services.versions.newest("Java")

@@ -1,7 +1,7 @@
 """Structural tests for the bot's semantic Components V2 workflows."""
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, cast, override
 from unittest.mock import AsyncMock
 from uuid import UUID
 
@@ -24,7 +24,13 @@ from squid.sponsors import PublicSponsor
 from squid.versions.application import VersionService
 from squid.versions.domain import Edition
 from squid_ui.testing import RecordingResponder, press_event
-from squid_ui_discord.testing import assert_within_limits, commit_render, delivered_to, message_harness
+from squid_ui_discord.testing import (
+    assert_within_limits,
+    commit_render,
+    delivered_to,
+    interaction_harness,
+    message_harness,
+)
 from tests.support.discord import make_layout_bot
 
 if TYPE_CHECKING:
@@ -35,6 +41,7 @@ class VersionRecorder(VersionService):
     def __init__(self) -> None:
         pass
 
+    @override
     async def newest(self, edition: Edition) -> str:
         assert edition == "Java"
         return "Java 1.20"
@@ -44,6 +51,7 @@ class SearchRecorder(SearchService):
     def __init__(self) -> None:
         self.calls: list[SearchRequest] = []
 
+    @override
     async def search(self, request: SearchRequest) -> SearchPage:
         self.calls.append(request)
         raise AssertionError("the seeded first page must not be fetched again")
@@ -60,6 +68,7 @@ class EditRecorder(BuildService):
         self.conflict = conflict
         self.expected_revision: int | None = None
 
+    @override
     def edit(
         self,
         build_id: int,
@@ -207,7 +216,7 @@ def test_build_editor_declares_keyed_topic_following_policy() -> None:
     assert BuildEditScreen.session.name == "build-edit"
     assert BuildEditScreen.timeout == 900
     assert BuildEditScreen.follow_topics is True
-    assert BuildEditScreen.root_options["retain_routed_on_timeout"] is True
+    assert BuildEditScreen.retain_routed_on_timeout is True
 
 
 async def test_expired_build_editor_retains_only_the_fresh_recovery_route(display_build: Build) -> None:
@@ -219,18 +228,16 @@ async def test_expired_build_editor_retains_only_the_fresh_recovery_route(displa
         refresh_posts=AsyncMock(),
     )
     bot = make_layout_bot()
-    message_root = bot.ui.mount(
-        component,
-        access=sd.Owner(7),
-        timeout=BuildEditScreen.timeout,
-        **BuildEditScreen.root_options,
-    )
-    message = message_harness()
-    await message_root.send(delivered_to(message))
+    interaction = interaction_harness(user_id=7)
+    interaction.client = bot
+    result = await (await sd.request(interaction)).respond(component)
+    assert isinstance(result, sd.Presented)
+    message_root = result.root
+    assert message_root.retain_routed_on_timeout is True
 
     await message_root.handle_timeout()
 
-    expired = message.edit.await_args.kwargs["view"]
+    expired = interaction.edit_original_response.await_args.kwargs["view"]
     buttons = {item.label: item.disabled for item in expired.walk_children() if isinstance(item, discord.ui.Button)}
     assert buttons["Reload fresh editor"] is False
     assert all(disabled for label, disabled in buttons.items() if label != "Reload fresh editor")

@@ -166,7 +166,8 @@ def test_routes_and_rendering_are_stable_and_unselected() -> None:
 
     presentation = squid_ui_discord.render_static(panel)
     view = cast(discord.ui.LayoutView, presentation.view)
-    custom_ids = [item.custom_id for item in view.walk_children() if hasattr(item, "custom_id")]
+    # BasedPyright does not narrow `hasattr`, so the guard above is invisible to it.
+    custom_ids = [item.custom_id for item in view.walk_children() if hasattr(item, "custom_id")]  # pyright: ignore[reportAttributeAccessIssue]
     assert custom_ids == ["roles:toggle:colour:101", "roles:toggle:colour:102"]
 
 

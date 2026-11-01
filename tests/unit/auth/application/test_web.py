@@ -1,36 +1,18 @@
 """Browser-session service tests, over Discord and over a second provider alike."""
 
-from dataclasses import dataclass, field
-from typing import override
-
 import httpx
 import pytest
 from pydantic import AnyHttpUrl, SecretStr
 from whenever import Instant
 
-from squid.accounts.application import AccountService
-from squid.accounts.domain import Account, AccountConsent, IdentityProvider
+from squid.accounts.domain import IdentityProvider
 from squid.auth.application.providers import DiscordOAuthProvider, OAuthProvider
 from squid.auth.application.web import WebSessionService
 from squid.config import OAuthClientCredentials, OAuthConfig, UpstreamHttpConfig
 from squid.core.errors import AuthenticationError, NotFoundError
-from tests.unit.auth.application.fakes import FakeXboxOAuthProvider, SessionRepository
+from tests.unit.auth.application.fakes import AccountServiceRecorder, FakeXboxOAuthProvider, SessionRepository
 
 NOW = Instant.from_utc(2026, 8, 5)
-
-
-@dataclass(slots=True)
-class AccountServiceRecorder(AccountService):
-    account_id: int = 42
-    identities: list[tuple[IdentityProvider, str]] = field(default_factory=list)
-
-    @override
-    async def get_or_create_identity(
-        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
-    ) -> Account:
-        del consent
-        self.identities.append((provider, subject))
-        return Account(id=self.account_id)
 
 
 def credentials() -> OAuthClientCredentials:

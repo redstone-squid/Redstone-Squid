@@ -2,14 +2,14 @@
 
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, override
 
+from squid_reactivity.core import state
 from squid_ui.chrome import CHROME_CONTEXT, DEFAULT_CHROME
 from squid_ui.document import DocumentLike
 from squid_ui.factories import action_control, action_controls, bullet, bullets, stack, status
 from squid_ui.interactions import ActionEvent, ActionMode, PressEvent
 from squid_ui.runtime.component import Component
-from squid_ui.runtime.reactivity import state
 from squid_ui.semantic import ControlDisplay, Emphasis, Tone
 from squid_ui.target_types import RenderTarget
 from squid_ui.text import Message, TextLike
@@ -32,7 +32,7 @@ class AgreementParticipant:
 type AgreementResolveHandler = Callable[[PressEvent, tuple[str, ...]], Awaitable[None]]
 
 
-class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTargetT]):
+class Agreement[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Component[RenderTargetT, ContextT]):
     """Collect actor-keyed approvals to a declared threshold."""
 
     approved: tuple[str, ...] = state((), persist=False)
@@ -40,7 +40,7 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTarg
 
     def __init__(
         self,
-        prompt: ContentLike[RenderTargetT],
+        prompt: ContentLike[RenderTargetT, ContextT],
         participants: Sequence[AgreementParticipant],
         *,
         key: str = "agreement",
@@ -68,7 +68,8 @@ class Agreement[RenderTargetT: RenderTarget = RenderTarget](Component[RenderTarg
         self.allow_withdraw = allow_withdraw
         self.on_resolve = on_resolve
 
-    def render(self) -> DocumentLike[RenderTargetT]:
+    @override
+    def render(self) -> DocumentLike[RenderTargetT, ContextT]:
         """Render participant status and the available actor controls."""
         chrome = self.inject(CHROME_CONTEXT, DEFAULT_CHROME)
         approved = frozenset(self.approved)

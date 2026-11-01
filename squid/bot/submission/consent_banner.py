@@ -9,7 +9,7 @@ import squid_ui as sl
 import squid_ui_discord as sd
 from squid.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.bot.consent import ConsentPrompt
-from squid.bot.routes._root import _feature_group, _feature_route
+from squid.bot.routes._root import _feature_group
 from squid.bot.ui import CardField, render_payload, text_node, tr
 from squid.bot.utils.sticky_message import StickyMessage
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 build_log_consents, _consents_created = _feature_group("build-log-consents")
-build_log_consent = _feature_route(build_log_consents, "new", aliases=("build_log:consent",))
+build_log_consent = build_log_consents.define("new", aliases=("build_log:consent",))
 
 CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 
@@ -28,13 +28,12 @@ CONSENT_BUTTON_CUSTOM_ID = build_log_consent.id()
 @build_log_consents.route(build_log_consent)
 async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
     """Open the ephemeral consent prompt behind the public banner button."""
-    ui = interaction.client.app_ui
+    request = await sd.request(interaction)
     accounts = interaction.client.services.accounts
 
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(interaction.user.id))
     if account is not None and account.id is not None and not account.needs_consent_refresh:
-        await ui.respond(
-            interaction,
+        await request.respond(
             text_node(
                 tr(
                     t"### Consent Already Granted\n"
@@ -72,7 +71,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         accept_label=tr(t"Agree & Enable Ingestion"),
         wait_timeout=120,
     )
-    outcome = await ui.respond(interaction, component)
+    outcome = await request.respond(component)
     if not isinstance(outcome, sd.Presented):
         return
     await component.wait()
@@ -81,8 +80,7 @@ async def open_consent_prompt(interaction: Interaction[RedstoneSquid]) -> None:
         await accounts.get_or_create_identity(
             IdentityProvider.DISCORD, str(interaction.user.id), consent=component.consent
         )
-        await ui.respond(
-            interaction,
+        await request.respond(
             text_node(
                 tr(
                     t"### Consent Recorded!\n"
@@ -103,22 +101,20 @@ class BuildLogConsentStickyMessage(StickyMessage):
     async def render(self, channel: TextChannel) -> sd.message_payload.MessagePayload:
         return render_payload(
             [
-                sl.primitives.Text(
+                sd.v2.text(
                     "## \U0001f4cb Build Log Ingestion Consent\n"
                     "Redstone Squid automatically indexes and tracks redstone door and build submissions in this channel. "
                     "To attribute your builds, parse schematics, and record your scores, the bot requires your consent to store "
                     "your Discord user ID.\n\n"
                     "Messages from unconsented users are not ingested. Click below to review permissions and enable automated ingestion."
                 ),
-                sl.primitives.Row(
-                    (
-                        sl.primitives.RoutedButton(
-                            "Enable Build Ingestion",
-                            CONSENT_BUTTON_CUSTOM_ID,
-                            style=sl.primitives.ActionStyle.PRIMARY,
-                            emoji="\N{CLIPBOARD}",
-                        ),
-                    )
+                sd.v2.row(
+                    sd.v2.routed_button(
+                        "Enable Build Ingestion",
+                        CONSENT_BUTTON_CUSTOM_ID,
+                        style=sl.primitives.ActionStyle.PRIMARY,
+                        emoji="\N{CLIPBOARD}",
+                    ),
                 ),
             ]
         )

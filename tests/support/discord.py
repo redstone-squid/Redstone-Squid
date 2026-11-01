@@ -3,14 +3,21 @@
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast, override
 
 import discord
 
+import squid_ui_discord as sd
 from squid.accounts.application import AccountService
+from squid.bot.errors import UI_ERRORS
+from squid.bot.i18n import localization_resolver
+from squid.bot.ui import HOST_DEFAULTS
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import Decision, PermissionNode, Reason, Subject
+from squid_reactivity import LocalTopicBus
+from squid_ui.text import NEUTRAL, Localization
 from squid_ui_discord.testing import AsyncCallRecorder
+from squid_ui_discord.testing import InteractionHarness as UIInteractionHarness
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -119,14 +126,53 @@ def make_interaction(
     return InteractionHarness(interaction, send_initial, send_followup)
 
 
+def make_command_interaction(
+    client: discord.Client,
+    *,
+    name: str,
+    options: list[dict[str, Any]] | None = None,
+    autocomplete: bool = False,
+    guild_id: int | None = None,
+    channel_id: int = 20,
+    user_id: int = 987654321098765432,
+) -> discord.Interaction[discord.Client]:
+    """Decode a gateway payload so command dispatch uses discord.py's real state and lookup."""
+    state = client._connection  # pyright: ignore[reportPrivateUsage]
+    if state.user is None:
+        state.user = discord.ClientUser(
+            state=state,
+            data=cast(Any, {"id": "1", "username": "squid", "discriminator": "0", "avatar": None, "bot": True}),
+        )
+    user = {"id": str(user_id), "username": "builder", "discriminator": "0", "avatar": None}
+    payload: dict[str, Any] = {
+        "id": str(discord.utils.time_snowflake(datetime.now(UTC))),
+        "application_id": "1",
+        "type": 4 if autocomplete else 2,
+        "token": "test-interaction-token",
+        "version": 1,
+        "attachment_size_limit": 10 * 1024 * 1024,
+        "locale": "en-GB",
+        "data": {"id": "2", "name": name, "type": 1, "options": options or []},
+        "channel": {"id": str(channel_id), "type": 0 if guild_id is not None else 1, "name": "builds", "position": 0},
+    }
+    if guild_id is None:
+        payload["user"] = user
+    else:
+        payload["guild_id"] = str(guild_id)
+        payload["member"] = {"user": user, "roles": [], "joined_at": "2026-01-01T00:00:00Z", "flags": 0}
+    return discord.Interaction(data=cast(Any, payload), state=state)
+
+
 class _AutocompletePermissions(PermissionService):
     def __init__(self, allowed_nodes: frozenset[str]) -> None:
         self.allowed_nodes = allowed_nodes
 
+    @override
     async def allows(self, subject: Subject, node: PermissionNode | str) -> bool:
         del subject
         return str(getattr(node, "name", node)) in self.allowed_nodes
 
+    @override
     async def decisions(
         self,
         subject: Subject,
@@ -164,27 +210,6 @@ class _AccountIds:
         return self.account_id
 
 
-@dataclass(frozen=True, slots=True)
-class _AutocompleteClient:
-    services: _AutocompleteServices
-    account_ids: _AccountIds
-
-    async def is_owner(self, user: object) -> bool:
-        del user
-        return False
-
-
-@dataclass(frozen=True, slots=True)
-class _AutocompleteSource:
-    client: _AutocompleteClient
-    user: _Identity
-    guild_id: int | None
-    locale: str
-    channel_id: int = 2
-    command: None = None
-    guild: None = None
-
-
 def make_autocomplete_interaction(
     suggestions: object,
     *,
@@ -201,23 +226,23 @@ def make_autocomplete_interaction(
     `allowed_nodes` is what the permission engine would grant this user.
     """
 
-    client = _AutocompleteClient(
+    async def is_owner(_user: object) -> bool:
+        return False
+
+    client = make_layout_bot(
         services=_AutocompleteServices(
             suggestions=suggestions,
             permissions=_AutocompletePermissions(allowed_nodes),
             accounts=_AutocompleteAccounts(),
         ),
         account_ids=_AccountIds(account_id),
+        is_owner=is_owner,
     )
-    return cast(
-        discord.Interaction[discord.Client],
-        _AutocompleteSource(
-            client=client,
-            user=_Identity(user_id),
-            guild_id=guild_id,
-            locale=locale,
-        ),
-    )
+    interaction = UIInteractionHarness(user_id=user_id, client=client)
+    interaction.guild = None if guild_id is None else _Identity(guild_id)
+    interaction.guild_id = guild_id
+    interaction.locale = locale
+    return cast(discord.Interaction[discord.Client], interaction.source)
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,6 +353,7 @@ class FakeClient:
     def __init__(self, **attributes: Any) -> None:
         self.__dict__.update(attributes)
 
+    @override
     def __repr__(self) -> str:
         return f"FakeClient({', '.join(sorted(self.__dict__))})"
 
@@ -339,12 +365,6 @@ def make_layout_bot(**attributes: Any) -> Any:
     `DiscordUIRuntime.of(source)`, so a test building one needs a real installation rather than a
     bare `SessionManager`. The installation is weakly keyed, so it leaves with the double.
     """
-    import squid_ui_discord as sd
-    from squid.bot.i18n import localization_resolver
-    from squid.bot.ui import HOST_DEFAULTS
-    from squid_reactivity import LocalTopicBus
-    from squid_ui.text import NEUTRAL, Localization
-
     bus = attributes.get("topic_bus") or LocalTopicBus()
     client = FakeClient(topic_bus=bus, **{k: v for k, v in attributes.items() if k != "topic_bus"})
 
@@ -352,12 +372,13 @@ def make_layout_bot(**attributes: Any) -> Any:
         settings = getattr(getattr(client, "services", None), "settings", None)
         return NEUTRAL if settings is None else await localization_resolver(source)
 
-    runtime = sd.install(cast(discord.Client, client), defaults=HOST_DEFAULTS, bus=bus, localization=resolve)
+    runtime = sd.install(
+        cast(discord.Client, client), sd.Config(defaults=HOST_DEFAULTS, bus=bus, localization=resolve, errors=UI_ERRORS)
+    )
     # Written through `__dict__` because these are the bot attributes the code under test
     # reads, and the double is a bag of them rather than a class declaring any.
     client.__dict__.update(
         ui=runtime,
-        app_ui=runtime.scope(client),
         sessions=runtime.sessions,
     )
     return client

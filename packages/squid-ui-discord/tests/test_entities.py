@@ -1,5 +1,7 @@
 """Entity picker semantics, planning, and scene contracts."""
 
+from collections.abc import Awaitable, Callable
+
 import pytest
 
 import squid_ui as sl
@@ -23,10 +25,15 @@ class _Responder:
 
     async def redirect(self, url: str) -> None: ...
 
-    async def finish(self) -> None: ...
+    def finish_on_success(self) -> None: ...
+
+    def on_success[ValueT](
+        self, callback: Callable[[], Awaitable[ValueT]], *, name: str | None = None
+    ) -> sl.runtime.PostCommitOperation[ValueT]:
+        raise AssertionError
 
     async def present_form(
-        self, form, *, key: str = "form", on_submit=None, mode=None, label="", record=None
+        self, form, *, key: str = "form", on_submit=None, mode=None, label: sl.TextLike = "", record=None
     ) -> None: ...
 
     def invalidate(self) -> None: ...
@@ -94,9 +101,7 @@ async def test_managed_native_entity_selection_survives_a_second_render() -> Non
     handler = first.bindings["moderator"].handler
     await handler(
         EntitySelectionEvent(
-            Actor("7"),
-            _Responder(),
-            values=(sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),),
+            Actor("7"), _Responder(), values=(sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),), context=None
         )
     )
 
