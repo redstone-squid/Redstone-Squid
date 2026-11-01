@@ -3,12 +3,7 @@
 from collections.abc import Iterable
 
 from squid.permissions.application.cache import SubjectRuleCache, cache_key
-from squid.permissions.application.ports import (
-    GrantRecord,
-    PermissionStore,
-    RoleRecord,
-    SubjectRecords,
-)
+from squid.permissions.application.ports import PermissionStore, SubjectRecords
 from squid.permissions.domain import (
     BUILTIN_ROLES_BY_KEY,
     CATALOGUE,
@@ -30,9 +25,10 @@ from squid.permissions.domain import (
     resolve_many,
     rules_from_role,
 )
+from squid.permissions.models import PermissionGrant, PermissionRole
 
 
-def _role_specs(roles: Iterable[RoleRecord]) -> dict[str, RoleSpec]:
+def _role_specs(roles: Iterable[PermissionRole]) -> dict[str, RoleSpec]:
     """Key stored roles by id, folding code-defined built-in patterns in.
 
     A built-in's pattern list lives in `squid.permissions.domain.catalogue`, and
@@ -62,7 +58,7 @@ def _role_specs(roles: Iterable[RoleRecord]) -> dict[str, RoleSpec]:
     return specs
 
 
-def _grant_rule(record: GrantRecord) -> Rule:
+def _grant_rule(record: PermissionGrant) -> Rule:
     by_account = record.subject_account_id is not None
     return Rule(
         pattern=Pattern.parse(record.pattern),
@@ -231,7 +227,7 @@ class PermissionService:
         )
         return await self.capabilities(subject, nodes)
 
-    def role_leaves(self, role: RoleRecord, roles: Iterable[RoleRecord]) -> tuple[str, ...]:
+    def role_leaves(self, role: PermissionRole, roles: Iterable[PermissionRole]) -> tuple[str, ...]:
         """The node names one role actually confers, sorted.
 
         Expansion is a read-time convenience for rendering and for the authority

@@ -18,17 +18,9 @@ from squid.permissions.application.administration import (
     PermissionRankError,
     ProtectedRoleError,
 )
-from squid.permissions.application.ports import (
-    AssignmentRecord,
-    AssignmentRow,
-    AuditEntry,
-    AuditRow,
-    GrantRecord,
-    RoleRecord,
-    RuleRow,
-    SubjectRecords,
-)
+from squid.permissions.application.ports import AuditEntry, SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Subject
+from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 
 from ..domain.strategies import patterns as domain_patterns
 
@@ -38,9 +30,9 @@ GUILD = 555
 class FakeStore:
     """One in-memory store standing in for both halves of the repository."""
 
-    def __init__(self, *, roles: tuple[RoleRecord, ...] = (), rules: tuple[RuleRow, ...] = ()) -> None:
+    def __init__(self, *, roles: tuple[PermissionRole, ...] = (), rules: tuple[PermissionGrant, ...] = ()) -> None:
         builtin = tuple(
-            RoleRecord(
+            PermissionRole(
                 id=index + 1,
                 slug=role.key,
                 guild_id=None,
@@ -52,7 +44,7 @@ class FakeStore:
         )
         self.roles = {role.id: role for role in (*builtin, *roles)}
         self.rules = list(rules)
-        self.assignments: list[AssignmentRow] = []
+        self.assignments: list[PermissionRoleAssignment] = []
         self.audit_entries: list[AuditEntry] = []
         self._next_id = 100
 
@@ -62,7 +54,7 @@ class FakeStore:
             epoch=1,
             roles=tuple(self.roles.values()),
             grants=tuple(
-                GrantRecord(
+                PermissionGrant(
                     pattern=rule.pattern,
                     effect=rule.effect,
                     subject_account_id=rule.subject_account_id,
@@ -72,7 +64,7 @@ class FakeStore:
                 if rule.subject_account_id == account_id
             ),
             assignments=tuple(
-                AssignmentRecord(
+                PermissionRoleAssignment(
                     role_id=assignment.role_id,
                     subject_account_id=assignment.subject_account_id,
                     scope_guild_id=assignment.scope_guild_id,
@@ -89,7 +81,7 @@ class FakeStore:
     async def upsert_grant(self, *, audit: AuditEntry, **kwargs) -> None:
         self._next_id += 1
         self.rules.append(
-            RuleRow(
+            PermissionGrant(
                 id=self._next_id,
                 pattern=kwargs["pattern"],
                 effect=kwargs["effect"],
@@ -111,21 +103,25 @@ class FakeStore:
         self.audit_entries.append(audit)
         return len(self.rules) != before
 
-    async def list_rules(self, **_kwargs: object) -> tuple[RuleRow, ...]:
+    async def list_rules(self, **_kwargs: object) -> tuple[PermissionGrant, ...]:
         return tuple(self.rules)
 
-    async def list_assignments(self, **_kwargs: object) -> tuple[AssignmentRow, ...]:
+    async def list_assignments(self, **_kwargs: object) -> tuple[PermissionRoleAssignment, ...]:
         return tuple(self.assignments)
 
-    async def list_roles(self, *, guild_id: int | None = None) -> tuple[RoleRecord, ...]:
+    async def list_roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
         return tuple(self.roles.values())
 
-    async def get_role(self, slug: str, *, guild_id: int | None = None) -> RoleRecord | None:
+    async def get_role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole | None:
         return next((role for role in self.roles.values() if role.slug == slug), None)
 
-    async def create_role(self, *, slug, name, description, guild_id, rank, created_by_account_id, audit) -> RoleRecord:
+    async def create_role(
+        self, *, slug, name, description, guild_id, rank, created_by_account_id, audit
+    ) -> PermissionRole:
         self._next_id += 1
-        role = RoleRecord(id=self._next_id, slug=slug, guild_id=guild_id, builtin_key=None, rank=rank, protected=False)
+        role = PermissionRole(
+            id=self._next_id, slug=slug, guild_id=guild_id, builtin_key=None, rank=rank, protected=False
+        )
         self.roles[role.id] = role
         self.audit_entries.append(audit)
         return role
@@ -136,7 +132,7 @@ class FakeStore:
 
     async def set_role_rank(self, role_id: int, rank: int, *, audit: AuditEntry) -> None:
         role = self.roles[role_id]
-        self.roles[role_id] = RoleRecord(
+        self.roles[role_id] = PermissionRole(
             id=role.id,
             slug=role.slug,
             guild_id=role.guild_id,
@@ -153,7 +149,7 @@ class FakeStore:
         role = self.roles[role_id]
         includes = (*role.includes, pattern) if mode == INCLUDE_MODE else role.includes
         excludes = (*role.excludes, pattern) if mode == EXCLUDE_MODE else role.excludes
-        self.roles[role_id] = RoleRecord(
+        self.roles[role_id] = PermissionRole(
             id=role.id,
             slug=role.slug,
             guild_id=role.guild_id,
@@ -172,7 +168,7 @@ class FakeStore:
 
     async def add_role_include(self, role_id, included_role_id, *, added_by_account_id, audit) -> None:
         role = self.roles[role_id]
-        self.roles[role_id] = RoleRecord(
+        self.roles[role_id] = PermissionRole(
             id=role.id,
             slug=role.slug,
             guild_id=role.guild_id,
@@ -192,7 +188,7 @@ class FakeStore:
     async def assign_role(self, role_id, *, audit, **kwargs) -> None:
         self._next_id += 1
         self.assignments.append(
-            AssignmentRow(
+            PermissionRoleAssignment(
                 id=self._next_id,
                 role_id=role_id,
                 role_slug=self.roles[role_id].slug,
@@ -207,7 +203,7 @@ class FakeStore:
         self.audit_entries.append(audit)
         return True
 
-    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[AuditRow, ...]:
+    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[PermissionAuditEntry, ...]:
         return ()
 
 
@@ -215,9 +211,9 @@ def admin(store: FakeStore) -> PermissionAdministrationService:
     return PermissionAdministrationService(store, PermissionService(store))
 
 
-def granted(*patterns: str, account_id: int = 7) -> tuple[RuleRow, ...]:
+def granted(*patterns: str, account_id: int = 7) -> tuple[PermissionGrant, ...]:
     return tuple(
-        RuleRow(id=index + 1, pattern=pattern, effect=int(Effect.ALLOW), subject_account_id=account_id)
+        PermissionGrant(id=index + 1, pattern=pattern, effect=int(Effect.ALLOW), subject_account_id=account_id)
         for index, pattern in enumerate(patterns)
     )
 
@@ -308,13 +304,17 @@ class TestRankGate:
     async def test_a_peer_role_cannot_be_managed(self) -> None:
         """The boundary alone permits lateral sabotage; rank is what stops it."""
         store = FakeStore(
-            roles=(RoleRecord(id=50, slug="moderator", guild_id=GUILD, builtin_key=None, rank=60, protected=False),),
+            roles=(
+                PermissionRole(id=50, slug="moderator", guild_id=GUILD, builtin_key=None, rank=60, protected=False),
+            ),
             rules=granted("**", "role.definition.manage_guild"),
         )
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
         store.assignments.append(
-            AssignmentRow(id=1, role_id=50, role_slug="moderator", subject_account_id=7, scope_guild_id=GUILD)
+            PermissionRoleAssignment(
+                id=1, role_id=50, role_slug="moderator", subject_account_id=7, scope_guild_id=GUILD
+            )
         )
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
 
@@ -343,10 +343,10 @@ class TestRoles:
     async def test_composition_cycles_are_refused_at_write_time(self) -> None:
         store = FakeStore(
             roles=(
-                RoleRecord(
+                PermissionRole(
                     id=50, slug="a", guild_id=None, builtin_key=None, rank=10, protected=False, includes_roles=(51,)
                 ),
-                RoleRecord(id=51, slug="b", guild_id=None, builtin_key=None, rank=10, protected=False),
+                PermissionRole(id=51, slug="b", guild_id=None, builtin_key=None, rank=10, protected=False),
             ),
             rules=granted("**", "role.definition.manage"),
         )
@@ -361,12 +361,12 @@ class TestRoles:
         administrator from removing a capability they cannot themselves hold."""
         store = FakeStore(
             roles=(
-                RoleRecord(id=50, slug="helper", guild_id=None, builtin_key=None, rank=5, protected=False),
-                RoleRecord(id=51, slug="lead", guild_id=None, builtin_key=None, rank=40, protected=False),
+                PermissionRole(id=50, slug="helper", guild_id=None, builtin_key=None, rank=5, protected=False),
+                PermissionRole(id=51, slug="lead", guild_id=None, builtin_key=None, rank=40, protected=False),
             ),
             rules=granted("role.definition.manage", "settings.**"),
         )
-        store.assignments.append(AssignmentRow(id=1, role_id=51, role_slug="lead", subject_account_id=7))
+        store.assignments.append(PermissionRoleAssignment(id=1, role_id=51, role_slug="lead", subject_account_id=7))
         service = admin(store)
         actor = await service.actor(Subject(account_id=7, guild_id=GUILD))
 
@@ -377,7 +377,7 @@ class TestRoles:
     async def test_show_surfaces_patterns_the_actor_cannot_manage(self) -> None:
         store = FakeStore(
             roles=(
-                RoleRecord(
+                PermissionRole(
                     id=50,
                     slug="helper",
                     guild_id=None,
@@ -532,7 +532,7 @@ async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario
     """
     store = FakeStore(
         roles=(
-            RoleRecord(
+            PermissionRole(
                 id=200,
                 slug=CUSTOM_A,
                 guild_id=scenario.guild_a,
@@ -540,7 +540,7 @@ async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario
                 rank=scenario.rank_a,
                 protected=False,
             ),
-            RoleRecord(
+            PermissionRole(
                 id=201,
                 slug=CUSTOM_B,
                 guild_id=scenario.guild_b,
@@ -548,7 +548,7 @@ async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario
                 rank=scenario.rank_b,
                 protected=False,
             ),
-            RoleRecord(
+            PermissionRole(
                 id=202,
                 slug=SEED_ROLE,
                 guild_id=None,
@@ -559,7 +559,7 @@ async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario
         ),
         rules=granted(*scenario.initial_patterns),
     )
-    store.assignments.append(AssignmentRow(id=1, role_id=202, role_slug=SEED_ROLE, subject_account_id=7))
+    store.assignments.append(PermissionRoleAssignment(id=1, role_id=202, role_slug=SEED_ROLE, subject_account_id=7))
     service = admin(store)
     subject = Subject(account_id=7, guild_id=GUILD)
     initial_held = (await service.actor(subject)).held

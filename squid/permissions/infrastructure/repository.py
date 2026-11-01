@@ -8,16 +8,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.permissions.application.ports import (
-    AssignmentRecord,
-    AssignmentRow,
-    AuditEntry,
-    AuditRow,
-    GrantRecord,
-    RoleRecord,
-    RuleRow,
-    SubjectRecords,
-)
+from squid.permissions.application.ports import AuditEntry, SubjectRecords
 from squid.permissions.models import (
     PermissionAuditEntry,
     PermissionEpoch,
@@ -73,35 +64,12 @@ class PermissionRepository:
 
         return SubjectRecords(epoch=epoch, roles=roles, grants=grants, assignments=assignments)
 
-    async def _load_roles(self, session: AsyncSession) -> tuple[RoleRecord, ...]:
+    async def _load_roles(self, session: AsyncSession) -> tuple[PermissionRole, ...]:
         rows = (await session.scalars(select(PermissionRole))).all()
         patterns = (await session.scalars(select(PermissionRolePattern))).all()
         includes = (await session.scalars(select(PermissionRoleInclude))).all()
 
-        by_role_includes: dict[int, list[str]] = {}
-        by_role_excludes: dict[int, list[str]] = {}
-        for pattern in patterns:
-            target = by_role_includes if pattern.mode == INCLUDE_MODE else by_role_excludes
-            target.setdefault(pattern.role_id, []).append(pattern.pattern)
-
-        by_role_edges: dict[int, list[int]] = {}
-        for edge in includes:
-            by_role_edges.setdefault(edge.role_id, []).append(edge.included_role_id)
-
-        return tuple(
-            RoleRecord(
-                id=row.id,
-                slug=row.slug,
-                guild_id=row.guild_id,
-                builtin_key=row.builtin_key,
-                rank=row.rank,
-                protected=row.protected,
-                includes=tuple(sorted(by_role_includes.get(row.id, ()))),
-                excludes=tuple(sorted(by_role_excludes.get(row.id, ()))),
-                includes_roles=tuple(sorted(by_role_edges.get(row.id, ()))),
-            )
-            for row in rows
-        )
+        return _role_records(rows, patterns, includes)
 
     async def _load_grants(
         self,
@@ -109,7 +77,7 @@ class PermissionRepository:
         account_id: int | None,
         role_ids: tuple[int, ...],
         guild_id: int | None,
-    ) -> tuple[GrantRecord, ...]:
+    ) -> tuple[PermissionGrant, ...]:
         conditions = []
         if account_id is not None:
             conditions.append(PermissionGrant.subject_account_id == account_id)
@@ -121,18 +89,7 @@ class PermissionRepository:
             return ()
 
         rows = (await session.scalars(select(PermissionGrant).where(or_(*conditions)))).all()
-        return tuple(
-            GrantRecord(
-                pattern=row.pattern,
-                effect=row.effect,
-                subject_account_id=row.subject_account_id,
-                subject_role_id=row.subject_role_id,
-                subject_guild_id=row.subject_guild_id,
-                scope_guild_id=row.scope_guild_id,
-                expires_at=row.expires_at,
-            )
-            for row in rows
-        )
+        return tuple(row for row in rows)
 
     async def _load_assignments(
         self,
@@ -140,7 +97,7 @@ class PermissionRepository:
         account_id: int | None,
         role_ids: tuple[int, ...],
         guild_id: int | None,
-    ) -> tuple[AssignmentRecord, ...]:
+    ) -> tuple[PermissionRoleAssignment, ...]:
         conditions = []
         if account_id is not None:
             conditions.append(PermissionRoleAssignment.subject_account_id == account_id)
@@ -153,17 +110,7 @@ class PermissionRepository:
             return ()
 
         rows = (await session.scalars(select(PermissionRoleAssignment).where(or_(*conditions)))).all()
-        return tuple(
-            AssignmentRecord(
-                role_id=row.role_id,
-                subject_account_id=row.subject_account_id,
-                subject_role_id=row.subject_role_id,
-                subject_guild_id=row.subject_guild_id,
-                scope_guild_id=row.scope_guild_id,
-                expires_at=row.expires_at,
-            )
-            for row in rows
-        )
+        return tuple(row for row in rows)
 
 
 class PermissionAdminRepository:
@@ -270,7 +217,7 @@ class PermissionAdminRepository:
         subject_account_id: int | None = None,
         subject_role_id: int | None = None,
         guild_id: int | None = None,
-    ) -> tuple[RuleRow, ...]:
+    ) -> tuple[PermissionGrant, ...]:
         statement = select(PermissionGrant)
         if subject_account_id is not None:
             statement = statement.where(PermissionGrant.subject_account_id == subject_account_id)
@@ -285,22 +232,7 @@ class PermissionAdminRepository:
             )
         async with self._session_factory() as session:
             rows = (await session.scalars(statement.order_by(PermissionGrant.id))).all()
-        return tuple(
-            RuleRow(
-                id=row.id,
-                pattern=row.pattern,
-                effect=row.effect,
-                subject_account_id=row.subject_account_id,
-                subject_role_id=row.subject_role_id,
-                subject_guild_id=row.subject_guild_id,
-                scope_guild_id=row.scope_guild_id,
-                expires_at=row.expires_at,
-                granted_by_account_id=row.granted_by_account_id,
-                granted_at=row.granted_at,
-                reason=row.reason,
-            )
-            for row in rows
-        )
+        return tuple(row for row in rows)
 
     async def list_assignments(
         self,
@@ -308,7 +240,7 @@ class PermissionAdminRepository:
         subject_account_id: int | None = None,
         subject_role_id: int | None = None,
         guild_id: int | None = None,
-    ) -> tuple[AssignmentRow, ...]:
+    ) -> tuple[PermissionRoleAssignment, ...]:
         statement = select(PermissionRoleAssignment, PermissionRole.slug).join(
             PermissionRole, PermissionRole.id == PermissionRoleAssignment.role_id
         )
@@ -326,21 +258,11 @@ class PermissionAdminRepository:
             )
         async with self._session_factory() as session:
             rows = (await session.execute(statement.order_by(PermissionRoleAssignment.id))).all()
-        return tuple(
-            AssignmentRow(
-                id=assignment.id,
-                role_id=assignment.role_id,
-                role_slug=slug,
-                subject_account_id=assignment.subject_account_id,
-                subject_role_id=assignment.subject_role_id,
-                subject_guild_id=assignment.subject_guild_id,
-                scope_guild_id=assignment.scope_guild_id,
-                expires_at=assignment.expires_at,
-            )
-            for assignment, slug in rows
-        )
+        for assignment, slug in rows:
+            assignment.role_slug = slug
+        return tuple(assignment for assignment, _ in rows)
 
-    async def list_roles(self, *, guild_id: int | None = None) -> tuple[RoleRecord, ...]:
+    async def list_roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
         statement = select(PermissionRole)
         if guild_id is not None:
             statement = statement.where(or_(PermissionRole.guild_id.is_(None), PermissionRole.guild_id == guild_id))
@@ -350,7 +272,7 @@ class PermissionAdminRepository:
             includes = (await session.scalars(select(PermissionRoleInclude))).all()
         return _role_records(roles, patterns, includes)
 
-    async def get_role(self, slug: str, *, guild_id: int | None = None) -> RoleRecord | None:
+    async def get_role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole | None:
         # A guild's own role shadows a global one of the same slug, which is what
         # makes `/role create moderator` usable in more than one server.
         candidates = [role for role in await self.list_roles(guild_id=guild_id) if role.slug == slug]
@@ -367,7 +289,7 @@ class PermissionAdminRepository:
         rank: int,
         created_by_account_id: int | None,
         audit: AuditEntry,
-    ) -> RoleRecord:
+    ) -> PermissionRole:
         async with self._session_factory() as session:
             role = PermissionRole(
                 slug=slug,
@@ -381,14 +303,7 @@ class PermissionAdminRepository:
             await session.flush()
             session.add(self._audit(replace(audit, role_id=role.id)))
             await session.commit()
-            return RoleRecord(
-                id=role.id,
-                slug=role.slug,
-                guild_id=role.guild_id,
-                builtin_key=role.builtin_key,
-                rank=role.rank,
-                protected=role.protected,
-            )
+            return role
 
     async def delete_role(self, role_id: int, *, audit: AuditEntry) -> bool:
         async with self._session_factory() as session:
@@ -541,7 +456,7 @@ class PermissionAdminRepository:
             await session.commit()
             return removed
 
-    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[AuditRow, ...]:
+    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[PermissionAuditEntry, ...]:
         statement = select(PermissionAuditEntry).order_by(PermissionAuditEntry.at.desc()).limit(limit)
         if guild_id is not None:
             statement = statement.where(
@@ -552,30 +467,14 @@ class PermissionAdminRepository:
             )
         async with self._session_factory() as session:
             rows = (await session.scalars(statement)).all()
-        return tuple(
-            AuditRow(
-                id=row.id,
-                action=row.action,
-                at=row.at,
-                actor_account_id=row.actor_account_id,
-                subject_kind=row.subject_kind,
-                subject_id=row.subject_id,
-                subject_guild_id=row.subject_guild_id,
-                pattern=row.pattern,
-                role_id=row.role_id,
-                scope_guild_id=row.scope_guild_id,
-                effect=row.effect,
-                reason=row.reason,
-            )
-            for row in rows
-        )
+        return tuple(row for row in rows)
 
 
 def _role_records(
     roles: Sequence[PermissionRole],
     patterns: Sequence[PermissionRolePattern],
     includes: Sequence[PermissionRoleInclude],
-) -> tuple[RoleRecord, ...]:
+) -> tuple[PermissionRole, ...]:
     """Fold pattern and composition rows into the role records they belong to."""
     by_includes: dict[int, list[str]] = {}
     by_excludes: dict[int, list[str]] = {}
@@ -587,17 +486,8 @@ def _role_records(
     for edge in includes:
         by_edges.setdefault(edge.role_id, []).append(edge.included_role_id)
 
-    return tuple(
-        RoleRecord(
-            id=role.id,
-            slug=role.slug,
-            guild_id=role.guild_id,
-            builtin_key=role.builtin_key,
-            rank=role.rank,
-            protected=role.protected,
-            includes=tuple(sorted(by_includes.get(role.id, ()))),
-            excludes=tuple(sorted(by_excludes.get(role.id, ()))),
-            includes_roles=tuple(sorted(by_edges.get(role.id, ()))),
-        )
-        for role in roles
-    )
+    for role in roles:
+        role.includes = tuple(sorted(by_includes.get(role.id, ())))
+        role.excludes = tuple(sorted(by_excludes.get(role.id, ())))
+        role.includes_roles = tuple(sorted(by_edges.get(role.id, ())))
+    return tuple(roles)

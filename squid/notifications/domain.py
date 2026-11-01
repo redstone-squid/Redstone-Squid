@@ -210,29 +210,6 @@ class RecordSubscriptionFilter:
 
 
 @dataclass(frozen=True, slots=True)
-class NotificationSubscription:
-    """One enabled subscription owned by an account."""
-
-    id: int
-    account_id: int
-    kind: SubscriptionKind
-    subject_id: UUID | None
-    record_filter: RecordSubscriptionFilter | None
-    created_at: Instant
-
-
-@dataclass(frozen=True, slots=True)
-class InboxNotification:
-    """One materialized inbox item."""
-
-    id: int
-    kind: NotificationKind
-    payload: dict[str, object]
-    created_at: Instant
-    read_at: Instant | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class PendingNotificationDelivery:
     """One fenced Discord DM claim with its materialized message data."""
 

@@ -1,6 +1,7 @@
 """SQLAlchemy notification preference, inbox, and delivery models."""
 
 import uuid
+from typing import override
 
 from sqlalchemy import (
     UUID,
@@ -18,12 +19,31 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import TypeDecorator
 from whenever import Instant
 
-from squid.notifications.domain import NotificationKind, SubscriptionKind
+from squid.notifications.domain import NotificationKind, RecordSubscriptionFilter, SubscriptionKind
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, StrEnumText, now
+
+
+class RecordFilterJSON(TypeDecorator[RecordSubscriptionFilter]):
+    """Store validated subscription filters in the existing JSON format."""
+
+    impl = JSONB(none_as_null=True)
+    cache_ok = True
+
+    @override
+    def process_bind_param(self, value: RecordSubscriptionFilter | None, dialect: Dialect) -> dict[str, object] | None:
+        return None if value is None else value.as_dict()
+
+    @override
+    def process_result_value(
+        self, value: dict[str, object] | None, dialect: Dialect
+    ) -> RecordSubscriptionFilter | None:
+        return None if value is None else RecordSubscriptionFilter.from_dict(value)
 
 
 class NotificationProfile(Base, kw_only=True):
@@ -51,7 +71,7 @@ class NotificationProfile(Base, kw_only=True):
     )
 
 
-class NotificationSubscriptionRecord(Base, kw_only=True):
+class NotificationSubscription(Base, kw_only=True):
     """A creator, exact record, or structured record-filter subscription."""
 
     __tablename__ = "notification_subscriptions"
@@ -88,7 +108,7 @@ class NotificationSubscriptionRecord(Base, kw_only=True):
         ),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     account_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="notification_subscriptions_account_id_fkey", ondelete="CASCADE"),
@@ -96,14 +116,14 @@ class NotificationSubscriptionRecord(Base, kw_only=True):
     )
     kind: Mapped[SubscriptionKind] = mapped_column(StrEnumText(SubscriptionKind), nullable=False)
     subject_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
-    filter: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
+    record_filter: Mapped[RecordSubscriptionFilter | None] = mapped_column("filter", RecordFilterJSON(), default=None)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
 
-class NotificationRecord(Base, kw_only=True):
+class InboxNotification(Base, kw_only=True):
     """An idempotently materialized user notification."""
 
     __tablename__ = "notifications"
@@ -119,23 +139,25 @@ class NotificationRecord(Base, kw_only=True):
         Index("notifications_created_idx", "created_at"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     account_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("accounts.id", name="notifications_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
+        default=None,
     )
     event_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("domain_events.id", name="notifications_event_id_fkey", ondelete="CASCADE"),
         nullable=False,
+        default=None,
     )
-    source_key: Mapped[str] = mapped_column(Text, nullable=False)
+    source_key: Mapped[str] = mapped_column(Text, nullable=False, default="")
     kind: Mapped[NotificationKind] = mapped_column(StrEnumText(NotificationKind), nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
     )
-    web_visible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    web_visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
@@ -170,7 +192,7 @@ class NotificationDeliveryRecord(Base, kw_only=True):
         ),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     notification_id: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,

@@ -20,11 +20,12 @@ from squid.bot.utils.permissions import (
     subject_for,
 )
 from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import AssignmentRecord, GrantRecord, RoleRecord, SubjectRecords
+from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
+from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
 
 BUILTIN_ROWS = tuple(
-    RoleRecord(id=index + 1, slug=role.key, guild_id=None, builtin_key=role.key, rank=role.rank, protected=True)
+    PermissionRole(id=index + 1, slug=role.key, guild_id=None, builtin_key=role.key, rank=role.rank, protected=True)
     for index, role in enumerate(BUILTIN_ROLES_BY_KEY.values())
 )
 ROLE_ID = {row.builtin_key: row.id for row in BUILTIN_ROWS}
@@ -42,7 +43,9 @@ class FakeAccountService(AccountService):
 
 
 class FakePermissionStore:
-    def __init__(self, *, grants: tuple[GrantRecord, ...] = (), assignments: tuple[AssignmentRecord, ...] = ()) -> None:
+    def __init__(
+        self, *, grants: tuple[PermissionGrant, ...] = (), assignments: tuple[PermissionRoleAssignment, ...] = ()
+    ) -> None:
         self._records = SubjectRecords(epoch=1, roles=BUILTIN_ROWS, grants=grants, assignments=assignments)
 
     async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
@@ -136,7 +139,7 @@ def _context(bot: RedstoneSquid, guild: Guild, author: discord.Member) -> Contex
 class TestRequires:
     async def test_a_granted_node_passes(self) -> None:
         store = FakePermissionStore(
-            assignments=(AssignmentRecord(role_id=ROLE_ID["trusted"], subject_account_id=8),),
+            assignments=(PermissionRoleAssignment(role_id=ROLE_ID["trusted"], subject_account_id=8),),
         )
         bot, guild = _bot(member_id=8, store=store)
         context = _context(bot, guild, _member(8, guild))
@@ -156,7 +159,7 @@ class TestRequires:
     async def test_a_forbid_is_reported_as_such(self) -> None:
         """The refusal has to read differently: nothing the user does will help."""
         store = FakePermissionStore(
-            grants=(GrantRecord(pattern="build.**", effect=int(Effect.FORBID), subject_account_id=8),),
+            grants=(PermissionGrant(pattern="build.**", effect=int(Effect.FORBID), subject_account_id=8),),
         )
         bot, guild = _bot(member_id=8, store=store)
         context = _context(bot, guild, _member(8, guild))
@@ -168,7 +171,7 @@ class TestRequires:
 
     async def test_any_mode_passes_on_one_held_node(self) -> None:
         store = FakePermissionStore(
-            assignments=(AssignmentRecord(role_id=ROLE_ID["trusted"], subject_account_id=8),),
+            assignments=(PermissionRoleAssignment(role_id=ROLE_ID["trusted"], subject_account_id=8),),
         )
         bot, guild = _bot(member_id=8, store=store)
         context = _context(bot, guild, _member(8, guild))

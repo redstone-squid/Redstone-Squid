@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.notifications import NotificationSubscription
+from squid.notifications.models import NotificationSubscription
 from squid.suggestions.application import Candidate, candidate
 from squid.suggestions.domain import SuggestionRequest
 

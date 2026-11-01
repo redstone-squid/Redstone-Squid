@@ -86,16 +86,15 @@ async def worker(mocker: MockerFixture) -> AsyncIterator[DeliveryWorker]:
         client._ready.set()  # pyright: ignore[reportPrivateUsage]
         user = mocker.Mock(spec=discord.User, id=repository.delivery.discord_id)
         client._connection._users[user.id] = user  # pyright: ignore[reportPrivateUsage]
-        bot = SimpleNamespace(
-            ui=runtime,
-            services=SimpleNamespace(notifications=NotificationService(cast(NotificationRepository, repository))),
-            wait_until_ready=client.wait_until_ready,
-            get_user=client.get_user,
-            fetch_user=client.fetch_user,
-            notification_site_url="https://example.test",
+        mocker.patch.object(
+            client,
+            "services",
+            SimpleNamespace(notifications=NotificationService(cast(NotificationRepository, repository))),
+            create=True,
         )
+        mocker.patch.object(client, "notification_site_url", "https://example.test", create=True)
         try:
-            yield DeliveryWorker(NotificationCog(bot), repository, user.send)
+            yield DeliveryWorker(NotificationCog(client), repository, user.send)
         finally:
             await runtime.close()
 

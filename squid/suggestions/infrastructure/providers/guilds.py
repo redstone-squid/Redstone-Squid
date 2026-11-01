@@ -8,7 +8,7 @@ empty dropdown instead of another server's starboards.
 from collections.abc import Sequence
 from typing import Protocol
 
-from squid.permissions.application.ports import RoleRecord
+from squid.permissions.models import PermissionRole
 from squid.starboard.domain import EDITABLE_SETTINGS, StarboardConfig
 from squid.suggestions.application import Candidate, candidate
 from squid.suggestions.domain import SuggestionRequest
@@ -23,7 +23,7 @@ class GuildStarboards(Protocol):
 class PermissionRoles(Protocol):
     """Read the permission roles visible from a guild."""
 
-    async def roles(self, *, guild_id: int | None = None) -> Sequence[RoleRecord]: ...
+    async def roles(self, *, guild_id: int | None = None) -> Sequence[PermissionRole]: ...
 
 
 class StarboardNameProvider:

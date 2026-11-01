@@ -60,10 +60,10 @@ class PermissionRole(Base, kw_only=True):
         CheckConstraint("slug ~ '^[a-z][a-z0-9-]{1,31}$'", name="permission_roles_slug_format"),
     )
 
-    id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(Integer, Identity(), primary_key=True, default=None)
     slug: Mapped[str] = mapped_column(Text, nullable=False)
     """Stable handle used in commands, unique within the owning guild."""
-    name: Mapped[str] = mapped_column(Text, nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False, default="")
     """Display name."""
     description: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
@@ -85,6 +85,11 @@ class PermissionRole(Base, kw_only=True):
     created_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
+
+    includes: tuple[str, ...] = ()
+    excludes: tuple[str, ...] = ()
+    includes_roles: tuple[int, ...] = ()
+    """Stored patterns and included roles, loaded in batches by the repository."""
 
 
 class PermissionRolePattern(Base, kw_only=True):
@@ -195,7 +200,7 @@ class PermissionGrant(Base, kw_only=True):
         ),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     pattern: Mapped[str] = mapped_column(Text, nullable=False)
     effect: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     granted_by_account_id: Mapped[int | None] = mapped_column(
@@ -269,7 +274,7 @@ class PermissionRoleAssignment(Base, kw_only=True):
         ),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     role_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("permission_roles.id", name="permission_role_assignments_role_id_fkey", ondelete="CASCADE"),
@@ -297,6 +302,9 @@ class PermissionRoleAssignment(Base, kw_only=True):
     )
     reason: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
 
+    role_slug: str = ""
+    """Role name resolved for administrative listings."""
+
 
 class PermissionAuditEntry(Base, kw_only=True):
     """An append-only record of one permission mutation.
@@ -312,7 +320,7 @@ class PermissionAuditEntry(Base, kw_only=True):
         Index("permission_audit_log_by_subject", "subject_kind", "subject_id"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     action: Mapped[str] = mapped_column(Text, nullable=False)
     """What happened: `grant`, `revoke`, `role_create`, `role_pattern_add`, and so on."""
     actor_account_id: Mapped[int | None] = mapped_column(

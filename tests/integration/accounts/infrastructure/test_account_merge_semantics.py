@@ -15,13 +15,18 @@ from squid.accounts.models import Account, AccountIdentity, AliasClaim, CreatorA
 from squid.core.errors import DataIntegrityError
 from squid.events import DomainEvent
 from squid.events.models import DomainEventRecord
-from squid.notifications.domain import NotificationCandidate, NotificationKind, SubscriptionKind
+from squid.notifications.domain import (
+    NotificationCandidate,
+    NotificationKind,
+    RecordSubscriptionFilter,
+    SubscriptionKind,
+)
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.notifications.models import (
+    InboxNotification,
     NotificationDeliveryRecord,
     NotificationProfile,
-    NotificationRecord,
-    NotificationSubscriptionRecord,
+    NotificationSubscription,
 )
 from squid.persistence.types import now
 from squid.submissions.domain import SubmissionOrigin
@@ -61,7 +66,7 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
         event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=99)
         session.add(event)
         await session.flush()
-        notification = NotificationRecord(
+        notification = InboxNotification(
             account_id=absorbed.id,
             event_id=event.id,
             source_key=(
@@ -77,7 +82,7 @@ async def test_late_notification_integrity_failure_rolls_back_earlier_merge_phas
         await session.flush()
         if corruption == "incompatible_collision":
             session.add(
-                NotificationRecord(
+                InboxNotification(
                     account_id=survivor.id,
                     event_id=event.id,
                     source_key=f"event:{event.id}:owner:{survivor.id}",
@@ -176,7 +181,7 @@ async def test_no_collision_notification_and_delivery_move_together_at_merge_com
         event = DomainEventRecord(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
         session.add(event)
         await session.flush()
-        notification = NotificationRecord(
+        notification = InboxNotification(
             account_id=absorbed.id,
             event_id=event.id,
             source_key=f"event:{event.id}:owner:{absorbed.id}",
@@ -191,7 +196,7 @@ async def test_no_collision_notification_and_delivery_move_together_at_merge_com
     await accounts.merge(survivor.id, absorbed.id)
 
     async with migrated_session_factory() as session:
-        merged_notification = (await session.scalars(select(NotificationRecord))).one()
+        merged_notification = (await session.scalars(select(InboxNotification))).one()
         merged_delivery = (await session.scalars(select(NotificationDeliveryRecord))).one()
     assert merged_notification.account_id == survivor.id
     assert merged_notification.source_key == f"event:{event.id}:owner:{survivor.id}"
@@ -230,7 +235,7 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
         event = DomainEventRecord(event_type="record_run.activated", aggregate_kind="record_run", aggregate_id=5)
         session.add(event)
         await session.flush()
-        notification = NotificationRecord(
+        notification = InboxNotification(
             account_id=absorbed.id,
             event_id=event.id,
             source_key=f"event:{event.id}:record-build:42:account:{absorbed.id}",
@@ -240,7 +245,7 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
         )
         session.add(notification)
         session.add(
-            NotificationRecord(
+            InboxNotification(
                 account_id=survivor.id,
                 event_id=event.id,
                 source_key=f"event:{event.id}:record-build:42:account:{survivor.id}",
@@ -281,7 +286,7 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
 
     async with migrated_session_factory() as session:
         merged = tuple(
-            (await session.scalars(select(NotificationRecord).where(NotificationRecord.event_id == event.id))).all()
+            (await session.scalars(select(InboxNotification).where(InboxNotification.event_id == event.id))).all()
         )
         delivery = (await session.scalars(select(NotificationDeliveryRecord))).one()
     assert len(merged) == 1
@@ -387,37 +392,37 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                     emoji="no",
                     weight=1.0,
                 ),
-                NotificationSubscriptionRecord(
+                NotificationSubscription(
                     account_id=survivor.id,
                     kind=SubscriptionKind.CREATOR,
                     subject_id=subject_id,
                 ),
-                NotificationSubscriptionRecord(
+                NotificationSubscription(
                     account_id=absorbed.id,
                     kind=SubscriptionKind.CREATOR,
                     subject_id=subject_id,
                 ),
-                NotificationSubscriptionRecord(
+                NotificationSubscription(
                     account_id=survivor.id,
                     kind=SubscriptionKind.CREATOR,
                     subject_id=disabled_subject_id,
                     enabled=False,
                 ),
-                NotificationSubscriptionRecord(
+                NotificationSubscription(
                     account_id=absorbed.id,
                     kind=SubscriptionKind.CREATOR,
                     subject_id=disabled_subject_id,
                     enabled=False,
                 ),
-                NotificationSubscriptionRecord(
+                NotificationSubscription(
                     account_id=survivor.id,
                     kind=SubscriptionKind.RECORD_FILTER,
-                    filter=record_filter,
+                    record_filter=RecordSubscriptionFilter.from_dict(record_filter),
                 ),
-                NotificationSubscriptionRecord(
+                NotificationSubscription(
                     account_id=absorbed.id,
                     kind=SubscriptionKind.RECORD_FILTER,
-                    filter=record_filter,
+                    record_filter=RecordSubscriptionFilter.from_dict(record_filter),
                 ),
             ]
         )
@@ -433,12 +438,12 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
             (
                 await session.execute(
                     select(
-                        NotificationSubscriptionRecord.account_id,
-                        NotificationSubscriptionRecord.kind,
-                        NotificationSubscriptionRecord.subject_id,
-                        NotificationSubscriptionRecord.filter,
-                        NotificationSubscriptionRecord.enabled,
-                    ).order_by(NotificationSubscriptionRecord.id)
+                        NotificationSubscription.account_id,
+                        NotificationSubscription.kind,
+                        NotificationSubscription.subject_id,
+                        NotificationSubscription.record_filter,
+                        NotificationSubscription.enabled,
+                    ).order_by(NotificationSubscription.id)
                 )
             ).all()
         )
@@ -459,4 +464,4 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
         subscription for subscription in subscriptions if subscription.kind is SubscriptionKind.RECORD_FILTER
     )
     assert record_subscription.subject_id is None
-    assert record_subscription.filter == record_filter
+    assert record_subscription.record_filter == RecordSubscriptionFilter.from_dict(record_filter)

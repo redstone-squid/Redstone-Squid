@@ -11,15 +11,14 @@ from squid.bot.notifications_view import NotificationScreen
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.notifications import (
     DEFAULT_INBOX_VISIBILITY,
-    InboxNotification,
     InboxVisibility,
     NotificationPreferences,
     NotificationService,
-    NotificationSubscription,
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
 from squid.notifications.domain import NotificationKind
+from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid_ui.testing import RecordingResponder, choose, labels, press, submit
 
 
@@ -58,7 +57,14 @@ class NotificationRecorder(NotificationService):
         record_filter: RecordSubscriptionFilter | None = None,
     ) -> NotificationSubscription:
         self.subscribe_calls.append(SubscribeCall(account_id, kind, subject_id, record_filter))
-        return NotificationSubscription(1, account_id, kind, subject_id, record_filter, Instant.now())
+        return NotificationSubscription(
+            id=1,
+            account_id=account_id,
+            kind=kind,
+            subject_id=subject_id,
+            record_filter=record_filter,
+            created_at=Instant.now(),
+        )
 
     @override
     async def inbox(
@@ -71,7 +77,11 @@ class NotificationRecorder(NotificationService):
     ) -> Page[InboxNotification]:
         self.inbox_reads.append(visibility)
         return Page(
-            items=(InboxNotification(3, NotificationKind.BUILD_CONFIRMED, {"build_id": 9}, Instant.now()),),
+            items=(
+                InboxNotification(
+                    id=3, kind=NotificationKind.BUILD_CONFIRMED, payload={"build_id": 9}, created_at=Instant.now()
+                ),
+            ),
             total=1,
             next=None,
             prev=None,

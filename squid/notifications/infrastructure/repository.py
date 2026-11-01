@@ -19,22 +19,20 @@ from squid.builds.models import Build, BuildCreator
 from squid.events import DomainEvent
 from squid.events.models import DomainEventDeliveryRecord, DomainEventRecord
 from squid.notifications.domain import (
-    InboxNotification,
     InboxVisibility,
     NotificationCandidate,
     NotificationKind,
     NotificationPreferences,
     NotificationSource,
-    NotificationSubscription,
     PendingNotificationDelivery,
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
 from squid.notifications.models import (
+    InboxNotification,
     NotificationDeliveryRecord,
     NotificationProfile,
-    NotificationRecord,
-    NotificationSubscriptionRecord,
+    NotificationSubscription,
 )
 from squid.permissions.domain import BuiltinRoleKeys
 from squid.permissions.models import PermissionRole, PermissionRoleAssignment
@@ -178,66 +176,66 @@ class PostgresNotificationRepository:
         subject_id: UUID | None,
         record_filter: RecordSubscriptionFilter | None,
     ) -> NotificationSubscription:
-        filter_value = None if record_filter is None else record_filter.as_dict()
+        filter_value = record_filter
         async with self._session_factory() as session, session.begin():
             predicates = [
-                NotificationSubscriptionRecord.account_id == account_id,
-                NotificationSubscriptionRecord.kind == kind,
-                NotificationSubscriptionRecord.enabled.is_(True),
+                NotificationSubscription.account_id == account_id,
+                NotificationSubscription.kind == kind,
+                NotificationSubscription.enabled.is_(True),
             ]
             if subject_id is None:
                 predicates.extend(
                     [
-                        NotificationSubscriptionRecord.subject_id.is_(None),
-                        NotificationSubscriptionRecord.filter == filter_value,
+                        NotificationSubscription.subject_id.is_(None),
+                        NotificationSubscription.record_filter == filter_value,
                     ]
                 )
             else:
-                predicates.append(NotificationSubscriptionRecord.subject_id == subject_id)
-            existing = await session.scalar(select(NotificationSubscriptionRecord).where(*predicates))
+                predicates.append(NotificationSubscription.subject_id == subject_id)
+            existing = await session.scalar(select(NotificationSubscription).where(*predicates))
             if existing is not None:
-                return _subscription(existing)
+                return existing
             row = await session.scalar(
-                insert(NotificationSubscriptionRecord)
+                insert(NotificationSubscription)
                 .values(
                     account_id=account_id,
                     kind=kind,
                     subject_id=subject_id,
-                    filter=filter_value,
+                    record_filter=filter_value,
                 )
                 .on_conflict_do_nothing()
-                .returning(NotificationSubscriptionRecord)
+                .returning(NotificationSubscription)
             )
             if row is None:
-                row = await session.scalar(select(NotificationSubscriptionRecord).where(*predicates))
+                row = await session.scalar(select(NotificationSubscription).where(*predicates))
             if row is None:
                 msg = "notification subscription conflict did not resolve to an equivalent row"
                 raise RuntimeError(msg)
-            return _subscription(row)
+            return row
 
     async def list_subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
         async with self._session_factory() as session:
             rows = (
                 await session.scalars(
-                    select(NotificationSubscriptionRecord)
+                    select(NotificationSubscription)
                     .where(
-                        NotificationSubscriptionRecord.account_id == account_id,
-                        NotificationSubscriptionRecord.enabled.is_(True),
+                        NotificationSubscription.account_id == account_id,
+                        NotificationSubscription.enabled.is_(True),
                     )
-                    .order_by(NotificationSubscriptionRecord.created_at, NotificationSubscriptionRecord.id)
+                    .order_by(NotificationSubscription.created_at, NotificationSubscription.id)
                 )
             ).all()
-            return tuple(_subscription(row) for row in rows)
+            return tuple(row for row in rows)
 
     async def delete_subscription(self, account_id: int, subscription_id: int) -> bool:
         async with self._session_factory() as session, session.begin():
             removed = await session.scalar(
-                delete(NotificationSubscriptionRecord)
+                delete(NotificationSubscription)
                 .where(
-                    NotificationSubscriptionRecord.id == subscription_id,
-                    NotificationSubscriptionRecord.account_id == account_id,
+                    NotificationSubscription.id == subscription_id,
+                    NotificationSubscription.account_id == account_id,
                 )
-                .returning(NotificationSubscriptionRecord.id)
+                .returning(NotificationSubscription.id)
             )
             return removed is not None
 
@@ -253,26 +251,26 @@ class PostgresNotificationRepository:
     ) -> Sequence[InboxNotification]:
         """List one newest-first inbox page; a `before_id` page carries its overfetch at the front."""
         async with self._session_factory() as session:
-            statement = _inbox_filter(select(NotificationRecord), account_id=account_id, visibility=visibility)
+            statement = _inbox_filter(select(InboxNotification), account_id=account_id, visibility=visibility)
             reverse = before_id is not None
             if before_id is not None:
                 # Walk away from the anchor in reversed display order; the page is flipped back below.
-                statement = statement.where(NotificationRecord.id > before_id).order_by(NotificationRecord.id.asc())
+                statement = statement.where(InboxNotification.id > before_id).order_by(InboxNotification.id.asc())
             else:
                 if after_id is not None:
-                    statement = statement.where(NotificationRecord.id < after_id)
-                statement = statement.order_by(NotificationRecord.id.desc())
+                    statement = statement.where(InboxNotification.id < after_id)
+                statement = statement.order_by(InboxNotification.id.desc())
             if offset:
                 statement = statement.offset(offset)
             rows = (await session.scalars(statement.limit(limit))).all()
             ordered = reversed(rows) if reverse else rows
-            return tuple(_inbox(row) for row in ordered)
+            return tuple(row for row in ordered)
 
     async def count_inbox(self, account_id: int, *, visibility: InboxVisibility) -> int:
         """Count web-visible inbox items, mirroring the visibility rules of `list_inbox`."""
         async with self._session_factory() as session:
             statement = _inbox_filter(
-                select(func.count()).select_from(NotificationRecord),
+                select(func.count()).select_from(InboxNotification),
                 account_id=account_id,
                 visibility=visibility,
             )
@@ -294,10 +292,10 @@ class PostgresNotificationRepository:
     ) -> bool:
         async with self._session_factory() as session, session.begin():
             updated = await session.scalar(
-                update(NotificationRecord)
-                .where(NotificationRecord.id == notification_id, *_inbox_predicates(account_id, visibility))
-                .values(read_at=func.coalesce(NotificationRecord.read_at, func.now()) if read else None)
-                .returning(NotificationRecord.id)
+                update(InboxNotification)
+                .where(InboxNotification.id == notification_id, *_inbox_predicates(account_id, visibility))
+                .values(read_at=func.coalesce(InboxNotification.read_at, func.now()) if read else None)
+                .returning(InboxNotification.id)
             )
             return updated is not None
 
@@ -314,16 +312,16 @@ class PostgresNotificationRepository:
         async with self._session_factory() as session, session.begin():
             cutoff = func.now() - func.make_interval(0, 0, 0, retention_days)
             removed_rows = (
-                delete(NotificationRecord)
-                .where(NotificationRecord.created_at < cutoff)
-                .returning(NotificationRecord.id)
+                delete(InboxNotification)
+                .where(InboxNotification.created_at < cutoff)
+                .returning(InboxNotification.id)
                 .cte("removed_notifications")
             )
             removed = await session.scalar(select(func.count()).select_from(removed_rows))
             await session.execute(
                 delete(DomainEventRecord).where(
                     DomainEventRecord.occurred_at < cutoff,
-                    ~exists().where(NotificationRecord.event_id == DomainEventRecord.id),
+                    ~exists().where(InboxNotification.event_id == DomainEventRecord.id),
                     ~exists().where(DomainEventDeliveryRecord.event_id == DomainEventRecord.id),
                 )
             )
@@ -341,14 +339,14 @@ class PostgresNotificationRepository:
                 select(
                     NotificationDeliveryRecord.id,
                     AccountIdentity.subject,
-                    NotificationRecord.kind,
-                    NotificationRecord.payload,
+                    InboxNotification.kind,
+                    InboxNotification.payload,
                 )
                 .join(NotificationProfile, NotificationProfile.account_id == NotificationDeliveryRecord.account_id)
                 .join(
-                    NotificationRecord,
-                    (NotificationRecord.id == NotificationDeliveryRecord.notification_id)
-                    & (NotificationRecord.account_id == NotificationDeliveryRecord.account_id),
+                    InboxNotification,
+                    (InboxNotification.id == NotificationDeliveryRecord.notification_id)
+                    & (InboxNotification.account_id == NotificationDeliveryRecord.account_id),
                 )
                 .join(Account, Account.id == NotificationDeliveryRecord.account_id)
                 .join(
@@ -366,7 +364,7 @@ class PostgresNotificationRepository:
                     account_consent_current(),
                     NotificationProfile.dm_enabled.is_(True),
                     NotificationProfile.dm_suspended_at.is_(None),
-                    or_(NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED, claimable_staff),
+                    or_(InboxNotification.kind != NotificationKind.STAFF_BUILD_SUBMITTED, claimable_staff),
                 )
                 .order_by(NotificationDeliveryRecord.available_at, NotificationDeliveryRecord.id)
                 .limit(limit)
@@ -500,11 +498,11 @@ class PostgresNotificationRepository:
         if creator_ids:
             subscriber_ids = (
                 await session.execute(
-                    select(NotificationSubscriptionRecord.account_id)
+                    select(NotificationSubscription.account_id)
                     .where(
-                        NotificationSubscriptionRecord.kind == SubscriptionKind.CREATOR,
-                        NotificationSubscriptionRecord.subject_id.in_(creator_ids),
-                        NotificationSubscriptionRecord.enabled.is_(True),
+                        NotificationSubscription.kind == SubscriptionKind.CREATOR,
+                        NotificationSubscription.subject_id.in_(creator_ids),
+                        NotificationSubscription.enabled.is_(True),
                     )
                     .distinct()
                 )
@@ -597,20 +595,20 @@ class PostgresNotificationRepository:
         if not values:
             return
         await session.execute(
-            insert(NotificationRecord)
+            insert(InboxNotification)
             .values(values)
-            .on_conflict_do_nothing(index_elements=[NotificationRecord.source_key])
+            .on_conflict_do_nothing(index_elements=[InboxNotification.source_key])
         )
         source_keys = [value["source_key"] for value in values]
         deliverable = (
-            select(NotificationRecord.id, NotificationRecord.account_id)
-            .join(NotificationProfile, NotificationProfile.account_id == NotificationRecord.account_id)
+            select(InboxNotification.id, InboxNotification.account_id)
+            .join(NotificationProfile, NotificationProfile.account_id == InboxNotification.account_id)
             .where(
-                NotificationRecord.source_key.in_(source_keys),
+                InboxNotification.source_key.in_(source_keys),
                 NotificationProfile.dm_enabled.is_(True),
                 NotificationProfile.dm_suspended_at.is_(None),
                 exists().where(
-                    AccountIdentity.account_id == NotificationRecord.account_id,
+                    AccountIdentity.account_id == InboxNotification.account_id,
                     AccountIdentity.provider == IdentityProvider.DISCORD,
                 ),
             )
@@ -728,13 +726,13 @@ class PostgresNotificationRepository:
         exact_subscriptions = (
             await session.execute(
                 select(
-                    NotificationSubscriptionRecord.account_id,
-                    NotificationSubscriptionRecord.kind,
-                    NotificationSubscriptionRecord.subject_id,
+                    NotificationSubscription.account_id,
+                    NotificationSubscription.kind,
+                    NotificationSubscription.subject_id,
                 ).where(
-                    NotificationSubscriptionRecord.kind.in_((SubscriptionKind.CREATOR, SubscriptionKind.RECORD)),
-                    NotificationSubscriptionRecord.subject_id.in_(relevant_subjects),
-                    NotificationSubscriptionRecord.enabled.is_(True),
+                    NotificationSubscription.kind.in_((SubscriptionKind.CREATOR, SubscriptionKind.RECORD)),
+                    NotificationSubscription.subject_id.in_(relevant_subjects),
+                    NotificationSubscription.enabled.is_(True),
                 )
             )
         ).all()
@@ -750,9 +748,9 @@ class PostgresNotificationRepository:
 
         filter_rows = (
             await session.execute(
-                select(NotificationSubscriptionRecord.account_id, NotificationSubscriptionRecord.filter).where(
-                    NotificationSubscriptionRecord.kind == SubscriptionKind.RECORD_FILTER,
-                    NotificationSubscriptionRecord.enabled.is_(True),
+                select(NotificationSubscription.account_id, NotificationSubscription.record_filter).where(
+                    NotificationSubscription.kind == SubscriptionKind.RECORD_FILTER,
+                    NotificationSubscription.enabled.is_(True),
                 )
             )
         ).all()
@@ -775,7 +773,7 @@ class PostgresNotificationRepository:
         for account_id, raw_filter in filter_rows:
             if raw_filter is None:
                 continue
-            record_filter = RecordSubscriptionFilter.from_dict(dict(raw_filter))
+            record_filter = raw_filter
             for build_id, build_gains in gains.items():
                 if any(_filter_matches(record_filter, gain, tags_by_build[build_id]) for gain in build_gains):
                     recipients[build_id].add(account_id)
@@ -796,21 +794,10 @@ def _preferences(
     )
 
 
-def _subscription(row: NotificationSubscriptionRecord) -> NotificationSubscription:
-    return NotificationSubscription(
-        id=row.id,
-        account_id=row.account_id,
-        kind=row.kind,
-        subject_id=row.subject_id,
-        record_filter=None if row.filter is None else RecordSubscriptionFilter.from_dict(dict(row.filter)),
-        created_at=row.created_at,
-    )
-
-
 def _inbox_predicates(account_id: int, visibility: InboxVisibility) -> tuple[ColumnElement[bool], ...]:
     predicates = (
-        NotificationRecord.account_id == account_id,
-        NotificationRecord.web_visible.is_(True),
+        InboxNotification.account_id == account_id,
+        InboxNotification.web_visible.is_(True),
         exists().where(
             NotificationProfile.account_id == account_id,
             NotificationProfile.web_enabled.is_(True),
@@ -820,22 +807,12 @@ def _inbox_predicates(account_id: int, visibility: InboxVisibility) -> tuple[Col
     )
     if visibility.include_staff:
         return predicates
-    return (*predicates, NotificationRecord.kind != NotificationKind.STAFF_BUILD_SUBMITTED)
+    return (*predicates, InboxNotification.kind != NotificationKind.STAFF_BUILD_SUBMITTED)
 
 
 def _inbox_filter[S: Select[Any]](statement: S, *, account_id: int, visibility: InboxVisibility) -> S:
     """Apply the visibility rules shared by inbox reads and state transitions."""
     return statement.where(*_inbox_predicates(account_id, visibility))
-
-
-def _inbox(row: NotificationRecord) -> InboxNotification:
-    return InboxNotification(
-        id=row.id,
-        kind=row.kind,
-        payload=dict(row.payload),
-        created_at=row.created_at,
-        read_at=row.read_at,
-    )
 
 
 def _filter_matches(

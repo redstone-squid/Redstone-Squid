@@ -11,15 +11,14 @@ from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.events import DomainEvent
 from squid.notifications.domain import (
     DEFAULT_INBOX_VISIBILITY,
-    InboxNotification,
     InboxVisibility,
     NotificationPreferences,
-    NotificationSubscription,
     PendingNotificationDelivery,
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
 from squid.notifications.errors import NotificationNotFoundError, NotificationSubscriptionNotFoundError
+from squid.notifications.models import InboxNotification, NotificationSubscription
 
 
 class NotificationRepository(Protocol):

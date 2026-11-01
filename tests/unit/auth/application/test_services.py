@@ -10,8 +10,9 @@ from squid.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, Ap
 from squid.auth.models.entities import ApiKey
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import GrantRecord, SubjectRecords
+from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import InvalidPatternError, Pattern
+from squid.permissions.models import PermissionGrant
 
 NOW = Instant.from_utc(2026, 8, 8, 12)
 
@@ -254,7 +255,7 @@ class TestIssuanceBoundary:
             async def load_for_subject(self, **_kwargs: object) -> SubjectRecords:
                 return SubjectRecords(
                     epoch=1,
-                    grants=tuple(GrantRecord(pattern=node, effect=1, subject_account_id=4) for node in held),
+                    grants=tuple(PermissionGrant(pattern=node, effect=1, subject_account_id=4) for node in held),
                 )
 
             async def epoch(self) -> int:

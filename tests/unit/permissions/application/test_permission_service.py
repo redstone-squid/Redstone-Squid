@@ -5,13 +5,14 @@ from collections.abc import Iterable
 import pytest
 
 from squid.permissions.application import PermissionService
-from squid.permissions.application.ports import AssignmentRecord, GrantRecord, RoleRecord, SubjectRecords
+from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect, Origin, Reason, Subject
+from squid.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
 
 GUILD = 555
 
 BUILTIN_ROWS = tuple(
-    RoleRecord(
+    PermissionRole(
         id=index + 1,
         slug=role.key,
         guild_id=None,
@@ -47,9 +48,9 @@ class FakeStore:
 
 def service(
     *,
-    roles: tuple[RoleRecord, ...] = BUILTIN_ROWS,
-    grants: tuple[GrantRecord, ...] = (),
-    assignments: tuple[AssignmentRecord, ...] = (),
+    roles: tuple[PermissionRole, ...] = BUILTIN_ROWS,
+    grants: tuple[PermissionGrant, ...] = (),
+    assignments: tuple[PermissionRoleAssignment, ...] = (),
 ) -> tuple[PermissionService, FakeStore]:
     store = FakeStore(SubjectRecords(epoch=1, roles=roles, grants=grants, assignments=assignments))
     return PermissionService(store), store
@@ -58,7 +59,7 @@ def service(
 async def test_a_builtin_role_uses_the_pattern_list_defined_in_code() -> None:
     """The seeded rows carry no patterns; the catalogue module supplies them."""
     permissions, _ = service(
-        assignments=(AssignmentRecord(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
+        assignments=(PermissionRoleAssignment(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
     )
     subject = Subject(account_id=7, guild_id=GUILD)
 
@@ -66,10 +67,10 @@ async def test_a_builtin_role_uses_the_pattern_list_defined_in_code() -> None:
     assert not await permissions.allows(subject, "record.entry.rebuild")
 
 
-def widened(key: str, *patterns: str) -> tuple[RoleRecord, ...]:
+def widened(key: str, *patterns: str) -> tuple[PermissionRole, ...]:
     """The built-in rows, with stored include patterns added to one of them."""
     return tuple(
-        RoleRecord(
+        PermissionRole(
             id=row.id,
             slug=row.slug,
             guild_id=row.guild_id,
@@ -86,7 +87,7 @@ async def test_stored_patterns_extend_a_builtin_rather_than_replacing_it() -> No
     """An operator can widen a built-in live, without a deploy."""
     permissions, _ = service(
         roles=widened("guild-admin", "perm.audit.view"),
-        assignments=(AssignmentRecord(role_id=ROLE_ID["guild-admin"], subject_account_id=7),),
+        assignments=(PermissionRoleAssignment(role_id=ROLE_ID["guild-admin"], subject_account_id=7),),
     )
     subject = Subject(account_id=7, guild_id=GUILD)
 
@@ -104,7 +105,7 @@ async def test_a_stored_pattern_cannot_punch_through_a_builtins_exclude() -> Non
     """
     permissions, _ = service(
         roles=widened("global-admin", "bot.**", "record.entry.rebuild"),
-        assignments=(AssignmentRecord(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
+        assignments=(PermissionRoleAssignment(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
     )
     subject = Subject(account_id=7, guild_id=GUILD)
 
@@ -114,7 +115,7 @@ async def test_a_stored_pattern_cannot_punch_through_a_builtins_exclude() -> Non
 
 async def test_a_role_assignment_to_a_discord_role_reaches_its_holders() -> None:
     permissions, _ = service(
-        assignments=(AssignmentRecord(role_id=ROLE_ID["trusted"], subject_role_id=99, subject_guild_id=GUILD),),
+        assignments=(PermissionRoleAssignment(role_id=ROLE_ID["trusted"], subject_role_id=99, subject_guild_id=GUILD),),
     )
     subject = Subject(account_id=7, discord_role_ids=frozenset({99}), guild_id=GUILD)
 
@@ -138,7 +139,7 @@ class TestGuildAdminBridge:
     async def test_an_explicit_deny_outranks_it(self) -> None:
         """The permission system is evaluated first; Discord is only a default."""
         permissions, _ = service(
-            grants=(GrantRecord(pattern="settings.server.edit", effect=int(Effect.DENY), subject_account_id=7),),
+            grants=(PermissionGrant(pattern="settings.server.edit", effect=int(Effect.DENY), subject_account_id=7),),
         )
         subject = Subject(account_id=7, guild_id=GUILD, discord_guild_admin=True)
         decision = await permissions.check(subject, "settings.server.edit")
@@ -165,7 +166,7 @@ class TestLoadCost:
     async def test_resolving_many_nodes_costs_one_load(self) -> None:
         """The N+1 guard: today's tiers pay two or three round trips per check."""
         permissions, store = service(
-            assignments=(AssignmentRecord(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
+            assignments=(PermissionRoleAssignment(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
         )
         held = await permissions.capabilities(
             Subject(account_id=7, guild_id=GUILD),
@@ -208,7 +209,7 @@ async def test_an_expired_assignment_stops_applying() -> None:
 
     expired = Instant.from_utc(2020, 1, 1)
     permissions, _ = service(
-        assignments=(AssignmentRecord(role_id=ROLE_ID["trusted"], subject_account_id=7, expires_at=expired),),
+        assignments=(PermissionRoleAssignment(role_id=ROLE_ID["trusted"], subject_account_id=7, expires_at=expired),),
     )
 
     decision = await permissions.check(Subject(account_id=7, guild_id=GUILD), "vote.log_delete.cast")

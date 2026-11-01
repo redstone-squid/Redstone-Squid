@@ -6,45 +6,7 @@ from typing import Protocol
 
 from whenever import Instant
 
-
-@dataclass(frozen=True, slots=True)
-class RoleRecord:
-    """A stored role definition, before code-defined built-in patterns are merged in."""
-
-    id: int
-    slug: str
-    guild_id: int | None
-    builtin_key: str | None
-    rank: int
-    protected: bool
-    includes: tuple[str, ...] = ()
-    excludes: tuple[str, ...] = ()
-    includes_roles: tuple[int, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class GrantRecord:
-    """A stored direct grant."""
-
-    pattern: str
-    effect: int
-    subject_account_id: int | None = None
-    subject_role_id: int | None = None
-    subject_guild_id: int | None = None
-    scope_guild_id: int | None = None
-    expires_at: Instant | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class AssignmentRecord:
-    """A stored role assignment."""
-
-    role_id: int
-    subject_account_id: int | None = None
-    subject_role_id: int | None = None
-    subject_guild_id: int | None = None
-    scope_guild_id: int | None = None
-    expires_at: Instant | None = None
+from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,9 +18,9 @@ class SubjectRecords:
     """
 
     epoch: int
-    roles: tuple[RoleRecord, ...] = ()
-    grants: tuple[GrantRecord, ...] = ()
-    assignments: tuple[AssignmentRecord, ...] = ()
+    roles: tuple[PermissionRole, ...] = ()
+    grants: tuple[PermissionGrant, ...] = ()
+    assignments: tuple[PermissionRoleAssignment, ...] = ()
 
 
 class PermissionStore(Protocol):
@@ -99,55 +61,6 @@ class ActorCapabilityResolver(Protocol):
     ) -> frozenset[str]:
         """The subset of `nodes` the described actor holds."""
         ...
-
-
-@dataclass(frozen=True, slots=True)
-class RuleRow:
-    """One stored rule, as `/perm list` and `/perm audit` render it."""
-
-    id: int
-    pattern: str
-    effect: int
-    subject_account_id: int | None = None
-    subject_role_id: int | None = None
-    subject_guild_id: int | None = None
-    scope_guild_id: int | None = None
-    expires_at: Instant | None = None
-    granted_by_account_id: int | None = None
-    granted_at: Instant | None = None
-    reason: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class AssignmentRow:
-    """One stored role assignment, with the role's slug resolved."""
-
-    id: int
-    role_id: int
-    role_slug: str
-    subject_account_id: int | None = None
-    subject_role_id: int | None = None
-    subject_guild_id: int | None = None
-    scope_guild_id: int | None = None
-    expires_at: Instant | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class AuditRow:
-    """One recorded permission mutation."""
-
-    id: int
-    action: str
-    at: Instant
-    actor_account_id: int | None = None
-    subject_kind: str | None = None
-    subject_id: int | None = None
-    subject_guild_id: int | None = None
-    pattern: str | None = None
-    role_id: int | None = None
-    scope_guild_id: int | None = None
-    effect: int | None = None
-    reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,7 +120,7 @@ class PermissionAdminStore(Protocol):
         subject_account_id: int | None = None,
         subject_role_id: int | None = None,
         guild_id: int | None = None,
-    ) -> tuple[RuleRow, ...]: ...
+    ) -> tuple[PermissionGrant, ...]: ...
 
     async def list_assignments(
         self,
@@ -215,11 +128,11 @@ class PermissionAdminStore(Protocol):
         subject_account_id: int | None = None,
         subject_role_id: int | None = None,
         guild_id: int | None = None,
-    ) -> tuple[AssignmentRow, ...]: ...
+    ) -> tuple[PermissionRoleAssignment, ...]: ...
 
-    async def list_roles(self, *, guild_id: int | None = None) -> tuple[RoleRecord, ...]: ...
+    async def list_roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]: ...
 
-    async def get_role(self, slug: str, *, guild_id: int | None = None) -> RoleRecord | None: ...
+    async def get_role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole | None: ...
 
     async def create_role(
         self,
@@ -231,7 +144,7 @@ class PermissionAdminStore(Protocol):
         rank: int,
         created_by_account_id: int | None,
         audit: AuditEntry,
-    ) -> RoleRecord: ...
+    ) -> PermissionRole: ...
 
     async def delete_role(self, role_id: int, *, audit: AuditEntry) -> bool: ...
 
@@ -284,4 +197,4 @@ class PermissionAdminStore(Protocol):
         audit: AuditEntry,
     ) -> bool: ...
 
-    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[AuditRow, ...]: ...
+    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[PermissionAuditEntry, ...]: ...

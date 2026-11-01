@@ -15,14 +15,13 @@ import squid_ui_discord as sd
 from squid.bot.ui import tr
 from squid.notifications import (
     DEFAULT_INBOX_VISIBILITY,
-    InboxNotification,
     InboxVisibility,
     NotificationPreferences,
-    NotificationSubscription,
     RecordSubscriptionFilter,
     SubscriptionKind,
     TagPredicate,
 )
+from squid.notifications.models import InboxNotification, NotificationSubscription
 
 if TYPE_CHECKING:
     from squid.notifications.application import NotificationService

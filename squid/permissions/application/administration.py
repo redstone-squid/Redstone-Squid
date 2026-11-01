@@ -24,14 +24,7 @@ from whenever import Instant
 
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.core.i18n import tr
-from squid.permissions.application.ports import (
-    AssignmentRow,
-    AuditEntry,
-    AuditRow,
-    PermissionAdminStore,
-    RoleRecord,
-    RuleRow,
-)
+from squid.permissions.application.ports import AuditEntry, PermissionAdminStore
 from squid.permissions.application.services import PermissionService
 from squid.permissions.domain import (
     CATALOGUE,
@@ -47,6 +40,7 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
+from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 
 INCLUDE_MODE = 1
 EXCLUDE_MODE = -1
@@ -158,7 +152,7 @@ class PermissionAdministrationService:
                 msg = f"{missing[0]} is outside your authority; you cannot grant what you do not hold."
                 raise PermissionAuthorityError(msg, public_context={"node": missing[0], "pattern": pattern})
 
-    def _require_rank(self, actor: Actor, role: RoleRecord) -> None:
+    def _require_rank(self, actor: Actor, role: PermissionRole) -> None:
         """Refuse managing a role at or above the actor's own highest rank."""
         if actor.is_owner:
             return
@@ -169,7 +163,7 @@ class PermissionAdministrationService:
             )
             raise PermissionRankError(msg, public_context={"role": role.slug, "rank": role.rank})
 
-    def _require_unprotected(self, actor: Actor, role: RoleRecord) -> None:
+    def _require_unprotected(self, actor: Actor, role: PermissionRole) -> None:
         """Keep the built-ins whole against anyone but the owner.
 
         Without this, someone who happens to hold everything in `global-admin`
@@ -210,7 +204,7 @@ class PermissionAdministrationService:
         for pattern in leaves:
             self._require_scope(actor, pattern, scope_guild_id)
 
-    def _require_role_management(self, actor: Actor, role: RoleRecord) -> None:
+    def _require_role_management(self, actor: Actor, role: PermissionRole) -> None:
         node = ROLE_DEFINITION_MANAGE if role.guild_id is None else ROLE_DEFINITION_MANAGE_GUILD
         if not actor.is_owner and node.name not in actor.held:
             msg = f"You need {node.name} to manage this role."
@@ -349,7 +343,7 @@ class PermissionAdministrationService:
         account_id: int | None = None,
         discord_role_id: int | None = None,
         guild_id: int | None = None,
-    ) -> tuple[RuleRow, ...]:
+    ) -> tuple[PermissionGrant, ...]:
         """Every stored rule attached to one subject."""
         return await self._store.list_rules(
             subject_account_id=account_id,
@@ -363,7 +357,7 @@ class PermissionAdministrationService:
         account_id: int | None = None,
         discord_role_id: int | None = None,
         guild_id: int | None = None,
-    ) -> tuple[AssignmentRow, ...]:
+    ) -> tuple[PermissionRoleAssignment, ...]:
         """Every role assignment attached to one subject."""
         return await self._store.list_assignments(
             subject_account_id=account_id,
@@ -371,25 +365,25 @@ class PermissionAdministrationService:
             guild_id=guild_id,
         )
 
-    async def audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[AuditRow, ...]:
+    async def audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[PermissionAuditEntry, ...]:
         """The most recent permission mutations."""
         return await self._store.list_audit(guild_id=guild_id, limit=limit)
 
     # ---- roles ---------------------------------------------------------
 
-    async def roles(self, *, guild_id: int | None = None) -> tuple[RoleRecord, ...]:
+    async def roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
         """Every role visible from one guild, highest rank first."""
         roles = await self._store.list_roles(guild_id=guild_id)
         return tuple(sorted(roles, key=lambda role: (-role.rank, role.slug)))
 
-    async def role(self, slug: str, *, guild_id: int | None = None) -> RoleRecord:
+    async def role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole:
         found = await self._store.get_role(slug, guild_id=guild_id)
         if found is None:
             msg = f"No permission role named {slug!r}."
             raise NotFoundError(msg, public_context={"role": slug})
         return found
 
-    def resolved_leaves(self, role: RoleRecord, roles: Sequence[RoleRecord]) -> tuple[str, ...]:
+    def resolved_leaves(self, role: PermissionRole, roles: Sequence[PermissionRole]) -> tuple[str, ...]:
         """The node names a role actually confers, composition and subtraction applied."""
         return self._permissions.role_leaves(role, roles)
 
@@ -402,7 +396,7 @@ class PermissionAdministrationService:
         description: str | None = None,
         guild_id: int | None = None,
         rank: int = 0,
-    ) -> RoleRecord:
+    ) -> PermissionRole:
         """Create an empty role. Patterns are added separately, each gated."""
         if not 0 <= rank <= MAX_ROLE_RANK:
             msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
@@ -433,7 +427,7 @@ class PermissionAdministrationService:
             ),
         )
 
-    async def delete_role(self, actor: Actor, role: RoleRecord) -> bool:
+    async def delete_role(self, actor: Actor, role: PermissionRole) -> bool:
         self._require_role_management(actor, role)
         return await self._store.delete_role(
             role.id,
@@ -446,7 +440,7 @@ class PermissionAdministrationService:
             ),
         )
 
-    async def set_rank(self, actor: Actor, role: RoleRecord, rank: int) -> None:
+    async def set_rank(self, actor: Actor, role: PermissionRole, rank: int) -> None:
         if not 0 <= rank <= MAX_ROLE_RANK:
             msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
             raise ValidationError(msg, public_context={"field": "rank"})
@@ -465,7 +459,7 @@ class PermissionAdministrationService:
             ),
         )
 
-    async def add_pattern(self, actor: Actor, role: RoleRecord, pattern: str, *, mode: int = INCLUDE_MODE) -> None:
+    async def add_pattern(self, actor: Actor, role: PermissionRole, pattern: str, *, mode: int = INCLUDE_MODE) -> None:
         """Include or subtract one pattern in a role.
 
         An *exclusion* is not gated by the authority boundary: subtracting from a
@@ -495,7 +489,7 @@ class PermissionAdministrationService:
             ),
         )
 
-    async def remove_pattern(self, actor: Actor, role: RoleRecord, pattern: str) -> bool:
+    async def remove_pattern(self, actor: Actor, role: PermissionRole, pattern: str) -> bool:
         self._require_role_management(actor, role)
         return await self._store.remove_role_pattern(
             role.id,
@@ -509,7 +503,7 @@ class PermissionAdministrationService:
             ),
         )
 
-    async def add_include(self, actor: Actor, role: RoleRecord, included: RoleRecord) -> None:
+    async def add_include(self, actor: Actor, role: PermissionRole, included: PermissionRole) -> None:
         """Compose one role into another, refusing cycles at write time."""
         self._require_role_management(actor, role)
         if role.id == included.id:
@@ -535,7 +529,7 @@ class PermissionAdministrationService:
         )
 
     @staticmethod
-    def _would_cycle(role_id: int, included_id: int, roles: Sequence[RoleRecord]) -> bool:
+    def _would_cycle(role_id: int, included_id: int, roles: Sequence[PermissionRole]) -> bool:
         edges = {role.id: role.includes_roles for role in roles}
         seen: set[int] = set()
         frontier = [included_id]
@@ -549,7 +543,7 @@ class PermissionAdministrationService:
             frontier.extend(edges.get(current, ()))
         return False
 
-    async def remove_include(self, actor: Actor, role: RoleRecord, included: RoleRecord) -> bool:
+    async def remove_include(self, actor: Actor, role: PermissionRole, included: PermissionRole) -> bool:
         self._require_role_management(actor, role)
         return await self._store.remove_role_include(
             role.id,
@@ -565,7 +559,7 @@ class PermissionAdministrationService:
     async def assign(
         self,
         actor: Actor,
-        role: RoleRecord,
+        role: PermissionRole,
         *,
         account_id: int | None = None,
         discord_role_id: int | None = None,
@@ -612,7 +606,7 @@ class PermissionAdministrationService:
     async def unassign(
         self,
         actor: Actor,
-        role: RoleRecord,
+        role: PermissionRole,
         *,
         account_id: int | None = None,
         discord_role_id: int | None = None,
@@ -640,7 +634,9 @@ class PermissionAdministrationService:
             ),
         )
 
-    def unmanageable_patterns(self, actor: Actor, role: RoleRecord, roles: Sequence[RoleRecord]) -> tuple[str, ...]:
+    def unmanageable_patterns(
+        self, actor: Actor, role: PermissionRole, roles: Sequence[PermissionRole]
+    ) -> tuple[str, ...]:
         """Which of a role's leaves the actor could not grant themselves.
 
         `/role show` surfaces this so the two gates disagreeing is visible up

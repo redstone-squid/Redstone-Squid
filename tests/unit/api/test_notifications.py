@@ -20,16 +20,15 @@ from squid.api.v1.schemas.notifications import NotificationPreferenceUpdate, Not
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.notifications import (
     DEFAULT_INBOX_VISIBILITY,
-    InboxNotification,
     InboxVisibility,
     NotificationPreferences,
     NotificationService,
-    NotificationSubscription,
     RecordSubscriptionFilter,
     SubscriptionKind,
     TagPredicate,
 )
 from squid.notifications.domain import NotificationKind
+from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.permissions.application import PermissionService
 from squid.permissions.domain import PermissionNode, Subject
 

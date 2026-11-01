@@ -31,9 +31,9 @@ from squid.minecraft_auth.domain.models import MinecraftClientOrigin
 from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
 from squid.notifications.infrastructure.repository import PostgresNotificationRepository
 from squid.notifications.models import (
+    InboxNotification,
     NotificationDeliveryRecord,
     NotificationProfile,
-    NotificationRecord,
 )
 from squid.permissions.domain import BuiltinRoleKeys
 from squid.permissions.models import (
@@ -374,7 +374,7 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
         materialized = tuple(
             (
                 await session.scalars(
-                    select(NotificationRecord).where(NotificationRecord.event_id == notification_event.id)
+                    select(InboxNotification).where(InboxNotification.event_id == notification_event.id)
                 )
             ).all()
         )
@@ -442,9 +442,9 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
         rows = tuple(
             (
                 await session.scalars(
-                    select(NotificationRecord)
-                    .where(NotificationRecord.event_id == notification_event.id)
-                    .order_by(NotificationRecord.account_id)
+                    select(InboxNotification)
+                    .where(InboxNotification.event_id == notification_event.id)
+                    .order_by(InboxNotification.account_id)
                 )
             ).all()
         )
@@ -473,7 +473,7 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
         merged = tuple(
             (
                 await session.scalars(
-                    select(NotificationRecord).where(NotificationRecord.event_id == notification_event.id)
+                    select(InboxNotification).where(InboxNotification.event_id == notification_event.id)
                 )
             ).all()
         )

@@ -15,7 +15,6 @@ from squid.permissions.application.administration import (
     effect_label,
     scope_label,
 )
-from squid.permissions.application.ports import AssignmentRow, AuditRow, RoleRecord, RuleRow
 from squid.permissions.domain import CATALOGUE, Effect, PermissionNode
 from squid.permissions.domain.catalogue import (
     PERM_AUDIT_VIEW,
@@ -26,6 +25,7 @@ from squid.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
+from squid.permissions.models import PermissionAuditEntry, PermissionGrant, PermissionRole, PermissionRoleAssignment
 
 type ActorProvider = Callable[[], Awaitable[Actor]]
 type AccessAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
@@ -119,8 +119,8 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         )
 
     def _subject_browser(
-        self, rules: tuple[RuleRow, ...], assignments: tuple[AssignmentRow, ...]
-    ) -> sp.Browser[RuleRow | AssignmentRow, sl.ComponentsV2Target, sd.Request]:
+        self, rules: tuple[PermissionGrant, ...], assignments: tuple[PermissionRoleAssignment, ...]
+    ) -> sp.Browser[PermissionGrant | PermissionRoleAssignment, sl.ComponentsV2Target, sd.Request]:
         return sp.Browser(
             sl.sources.list_source((*rules, *assignments)),
             key="subject-access",
@@ -157,7 +157,9 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         return _AssignmentForm().spec()
 
     @staticmethod
-    def _role_browser(roles: tuple[RoleRecord, ...]) -> sp.Browser[RoleRecord, sl.ComponentsV2Target, sd.Request]:
+    def _role_browser(
+        roles: tuple[PermissionRole, ...],
+    ) -> sp.Browser[PermissionRole, sl.ComponentsV2Target, sd.Request]:
         return sp.Browser(
             sl.sources.list_source(roles),
             key="roles",
@@ -206,7 +208,9 @@ class AccessScreen(sd.UserSessionScreen, session_name="access"):
         )
 
     @staticmethod
-    def _audit(rows: tuple[AuditRow, ...]) -> sp.Browser[AuditRow, sl.ComponentsV2Target, sd.Request]:
+    def _audit(
+        rows: tuple[PermissionAuditEntry, ...],
+    ) -> sp.Browser[PermissionAuditEntry, sl.ComponentsV2Target, sd.Request]:
         return sp.Browser(
             sl.sources.list_source(rows),
             key="permission-audit",
@@ -375,18 +379,18 @@ def _scope(value: str, guild_id: int) -> int | None:
     return None if value == "global" else guild_id
 
 
-def _subject_item_label(row: RuleRow | AssignmentRow) -> str:
-    return row.pattern if isinstance(row, RuleRow) else row.role_slug
+def _subject_item_label(row: PermissionGrant | PermissionRoleAssignment) -> str:
+    return row.pattern if isinstance(row, PermissionGrant) else row.role_slug
 
 
-def _subject_item_summary(row: RuleRow | AssignmentRow) -> str:
-    if isinstance(row, RuleRow):
+def _subject_item_summary(row: PermissionGrant | PermissionRoleAssignment) -> str:
+    if isinstance(row, PermissionGrant):
         return f"{effect_label(row.effect)} · {scope_label(row.scope_guild_id)}"
     return f"internal role · {scope_label(row.scope_guild_id)}"
 
 
-def _subject_item_detail(row: RuleRow | AssignmentRow) -> sl.semantic.Fields:
-    if isinstance(row, RuleRow):
+def _subject_item_detail(row: PermissionGrant | PermissionRoleAssignment) -> sl.semantic.Fields:
+    if isinstance(row, PermissionGrant):
         return sl.fields(
             sl.field(tr(t"Effect"), effect_label(row.effect)),
             sl.field(tr(t"Pattern"), row.pattern),
@@ -399,13 +403,13 @@ def _subject_item_detail(row: RuleRow | AssignmentRow) -> sl.semantic.Fields:
     )
 
 
-def _role_summary(role: RoleRecord) -> str:
+def _role_summary(role: PermissionRole) -> str:
     scope = "global" if role.guild_id is None else "this server"
     protected = " · built-in" if role.protected else ""
     return f"rank {role.rank} · {scope}{protected}"
 
 
-def _role_detail(role: RoleRecord, roles: tuple[RoleRecord, ...]) -> sl.semantic.Fields:
+def _role_detail(role: PermissionRole, roles: tuple[PermissionRole, ...]) -> sl.semantic.Fields:
     by_id = {item.id: item.slug for item in roles}
     return sl.fields(
         sl.field(tr(t"Includes"), ", ".join(role.includes) or "—"),
@@ -414,11 +418,11 @@ def _role_detail(role: RoleRecord, roles: tuple[RoleRecord, ...]) -> sl.semantic
     )
 
 
-def _audit_summary(row: AuditRow) -> str:
+def _audit_summary(row: PermissionAuditEntry) -> str:
     return f"{row.at} · {row.pattern or 'role change'}"
 
 
-def _audit_detail(row: AuditRow) -> sl.semantic.Fields:
+def _audit_detail(row: PermissionAuditEntry) -> sl.semantic.Fields:
     return sl.fields(
         sl.field(tr(t"Action"), row.action),
         sl.field(tr(t"Pattern"), row.pattern or "—"),

@@ -28,10 +28,10 @@ from squid.notifications.infrastructure.repository import (
     _is_durable_staff_notification_recipient,
 )
 from squid.notifications.models import (
+    InboxNotification,
     NotificationDeliveryRecord,
     NotificationProfile,
-    NotificationRecord,
-    NotificationSubscriptionRecord,
+    NotificationSubscription,
 )
 from squid.permissions.domain import BuiltinRoleKeys
 from squid.permissions.models import (
@@ -111,7 +111,7 @@ async def _seed_delivery(
         )
         session.add(event)
         await session.flush()
-        notification = NotificationRecord(
+        notification = InboxNotification(
             account_id=account.id,
             event_id=event.id,
             source_key=f"event:{event.id}:account:{account.id}",
@@ -270,8 +270,8 @@ async def test_persisted_notification_and_subscription_kinds_round_trip_as_enums
     )
 
     async with async_session_factory() as session:
-        notification_kind = (await session.scalars(select(NotificationRecord.kind))).one()
-        subscription_kind = (await session.scalars(select(NotificationSubscriptionRecord.kind))).one()
+        notification_kind = (await session.scalars(select(InboxNotification.kind))).one()
+        subscription_kind = (await session.scalars(select(NotificationSubscription.kind))).one()
 
     assert notification_kind is NotificationKind.BUILD_CONFIRMED
     assert subscription_kind is SubscriptionKind.CREATOR
@@ -309,7 +309,7 @@ async def test_disabling_dms_cancels_pending_deliveries_without_hiding_the_inbox
     assert preferences.dm_enabled is False
     async with async_session_factory() as session:
         delivery = await session.scalar(select(NotificationDeliveryRecord))
-        notification = await session.scalar(select(NotificationRecord))
+        notification = await session.scalar(select(InboxNotification))
         assert delivery is not None
         assert delivery.dead_at is not None
         assert notification is not None
@@ -323,11 +323,11 @@ async def test_read_state_changes_are_idempotent_and_visibility_safe(
     await _seed_delivery(async_session_factory)
     async with async_session_factory.begin() as session:
         account_id = (await session.scalars(select(NotificationProfile.account_id))).one()
-        ordinary_id = (await session.scalars(select(NotificationRecord.id))).one()
+        ordinary_id = (await session.scalars(select(InboxNotification.id))).one()
         event = DomainEventRecord(event_type="build.submitted", aggregate_kind="build", aggregate_id=43)
         session.add(event)
         await session.flush()
-        staff = NotificationRecord(
+        staff = InboxNotification(
             account_id=account_id,
             event_id=event.id,
             source_key="event:2:staff:1",
@@ -359,7 +359,7 @@ async def test_read_state_changes_require_current_inbox_eligibility(
     await _seed_delivery(async_session_factory)
     async with async_session_factory.begin() as session:
         account = (await session.scalars(select(Account))).one()
-        notification_id = (await session.scalars(select(NotificationRecord.id))).one()
+        notification_id = (await session.scalars(select(InboxNotification.id))).one()
         if gate == "web":
             profile = (await session.scalars(select(NotificationProfile))).one()
             profile.web_enabled = False
@@ -383,7 +383,7 @@ async def test_inbox_count_and_both_keyset_directions_share_visibility(
         session.add(event)
         await session.flush()
         session.add_all(
-            NotificationRecord(
+            InboxNotification(
                 account_id=account.id,
                 event_id=event.id,
                 source_key=f"event:{event.id}:account:{index}",
@@ -514,13 +514,13 @@ async def test_cleanup_removes_expired_inbox_and_unreferenced_source_event(
     await _seed_delivery(async_session_factory)
     expired_at = Instant.now().subtract(hours=24 * 91)
     async with async_session_factory.begin() as session:
-        await session.execute(update(NotificationRecord).values(created_at=expired_at))
+        await session.execute(update(InboxNotification).values(created_at=expired_at))
         await session.execute(update(DomainEventRecord).values(occurred_at=expired_at))
 
     assert await repository.cleanup(retention_days=90) == 1
 
     async with async_session_factory() as session:
-        assert await session.scalar(select(NotificationRecord)) is None
+        assert await session.scalar(select(InboxNotification)) is None
         assert await session.scalar(select(NotificationDeliveryRecord)) is None
         assert await session.scalar(select(DomainEventRecord)) is None
 
@@ -563,7 +563,7 @@ async def test_equivalent_subscriptions_are_idempotent_at_the_database_boundary(
     assert first.id == second.id
     assert filtered.id == filtered_again.id
     async with async_session_factory() as session:
-        assert len((await session.scalars(select(NotificationSubscriptionRecord))).all()) == 2
+        assert len((await session.scalars(select(NotificationSubscription))).all()) == 2
 
 
 @pytest.mark.parametrize(("recipient_count", "expected_statements"), [(0, 0), (1, 3), (100, 3)])
@@ -641,7 +641,7 @@ async def test_candidate_materialization_is_unique_under_concurrent_replay(
         tasks.start_soon(replay)
 
     async with async_session_factory() as session:
-        assert len((await session.scalars(select(NotificationRecord))).all()) == 1
+        assert len((await session.scalars(select(InboxNotification))).all()) == 1
         assert len((await session.scalars(select(NotificationDeliveryRecord))).all()) == 1
 
 
@@ -733,7 +733,7 @@ async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
         )
 
     async with async_session_factory() as session:
-        notified = set((await session.scalars(select(NotificationRecord.account_id))).all())
+        notified = set((await session.scalars(select(InboxNotification.account_id))).all())
         delivered = set((await session.scalars(select(NotificationDeliveryRecord.account_id))).all())
 
     assert notified == {accounts["both"], accounts["web_only"]}

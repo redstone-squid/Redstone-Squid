@@ -59,12 +59,11 @@ from squid.minecraft_auth.models import PaperInstallation, PlayerAuthorizationCh
 from squid.notifications import NotificationPreferences, NotificationService
 from squid.notifications.domain import (
     DEFAULT_INBOX_VISIBILITY,
-    InboxNotification,
     InboxVisibility,
-    NotificationSubscription,
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
+from squid.notifications.models import InboxNotification, NotificationSubscription
 from squid.permissions.application import PermissionService, SubjectRecords
 from squid.permissions.application.epoch import PermissionEpochWatcher, WakeListener
 from squid.permissions.domain import Pattern

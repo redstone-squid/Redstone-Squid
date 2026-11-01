@@ -11,10 +11,10 @@ from whenever import Instant
 from squid.core.errors import DataIntegrityError
 from squid.notifications.domain import NotificationSource
 from squid.notifications.models import (
+    InboxNotification,
     NotificationDeliveryRecord,
     NotificationProfile,
-    NotificationRecord,
-    NotificationSubscriptionRecord,
+    NotificationSubscription,
 )
 
 
@@ -53,8 +53,8 @@ def _merge_notification_profile_statement(*, survivor: int, absorbed: int) -> In
 
 
 def _collapse_notification_subscriptions_statement(*, survivor: int, absorbed: int) -> Delete:
-    absorbed_row = aliased(NotificationSubscriptionRecord, name="absorbed_subscription")
-    survivor_row = aliased(NotificationSubscriptionRecord, name="survivor_subscription")
+    absorbed_row = aliased(NotificationSubscription, name="absorbed_subscription")
+    survivor_row = aliased(NotificationSubscription, name="survivor_subscription")
     duplicate_ids = (
         select(absorbed_row.id)
         .join(
@@ -63,13 +63,13 @@ def _collapse_notification_subscriptions_statement(*, survivor: int, absorbed: i
                 survivor_row.account_id == survivor,
                 survivor_row.kind == absorbed_row.kind,
                 survivor_row.subject_id.is_not_distinct_from(absorbed_row.subject_id),
-                survivor_row.filter.is_not_distinct_from(absorbed_row.filter),
+                survivor_row.record_filter.is_not_distinct_from(absorbed_row.record_filter),
                 survivor_row.enabled == absorbed_row.enabled,
             ),
         )
         .where(absorbed_row.account_id == absorbed)
     )
-    return delete(NotificationSubscriptionRecord).where(NotificationSubscriptionRecord.id.in_(duplicate_ids))
+    return delete(NotificationSubscription).where(NotificationSubscription.id.in_(duplicate_ids))
 
 
 async def merge_account_notifications(session: AsyncSession, *, survivor: int, absorbed: int) -> None:
@@ -82,8 +82,8 @@ async def merge_account_notifications(session: AsyncSession, *, survivor: int, a
     await session.execute(delete(NotificationProfile).where(NotificationProfile.account_id == absorbed))
     await session.execute(_collapse_notification_subscriptions_statement(survivor=survivor, absorbed=absorbed))
     await session.execute(
-        update(NotificationSubscriptionRecord)
-        .where(NotificationSubscriptionRecord.account_id == absorbed)
+        update(NotificationSubscription)
+        .where(NotificationSubscription.account_id == absorbed)
         .values(account_id=survivor)
     )
     await _canonicalize_notifications(session, survivor=survivor, absorbed=absorbed)
@@ -94,9 +94,9 @@ async def _canonicalize_notifications(session: AsyncSession, *, survivor: int, a
     notifications = tuple(
         (
             await session.scalars(
-                select(NotificationRecord)
-                .where(NotificationRecord.account_id.in_((survivor, absorbed)))
-                .order_by(NotificationRecord.id)
+                select(InboxNotification)
+                .where(InboxNotification.account_id.in_((survivor, absorbed)))
+                .order_by(InboxNotification.id)
                 .with_for_update()
             )
         ).all()

@@ -5,13 +5,14 @@ from collections.abc import Iterable
 from whenever import Instant
 
 from squid.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache, cache_key
-from squid.permissions.application.ports import AssignmentRecord, RoleRecord, SubjectRecords
+from squid.permissions.application.ports import SubjectRecords
 from squid.permissions.domain import BUILTIN_ROLES_BY_KEY, Rule, Subject
+from squid.permissions.models import PermissionRole, PermissionRoleAssignment
 
 GUILD = 555
 
 BUILTIN_ROWS = tuple(
-    RoleRecord(id=index + 1, slug=role.key, guild_id=None, builtin_key=role.key, rank=role.rank, protected=True)
+    PermissionRole(id=index + 1, slug=role.key, guild_id=None, builtin_key=role.key, rank=role.rank, protected=True)
     for index, role in enumerate(BUILTIN_ROLES_BY_KEY.values())
 )
 ROLE_ID = {row.builtin_key: row.id for row in BUILTIN_ROWS}
@@ -35,7 +36,7 @@ class CountingStore:
         return SubjectRecords(
             epoch=self.epoch_version,
             roles=BUILTIN_ROWS,
-            assignments=(AssignmentRecord(role_id=ROLE_ID["trusted"], subject_account_id=account_id),),
+            assignments=(PermissionRoleAssignment(role_id=ROLE_ID["trusted"], subject_account_id=account_id),),
         )
 
     async def epoch(self) -> int:

@@ -9,13 +9,9 @@ import pytest
 from squid.accounts.errors import ConsentRequiredError
 from squid.notifications import NotificationPreferences, NotificationService
 from squid.notifications.application import NotificationRepository
-from squid.notifications.domain import (
-    InboxVisibility,
-    NotificationSubscription,
-    RecordSubscriptionFilter,
-    SubscriptionKind,
-)
+from squid.notifications.domain import InboxVisibility, RecordSubscriptionFilter, SubscriptionKind
 from squid.notifications.errors import NotificationSubscriptionNotFoundError
+from squid.notifications.models import NotificationSubscription
 
 SUBJECT_ID = UUID("11111111-1111-1111-1111-111111111111")
 
