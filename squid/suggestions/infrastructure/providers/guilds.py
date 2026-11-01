@@ -9,7 +9,8 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from squid.permissions.models import PermissionRole
-from squid.starboard.domain import EDITABLE_SETTINGS, StarboardConfig
+from squid.starboard.domain import EDITABLE_SETTINGS
+from squid.starboard.models import StarboardConfig
 from squid.suggestions.application import Candidate, candidate
 from squid.suggestions.domain import SuggestionRequest
 

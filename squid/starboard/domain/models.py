@@ -1,13 +1,10 @@
 """Starboard snapshots and pure scoring rules."""
 
 from dataclasses import dataclass
-from math import isfinite
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from whenever import Instant
 
-from squid.core.errors import ValidationError
-from squid.core.i18n import tr
 from squid.reactions.domain import ReactionActor
 
 type StarboardDirection = Literal["up", "down"]
@@ -45,141 +42,6 @@ will actually accept cannot drift apart.
 
 
 @dataclass(frozen=True, slots=True)
-class StarboardEmoji:
-    """An ordered weighted reaction configured for a starboard."""
-
-    emoji: str
-    direction: StarboardDirection
-    multiplier: float = 1.0
-    position: int = 0
-
-    def __post_init__(self) -> None:
-        if not self.emoji.strip():
-            msg = tr(t"Starboard emoji cannot be empty.")
-            raise ValidationError(msg)
-        if not isfinite(self.multiplier) or self.multiplier <= 0:
-            msg = tr(t"Starboard emoji multiplier must be finite and greater than zero.")
-            raise ValidationError(msg)
-        if self.position < 0:
-            msg = tr(t"Starboard emoji position cannot be negative.")
-            raise ValidationError(msg)
-
-
-@dataclass(frozen=True, slots=True)
-class StarboardConfig:
-    """A complete immutable starboard configuration snapshot."""
-
-    id: int
-    guild_id: int
-    channel_id: int
-    name: str
-    emojis: tuple[StarboardEmoji, ...]
-    enabled: bool = True
-    required: float = 3.0
-    required_remove: float = 0.0
-    self_vote: bool = False
-    allow_bots: bool = False
-    require_image: bool = False
-    min_age_seconds: int = 0
-    max_age_seconds: int = 0
-    autoreact_upvote: bool = True
-    autoreact_downvote: bool = True
-    remove_invalid_reactions: bool = False
-    link_edits: bool = True
-    link_deletes: bool = True
-    display_emoji: str = "⭐"
-    colour: int = 0x435E81
-    jump_to_message: bool = True
-    attachments_list: bool = True
-    replied_to: bool = True
-    ping_author: bool = False
-
-    def __post_init__(self) -> None:
-        if not self.name.strip():
-            msg = tr(t"Starboard name cannot be empty.")
-            raise ValidationError(msg)
-        if not isfinite(self.required) or not isfinite(self.required_remove):
-            msg = tr(t"Starboard thresholds must be finite.")
-            raise ValidationError(msg)
-        if self.required <= self.required_remove:
-            msg = tr(t"The post threshold must exceed the removal threshold.")
-            raise ValidationError(msg)
-        if self.min_age_seconds < 0 or self.max_age_seconds < 0:
-            msg = tr(t"Starboard message ages cannot be negative.")
-            raise ValidationError(msg)
-        if self.max_age_seconds and self.min_age_seconds > self.max_age_seconds:
-            msg = tr(t"The minimum message age cannot exceed the maximum.")
-            raise ValidationError(msg)
-        if not 0 <= self.colour <= 0xFFFFFF:
-            msg = tr(t"Starboard colour must be a valid RGB value.")
-            raise ValidationError(msg)
-        if not self.display_emoji.strip():
-            msg = tr(t"Starboard display emoji cannot be empty.")
-            raise ValidationError(msg)
-        aliases = [item.emoji for item in self.emojis]
-        if len(aliases) != len(set(aliases)):
-            msg = tr(t"Starboard emojis must be unique.")
-            raise ValidationError(msg)
-
-
-@dataclass(frozen=True, slots=True)
-class StarboardSource:
-    """A guild or channel source grant for a starboard."""
-
-    starboard_id: int
-    guild_id: int
-    channel_id: int = 0
-    approved_by: int | None = None
-    approved_at: Instant | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class OriginMessage:
-    """Persisted source-message facts used by starboard policy."""
-
-    id: int
-    guild_id: int
-    channel_id: int
-    author_id: int
-    author_is_bot: bool
-    posted_at: Instant
-    is_nsfw: bool = False
-    has_image: bool = False
-    deleted_at: Instant | None = None
-
-    @property
-    def present(self) -> bool:
-        return self.deleted_at is None
-
-
-@dataclass(frozen=True, slots=True)
-class StarboardVote:
-    """One actor's current reaction to an origin message."""
-
-    starboard_id: int
-    origin_message_id: int
-    user_id: int
-    emoji: str
-    direction: StarboardDirection
-    weight: float
-    target_author_id: int
-    created_at: Instant
-
-
-@dataclass(frozen=True, slots=True)
-class StarboardEntry:
-    """Persisted materialization state for an origin on a starboard."""
-
-    starboard_id: int
-    origin_message_id: int
-    score: float = 0.0
-    raw_count: int = 0
-    last_rendered_score: float | None = None
-    first_posted_at: Instant | None = None
-    updated_at: Instant | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class VoteVerdict:
     """The policy result for one reaction."""
 
@@ -207,7 +69,7 @@ def evaluate_vote(
     *,
     now: Instant | None = None,
 ) -> VoteVerdict:
-    """Authorize a configured reaction using only immutable snapshots."""
+    """Authorize a configured reaction using the loaded configuration and message facts."""
     option = next((item for item in config.emojis if item.emoji == emoji), None)
     if option is None or not config.enabled or not origin.present:
         return VoteVerdict.ignore()
@@ -245,3 +107,7 @@ def entry_should_be_posted(
     # Between the two thresholds nothing changes, which is what stops an entry
     # hovering at the boundary from flickering in and out of the channel.
     return currently_posted
+
+
+if TYPE_CHECKING:
+    from squid.starboard.models import OriginMessage, StarboardConfig

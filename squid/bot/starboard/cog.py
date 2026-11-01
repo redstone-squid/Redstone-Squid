@@ -27,7 +27,7 @@ from squid.permissions.domain.catalogue import (
 )
 from squid.posts.domain import starboard_entry_key
 from squid.reactions.domain import ReactionActor
-from squid.starboard.domain import OriginMessage, StarboardConfig
+from squid.starboard.models import OriginMessage, StarboardConfig
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -129,12 +129,12 @@ class StarboardCog[BotT: "squid.bot.app.RedstoneSquid"](sd.Cog[BotT]):
             embed.image.url or embed.thumbnail.url for embed in message.embeds
         )
         return OriginMessage(
-            message.id,
-            message.guild.id,
-            message.channel.id,
-            message.author.id,
-            message.author.bot,
-            Instant(message.created_at),
+            id=message.id,
+            guild_id=message.guild.id,
+            channel_id=message.channel.id,
+            author_id=message.author.id,
+            author_is_bot=message.author.bot,
+            posted_at=Instant(message.created_at),
             is_nsfw=channel_nsfw,
             has_image=has_image,
         )

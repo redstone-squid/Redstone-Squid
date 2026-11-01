@@ -1,6 +1,6 @@
 """Starboard orchestration over ports that name no framework."""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from math import isfinite
 
 from squid.core.errors import ValidationError
@@ -8,7 +8,8 @@ from squid.core.i18n import tr
 from squid.reactions.application import RoleWeightPolicy
 from squid.reactions.domain import ReactionActor, RoleMultiplier, WeightScope
 from squid.starboard.application.ports import EntryKey, EntryState, PendingVote, StarboardRepository
-from squid.starboard.domain import OriginMessage, StarboardConfig, StarboardEmoji, evaluate_vote
+from squid.starboard.domain import evaluate_vote
+from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,11 +94,14 @@ class StarboardService:
         self, guild_id: int, channel_id: int, name: str = "main", *, required: float = 3.0
     ) -> StarboardConfig:
         config = StarboardConfig(
-            0,
-            guild_id,
-            channel_id,
-            name.strip(),
-            (StarboardEmoji("⭐", "up", position=0), StarboardEmoji("💩", "down", position=1)),
+            id=0,
+            guild_id=guild_id,
+            channel_id=channel_id,
+            name=name.strip(),
+            emojis=(
+                StarboardEmoji(emoji="⭐", direction="up", position=0),
+                StarboardEmoji(emoji="💩", direction="down", position=1),
+            ),
             required=required,
         )
         created = await self._repository.create(config)
@@ -119,18 +123,20 @@ class StarboardService:
         current = await self._repository.get(guild_id, name)
         if current is None:
             return None
-        replace(current, **settings)  # type: ignore[arg-type]
+        for key, value in settings.items():
+            setattr(current, key, value)
+        current.validate()
         updated = await self._repository.update(guild_id, name, settings)
         self.invalidate_cache(guild_id)
         return updated
 
     async def set_emojis(self, config: StarboardConfig, emojis: tuple[StarboardEmoji, ...]) -> None:
         StarboardConfig(
-            config.id,
-            config.guild_id,
-            config.channel_id,
-            config.name,
-            emojis,
+            id=config.id,
+            guild_id=config.guild_id,
+            channel_id=config.channel_id,
+            name=config.name,
+            emojis=emojis,
             required=config.required,
             required_remove=config.required_remove,
         )

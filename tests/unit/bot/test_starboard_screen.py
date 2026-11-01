@@ -15,12 +15,14 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_WEIGHT_EDIT,
 )
 from squid.starboard.application import StarboardService
-from squid.starboard.domain import StarboardConfig, StarboardEmoji
+from squid.starboard.models import StarboardConfig, StarboardEmoji
 from squid_ui.testing import labels
 
 
 def board(name: str = "main") -> StarboardConfig:
-    return StarboardConfig(1, 7, 11, name, (StarboardEmoji("⭐", "up"),))
+    return StarboardConfig(
+        id=1, guild_id=7, channel_id=11, name=name, emojis=(StarboardEmoji(emoji="⭐", direction="up"),)
+    )
 
 
 class FakeStarboardService(StarboardService):

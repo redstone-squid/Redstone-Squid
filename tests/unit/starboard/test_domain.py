@@ -6,27 +6,30 @@ from hypothesis import strategies as st
 from whenever import Instant
 
 from squid.reactions.domain import ReactionActor
-from squid.starboard.domain import (
-    OriginMessage,
-    StarboardConfig,
-    StarboardEmoji,
-    entry_should_be_posted,
-    evaluate_vote,
-)
+from squid.starboard.domain import entry_should_be_posted, evaluate_vote
+from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 
 NOW = Instant.parse_iso("2026-08-04T12:00:00Z")
 
 
 def config(**changes: object) -> StarboardConfig:
     return replace(
-        StarboardConfig(1, 10, 20, "main", (StarboardEmoji("⭐", "up"), StarboardEmoji("💩", "down"))),
+        StarboardConfig(
+            id=1,
+            guild_id=10,
+            channel_id=20,
+            name="main",
+            emojis=(StarboardEmoji(emoji="⭐", direction="up"), StarboardEmoji(emoji="💩", direction="down")),
+        ),
         **changes,  # pyrefly: ignore[bad-argument-type]
     )
 
 
 def origin(**changes: object) -> OriginMessage:
     return replace(
-        OriginMessage(100, 10, 30, 40, author_is_bot=False, posted_at=NOW.subtract(seconds=60)),
+        OriginMessage(
+            id=100, guild_id=10, channel_id=30, author_id=40, author_is_bot=False, posted_at=NOW.subtract(seconds=60)
+        ),
         **changes,  # pyrefly: ignore[bad-argument-type]
     )
 

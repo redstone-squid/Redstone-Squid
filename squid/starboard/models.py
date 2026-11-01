@@ -1,5 +1,7 @@
 """SQLAlchemy starboard models."""
 
+from math import isfinite
+
 from sqlalchemy import (
     BigInteger,
     Boolean,
@@ -17,11 +19,14 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
+from squid.core.errors import ValidationError
+from squid.core.i18n import tr
 from squid.persistence.base import Base
 from squid.persistence.types import InstantUTC, now
+from squid.starboard.domain.models import StarboardDirection
 
 
-class Starboard(Base, kw_only=True):
+class StarboardConfig(Base, kw_only=True):
     """A named weighted-message board owned by one Discord guild."""
 
     __tablename__ = "starboards"
@@ -46,7 +51,7 @@ class Starboard(Base, kw_only=True):
         CheckConstraint("colour BETWEEN 0 AND 16777215", name="starboards_colour_check"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, default=None)
     guild_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("server_settings.server_id", ondelete="CASCADE"), nullable=False
     )
@@ -77,6 +82,40 @@ class Starboard(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
 
+    emojis: tuple[StarboardEmoji, ...] = ()
+    """Configured reactions, ordered and populated by the repository."""
+
+    def __post_init__(self) -> None:
+        self.validate()
+
+    def validate(self) -> None:
+        """Check the configuration values before saving or using them."""
+        if not self.name.strip():
+            msg = tr(t"StarboardConfig name cannot be empty.")
+            raise ValidationError(msg)
+        if not isfinite(self.required) or not isfinite(self.required_remove):
+            msg = tr(t"StarboardConfig thresholds must be finite.")
+            raise ValidationError(msg)
+        if self.required <= self.required_remove:
+            msg = tr(t"The post threshold must exceed the removal threshold.")
+            raise ValidationError(msg)
+        if self.min_age_seconds < 0 or self.max_age_seconds < 0:
+            msg = tr(t"StarboardConfig message ages cannot be negative.")
+            raise ValidationError(msg)
+        if self.max_age_seconds and self.min_age_seconds > self.max_age_seconds:
+            msg = tr(t"The minimum message age cannot exceed the maximum.")
+            raise ValidationError(msg)
+        if not 0 <= self.colour <= 0xFFFFFF:
+            msg = tr(t"StarboardConfig colour must be a valid RGB value.")
+            raise ValidationError(msg)
+        if not self.display_emoji.strip():
+            msg = tr(t"StarboardConfig display emoji cannot be empty.")
+            raise ValidationError(msg)
+        aliases = [item.emoji for item in self.emojis]
+        if len(aliases) != len(set(aliases)):
+            msg = tr(t"StarboardConfig emojis must be unique.")
+            raise ValidationError(msg)
+
 
 class StarboardEmoji(Base, kw_only=True):
     """An ordered upvote or downvote emoji for a starboard."""
@@ -94,12 +133,27 @@ class StarboardEmoji(Base, kw_only=True):
     )
 
     starboard_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("starboards.id", ondelete="CASCADE"), primary_key=True
+        BigInteger, ForeignKey("starboards.id", ondelete="CASCADE"), primary_key=True, default=None
     )
     emoji: Mapped[str] = mapped_column(Text, primary_key=True)
-    direction: Mapped[str] = mapped_column(Text, nullable=False)
+    direction: Mapped[StarboardDirection] = mapped_column(Text, nullable=False)
     multiplier: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("1.0"), default=1.0)
-    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
+    position: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)
+
+    def __post_init__(self) -> None:
+        self.validate()
+
+    def validate(self) -> None:
+        """Check the configuration values before saving or using them."""
+        if not self.emoji.strip():
+            msg = tr(t"StarboardConfig emoji cannot be empty.")
+            raise ValidationError(msg)
+        if not isfinite(self.multiplier) or self.multiplier <= 0:
+            msg = tr(t"StarboardConfig emoji multiplier must be finite and greater than zero.")
+            raise ValidationError(msg)
+        if self.position < 0:
+            msg = tr(t"StarboardConfig emoji position cannot be negative.")
+            raise ValidationError(msg)
 
 
 class StarboardSource(Base, kw_only=True):
@@ -118,7 +172,7 @@ class StarboardSource(Base, kw_only=True):
     approved_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
 
 
-class StarboardOriginMessage(Base, kw_only=True):
+class OriginMessage(Base, kw_only=True):
     """A source message that has been evaluated by at least one starboard."""
 
     __tablename__ = "starboard_origin_messages"
@@ -137,6 +191,10 @@ class StarboardOriginMessage(Base, kw_only=True):
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=now
     )
     deleted_at: Mapped[Instant | None] = mapped_column(InstantUTC(), nullable=True, default=None)
+
+    @property
+    def present(self) -> bool:
+        return self.deleted_at is None
 
 
 class StarboardVote(Base, kw_only=True):
@@ -161,7 +219,7 @@ class StarboardVote(Base, kw_only=True):
     )
     user_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     emoji: Mapped[str] = mapped_column(Text, nullable=False)
-    direction: Mapped[str] = mapped_column(Text, nullable=False)
+    direction: Mapped[StarboardDirection] = mapped_column(Text, nullable=False)
     weight: Mapped[float] = mapped_column(Float, nullable=False)
     target_author_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[Instant] = mapped_column(

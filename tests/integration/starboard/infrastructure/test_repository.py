@@ -8,12 +8,12 @@ from whenever import Instant
 
 from squid.settings.models import ServerSetting
 from squid.starboard.application import PendingVote
-from squid.starboard.domain import OriginMessage, StarboardConfig, StarboardEmoji
 from squid.starboard.infrastructure.repository import PostgresStarboardRepository
 from squid.starboard.models import (
-    Starboard,
+    OriginMessage,
+    StarboardConfig,
+    StarboardEmoji,
     StarboardEntry,
-    StarboardOriginMessage,
     StarboardRoleMultiplier,
     StarboardSource,
     StarboardVote,
@@ -26,10 +26,10 @@ TABLES = cast(
     tuple[Table, ...],
     (
         ServerSetting.__table__,
-        Starboard.__table__,
+        StarboardConfig.__table__,
         StarboardEmojiRow.__table__,
         StarboardSource.__table__,
-        StarboardOriginMessage.__table__,
+        OriginMessage.__table__,
         StarboardVote.__table__,
         StarboardEntry.__table__,
         StarboardRoleMultiplier.__table__,
@@ -64,15 +64,17 @@ async def test_vote_overwrite_and_exact_emoji_withdrawal(
     repo = await repository(async_session_factory)
     created = await repo.create(
         StarboardConfig(
-            0,
-            10,
-            20,
-            "main",
-            (StarboardEmoji("⭐", "up"), StarboardEmoji("💩", "down")),
+            id=0,
+            guild_id=10,
+            channel_id=20,
+            name="main",
+            emojis=(StarboardEmoji(emoji="⭐", direction="up"), StarboardEmoji(emoji="💩", direction="down")),
             required=1,
         )
     )
-    origin = OriginMessage(100, 10, 30, 40, author_is_bot=False, posted_at=Instant.now())
+    origin = OriginMessage(
+        id=100, guild_id=10, channel_id=30, author_id=40, author_is_bot=False, posted_at=Instant.now()
+    )
 
     keys = await repo.record_votes(origin, 50, (PendingVote(created, "⭐", "up", 1),))
     assert keys == [(created.id, origin.id)]
@@ -99,7 +101,11 @@ async def test_whole_guild_and_channel_sources_do_not_duplicate_configs(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     repo = await repository(async_session_factory)
-    created = await repo.create(StarboardConfig(0, 10, 20, "main", (StarboardEmoji("⭐", "up"),)))
+    created = await repo.create(
+        StarboardConfig(
+            id=0, guild_id=10, channel_id=20, name="main", emojis=(StarboardEmoji(emoji="⭐", direction="up"),)
+        )
+    )
     async with async_session_factory.begin() as session:
         await session.execute(insert(StarboardSource).values(starboard_id=created.id, guild_id=10, channel_id=30))
 

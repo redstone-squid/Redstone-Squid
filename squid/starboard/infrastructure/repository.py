@@ -1,32 +1,21 @@
 """PostgreSQL starboard repository."""
 
 from collections.abc import Mapping, Sequence
-from typing import cast
 
 from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.starboard.application.ports import EntryKey, EntryState, PendingVote
-from squid.starboard.domain import (
+from squid.starboard.domain.models import EDITABLE_SETTINGS
+from squid.starboard.models import (
     OriginMessage,
     StarboardConfig,
-    StarboardDirection,
     StarboardEmoji,
     StarboardEntry,
-)
-from squid.starboard.models import (
-    Starboard,
-    StarboardOriginMessage,
     StarboardRoleMultiplier,
     StarboardSource,
     StarboardVote,
-)
-from squid.starboard.models import (
-    StarboardEmoji as StarboardEmojiRow,
-)
-from squid.starboard.models import (
-    StarboardEntry as StarboardEntryRow,
 )
 
 
@@ -39,10 +28,10 @@ class PostgresStarboardRepository:
     async def relevant_emojis(self, guild_id: int) -> frozenset[str]:
         async with self._session_factory() as session:
             values = await session.scalars(
-                select(StarboardEmojiRow.emoji)
-                .join(Starboard, Starboard.id == StarboardEmojiRow.starboard_id)
-                .join(StarboardSource, StarboardSource.starboard_id == Starboard.id)
-                .where(Starboard.enabled, StarboardSource.guild_id == guild_id)
+                select(StarboardEmoji.emoji)
+                .join(StarboardConfig, StarboardConfig.id == StarboardEmoji.starboard_id)
+                .join(StarboardSource, StarboardSource.starboard_id == StarboardConfig.id)
+                .where(StarboardConfig.enabled, StarboardSource.guild_id == guild_id)
                 .distinct()
             )
             return frozenset(values)
@@ -51,15 +40,15 @@ class PostgresStarboardRepository:
         async with self._session_factory() as session:
             rows = (
                 await session.scalars(
-                    select(Starboard)
-                    .join(StarboardSource, StarboardSource.starboard_id == Starboard.id)
+                    select(StarboardConfig)
+                    .join(StarboardSource, StarboardSource.starboard_id == StarboardConfig.id)
                     .where(
-                        Starboard.enabled,
+                        StarboardConfig.enabled,
                         StarboardSource.guild_id == guild_id,
                         or_(StarboardSource.channel_id == 0, StarboardSource.channel_id == channel_id),
                     )
                     .distinct()
-                    .order_by(Starboard.id)
+                    .order_by(StarboardConfig.id)
                 )
             ).all()
             return await self._configs(session, rows)
@@ -81,7 +70,7 @@ class PostgresStarboardRepository:
         async with self._session_factory.begin() as session:
             await self._lock(session, origin.id)
             await session.execute(
-                pg_insert(StarboardOriginMessage)
+                pg_insert(OriginMessage)
                 .values(
                     id=origin.id,
                     guild_id=origin.guild_id,
@@ -94,7 +83,7 @@ class PostgresStarboardRepository:
                     deleted_at=None,
                 )
                 .on_conflict_do_update(
-                    index_elements=[StarboardOriginMessage.id],
+                    index_elements=[OriginMessage.id],
                     set_={
                         "channel_id": origin.channel_id,
                         "author_id": origin.author_id,
@@ -128,7 +117,7 @@ class PostgresStarboardRepository:
                     )
                 )
                 await session.execute(
-                    pg_insert(StarboardEntryRow)
+                    pg_insert(StarboardEntry)
                     .values(starboard_id=vote.config.id, origin_message_id=origin.id)
                     .on_conflict_do_nothing()
                 )
@@ -158,7 +147,7 @@ class PostgresStarboardRepository:
         async with self._session_factory.begin() as session:
             await self._lock(session, origin.id)
             await session.execute(
-                pg_insert(StarboardOriginMessage)
+                pg_insert(OriginMessage)
                 .values(
                     id=origin.id,
                     guild_id=origin.guild_id,
@@ -171,7 +160,7 @@ class PostgresStarboardRepository:
                     deleted_at=None,
                 )
                 .on_conflict_do_update(
-                    index_elements=[StarboardOriginMessage.id],
+                    index_elements=[OriginMessage.id],
                     set_={"seen_at": func.now(), "deleted_at": None, "has_image": origin.has_image},
                 )
             )
@@ -196,7 +185,7 @@ class PostgresStarboardRepository:
                     )
                 )
                 await session.execute(
-                    pg_insert(StarboardEntryRow)
+                    pg_insert(StarboardEntry)
                     .values(starboard_id=vote.config.id, origin_message_id=origin.id)
                     .on_conflict_do_nothing()
                 )
@@ -220,10 +209,10 @@ class PostgresStarboardRepository:
         async with self._session_factory.begin() as session:
             await self._lock(session, origin_message_id)
             changed = await session.execute(
-                update(StarboardOriginMessage)
-                .where(StarboardOriginMessage.id == origin_message_id)
+                update(OriginMessage)
+                .where(OriginMessage.id == origin_message_id)
                 .values(deleted_at=func.now())
-                .returning(StarboardOriginMessage.id)
+                .returning(OriginMessage.id)
             )
             if changed.scalar_one_or_none() is None:
                 return ()
@@ -232,10 +221,10 @@ class PostgresStarboardRepository:
     async def mark_rendered(self, starboard_id: int, origin_message_id: int, score: float) -> None:
         async with self._session_factory.begin() as session:
             await session.execute(
-                update(StarboardEntryRow)
+                update(StarboardEntry)
                 .where(
-                    StarboardEntryRow.starboard_id == starboard_id,
-                    StarboardEntryRow.origin_message_id == origin_message_id,
+                    StarboardEntry.starboard_id == starboard_id,
+                    StarboardEntry.origin_message_id == origin_message_id,
                 )
                 .values(last_rendered_score=score, updated_at=func.now())
             )
@@ -243,27 +232,28 @@ class PostgresStarboardRepository:
     async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState | None:
         """Load one entry with its board configuration and origin facts."""
         async with self._session_factory() as session:
-            entry_row = await session.get(StarboardEntryRow, (starboard_id, origin_message_id))
-            origin_row = await session.get(StarboardOriginMessage, origin_message_id)
+            entry_row = await session.get(StarboardEntry, (starboard_id, origin_message_id))
+            origin_row = await session.get(OriginMessage, origin_message_id)
             if entry_row is None or origin_row is None:
                 return None
-            starboard_row = await session.get(Starboard, starboard_id)
+            starboard_row = await session.get(StarboardConfig, starboard_id)
             if starboard_row is None:
                 return None
-            config = await self._to_config(session, starboard_row)
-            return EntryState(config, self._origin(origin_row), self._entry(entry_row))
+            config = await self._with_emojis(session, starboard_row)
+            return EntryState(config, origin_row, entry_row)
 
     async def disable_channel(self, channel_id: int) -> None:
         async with self._session_factory.begin() as session:
-            await session.execute(update(Starboard).where(Starboard.channel_id == channel_id).values(enabled=False))
+            await session.execute(
+                update(StarboardConfig).where(StarboardConfig.channel_id == channel_id).values(enabled=False)
+            )
 
     async def create(self, config: StarboardConfig) -> StarboardConfig:
         async with self._session_factory.begin() as session:
-            starboard_id = (
-                await session.execute(
-                    pg_insert(Starboard).values(**self._config_values(config)).returning(Starboard.id)
-                )
-            ).scalar_one()
+            del config.id
+            session.add(config)
+            await session.flush()
+            starboard_id = config.id
             await session.execute(
                 pg_insert(StarboardSource).values(starboard_id=starboard_id, guild_id=config.guild_id, channel_id=0)
             )
@@ -273,37 +263,41 @@ class PostgresStarboardRepository:
     async def delete(self, guild_id: int, name: str) -> bool:
         async with self._session_factory.begin() as session:
             result = await session.execute(
-                delete(Starboard)
-                .where(Starboard.guild_id == guild_id, func.lower(Starboard.name) == name.lower())
-                .returning(Starboard.id)
+                delete(StarboardConfig)
+                .where(StarboardConfig.guild_id == guild_id, func.lower(StarboardConfig.name) == name.lower())
+                .returning(StarboardConfig.id)
             )
             return result.scalar_one_or_none() is not None
 
     async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]:
         async with self._session_factory() as session:
             rows = (
-                await session.scalars(select(Starboard).where(Starboard.guild_id == guild_id).order_by(Starboard.name))
+                await session.scalars(
+                    select(StarboardConfig).where(StarboardConfig.guild_id == guild_id).order_by(StarboardConfig.name)
+                )
             ).all()
             return await self._configs(session, rows)
 
     async def get(self, guild_id: int, name: str) -> StarboardConfig | None:
         async with self._session_factory() as session:
             row = await session.scalar(
-                select(Starboard).where(Starboard.guild_id == guild_id, func.lower(Starboard.name) == name.lower())
+                select(StarboardConfig).where(
+                    StarboardConfig.guild_id == guild_id, func.lower(StarboardConfig.name) == name.lower()
+                )
             )
-            return await self._to_config(session, row) if row is not None else None
+            return await self._with_emojis(session, row) if row is not None else None
 
     async def update(self, guild_id: int, name: str, settings: Mapping[str, object]) -> StarboardConfig | None:
-        allowed = set(self._config_values(None)) - {"guild_id", "channel_id", "name"}
+        allowed = set(EDITABLE_SETTINGS)
         if not settings or not set(settings) <= allowed | {"channel_id", "name"}:
             msg = "Unknown or empty starboard setting update."
             raise ValueError(msg)
         async with self._session_factory.begin() as session:
             starboard_id = await session.scalar(
-                update(Starboard)
-                .where(Starboard.guild_id == guild_id, func.lower(Starboard.name) == name.lower())
+                update(StarboardConfig)
+                .where(StarboardConfig.guild_id == guild_id, func.lower(StarboardConfig.name) == name.lower())
                 .values(**settings)
-                .returning(Starboard.id)
+                .returning(StarboardConfig.id)
             )
             return await self._get_by_id(session, starboard_id) if starboard_id is not None else None
 
@@ -341,15 +335,15 @@ class PostgresStarboardRepository:
     ) -> Sequence[EntryKey]:
         if starboard_ids is not None and not starboard_ids:
             return ()
-        statement = select(StarboardEntryRow).where(StarboardEntryRow.origin_message_id == origin_message_id)
+        statement = select(StarboardEntry).where(StarboardEntry.origin_message_id == origin_message_id)
         if starboard_ids is not None:
-            statement = statement.where(StarboardEntryRow.starboard_id.in_(starboard_ids))
-        entries = (await session.scalars(statement.order_by(StarboardEntryRow.starboard_id))).all()
+            statement = statement.where(StarboardEntry.starboard_id.in_(starboard_ids))
+        entries = (await session.scalars(statement.order_by(StarboardEntry.starboard_id))).all()
         if origin is None:
-            origin_row = await session.get(StarboardOriginMessage, origin_message_id)
+            origin_row = await session.get(OriginMessage, origin_message_id)
             if origin_row is None:
                 return ()
-            origin = self._origin(origin_row)
+            origin = origin_row
         keys: list[EntryKey] = []
         for entry_row in entries:
             score, raw_count = (
@@ -382,118 +376,40 @@ class PostgresStarboardRepository:
         await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0))))
 
     async def _get_by_id(self, session: AsyncSession, starboard_id: int) -> StarboardConfig:
-        row = await session.get(Starboard, starboard_id)
+        row = await session.get(StarboardConfig, starboard_id)
         if row is None:
             msg = f"Starboard {starboard_id} no longer exists."
             raise LookupError(msg)
-        return await self._to_config(session, row)
+        return await self._with_emojis(session, row)
 
-    async def _configs(self, session: AsyncSession, rows: Sequence[Starboard]) -> tuple[StarboardConfig, ...]:
-        return tuple([await self._to_config(session, row) for row in rows])
-
-    async def _to_config(self, session: AsyncSession, row: Starboard) -> StarboardConfig:
-        emoji_rows = (
+    async def _configs(self, session: AsyncSession, rows: Sequence[StarboardConfig]) -> tuple[StarboardConfig, ...]:
+        if not rows:
+            return ()
+        emojis = (
             await session.scalars(
-                select(StarboardEmojiRow)
-                .where(StarboardEmojiRow.starboard_id == row.id)
-                .order_by(StarboardEmojiRow.position)
+                select(StarboardEmoji)
+                .where(StarboardEmoji.starboard_id.in_([row.id for row in rows]))
+                .order_by(StarboardEmoji.position)
             )
         ).all()
-        emojis = tuple(
-            StarboardEmoji(item.emoji, cast(StarboardDirection, item.direction), item.multiplier, item.position)
-            for item in emoji_rows
-        )
-        return StarboardConfig(
-            row.id,
-            row.guild_id,
-            row.channel_id,
-            row.name,
-            emojis,
-            enabled=row.enabled,
-            required=row.required,
-            required_remove=row.required_remove,
-            self_vote=row.self_vote,
-            allow_bots=row.allow_bots,
-            require_image=row.require_image,
-            min_age_seconds=row.min_age_seconds,
-            max_age_seconds=row.max_age_seconds,
-            autoreact_upvote=row.autoreact_upvote,
-            autoreact_downvote=row.autoreact_downvote,
-            remove_invalid_reactions=row.remove_invalid_reactions,
-            link_edits=row.link_edits,
-            link_deletes=row.link_deletes,
-            display_emoji=row.display_emoji,
-            colour=row.colour,
-            jump_to_message=row.jump_to_message,
-            attachments_list=row.attachments_list,
-            replied_to=row.replied_to,
-            ping_author=row.ping_author,
-        )
+        grouped: dict[int, list[StarboardEmoji]] = {}
+        for emoji in emojis:
+            emoji.validate()
+            grouped.setdefault(emoji.starboard_id, []).append(emoji)
+        for row in rows:
+            row.emojis = tuple(grouped.get(row.id, ()))
+            row.validate()
+        return tuple(rows)
 
-    @staticmethod
-    def _origin(row: StarboardOriginMessage) -> OriginMessage:
-        return OriginMessage(
-            row.id,
-            row.guild_id,
-            row.channel_id,
-            row.author_id,
-            row.author_is_bot,
-            row.posted_at,
-            is_nsfw=row.is_nsfw,
-            has_image=row.has_image,
-            deleted_at=row.deleted_at,
-        )
-
-    @staticmethod
-    def _entry(row: StarboardEntryRow) -> StarboardEntry:
-        return StarboardEntry(
-            row.starboard_id,
-            row.origin_message_id,
-            row.score,
-            row.raw_count,
-            row.last_rendered_score,
-            row.first_posted_at,
-            row.updated_at,
-        )
-
-    @staticmethod
-    def _config_values(config: StarboardConfig | None) -> dict[str, object]:
-        if config is None:
-            return {
-                key: None
-                for key in (
-                    "guild_id",
-                    "channel_id",
-                    "name",
-                    "enabled",
-                    "required",
-                    "required_remove",
-                    "self_vote",
-                    "allow_bots",
-                    "require_image",
-                    "min_age_seconds",
-                    "max_age_seconds",
-                    "autoreact_upvote",
-                    "autoreact_downvote",
-                    "remove_invalid_reactions",
-                    "link_edits",
-                    "link_deletes",
-                    "display_emoji",
-                    "colour",
-                    "jump_to_message",
-                    "attachments_list",
-                    "replied_to",
-                    "ping_author",
-                )
-            }
-        return {key: getattr(config, key) for key in PostgresStarboardRepository._config_values(None)}
+    async def _with_emojis(self, session: AsyncSession, row: StarboardConfig) -> StarboardConfig:
+        return (await self._configs(session, [row]))[0]
 
     @staticmethod
     async def _replace_emojis(session: AsyncSession, starboard_id: int, emojis: Sequence[StarboardEmoji]) -> None:
-        await session.execute(delete(StarboardEmojiRow).where(StarboardEmojiRow.starboard_id == starboard_id))
+        await session.execute(delete(StarboardEmoji).where(StarboardEmoji.starboard_id == starboard_id))
         if emojis:
             await session.execute(
-                pg_insert(StarboardEmojiRow),
+                pg_insert(StarboardEmoji),
                 [
                     {
                         "starboard_id": starboard_id,

@@ -15,7 +15,8 @@ from squid.permissions.domain.catalogue import (
     STARBOARD_EMOJI_EDIT,
     STARBOARD_WEIGHT_EDIT,
 )
-from squid.starboard.domain import EDITABLE_SETTINGS, StarboardConfig, StarboardDirection, StarboardEmoji
+from squid.starboard.domain import EDITABLE_SETTINGS, StarboardDirection
+from squid.starboard.models import StarboardConfig, StarboardEmoji
 
 type StarboardAuthorizer = Callable[[PermissionNode], Awaitable[bool]]
 type BoardCreator = Callable[[int, str, float], Awaitable[StarboardConfig]]
@@ -199,7 +200,7 @@ class StarboardScreen(sd.UserGuildSessionScreen, session_name="starboard"):
         if operation == "add":
             direction = form.direction
             multiplier = form.multiplier
-            aliases += (StarboardEmoji(emoji, direction, multiplier, len(aliases)),)
+            aliases += (StarboardEmoji(emoji=emoji, direction=direction, multiplier=multiplier, position=len(aliases)),)
         await self._operations.set_emojis(config, aliases)
         await self._refresh()
         await event.notice(tr(t"Starboard emojis updated."))

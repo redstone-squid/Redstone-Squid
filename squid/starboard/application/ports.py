@@ -4,13 +4,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from squid.starboard.domain import (
-    OriginMessage,
-    StarboardConfig,
-    StarboardDirection,
-    StarboardEmoji,
-    StarboardEntry,
-)
+from squid.starboard.domain import StarboardDirection
+from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji, StarboardEntry
 
 
 @dataclass(frozen=True, slots=True)

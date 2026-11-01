@@ -5,7 +5,7 @@ from whenever import Instant
 
 from squid.reactions.domain import ReactionActor
 from squid.starboard.application import PendingVote, StarboardService
-from squid.starboard.domain import OriginMessage, StarboardConfig, StarboardEmoji
+from squid.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 
 
 class FakeRepository:
@@ -37,13 +37,20 @@ def make_config(**settings: Any) -> StarboardConfig:
         guild_id=10,
         channel_id=20,
         name="main",
-        emojis=(StarboardEmoji("⭐", "up", 1.5),),
+        emojis=(StarboardEmoji(emoji="⭐", direction="up", multiplier=1.5),),
     )
     return replace(base, **settings)
 
 
 def make_origin() -> OriginMessage:
-    return OriginMessage(100, 10, 30, 40, author_is_bot=False, posted_at=Instant.now().subtract(seconds=60))
+    return OriginMessage(
+        id=100,
+        guild_id=10,
+        channel_id=30,
+        author_id=40,
+        author_is_bot=False,
+        posted_at=Instant.now().subtract(seconds=60),
+    )
 
 
 async def test_service_caches_relevant_emojis() -> None:
