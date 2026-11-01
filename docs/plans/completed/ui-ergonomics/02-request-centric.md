@@ -6,14 +6,15 @@ routing below the facade are untouched.
 
 ## Status
 
-**Completed 2026-10-31.** The request-centric API and bot migration are complete. The original
+**Completed 2026-10-31; ownership follow-up 2026-11-01.** The request-centric API and bot migration are complete. The original
 prototype shipped on `cleanup/surface-audit` (`bd5ba7a8`..`cf697211`, 2026-09-02); the cleanup
 removed its remaining compatibility surfaces and updated the maintained guides.
 
 Final API decisions:
 
 - `sd.Config` is the installation configuration. Installation keywords and scope response defaults
-  are gone; `Scope` owns lifetime and out-of-band `send`/`edit`, while `sd.request` resolves sources.
+  are gone; `Scope` owns lifetime and out-of-band `send`/`edit`. Its `request` method delegates to
+  the shared resolver for listeners and callbacks without a command binding.
 - `sd.request` is **always asynchronous**, including component events. This keeps one call shape
   and makes asynchronous native-source localization explicit. A native-first memoized request gains
   its root, root locale, and owner scope when later resolved from its component event.
@@ -29,17 +30,34 @@ Final API decisions:
 - Chrome lives in `Config.defaults` with an explicit `Screen.chrome` override. The build editor's
   previously unread `root_options` became typed `retain_routed_on_timeout` screen policy; its
   recovery route is tested through `Request.respond` and actual timeout handling.
-- `app_ui`, `_component_error_hook`, scope request/default APIs, and the transitional permissions
-  caller union are removed. Cogs find the installation directly without requiring `bot.ui`.
+- `app_ui`, `_component_error_hook`, scope defaults, and the transitional permissions caller union
+  are removed. `Scope.request` was restored in the ownership follow-up: callers use
+  `self.ui.request(source)` rather than remembering `owner=self`. Native commands infer their
+  registered owner from Discord's binding. Ownership passed by Squid decorators is private plumbing.
+  Missing or closed expected scopes raise; bound resolvers reject conflicting owners or clients.
+  Cogs find the installation directly without requiring `bot.ui`.
 - `AdmissionSpec` and `Reject` are public exports. Identical `RouteGroup.define` calls are idempotent,
   even after registration; changing aliases still fails. The bot's route cache is removed.
 
 The implementation and verification notes below describe the original proposal and prototype;
 where they differ, these final decisions and the maintained architecture guide take precedence.
 
-## Cleanup verification
+## Ownership follow-up verification (2026-11-01)
 
-All **2,278 tests pass** across `packages/squid-ui-discord/tests`, `tests/unit/bot`, and
+**705 tests passed:** 634 focused request, command, scope, screen, error-policy, staging, and bot
+tests, plus 71 architecture tests. Coverage includes inferred prefix and application-command
+ownership, early-request claims preserving private deferral, cog unload, finished roots,
+cross-client resolution, and conflicting owners before and after response. The typed fixtures
+verify that `Scope.request` preserves `Request[OwnerT]`.
+
+Pyrefly reports zero errors through the exact typecheck recipe (the installed `just` still cannot
+parse the repository's `prepend` function). Alembic reports one head, whitespace checks pass, and
+the maintained Discord API reference symbols resolve. The quickstart, API map, architecture guide,
+migration guide, and this plan now agree on inferred versus bound resolution.
+
+## Cleanup verification (2026-10-31)
+
+All **2,278 tests passed** across `packages/squid-ui-discord/tests`, `tests/unit/bot`, and
 `tests/architecture`, covering retired public exports, command injection, component rollback and
 error visibility, failed error delivery, route reloads, and editor timeout recovery. Pyrefly reports
 zero errors. `alembic heads` reports one head, `git diff --check` passes, and every symbol named by
@@ -200,9 +218,10 @@ layout = sd.hybrid_group(name="layout")
   class-body form work (the decorator cannot see its group) and gives nested groups for free.
 - **Scope comes from `Command.binding`.** discord.py binds instance-form members to the cog
   and class-body members to the group instance, keeping that through the cog copy
-  (`commands.py:743`), so `binding` is a cog, a group, or `None`. `runtime.scope_for(binding)`:
-  an `sd.Cog` → its scope; anything else → the app scope. This deletes `ext/commands._ui_for`
-  and `operations._command_request`.
+  (`commands.py:743`), so `binding` is a cog, a group, or `None`. A cog uses its registered
+  scope; a class-body group or free command uses the app scope. Missing or closed cog scopes
+  raise. Native command resolution reads the same binding; callbacks without one use
+  `self.ui.request(source)`. This deletes `ext/commands._ui_for` and `operations._command_request`.
 - A group is **not** a scope owner. Roots opened from a member belong to the binding cog or
   the app, so there is no third lifetime object.
 - `sd.hybrid_group` returns `sd.HybridGroup(commands.HybridGroup)` with the same registrar

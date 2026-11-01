@@ -52,7 +52,11 @@ bot.tree.add_command(counter)
 ```
 
 The request carries localization, user, destination, acknowledgement state, and response policy.
-Its scope owns the screens it opens.
+Its scope owns the screens it opens. Squid command decorators supply that scope automatically.
+Inside native commands, `await sd.request(ctx)` or `await sd.request(interaction)` infers it from
+Discord's command binding. In a cog listener without a command binding, use
+`await self.ui.request(source)` so the panel ends when that cog unloads. Component handlers use
+`await sd.request(event)` and inherit their root's scope.
 For a common logical session policy, choose a named screen preset:
 
 ```python

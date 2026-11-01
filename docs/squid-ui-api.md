@@ -17,7 +17,8 @@ composition and adapter contracts.
 | Compile an App Home view | `squid_ui_slack.SLACK_HOME_SDK343`, `HomeRenderer` |
 | Install a Discord host | `squid_ui_discord.install`, `DiscordUIRuntime` |
 | Bind UI authority to an owner | `DiscordUIRuntime.scope`, `Scope` |
-| Handle one Discord event | `Scope.request`, `Request` |
+| Resolve a native command or component event | `squid_ui_discord.request`, `Request` |
+| Resolve a listener in its cog scope | `Scope.request` |
 | Declare reusable opening policy | `squid_ui_discord.Screen` |
 | Compose dynamic session policy | `SessionSpec`, `SessionManager` |
 | Own one live message | `MessageRoot` |

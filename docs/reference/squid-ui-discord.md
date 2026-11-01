@@ -23,8 +23,10 @@ One runtime per Discord client. `install()` starts no background work; supervise
 ## Entry points
 
 `DiscordUIRuntime` owns process resources. Its exact-identity owner scopes provide delivery, while
-`Request` normalizes one event and its acknowledgement state. `Screen` declares reusable
-opening policy and is always presented through an owner scope.
+`Request` normalizes one event and its acknowledgement state. Command decorators inject it;
+`sd.request(source)` infers native command and component ownership. Listeners without a command
+binding use `self.ui.request(source)`, sharing the same request through the cog's scope. Missing
+or closed expected scopes raise. `Screen` declares reusable opening policy.
 
 ::: squid_ui_discord.Screen
 

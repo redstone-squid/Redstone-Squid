@@ -48,6 +48,11 @@ async def counter(request: sd.Request) -> Counter:
 bot.tree.add_command(counter)
 ```
 
+Command decorators supply an owned request. Native commands can use `await sd.request(source)`
+to infer the command's cog; component events inherit their root's scope. Cog listeners without a
+command binding use `await self.ui.request(source)`. Both resolvers share one request and ledger;
+a missing or closed command-owner scope raises instead of extending the panel's lifetime.
+
 `sd.install()` starts no tasks. Run the installed runtime before opening panels, even when
 using neither scheduled refreshes nor challenges: ordinary panel shutdown also needs its execution
 host. Await startup readiness, then finish the runtime before cancelling its runner:
