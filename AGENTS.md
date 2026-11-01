@@ -10,7 +10,8 @@ Uses Python 3.14+ and discord.py.
 - Do not use `from __future__ import annotations` or quote forward references in annotations.
   Python 3.14 defers annotation evaluation by default.
 - Keep docstrings plain and concise, with Google-style sections where useful. Explain behavior and
-  edge cases callers need to know. Use comments to explain non-obvious decisions.
+  edge cases callers need to know. Don't write too defensively, assume the readers are nice and smart but
+  not familiar with the codebase. Examples may help for extremely complicated situations. Use comments to explain non-obvious decisions.
 - Pyrefly is the local type checker; BasedPyright also runs in CI. Keep existing `# pyright: ignore[...]`
   comments. Use `# type: ignore` or `# pyrefly: ignore` for new suppressions unless specific to BasedPyright.
 
