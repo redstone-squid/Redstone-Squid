@@ -12,6 +12,7 @@ from squid.settings.models import ServerSetting
 
 class _ServerSettingModelRepository(BaseAsyncRepository[ServerSetting]):
     model_type = ServerSetting
+    id_attribute = "server_id"
 
 
 DbSettingKey = Literal[

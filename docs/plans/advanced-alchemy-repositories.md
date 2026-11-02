@@ -2,6 +2,11 @@
 
 Reviewed: 2026-11-01. Scope: persistence adapters in this codebase.
 
+Follow-up, 2026-11-02: the settings primary-key defect described below is fixed by configuring
+`id_attribute = "server_id"`. PostgreSQL regression coverage now exercises existing-row settings
+updates, locale changes and clearing, and guild removal/rejoining. The original assessment and
+pre-fix reproducer are retained below as historical evidence; the broader adoption proposal remains open.
+
 Keep Advanced Alchemy and expand it selectively during the planned move to application-owned units of
 work. Do not schedule a blanket migration or require every repository to inherit from it. Audit the
 existing helpers first: settings updates already have a reproducible primary-key configuration defect.
